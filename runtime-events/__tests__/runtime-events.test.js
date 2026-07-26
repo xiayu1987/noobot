@@ -63,6 +63,13 @@ async function markSessionDeleted(workspaceRoot, userId, sessionId) {
   return paths;
 }
 
+async function persistSession(workspaceRoot, userId, sessionId) {
+  const sessionDir = path.join(workspaceRoot, userId, 'runtime', 'session', sessionId);
+  await fs.mkdir(sessionDir, { recursive: true });
+  await fs.writeFile(path.join(sessionDir, 'session.json'), JSON.stringify({ sessionId }), 'utf8');
+  return sessionDir;
+}
+
 async function writeArchive(file, ageMs = 0) {
   await fs.writeFile(file, `${JSON.stringify({ archived: path.basename(file) })}\n`, 'utf8');
   const time = new Date(Date.now() - ageMs);
@@ -113,8 +120,7 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   });
 });
 
-test('tool log window debug is enabled by default and uses its own file', async () => {
-  assert.equal(RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls.frontendToolLogWindowDebug, true);
+test('tool log window debug uses its own file when enabled', async () => {
   assert.equal(
     RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.frontendToolLogWindowDebug,
     'NOOBOT_RUNTIME_EVENT_FRONTEND_TOOL_LOG_WINDOW_DEBUG',
@@ -129,7 +135,7 @@ test('tool log window debug is enabled by default and uses its own file', async 
     userId: 'admin',
     sessionId: 'session-tool-window',
     data: { debugType: 'tool-log-window', selectedCount: 10 },
-  }, { root, includeProcess: false });
+  }, { root, includeProcess: false, frontendToolLogWindowDebug: true });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);
@@ -235,6 +241,7 @@ test('startup and system events write JSONL without session context', async () =
 
 test('session runtime events write to runtime session events path', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 's_1');
   const result = await writeRuntimeEvent({
     source: 'agent',
     scope: 'session',
@@ -258,6 +265,7 @@ test('session runtime events write to runtime session events path', async () => 
 
 test('routed runtime events write session when full session context exists', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'session_1');
   const result = await writeRoutedRuntimeEvent({
     source: 'agent',
     category: 'system',
@@ -378,6 +386,7 @@ test('createRuntimeEventWriter merges default context', async () => {
 
 test('createRuntimeEventWriter exposes routed writer with merged defaults', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'session-2');
   const writer = createRuntimeEventWriter({ source: 'agent', workspaceRoot, userId: 'admin', sessionId: 'session-2' });
   const result = await writer.routed({
     category: 'system',
@@ -393,6 +402,7 @@ test('createRuntimeEventWriter exposes routed writer with merged defaults', asyn
 
 test('runtime event jsonl transport appends without rotating below max file bytes', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'rotation-1');
   const first = await writeRuntimeEvent({
     source: 'agent',
     scope: 'session',
@@ -429,6 +439,7 @@ test('runtime event jsonl transport appends without rotating below max file byte
 
 test('runtime event jsonl transport rotates active file when max file bytes is exceeded', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'rotation-2');
   const baseEvent = {
     source: 'agent',
     scope: 'session',
@@ -463,6 +474,7 @@ test('runtime event jsonl transport rotates active file when max file bytes is e
 
 test('runtime event max file bytes can be disabled with zero', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'rotation-disabled');
   const baseEvent = {
     source: 'agent',
     scope: 'session',
@@ -495,6 +507,7 @@ test('runtime event max file bytes falls back when environment value is invalid'
   const previousDefaultWorkspaceRoot = process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT;
   const defaultWorkspaceRoot = await tempRoot();
   try {
+    await persistSession(defaultWorkspaceRoot, 'admin', 'rotation-invalid-env');
     process.env[maxFileBytesEnv] = 'invalid';
     process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT = defaultWorkspaceRoot;
     const first = await writeRoutedRuntimeEvent({
@@ -530,6 +543,7 @@ test('runtime event max file bytes falls back when environment value is invalid'
 
 test('runtime event archive cleanup deletes archives older than retention days', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'cleanup-ttl');
   const baseEvent = {
     source: 'agent',
     scope: 'session',
@@ -564,6 +578,7 @@ test('runtime event archive cleanup deletes archives older than retention days',
 
 test('runtime event archive cleanup keeps only newest max archives', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'cleanup-max');
   const baseEvent = {
     source: 'agent',
     scope: 'session',
@@ -599,6 +614,7 @@ test('runtime event archive cleanup keeps only newest max archives', async () =>
 
 test('runtime event archive cleanup can be disabled', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'cleanup-disabled');
   const baseEvent = {
     source: 'agent',
     scope: 'session',
@@ -628,6 +644,7 @@ test('runtime event archive cleanup can be disabled', async () => {
 
 test('runtime event archive cleanup ignores active and unrelated jsonl files', async () => {
   const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'cleanup-active');
   const baseEvent = {
     source: 'agent',
     scope: 'session',
@@ -671,6 +688,111 @@ test('existing session-channel API remains available', async () => {
   assert.match(result.file, /session-1\/system\.jsonl$/);
 });
 
+test('workspace runtime events store child session logs under the parent session', async () => {
+  const workspaceRoot = await tempRoot();
+  const result = await writeRuntimeEvent({
+    source: 'agent', scope: 'session', category: 'system', event: 'child.event',
+    userId: 'admin', sessionId: 'child-session', parentSessionId: 'parent-session', workspaceRoot,
+  }, { includeProcess: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.record.sessionId, 'child-session');
+  assert.equal(result.record.parentSessionId, 'parent-session');
+  assert.match(result.file, /parent-session\/events\/system\.jsonl$/);
+  assert.equal(await pathExists(path.join(workspaceRoot, 'admin', 'runtime', 'session', 'child-session')), false);
+});
+
+test('workspace session-channel stores child logs under the parent session', async () => {
+  const workspaceRoot = await tempRoot();
+  const result = await writeSessionChannelEvent({
+    source: 'agent-proxy', category: 'transport', event: 'child.transport',
+    userId: 'admin', sessionId: 'child-session', parentSessionId: 'parent-session',
+  }, { workspaceRoot, dirName: 'logs' });
+
+  assert.equal(result.ok, true);
+  assert.match(result.file, /parent-session\/logs\/transport\.jsonl$/);
+  assert.equal(await pathExists(path.join(workspaceRoot, 'admin', 'runtime', 'session', 'child-session')), false);
+  const [record] = await readJsonl(result.file);
+  assert.equal(record.sessionId, 'child-session');
+  assert.equal(record.parentSessionId, 'parent-session');
+});
+
+test('workspace runtime events ignore placeholder parent session ids', async () => {
+  const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'real-session');
+  const result = await writeRuntimeEvent({
+    source: 'agent-proxy', scope: 'session', category: 'transport', event: 'root.transport',
+    userId: 'admin', sessionId: 'real-session', parentSessionId: 'undefined', workspaceRoot,
+    data: { parentSessionId: 'NULL' },
+  }, { includeProcess: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.record.parentSessionId, undefined);
+  assert.equal(result.record.data.parentSessionId, undefined);
+  assert.match(result.file, /real-session\/events\/transport\.jsonl$/);
+  assert.equal(await pathExists(path.join(workspaceRoot, 'admin', 'runtime', 'session', 'undefined')), false);
+});
+
+test('workspace session-channel ignores placeholder parent session ids', async () => {
+  const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'real-session');
+  const result = await writeSessionChannelEvent({
+    source: 'agent-proxy', category: 'transport', event: 'root.transport',
+    userId: 'admin', sessionId: 'real-session', parentSessionId: 'undefined',
+    data: { parentSessionId: 'null' },
+  }, { workspaceRoot, dirName: 'logs' });
+
+  assert.equal(result.ok, true);
+  assert.match(result.file, /real-session\/logs\/transport\.jsonl$/);
+  const [record] = await readJsonl(result.file);
+  assert.equal(record.parentSessionId, undefined);
+  assert.equal(record.data.parentSessionId, undefined);
+  assert.equal(await pathExists(path.join(workspaceRoot, 'admin', 'runtime', 'session', 'undefined')), false);
+});
+
+test('placeholder parent session id cannot create an unpersisted session directory', async () => {
+  const workspaceRoot = await tempRoot();
+  const result = await writeSessionChannelEvent({
+    source: 'agent-proxy', category: 'transport', event: 'draft.transport',
+    userId: 'admin', sessionId: 'draft-session', parentSessionId: 'undefined',
+  }, { workspaceRoot, dirName: 'logs' });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
+  assert.equal(result.missingSession, true);
+  assert.equal(await pathExists(path.join(workspaceRoot, 'admin', 'runtime', 'session', 'undefined')), false);
+  assert.equal(await pathExists(path.join(workspaceRoot, 'admin', 'runtime', 'session', 'draft-session')), false);
+});
+
+test('workspace runtime events do not create an unpersisted session directory', async () => {
+  const workspaceRoot = await tempRoot();
+  const sessionDir = path.join(workspaceRoot, 'admin', 'runtime', 'session', 'draft-session');
+  const result = await writeRuntimeEvent({
+    source: 'frontend', scope: 'session', category: 'debug', level: 'debug',
+    event: 'frontend.workflowRender.draft', userId: 'admin', sessionId: 'draft-session',
+    workspaceRoot, data: { debugType: 'workflow-diagnostics' },
+  }, { includeProcess: false, workflowDiagnosticsDebug: true });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
+  assert.equal(result.missingSession, true);
+  assert.equal(await pathExists(sessionDir), false);
+});
+
+test('workspace session-channel does not create an unpersisted session directory', async () => {
+  const workspaceRoot = await tempRoot();
+  const sessionDir = path.join(workspaceRoot, 'admin', 'runtime', 'session', 'draft-session');
+  const result = await writeSessionChannelEvent({
+    source: 'frontend', category: 'message', event: 'draft.message',
+    userId: 'admin', sessionId: 'draft-session',
+  }, { workspaceRoot, dirName: 'logs' });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
+  assert.equal(result.missingSession, true);
+  assert.equal(await pathExists(sessionDir), false);
+});
+
 test('session-channel does not recreate a deleted session directory', async () => {
   const workspaceRoot = await tempRoot();
   const userId = 'admin';
@@ -693,6 +815,21 @@ test('runtime event writer does not recreate a deleted session directory', async
   const result = await writeRuntimeEvent({
     source: 'frontend', scope: 'session', category: 'message', event: 'late.event',
     userId, sessionId, workspaceRoot,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, true);
+  assert.equal(result.deleted, true);
+  assert.equal(await pathExists(sessionDir), false);
+});
+
+test('runtime event writer does not recreate a deleted parent session for child logs', async () => {
+  const workspaceRoot = await tempRoot();
+  const userId = 'admin';
+  const parentSessionId = 'deleted-parent-session';
+  const { sessionDir } = await markSessionDeleted(workspaceRoot, userId, parentSessionId);
+  const result = await writeRuntimeEvent({
+    source: 'agent', scope: 'session', category: 'system', event: 'late.child.event',
+    userId, sessionId: 'child-session', parentSessionId, workspaceRoot,
   });
   assert.equal(result.ok, true);
   assert.equal(result.skipped, true);

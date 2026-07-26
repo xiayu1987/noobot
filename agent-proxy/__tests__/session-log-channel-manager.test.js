@@ -106,3 +106,49 @@ test("ChannelManager falls back to session id from channel key for session logs"
   assert.equal(records[0].event.sessionId, "session-from-key");
   assert.equal(records[0].event.category, "state");
 });
+
+test("ChannelManager assigns child session logs to the root session from the channel key", () => {
+  const records = [];
+  const manager = new ChannelManager({ OPEN: 1 }, {
+    sessionLogClient: { log: (apiKey, event) => records.push({ apiKey, event }) },
+  });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "root-session" });
+  const channel = manager.ensureChannel(channelKey, { sessionId: "root-session" });
+
+  records.length = 0;
+  manager.logSessionEvent(channel, {
+    category: "transport",
+    event: "agentProxy.child.transport",
+    sessionId: "workflow-child-session",
+  });
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].event.sessionId, "workflow-child-session");
+  assert.equal(records[0].event.parentSessionId, "root-session");
+});
+
+test("ChannelManager ignores placeholder parent session ids", () => {
+  const records = [];
+  const manager = new ChannelManager({ OPEN: 1 }, {
+    sessionLogClient: { log: (apiKey, event) => records.push({ apiKey, event }) },
+  });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "root-session" });
+  const channel = manager.ensureChannel(channelKey, {
+    sessionId: "root-session",
+    parentSessionId: "undefined",
+  });
+
+  records.length = 0;
+  manager.logSessionEvent(channel, {
+    category: "transport",
+    event: "agentProxy.root.transport",
+    sessionId: "root-session",
+    parentSessionId: "UNDEFINED",
+    data: { parentSessionId: "null" },
+  });
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].event.sessionId, "root-session");
+  assert.equal(records[0].event.parentSessionId, undefined);
+  assert.equal(records[0].event.data.parentSessionId, undefined);
+});

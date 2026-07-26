@@ -58,6 +58,21 @@ test("stopped model message snapshot keeps message tool calls and tool results",
     ],
   });
 
+  const parentSnapshotFile = path.join(
+    workspaceRoot,
+    identity.userId,
+    "runtime",
+    "session",
+    identity.parentSessionId,
+    "model-message-snapshots",
+    `${identity.sessionId}__${identity.dialogProcessId}__${identity.turnScopeId}.json`,
+  );
+  assert.equal(await fs.stat(parentSnapshotFile).then((stat) => stat.isFile()), true);
+  await assert.rejects(
+    () => fs.access(path.join(workspaceRoot, identity.userId, "runtime", "session", identity.sessionId)),
+    /ENOENT/,
+  );
+
   const loaded = await loadStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
     identity,
@@ -256,9 +271,9 @@ test("stopped model message snapshot validates identity on load", async () => {
     identity.userId,
     "runtime",
     "session",
-    identity.sessionId,
+    identity.parentSessionId,
     "model-message-snapshots",
-    `${identity.dialogProcessId}__${identity.turnScopeId}.json`,
+    `${identity.sessionId}__${identity.dialogProcessId}__${identity.turnScopeId}.json`,
   );
   const raw = JSON.parse(await fs.readFile(snapshotFile, "utf8"));
   raw.sessionId = "different-session";
@@ -267,6 +282,43 @@ test("stopped model message snapshot validates identity on load", async () => {
   await assert.rejects(
     () => loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity }),
     /identity mismatch: sessionId/,
+  );
+});
+
+test("stopped model message snapshot loads the legacy child-session path", async () => {
+  const workspaceRoot = await createWorkspace();
+  const legacyIdentity = { ...identity, parentSessionId: "" };
+  await saveStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity: legacyIdentity,
+    messageBlocks: { system: [new SystemMessage("legacy")], history: [], incremental: [] },
+  });
+
+  const loaded = await loadStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity,
+  });
+  assert.equal(loaded.messages[0].content, "legacy");
+});
+
+test("stopped model message snapshot does not recreate a deleted parent session", async () => {
+  const workspaceRoot = await createWorkspace();
+  const sessionRoot = path.join(workspaceRoot, identity.userId, "runtime", "session");
+  await fs.mkdir(sessionRoot, { recursive: true });
+  await fs.writeFile(path.join(sessionRoot, ".deleted-sessions.json"), JSON.stringify({
+    sessions: { [identity.parentSessionId]: { deletedAt: new Date().toISOString() } },
+  }), "utf8");
+
+  const saved = await saveStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity,
+    messageBlocks: { system: [new SystemMessage("late")], history: [], incremental: [] },
+  });
+
+  assert.equal(saved, null);
+  await assert.rejects(
+    () => fs.access(path.join(sessionRoot, identity.parentSessionId)),
+    /ENOENT/,
   );
 });
 
@@ -347,9 +399,9 @@ test("stopped model message snapshot preserves legacy snapshot content on load",
     identity.userId,
     "runtime",
     "session",
-    identity.sessionId,
+    identity.parentSessionId,
     "model-message-snapshots",
-    `${identity.dialogProcessId}__${identity.turnScopeId}.json`,
+    `${identity.sessionId}__${identity.dialogProcessId}__${identity.turnScopeId}.json`,
   );
   const raw = JSON.parse(await fs.readFile(snapshotFile, "utf8"));
   raw.messageBlocks.system.push({ type: "system", content: "[HARNESS_POLICY_SELECTION]\nlegacy polluted\n[/HARNESS_POLICY_SELECTION]", additional_kwargs: {} });

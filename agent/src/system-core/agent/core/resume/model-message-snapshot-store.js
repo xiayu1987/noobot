@@ -6,18 +6,31 @@
 import fs from "node:fs/promises";
 import { filePath as path } from "../../../utils/path-resolver.js";
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import { isWorkspaceSessionDeleted } from "@noobot/runtime-events";
 
 function cleanId(value = "") {
   return String(value || "").trim().replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-function snapshotDir({ globalConfig = {}, userId = "", sessionId = "" } = {}) {
+function snapshotDir({ globalConfig = {}, userId = "", sessionId = "", parentSessionId = "" } = {}) {
   const root = String(globalConfig?.workspaceRoot || process.cwd()).trim();
-  return path.resolve(root, cleanId(userId), "runtime", "session", cleanId(sessionId), "model-message-snapshots");
+  const storageSessionId = cleanId(parentSessionId) || cleanId(sessionId);
+  return path.resolve(root, cleanId(userId), "runtime", "session", storageSessionId, "model-message-snapshots");
 }
 
 function snapshotPath(identity = {}, globalConfig = {}) {
-  return path.join(snapshotDir({ globalConfig, ...identity }), `${cleanId(identity.dialogProcessId)}__${cleanId(identity.turnScopeId)}.json`);
+  const childPrefix = cleanId(identity.parentSessionId) && cleanId(identity.parentSessionId) !== cleanId(identity.sessionId)
+    ? `${cleanId(identity.sessionId)}__`
+    : "";
+  return path.join(snapshotDir({ globalConfig, ...identity }), `${childPrefix}${cleanId(identity.dialogProcessId)}__${cleanId(identity.turnScopeId)}.json`);
+}
+
+function legacySnapshotPath(identity = {}, globalConfig = {}) {
+  const legacyIdentity = { ...identity, parentSessionId: "" };
+  return path.join(
+    snapshotDir({ globalConfig, ...legacyIdentity }),
+    `${cleanId(identity.dialogProcessId)}__${cleanId(identity.turnScopeId)}.json`,
+  );
 }
 
 function messageType(message = {}) {
@@ -193,6 +206,18 @@ export async function saveStoppedModelMessageSnapshot({ globalConfig = {}, ident
     turnScopeId: String(identity.turnScopeId || "").trim(),
   };
   if (!normalizedIdentity.userId || !normalizedIdentity.sessionId || !normalizedIdentity.dialogProcessId || !normalizedIdentity.turnScopeId) return null;
+  const workspaceRoot = String(globalConfig?.workspaceRoot || process.cwd()).trim();
+  const guardedSessionIds = [...new Set([
+    normalizedIdentity.sessionId,
+    normalizedIdentity.parentSessionId,
+  ].filter(Boolean))];
+  for (const sessionId of guardedSessionIds) {
+    if (await isWorkspaceSessionDeleted({
+      workspaceRoot,
+      userId: normalizedIdentity.userId,
+      sessionId,
+    })) return null;
+  }
   const now = new Date().toISOString();
   const factSourceMessages = composeMessagesFromBlocks(messageBlocks);
   const snapshot = {
@@ -256,12 +281,26 @@ export async function saveStoppedModelMessageSnapshotCandidate({
     return result;
   }
   try {
-    await saveStoppedModelMessageSnapshot({
+    const snapshot = await saveStoppedModelMessageSnapshot({
       globalConfig,
       identity,
       messages: candidate.messages,
       messageBlocks: candidate.messageBlocks,
     });
+    if (!snapshot) {
+      const result = buildSnapshotPersistenceResult({
+        status: "skipped",
+        source,
+        reason: "session_deleted",
+        identity,
+        candidate,
+      });
+      eventListener?.onEvent?.({
+        event: "stopped_model_message_snapshot_save_skipped",
+        data: result,
+      });
+      return result;
+    }
     const result = buildSnapshotPersistenceResult({
       status: "saved",
       source,
@@ -297,16 +336,28 @@ export async function loadStoppedModelMessageSnapshot({
   const normalizedIdentity = {
     userId: String(identity.userId || "").trim(),
     sessionId: String(identity.sessionId || "").trim(),
+    parentSessionId: String(identity.parentSessionId || "").trim(),
     dialogProcessId: String(identity.dialogProcessId || "").trim(),
     turnScopeId: String(identity.turnScopeId || "").trim(),
   };
-  const filePath = snapshotPath(normalizedIdentity, globalConfig);
+  const filePaths = [...new Set([
+    snapshotPath(normalizedIdentity, globalConfig),
+    legacySnapshotPath(normalizedIdentity, globalConfig),
+  ])];
   let raw;
-  try {
-    raw = await fs.readFile(filePath, "utf8");
-  } catch (error) {
-    if (allowMissing === true && error?.code === "ENOENT") return null;
-    throw error;
+  let lastError;
+  for (const filePath of filePaths) {
+    try {
+      raw = await fs.readFile(filePath, "utf8");
+      break;
+    } catch (error) {
+      lastError = error;
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  if (raw === undefined) {
+    if (allowMissing === true && lastError?.code === "ENOENT") return null;
+    throw lastError;
   }
   const snapshot = JSON.parse(raw);
   assertIdentity(snapshot, normalizedIdentity);
@@ -322,5 +373,11 @@ export async function loadStoppedModelMessageSnapshot({
 }
 
 export async function clearStoppedModelMessageSnapshot({ globalConfig = {}, identity = {} } = {}) {
-  try { await fs.rm(snapshotPath(identity, globalConfig), { force: true }); } catch {}
+  const filePaths = [...new Set([
+    snapshotPath(identity, globalConfig),
+    legacySnapshotPath(identity, globalConfig),
+  ])];
+  await Promise.all(filePaths.map(async (filePath) => {
+    try { await fs.rm(filePath, { force: true }); } catch {}
+  }));
 }

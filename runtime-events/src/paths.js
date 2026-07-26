@@ -7,6 +7,7 @@ import path from 'node:path';
 import { RUNTIME_EVENT_SCOPES } from './constants.js';
 import { resolveDefaultRuntimeEventsConfig } from './config.js';
 import { safeSegment } from './sanitize.js';
+import { resolveOptionalSessionId } from './session-id.js';
 
 const DEBUG_CATEGORY = 'debug';
 
@@ -22,6 +23,18 @@ export function resolveRuntimeEventsConfig(options = {}) {
   };
 }
 
+export function resolveRuntimeEventStorageSessionId(record = {}) {
+  return safeSegment(resolveOptionalSessionId(
+    record.storageSessionId,
+    record.rootSessionId,
+    record.parentSessionId,
+    record.data?.storageSessionId,
+    record.data?.rootSessionId,
+    record.data?.parentSessionId,
+    record.sessionId,
+  ));
+}
+
 export function resolveRuntimeEventDir(record, config = resolveRuntimeEventsConfig(record)) {
   if (config.root) {
     if (record.scope === RUNTIME_EVENT_SCOPES.SESSION) return path.join(config.root, safeSegment(record.sessionId));
@@ -29,7 +42,7 @@ export function resolveRuntimeEventDir(record, config = resolveRuntimeEventsConf
   }
   const workspaceRoot = path.resolve(String(record.workspaceRoot || config.workspaceRoot));
   if (record.scope === RUNTIME_EVENT_SCOPES.SESSION) {
-    return path.join(workspaceRoot, safeSegment(record.userId), 'runtime', 'session', safeSegment(record.sessionId), config.dirName);
+    return path.join(workspaceRoot, safeSegment(record.userId), 'runtime', 'session', resolveRuntimeEventStorageSessionId(record), config.dirName);
   }
   const userPart = record.userId ? safeSegment(record.userId) : 'system';
   return path.join(workspaceRoot, userPart, 'runtime', config.dirName, safeSegment(record.scope), safeSegment(record.source));

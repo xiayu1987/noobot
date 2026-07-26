@@ -13,6 +13,7 @@
     "./channels/startup": "./src/channels/startup.js",
     "./channels/system": "./src/channels/system.js",
     "./session-channel": "./src/session-channel.js",
+    "./session-id": "./src/session-id.js",
     "./package.json": "./package.json",
     "./session-log-protocol": "./src/session-log-protocol.js"
   },

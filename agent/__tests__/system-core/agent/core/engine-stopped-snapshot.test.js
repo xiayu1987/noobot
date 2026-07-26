@@ -86,6 +86,7 @@ test("runAgentTurn persists user stopped model message snapshot from engine user
     identity: {
       userId: "admin",
       sessionId: "session-engine-stop",
+      parentSessionId: "parent-session-engine-stop",
       dialogProcessId: "dialog-engine-stop",
       turnScopeId: "turn-engine-stop",
     },

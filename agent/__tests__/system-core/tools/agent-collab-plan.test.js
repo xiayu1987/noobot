@@ -35,6 +35,9 @@ afterEach(() => {
 
 test("plan_multi_task_collaboration: JSON parse fallbacks write runtime-events with session context", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-plan-collab-"));
+  const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s1");
+  await fs.mkdir(sessionDir, { recursive: true });
+  await fs.writeFile(path.join(sessionDir, "session.json"), JSON.stringify({ sessionId: "s1" }), "utf8");
   installFakeModel('not json\n```json\n{ "tasks": [\n```');
 
   const runtime = {

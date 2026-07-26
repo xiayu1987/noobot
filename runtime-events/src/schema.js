@@ -5,6 +5,7 @@
  */
 import { RUNTIME_EVENT_CATEGORIES, RUNTIME_EVENT_CHANNELS, RUNTIME_EVENT_LEVELS, RUNTIME_EVENT_SCOPES } from './constants.js';
 import { safeSegment, sanitizeValue, serializeError } from './sanitize.js';
+import { normalizeOptionalSessionId } from './session-id.js';
 
 const scopes = new Set(Object.values(RUNTIME_EVENT_SCOPES));
 const levels = new Set(Object.values(RUNTIME_EVENT_LEVELS));
@@ -39,15 +40,27 @@ export function normalizeRuntimeEvent(event = {}, defaults = {}) {
     level,
     event: String(name),
   };
-  for (const key of ['userId', 'sessionId', 'parentSessionId', 'dialogProcessId', 'turnScopeId']) {
+  for (const key of ['userId', 'sessionId', 'dialogProcessId', 'turnScopeId']) {
     const value = event[key] ?? defaults[key];
+    if (value) record[key] = safeSegment(value);
+  }
+  for (const key of ['parentSessionId', 'rootSessionId', 'storageSessionId']) {
+    const value = normalizeOptionalSessionId(event[key] ?? defaults[key]);
     if (value) record[key] = safeSegment(value);
   }
   const workspaceRoot = event.workspaceRoot || defaults.workspaceRoot;
   if (workspaceRoot) record.workspaceRoot = String(workspaceRoot);
   const processInfo = event.process ?? defaults.process ?? buildProcessInfo(defaults.includeProcess ?? true);
   if (processInfo) record.process = sanitizeValue(processInfo);
-  if (event.data || defaults.data) record.data = sanitizeValue({ ...(defaults.data || {}), ...(event.data || {}) });
+  if (event.data || defaults.data) {
+    record.data = sanitizeValue({ ...(defaults.data || {}), ...(event.data || {}) });
+    for (const key of ['parentSessionId', 'rootSessionId', 'storageSessionId']) {
+      if (!(key in record.data)) continue;
+      const value = normalizeOptionalSessionId(record.data[key]);
+      if (value) record.data[key] = safeSegment(value);
+      else delete record.data[key];
+    }
+  }
   const error = event.error || defaults.error;
   if (error) record.error = serializeError(error);
   const tags = event.tags || defaults.tags;
