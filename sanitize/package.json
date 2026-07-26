@@ -1,9 +1,11 @@
 {
   "name": "@noobot/sanitize",
-  "version": "4.0.4",
+  "version": "4.1.1",
   "private": true,
   "license": "MIT",
   "type": "module",
   "exports": "./src/index.js",
-  "scripts": { "test": "node --test" }
+  "scripts": {
+    "test": "node --test"
+  }
 }
