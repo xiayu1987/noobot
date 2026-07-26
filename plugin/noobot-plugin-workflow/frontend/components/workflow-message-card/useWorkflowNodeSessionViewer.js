@@ -101,6 +101,17 @@ export function resolveCanonicalWorkflowNodeItem(nodeItem = {}, runtimeNodeSessi
   };
 }
 
+export function isSameWorkflowDrawerRoute(left = {}, right = {}) {
+  const leftDialogProcessId = text(left?.dialogProcessId);
+  const leftRootSessionId = text(left?.rootSessionId);
+  return Boolean(
+    leftDialogProcessId &&
+    leftRootSessionId &&
+    leftDialogProcessId === text(right?.dialogProcessId) &&
+    leftRootSessionId === text(right?.rootSessionId),
+  );
+}
+
 export function useWorkflowNodeSessionViewer({
   props,
   emit,
@@ -756,6 +767,27 @@ export function useWorkflowNodeSessionViewer({
     window.addEventListener("popstate", handleWorkflowDrawerPopState);
     const initialRoute = parseWorkflowDrawerRoute(history.state);
     if (initialRoute.dialogProcessId && initialRoute.rootSessionId) {
+      const selectedRoute = selectedNode.value
+        ? buildWorkflowDrawerRoute(selectedNode.value)
+        : null;
+      // A workflow card moves from the live projection to the persisted
+      // message list at completion. The replacement card inherits selection
+      // context from the registry, while history still contains the old open
+      // drawer route. Treat that route as consumed UI state, not as a second
+      // open command. A real page refresh has no in-memory selection and still
+      // restores the deep link normally.
+      if (selectedRoute && isSameWorkflowDrawerRoute(initialRoute, selectedRoute)) {
+        props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.initialRouteConsumed", {
+          sessionId: text(initialRoute.rootSessionId),
+          dialogProcessId: text(initialRoute.dialogProcessId),
+          turnScopeId: text(selectedNode.value?.turnScopeId),
+          workflowRunId: text(selectedNode.value?.workflowRunId),
+          nodeExecutionId: text(selectedNode.value?.nodeExecutionId),
+          reason: "existing_viewer_selection",
+        });
+        replaceWorkflowDrawerHistory({ dialogProcessId: "", rootSessionId: "" });
+        return;
+      }
       applyWorkflowDrawerRoute(initialRoute);
     }
   });

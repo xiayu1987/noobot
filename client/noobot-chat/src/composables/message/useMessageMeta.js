@@ -17,6 +17,7 @@ import {
 } from "../chat/sessionRunStateMachine/turnRuntimeRegistry";
 import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
 import { selectCompletedToolArtifacts } from "../chat/chatEngine/toolTimeline";
+import { resolveStatusStepPresentation } from "../infra/messagePresentation";
 
 export function useMessageMeta({
   getMessageItem = () => ({}),
@@ -79,32 +80,16 @@ export function useMessageMeta({
 
   const statusStepState = computed(() => {
     const messageItem = getMessageItem() || {};
-    const projectedState = String(messageItem?.projectedStatusStepState || "").trim().toLowerCase();
-    const projectedDisplayState = ["completed", "stopped", "error", "requesting", "sending", "completing", "stopping"]
-      .includes(projectedState)
-        ? projectedState
-        : "";
     const turnScopeId = String(messageItem?.statusTurnScopeId || getMessageTurnScopeId(messageItem)).trim();
     const turnRuntime = resolveTurnRuntimeByScope(turnRuntimeRegistry.value, turnScopeId, {
       sessionId: String(messageItem?.sessionId || messageItem?.session_id || "").trim(),
     });
-    if (!turnRuntime) {
-      if (projectedDisplayState) return projectedDisplayState;
-      const persistedState = String(messageItem?.persistedStatusStepState || "").trim().toLowerCase();
-      if (persistedState === "user_stopped" || persistedState === "stopped") return "stopped";
-      if (["error", "failed", "expired"].includes(persistedState)) return "error";
-      return ["requesting", "sending", "completing", "stopping"].includes(persistedState)
-        ? persistedState
-        : "";
-    }
-    if (turnRuntime.terminal === "completed") return "completed";
-    if (turnRuntime.terminal === "user_stopped") return "stopped";
-    if (turnRuntime.terminal) return "error";
-    const displayState = turnRuntimeDisplayState(turnRuntime);
-    const runtimeDisplayState = ["requesting", "sending", "completing", "stopping"].includes(displayState)
-      ? displayState
-      : "";
-    return runtimeDisplayState || projectedDisplayState;
+    return resolveStatusStepPresentation({
+      turnRuntime,
+      runtimeDisplayState: turnRuntime ? turnRuntimeDisplayState(turnRuntime) : "",
+      projectedState: messageItem?.projectedStatusStepState,
+      persistedState: messageItem?.persistedStatusStepState,
+    }).displayState;
   });
 
   return {
