@@ -30,6 +30,10 @@ import { initializeMessageEventState } from "./messageEventState";
 import { mergeToolTimelines } from "../chat/chatEngine/toolTimeline";
 import { mergeActivityTimelines } from "../chat/chatEngine/activityTimeline";
 import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
+import {
+  mergeMessagePresentationFacets,
+  normalizeStatusStepDisplayState,
+} from "./messagePresentation";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -182,24 +186,6 @@ function normalizeMessageType(messageItem = {}) {
   return rawType;
 }
 
-const TERMINAL_PROJECTED_STATUS_STEP_STATES = new Set([
-  "completed",
-  "stopped",
-  "error",
-]);
-
-function mergeProjectedStatusStepState(previousState = "", currentState = "") {
-  const previous = String(previousState || "").trim().toLowerCase();
-  const current = String(currentState || "").trim().toLowerCase();
-  if (!current) return previous;
-  if (!previous) return current;
-  if (TERMINAL_PROJECTED_STATUS_STEP_STATES.has(previous) &&
-      !TERMINAL_PROJECTED_STATUS_STEP_STATES.has(current)) {
-    return previous;
-  }
-  return current;
-}
-
 function createMessageModel(messageItem = {}) {
   // Message construction is the persisted-document boundary. Convert legacy
   // log projections once, then expose only canonical timelines at runtime.
@@ -257,9 +243,9 @@ function createMessageModel(messageItem = {}) {
     // through the shared view-model boundary without folding it into Turn
     // Runtime protocol state or comparing unrelated sequence domains.
     statusTurnScopeId: String(canonicalMessage.statusTurnScopeId || "").trim(),
-    projectedStatusStepState: String(canonicalMessage.projectedStatusStepState || "")
-      .trim()
-      .toLowerCase(),
+    projectedStatusStepState: normalizeStatusStepDisplayState(
+      canonicalMessage.projectedStatusStepState,
+    ),
     hasFirstStreamEvent: canonicalMessage.hasFirstStreamEvent === true,
     ts: messageTimestamp || nowIso(),
     taskId: canonicalMessage.taskId || "",
@@ -383,13 +369,9 @@ function foldConversationMessages(messages = [], buildView) {
       Number(previousMessage?.thinkingDetailCount || 0),
       Number(currentMessage?.thinkingDetailCount || 0),
     );
-    const currentStatusTurnScopeId = String(currentMessage?.statusTurnScopeId || "").trim();
-    if (!previousMessage.statusTurnScopeId && currentStatusTurnScopeId) {
-      previousMessage.statusTurnScopeId = currentStatusTurnScopeId;
-    }
-    previousMessage.projectedStatusStepState = mergeProjectedStatusStepState(
-      previousMessage.projectedStatusStepState,
-      currentMessage.projectedStatusStepState,
+    Object.assign(
+      previousMessage,
+      mergeMessagePresentationFacets(previousMessage, currentMessage),
     );
     const currentAttachments = normalizeArray(currentMessage?.attachments);
     const previousAttachments = normalizeArray(previousMessage?.attachments);
