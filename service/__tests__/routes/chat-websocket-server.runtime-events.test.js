@@ -11,6 +11,12 @@ import path from "node:path";
 import { recordServiceWebSocketRuntimeError, recordServiceWebSocketSendFailure } from "../../ws/chat-websocket-server.js";
 import { startServerWithWs, closeServer, readJsonl, waitForFile, requestRawUpgrade } from "./chat-websocket-server.test-helpers.js";
 
+async function persistSession(workspaceRoot, userId, sessionId) {
+  const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
+  await fs.mkdir(sessionDir, { recursive: true });
+  await fs.writeFile(path.join(sessionDir, "session.json"), JSON.stringify({ sessionId }), "utf8");
+}
+
 test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-chat-ws-system-"));
   const server = await startServerWithWs({ sessionLogConfig: { workspaceRoot } });
@@ -56,6 +62,7 @@ test("chat-websocket-server: invalid upgrade URL writes sanitized system runtime
 
 test("chat-websocket-server: service websocket send failures write direct system runtime event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-runtime-events-"));
+  await persistSession(workspaceRoot, "u1", "s1");
   await recordServiceWebSocketSendFailure({
     sessionLogConfig: { workspaceRoot },
     eventName: "done",
@@ -90,6 +97,7 @@ test("chat-websocket-server: service websocket send failures write direct system
 
 test("chat-websocket-server: service websocket runtime errors write direct system runtime event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-runtime-events-error-"));
+  await persistSession(workspaceRoot, "u1", "p1");
   await recordServiceWebSocketRuntimeError({
     sessionLogConfig: { workspaceRoot },
     event: "service.websocket.run.failed",
@@ -107,7 +115,7 @@ test("chat-websocket-server: service websocket runtime errors write direct syste
     "u1",
     "runtime",
     "session",
-    "s1",
+    "p1",
     "events",
     "system.jsonl",
   ));

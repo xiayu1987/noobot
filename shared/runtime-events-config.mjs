@@ -79,9 +79,8 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     frontendToolLogWindowDebug: false,
     frontendTerminalResolutionDebug: false,
     agentProxyRouteDebug: false,
-    // Temporarily enabled by default while workflow/sub-agent projection and
-    // completion-source diagnostics are under active investigation.
-    workflowDiagnosticsDebug: true,
+    // Keep verbose workflow diagnostics opt-in outside active investigations.
+    workflowDiagnosticsDebug: false,
     frontendLifecycleLog: true,
     agentProxyHttpLog: true,
     agentProxyWebSocketLog: true,
