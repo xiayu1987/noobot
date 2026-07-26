@@ -85,24 +85,37 @@ export class ExecutionLogRepository {
     }
   }
 
-  async _getBundleStore(userId, sessionId, parentSessionId = "") {
+  async _getBundleStore(userId, sessionId, parentSessionId = "", persistenceContext = null) {
     if (this.executionRepository?.getBundle) {
-      return this.executionRepository.getBundle(userId, sessionId, parentSessionId);
+      return this.executionRepository.getBundle(
+        userId,
+        sessionId,
+        parentSessionId,
+        persistenceContext,
+      );
     }
     return this.sessionRepository.getExecutionBundle(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
   }
 
-  async _saveBundleStore(userId, sessionId, bundle = {}, parentSessionId = "") {
+  async _saveBundleStore(
+    userId,
+    sessionId,
+    bundle = {},
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
     if (this.executionRepository?.saveBundle) {
       return this.executionRepository.saveBundle(
         userId,
         sessionId,
         bundle,
         parentSessionId,
+        persistenceContext,
       );
     }
     return this.sessionRepository.saveExecutionBundle(
@@ -110,6 +123,7 @@ export class ExecutionLogRepository {
       sessionId,
       bundle,
       parentSessionId,
+      persistenceContext,
     );
   }
 
@@ -119,6 +133,7 @@ export class ExecutionLogRepository {
     normalizedLog = {},
     bundle = {},
     parentSessionId = "",
+    persistenceContext = null,
   ) {
     if (this.executionRepository?.appendLog) {
       return this.executionRepository.appendLog(
@@ -127,24 +142,42 @@ export class ExecutionLogRepository {
         normalizedLog,
         bundle,
         parentSessionId,
+        persistenceContext,
       );
     }
     bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
     bundle.logs.push(normalizedLog);
-    return this._saveBundleStore(userId, sessionId, bundle, parentSessionId);
+    return this._saveBundleStore(
+      userId,
+      sessionId,
+      bundle,
+      parentSessionId,
+      persistenceContext,
+    );
   }
 
-  async getBundle(userId, sessionId, parentSessionId = "") {
+  async getBundle(userId, sessionId, parentSessionId = "", persistenceContext = null) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
-    return this._getBundleStore(userId, normalizedSessionId, parentSessionId);
+    return this._getBundleStore(
+      userId,
+      normalizedSessionId,
+      parentSessionId,
+      persistenceContext,
+    );
   }
 
-  async appendLog(userId, sessionId, executionLog = {}, parentSessionId = "") {
+  async appendLog(
+    userId,
+    sessionId,
+    executionLog = {},
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
@@ -157,6 +190,7 @@ export class ExecutionLogRepository {
         userId,
         normalizedSessionId,
         parentSessionId,
+        persistenceContext,
       );
       const normalizedLog = normalizeExecutionLogEntity(executionLog, this.now);
       bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
@@ -188,6 +222,7 @@ export class ExecutionLogRepository {
         normalizedLog,
         bundle,
         parentSessionId,
+        persistenceContext,
       );
       await this._appendSessionChannelLog(
         userId,
