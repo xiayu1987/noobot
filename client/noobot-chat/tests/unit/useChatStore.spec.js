@@ -68,6 +68,27 @@ describe("useChatStore sub session projection", () => {
     expect(store.selectSubSessionMessages("sub-session-1")?.messages[0].content).toBe("he");
   });
 
+  it("converges workflow child streaming and non-streaming content on the final event", () => {
+    const store = useChatStore();
+    store.upsertSubSessionEvent("llm_delta", createSubSessionEvent({
+      eventId: "delta-1", sequence: 1, eventType: "llm_delta", text: "draft ",
+    }));
+    store.upsertSubSessionEvent("llm_delta", createSubSessionEvent({
+      eventId: "delta-2", sequence: 2, eventType: "llm_delta", text: "tokens",
+    }));
+    store.upsertSubSessionEvent("main_model_content", createSubSessionEvent({
+      eventId: "final-3", sequence: 3, eventType: "main_model_content",
+      text: "authoritative final", output: "authoritative final",
+    }));
+
+    const message = store.selectSubSessionMessages("sub-session-1")?.messages?.[0];
+    expect(message).toMatchObject({
+      content: "authoritative final",
+      finalContentSequence: 3,
+      messageId: "msg-assistant-1",
+    });
+  });
+
   it("merges delta, thinking, tool and lifecycle updates in sequence order", () => {
     const store = useChatStore();
     store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "he", pending: true, status: "sending" }));

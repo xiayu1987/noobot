@@ -41,7 +41,7 @@ export function createReviewHandler() {
     const reviewOptions = meta?.harness?.review && typeof meta.harness.review === "object"
       ? meta.harness.review
       : {};
-    const attachToFinalOutput = hook === "before_final_output" && reviewOptions.attachToFinalOutput !== false;
+    const attachToFinalOutput = hook === "before_final_output" && reviewOptions.attachToFinalOutput === true;
     const lifecycle = await runWorkflowLifecycle(ctx, {
       domain: CAPABILITY_DOMAIN.REVIEW,
       point: hook,

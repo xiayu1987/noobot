@@ -18,6 +18,12 @@ export const MESSAGE_EVENT_TYPE = Object.freeze({
 
 export const MESSAGE_EVENT_TYPES = Object.freeze(new Set(Object.values(MESSAGE_EVENT_TYPE)));
 
+export const MESSAGE_CONTENT_EFFECT = Object.freeze({
+  NONE: "none",
+  APPEND: "append",
+  REPLACE: "replace",
+});
+
 const text = (value) => String(value || "").trim();
 
 export function isMessageEventEnvelope(value = {}) {
@@ -75,6 +81,30 @@ export function assertMessageEventEnvelope(value = {}) {
     throw new TypeError(`invalid authoritative message event envelope: ${validation.errors.join(",")}`);
   }
   return value;
+}
+
+/**
+ * Project only the content effect of a canonical message event. Main-session
+ * and workflow child projections share this contract, so streaming changes
+ * delivery timing but never the final message semantics.
+ */
+export function projectMessageEventContent(event = {}) {
+  const eventType = text(event?.eventType);
+  if (eventType === MESSAGE_EVENT_TYPE.LLM_DELTA) {
+    return Object.freeze({
+      effect: MESSAGE_CONTENT_EFFECT.APPEND,
+      content: typeof event?.text === "string" ? event.text : "",
+    });
+  }
+  if (eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT) {
+    return Object.freeze({
+      effect: MESSAGE_CONTENT_EFFECT.REPLACE,
+      content: typeof event?.text === "string"
+        ? event.text
+        : (typeof event?.output === "string" ? event.output : ""),
+    });
+  }
+  return Object.freeze({ effect: MESSAGE_CONTENT_EFFECT.NONE, content: "" });
 }
 
 export function projectMessageEventToolFacets(event = {}) {

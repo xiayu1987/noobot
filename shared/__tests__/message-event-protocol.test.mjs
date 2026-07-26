@@ -9,8 +9,10 @@ import assert from "node:assert/strict";
 import {
   assertMessageEventEnvelope,
   MESSAGE_EVENT_TYPE,
+  MESSAGE_CONTENT_EFFECT,
   validateMessageEventEnvelope,
   hasMessageEventToolPayload,
+  projectMessageEventContent,
   projectMessageEventToolFacets,
 } from "../message-event-protocol.mjs";
 
@@ -76,4 +78,19 @@ test("message event protocol projects backend tool fields to canonical facets", 
     success: true,
   });
   assert.equal(hasMessageEventToolPayload(envelope({ tool: "read_file" })), true);
+});
+
+test("message content protocol separates incremental delivery from authoritative final content", () => {
+  assert.deepEqual(
+    projectMessageEventContent(envelope({ eventType: "llm_delta", text: "token" })),
+    { effect: MESSAGE_CONTENT_EFFECT.APPEND, content: "token" },
+  );
+  assert.deepEqual(
+    projectMessageEventContent(envelope({ eventType: "main_model_content", text: "final" })),
+    { effect: MESSAGE_CONTENT_EFFECT.REPLACE, content: "final" },
+  );
+  assert.deepEqual(
+    projectMessageEventContent(envelope()),
+    { effect: MESSAGE_CONTENT_EFFECT.NONE, content: "" },
+  );
 });

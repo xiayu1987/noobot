@@ -20,6 +20,38 @@ import {
 import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
 
 describe("useChatEngine.send-stream", () => {
+  it("refreshes a stale session version without replaying the failed Turn", async () => {
+    const conflict = new Error("session version conflict");
+    conflict.data = {
+      errorCode: "SESSION_VERSION_CONFLICT",
+      currentVersion: 2,
+    };
+    const stream = vi.fn(async () => {
+      throw conflict;
+    });
+    const fetchSessionDetail = vi.fn(async () => ({
+      sessionId: "s-version-conflict",
+      sessions: [{ sessionId: "s-version-conflict", version: 2, revision: 2, messages: [] }],
+    }));
+    const applySessionDetail = vi.fn();
+    const { engine } = createHarness({
+      sessionId: "s-version-conflict",
+      stream,
+      deps: { fetchSessionDetail, applySessionDetail },
+    });
+
+    await expect(engine.send()).resolves.toBe(false);
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(fetchSessionDetail).toHaveBeenCalledWith("s-version-conflict", expect.objectContaining({
+      source: "sendVersionConflict",
+      force: true,
+    }));
+    expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
+      preserveCurrentMessages: true,
+    }));
+  });
+
   it("sends the locally recorded thinking start so refresh can hydrate the duration", async () => {
     let capturedPayload = null;
     const stream = vi.fn(async (payload, onEvent) => {

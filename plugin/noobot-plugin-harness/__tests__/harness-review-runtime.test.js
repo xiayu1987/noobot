@@ -28,7 +28,7 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
 }
 
-test("harness review generates review report at final output", async () => {
+test("harness review keeps its report internal by default", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
 
@@ -50,7 +50,8 @@ test("harness review generates review report at final output", async () => {
     agentContext,
   });
 
-  assert.match(String(result.output), /Harness-Review/);
+  assert.equal(String(result.output), "done");
+  assert.doesNotMatch(String(result.output), /Harness-Review/);
   assert.equal(Array.isArray(agentContext.payload.harness.reviewReports), true);
   assert.equal(agentContext.payload.harness.reviewReports.length, 1);
   assert.equal(agentContext.payload.harness.lastReviewReport.point, "before_final_output");
@@ -73,6 +74,27 @@ test("harness review generates review report at final output", async () => {
     String(reviewDecision?.detail?.chosenReasonLabel || ""),
     /review 报告|review report/i,
   );
+});
+
+test("harness review attaches to final output only when explicitly enabled", async () => {
+  const hookManager = createAgentHookManager();
+  registerNoobotPlugin(
+    { hookManager },
+    { trace: false, promptPolicy: false, review: { attachToFinalOutput: true } },
+  );
+  const result = { output: "done" };
+  const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
+
+  await hookManager.emit("before_final_output", {
+    userId: "u12-opt-in",
+    sessionId: "s12-opt-in",
+    dialogProcessId: "dp12-opt-in",
+    result,
+    agentContext,
+  });
+
+  assert.match(String(result.output), /Harness-Review/);
+  assert.equal(agentContext.payload.harness.reviewReports.length, 1);
 });
 
 test("harness before_final_output capability runtime runs once", async () => {
@@ -226,7 +248,9 @@ test("harness finalResponseGuard false skips final policy injection but keeps re
   });
 
   assert.doesNotMatch(String(result.output), /noobot-harness-final-response/);
-  assert.match(String(result.output), /Harness-Review/);
+  assert.doesNotMatch(String(result.output), /Harness-Review/);
+  assert.equal(agentContext.payload.harness.reviewReports.length, 1);
+  assert.equal(agentContext.payload.harness.lastReviewReport.point, "before_final_output");
 });
 
 test("harness promptPolicy false still traces before_llm_call", async () => {
@@ -382,7 +406,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   });
 
   assert.doesNotMatch(String(result.output), /Harness-Forced-Acceptance/);
-  assert.match(String(result.output), /Harness-Review/);
+  assert.doesNotMatch(String(result.output), /Harness-Review/);
   assert.equal(agentContext.payload.harness.reviewReports.length, 1);
   assert.equal(agentContext.payload.harness.lastReviewReport.summary.planningCaptured, true);
   assert.equal(
@@ -493,4 +517,3 @@ test("harness forced acceptance is owned by acceptance without appending to fina
   assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "forced_acceptance_triggered"), true);
   assert.equal(agentContext.payload.harness.logs.planning.some((log) => log.event === "forced_acceptance_triggered"), false);
 });
-

@@ -31,6 +31,25 @@ test("authoritative message events declare the message-event sequence domain", (
   assert.equal(emitted[0]?.data?.sequenceDomain, "message-event");
 });
 
+test("each assistant message owns an independent contiguous event sequence", () => {
+  const runtime = { systemRuntime: { sessionId: "session-1" } };
+  const listener = { onEvent() {} };
+
+  const firstMessageId = beginAssistantMessageEventStream(runtime);
+  const first = emitMessageEvent(listener, runtime, "llm_delta", { text: "first" });
+  const second = emitMessageEvent(listener, runtime, "llm_delta", { text: "second" });
+  const nextMessageId = beginAssistantMessageEventStream(runtime);
+  const next = emitMessageEvent(listener, runtime, "llm_delta", { text: "next" });
+
+  assert.notEqual(nextMessageId, firstMessageId);
+  assert.deepEqual(
+    [first.sequence, second.sequence, next.sequence],
+    [1, 2, 1],
+  );
+  assert.equal(first.messageId, firstMessageId);
+  assert.equal(next.messageId, nextMessageId);
+});
+
 test("authoritative message envelope validation rejects partial events", () => {
   const envelope = {
     envelopeKind: "noobot.message_event",

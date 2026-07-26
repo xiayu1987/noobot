@@ -800,28 +800,27 @@ export function createChatEngineSender({
           };
         }
       });
-      for (let attempt = 1; attempt <= 2; attempt += 1) {
-        try {
-          await streamOnce(payload);
-          break;
-        } catch (streamError) {
-          const errorData = streamError?.data || lastStreamErrorEventData || {};
-          const versionConflict = normalizeTrimmedString(errorData?.errorCode) === "SESSION_VERSION_CONFLICT";
-          if (!versionConflict || attempt >= 2) throw streamError;
-          const previousVersion = getCurrentSessionVersion(activeSession);
+      try {
+        await streamOnce(payload);
+      } catch (streamError) {
+        const errorData = streamError?.data || lastStreamErrorEventData || {};
+        const versionConflict = normalizeTrimmedString(errorData?.errorCode) === "SESSION_VERSION_CONFLICT";
+        if (versionConflict) {
+          // ACTION_ACCEPTED already owns this Turn before Agent commits the
+          // message. Reusing its turnScopeId after a version conflict enters a
+          // terminal lifecycle and causes an illegal_transition. Refresh the
+          // concurrency token for the next user action, but never replay this
+          // failed Turn implicitly.
           const detail = await fetchSessionDetail(sessionId, {
             source: "sendVersionConflict",
             force: true,
             reuseRecentlyLoaded: false,
-          });
-          if (!detail) throw streamError;
-          applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
-          if (!isNewerSessionVersion(getCurrentSessionVersion(activeSession), previousVersion)) {
-            throw streamError;
+          }).catch(() => null);
+          if (detail) {
+            applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
           }
-          lastStreamErrorEventData = null;
-          payload = buildPayloadForCurrentVersion();
         }
+        throw streamError;
       }
       logStateMachineDebug("stateMachine.stream.resolved", {
         hasFinalDoneEventData: Boolean(finalDoneEventData),
