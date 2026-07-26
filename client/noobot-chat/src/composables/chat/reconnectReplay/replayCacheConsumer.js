@@ -74,6 +74,7 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   authoritativeCurrentRun = false,
   legacyDialogFallback = false,
   appliedReconnectSeqByDialogProcessId,
+  appliedReconnectEventKindsByTurnKey,
   terminalDialogProcessIdSet,
   classifyRealtimeLog,
   getReplayHydrationPromise,
@@ -85,6 +86,14 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   processStore,
   onHydrationError,
 } = {}) {
+  const replayKey = normalizeReplayCacheKey(dialogProcessId, activeSessionId?.value, turnScopeId);
+  const lastAppliedSeq = Number(
+    appliedReconnectSeqByDialogProcessId[replayKey] ||
+    appliedReconnectSeqByDialogProcessId[_trimStr(dialogProcessId)] ||
+    0,
+  );
+  const boundary = appliedReconnectEventKindsByTurnKey?.[replayKey] ||
+    appliedReconnectEventKindsByTurnKey?.[_trimStr(dialogProcessId)] || null;
   return applyReconnectReplayBatchToActiveSession({
     activeSession,
     activeSessionId,
@@ -96,9 +105,10 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     allowCreate,
     authoritativeCurrentRun,
     legacyDialogFallback: legacyDialogFallback || !_trimStr(turnScopeId),
-    lastAppliedSeq: Number(appliedReconnectSeqByDialogProcessId[
-      normalizeReplayCacheKey(dialogProcessId, activeSessionId?.value, turnScopeId)
-    ] || appliedReconnectSeqByDialogProcessId[_trimStr(dialogProcessId)] || 0),
+    lastAppliedSeq,
+    lastAppliedEventKinds: boundary && Number(boundary.sequence || 0) === lastAppliedSeq
+      ? boundary.eventKinds
+      : null,
     terminalDialogProcessIdSet,
     isReconnectTerminalBatch,
     isReconnectTerminalEvent,

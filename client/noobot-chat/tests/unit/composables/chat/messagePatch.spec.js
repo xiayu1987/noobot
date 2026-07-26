@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { applyDoneMessagesPatch } from "../../../../src/composables/chat/chatEngine/messagePatch";
+import {
+  applyDoneMessagesPatch,
+  reconcileDoneTurnSnapshot,
+} from "../../../../src/composables/chat/chatEngine/messagePatch";
+import { applyDoneMessagesFromReconnect } from "../../../../src/composables/chat/reconnectReplay/doneReplay";
 
 describe("messagePatch", () => {
   it("applies done raw messages without adding legacy dialog identity", () => {
@@ -93,5 +97,150 @@ describe("messagePatch", () => {
     expect(activeSession.value.messages).toHaveLength(2);
     expect(activeSession.value.messages.some((messageItem) => messageItem.workflowMessage === true)).toBe(false);
     expect(botMessage.content).toBe("normal finalized");
+  });
+
+  it("projects the same DONE snapshot identically through realtime and reconnect entries", () => {
+    const data = {
+      sessionId: "session-homomorphic",
+      dialogProcessId: "dialog-homomorphic",
+      turnScopeId: "turn-homomorphic",
+      messages: [
+        {
+          role: "user",
+          content: "run workflow",
+          sessionId: "session-homomorphic",
+          dialogProcessId: "dialog-homomorphic",
+          turnScopeId: "turn-homomorphic",
+        },
+        {
+          role: "assistant",
+          type: "workflow",
+          content: "workflow result",
+          sessionId: "session-homomorphic",
+          dialogProcessId: "dialog-homomorphic",
+          turnScopeId: "turn-homomorphic",
+          pluginMessage: true,
+          pluginMeta: {
+            source: "workflow-plugin",
+            kind: "workflow",
+            payload: { workflowRunId: "run-homomorphic" },
+          },
+        },
+      ],
+    };
+    const newProjection = () => {
+      const assistant = {
+        role: "assistant",
+        type: "message",
+        content: "",
+        sessionId: data.sessionId,
+        dialogProcessId: data.dialogProcessId,
+        turnScopeId: data.turnScopeId,
+        pending: true,
+        thinkingExpanded: true,
+        attachments: [],
+      };
+      return {
+        assistant,
+        session: {
+          value: {
+            id: data.sessionId,
+            backendSessionId: data.sessionId,
+            title: "session",
+            messages: [data.messages[0], assistant],
+            sessionDocs: [],
+          },
+        },
+      };
+    };
+    const makeViewMessage = (messageItem) => ({ ...messageItem });
+    const foldMessagesForView = (messages) => messages;
+    const mergeAssistantAttachments = (target, attachments) => {
+      target.attachments = attachments;
+    };
+    const realtime = newProjection();
+    applyDoneMessagesPatch({
+      data,
+      botMessage: realtime.assistant,
+      activeSession: realtime.session,
+      makeViewMessage,
+      foldMessagesForView,
+      mergeAssistantAttachments,
+    });
+    const reconnect = newProjection();
+    applyDoneMessagesFromReconnect({
+      activeSession: reconnect.session,
+      activeSessionId: { value: data.sessionId },
+      eventData: data,
+      makeViewMessage,
+      foldMessagesForView,
+      mergeAssistantAttachments,
+      applyCompletedToolLogsToMessages: () => {},
+      sessionTitleFromMessages: () => "session",
+      applyFoldedMessagesToActiveSession: () => {},
+    });
+
+    const comparable = (message) => ({
+      role: message.role,
+      type: message.type,
+      content: message.content,
+      sessionId: message.sessionId,
+      dialogProcessId: message.dialogProcessId,
+      turnScopeId: message.turnScopeId,
+      pluginMessage: message.pluginMessage,
+      pluginMeta: message.pluginMeta,
+      pending: message.pending,
+      thinkingExpanded: message.thinkingExpanded,
+    });
+    expect(comparable(reconnect.assistant)).toEqual(comparable(realtime.assistant));
+    expect(reconnect.session.value.messages).toHaveLength(2);
+  });
+
+  it("inserts exactly one exact-Turn assistant when a replay projection has only the user", () => {
+    const userMessage = {
+      role: "user",
+      content: "run workflow",
+      sessionId: "session-insert",
+      dialogProcessId: "dialog-insert",
+      turnScopeId: "turn-insert",
+    };
+    const activeSession = { value: { messages: [userMessage] } };
+    const data = {
+      sessionId: "session-insert",
+      dialogProcessId: "dialog-insert",
+      turnScopeId: "turn-insert",
+      messages: [
+        userMessage,
+        {
+          role: "assistant",
+          content: "final answer",
+          sessionId: "session-insert",
+          dialogProcessId: "dialog-insert",
+          turnScopeId: "turn-insert",
+        },
+      ],
+    };
+
+    const first = reconcileDoneTurnSnapshot({
+      data,
+      activeSession,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => messages,
+    });
+    const second = reconcileDoneTurnSnapshot({
+      data,
+      activeSession,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (messages) => messages,
+    });
+
+    expect(first).toMatchObject({ applied: true, inserted: true });
+    expect(second).toMatchObject({ applied: true, inserted: false });
+    expect(activeSession.value.messages).toHaveLength(2);
+    expect(activeSession.value.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "final answer",
+      turnScopeId: "turn-insert",
+    });
   });
 });

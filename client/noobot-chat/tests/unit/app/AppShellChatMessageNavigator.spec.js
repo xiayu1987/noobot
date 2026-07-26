@@ -149,7 +149,8 @@ describe("AppShell chat message navigator", () => {
   it("builds navigator items from active session messages and delegates selection to the message list", () => {
     expect(chatMessageNavigatorPanelSource).toContain("const chatMessageNavItems = computed(() =>");
     expect(chatMessageNavigatorPanelSource).toContain("buildChatMessageNavItems({");
-    expect(chatMessageNavigatorPanelSource).toContain("messages: activeSession?.value?.messages || []");
+    expect(chatMessageNavigatorPanelSource).toContain("selectTurnPresentations({");
+    expect(chatMessageNavigatorPanelSource).toContain("messages: presentationMessages.value");
     expect(chatMessageNavigatorPanelSource).toContain("getMessageAnchorId: messageListPanelRef?.value?.getMessageAnchorId");
     expect(chatMessageNavItemsStateSource).toContain("export function buildChatMessageNavItems({");
     expect(chatMessageNavItemsStateSource).toContain("shouldRenderMessageInChat");

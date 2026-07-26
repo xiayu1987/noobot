@@ -402,7 +402,11 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     // The authoritative detail lifecycle event owns completion even when this
     // focused mock only replaces content.
     expect(assistant?.pending).toBe(false);
-    expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only");
+    expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only", expect.objectContaining({
+      source: "realtimeDoneFinalStatus",
+      force: true,
+      requireFresh: true,
+    }));
     expect(applySessionDetail).toHaveBeenCalledTimes(1);
   });
 
@@ -432,7 +436,11 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(botMessage.dialogProcessId).toBe("dp-error");
     expect(botMessage.pending).toBe(false);
     expect(botMessage.error).toBe("invalid tool input");
-    expect(fetchSessionDetail).toHaveBeenCalledWith("s-error");
+    expect(fetchSessionDetail).toHaveBeenCalledWith("s-error", expect.objectContaining({
+      source: "realtimeErrorRecoveryFinalStatus",
+      force: true,
+      requireFresh: true,
+    }));
     expect(applySessionDetail).toHaveBeenCalledWith({ sessionId: "s-error", messages: [] }, {
       preserveCurrentMessages: true,
       scrollToBottom: false,

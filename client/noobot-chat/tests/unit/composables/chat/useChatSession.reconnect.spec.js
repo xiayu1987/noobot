@@ -440,13 +440,17 @@ describe("useChatSession reconnect replay", () => {
     expect(oldAssistant.content).toBe("old keep");
     expect(newAssistant.content).toBe("new final answer");
     expect(newAssistant.modelAlias).toBe("alias-1");
-    // DONE is only a terminal-resolution notification. It queries the single
-    // authoritative endpoint; this unresolved fixture must not manufacture a
-    // terminal registry state or clear pending presentation.
-    expect(authFetch).toHaveBeenCalledTimes(2);
-    expect(authFetch.mock.calls.every(([url]) => url.includes("/turns/turn-new/terminal"))).toBe(true);
+    // Completion uses the same fresh-detail and connector reconciliation as
+    // realtime, while all terminal discovery sources converge on one Turn GET.
+    // The final detail materializes the assistant presentation immediately;
+    // the unresolved terminal fixture must not manufacture registry state.
+    const requestedUrls = authFetch.mock.calls.map(([url]) => url);
+    expect(requestedUrls).toHaveLength(3);
+    expect(requestedUrls.filter((url) => url === "/api/internal/session/u-1/s-1")).toHaveLength(1);
+    expect(requestedUrls.filter((url) => url === "/api/internal/connectors/u-1/s-1")).toHaveLength(1);
+    expect(requestedUrls.filter((url) => url.includes("/turns/turn-new/terminal"))).toHaveLength(1);
     expect(store.turnRuntimeRegistry.sessions).toEqual({});
-    expect(newAssistant.pending).toBe(true);
+    expect(newAssistant.pending).toBe(false);
   });
 
 

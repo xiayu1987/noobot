@@ -21,6 +21,7 @@ import {
   buildUnifiedSessionDetail,
   hasNewProtocolNodeIdentity,
   mergeUnifiedSessionDetail,
+  projectTurnStatusOntoAssistant,
   resolveIsolatedNodeSessionId,
   resolveNodeChildExecutionIds,
   resolveRuntimeNodeSession,
@@ -262,6 +263,24 @@ export function useWorkflowNodeSessionViewer({
         pending: message?.pending === true,
         workflowNodeRunningPlaceholder: message?.workflowNodeRunningPlaceholder === true,
         contentLength: String(message?.content || "").length,
+      })),
+    });
+    const projectedAssistants = messages.filter((message = {}) =>
+      text(message?.role).toLowerCase() === "assistant" &&
+      Boolean(text(message?.statusTurnScopeId) || text(message?.projectedStatusStepState)));
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.statusProjected", {
+      sessionId: text(detail?.sessionId || detail?.sessionSummary?.sessionId),
+      dialogProcessId: resolveWorkflowDialogProcessId(runtimeNode) || resolveWorkflowDialogProcessId(nodeItem),
+      turnScopeId: text(runtimeNode?.turnScopeId || nodeItem?.turnScopeId),
+      workflowRunId: text(runtimeNode?.workflowRunId || nodeItem?.workflowRunId),
+      nodeExecutionId: text(runtimeNode?.nodeExecutionId || nodeItem?.nodeExecutionId),
+      stage,
+      assistantFound: messages.some((message = {}) => text(message?.role).toLowerCase() === "assistant"),
+      projectedAssistantCount: projectedAssistants.length,
+      projectedAssistants: projectedAssistants.map((message = {}) => ({
+        id: text(message?.id || message?.messageId),
+        statusTurnScopeId: text(message?.statusTurnScopeId),
+        projectedStatusStepState: text(message?.projectedStatusStepState),
       })),
     });
   }
@@ -588,13 +607,22 @@ export function useWorkflowNodeSessionViewer({
                   ? subSessionMergeResult.session.messages.length
                   : 0,
               });
-              const placeholderMessages = withRunningAssistantPlaceholder(rawMessages, {
-                sessionId: sessionIdHint,
-                turnScopeId: text(canonicalNodeItem?.turnScopeId),
-                dialogProcessId,
-                state: subSessionMergeResult?.session?.status ||
-                  canonicalNodeItem?.status || canonicalNodeItem?.state || canonicalNodeItem?.stepStatus,
-              });
+              const projectionState = subSessionMergeResult?.session?.status ||
+                canonicalNodeItem?.status || canonicalNodeItem?.state || canonicalNodeItem?.stepStatus;
+              const placeholderMessages = projectTurnStatusOntoAssistant(
+                withRunningAssistantPlaceholder(rawMessages, {
+                  sessionId: sessionIdHint,
+                  turnScopeId: text(canonicalNodeItem?.turnScopeId),
+                  dialogProcessId,
+                  state: projectionState,
+                }),
+                {
+                  sessionId: sessionIdHint,
+                  turnScopeId: text(canonicalNodeItem?.turnScopeId),
+                  dialogProcessId,
+                  state: projectionState,
+                },
+              );
               const messages = attachPersistedExecutionLogs(
                 placeholderMessages,
                 hydratedDetail.executionLogs,

@@ -247,9 +247,54 @@ export async function refreshFinalSessionDetail({
   }
 }
 
-export async function finalizeDoneSessionDetail(options = {}) {
-  return refreshFinalSessionDetail(options);
+export async function finalizeDoneTurnPresentation({
+  fetchSessionDetail,
+  completionSource = "done",
+  logSessionEvent,
+  ...options
+} = {}) {
+  const source = normalizeTrimmedString(completionSource) || "done";
+  const scope = {
+    sessionId: resolveFinalizeSessionId(options),
+    dialogProcessId: normalizeTrimmedString(
+      options?.finalDoneEventData?.dialogProcessId || options?.finalEventData?.dialogProcessId,
+    ),
+    turnScopeId: normalizeTrimmedString(
+      options?.finalDoneEventData?.turnScopeId || options?.finalEventData?.turnScopeId,
+    ),
+  };
+  logSessionEvent?.({
+    category: "debug",
+    level: "debug",
+    debugType: "workflow-diagnostics",
+    event: "frontend.completionPresentation.started",
+    ...scope,
+    data: { source },
+  });
+  const applied = await refreshFinalSessionDetail({
+    ...options,
+    logSessionEvent,
+    fetchSessionDetail: (sessionId) => fetchSessionDetail?.(sessionId, {
+      source: `${source}FinalStatus`,
+      force: true,
+      requireFresh: true,
+      reuseRecentlyLoaded: false,
+    }),
+  });
+  logSessionEvent?.({
+    category: "debug",
+    level: "debug",
+    debugType: "workflow-diagnostics",
+    event: "frontend.completionPresentation.finished",
+    ...scope,
+    data: { source, applied: applied === true },
+  });
+  return applied;
 }
+
+// Compatibility name for callers migrating to the explicit Turn presentation
+// boundary. All completion paths must share the policy above.
+export const finalizeDoneSessionDetail = finalizeDoneTurnPresentation;
 
 /**
  * Read-after-write convergence for a persisted user stop.  USER_STOPPED is a

@@ -68,7 +68,7 @@ import {
   SESSION_RUN_EVENT,
 } from "./sessionRunStateMachine";
 import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry";
-import { finalizeDoneSessionDetail as finalizeDoneSessionDetailWithContext } from "./chatEngine/sessionFinalize";
+import { finalizeDoneTurnPresentation } from "./chatEngine/sessionFinalize";
 import { logWorkflowDiagnostics } from "./debug/workflowDiagnosticsLogger";
 
 export function useReconnectReplay({
@@ -107,7 +107,13 @@ export function useReconnectReplay({
   applyWorkflowRuntimeEvent: reduceWorkflowRuntimeEvent,
 } = {}) {
   const reconnectReplayContext = createReconnectReplayContext();
-  const { replayCache, appliedReconnectSeqByDialogProcessId, terminalDialogProcessIdSet, missingInteractionPayloadTimers } =
+  const {
+    replayCache,
+    appliedReconnectSeqByDialogProcessId,
+    appliedReconnectEventKindsByTurnKey,
+    terminalDialogProcessIdSet,
+    missingInteractionPayloadTimers,
+  } =
     reconnectReplayContext;
   let { cacheExpiredRefreshTimer, replayHydrationPromise } = reconnectReplayContext;
   const protocolReconcileAttempts = new Map();
@@ -502,7 +508,10 @@ export function useReconnectReplay({
       appliedReconnectSeqByDialogProcessId,
       dialogProcessId,
       sequence,
-      identity,
+      {
+        ...identity,
+        appliedEventKindsByTurnKey: appliedReconnectEventKindsByTurnKey,
+      },
     );
   }
 
@@ -563,6 +572,7 @@ export function useReconnectReplay({
       sessionTitleFromMessages,
       applyFoldedMessagesForDialogProcess: applyFoldedMessagesForDialogProcessWithContext,
       applyFoldedMessagesToActiveSession: applyFoldedMessagesToActiveSessionWithContext,
+      mergeAssistantAttachments,
     });
   }
 
@@ -581,17 +591,12 @@ export function useReconnectReplay({
       assistantFound: Boolean(botMessage),
       doneMessageCount: Array.isArray(eventData?.messages) ? eventData.messages.length : 0,
     });
-    const applied = await finalizeDoneSessionDetailWithContext({
+    const applied = await finalizeDoneTurnPresentation({
       activeSession,
       activeSessionId,
       botMessage,
       finalDoneEventData: eventData,
-      fetchSessionDetail: (requestedSessionId) => chatList.fetchSessionDetail(requestedSessionId, {
-        source: "reconnectDoneFinalStatus",
-        force: true,
-        requireFresh: true,
-        reuseRecentlyLoaded: false,
-      }),
+      fetchSessionDetail: chatList.fetchSessionDetail,
       applySessionDetail: chatList.applySessionDetail,
       applyAssistantFailureState: (targetAssistantMessage, error) =>
         applyAssistantFailureStateWithContext({
@@ -603,6 +608,7 @@ export function useReconnectReplay({
       refreshSessionConnectorsAsync,
       preserveCurrentMessages: true,
       logSessionEvent: (payload) => sessionLogWebSocketClient?.log?.(payload),
+      completionSource: "reconnectDone",
     });
     logWorkflowDiagnostics("frontend.workflowReplay.doneFinalDetailFinished", {
       sessionId,
@@ -653,6 +659,7 @@ export function useReconnectReplay({
       allowCreate,
       authoritativeCurrentRun,
       appliedReconnectSeqByDialogProcessId,
+      appliedReconnectEventKindsByTurnKey,
       terminalDialogProcessIdSet,
       classifyRealtimeLog,
       getReplayHydrationPromise: () => replayHydrationPromise,
@@ -703,7 +710,7 @@ export function useReconnectReplay({
       applyExecutionTree,
       applyWorkflowRuntimeEvent,
       applySubSessionReplayMessages,
-      finalizeDoneSessionDetail: finalizeReconnectDoneSessionDetail,
+      finalizeDoneTurnPresentation: finalizeReconnectDoneSessionDetail,
       isDeletedTurn,
     });
   }

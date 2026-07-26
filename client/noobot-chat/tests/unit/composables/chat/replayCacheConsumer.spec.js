@@ -149,10 +149,11 @@ describe("replayCacheConsumer", () => {
     });
 
     expect(fixture.activeSession.value.messages[0].content).toBe("new");
-    expect(fixture.markReconnectSequenceApplied).toHaveBeenCalledWith("dp-1", 3, {
+    expect(fixture.markReconnectSequenceApplied).toHaveBeenCalledWith("dp-1", 3, expect.objectContaining({
       sessionId: "",
       turnScopeId: "",
-    });
+      eventKindsAtSequence: [StreamEventEnum.DELTA],
+    }));
     expect(fixture.scrollBottom).not.toHaveBeenCalled();
   });
 
@@ -170,10 +171,11 @@ describe("replayCacheConsumer", () => {
     });
 
     expect(terminalDialogProcessIdSet.has("dp-1")).toBe(true);
-    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 2, {
+    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 2, expect.objectContaining({
       sessionId: "",
       turnScopeId: "",
-    });
+      eventKindsAtSequence: [StreamEventEnum.DONE],
+    }));
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
 
     await applyReconnectMessagesToActiveSessionReplay({
@@ -185,10 +187,11 @@ describe("replayCacheConsumer", () => {
     });
 
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
-    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 3, {
+    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 3, expect.objectContaining({
       sessionId: "",
       turnScopeId: "",
-    });
+      eventKindsAtSequence: [StreamEventEnum.DELTA],
+    }));
   });
 
   it("continues reconnect thinking execution count and items from refresh hydrated process fields", async () => {

@@ -4,9 +4,11 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
-import WorkflowLiveProjectionList from "./WorkflowLiveProjectionList.vue";
+import { useChatStore } from "../shared/stores/useChatStore";
+import { selectTurnPresentations } from "../composables/chat/chatEngine/turnPresentation";
+import { logWorkflowDiagnostics, summarizeWorkflowMessages } from "../composables/chat/debug/workflowDiagnosticsLogger";
 import { useLocale } from "../shared/i18n/useLocale";
 import {
   getMessageSessionId,
@@ -35,8 +37,22 @@ const props = defineProps({
 
 const listRef = ref(null);
 const { translate } = useLocale();
+const chatStore = useChatStore();
+const presentedMessages = computed(() => {
+  const messages = selectTurnPresentations({
+    activeSession: props.activeSession,
+    workflowRegistry: chatStore.workflowNodeStateRegistry,
+  });
+  logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", {
+    sessionId: String(props.activeSession?.backendSessionId || props.activeSession?.id || ""),
+    sourceMessageCount: Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
+    presentationMessageCount: messages.length,
+    workflowPresentations: summarizeWorkflowMessages(messages),
+  });
+  return messages;
+});
 const messageItemSharedProps = computed(() => ({
-  allMessages: props.activeSession?.messages || [],
+  allMessages: presentedMessages.value,
   sessionDocs: props.activeSession?.sessionDocs || [],
   userId: props.userId,
   authFetch: props.authFetch,
@@ -101,14 +117,14 @@ defineExpose({
     <el-scrollbar ref="listRef" class="msg-list">
       <div class="msg-list-inner">
         <el-skeleton
-          v-if="loadingSessionDetail && !activeSession?.messages?.length"
+          v-if="loadingSessionDetail && !presentedMessages.length"
           :rows="6"
           animated
           class="skeleton-loading noobot-surface-card"
         />
 
         <div
-          v-if="!activeSession?.messages?.length && !loadingSessionDetail"
+          v-if="!presentedMessages.length && !loadingSessionDetail"
           class="empty-state"
         >
           <div class="empty-icon">
@@ -118,7 +134,7 @@ defineExpose({
         </div>
 
         <template
-          v-for="(messageItem, messageIndex) in activeSession?.messages || []"
+          v-for="(messageItem, messageIndex) in presentedMessages"
           :key="getMessageRenderKey(messageItem, messageIndex)"
         >
           <div

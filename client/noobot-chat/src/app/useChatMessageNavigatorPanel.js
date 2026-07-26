@@ -11,10 +11,12 @@ import {
   selectChatMessageNavigatorItem,
 } from "./state/chatMessageNavigatorState";
 import { buildChatMessageNavItems } from "./state/chatMessageNavItemsState";
+import { selectTurnPresentations } from "../composables/chat/chatEngine/turnPresentation";
 
 export function useChatMessageNavigatorPanel({
   activeSession,
   activeSessionId,
+  workflowNodeStateRegistry,
   shouldRenderMessageInChat,
   messageListPanelRef,
   isMobile,
@@ -27,8 +29,12 @@ export function useChatMessageNavigatorPanel({
   const mobileChatNavigatorVisible = ref(false);
   const currentMessageAnchorId = ref("");
 
+  const presentationMessages = computed(() => selectTurnPresentations({
+    activeSession: activeSession?.value || {},
+    workflowRegistry: workflowNodeStateRegistry?.value || workflowNodeStateRegistry || {},
+  }));
   const chatMessageNavItems = computed(() => buildChatMessageNavItems({
-    messages: activeSession?.value?.messages || [],
+    messages: presentationMessages.value,
     shouldRenderMessageInChat,
     getMessageAnchorId: messageListPanelRef?.value?.getMessageAnchorId,
     translateSession: () => translate?.("common.session") || "session",

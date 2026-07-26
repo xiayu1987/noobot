@@ -76,6 +76,8 @@ describe("terminalResolutionCoordinator", () => {
       applied: false,
       reason: "terminal_materialization_not_ready",
     });
+    await coordinator.resolve("s-1", "t-1");
+    expect(fetcher).toHaveBeenCalledTimes(1);
     expect(apply).not.toHaveBeenCalled();
   });
 

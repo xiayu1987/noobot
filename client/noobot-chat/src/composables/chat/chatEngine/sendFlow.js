@@ -17,7 +17,7 @@ import {
 } from "./sendFinalize";
 import { prepareChatSend } from "./sendPrepare";
 import {
-  finalizeDoneSessionDetail,
+  finalizeDoneTurnPresentation,
   finalizeStoppedSessionDetail,
   refreshFinalSessionDetail,
 } from "./sessionFinalize";
@@ -56,6 +56,7 @@ import {
   getCurrentSessionVersion,
   isNewerSessionVersion,
 } from "./sessionVersionManager";
+import { normalizeTurnTransportEnvelope } from "./turnTransportEnvelope";
 
 function createTurnScopeId() {
   const randomUuid = globalThis?.crypto?.randomUUID?.();
@@ -396,7 +397,7 @@ export function createChatEngineSender({
           turnScopeId: finalDoneEventData.turnScopeId,
           botMessage: summarizeStateMachineMessage(botMsg),
         });
-        finalDoneDetailPromise = finalizeDoneSessionDetail({
+        finalDoneDetailPromise = finalizeDoneTurnPresentation({
           activeSession,
           activeSessionId,
           botMessage: botMsg,
@@ -407,6 +408,7 @@ export function createChatEngineSender({
           applyRunStateEvent,
           refreshSessionConnectorsAsync,
           logSessionEvent,
+          completionSource: "realtimeDone",
         }).then((applied) => {
           logStateMachineDebug("stateMachine.done.finalize.after", {
             source,
@@ -435,7 +437,11 @@ export function createChatEngineSender({
         return finalDoneDetailPromise;
       };
 
-      const streamOnce = (streamPayload) => chatWebSocketClient.stream(streamPayload, ({ event, data }) => {
+      const streamOnce = (streamPayload) => chatWebSocketClient.stream(streamPayload, (incomingEnvelope) => {
+        const { event, data } = normalizeTurnTransportEnvelope({
+          ...(incomingEnvelope || {}),
+          source: "realtime",
+        });
         const authoritativeEvent = data?.event || {};
         const subProjectionChecks = {
           eventName: event === "subagent_message_event",
@@ -969,7 +975,7 @@ export function createChatEngineSender({
           hasStreamErrorEventData: Boolean(lastStreamErrorEventData),
         },
       });
-      await finalizeDoneSessionDetail({
+      await finalizeDoneTurnPresentation({
         activeSession,
         activeSessionId,
         botMessage: botMsg,
@@ -979,6 +985,8 @@ export function createChatEngineSender({
         applyAssistantFailureState,
         applyRunStateEvent,
         refreshSessionConnectorsAsync,
+        completionSource: "realtimeErrorRecovery",
+        logSessionEvent,
       });
       return false;
     } finally {

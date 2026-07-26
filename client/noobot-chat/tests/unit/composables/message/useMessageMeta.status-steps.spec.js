@@ -159,4 +159,62 @@ describe("useMessageMeta status steps", () => {
     await nextTick();
     expect(statusStepState.value).toBe("");
   });
+
+  it("renders an authoritative child Execution projection without hydrating the Registry", async () => {
+    const message = {
+      role: "assistant",
+      sessionId: "child-session",
+      turnScopeId: "workflow-node:child",
+      statusTurnScopeId: "workflow-node:child",
+      projectedStatusStepState: "completed",
+    };
+    const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
+    await nextTick();
+    expect(statusStepState.value).toBe("completed");
+  });
+
+  it("keeps the child Execution projection when an unresolved backend terminal runtime has no display state", async () => {
+    const store = useChatStore();
+    const message = {
+      role: "assistant",
+      sessionId: "child-session",
+      turnScopeId: "workflow-node:child",
+      statusTurnScopeId: "workflow-node:child",
+      projectedStatusStepState: "completed",
+    };
+    applyEvent(store, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "completed",
+      sessionId: "child-session",
+      turnScopeId: "workflow-node:child",
+    });
+    const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
+    await nextTick();
+    expect(statusStepState.value).toBe("completed");
+  });
+
+  it("keeps an active runtime ahead of an older child Execution projection", async () => {
+    const store = useChatStore();
+    const message = {
+      role: "assistant",
+      sessionId: "child-session",
+      turnScopeId: "workflow-node:child",
+      statusTurnScopeId: "workflow-node:child",
+      projectedStatusStepState: "completed",
+    };
+    applyEvent(store, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
+      sessionId: "child-session",
+      turnScopeId: "workflow-node:child",
+    });
+    applyEvent(store, {
+      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+      state: "sending",
+      sessionId: "child-session",
+      turnScopeId: "workflow-node:child",
+    });
+    const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
+    await nextTick();
+    expect(statusStepState.value).toBe("sending");
+  });
 });

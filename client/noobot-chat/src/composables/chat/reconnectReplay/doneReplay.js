@@ -6,7 +6,6 @@
 import { findVisibleLastMessage } from "../../infra/messageModel";
 import {
   findReconnectDoneEnvelopeWithMessages,
-  patchMessageObjectPreservingUiState,
 } from "../../infra/reconnectReplayModel";
 import { nowIso } from "../../infra/timeFields";
 import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
@@ -23,45 +22,7 @@ import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessage,
 } from "../debug/workflowDiagnosticsLogger";
-
-function patchDoneAssistantByTurn({ activeSession, foldedSessionMessages = [], turnScopeId = "" } = {}) {
-  const normalizedTurnScopeId = _trimStr(turnScopeId);
-  if (!activeSession?.value || !normalizedTurnScopeId) {
-    return { applied: false, reason: "missing_active_turn" };
-  }
-  const doneAssistant = [...foldedSessionMessages].reverse().find((messageItem) =>
-    getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
-    getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
-  );
-  if (!doneAssistant) return { applied: false, reason: "done_assistant_missing" };
-  const activeMessages = Array.isArray(activeSession.value.messages)
-    ? activeSession.value.messages
-    : [];
-  let targetAssistant = activeMessages.find((messageItem) =>
-    getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
-    getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
-  );
-  let inserted = false;
-  if (!targetAssistant) {
-    targetAssistant = doneAssistant;
-    const lastTurnMessageIndex = activeMessages.findLastIndex(
-      (messageItem) => getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
-    );
-    activeMessages.splice(lastTurnMessageIndex + 1, 0, targetAssistant);
-    inserted = true;
-  }
-  // DONE is a versioned snapshot for this exact Turn. Reuse the canonical
-  // message patch so a refreshed-page assistant placeholder can become the
-  // finalized workflow/plugin message in place, without losing UI-owned state.
-  patchMessageObjectPreservingUiState(targetAssistant, doneAssistant);
-  const content = _trimStr(doneAssistant?.content);
-  if (content) targetAssistant.content = content;
-  targetAssistant.modelAlias = _trimStr(doneAssistant?.modelAlias) || targetAssistant.modelAlias;
-  targetAssistant.modelName = _trimStr(doneAssistant?.modelName) || targetAssistant.modelName;
-  if (Array.isArray(doneAssistant?.modelRuns)) targetAssistant.modelRuns = doneAssistant.modelRuns;
-  targetAssistant.tool_calls = Array.isArray(doneAssistant?.tool_calls) ? doneAssistant.tool_calls : [];
-  return { applied: true, inserted, targetAssistant };
-}
+import { reconcileDoneTurnSnapshot } from "../chatEngine/messagePatch";
 
 export function applyDoneMessagesFromReconnect({
   activeSession,
@@ -72,6 +33,7 @@ export function applyDoneMessagesFromReconnect({
   applyCompletedToolLogsToMessages,
   sessionTitleFromMessages,
   applyFoldedMessagesToActiveSession,
+  mergeAssistantAttachments,
 } = {}) {
   if (!activeSession?.value) return false;
   const sessionMessages = Array.isArray(eventData?.messages) ? eventData.messages : [];
@@ -82,10 +44,6 @@ export function applyDoneMessagesFromReconnect({
   // pending/streaming overlay.  Keep them local to this pass instead of
   // publishing another completed-message array on session.rawMessages; completed
   // display state is rebuilt from normalized session detail.
-  const replayMessagesForView = sessionMessages.map((messageItem) =>
-    makeViewMessage(messageItem),
-  );
-  const foldedSessionMessages = foldMessagesForView(replayMessagesForView);
   const doneTurnScopeId = _trimStr(eventData?.turnScopeId);
   let turnMergeResult = { applied: false, reason: "legacy_unscoped_done" };
   if (
@@ -93,15 +51,18 @@ export function applyDoneMessagesFromReconnect({
     Array.isArray(activeSession.value.messages) &&
     activeSession.value.messages.length
   ) {
-    turnMergeResult = patchDoneAssistantByTurn({
+    turnMergeResult = reconcileDoneTurnSnapshot({
+      data: eventData,
       activeSession,
-      foldedSessionMessages,
-      turnScopeId: doneTurnScopeId,
+      makeViewMessage,
+      foldMessagesForView,
+      mergeAssistantAttachments,
     });
   } else if (!activeSession.value.messages.length) {
     // Unscoped legacy DONE is allowed to initialize an empty historical view,
     // but must never reconcile or fold a live turn by execution-chain identity.
-    applyFoldedMessagesToActiveSession(activeSession, foldedSessionMessages);
+    const replayMessagesForView = sessionMessages.map((messageItem) => makeViewMessage(messageItem));
+    applyFoldedMessagesToActiveSession(activeSession, foldMessagesForView(replayMessagesForView));
   }
   logWorkflowDiagnostics("frontend.workflowReplay.doneMessagesReconciled", {
     sessionId: returnedSessionId || _trimStr(activeSession.value?.backendSessionId || activeSessionId?.value),

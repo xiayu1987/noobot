@@ -64,36 +64,6 @@ const {
   toggleThinkingDetailExpanded,
   formatInjectedMessageTitle,
 } = panel;
-// A turn can be represented by several incremental assistant messages. The
-// thinking card plugin is mounted for each of them, but the live workflow must
-// belong to one card only. Use the last message with the same turn identity as
-// the owner so streaming snapshots cannot split the thinking UI into cards.
-const ownsWorkflowProjection = computed(() => {
-  if (props.variant === "details" || !hasThinking.value) return false;
-  const turnScopeId = String(props.messageItem?.turnScopeId || "").trim();
-  const dialogProcessId = String(props.messageItem?.dialogProcessId || "").trim();
-  if (!turnScopeId && !dialogProcessId) return false;
-  const matchingMessages = (Array.isArray(props.allMessages) ? props.allMessages : [])
-    .filter((item = {}) => {
-      if (item?.role !== "assistant" || item?.__workflowLiveProjection === true) return false;
-      if (turnScopeId) return String(item?.turnScopeId || "").trim() === turnScopeId;
-      return String(item?.dialogProcessId || "").trim() === dialogProcessId;
-    });
-  return matchingMessages.at(-1) === props.messageItem;
-});
-
-const workflowProjectionProps = computed(() => ({
-  activeSession: { messages: props.allMessages },
-  anchorMessage: props.messageItem,
-  messageItemSharedProps: {
-    userId: props.userId,
-    authFetch: props.authFetch,
-    renderMarkdown: props.renderMarkdown,
-    formatTime: props.formatTime,
-    formatFileSize: props.formatFileSize,
-    isImageMime: props.isImageMime,
-  },
-}));
 </script>
 
 <template>
@@ -108,8 +78,6 @@ const workflowProjectionProps = computed(() => ({
     :execution-logs="currentExecutionLogs"
     :execution-log-count="getExecutionLogCount(messageItem)"
     :thinking-detail-label="getThinkingDetailLabel(messageItem)"
-    :show-workflow-projection="ownsWorkflowProjection"
-    :workflow-projection-props="workflowProjectionProps"
     :open-names="thinkingOpenNames"
     @update:open-names="updateThinkingOpenNames"
     @open-thinking-details="openThinkingDetailDrawer"
