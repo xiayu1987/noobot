@@ -4,8 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { findVisibleLastMessage } from "../../infra/messageModel";
+import {
+  findReconnectDoneEnvelopeWithMessages,
+  patchMessageObjectPreservingUiState,
+} from "../../infra/reconnectReplayModel";
 import { nowIso } from "../../infra/timeFields";
-import { findReconnectDoneEnvelopeWithMessages } from "../../infra/reconnectReplayModel";
 import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
 import {
   buildToolTimelineFromLegacyLogs,
@@ -16,26 +19,48 @@ import {
 import { _trimStr } from "./utils";
 import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
 import { RoleEnum } from "../../../shared/constants/chatConstants";
+import {
+  logWorkflowDiagnostics,
+  summarizeWorkflowMessage,
+} from "../debug/workflowDiagnosticsLogger";
 
 function patchDoneAssistantByTurn({ activeSession, foldedSessionMessages = [], turnScopeId = "" } = {}) {
   const normalizedTurnScopeId = _trimStr(turnScopeId);
-  if (!activeSession?.value || !normalizedTurnScopeId) return;
+  if (!activeSession?.value || !normalizedTurnScopeId) {
+    return { applied: false, reason: "missing_active_turn" };
+  }
   const doneAssistant = [...foldedSessionMessages].reverse().find((messageItem) =>
     getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
     getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
   );
-  if (!doneAssistant) return;
-  const targetAssistant = (activeSession.value.messages || []).find((messageItem) =>
+  if (!doneAssistant) return { applied: false, reason: "done_assistant_missing" };
+  const activeMessages = Array.isArray(activeSession.value.messages)
+    ? activeSession.value.messages
+    : [];
+  let targetAssistant = activeMessages.find((messageItem) =>
     getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
     getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
   );
-  if (!targetAssistant) return;
+  let inserted = false;
+  if (!targetAssistant) {
+    targetAssistant = doneAssistant;
+    const lastTurnMessageIndex = activeMessages.findLastIndex(
+      (messageItem) => getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
+    );
+    activeMessages.splice(lastTurnMessageIndex + 1, 0, targetAssistant);
+    inserted = true;
+  }
+  // DONE is a versioned snapshot for this exact Turn. Reuse the canonical
+  // message patch so a refreshed-page assistant placeholder can become the
+  // finalized workflow/plugin message in place, without losing UI-owned state.
+  patchMessageObjectPreservingUiState(targetAssistant, doneAssistant);
   const content = _trimStr(doneAssistant?.content);
   if (content) targetAssistant.content = content;
   targetAssistant.modelAlias = _trimStr(doneAssistant?.modelAlias) || targetAssistant.modelAlias;
   targetAssistant.modelName = _trimStr(doneAssistant?.modelName) || targetAssistant.modelName;
   if (Array.isArray(doneAssistant?.modelRuns)) targetAssistant.modelRuns = doneAssistant.modelRuns;
   targetAssistant.tool_calls = Array.isArray(doneAssistant?.tool_calls) ? doneAssistant.tool_calls : [];
+  return { applied: true, inserted, targetAssistant };
 }
 
 export function applyDoneMessagesFromReconnect({
@@ -62,12 +87,13 @@ export function applyDoneMessagesFromReconnect({
   );
   const foldedSessionMessages = foldMessagesForView(replayMessagesForView);
   const doneTurnScopeId = _trimStr(eventData?.turnScopeId);
+  let turnMergeResult = { applied: false, reason: "legacy_unscoped_done" };
   if (
     doneTurnScopeId &&
     Array.isArray(activeSession.value.messages) &&
     activeSession.value.messages.length
   ) {
-    patchDoneAssistantByTurn({
+    turnMergeResult = patchDoneAssistantByTurn({
       activeSession,
       foldedSessionMessages,
       turnScopeId: doneTurnScopeId,
@@ -77,6 +103,19 @@ export function applyDoneMessagesFromReconnect({
     // but must never reconcile or fold a live turn by execution-chain identity.
     applyFoldedMessagesToActiveSession(activeSession, foldedSessionMessages);
   }
+  logWorkflowDiagnostics("frontend.workflowReplay.doneMessagesReconciled", {
+    sessionId: returnedSessionId || _trimStr(activeSession.value?.backendSessionId || activeSessionId?.value),
+    dialogProcessId: _trimStr(eventData?.dialogProcessId),
+    turnScopeId: doneTurnScopeId,
+    result: turnMergeResult?.applied === true ? "applied" : "ignored",
+    reason: _trimStr(turnMergeResult?.reason),
+    insertedAssistant: turnMergeResult?.inserted === true,
+    doneMessageCount: sessionMessages.length,
+    activeMessageCount: activeSession.value.messages.length,
+    assistant: turnMergeResult?.targetAssistant
+      ? summarizeWorkflowMessage(turnMergeResult.targetAssistant)
+      : null,
+  });
   applyCompletedToolLogsToMessages(
     activeSession.value.messages,
     activeSession.value.sessionDocs || [],

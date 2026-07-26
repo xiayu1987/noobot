@@ -36,6 +36,27 @@ const envelope = {
 };
 
 describe("messageModel semantic transfer", () => {
+  it("preserves workflow node running placeholder ownership through the view boundary", () => {
+    const message = buildViewMessage({
+      role: "assistant",
+      type: "message",
+      content: "",
+      pending: true,
+      synthetic: true,
+      placeholder: true,
+      turnPlaceholder: true,
+      workflowNodeRunningPlaceholder: true,
+    });
+
+    expect(message).toMatchObject({
+      pending: true,
+      synthetic: true,
+      placeholder: true,
+      turnPlaceholder: true,
+      workflowNodeRunningPlaceholder: true,
+    });
+  });
+
   it("keeps turn UI state out of message projections", () => {
     expect(buildViewMessage({ role: "assistant", pending: true })).not.toHaveProperty("thinkingOpenNames");
     expect(buildViewMessage({ role: "assistant" })).not.toHaveProperty("expandedDetailLogKeys");

@@ -8,6 +8,11 @@ import { BackendChannelState } from "../sessionRunStateMachine";
 import { normalizeReplayCacheKey } from "./replayCache";
 import { _trimStr } from "./utils";
 
+const WORKFLOW_RUNTIME_EVENT_NAMES = new Set([
+  "workflow_planning_message_prepared",
+  "workflow_node_state_committed",
+]);
+
 export async function applyReconnectEventReplay({
   event,
   data,
@@ -23,23 +28,45 @@ export async function applyReconnectEventReplay({
   applyExecutionSnapshot,
   applyExecutionChildren,
   applyExecutionTree,
+  applyWorkflowRuntimeEvent,
+  applySubSessionReplayMessages,
+  finalizeDoneSessionDetail,
   isDeletedTurn,
 } = {}) {
+  const replayEvent = _trimStr(event);
   const replaySessionId = _trimStr(data?.sessionId || data?.messageEvent?.sessionId);
   const replayTurnScopeId = _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId);
   if (isDeletedTurn?.({ sessionId: replaySessionId, turnScopeId: replayTurnScopeId }) === true) {
     return { applied: false, reason: "deleted_turn_tombstoned" };
   }
-  if (_trimStr(event) === StreamEventEnum.EXECUTION_SNAPSHOT) return applyExecutionSnapshot?.(data || {});
-  if (_trimStr(event) === StreamEventEnum.EXECUTION_CHILDREN) return applyExecutionChildren?.(data || {});
-  if (_trimStr(event) === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(data || {});
-  if (_trimStr(event) === StreamEventEnum.TURN_SNAPSHOT) {
+  if (replayEvent === "subagent_message_event" || data?.route?.scope === "sub_session") {
+    return applySubSessionReplayMessages?.([{ event: replayEvent, data }], {
+      rootSessionId: _trimStr(
+        data?.route?.rootSessionId ||
+        data?.route?.parentSessionId ||
+        data?.rootSessionId ||
+        data?.parentSessionId,
+      ),
+      dialogProcessId: _trimStr(data?.dialogProcessId),
+      turnScopeId: replayTurnScopeId,
+    }) || { applied: false, reason: "sub_session_projection_unavailable" };
+  }
+  if (WORKFLOW_RUNTIME_EVENT_NAMES.has(replayEvent)) {
+    return applyWorkflowRuntimeEvent?.(replayEvent, data || {}) || {
+      applied: false,
+      reason: "workflow_runtime_projection_unavailable",
+    };
+  }
+  if (replayEvent === StreamEventEnum.EXECUTION_SNAPSHOT) return applyExecutionSnapshot?.(data || {});
+  if (replayEvent === StreamEventEnum.EXECUTION_CHILDREN) return applyExecutionChildren?.(data || {});
+  if (replayEvent === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(data || {});
+  if (replayEvent === StreamEventEnum.TURN_SNAPSHOT) {
     return applyTurnLifecycleSnapshot?.(data || {});
   }
-  if (_trimStr(event) === StreamEventEnum.TURN_LIFECYCLE) {
+  if (replayEvent === StreamEventEnum.TURN_LIFECYCLE) {
     return applyTurnLifecycleEnvelope?.(data || {});
   }
-  if (_trimStr(event) === StreamEventEnum.CHANNEL_STATE) {
+  if (replayEvent === StreamEventEnum.CHANNEL_STATE) {
     const stateData = data || {};
     const sessionId = _trimStr(stateData.sessionId);
     const turnScopeId = _trimStr(stateData.turnScopeId || stateData.messageEvent?.turnScopeId);
@@ -71,6 +98,7 @@ export async function applyReconnectEventReplay({
       turnScopeId,
     });
     if (_trimStr(event) === StreamEventEnum.DONE) {
+      await finalizeDoneSessionDetail?.(data || {});
       const authoritativeSnapshot = hasAuthoritativeCurrentRun?.({
         sessionId,
         turnScopeId,
@@ -92,6 +120,7 @@ export async function applyReconnectEventReplay({
       turnScopeId,
     });
     if (_trimStr(event) === StreamEventEnum.DONE) {
+      await finalizeDoneSessionDetail?.(data || {});
       await applyChannelState({
         ...(data || {}),
         dialogProcessId,

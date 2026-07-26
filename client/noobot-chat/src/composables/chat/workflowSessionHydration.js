@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  logWorkflowDiagnostics,
+  summarizeWorkflowMessages,
+} from "./debug/workflowDiagnosticsLogger";
 
 function text(value) {
   return String(value || "").trim();
@@ -42,8 +46,16 @@ export function hydrateWorkflowRegistryFromSessionDetail({
   sessionItem = {},
   mainSessionDoc = {},
   upsertWorkflowPlanningEvent,
+  upsertWorkflowNodeStateEvent,
+  applyWorkflowRuntimeEvent,
 } = {}) {
-  if (typeof upsertWorkflowPlanningEvent !== "function") return 0;
+  if (typeof applyWorkflowRuntimeEvent !== "function" && typeof upsertWorkflowPlanningEvent !== "function") {
+    logWorkflowDiagnostics("frontend.workflowHydration.skipped", {
+      sessionId: text(detail?.sessionId || sessionItem?.backendSessionId || sessionItem?.id),
+      reason: "missing_upsert",
+    });
+    return 0;
+  }
   const sessionId = text(
     mainSessionDoc?.sessionId || detail?.sessionId || sessionItem?.backendSessionId || sessionItem?.id,
   );
@@ -54,13 +66,70 @@ export function hydrateWorkflowRegistryFromSessionDetail({
   ];
   const seen = new Set();
   let hydrated = 0;
+  const runtimeEvents = Array.isArray(detail?.workflowRuntimeEvents)
+    ? detail.workflowRuntimeEvents
+    : [];
+  const reduceRuntimeEvent = (record = {}, source = "replay") => {
+    if (typeof applyWorkflowRuntimeEvent === "function") {
+      return applyWorkflowRuntimeEvent(record, { source });
+    }
+    const eventName = text(record?.event || record?.type);
+    const data = record?.data && typeof record.data === "object" ? record.data : record;
+    if (eventName === "workflow_planning_message_prepared") return upsertWorkflowPlanningEvent?.(data);
+    if (eventName === "workflow_node_state_committed") return upsertWorkflowNodeStateEvent?.(data);
+    return { applied: false, reason: "unsupported_event" };
+  };
+  logWorkflowDiagnostics("frontend.workflowHydration.sourceInspected", {
+    sessionId,
+    sourceMessageCount: sources.length,
+    workflowCandidates: summarizeWorkflowMessages(sources),
+    workflowRuntimeEventCount: runtimeEvents.length,
+  });
+  // execution.jsonl order is the causal order. Preserve it exactly; sequence
+  // values are only comparable inside each event's declared domain.
+  for (const runtimeEvent of runtimeEvents) {
+    const eventName = text(runtimeEvent?.event || runtimeEvent?.type);
+    const data = runtimeEvent?.data && typeof runtimeEvent.data === "object"
+      ? runtimeEvent.data
+      : runtimeEvent;
+    if (!["workflow_planning_message_prepared", "workflow_node_state_committed", "workflow_message_event"].includes(eventName)) continue;
+    const result = reduceRuntimeEvent(runtimeEvent, "replay");
+    if (eventName !== "workflow_planning_message_prepared") continue;
+    const workflowRunId = text(data?.workflowRunId);
+    if (workflowRunId) seen.add(workflowRunId);
+    hydrated += workflowRunId ? 1 : 0;
+    logWorkflowDiagnostics("frontend.workflowHydration.runtimePlanningApplied", {
+      sessionId,
+      dialogProcessId: text(data?.dialogProcessId),
+      turnScopeId: text(data?.turnScopeId),
+      workflowRunId,
+      nodeSessionCount: Array.isArray(data?.nodeSessions) ? data.nodeSessions.length : 0,
+      sequenceDomain: text(runtimeEvent?.sequenceDomain || data?.sequenceDomain),
+      applied: result?.applied === true,
+      reason: String(result?.reason || ""),
+    });
+  }
   for (const message of sources) {
     const event = workflowPlanningEventFromMessage(message, sessionId);
     if (!event || seen.has(event.workflowRunId)) continue;
     seen.add(event.workflowRunId);
-    upsertWorkflowPlanningEvent(event);
+    const result = reduceRuntimeEvent({ event: "workflow_planning_message_prepared", data: event }, "persisted-message");
+    logWorkflowDiagnostics("frontend.workflowHydration.candidateApplied", {
+      sessionId,
+      dialogProcessId: event.dialogProcessId,
+      turnScopeId: event.turnScopeId,
+      workflowRunId: event.workflowRunId,
+      nodeSessionCount: event.nodeSessions.length,
+      applied: result?.applied === true,
+      reason: String(result?.reason || ""),
+    });
     hydrated += 1;
   }
+  logWorkflowDiagnostics("frontend.workflowHydration.completed", {
+    sessionId,
+    hydratedWorkflowCount: hydrated,
+    sourceMessageCount: sources.length,
+  });
   return hydrated;
 }
 

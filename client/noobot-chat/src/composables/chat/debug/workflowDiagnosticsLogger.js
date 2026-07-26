@@ -60,6 +60,12 @@ export function summarizeWorkflowMessages(messages = []) {
       message.type === "workflow" ||
       message.pluginSource === "workflow-plugin" ||
       Boolean(message.workflowRunId) ||
-      message.tagKeys.includes("message"),
+      message.tagKeys.includes("message") ||
+      (
+        message.role.toLowerCase() === "assistant" &&
+        message.type === "message" &&
+        message.contentLength === 0 &&
+        Boolean(message.turnScopeId || message.dialogProcessId)
+      ),
     );
 }

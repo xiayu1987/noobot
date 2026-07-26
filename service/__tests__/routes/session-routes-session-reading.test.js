@@ -5,7 +5,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import express, { createSessionApp, registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 
 test("session-routes: sessions 列表只读取并返回概要", async () => {
   const app = express();
@@ -137,6 +140,63 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
     assert.equal(payload.sessions[0].rawMessages.length, 1);
   });
 });
+
+test("session-routes: session detail rebuilds running workflow projection from persisted execution events", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-runtime-projection-"));
+  const sessionDir = path.join(workspaceRoot, "runtime/session/s-workflow");
+  await fs.mkdir(sessionDir, { recursive: true });
+  const records = [
+    {
+      event: "workflow_planning_message_prepared",
+      data: {
+        sessionId: "s-workflow",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "",
+        workflowRunId: "client-turn:one",
+        semanticText: "WORKFLOW_DSL/1",
+        nodeSessions: [{ nodeExecutionId: "node-1", stepStatus: "ready" }],
+      },
+    },
+    {
+      event: "workflow_node_state_committed",
+      data: { workflowRunId: "client-turn:one", nodeExecutionId: "node-1", status: "running", revision: 2, sequence: 2 },
+    },
+    {
+      event: "workflow_node_state_committed",
+      data: { workflowRunId: "client-turn:one", nodeExecutionId: "node-1", status: "succeeded", revision: 3, sequence: 3 },
+    },
+  ];
+  await fs.writeFile(
+    path.join(sessionDir, "execution.jsonl"),
+    `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+    "utf8",
+  );
+  const app = createSessionApp({
+    session: {
+      getSessionDisplayData: async () => ({
+        exists: true,
+        sessionId: "s-workflow",
+        summary: true,
+        sessions: [{ sessionId: "s-workflow", messages: [{ role: "user", content: "run" }] }],
+      }),
+    },
+    bot: { getWorkspacePath: () => workspaceRoot },
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s-workflow`);
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.workflowRuntimeEvents.length, 3);
+    assert.equal(payload.workflowRuntimeEvents[0].data.turnScopeId, "client-turn:one");
+    assert.equal(payload.workflowRuntimeEvents[0].sequenceDomain, "workflow-planning");
+    assert.equal(payload.workflowRuntimeEvents[1].data.status, "running");
+    assert.equal(payload.workflowRuntimeEvents[2].data.status, "succeeded");
+    assert.equal(payload.workflowRuntimeEvents[2].data.revision, 3);
+    assert.equal(payload.workflowRuntimeEvents[2].sequenceDomain, "workflow-node-state");
+  });
+});
+
 test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话明细", async () => {
   const app = express();
   let fullCalled = false;

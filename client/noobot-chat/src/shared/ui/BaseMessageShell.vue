@@ -12,6 +12,7 @@ defineProps({
   ts: { type: [String, Number], default: "" },
   formatTime: { type: Function, required: true },
   modelLabel: { type: String, default: "" },
+  hideHeader: { type: Boolean, default: false },
 });
 
 const { translate } = useLocale();
@@ -19,7 +20,7 @@ const { translate } = useLocale();
 
 <template>
   <div class="base-message-shell" :class="role">
-    <div class="base-message-header" :class="{ user: role === 'user' }">
+    <div v-if="!hideHeader" class="base-message-header" :class="{ user: role === 'user' }">
       <div class="base-message-avatar noobot-message-avatar">
         <template v-if="role === 'user'">{{ translate("message.me") }}</template>
         <img v-else class="base-message-assistant-icon" :src="noobotIcon" alt="Noobot" />

@@ -3,19 +3,35 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { defineComponent, nextTick } from "vue";
+import { defineComponent, h, nextTick } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import WorkflowLiveProjectionList from "../../../src/app/WorkflowLiveProjectionList.vue";
 import { useChatStore } from "../../../src/shared/stores/useChatStore";
+import { registerFrontendPlugin } from "../../../src/plugins/frontend-plugin-registry";
 
-vi.mock("../../../src/modules/message/ChatMessageItem.vue", () => ({
-  default: defineComponent({
-    props: { messageItem: { type: Object, required: true } },
-    template: '<div class="message-stub">{{ messageItem.pluginMeta.payload.workflowRunId }}</div>',
-  }),
-}));
+const WorkflowCardStub = defineComponent({
+  props: { messageItem: { type: Object, required: true } },
+  setup(props) {
+    return () => h("div", {
+      class: "workflow-card-stub",
+      "data-node-count": props.messageItem.pluginMeta.payload.nodeSessions?.length || 0,
+    }, props.messageItem.pluginMeta.payload.workflowRunId);
+  },
+});
+
+registerFrontendPlugin({
+  id: "workflow-live-projection-test",
+  capabilities: ["message.card.workflow-live-test"],
+  messageCards: [{
+    id: "workflow-live-projection-test-card",
+    slot: "pre",
+    component: WorkflowCardStub,
+    match: (messageItem = {}) => messageItem?.__workflowLiveProjection === true,
+    resolveProps: (context = {}) => ({ messageItem: context.messageItem }),
+  }],
+});
 
 describe("WorkflowLiveProjectionList", () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -59,7 +75,8 @@ describe("WorkflowLiveProjectionList", () => {
       global: { plugins: [pinia] },
     });
     expect(wrapper.findAll(".workflow-live-projection-anchor")).toHaveLength(1);
-    expect(wrapper.find(".message-stub").text()).toBe("workflow-a");
+    expect(wrapper.find(".workflow-card-stub").text()).toBe("workflow-a");
+    expect(wrapper.find(".workflow-card-stub").attributes("data-node-count")).toBe("1");
 
     wrapper.unmount();
     const persistedWrapper = mount(WorkflowLiveProjectionList, {

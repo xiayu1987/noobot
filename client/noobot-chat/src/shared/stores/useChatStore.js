@@ -26,6 +26,11 @@ import {
   isMessageEventEnvelope,
   projectMessageEventToolFacets,
 } from "@noobot/shared/message-event-protocol";
+import {
+  normalizeWorkflowRuntimeEvent,
+  WORKFLOW_RUNTIME_EVENT,
+  WORKFLOW_SEQUENCE_DOMAIN,
+} from "@noobot/shared/workflow-runtime-event-protocol";
 import { logWorkflowDiagnostics } from "../../composables/chat/debug/workflowDiagnosticsLogger";
 
 function text(value) {
@@ -34,12 +39,16 @@ function text(value) {
 
 const SUB_SESSION_TERMINAL_STATUSES = new Set([
   "completed",
+  "succeeded",
   "failed",
   "cancelled",
   "canceled",
   "stopped",
   "aborted",
   "error",
+  "expired",
+  "timeout",
+  "no_conversation",
 ]);
 
 function isSubSessionTerminalStatus(value) {
@@ -100,6 +109,9 @@ function createSubSessionMessageRegistry() {
 
 function shouldApplyWorkflowNodeStateEvent(current = null, incoming = {}) {
   if (!current) return true;
+  const currentDomain = text(current?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
+  const incomingDomain = text(incoming?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
+  if (currentDomain !== incomingDomain) return false;
   const incomingRevision = Number(incoming?.revision || 0);
   const currentRevision = Number(current?.revision || 0);
   if (incomingRevision < currentRevision) return false;
@@ -113,6 +125,9 @@ function shouldApplyWorkflowNodeStateEvent(current = null, incoming = {}) {
 
 function shouldApplyOrderedEvent(current = null, incoming = {}) {
   if (!current) return true;
+  const currentDomain = text(current?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE;
+  const incomingDomain = text(incoming?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE;
+  if (currentDomain !== incomingDomain) return false;
   const incomingRevision = Number(incoming?.revision || 0);
   const currentRevision = Number(current?.revision || 0);
   if (incomingRevision < currentRevision) return false;
@@ -191,11 +206,12 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     eventId,
     revision: Number(eventData?.revision ?? currentMessage?.revision ?? 0),
     sequence: Number(eventData?.sequence ?? eventData?.seq ?? currentMessage?.sequence ?? 0),
+    sequenceDomain: text(eventData?.sequenceDomain || currentMessage?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
     firstSequence: Number(currentMessage?.firstSequence ?? eventData?.sequence ?? eventData?.seq ?? 0),
     status,
     pending: eventData?.pending ?? currentMessage?.pending,
-    createdAt: eventData?.createdAt || currentMessage?.createdAt || new Date().toISOString(),
-    updatedAt: eventData?.updatedAt || new Date().toISOString(),
+    createdAt: eventData?.createdAt || eventData?.timestamp || currentMessage?.createdAt || new Date().toISOString(),
+    updatedAt: eventData?.updatedAt || eventData?.timestamp || new Date().toISOString(),
     thinking: eventData?.thinking ?? currentMessage?.thinking,
     toolCall: canonicalToolCall ?? currentMessage?.toolCall,
     toolResult: canonicalToolResult ?? currentMessage?.toolResult,
@@ -232,11 +248,54 @@ function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId
   const merged = mergePersistedMessageValue(realtime, snapshot);
   return {
     ...merged,
-    id: messageId,
-    messageId,
+    ...(messageId ? { id: messageId, messageId } : {}),
     // Event history is a realtime projection and is not part of session.json.
     rawEvents: Array.isArray(realtime.rawEvents) ? realtime.rawEvents : merged.rawEvents,
+    eventId: realtime.eventId,
+    sequence: realtime.sequence,
+    firstSequence: realtime.firstSequence,
+    revision: realtime.revision,
+    sequenceDomain: text(realtime.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
   };
+}
+
+function normalizeSubSessionSnapshotMessage(snapshot = {}) {
+  if (text(snapshot?.sequenceDomain) === WORKFLOW_SEQUENCE_DOMAIN.MESSAGE) return snapshot;
+  const {
+    eventId: _eventId,
+    sequence: _sequence,
+    firstSequence: _firstSequence,
+    revision: _revision,
+    sequenceDomain: _sequenceDomain,
+    ...content
+  } = snapshot && typeof snapshot === "object" ? snapshot : {};
+  return content;
+}
+
+function subSessionMessageIdentity(message = {}) {
+  const stableId = text(message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId);
+  if (stableId) return `id:${stableId}`;
+  const role = text(message?.role || message?.type).toLowerCase();
+  const turnScopeId = text(message?.turnScopeId || message?.metadata?.turnScopeId);
+  if (turnScopeId && role) return `turn:${turnScopeId}:${role}`;
+  const dialogProcessId = text(message?.dialogProcessId || message?.metadata?.dialogProcessId);
+  if (dialogProcessId && role) return `dialog:${dialogProcessId}:${role}`;
+  return "";
+}
+
+function subSessionMessageIdentityCandidates(message = {}) {
+  const role = text(message?.role || message?.type).toLowerCase();
+  return [
+    text(message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId)
+      ? `id:${text(message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId)}`
+      : "",
+    text(message?.turnScopeId || message?.metadata?.turnScopeId) && role
+      ? `turn:${text(message?.turnScopeId || message?.metadata?.turnScopeId)}:${role}`
+      : "",
+    text(message?.dialogProcessId || message?.metadata?.dialogProcessId) && role
+      ? `dialog:${text(message?.dialogProcessId || message?.metadata?.dialogProcessId)}:${role}`
+      : "",
+  ].filter(Boolean);
 }
 
 export const useChatStore = defineStore("chat", () => {
@@ -322,10 +381,16 @@ export const useChatStore = defineStore("chat", () => {
   function upsertWorkflowNodeStateEvent(eventData = {}) {
     const workflowRunId = text(eventData?.workflowRunId);
     const nodeExecutionId = text(eventData?.nodeExecutionId);
+    const sequenceDomain = text(eventData?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
+    if (sequenceDomain !== WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE) {
+      return { applied: false, reason: "sequence_domain_mismatch" };
+    }
     if (!workflowRunId || !nodeExecutionId) {
       const result = { applied: false, reason: "missing_identity" };
       logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", {
         sessionId: text(eventData?.parentSessionId || eventData?.sessionId),
+        nodeSessionId: text(eventData?.sessionId),
+        parentSessionId: text(eventData?.parentSessionId),
         dialogProcessId: text(eventData?.dialogProcessId),
         turnScopeId: text(eventData?.turnScopeId),
         workflowRunId,
@@ -345,6 +410,8 @@ export const useChatStore = defineStore("chat", () => {
       const result = { applied: false, reason: "stale", current };
       logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", {
         sessionId: text(eventData?.parentSessionId || eventData?.sessionId),
+        nodeSessionId: text(eventData?.sessionId || current?.sessionId),
+        parentSessionId: text(eventData?.parentSessionId || current?.parentSessionId),
         dialogProcessId: text(eventData?.dialogProcessId),
         turnScopeId: text(eventData?.turnScopeId),
         workflowRunId,
@@ -369,12 +436,72 @@ export const useChatStore = defineStore("chat", () => {
       eventId: text(eventData?.eventId || current?.eventId),
       revision: Number(eventData?.revision ?? current?.revision ?? 0),
       sequence: Number(eventData?.sequence ?? current?.sequence ?? 0),
+      sequenceDomain,
     };
     workflow.nodes[nodeExecutionId] = next;
     workflow.sequence = Math.max(Number(workflow.sequence || 0), Number(next.sequence || 0));
     workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
+    const childSessionId = text(next.sessionId);
+    if (childSessionId && childSessionId !== text(next.parentSessionId)) {
+      const subRegistry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
+      if (!subRegistry.sessions) subRegistry.sessions = {};
+      const currentSubSession = subRegistry.sessions[childSessionId] || {
+        id: childSessionId,
+        sessionId: childSessionId,
+        messages: [],
+        eventsById: {},
+        sequence: 0,
+      };
+      const turnState = projectSubSessionTurnState(currentSubSession, {
+        ...next,
+        sessionId: childSessionId,
+        state: next.status,
+      });
+      subRegistry.sessions[childSessionId] = {
+        ...currentSubSession,
+        id: childSessionId,
+        sessionId: childSessionId,
+        parentSessionId: text(next.parentSessionId || currentSubSession.parentSessionId),
+        dialogProcessId: text(next.dialogProcessId || currentSubSession.dialogProcessId),
+        turnScopeId: text(next.turnScopeId || currentSubSession.turnScopeId),
+        workflowRunId,
+        nodeExecutionId,
+        status: text(next.status || currentSubSession.status),
+        turnStatuses: turnState.turnStatuses,
+        turnTimings: turnState.turnTimings,
+        sequenceByDomain: {
+          ...(currentSubSession.sequenceByDomain || {}),
+          [WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE]: Math.max(
+            Number(currentSubSession.sequenceByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE] || 0),
+            Number(next.sequence || 0),
+          ),
+        },
+        revisionByDomain: {
+          ...(currentSubSession.revisionByDomain || {}),
+          [WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE]: Math.max(
+            Number(currentSubSession.revisionByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE] || 0),
+            Number(next.revision || 0),
+          ),
+        },
+        updatedAt: next.updatedAt || new Date().toISOString(),
+      };
+      subSessionMessageRegistry.value = { ...subRegistry, sessions: { ...subRegistry.sessions } };
+      logWorkflowDiagnostics("frontend.workflowStore.nodeSessionStatusApplied", {
+        sessionId: childSessionId,
+        parentSessionId: next.parentSessionId,
+        dialogProcessId: next.dialogProcessId,
+        turnScopeId: next.turnScopeId,
+        workflowRunId,
+        nodeExecutionId,
+        status: next.status,
+        terminal: isSubSessionTerminalStatus(next.status),
+        messageCount: currentSubSession.messages.length,
+      });
+    }
     logWorkflowDiagnostics("frontend.workflowStore.nodeStateApplied", {
       sessionId: text(next.parentSessionId || next.sessionId),
+      nodeSessionId: next.sessionId,
+      parentSessionId: next.parentSessionId,
       dialogProcessId: next.dialogProcessId,
       turnScopeId: next.turnScopeId,
       workflowRunId,
@@ -391,6 +518,10 @@ export const useChatStore = defineStore("chat", () => {
   function upsertWorkflowPlanningEvent(eventData = {}) {
     const workflowRunId = text(eventData?.workflowRunId);
     const nodeSessions = Array.isArray(eventData?.nodeSessions) ? eventData.nodeSessions : [];
+    const sequenceDomain = text(eventData?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.PLANNING;
+    if (sequenceDomain !== WORKFLOW_SEQUENCE_DOMAIN.PLANNING) {
+      return { applied: false, reason: "sequence_domain_mismatch" };
+    }
     if (!workflowRunId || !nodeSessions.length) {
       const result = { applied: false, reason: "missing_planning_nodes" };
       logWorkflowDiagnostics("frontend.workflowStore.planningRejected", {
@@ -435,6 +566,7 @@ export const useChatStore = defineStore("chat", () => {
       revision: Number(nodeSession?.revision || 1),
       sequence: Number(nodeSession?.sequence || index + 1),
       eventId: text(nodeSession?.eventId) || `workflow-plan:${text(nodeSession?.nodeExecutionId)}`,
+      sequenceDomain: text(nodeSession?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
     }));
     const result = {
       applied: results.some((result) => result?.applied === true),
@@ -459,6 +591,10 @@ export const useChatStore = defineStore("chat", () => {
     if (!isMessageEventEnvelope(eventData)) {
       return { applied: false, reason: "not_authoritative_message_event" };
     }
+    const sequenceDomain = text(eventData?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE;
+    if (sequenceDomain !== WORKFLOW_SEQUENCE_DOMAIN.MESSAGE) {
+      return { applied: false, reason: "sequence_domain_mismatch" };
+    }
     const projectionEventName = text(eventData?.eventType);
     const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
     if (!sessionId) return { applied: false, reason: "missing_session" };
@@ -473,7 +609,7 @@ export const useChatStore = defineStore("chat", () => {
       return { applied: false, reason: "duplicate", current: currentSession };
     }
     const messages = Array.isArray(currentSession.messages) ? [...currentSession.messages] : [];
-    const incoming = { ...eventData, sessionId, eventId };
+    const incoming = { ...eventData, sessionId, eventId, sequenceDomain };
     const messageKey = authoritativeSubSessionMessageId(incoming);
     const existingIndex = messageKey
       ? messages.findIndex((message = {}) => text(message?.messageId || message?.id) === messageKey)
@@ -508,13 +644,74 @@ export const useChatStore = defineStore("chat", () => {
       turnStatuses: turnState.turnStatuses,
       turnTimings: turnState.turnTimings,
       eventsById: { ...(currentSession.eventsById || {}), ...(eventId ? { [eventId]: { ...eventData, eventId } } : {}) },
-      sequence: Math.max(Number(currentSession.sequence || 0), Number(eventData?.sequence || eventData?.seq || 0)),
+      sequence: Math.max(Number(currentSession.sequence || 0), Number(eventData?.sequence || 0)),
+      sequenceDomain,
+      sequenceByDomain: {
+        ...(currentSession.sequenceByDomain || {}),
+        [WORKFLOW_SEQUENCE_DOMAIN.MESSAGE]: Math.max(
+          Number(currentSession.sequenceByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.MESSAGE] || 0),
+          Number(eventData?.sequence || 0),
+        ),
+      },
       revision: Math.max(Number(currentSession.revision || 0), Number(eventData?.revision || 0)),
-      updatedAt: new Date().toISOString(),
+      revisionByDomain: {
+        ...(currentSession.revisionByDomain || {}),
+        [WORKFLOW_SEQUENCE_DOMAIN.MESSAGE]: Math.max(
+          Number(currentSession.revisionByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.MESSAGE] || 0),
+          Number(eventData?.revision || 0),
+        ),
+      },
+      updatedAt: eventTime(eventData),
     };
     registry.sessions[sessionId] = nextSession;
     subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
     return { applied: true, session: nextSession, message: nextMessage };
+  }
+
+  function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
+    const canonical = normalizeWorkflowRuntimeEvent(record, { source });
+    if (!canonical.valid) {
+      const result = { applied: false, reason: canonical.errors[0] || "invalid_runtime_event", canonical };
+      logWorkflowDiagnostics("frontend.workflowStore.runtimeEventRejected", {
+        sessionId: text(canonical?.data?.parentSessionId || canonical?.data?.sessionId),
+        dialogProcessId: text(canonical?.data?.dialogProcessId),
+        turnScopeId: text(canonical?.data?.turnScopeId),
+        workflowRunId: text(canonical?.data?.workflowRunId),
+        nodeExecutionId: text(canonical?.data?.nodeExecutionId),
+        source: canonical.source,
+        runtimeEvent: canonical.event,
+        sequenceDomain: canonical.sequenceDomain,
+        authoritativeSequence: canonical.sequence,
+        transportSequence: canonical.transportSequence,
+        reason: result.reason,
+      });
+      return result;
+    }
+    let result;
+    if (canonical.event === WORKFLOW_RUNTIME_EVENT.PLANNING) {
+      result = upsertWorkflowPlanningEvent(canonical.data);
+    } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
+      result = upsertWorkflowNodeStateEvent(canonical.data);
+    } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.MESSAGE) {
+      result = upsertSubSessionEvent(canonical.data.eventType, canonical.data);
+    } else {
+      result = { applied: false, reason: "unsupported_event" };
+    }
+    logWorkflowDiagnostics("frontend.workflowStore.runtimeEventReduced", {
+      sessionId: text(canonical?.data?.parentSessionId || canonical?.data?.sessionId),
+      dialogProcessId: text(canonical?.data?.dialogProcessId),
+      turnScopeId: text(canonical?.data?.turnScopeId),
+      workflowRunId: text(canonical?.data?.workflowRunId),
+      nodeExecutionId: text(canonical?.data?.nodeExecutionId),
+      source: canonical.source,
+      runtimeEvent: canonical.event,
+      sequenceDomain: canonical.sequenceDomain,
+      authoritativeSequence: canonical.sequence,
+      transportSequence: canonical.transportSequence,
+      applied: result?.applied === true,
+      reason: text(result?.reason),
+    });
+    return { ...(result || {}), canonical };
   }
 
   function mergeSubSessionSnapshot(sessionDoc = {}) {
@@ -522,20 +719,54 @@ export const useChatStore = defineStore("chat", () => {
     if (!sessionId) return { applied: false, reason: "missing_session" };
     const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
     const current = registry.sessions?.[sessionId] || { sessionId, messages: [], eventsById: {}, sequence: 0 };
+    const currentStatus = text(current?.status || current?.state).toLowerCase();
+    const snapshotStatus = text(sessionDoc?.status || sessionDoc?.state).toLowerCase();
+    const mergedStatus = isSubSessionTerminalStatus(currentStatus) && !isSubSessionTerminalStatus(snapshotStatus)
+      ? currentStatus
+      : (snapshotStatus || currentStatus);
     const snapshotMessages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
     const realtimeMessages = Array.isArray(current.messages) ? current.messages : [];
-    const realtimeById = new Map(realtimeMessages.map((message = {}) => [text(message.messageId || message.id), message]));
-    const claimedIds = new Set();
-    const messages = snapshotMessages.map((snapshot = {}) => {
-      const messageId = text(snapshot.messageId || snapshot.id || snapshot?.additional_kwargs?.noobotMessageId);
-      const realtime = messageId ? realtimeById.get(messageId) : null;
-      if (messageId) claimedIds.add(messageId);
-      if (!realtime) return snapshot;
-      return mergePersistedSubSessionMessage(realtime, snapshot, messageId);
+    const realtimeIndexByIdentity = new Map();
+    realtimeMessages.forEach((message = {}, index) => {
+      for (const identity of subSessionMessageIdentityCandidates(message)) {
+        if (!realtimeIndexByIdentity.has(identity)) realtimeIndexByIdentity.set(identity, index);
+      }
     });
-    for (const realtime of realtimeMessages) {
-      const messageId = text(realtime.messageId || realtime.id);
-      if (!messageId || !claimedIds.has(messageId)) messages.push(realtime);
+    const claimedRealtimeIndexes = new Set();
+    const messages = snapshotMessages.map((rawSnapshot = {}) => {
+      const snapshot = normalizeSubSessionSnapshotMessage(rawSnapshot);
+      const messageId = text(snapshot.messageId || snapshot.id || snapshot?.additional_kwargs?.noobotMessageId);
+      const realtimeIndex = subSessionMessageIdentityCandidates(snapshot)
+        .map((identity) => realtimeIndexByIdentity.get(identity))
+        .find((index) => Number.isInteger(index));
+      const realtime = Number.isInteger(realtimeIndex) ? realtimeMessages[realtimeIndex] : null;
+      if (Number.isInteger(realtimeIndex)) claimedRealtimeIndexes.add(realtimeIndex);
+      if (!realtime) return snapshot;
+      return mergePersistedSubSessionMessage(
+        realtime,
+        snapshot,
+        messageId || text(realtime.messageId || realtime.id),
+      );
+    });
+    realtimeMessages.forEach((realtime, index) => {
+      if (!claimedRealtimeIndexes.has(index)) messages.push(realtime);
+    });
+    const deduplicatedMessages = [];
+    const deduplicatedIndexByIdentity = new Map();
+    for (const message of messages) {
+      const identity = subSessionMessageIdentity(message);
+      if (!identity || !deduplicatedIndexByIdentity.has(identity)) {
+        if (identity) deduplicatedIndexByIdentity.set(identity, deduplicatedMessages.length);
+        deduplicatedMessages.push(message);
+        continue;
+      }
+      const index = deduplicatedIndexByIdentity.get(identity);
+      const previous = deduplicatedMessages[index];
+      deduplicatedMessages[index] = mergePersistedSubSessionMessage(
+        previous,
+        message,
+        text(message?.messageId || message?.id || previous?.messageId || previous?.id),
+      );
     }
     registry.sessions = registry.sessions || {};
     registry.sessions[sessionId] = {
@@ -543,11 +774,21 @@ export const useChatStore = defineStore("chat", () => {
       ...sessionDoc,
       id: sessionId,
       sessionId,
-      messages,
-      turnStatuses: Array.isArray(sessionDoc?.turnStatuses)
+      status: mergedStatus,
+      messages: deduplicatedMessages,
+      sequence: Number(current.sequence || 0),
+      sequenceDomain: text(current.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+      sequenceByDomain: { ...(current.sequenceByDomain || {}) },
+      revision: Number(current.revision || 0),
+      revisionByDomain: { ...(current.revisionByDomain || {}) },
+      turnStatuses: isSubSessionTerminalStatus(currentStatus) && !isSubSessionTerminalStatus(snapshotStatus)
+        ? (current.turnStatuses || [])
+        : Array.isArray(sessionDoc?.turnStatuses)
         ? sessionDoc.turnStatuses
         : (current.turnStatuses || []),
-      turnTimings: Array.isArray(sessionDoc?.turnTimings)
+      turnTimings: isSubSessionTerminalStatus(currentStatus) && !isSubSessionTerminalStatus(snapshotStatus)
+        ? (current.turnTimings || [])
+        : Array.isArray(sessionDoc?.turnTimings)
         ? sessionDoc.turnTimings
         : (current.turnTimings || []),
       eventsById: current.eventsById || {},
@@ -629,6 +870,7 @@ export const useChatStore = defineStore("chat", () => {
     upsertWorkflowNodeStateEvent,
     upsertWorkflowPlanningEvent,
     upsertSubSessionEvent,
+    applyWorkflowRuntimeEvent,
     mergeSubSessionSnapshot,
     selectSubSessionMessages,
     selectExecutionSession,

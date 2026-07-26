@@ -6,15 +6,136 @@
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { createServicePluginHost } from "../services/service-plugin-host.js";
-import { buildThinkingDetailPayload, normalizeSessionThinkingRouteText as normalizeRouteText } from "noobot-agent/session";
+import {
+  buildThinkingDetailPayload,
+  normalizeSessionThinkingRouteText as normalizeRouteText,
+  readJsonlArtifactFile,
+} from "noobot-agent/session";
 import crypto from "node:crypto";
+import path from "node:path";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
+import {
+  normalizeWorkflowRuntimeEvent,
+  WORKFLOW_RUNTIME_EVENT,
+} from "@noobot/shared/workflow-runtime-event-protocol";
 
 const servicePluginHost = createServicePluginHost();
+
+const WORKFLOW_RUNTIME_EVENTS = new Set([
+  "workflow_planning_message_prepared",
+  "workflow_node_state_committed",
+]);
+
+async function readWorkflowRuntimeProjection({ bot = null, userId = "", sessionId = "" } = {}) {
+  const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!workspacePath || !normalizedSessionId) return { events: [], error: "missing_workspace_or_session" };
+  const workspaceRoot = path.resolve(workspacePath);
+  const sessionsRoot = path.resolve(workspaceRoot, "runtime/session");
+  const sessionDir = path.resolve(sessionsRoot, normalizedSessionId);
+  const relativeSessionDir = path.relative(sessionsRoot, sessionDir);
+  if (!relativeSessionDir || relativeSessionDir.startsWith("..") || path.isAbsolute(relativeSessionDir)) {
+    return { events: [], error: "invalid_session_path" };
+  }
+  let records;
+  try {
+    records = await readJsonlArtifactFile(path.join(sessionDir, "execution.jsonl"));
+  } catch (error) {
+    return { events: [], error: String(error?.code || error?.message || "execution_events_read_failed") };
+  }
+  const events = [];
+  const seenEventIds = new Set();
+  let invalidEventCount = 0;
+  for (const record of Array.isArray(records) ? records : []) {
+    let canonical = normalizeWorkflowRuntimeEvent(record, { source: "session-detail-replay" });
+    const event = canonical.event;
+    if (!WORKFLOW_RUNTIME_EVENTS.has(event)) continue;
+    if (!canonical.valid) {
+      invalidEventCount += 1;
+      continue;
+    }
+    let data = canonical.data;
+    const workflowRunId = String(data?.workflowRunId || "").trim();
+    if (!workflowRunId) continue;
+    if (event === WORKFLOW_RUNTIME_EVENT.PLANNING) {
+      canonical = normalizeWorkflowRuntimeEvent({
+        event,
+        source: canonical.source,
+        data: {
+          ...data,
+          sessionId: String(data?.sessionId || normalizedSessionId).trim(),
+          dialogProcessId: String(data?.dialogProcessId || "").trim(),
+          turnScopeId: String(data?.turnScopeId || workflowRunId).trim(),
+          semanticText: String(data?.semanticText || ""),
+          createdAt: data?.createdAt || data?.ts || record?.ts || "",
+        },
+      }, { source: "session-detail-replay" });
+      data = canonical.data;
+    }
+    if (event === WORKFLOW_RUNTIME_EVENT.NODE_STATE && !String(data?.nodeExecutionId || "").trim()) continue;
+    const eventId = String(canonical.eventId || "").trim();
+    if (eventId && seenEventIds.has(eventId)) continue;
+    if (eventId) seenEventIds.add(eventId);
+    events.push(canonical);
+  }
+  return {
+    events,
+    error: invalidEventCount ? `invalid_runtime_events:${invalidEventCount}` : "",
+    invalidEventCount,
+  };
+}
+
+function summarizeWorkflowSessionMessages(result = {}) {
+  const docs = Array.isArray(result?.sessions) ? result.sessions : [];
+  return docs.flatMap((doc = {}) =>
+    (Array.isArray(doc?.messages) ? doc.messages : []).map((message = {}, index) => {
+      const payload = message?.pluginMeta?.payload || {};
+      const workflowRunId = String(
+        payload?.workflowRunId ||
+          payload?.execution?.workflowRunId ||
+          payload?.execution?.instanceId ||
+          message?.workflowRunId ||
+          "",
+      ).trim();
+      const tagKeys = Array.isArray(message?.tags)
+        ? message.tags.map((item) => String(item || ""))
+        : Object.keys(message?.tags || {});
+      const suspiciousAssistantPlaceholder =
+        String(message?.role || "").trim().toLowerCase() === "assistant" &&
+        String(message?.type || "").trim() === "message" &&
+        !String(message?.content || "").trim() &&
+        Boolean(String(message?.turnScopeId || message?.dialogProcessId || "").trim());
+      if (
+        String(message?.type || "").trim() !== "workflow" &&
+        String(message?.pluginMeta?.source || "").trim() !== "workflow-plugin" &&
+        !workflowRunId &&
+        !tagKeys.includes("message") &&
+        !suspiciousAssistantPlaceholder
+      ) return [];
+      return [{
+        sessionDocId: String(doc?.sessionId || ""),
+        index,
+        id: String(message?.id || message?.messageId || ""),
+        role: String(message?.role || ""),
+        type: String(message?.type || ""),
+        pluginSource: String(message?.pluginMeta?.source || ""),
+        pluginKind: String(message?.pluginMeta?.kind || ""),
+        pluginPhase: String(message?.pluginMeta?.phase || ""),
+        dialogProcessId: String(message?.dialogProcessId || ""),
+        turnScopeId: String(message?.turnScopeId || ""),
+        workflowRunId,
+        nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
+        contentLength: String(message?.content || "").length,
+        tagKeys,
+        suspiciousAssistantPlaceholder,
+      }];
+    }),
+  );
+}
 
 export function registerSessionRoutes(
   app,
@@ -62,7 +183,35 @@ export function registerSessionRoutes(
         userId,
         sessionId,
       });
-      res.json({ ok: true, ...result });
+      const workflowRuntimeProjection = result?.exists === false
+        ? { events: [], error: "session_not_found" }
+        : await readWorkflowRuntimeProjection({ bot, userId, sessionId });
+      const sessionDocs = Array.isArray(result?.sessions) ? result.sessions : [];
+      void writeRoutedRuntimeEvent({
+        scope: "session",
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+        level: "debug",
+        debugType: "workflow-diagnostics",
+        event: "service.workflowDetail.dataSourceRead",
+        userId: String(userId || "").trim(),
+        sessionId: String(sessionId || "").trim(),
+        data: {
+          mode,
+          exists: result?.exists !== false,
+          responseSessionId: String(result?.sessionId || ""),
+          sessionDocCount: sessionDocs.length,
+          messageCount: sessionDocs.reduce(
+            (count, doc = {}) => count + (Array.isArray(doc?.messages) ? doc.messages.length : 0),
+            0,
+          ),
+          workflowCandidates: summarizeWorkflowSessionMessages(result),
+          workflowRuntimeEventCount: workflowRuntimeProjection.events.length,
+          workflowRuntimeProjectionError: workflowRuntimeProjection.error,
+        },
+      });
+      res.json({ ok: true, ...result, workflowRuntimeEvents: workflowRuntimeProjection.events });
     }),
   );
 

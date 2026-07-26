@@ -3,7 +3,7 @@
   Contact: 126240622+xiayu1987@users.noreply.github.com
   SPDX-License-Identifier: MIT
 */
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { buildViewMessage, foldConversationMessages } from "../../../../../client/noobot-chat/src/composables/infra/messageModel";
 import { buildSessionDetailProjection } from "../../../../../client/noobot-chat/src/composables/chat/chatList/sessionDetailProjection";
 
@@ -121,6 +121,42 @@ export function useWorkflowNodeMessages({
       sessionId: String(messageItem?.sessionId || selectedNodeSessionId.value || "").trim(),
     })),
   );
+
+  function summarizeMessage(messageItem = {}) {
+    return {
+      id: String(messageItem?.id || messageItem?.messageId || "").trim(),
+      role: String(messageItem?.role || "").trim(),
+      sessionId: String(messageItem?.sessionId || "").trim(),
+      dialogProcessId: String(messageItem?.dialogProcessId || "").trim(),
+      turnScopeId: String(messageItem?.turnScopeId || "").trim(),
+      pending: messageItem?.pending === true,
+      workflowNodeRunningPlaceholder: messageItem?.workflowNodeRunningPlaceholder === true,
+      contentLength: String(messageItem?.content || "").length,
+      rawEventCount: Array.isArray(messageItem?.rawEvents) ? messageItem.rawEvents.length : 0,
+      activityTimelineCount: Array.isArray(messageItem?.activityTimeline) ? messageItem.activityTimeline.length : 0,
+      toolTimelineCount: Array.isArray(messageItem?.toolTimeline) ? messageItem.toolTimeline.length : 0,
+    };
+  }
+
+  watch(
+    () => ({
+      sessionId: selectedNodeSessionId.value,
+      source: (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).map(summarizeMessage),
+      display: displayNodeMessages.value.map(summarizeMessage),
+    }),
+    (projection) => {
+      props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.displayProjected", {
+        sessionId: String(projection.sessionId || "").trim(),
+        dialogProcessId: String(selectedNode.value?.dialogProcessId || "").trim(),
+        turnScopeId: String(selectedNode.value?.turnScopeId || "").trim(),
+        sourceMessageCount: projection.source.length,
+        displayMessageCount: projection.display.length,
+        sourceMessages: projection.source,
+        displayMessages: projection.display,
+      });
+    },
+    { immediate: true },
+  );
   
   const nodeSessionAllMessages = computed(() => {
     const rawMessages = Array.isArray(selectedNodeRawMessages.value)
@@ -136,6 +172,31 @@ export function useWorkflowNodeMessages({
     if (Array.isArray(nodeItem?.runtimeBoxes)) return nodeItem.runtimeBoxes;
     return [];
   });
+
+  watch(
+    () => ({
+      sessionId: String(selectedNodeSessionId.value || "").trim(),
+      nodeExecutionId: String(selectedRuntimeNode.value?.nodeExecutionId || "").trim(),
+      nodeId: String(selectedRuntimeNode.value?.nodeId || "").trim(),
+      boxCount: selectedRuntimeBoxes.value.length,
+      stepCount: selectedRuntimeBoxes.value.reduce(
+        (count, box = {}) => count + (Array.isArray(box?.steps) ? box.steps.length : 0),
+        0,
+      ),
+      boxIds: selectedRuntimeBoxes.value.map((box = {}) =>
+        String(box?.actionNodeStateId || box?.nodeStateId || "").trim()),
+    }),
+    (projection) => {
+      props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.runtimeBoxesProjected", {
+        sessionId: projection.sessionId,
+        dialogProcessId: String(selectedRuntimeNode.value?.dialogProcessId || "").trim(),
+        turnScopeId: String(selectedRuntimeNode.value?.turnScopeId || "").trim(),
+        workflowRunId: String(selectedRuntimeNode.value?.workflowRunId || "").trim(),
+        ...projection,
+      });
+    },
+    { immediate: true },
+  );
 
   return {
     selectedNodeSessionDocs,

@@ -31,6 +31,10 @@ import {
 } from "../debug/resendDebugLogger";
 import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger";
 import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
+import {
+  logWorkflowDiagnostics,
+  summarizeWorkflowMessages,
+} from "../debug/workflowDiagnosticsLogger";
 import { applyLatestSessionVersion } from "../chatEngine/sessionVersionManager";
 import {
   confirmTurnRuntimeDeletion,
@@ -120,6 +124,15 @@ export function createSessionDetailApplicator({
       sessionDocs.find((doc) => doc.sessionId === detail.sessionId) ||
       sessionDocs[0] ||
       {};
+    logWorkflowDiagnostics("frontend.workflowDetail.applySourceSelected", {
+      sessionId: detailSessionId,
+      applyMode,
+      preserveCurrentMessages: requestedPreserveCurrentMessages,
+      selectedSessionDocId: String(mainSessionDoc?.sessionId || ""),
+      sessionDocCount: sessionDocs.length,
+      currentCandidates: summarizeWorkflowMessages(sessionItem.messages),
+      persistedCandidates: summarizeWorkflowMessages(mainSessionDoc.messages),
+    });
     const serverSessionTitle = String(
       mainSessionDoc.title || mainSessionDoc.customTitle || detail.title || "",
     ).trim();

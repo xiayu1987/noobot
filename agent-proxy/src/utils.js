@@ -18,11 +18,14 @@ export function ensureConnectionId(socket = null) {
 }
 
 export function resolveMessageEventTrace(eventName = "", data = {}, transportSequence = 0) {
-  const candidate = String(eventName || "").trim() === "message_event" ? data?.event : null;
+  const normalizedEventName = String(eventName || "").trim();
+  const candidate = normalizedEventName === "message_event" || normalizedEventName === "subagent_message_event"
+    ? data?.event
+    : null;
   const authoritative = isMessageEventEnvelope(candidate) ? candidate : null;
   return {
     protocolKind: authoritative ? "message_event" : "legacy",
-    transportEvent: String(eventName || "").trim(),
+    transportEvent: normalizedEventName,
     transportSequence: Number(transportSequence || 0),
     eventId: String(authoritative?.eventId || "").trim(),
     eventType: String(authoritative?.eventType || "").trim(),

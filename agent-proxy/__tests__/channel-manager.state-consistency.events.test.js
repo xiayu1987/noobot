@@ -139,6 +139,18 @@ test("message event tracing only accepts the shared authoritative envelope", () 
     turnScopeId: "",
     dialogProcessId: "",
   });
+  assert.deepEqual(resolveMessageEventTrace("subagent_message_event", { event: authoritative }, 11), {
+    protocolKind: "message_event",
+    transportEvent: "subagent_message_event",
+    transportSequence: 11,
+    eventId: "event-1",
+    eventType: "tool_call_start",
+    messageId: "message-1",
+    authoritativeSequence: 7,
+    sessionId: "session-1",
+    turnScopeId: "",
+    dialogProcessId: "",
+  });
   assert.equal(resolveMessageEventTrace("thinking", { event: authoritative }, 9).protocolKind, "legacy");
   assert.equal(resolveMessageEventTrace("message_event", { event: { eventId: "loose" } }, 9).protocolKind, "legacy");
 });

@@ -5,6 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
 import {
   WORKFLOW_ACTION,
   WORKFLOW_PLUGIN_DEFAULTS,
@@ -113,11 +114,12 @@ async function publishWorkflowNodeStateCommitted({ options = {}, ctx = {}, fact 
   if (!node) return null;
   const event = "workflow_node_state_committed";
   const data = {
+    sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
     workflowRunId: node.workflowRunId,
     nodeExecutionId: node.nodeExecutionId,
     commandId: node.commandId,
     sessionId: node.sessionId,
-    parentSessionId: node.parentSessionId,
+    parentSessionId: String(node.parentSessionId || ctx?.sessionId || "").trim(),
     dialogProcessId: node.dialogProcessId,
     turnScopeId: node.turnScopeId,
     nodeId: node.nodeId,

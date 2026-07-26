@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { onMounted, watch } from "vue";
 import { useWorkflowLocale } from "../i18n";
 import WorkflowCardPreview from "./workflow-message-card/WorkflowCardPreview.vue";
 import WorkflowNodeSessionDrawer from "./workflow-message-card/WorkflowNodeSessionDrawer.vue";
@@ -22,9 +23,28 @@ const props = defineProps({
   stopExecution: { type: Function, default: null },
   selectSessionMessages: { type: Function, default: null },
   mergeSubSessionSnapshot: { type: Function, default: null },
+  logWorkflowDiagnostics: { type: Function, default: null },
 });
 const emit = defineEmits(["open-thinking-details"]);
 const { translate } = useWorkflowLocale();
+
+function logCardRender(stage) {
+  const payload = props.messageItem?.pluginMeta?.payload || {};
+  props.logWorkflowDiagnostics?.(`frontend.workflowRender.card${stage}`, {
+    sessionId: String(payload?.planningDialog?.sessionId || props.messageItem?.sessionId || ""),
+    dialogProcessId: String(props.messageItem?.dialogProcessId || payload?.planningDialog?.dialogProcessId || ""),
+    turnScopeId: String(props.messageItem?.turnScopeId || ""),
+    workflowRunId: String(
+      payload?.workflowRunId || payload?.execution?.workflowRunId || payload?.execution?.instanceId || "",
+    ),
+    liveProjection: props.messageItem?.__workflowLiveProjection === true,
+    nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
+    registryWorkflowCount: Object.keys(props.workflowNodeStateRegistry?.workflows || {}).length,
+  });
+}
+
+onMounted(() => logCardRender("Mounted"));
+watch(() => props.messageItem, () => logCardRender("Updated"));
 
 const {
   selectedExecutionId,

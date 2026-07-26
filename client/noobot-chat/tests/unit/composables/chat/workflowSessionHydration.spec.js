@@ -40,6 +40,41 @@ describe("workflow session hydration", () => {
     }));
   });
 
+  it("rebuilds a running workflow from persisted runtime events before the final message exists", () => {
+    const upsertPlanning = vi.fn(() => ({ applied: true }));
+    const upsertNodeState = vi.fn(() => ({ applied: true }));
+    const planning = {
+      workflowRunId: "workflow-running",
+      sessionId: "session-a",
+      dialogProcessId: "dialog-a",
+      turnScopeId: "turn-a",
+      semanticText: "WORKFLOW_DSL/1\nNODE id=a type=action name=\"A\"",
+      nodeSessions: [{ nodeExecutionId: "node-a", stepStatus: "ready" }],
+    };
+    const running = {
+      workflowRunId: "workflow-running",
+      nodeExecutionId: "node-a",
+      status: "running",
+      revision: 2,
+      sequence: 2,
+    };
+
+    expect(hydrateWorkflowRegistryFromSessionDetail({
+      detail: {
+        sessionId: "session-a",
+        workflowRuntimeEvents: [
+          { event: "workflow_planning_message_prepared", data: planning },
+          { event: "workflow_node_state_committed", data: running },
+        ],
+      },
+      mainSessionDoc: { messages: [{ role: "user", type: "message", content: "run" }] },
+      upsertWorkflowPlanningEvent: upsertPlanning,
+      upsertWorkflowNodeStateEvent: upsertNodeState,
+    })).toBe(1);
+    expect(upsertPlanning).toHaveBeenCalledWith(planning);
+    expect(upsertNodeState).toHaveBeenCalledWith(running);
+  });
+
   it("supports persisted execution node runs when refresh happens during execution", () => {
     const message = workflowMessage();
     message.pluginMeta.payload.nodeSessions = undefined;

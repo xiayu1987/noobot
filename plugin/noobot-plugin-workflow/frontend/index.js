@@ -68,6 +68,9 @@ export function registerFrontendPlugin(ctx = {}) {
           mergeSubSessionSnapshot: typeof context?.mergeSubSessionSnapshot === "function"
             ? context.mergeSubSessionSnapshot
             : null,
+          logWorkflowDiagnostics: typeof context?.logWorkflowDiagnostics === "function"
+            ? context.logWorkflowDiagnostics
+            : null,
         }),
       },
     ],

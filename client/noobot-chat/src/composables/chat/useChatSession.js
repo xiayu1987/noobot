@@ -72,7 +72,11 @@ import { setResendDebugLogSink } from "./debug/resendDebugLogger";
 import { setStopDebugLogSink } from "./debug/stopDebugLogger";
 import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger";
 import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
-import { setWorkflowDiagnosticsLogSink } from "./debug/workflowDiagnosticsLogger";
+import {
+  logWorkflowDiagnostics,
+  setWorkflowDiagnosticsLogSink,
+  summarizeWorkflowMessage,
+} from "./debug/workflowDiagnosticsLogger";
 import {
   logThinkingReplayDebug,
   setThinkingReplayDebugLogSink,
@@ -516,6 +520,8 @@ export function useChatSession({
       sessionItem,
       mainSessionDoc,
       upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
+      upsertWorkflowNodeStateEvent: chatStore.upsertWorkflowNodeStateEvent,
+      applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     });
     const sessionId = String(
       sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "",
@@ -751,6 +757,7 @@ export function useChatSession({
     upsertWorkflowNodeStateEvent: chatStore.upsertWorkflowNodeStateEvent,
     upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
     upsertSubSessionEvent: chatStore.upsertSubSessionEvent,
+    applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     ensureConnected,
     notify,
   });
@@ -793,17 +800,9 @@ export function useChatSession({
     applyExecutionSnapshot: (payload) => chatStore.applyExecutionSnapshot(payload),
     applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),
     applyExecutionTree: (payload) => chatStore.applyExecutionTree(payload),
+    applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     applyTurnRuntimeEvents: (events = []) => {
       const sourceEvents = Array.isArray(events) ? events : [];
-      for (const event of sourceEvents) {
-        const eventName = String(event?.event || event?.type || "").trim();
-        if (eventName === "workflow_planning_message_prepared") {
-          chatStore.upsertWorkflowPlanningEvent?.(event?.data || event);
-        }
-        if (eventName === "workflow_node_state_committed") {
-          chatStore.upsertWorkflowNodeStateEvent?.(event?.data || event);
-        }
-      }
       // Replay events always reach the runtime registry. Legacy turnStatuses are
       // history/discovery metadata and are not allowed to suppress lifecycle
       // observations; registry identity and revision/sequence guards own stale
@@ -1077,13 +1076,31 @@ export function useChatSession({
 
   function shouldRenderMessageInChat(messageItem) {
     const messageRole = getMessageRole(messageItem);
-    return messageRole !== RoleEnum.TOOL &&
+    const messageTurnScopeId = getMessageTurnScopeId(messageItem);
+    const childWorkflowMessage = messageTurnScopeId.startsWith("workflow-node:");
+    const workflowPlaceholder = isWorkflowThinkingPlaceholder(
+      messageItem,
+      chatStore.workflowNodeStateRegistry,
+      activeSession.value?.messages,
+    );
+    const shouldRender = messageRole !== RoleEnum.TOOL &&
       !isHarnessInjectedMessage(messageItem) &&
-      !isWorkflowThinkingPlaceholder(
-        messageItem,
-        chatStore.workflowNodeStateRegistry,
-        activeSession.value?.messages,
-      );
+      !childWorkflowMessage &&
+      !workflowPlaceholder;
+    const summary = summarizeWorkflowMessage(messageItem);
+    if (summary.type === "workflow" || summary.pluginSource === "workflow-plugin" || workflowPlaceholder || childWorkflowMessage) {
+      logWorkflowDiagnostics("frontend.workflowRender.messageVisibilityEvaluated", {
+        sessionId: String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
+        dialogProcessId: summary.dialogProcessId,
+        turnScopeId: summary.turnScopeId,
+        workflowRunId: summary.workflowRunId,
+        shouldRender,
+        childWorkflowMessage,
+        workflowPlaceholder,
+        message: summary,
+      });
+    }
+    return shouldRender;
   }
 
   return {

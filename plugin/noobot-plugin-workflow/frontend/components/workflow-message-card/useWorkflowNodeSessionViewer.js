@@ -15,6 +15,8 @@ import {
 } from "./workflowNodeSessionDetail";
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 import { createWorkflowNodeViewTransaction } from "./workflowNodeViewTransaction.js";
+import { buildActivityTimelineFromLegacyLogs } from "../../../../../client/noobot-chat/src/composables/chat/chatEngine/activityTimeline.js";
+import { buildToolTimelineFromLegacyLogs } from "../../../../../client/noobot-chat/src/composables/chat/chatEngine/toolTimeline.js";
 import {
   buildUnifiedSessionDetail,
   hasNewProtocolNodeIdentity,
@@ -22,10 +24,80 @@ import {
   resolveIsolatedNodeSessionId,
   resolveNodeChildExecutionIds,
   resolveRuntimeNodeSession,
+  withRunningAssistantPlaceholder,
 } from "./workflowUnifiedSessionDetail.js";
 
 function text(value) {
   return String(value || "").trim();
+}
+
+function normalizePersistedExecutionLogs(logs = [], { turnScopeId = "", dialogProcessId = "" } = {}) {
+  const scopeId = text(turnScopeId);
+  const normalizedDialogProcessId = text(dialogProcessId);
+  return (Array.isArray(logs) ? logs : [])
+    .map((record = {}) => {
+      const data = record?.data && typeof record.data === "object" ? record.data : {};
+      const event = text(record?.event || data?.eventType || data?.event);
+      const displayText = text(
+        record?.text ||
+        record?.output ||
+        data?.text ||
+        data?.output ||
+        data?.content ||
+        (event === "agent_lifecycle_state_changed" ? data?.phase || data?.state : ""),
+      );
+      return {
+        ...record,
+        ...data,
+        event,
+        rawEvent: event,
+        type: text(record?.type || data?.type || data?.eventType),
+        text: displayText,
+        timestamp: text(data?.timestamp || record?.timestamp || record?.ts),
+        ts: text(record?.ts || data?.timestamp),
+      };
+    })
+    .filter((record = {}) => {
+      const recordScopeId = text(record?.turnScopeId);
+      const recordDialogId = text(record?.dialogProcessId);
+      if (scopeId && recordScopeId) return recordScopeId === scopeId;
+      if (normalizedDialogProcessId && recordDialogId) return recordDialogId === normalizedDialogProcessId;
+      return true;
+    });
+}
+
+function attachPersistedExecutionLogs(messages = [], executionLogs = [], identity = {}) {
+  const normalizedLogs = normalizePersistedExecutionLogs(executionLogs, identity);
+  if (!normalizedLogs.length) return messages;
+  return (Array.isArray(messages) ? messages : []).map((message = {}) => {
+    if (message?.workflowNodeRunningPlaceholder !== true) return message;
+    return {
+      ...message,
+      rawEvents: normalizedLogs,
+      activityTimeline: buildActivityTimelineFromLegacyLogs(normalizedLogs),
+      toolTimeline: buildToolTimelineFromLegacyLogs(normalizedLogs),
+    };
+  });
+}
+
+export function shouldRejectRootSessionProjection({
+  currentSessionId = "",
+  incomingSessionId = "",
+  rootSessionId = "",
+} = {}) {
+  const current = text(currentSessionId);
+  const incoming = text(incomingSessionId);
+  const root = text(rootSessionId);
+  return Boolean(current && incoming && root && current !== root && incoming === root);
+}
+
+export function resolveCanonicalWorkflowNodeItem(nodeItem = {}, runtimeNodeSessions = []) {
+  const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+  return {
+    ...(nodeItem && typeof nodeItem === "object" ? nodeItem : {}),
+    ...(runtimeNode && typeof runtimeNode === "object" ? runtimeNode : {}),
+    rootSessionId: text(runtimeNode?.rootSessionId || nodeItem?.rootSessionId),
+  };
 }
 
 export function useWorkflowNodeSessionViewer({
@@ -104,12 +176,94 @@ export function useWorkflowNodeSessionViewer({
     return rootSessionId && identity ? `${rootSessionId}:${identity}` : identity;
   }
 
+  function findOwningRuntimeNode(stepItem = {}) {
+    const stepExecutionId = text(stepItem?.nodeExecutionId);
+    const stepDialogProcessId = resolveWorkflowDialogProcessId(stepItem);
+    const stepSessionId = text(stepItem?.sessionId || stepItem?.nodeSessionId);
+    return (Array.isArray(flowNodes?.value) ? flowNodes.value : []).find((nodeItem = {}) =>
+      (Array.isArray(nodeItem?.actionNodeStates) ? nodeItem.actionNodeStates : []).some((stateBox = {}) =>
+        (Array.isArray(stateBox?.steps) ? stateBox.steps : []).some((candidate = {}) => {
+          if (stepExecutionId && text(candidate?.nodeExecutionId) === stepExecutionId) return true;
+          if (stepDialogProcessId && resolveWorkflowDialogProcessId(candidate) === stepDialogProcessId) return true;
+          return Boolean(stepSessionId && text(candidate?.sessionId || candidate?.nodeSessionId) === stepSessionId);
+        }),
+      ),
+    ) || null;
+  }
+
+  function findCurrentRuntimeNode(nodeItem = {}) {
+    const nodeId = text(nodeItem?.nodeId);
+    const nodeExecutionId = text(nodeItem?.nodeExecutionId);
+    const dialogProcessId = resolveWorkflowDialogProcessId(nodeItem);
+    const nodes = Array.isArray(flowNodes?.value) ? flowNodes.value : [];
+    return nodes.find((candidate = {}) => {
+      if (nodeExecutionId && text(candidate?.nodeExecutionId) === nodeExecutionId) return true;
+      if (dialogProcessId && resolveWorkflowDialogProcessId(candidate) === dialogProcessId) return true;
+      return Boolean(nodeId && text(candidate?.nodeId) === nodeId);
+    }) || null;
+  }
+
+  watch(
+    () => flowNodes?.value,
+    () => {
+      const previous = selectedRuntimeNode.value;
+      if (!previous) return;
+      const current = findCurrentRuntimeNode(previous);
+      if (!current || current === previous) return;
+      selectedRuntimeNode.value = current;
+      props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.runtimeNodeRebound", {
+        sessionId: text(
+          selectedNodeSessionId.value ||
+          current?.sessionId ||
+          current?.nodeSessionId ||
+          previous?.sessionId ||
+          previous?.nodeSessionId,
+        ),
+        dialogProcessId: resolveWorkflowDialogProcessId(current),
+        turnScopeId: text(current?.turnScopeId),
+        workflowRunId: text(current?.workflowRunId),
+        nodeExecutionId: text(current?.nodeExecutionId),
+        nodeId: text(current?.nodeId),
+        boxCount: Array.isArray(current?.actionNodeStates) ? current.actionNodeStates.length : 0,
+        reason: "runtime_projection_updated",
+      });
+    },
+    { flush: "sync" },
+  );
+
   function isCurrentSessionRequest(viewTicket, targetSessionId = "", detail = null) {
     if (!nodeViewTransaction.accepts(viewTicket)) return false;
     const expectedSessionId = text(targetSessionId);
     const responseSessionId = detailSessionId(detail || {});
     if (expectedSessionId && responseSessionId && expectedSessionId !== responseSessionId) return false;
     return true;
+  }
+
+  function logNodeDetailProjection(stage = "", nodeItem = {}, detail = {}) {
+    const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+    const executionSessionId = text(detail?.execution?.sessionId || detail?.session?.sessionId || detail?.session?.id);
+    const messages = Array.isArray(detail?.messages) ? detail.messages : [];
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.projected", {
+      sessionId: text(detail?.sessionId || detail?.sessionSummary?.sessionId),
+      dialogProcessId: resolveWorkflowDialogProcessId(runtimeNode) || resolveWorkflowDialogProcessId(nodeItem),
+      turnScopeId: text(runtimeNode?.turnScopeId || nodeItem?.turnScopeId),
+      workflowRunId: text(runtimeNode?.workflowRunId || nodeItem?.workflowRunId),
+      nodeExecutionId: text(runtimeNode?.nodeExecutionId || nodeItem?.nodeExecutionId),
+      stage,
+      isolatedNodeSessionId: resolveIsolatedNodeSessionId(nodeItem, runtimeNode),
+      executionSessionId,
+      messageCount: messages.length,
+      messages: messages.map((message = {}) => ({
+        id: text(message?.id || message?.messageId),
+        role: text(message?.role),
+        sessionId: text(message?.sessionId),
+        turnScopeId: text(message?.turnScopeId),
+        dialogProcessId: text(message?.dialogProcessId),
+        pending: message?.pending === true,
+        workflowNodeRunningPlaceholder: message?.workflowNodeRunningPlaceholder === true,
+        contentLength: String(message?.content || "").length,
+      })),
+    });
   }
 
   function applyExecutionDetail(executionId = "") {
@@ -213,11 +367,31 @@ export function useWorkflowNodeSessionViewer({
     selectedNodeSessionId.value = normalizedDetail.sessionId || "";
     selectedNodeMessages.value = normalizedDetail.messages;
     selectedNodeRawMessages.value = normalizedDetail.rawMessages;
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.snapshotReplaced", {
+      sessionId: selectedNodeSessionId.value,
+      dialogProcessId: resolveWorkflowDialogProcessId(selectedNode.value || {}),
+      turnScopeId: text(selectedNode.value?.turnScopeId),
+      workflowRunId: text(selectedNode.value?.workflowRunId),
+      messageCount: selectedNodeMessages.value.length,
+    });
   }
 
   function mergeSelectedNodeSessionSnapshot(detail = {}) {
     const currentSessionId = text(selectedNodeSessionId.value || selectedNodeSessionSummary.value?.sessionId);
     const incomingSessionId = text(detail.sessionId || detail.sessionSummary?.sessionId);
+    const rootSessionId = text(buildWorkflowDrawerRoute(selectedNode.value || {}).rootSessionId);
+    if (shouldRejectRootSessionProjection({ currentSessionId, incomingSessionId, rootSessionId })) {
+      props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.rootProjectionRejected", {
+        sessionId: rootSessionId,
+        dialogProcessId: resolveWorkflowDialogProcessId(selectedNode.value || {}),
+        turnScopeId: text(selectedNode.value?.turnScopeId),
+        workflowRunId: text(selectedNode.value?.workflowRunId),
+        currentSessionId,
+        incomingSessionId,
+        messageCount: Array.isArray(detail?.messages) ? detail.messages.length : 0,
+      });
+      return false;
+    }
     const currentDetail = currentSessionId && currentSessionId === incomingSessionId
       ? {
           sessionId: currentSessionId,
@@ -246,6 +420,15 @@ export function useWorkflowNodeSessionViewer({
     selectedNodeSessionId.value = mergedDetail.sessionId || "";
     selectedNodeMessages.value = mergedDetail.messages;
     selectedNodeRawMessages.value = mergedDetail.rawMessages;
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.snapshotMerged", {
+      sessionId: selectedNodeSessionId.value,
+      dialogProcessId: resolveWorkflowDialogProcessId(selectedNode.value || {}),
+      turnScopeId: text(selectedNode.value?.turnScopeId),
+      workflowRunId: text(selectedNode.value?.workflowRunId),
+      previousSessionId: currentSessionId,
+      incomingSessionId,
+      messageCount: selectedNodeMessages.value.length,
+    });
     return true;
   }
 
@@ -259,7 +442,20 @@ export function useWorkflowNodeSessionViewer({
       selectExecutionDetail: props.selectExecutionDetail,
       allowEmptyMessages: false,
     });
-    if (!detail) return false;
+    if (!detail) {
+      const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+      props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.unifiedUnavailable", {
+        sessionId: resolveIsolatedNodeSessionId(nodeItem, runtimeNode),
+        dialogProcessId: resolveWorkflowDialogProcessId(runtimeNode) || resolveWorkflowDialogProcessId(nodeItem),
+        turnScopeId: text(runtimeNode?.turnScopeId || nodeItem?.turnScopeId),
+        workflowRunId: text(runtimeNode?.workflowRunId || nodeItem?.workflowRunId),
+        nodeExecutionId: text(runtimeNode?.nodeExecutionId || nodeItem?.nodeExecutionId),
+        stage: "live-apply",
+        runtimeNodeCount: Array.isArray(runtimeNodeSessions?.value) ? runtimeNodeSessions.value.length : 0,
+      });
+      return false;
+    }
+    logNodeDetailProjection("live-apply", nodeItem, detail);
     if (!nodeViewTransaction.merge(viewKey, detail)) return false;
     selectedExecutionId.value = text(detail.executionId);
     attemptExecutionIds.value = Array.isArray(detail.attemptExecutionIds) ? detail.attemptExecutionIds : [];
@@ -278,10 +474,24 @@ export function useWorkflowNodeSessionViewer({
 
   async function openNodeSession(nodeItem = {}, options = {}) {
     const { fromHistory = false } = options || {};
-    const viewKey = nodeViewKey(nodeItem);
-    selectedGraphDialogProcessId.value = resolveWorkflowDialogProcessId(nodeItem);
-    const { dialogProcessId, rootSessionId } = buildWorkflowDrawerRoute(nodeItem);
-    const isNewProtocolNode = hasNewProtocolNodeIdentity(nodeItem);
+    const canonicalNodeItem = resolveCanonicalWorkflowNodeItem(nodeItem, runtimeNodeSessions);
+    const viewKey = nodeViewKey(canonicalNodeItem);
+    selectedGraphDialogProcessId.value = resolveWorkflowDialogProcessId(canonicalNodeItem);
+    const { dialogProcessId, rootSessionId } = buildWorkflowDrawerRoute(canonicalNodeItem);
+    const isNewProtocolNode = hasNewProtocolNodeIdentity(canonicalNodeItem);
+    const canonicalRuntimeNode = resolveRuntimeNodeSession(canonicalNodeItem, runtimeNodeSessions);
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.openStarted", {
+      sessionId: resolveIsolatedNodeSessionId(canonicalNodeItem, canonicalRuntimeNode),
+      dialogProcessId,
+      turnScopeId: text(canonicalNodeItem?.turnScopeId),
+      workflowRunId: text(canonicalNodeItem?.workflowRunId),
+      nodeExecutionId: text(canonicalNodeItem?.nodeExecutionId),
+      clickedSessionId: text(nodeItem?.sessionId || nodeItem?.nodeSessionId),
+      canonicalSessionId: text(canonicalNodeItem?.sessionId || canonicalNodeItem?.nodeSessionId),
+      activeChildExecutionId: text(canonicalNodeItem?.activeChildExecutionId || canonicalNodeItem?.childExecutionId),
+      runtimeNodeCount: Array.isArray(runtimeNodeSessions?.value) ? runtimeNodeSessions.value.length : 0,
+      fromHistory,
+    });
     if (!props.userId || (!isNewProtocolNode && (!rootSessionId || !dialogProcessId))) {
       ElMessage.warning(translate("workflow.nodeSessionMissing"));
       return;
@@ -291,18 +501,32 @@ export function useWorkflowNodeSessionViewer({
       pushWorkflowDrawerHistory({ dialogProcessId, rootSessionId });
     }
     viewerError.value = "";
-    selectedRuntimeStep.value = nodeItem;
-    selectedNode.value = nodeItem;
+    const owningRuntimeNode = findOwningRuntimeNode(canonicalNodeItem);
+    if (owningRuntimeNode) selectedRuntimeNode.value = owningRuntimeNode;
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.owningRuntimeNodeResolved", {
+      sessionId: resolveIsolatedNodeSessionId(canonicalNodeItem, canonicalRuntimeNode),
+      dialogProcessId,
+      turnScopeId: text(canonicalNodeItem?.turnScopeId),
+      workflowRunId: text(canonicalNodeItem?.workflowRunId),
+      nodeExecutionId: text(canonicalNodeItem?.nodeExecutionId),
+      owningNodeFound: Boolean(owningRuntimeNode),
+      owningNodeId: text(owningRuntimeNode?.nodeId),
+      boxCount: Array.isArray(owningRuntimeNode?.actionNodeStates)
+        ? owningRuntimeNode.actionNodeStates.length
+        : 0,
+    });
+    selectedRuntimeStep.value = canonicalNodeItem;
+    selectedNode.value = canonicalNodeItem;
     const viewTicket = nodeViewTransaction.begin(viewKey);
     viewerState.value = "loading";
     if (isNewProtocolNode) {
       // The node's committed Child Execution reference is authoritative. Do
       // not wait for its Execution/message projection to already exist in the
       // local registry: that is precisely when the drawer needs to hydrate it.
-      const childExecutionIds = resolveNodeChildExecutionIds(nodeItem, runtimeNodeSessions);
+      const childExecutionIds = resolveNodeChildExecutionIds(canonicalNodeItem, runtimeNodeSessions);
       const executionId = text(selectedExecutionId.value || childExecutionIds[0]);
-      const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
-      const sessionIdHint = resolveIsolatedNodeSessionId(nodeItem, runtimeNode);
+      const runtimeNode = resolveRuntimeNodeSession(canonicalNodeItem, runtimeNodeSessions);
+      const sessionIdHint = resolveIsolatedNodeSessionId(canonicalNodeItem, runtimeNode);
       selectedExecutionId.value = executionId;
       attemptExecutionIds.value = childExecutionIds;
       try {
@@ -318,16 +542,77 @@ export function useWorkflowNodeSessionViewer({
             rootSessionId,
             dialogProcessId,
           });
+          props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.restLoaded", {
+            sessionId: text(detail?.sessionId || sessionIdHint),
+            dialogProcessId,
+            turnScopeId: text(canonicalNodeItem?.turnScopeId),
+            workflowRunId: text(canonicalNodeItem?.workflowRunId),
+            nodeExecutionId: text(canonicalNodeItem?.nodeExecutionId),
+            requestedSessionId: sessionIdHint,
+            responseState: text(detail?.state),
+            messageCount: Array.isArray(detail?.messages) ? detail.messages.length : 0,
+            executionLogCount: Array.isArray(detail?.executionLogs) ? detail.executionLogs.length : 0,
+          });
           if (isCurrentSessionRequest(viewTicket, sessionIdHint, detail)) {
             if (detail?.state === "pending") {
               viewerState.value = "pending";
             } else {
-              nodeViewTransaction.replace(viewTicket, hydrateExecutionSessionDetail(detail, {
+              const hydratedDetail = hydrateExecutionSessionDetail(detail, {
                 executionId,
                 execution: executionId && typeof props.selectExecutionDetail === "function"
                   ? props.selectExecutionDetail(executionId)?.execution || null
                   : null,
-              }));
+              });
+              const rawMessages = Array.isArray(hydratedDetail.rawMessages)
+                ? hydratedDetail.rawMessages
+                : hydratedDetail.messages;
+              const subSessionMergeResult = typeof mergeSubSessionSnapshot === "function"
+                ? mergeSubSessionSnapshot({
+                    ...(hydratedDetail.sessionSummary || {}),
+                    sessionId: sessionIdHint,
+                    messages: rawMessages,
+                    rawMessages,
+                  })
+                : null;
+              props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.subSessionHydrated", {
+                sessionId: sessionIdHint,
+                dialogProcessId,
+                turnScopeId: text(canonicalNodeItem?.turnScopeId),
+                workflowRunId: text(canonicalNodeItem?.workflowRunId),
+                nodeExecutionId: text(canonicalNodeItem?.nodeExecutionId),
+                messageCount: rawMessages.length,
+                storeMergeAvailable: typeof mergeSubSessionSnapshot === "function",
+                storeMergeApplied: subSessionMergeResult?.applied === true,
+                storeMergeReason: text(subSessionMergeResult?.reason),
+                storedMessageCount: Array.isArray(subSessionMergeResult?.session?.messages)
+                  ? subSessionMergeResult.session.messages.length
+                  : 0,
+              });
+              const placeholderMessages = withRunningAssistantPlaceholder(rawMessages, {
+                sessionId: sessionIdHint,
+                turnScopeId: text(canonicalNodeItem?.turnScopeId),
+                dialogProcessId,
+                state: subSessionMergeResult?.session?.status ||
+                  canonicalNodeItem?.status || canonicalNodeItem?.state || canonicalNodeItem?.stepStatus,
+              });
+              const messages = attachPersistedExecutionLogs(
+                placeholderMessages,
+                hydratedDetail.executionLogs,
+                {
+                  turnScopeId: text(canonicalNodeItem?.turnScopeId),
+                  dialogProcessId: resolveWorkflowDialogProcessId(rawMessages.find((message = {}) =>
+                    text(message?.role).toLowerCase() === "user") || canonicalNodeItem),
+                },
+              );
+              nodeViewTransaction.replace(viewTicket, {
+                ...hydratedDetail,
+                messages,
+                rawMessages,
+                sessionSummary: {
+                  ...(hydratedDetail.sessionSummary || {}),
+                  messages,
+                },
+              });
               viewerState.value = detail?.state === "empty" ? "empty" : "ready";
             }
           }
@@ -350,7 +635,7 @@ export function useWorkflowNodeSessionViewer({
         }
       } finally {
         if (nodeViewTransaction.activate(viewTicket)) {
-          applyUnifiedSessionDetailIfAvailable(nodeItem);
+          applyUnifiedSessionDetailIfAvailable(canonicalNodeItem);
         }
       }
       return;
@@ -366,7 +651,7 @@ export function useWorkflowNodeSessionViewer({
         rootSessionId,
         dialogProcessId,
       });
-      const targetSessionId = text(nodeItem?.sessionId || nodeItem?.nodeSessionId);
+      const targetSessionId = text(canonicalNodeItem?.sessionId || canonicalNodeItem?.nodeSessionId);
       if (!isCurrentSessionRequest(viewTicket, targetSessionId, detail)) return;
       nodeViewTransaction.replace(viewTicket, detail);
       viewerState.value = (detail.messages || []).length ? "ready" : "empty";
@@ -376,7 +661,7 @@ export function useWorkflowNodeSessionViewer({
       viewerState.value = "failed";
     } finally {
       if (nodeViewTransaction.activate(viewTicket)) {
-        applyUnifiedSessionDetailIfAvailable(nodeItem);
+        applyUnifiedSessionDetailIfAvailable(canonicalNodeItem);
       }
     }
   }
@@ -390,9 +675,24 @@ export function useWorkflowNodeSessionViewer({
     viewerError.value = "";
     viewerState.value = "idle";
     viewerVisible.value = true;
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.nodePanelOpened", {
+      sessionId: text(nodeItem?.sessionId || nodeItem?.nodeSessionId),
+      dialogProcessId: resolveWorkflowDialogProcessId(nodeItem),
+      turnScopeId: text(nodeItem?.turnScopeId),
+      workflowRunId: text(nodeItem?.workflowRunId),
+      nodeExecutionId: text(nodeItem?.nodeExecutionId),
+    });
   }
 
   async function handleRuntimeStepClick(stepItem = {}) {
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.stepClicked", {
+      sessionId: text(stepItem?.sessionId || stepItem?.nodeSessionId),
+      dialogProcessId: resolveWorkflowDialogProcessId(stepItem),
+      turnScopeId: text(stepItem?.turnScopeId),
+      workflowRunId: text(stepItem?.workflowRunId),
+      nodeExecutionId: text(stepItem?.nodeExecutionId),
+      stepHasSession: stepHasSession(stepItem),
+    });
     if (!stepHasSession(stepItem)) return;
     await openNodeSession(stepItem);
   }
@@ -475,6 +775,7 @@ export function useWorkflowNodeSessionViewer({
     (projection) => {
       if (!projection) return;
       const { viewKey, detail } = projection;
+      logNodeDetailProjection("live-watch", selectedRuntimeStep.value, detail);
       if (!nodeViewTransaction.merge(viewKey, detail)) return;
       if (detail.executionId) selectedExecutionId.value = text(detail.executionId);
       if (Array.isArray(detail.attemptExecutionIds)) {

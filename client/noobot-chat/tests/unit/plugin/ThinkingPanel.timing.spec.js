@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
+import { buildViewMessage } from "../../../src/composables/infra/messageModel.js";
 
 function runtime(overrides = {}) {
   return {
@@ -98,6 +99,17 @@ describe("ThinkingPanel runtime timing", () => {
     expect(wrapper.text()).toContain("--:--");
     expect(wrapper.text()).not.toContain("00:12");
     expect(wrapper.find(".thinking-realtime-shell").classes()).not.toContain("is-running");
+  });
+
+  it("renders a running thinking panel for a workflow node placeholder without a root runtime", () => {
+    const wrapper = mountThinkingPanel(buildViewMessage(thinkingMessage({
+      completedToolLogs: [],
+      pending: true,
+      workflowNodeRunningPlaceholder: true,
+    })));
+
+    expect(wrapper.find(".thinking-realtime-shell").exists()).toBe(true);
+    expect(wrapper.find(".thinking-realtime-shell").classes()).toContain("is-running");
   });
 
   it("prefers Runtime Store timestamps over stale message and channel timestamps", () => {

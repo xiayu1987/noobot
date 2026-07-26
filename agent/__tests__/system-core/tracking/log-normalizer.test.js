@@ -12,8 +12,24 @@ import {
 } from "../../../src/system-core/tracking/event-log/log-normalizer.js";
 import {
   assertMessageEventEnvelope,
+  beginAssistantMessageEventStream,
+  emitMessageEvent,
   isMessageEventEnvelope,
 } from "../../../src/system-core/event/message-event-stream.js";
+
+test("authoritative message events declare the message-event sequence domain", () => {
+  const emitted = [];
+  const runtime = { systemRuntime: { sessionId: "session-1" } };
+  beginAssistantMessageEventStream(runtime);
+  const envelope = emitMessageEvent({
+    onEvent(event) {
+      emitted.push(event);
+    },
+  }, runtime, "llm_delta", { text: "token" });
+
+  assert.equal(envelope.sequenceDomain, "message-event");
+  assert.equal(emitted[0]?.data?.sequenceDomain, "message-event");
+});
 
 test("authoritative message envelope validation rejects partial events", () => {
   const envelope = {

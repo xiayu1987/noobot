@@ -691,6 +691,24 @@ export function createMessageHandler({
       getCurrentTurnScopeId: () => state.currentTurnScopeId,
       onEventReceived: (eventData = {}) => {
         const eventType = String(eventData.eventType || eventData.eventName || "").trim();
+        if (
+          eventType === "workflow_planning_message_prepared" ||
+          eventType === "workflow_node_state_committed"
+        ) {
+          void recordServiceWebSocketLifecycle({
+            sessionLogConfig,
+            category: "debug",
+            level: "debug",
+            debugType: "workflow-diagnostics",
+            event: "service.workflowTransport.sourceEventReceived",
+            userId,
+            sessionId: eventData.sessionId || sessionId,
+            dialogProcessId: eventData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
+            turnScopeId: eventData.turnScopeId || state.currentTurnScopeId || "",
+            data: eventData,
+          });
+          return;
+        }
         if (eventType !== "tool_call_start" && eventType !== "tool_call_end") return;
         void recordServiceWebSocketLifecycle({
           sessionLogConfig,

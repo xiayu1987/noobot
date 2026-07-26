@@ -18,20 +18,101 @@ function text(value) {
 function contentOnly(value = {}) {
   const {
     turnRuntime: _turnRuntime,
-    turnTimings: _turnTimings,
-    turnStatuses: _turnStatuses,
     ...content
   } = value && typeof value === "object" ? value : {};
   return content;
 }
 
+const TERMINAL_EXECUTION_STATES = new Set([
+  "completed", "succeeded", "failed", "error", "cancelled", "aborted",
+  "user_stopped", "expired", "timeout", "no_conversation",
+]);
+
+function resolveProjectionState(...values) {
+  const states = values.map((value) => text(value).toLowerCase()).filter(Boolean);
+  return states.find((state) => TERMINAL_EXECUTION_STATES.has(state)) || states[0] || "";
+}
+
+export function withRunningAssistantPlaceholder(messages = [], {
+  sessionId = "",
+  turnScopeId = "",
+  dialogProcessId = "",
+  state = "",
+} = {}) {
+  const source = Array.isArray(messages) ? messages : [];
+  const normalizedState = text(state).toLowerCase();
+  const scopeId = text(turnScopeId);
+  const normalizedDialogProcessId = text(dialogProcessId);
+  if (!normalizedState || TERMINAL_EXECUTION_STATES.has(normalizedState)) return source;
+  const matchesTurn = (item = {}) => {
+    const itemScopeId = text(item?.turnScopeId || item?.metadata?.turnScopeId);
+    const itemDialogId = text(item?.dialogProcessId || item?.metadata?.dialogProcessId);
+    if (scopeId && itemScopeId) return itemScopeId === scopeId;
+    if (normalizedDialogProcessId && itemDialogId) return itemDialogId === normalizedDialogProcessId;
+    return !scopeId && !normalizedDialogProcessId;
+  };
+  const matchingUser = source.find((item = {}) => text(item?.role).toLowerCase() === "user" && matchesTurn(item));
+  if (!matchingUser) return source;
+  if (source.some((item = {}) => text(item?.role).toLowerCase() === "assistant" && matchesTurn(item))) return source;
+  return [...source, {
+    id: `workflow-node-running:${scopeId || normalizedDialogProcessId || text(sessionId)}`,
+    role: "assistant",
+    type: "message",
+    content: "",
+    pending: true,
+    synthetic: true,
+    placeholder: true,
+    turnPlaceholder: true,
+    workflowNodeRunningPlaceholder: true,
+    sessionId: text(matchingUser?.sessionId || matchingUser?.metadata?.sessionId || sessionId),
+    turnScopeId: scopeId,
+    dialogProcessId: text(
+      matchingUser?.dialogProcessId || matchingUser?.metadata?.dialogProcessId || normalizedDialogProcessId,
+    ),
+  }];
+}
+
+function withoutSupersededRunningPlaceholders(messages = [], { terminal = false } = {}) {
+  const source = Array.isArray(messages) ? messages : [];
+  const realAssistantKeys = new Set(source
+    .filter((item = {}) => text(item?.role).toLowerCase() === "assistant" && item?.workflowNodeRunningPlaceholder !== true)
+    .flatMap((item = {}) => [
+      text(item?.turnScopeId || item?.metadata?.turnScopeId),
+      text(item?.dialogProcessId || item?.metadata?.dialogProcessId),
+    ].filter(Boolean)));
+  return source.filter((item = {}) => {
+    if (item?.workflowNodeRunningPlaceholder !== true) return true;
+    const identityKeys = [text(item?.turnScopeId), text(item?.dialogProcessId)].filter(Boolean);
+    // Terminal node state can arrive before the final Session snapshot or
+    // authoritative assistant message. Keep the existing thinking surface
+    // until a real assistant with the same identity materializes; otherwise
+    // the drawer briefly collapses to the user message only.
+    return !identityKeys.some((key) => realAssistantKeys.has(key));
+  });
+}
+
 /** Merge persisted full detail with the realtime projection without allowing a
- * partial realtime document to erase user messages or turn metadata. */
+ * partial realtime document to erase messages or persisted turn facts. */
 export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
   const merged = mergeCanonicalSessionDetail(contentOnly(base), contentOnly(incoming));
+  const mergedState = resolveProjectionState(
+    merged?.execution?.state,
+    merged?.execution?.status,
+    merged?.sessionSummary?.state,
+    merged?.sessionSummary?.status,
+    merged?.state,
+    merged?.status,
+  );
+  const terminal = TERMINAL_EXECUTION_STATES.has(mergedState);
+  const messages = withoutSupersededRunningPlaceholders(merged.messages, { terminal });
+  const rawMessages = withoutSupersededRunningPlaceholders(merged.rawMessages, { terminal });
   return {
     ...contentOnly(merged),
-    ...(merged.sessionSummary ? { sessionSummary: contentOnly(merged.sessionSummary) } : {}),
+    messages,
+    rawMessages,
+    ...(merged.sessionSummary ? {
+      sessionSummary: { ...contentOnly(merged.sessionSummary), messages },
+    } : {}),
     ...(merged.execution ? { execution: contentOnly(merged.execution) } : {}),
   };
 }
@@ -86,13 +167,58 @@ export function buildUnifiedSessionDetail({
   allowEmptyMessages = false,
 } = {}) {
   const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
+  const isolatedNodeSessionId = resolveIsolatedNodeSessionId(nodeItem, runtimeNode);
   const childExecutionIds = resolveNodeChildExecutionIds(nodeItem, runtimeNodeSessions);
   if (childExecutionIds.length && typeof selectExecutionDetail === "function") {
     const executionDetail = selectExecutionDetail(childExecutionIds[0]);
     if (executionDetail) {
       const execution = contentOnly(executionDetail.execution || {});
-      const sessionDoc = contentOnly(executionDetail.session || {});
-      const messages = Array.isArray(executionDetail.messages) ? executionDetail.messages : [];
+      const executionSessionDoc = contentOnly(executionDetail.session || {});
+      const executionSessionId = text(execution.sessionId || executionSessionDoc.sessionId || executionSessionDoc.id);
+      const isolatedSessionDoc = isolatedNodeSessionId && typeof selectSessionMessages === "function"
+        ? contentOnly(selectSessionMessages(isolatedNodeSessionId) || {})
+        : {};
+      const hasIsolatedSessionProjection = Boolean(
+        isolatedNodeSessionId && text(isolatedSessionDoc.sessionId || isolatedSessionDoc.id),
+      );
+      const executionOwnsIsolatedSession = Boolean(
+        !isolatedNodeSessionId || !executionSessionId || executionSessionId === isolatedNodeSessionId,
+      );
+      // A child Execution can temporarily inherit the root Session identity.
+      // The committed workflow node state owns the isolated child Session; use
+      // its projection whenever available so a root snapshot cannot overwrite
+      // the node drawer after REST hydration.
+      const sessionId = text(isolatedNodeSessionId || executionSessionId);
+      const sessionDoc = hasIsolatedSessionProjection
+        ? isolatedSessionDoc
+        : executionOwnsIsolatedSession
+          ? executionSessionDoc
+          : { sessionId };
+      const rawMessages = hasIsolatedSessionProjection
+        ? (Array.isArray(isolatedSessionDoc.messages) ? isolatedSessionDoc.messages : [])
+        : executionOwnsIsolatedSession && Array.isArray(executionDetail.messages)
+          ? executionDetail.messages
+          : [];
+      const turnScopeId = text(execution.turnScopeId || runtimeNode?.turnScopeId || nodeItem?.turnScopeId);
+      const dialogProcessId = text(
+        execution.dialogProcessId || runtimeNode?.dialogProcessId || resolveWorkflowDialogProcessId(runtimeNode) || resolveWorkflowDialogProcessId(nodeItem),
+      );
+      const projectionState = resolveProjectionState(
+        execution.state,
+        execution.status,
+        runtimeNode?.status,
+        runtimeNode?.state,
+        sessionDoc?.status,
+        sessionDoc?.state,
+        nodeItem?.status,
+        nodeItem?.state,
+      );
+      const messages = withRunningAssistantPlaceholder(rawMessages, {
+        sessionId,
+        turnScopeId,
+        dialogProcessId,
+        state: projectionState,
+      });
       if (!messages.length && !execution && !allowEmptyMessages) return null;
       return {
         executionId: text(execution.executionId || childExecutionIds[0]),
@@ -100,15 +226,22 @@ export function buildUnifiedSessionDetail({
         childExecutions: Array.isArray(executionDetail.children) ? executionDetail.children : [],
         descendantExecutions: Array.isArray(executionDetail.descendants) ? executionDetail.descendants : [],
         attemptExecutionIds: childExecutionIds,
-        sessionId: text(execution.sessionId || sessionDoc.sessionId || sessionDoc.id),
+        sessionId,
         messages,
-        rawMessages: messages,
+        rawMessages,
         sessionSummary: {
           ...sessionDoc,
-          sessionId: text(execution.sessionId || sessionDoc.sessionId || sessionDoc.id),
+          sessionId,
           executionId: text(execution.executionId || childExecutionIds[0]),
-          turnScopeId: text(execution.turnScopeId),
-          dialogProcessId: text(execution.dialogProcessId),
+          turnScopeId,
+          dialogProcessId,
+          status: projectionState || text(sessionDoc?.status || sessionDoc?.state),
+          turnStatuses: Array.isArray(sessionDoc.turnStatuses)
+            ? sessionDoc.turnStatuses
+            : Array.isArray(execution.turnStatuses) ? execution.turnStatuses : [],
+          turnTimings: Array.isArray(sessionDoc.turnTimings)
+            ? sessionDoc.turnTimings
+            : Array.isArray(execution.turnTimings) ? execution.turnTimings : [],
           messages,
         },
       };
@@ -117,7 +250,7 @@ export function buildUnifiedSessionDetail({
   // Child Execution identity remains authoritative, but its projection can
   // arrive after sub-session events. Use only the node's preallocated session
   // identity as the realtime fallback; never infer another child by dialog.
-  const sessionId = resolveIsolatedNodeSessionId(nodeItem, runtimeNode);
+  const sessionId = isolatedNodeSessionId;
   if (!sessionId || typeof selectSessionMessages !== "function") return null;
   const sessionDoc = contentOnly(selectSessionMessages(sessionId));
   if (!sessionDoc || typeof sessionDoc !== "object") return null;
@@ -125,7 +258,7 @@ export function buildUnifiedSessionDetail({
   const turnScopeId = text(runtimeNode?.turnScopeId || nodeItem?.turnScopeId);
   const dialogProcessId = text(runtimeNode?.dialogProcessId || resolveWorkflowDialogProcessId(runtimeNode) || resolveWorkflowDialogProcessId(nodeItem));
   if (!messages.length && !allowEmptyMessages && !childExecutionIds.length) return null;
-  const scopedMessages = turnScopeId
+  const scopedRawMessages = turnScopeId
     ? messages.filter((messageItem = {}) => {
       const messageTurnScopeId = text(messageItem?.turnScopeId || messageItem?.metadata?.turnScopeId || messageItem?.pluginMeta?.turnScopeId);
       const messageDialogProcessId = text(messageItem?.dialogProcessId || messageItem?.metadata?.dialogProcessId || messageItem?.pluginMeta?.dialogProcessId);
@@ -134,18 +267,33 @@ export function buildUnifiedSessionDetail({
       return true;
     })
     : messages;
-  if (!scopedMessages.length && !allowEmptyMessages && !childExecutionIds.length) return null;
+  if (!scopedRawMessages.length && !allowEmptyMessages && !childExecutionIds.length) return null;
+  const projectionState = resolveProjectionState(
+    runtimeNode?.status,
+    runtimeNode?.state,
+    sessionDoc?.status,
+    sessionDoc?.state,
+    nodeItem?.status,
+    nodeItem?.state,
+  );
+  const scopedMessages = withRunningAssistantPlaceholder(scopedRawMessages, {
+    sessionId,
+    turnScopeId,
+    dialogProcessId,
+    state: projectionState,
+  });
   return {
     executionId: text(childExecutionIds[0]),
     attemptExecutionIds: childExecutionIds,
     sessionId,
     messages: scopedMessages,
-    rawMessages: scopedMessages,
+    rawMessages: scopedRawMessages,
     sessionSummary: {
       ...(sessionDoc && typeof sessionDoc === "object" ? sessionDoc : {}),
       sessionId,
       parentSessionId: text(runtimeNode?.parentSessionId || sessionDoc?.parentSessionId || nodeItem?.parentSessionId),
       dialogProcessId,
+      status: projectionState || text(sessionDoc?.status || sessionDoc?.state),
       turnScopeId,
       messages: scopedMessages,
     },

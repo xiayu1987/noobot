@@ -15,6 +15,200 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
+  it("upgrades a refreshed assistant placeholder to the finalized workflow message from live DONE", async () => {
+    const { api, refs } = createFixture();
+    const placeholder = {
+      role: RoleEnum.ASSISTANT,
+      type: "message",
+      sessionId: "s-1",
+      dialogProcessId: "dp-workflow-final",
+      turnScopeId: "turn-workflow-final",
+      content: "",
+      pending: true,
+      thinkingExpanded: true,
+    };
+    refs.activeSession.value.messages = [
+      {
+        role: RoleEnum.USER,
+        content: "run workflow",
+        sessionId: "s-1",
+        dialogProcessId: "dp-workflow-final",
+        turnScopeId: "turn-workflow-final",
+      },
+      placeholder,
+    ];
+
+    await api.applyReconnectEvent(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-workflow-final",
+      turnScopeId: "turn-workflow-final",
+      seq: 85,
+      messages: [
+        {
+          role: RoleEnum.USER,
+          content: "run workflow",
+          sessionId: "s-1",
+          dialogProcessId: "dp-workflow-final",
+          turnScopeId: "turn-workflow-final",
+        },
+        {
+          role: RoleEnum.ASSISTANT,
+          type: "workflow",
+          content: "workflow finalized",
+          sessionId: "s-1",
+          dialogProcessId: "dp-workflow-final",
+          turnScopeId: "turn-workflow-final",
+          pluginMessage: true,
+          pluginMeta: {
+            source: "workflow-plugin",
+            kind: "workflow",
+            phase: "planning",
+            payload: { workflowRunId: "workflow-final" },
+          },
+        },
+      ],
+    });
+
+    expect(refs.activeSession.value.messages).toHaveLength(2);
+    expect(refs.activeSession.value.messages[1]).toMatchObject({
+      type: "workflow",
+      content: "workflow finalized",
+      pluginMessage: true,
+      pluginMeta: {
+        source: "workflow-plugin",
+        kind: "workflow",
+      },
+      thinkingExpanded: true,
+    });
+  });
+
+  it("applies a live DONE snapshot after terminal lifecycle and same-sequence channel state", async () => {
+    const { api, refs, mocks } = createFixture();
+    refs.activeSession.value.messages = [
+      {
+        role: RoleEnum.USER,
+        content: "run workflow",
+        sessionId: "s-1",
+        dialogProcessId: "dp-terminal-order",
+        turnScopeId: "turn-terminal-order",
+      },
+    ];
+    mocks.chatList.fetchSessionDetail.mockResolvedValueOnce({
+      sessionId: "s-1",
+      sessions: [{
+        sessionId: "s-1",
+        messages: [
+          refs.activeSession.value.messages[0],
+          {
+            role: RoleEnum.ASSISTANT,
+            type: "workflow",
+            content: "workflow completed",
+            sessionId: "s-1",
+            dialogProcessId: "dp-terminal-order",
+            turnScopeId: "turn-terminal-order",
+            pluginMessage: true,
+            pluginMeta: {
+              source: "workflow-plugin",
+              kind: "workflow",
+              payload: { workflowRunId: "workflow-terminal-order" },
+            },
+          },
+        ],
+      }],
+    });
+
+    await api.applyReconnectEvent(StreamEventEnum.TURN_LIFECYCLE, {
+      eventType: "turn.completed",
+      sessionId: "s-1",
+      dialogProcessId: "dp-terminal-order",
+      turnScopeId: "turn-terminal-order",
+      seq: 91,
+      sequence: 2,
+    });
+    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-terminal-order",
+      turnScopeId: "turn-terminal-order",
+      state: BackendChannelState.COMPLETED,
+      seq: 93,
+    });
+    await api.applyReconnectEvent(StreamEventEnum.DONE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-terminal-order",
+      turnScopeId: "turn-terminal-order",
+      seq: 93,
+      // The production DONE can precede assistant materialization in its
+      // embedded snapshot. Final detail is the canonical presentation source.
+      messages: [refs.activeSession.value.messages[0]],
+    });
+
+    expect(refs.activeSession.value.messages).toHaveLength(2);
+    expect(refs.activeSession.value.messages[1]).toMatchObject({
+      role: RoleEnum.ASSISTANT,
+      type: "workflow",
+      content: "workflow completed",
+      pluginMessage: true,
+    });
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", expect.objectContaining({
+      source: "reconnectDoneFinalStatus",
+      force: true,
+      requireFresh: true,
+    }));
+  });
+
+  it("routes a live child canonical event through the same sub-session reducer as reconnect replay", async () => {
+    const { api, mocks } = createFixture();
+    const messageEvent = {
+      eventId: "evt-child-live-1",
+      messageId: "msg-child-live-1",
+      sessionId: "child-session",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "workflow-node:node-1",
+      type: "tool_call_start",
+      sequence: 1,
+    };
+
+    const result = await api.applyReconnectEvent("subagent_message_event", {
+      sessionId: "child-session",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "workflow-node:node-1",
+      seq: 42,
+      route: { scope: "sub_session", rootSessionId: "s-1" },
+      event: messageEvent,
+    });
+
+    expect(result).toEqual({ applied: true, appliedCount: 1 });
+    expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledWith(
+      {
+        event: "workflow_message_event",
+        data: messageEvent,
+        transportSequence: 0,
+      },
+      { source: "reconnect" },
+    );
+  });
+
+  it("projects workflow planning events replayed after a page refresh", async () => {
+    const { api, mocks } = createFixture();
+    const data = {
+      sessionId: "s-1",
+      dialogProcessId: "dp-workflow",
+      turnScopeId: "turn-workflow",
+      workflowRunId: "workflow-1",
+      nodeSessions: [{ nodeExecutionId: "node-1" }],
+    };
+
+    await api.applyReconnectEvent("workflow_planning_message_prepared", data);
+
+    expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledWith({
+      event: "workflow_planning_message_prepared",
+      data,
+      transportSequence: 0,
+    }, { source: "reconnect" });
+    expect(mocks.applyTurnRuntimeEvents).not.toHaveBeenCalled();
+  });
+
   it("EV-02: THINKING updates logs and keeps pending true", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [

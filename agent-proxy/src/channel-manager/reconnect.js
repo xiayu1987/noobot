@@ -178,8 +178,17 @@ handleReconnect(socket, payload = {}) {
 
     for (const dpId of dialogProcessIdsInLog) {
       const lastSeq = Number(lastReceivedSeqMap[dpId] || 0);
+      const latestDialogTurnScopeId = [...channel.eventLog]
+        .reverse()
+        .find((envelope) =>
+          String(envelope?.data?.dialogProcessId || "").trim() === dpId &&
+          String(envelope?.data?.turnScopeId || "").trim())
+        ?.data?.turnScopeId;
       const reconnectTurnScopeId = String(
-        lastReceivedTurnScopeIdMap?.[dpId] || payload?.currentTurnScopeId || "",
+        lastReceivedTurnScopeIdMap?.[dpId] ||
+          (lastSeq <= 0 ? latestDialogTurnScopeId : "") ||
+          payload?.currentTurnScopeId ||
+          "",
       ).trim();
       const conversationState = String(
         channel.conversationStateByDialogProcessId?.get(dpId)?.state || "",

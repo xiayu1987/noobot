@@ -145,6 +145,43 @@ describe("useChatStore sub session projection", () => {
     expect(message?.rawEvents).toHaveLength(2);
   });
 
+  it("continues a REST-hydrated child session with realtime assistant tool events", () => {
+    const store = useChatStore();
+    store.mergeSubSessionSnapshot({
+      sessionId: "sub-session-1",
+      parentSessionId: "main-session-1",
+      messages: [{
+        id: "msg-user-1",
+        messageId: "msg-user-1",
+        role: "user",
+        content: "run child task",
+        sessionId: "sub-session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+      }],
+    });
+
+    const result = store.upsertSubSessionEvent("tool_call_start", createSubSessionEvent({
+      eventType: "tool_call_start",
+      eventId: "tool-start-after-refresh",
+      sequence: 1,
+      tool: "write_file",
+      toolCallId: "call-after-refresh",
+    }));
+
+    expect(result.applied).toBe(true);
+    const messages = store.selectSubSessionMessages("sub-session-1")?.messages || [];
+    expect(messages.map((message) => message.role)).toEqual(["user", "assistant"]);
+    expect(messages[1]).toMatchObject({
+      id: "msg-assistant-1",
+      sessionId: "sub-session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      role: "assistant",
+    });
+    expect(messages[1].rawEvents).toHaveLength(1);
+  });
+
   it("keeps events ordered when realtime updates arrive out of sequence", () => {
     const store = useChatStore();
     store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "event-2", sequence: 2, content: "second" }));
@@ -153,6 +190,36 @@ describe("useChatStore sub session projection", () => {
     expect(earlier.applied).toBe(false);
     expect(earlier.reason).toBe("stale");
     expect(store.selectSubSessionMessages("sub-session-1")?.messages.map((message) => message.content)).toEqual(["second"]);
+  });
+
+  it("does not treat an unscoped snapshot sequence as message-event ordering", () => {
+    const store = useChatStore();
+    store.mergeSubSessionSnapshot({
+      sessionId: "sub-session-1",
+      messages: [{
+        id: "msg-assistant-1",
+        messageId: "msg-assistant-1",
+        role: "assistant",
+        content: "persisted",
+        turnScopeId: "turn-1",
+        sequence: 999,
+        revision: 999,
+      }],
+    });
+
+    const result = store.upsertSubSessionEvent("llm_delta", createSubSessionEvent({
+      eventId: "event-live-1",
+      sequence: 1,
+      revision: 1,
+      content: " live",
+    }));
+
+    expect(result.applied).toBe(true);
+    expect(store.selectSubSessionMessages("sub-session-1").messages[0]).toMatchObject({
+      sequence: 1,
+      revision: 1,
+      sequenceDomain: "message-event",
+    });
   });
 
   it("merges a persisted snapshot without erasing realtime increments", () => {
@@ -177,6 +244,70 @@ describe("useChatStore sub session projection", () => {
     expect(store.selectSubSessionMessages("sub-session-1")?.messages[0].content).toBe("hello");
     expect(store.selectSubSessionMessages("sub-session-1")?.messages[1].content).toBe("world");
     expect(store.selectSubSessionMessages("sub-session-1")?.eventsById?.["event-1"]).toBeTruthy();
+  });
+
+  it("deduplicates id-less REST and realtime messages by child turn and role", () => {
+    const store = useChatStore();
+    store.mergeSubSessionSnapshot({
+      sessionId: "sub-session-1",
+      messages: [{
+        role: "user",
+        content: "same request",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+      }],
+    });
+
+    const result = store.mergeSubSessionSnapshot({
+      sessionId: "sub-session-1",
+      messages: [{
+        role: "user",
+        content: "same request",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+      }],
+    });
+
+    expect(result.session.messages).toHaveLength(1);
+    expect(result.session.messages[0]).toMatchObject({ role: "user", content: "same request" });
+  });
+
+  it("projects terminal workflow node state onto the isolated child session", () => {
+    const store = useChatStore();
+    store.upsertWorkflowNodeStateEvent({
+      workflowRunId: "workflow-1",
+      nodeExecutionId: "node-1",
+      sessionId: "sub-session-1",
+      parentSessionId: "main-session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      status: "running",
+      revision: 1,
+      sequence: 1,
+    });
+    store.mergeSubSessionSnapshot({
+      sessionId: "sub-session-1",
+      status: "running",
+      messages: [{ role: "user", content: "request", turnScopeId: "turn-1" }],
+    });
+    store.upsertWorkflowNodeStateEvent({
+      workflowRunId: "workflow-1",
+      nodeExecutionId: "node-1",
+      sessionId: "sub-session-1",
+      parentSessionId: "main-session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      status: "succeeded",
+      revision: 2,
+      sequence: 2,
+    });
+
+    const session = store.selectSubSessionMessages("sub-session-1");
+    expect(session.status).toBe("succeeded");
+    expect(session.turnStatuses).toEqual([
+      expect.objectContaining({ turnScopeId: "turn-1", status: "succeeded" }),
+    ]);
+    expect(session.turnTimings[0].thinkingFinishedAt).toEqual(expect.any(String));
   });
 
   it("does not overwrite existing realtime content when snapshot messages are empty", () => {

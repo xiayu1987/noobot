@@ -8,9 +8,37 @@ import {
   applyFoldedMessagesForDialogProcess,
   applyFoldedMessagesToActiveSession,
 } from "../../../../src/composables/chat/reconnectReplay/messageReplay";
+import { resolveReconnectTargetAssistantMessage } from "../../../../src/composables/chat/reconnectReplay/assistantMessageReplay";
 import { selectToolTimeline } from "../../../../src/composables/chat/chatEngine/toolTimeline";
 
 describe("messageReplay", () => {
+  it("promotes a dialog-only reconnect assistant when the authoritative turn scope arrives", () => {
+    const assistant = {
+      role: "assistant",
+      content: "",
+      pending: true,
+      turnPlaceholder: true,
+      dialogProcessId: "dp-workflow",
+    };
+    const activeSession = { value: { id: "session-1", messages: [assistant] } };
+    const appendMessage = (role, content) => {
+      const message = { role, content };
+      activeSession.value.messages.push(message);
+      return message;
+    };
+
+    const resolved = resolveReconnectTargetAssistantMessage({
+      activeSession,
+      appendMessage,
+      dialogProcessId: "dp-workflow",
+      turnScopeId: "client-turn:workflow-1",
+    });
+
+    expect(resolved).toBe(assistant);
+    expect(assistant.turnScopeId).toBe("client-turn:workflow-1");
+    expect(activeSession.value.messages).toHaveLength(1);
+  });
+
   it("patches an existing pending assistant for a reconnect DONE dialog process", () => {
     const pendingAssistant = {
       role: "assistant",

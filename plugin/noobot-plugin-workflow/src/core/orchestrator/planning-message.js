@@ -6,6 +6,7 @@
 
 import { appendWorkflowPlanningMessage, emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
+import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
 
 export function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {
   return {
@@ -59,7 +60,7 @@ export async function prepareWorkflowPlanningMessage({
   planningWorkflowPayload.workflowRunId = workflowRunId;
   planningWorkflowPayload.nodeSessions = planningNodeSessions;
   planningWorkflowPayload.attachments = [];
-  await appendWorkflowPlanningMessage({
+  const workflowMessage = await appendWorkflowPlanningMessage({
     options,
     agentResult,
     ctx,
@@ -78,8 +79,23 @@ export async function prepareWorkflowPlanningMessage({
       dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
       turnScopeId: String(ctx?.turnScopeId || "").trim(),
       workflowRunId,
+      sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
       semanticText,
       nodeSessions: planningNodeSessions,
+      sourceMessage: {
+        role: String(workflowMessage?.role || ""),
+        type: String(workflowMessage?.type || ""),
+        pluginMessage: workflowMessage?.pluginMessage === true,
+        pluginSource: String(workflowMessage?.pluginMeta?.source || ""),
+        pluginKind: String(workflowMessage?.pluginMeta?.kind || ""),
+        pluginPhase: String(workflowMessage?.pluginMeta?.phase || ""),
+        workflowRunId: String(
+          workflowMessage?.pluginMeta?.payload?.workflowRunId ||
+            workflowMessage?.pluginMeta?.payload?.execution?.workflowRunId ||
+            "",
+        ),
+        contentLength: String(workflowMessage?.content || "").length,
+      },
     },
   });
   if (typeof ctx?.eventListener?.onEvent === "function") {
@@ -90,8 +106,23 @@ export async function prepareWorkflowPlanningMessage({
         dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
         turnScopeId: String(ctx?.turnScopeId || "").trim(),
         workflowRunId,
+        sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
         semanticText,
         nodeSessions: planningNodeSessions,
+        sourceMessage: {
+          role: String(workflowMessage?.role || ""),
+          type: String(workflowMessage?.type || ""),
+          pluginMessage: workflowMessage?.pluginMessage === true,
+          pluginSource: String(workflowMessage?.pluginMeta?.source || ""),
+          pluginKind: String(workflowMessage?.pluginMeta?.kind || ""),
+          pluginPhase: String(workflowMessage?.pluginMeta?.phase || ""),
+          workflowRunId: String(
+            workflowMessage?.pluginMeta?.payload?.workflowRunId ||
+              workflowMessage?.pluginMeta?.payload?.execution?.workflowRunId ||
+              "",
+          ),
+          contentLength: String(workflowMessage?.content || "").length,
+        },
       },
     });
   }
