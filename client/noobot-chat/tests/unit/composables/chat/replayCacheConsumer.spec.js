@@ -60,6 +60,32 @@ function createFakeProcessStore() {
 }
 
 describe("replayCacheConsumer", () => {
+  it("keeps cached workflow-node replay out of the root message consumer", async () => {
+    const childMessages = [{
+      event: "subagent_message_event",
+      data: { turnScopeId: "workflow-node:node-1", route: { scope: "sub_session" } },
+    }];
+    const replayCache = {
+      "s-1": { "__turn__s-1::workflow-node:node-1": childMessages },
+    };
+    const applyReconnectMessagesToActiveSession = vi.fn();
+    const applySubSessionReplayMessages = vi.fn(async () => ({ applied: true }));
+
+    await consumeReconnectReplayCacheForSession({
+      replayCache,
+      sessionId: "s-1",
+      applyReconnectMessagesToActiveSession,
+      applySubSessionReplayMessages,
+    });
+
+    expect(applySubSessionReplayMessages).toHaveBeenCalledWith(
+      childMessages,
+      expect.objectContaining({ rootSessionId: "s-1", turnScopeId: "workflow-node:node-1" }),
+    );
+    expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
+    expect(replayCache).toEqual({});
+  });
+
   it("consumes cached replay groups for a session and removes the session cache", async () => {
     const replayCache = {
       "s-1": {

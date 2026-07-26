@@ -399,3 +399,42 @@ test("reconnect replay is isolated by turnScopeId", () => {
   const replayMessages = listReplayMessages(getReconnectDataEvent(socket));
   assert.deepEqual(replayMessages.map((item) => item?.data?.text), ["current run"]);
 });
+
+test("fresh-page reconnect infers each child dialog turn scope from its own events", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-root" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-root",
+    turnScopeId: "root-turn",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+
+  manager.pushChannelEvent(channel, "subagent_message_event", {
+    sessionId: "session-child",
+    dialogProcessId: "child-dialog",
+    turnScopeId: "workflow-node:child-turn",
+    seq: 12,
+    channelKind: "message_event",
+    channelVersion: 1,
+    event: { eventId: "child-event" },
+  });
+
+  const socket = createMockSocket();
+  socket.__agentProxyChannelKeys.add(channelKey);
+  manager.handleReconnect(socket, {
+    currentSessionId: "session-root",
+    currentTurnScopeId: "root-turn",
+    lastReceivedSeqMap: {},
+    lastReceivedTurnScopeIdMap: {},
+  });
+
+  const reconnectData = getReconnectDataEvent(socket);
+  const childDialog = reconnectData?.data?.sessions?.[0]?.dialogProcesses?.find(
+    (item) => item?.dialogProcessId === "child-dialog",
+  );
+  assert.equal(childDialog?.turnScopeId, "workflow-node:child-turn");
+  assert.deepEqual(childDialog?.messages?.map((item) => item?.event), ["subagent_message_event"]);
+});

@@ -108,6 +108,7 @@ export async function applyReconnectDataReplay({
   applyChannelState,
   scheduleCacheExpiredSessionRefresh,
   reconcileSessionState,
+  applySubSessionReplayMessages,
   isDeletedTurn,
 } = {}) {
   const receivedSessions = Array.isArray(reconnectData?.sessions)
@@ -185,6 +186,19 @@ export async function applyReconnectDataReplay({
           const replayTurnScopeId = replayGroup.turnScopeId || normalizeTurnMeta(dp).turnScopeId ||
             currentRunMeta.turnScopeId;
           if (isDeletedTurn?.({ sessionId, turnScopeId: replayTurnScopeId }) === true) continue;
+          const isWorkflowNodeReplay = replayTurnScopeId.startsWith("workflow-node:") ||
+            messages.some(({ event = "", data = {} } = {}) =>
+              event === "subagent_message_event" ||
+              data?.route?.scope === "sub_session" ||
+              String(data?.event?.turnScopeId || data?.turnScopeId || "").trim().startsWith("workflow-node:"));
+          if (isWorkflowNodeReplay) {
+            await applySubSessionReplayMessages?.(messages, {
+              rootSessionId: sessionId,
+              dialogProcessId: dpId,
+              turnScopeId: replayTurnScopeId,
+            });
+            continue;
+          }
           const belongsToAuthoritativeCurrentRun = Boolean(
             hasAuthoritativeCurrentRun &&
             replayTurnScopeId &&

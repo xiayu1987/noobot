@@ -21,6 +21,44 @@ function createFixture(overrides = {}) {
 }
 
 describe("applyReconnectDataReplay", () => {
+  it("routes workflow-node replay to the child projection without creating a root assistant", async () => {
+    const childEvent = {
+      event: "subagent_message_event",
+      data: {
+        turnScopeId: "workflow-node:node-1",
+        route: { scope: "sub_session" },
+        event: {
+          envelopeKind: "noobot.message_event",
+          eventType: "main_model_content",
+          sessionId: "child-1",
+          turnScopeId: "workflow-node:node-1",
+          messageId: "message-1",
+        },
+      },
+    };
+    const fixture = createFixture({
+      applySubSessionReplayMessages: vi.fn(async () => ({ applied: true })),
+    });
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          hasRunningTask: true,
+          currentRun: { sessionId: "s-1", dialogProcessId: "dp-root", turnScopeId: "turn-root", state: "sending" },
+          dialogProcesses: [{ dialogProcessId: "dp-node", messages: [childEvent] }],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.applySubSessionReplayMessages).toHaveBeenCalledWith(
+      [childEvent],
+      expect.objectContaining({ rootSessionId: "s-1", turnScopeId: "workflow-node:node-1" }),
+    );
+    expect(fixture.applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
+  });
+
   it("applies active session replay messages with recoverable allowCreate", async () => {
     const fixture = createFixture();
     const messages = [

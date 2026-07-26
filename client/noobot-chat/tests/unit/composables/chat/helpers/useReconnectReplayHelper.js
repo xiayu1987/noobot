@@ -87,6 +87,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     applied: false,
     reason: "terminal_unresolved",
   }));
+  const applyWorkflowRuntimeEvent = vi.fn(() => ({ applied: true }));
   const applyTerminalResolution = (response) => {
     const result = applyTurnTerminalResolution(turnRuntimeRegistry.value, response);
     if (result?.applied) {
@@ -168,6 +169,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     notify,
     processStore,
     applyTurnRuntimeEvents,
+    applyWorkflowRuntimeEvent,
     resolveTurnTerminalState,
   });
 
@@ -199,6 +201,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       chatList,
       chatWebSocketClient,
       applyTurnRuntimeEvents,
+      applyWorkflowRuntimeEvent,
       resolveTurnTerminalState,
       applyTerminalResolution,
     },

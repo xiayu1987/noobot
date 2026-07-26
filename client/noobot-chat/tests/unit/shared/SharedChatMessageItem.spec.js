@@ -5,9 +5,10 @@
  */
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
-import { defineComponent, h } from "vue";
+import { defineComponent, h, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import SharedChatMessageItem from "../../../src/shared/message/SharedChatMessageItem.vue";
+import { useChatStore } from "../../../src/shared/stores/useChatStore";
 import { registerFrontendPlugin } from "../../../src/plugins/frontend-plugin-registry";
 
 vi.mock("../../../src/shared/ui", async () => {
@@ -47,11 +48,20 @@ vi.mock("../../../src/shared/ui", async () => {
         return () => null;
       },
     }),
-    BaseMessageShell: passthrough("BaseMessageShell"),
+    BaseMessageShell: defineComponent({
+      name: "BaseMessageShell",
+      props: { hideHeader: { type: Boolean, default: false } },
+      setup(props, { slots }) {
+        return () => h("div", {
+          class: "BaseMessageShell-stub",
+          "data-hide-header": String(props.hideHeader),
+        }, slots.default?.());
+      },
+    }),
     BaseMessageTypeTag: defineComponent({
       name: "BaseMessageTypeTag",
       setup() {
-        return () => null;
+        return () => h("div", { class: "BaseMessageTypeTag-stub" });
       },
     }),
     BasePreviewContent: defineComponent({
@@ -100,8 +110,10 @@ const AssetRenderer = defineComponent({
 });
 
 function mountItem(props = {}) {
+  const { storeSetup, ...componentProps } = props;
   const pinia = createPinia();
   setActivePinia(pinia);
+  storeSetup?.(useChatStore(pinia));
   return mount(SharedChatMessageItem, {
     props: {
       messageItem: {
@@ -123,7 +135,7 @@ function mountItem(props = {}) {
       formatTime: (value = "") => String(value || ""),
       formatFileSize: (value = 0) => String(value || 0),
       isImageMime: () => false,
-      ...props,
+      ...componentProps,
     },
     global: {
       plugins: [pinia],
@@ -135,6 +147,109 @@ function mountItem(props = {}) {
 }
 
 describe("SharedChatMessageItem", () => {
+  it("hides the message type tag for an empty assistant thinking host", () => {
+    const wrapper = mountItem({
+      messageItem: {
+        id: "thinking-placeholder",
+        role: "assistant",
+        type: "message",
+        content: "",
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+      },
+    });
+
+    expect(wrapper.find(".BaseMessageTypeTag-stub").exists()).toBe(false);
+  });
+
+  it("keeps the type tag for persisted workflow messages", () => {
+    const wrapper = mountItem({
+      messageItem: {
+        id: "workflow-1",
+        role: "assistant",
+        type: "workflow",
+        content: "WORKFLOW_DSL/1",
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+      },
+    });
+
+    expect(wrapper.find(".BaseMessageTypeTag-stub").exists()).toBe(true);
+  });
+
+  it("keeps the single outer assistant header that owns a live workflow", () => {
+    const wrapper = mountItem({
+      storeSetup: (store) => store.upsertWorkflowPlanningEvent({
+        workflowRunId: "turn-workflow",
+        sessionId: "session-1",
+        dialogProcessId: "dialog-workflow",
+        turnScopeId: "turn-workflow",
+        semanticText: "WORKFLOW_DSL/1",
+        nodeSessions: [{ nodeExecutionId: "node-1", status: "running" }],
+      }),
+      messageItem: {
+        id: "workflow-thinking-host",
+        role: "assistant",
+        type: "message",
+        content: "",
+        sessionId: "session-1",
+        dialogProcessId: "dialog-workflow",
+        turnScopeId: "turn-workflow",
+        pending: true,
+      },
+    });
+
+    expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
+  });
+
+  it("keeps the assistant header for a workflow node running placeholder", () => {
+    const wrapper = mountItem({
+      messageItem: {
+        id: "workflow-node-running",
+        role: "assistant",
+        type: "message",
+        content: "",
+        sessionId: "child-session",
+        dialogProcessId: "child-dialog",
+        turnScopeId: "workflow-node:node-1",
+        pending: true,
+        workflowNodeRunningPlaceholder: true,
+      },
+    });
+
+    expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
+  });
+
+  it("keeps the assistant header when workflow ownership arrives after mount", async () => {
+    const wrapper = mountItem({
+      messageItem: {
+        id: "workflow-thinking-host-late",
+        role: "assistant",
+        type: "message",
+        content: "",
+        sessionId: "session-late",
+        dialogProcessId: "dialog-before-workflow",
+        turnScopeId: "turn-before-workflow",
+        pending: true,
+      },
+    });
+    expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
+
+    useChatStore().upsertWorkflowPlanningEvent({
+      workflowRunId: "workflow-late",
+      sessionId: "session-late",
+      dialogProcessId: "dialog-workflow-late",
+      turnScopeId: "turn-workflow-late",
+      semanticText: "WORKFLOW_DSL/1",
+      nodeSessions: [{ nodeExecutionId: "node-late", status: "running" }],
+    });
+    await nextTick();
+
+    expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
+  });
+
   it("passes displayed attachments to message card renderers with the legacy alias", () => {
     registerFrontendPlugin({
       id: "shared-message-context-probe",
@@ -259,5 +374,11 @@ describe("SharedChatMessageItem", () => {
     expect(probe.attributes("data-written-file-count")).toBe("0");
     expect(wrapper.find(".BaseFileCardList-stub").exists()).toBe(false);
     expect(wrapper.findAll(".BaseAttachmentFileCard-stub")).toHaveLength(0);
+  });
+
+  it("passes embedded header visibility to the message shell", () => {
+    const wrapper = mountItem({ hideHeader: true });
+
+    expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("true");
   });
 });

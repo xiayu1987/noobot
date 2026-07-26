@@ -4,12 +4,47 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
+import fs from "node:fs/promises";
 import { HTTP_STATUS } from "noobot-agent/constants";
 import { readSessionArtifactSnapshot } from "noobot-agent/session";
 import {
   buildThinkingDetailPayload,
   normalizeSessionThinkingRouteText as normalizeRouteText,
+  readJsonlArtifactFile,
 } from "noobot-agent/session";
+
+export async function readSegmentedChildExecutionLogs({ workspacePath = "", rootSessionId = "", childSessionId = "" } = {}) {
+  const workspaceRoot = path.resolve(String(workspacePath || ""));
+  const sessionsRoot = path.resolve(workspaceRoot, "runtime/session");
+  const executionEventsDir = path.resolve(
+    sessionsRoot,
+    String(rootSessionId || "").trim(),
+    String(childSessionId || "").trim(),
+    "execution-events",
+  );
+  const relativeDir = path.relative(sessionsRoot, executionEventsDir);
+  if (!rootSessionId || !childSessionId || !relativeDir || relativeDir.startsWith("..") || path.isAbsolute(relativeDir)) {
+    return [];
+  }
+  let entries;
+  try {
+    entries = await fs.readdir(executionEventsDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const segmentNames = entries
+    .filter((entry) => entry.isFile() && /^segment-\d+\.jsonl$/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+  const segments = await Promise.all(segmentNames.map(async (segmentName) => {
+    try {
+      return await readJsonlArtifactFile(path.join(executionEventsDir, segmentName));
+    } catch {
+      return [];
+    }
+  }));
+  return segments.flat();
+}
 
 function resolveWorkflowSessionDir({ bot = null, userId = "", sessionId = "", dialogProcessId = "", translateText = null, locale = "" } = {}) {
   const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
@@ -61,6 +96,15 @@ export function registerServiceRoutes(app, context = {}) {
     });
     const { session, sessionSummary, task, execution, executionLogs, meta } =
       await readSessionArtifactSnapshot({ outputDir: workflowDir });
+    const childSessionId = String(sessionSummary?.sessionId || session?.sessionId || "").trim();
+    const scopedExecutionLogs = Array.isArray(executionLogs) ? executionLogs : [];
+    const restoredExecutionLogs = scopedExecutionLogs.length
+      ? scopedExecutionLogs
+      : await readSegmentedChildExecutionLogs({
+          workspacePath: bot?.getWorkspacePath?.(userId),
+          rootSessionId: sessionId,
+          childSessionId,
+        });
     res.json({
       ok: true,
       userId: String(userId || "").trim(),
@@ -71,7 +115,7 @@ export function registerServiceRoutes(app, context = {}) {
         sessionSummary,
         task,
         execution,
-        executionLogs,
+        executionLogs: restoredExecutionLogs,
         meta,
         dir: workflowDir,
       },

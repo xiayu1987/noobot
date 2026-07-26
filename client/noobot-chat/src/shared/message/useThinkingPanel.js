@@ -124,7 +124,11 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getRuntimeView(messageItem = props.messageItem) {
-    return props.runtime || { running: false, terminal: false, startedAt: "", finishedAt: "" };
+    const runtime = props.runtime || { running: false, terminal: false, startedAt: "", finishedAt: "" };
+    if (messageItem?.workflowNodeRunningPlaceholder === true && messageItem?.pending === true && !runtime.running) {
+      return { ...runtime, running: true, terminal: false, phase: "processing" };
+    }
+    return runtime;
   }
 
   function getRealtimeLogs(messageItem = {}) {

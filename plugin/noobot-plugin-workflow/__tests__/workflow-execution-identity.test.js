@@ -124,11 +124,21 @@ test("runWorkflowExecution carries planning identity through events, strategy an
     realtimeNodeEvents.map((item) => item.data?.status),
     ["running", "succeeded"],
   );
+  assert.deepEqual(
+    persistedNodeEvents.map((item) => item.sequenceDomain),
+    ["workflow-node-state", "workflow-node-state"],
+  );
+  assert.deepEqual(
+    realtimeNodeEvents.map((item) => item.data?.sequenceDomain),
+    ["workflow-node-state", "workflow-node-state"],
+  );
   assert.equal(realtimeNodeEvents[0].data.nodeExecutionId, identity.nodeExecutionId);
   assert.equal(realtimeNodeEvents[0].data.commandId, identity.commandId);
   assert.equal(realtimeNodeEvents[0].data.dialogProcessId, identity.dialogProcessId);
   assert.equal(realtimeNodeEvents[0].data.turnScopeId, identity.turnScopeId);
   assert.equal(realtimeNodeEvents[0].data.sessionId, subSessionCalls[0].strategy.sessionId);
+  assert.equal(realtimeNodeEvents[0].data.parentSessionId, "s1");
+  assert.equal(persistedNodeEvents[0].parentSessionId, "s1");
   assert.equal(realtimeNodeEvents[1].data.sessionId, "child-a");
   assert.equal(realtimeNodeEvents[1].data.eventId, persistedNodeEvents[1].eventId);
 });

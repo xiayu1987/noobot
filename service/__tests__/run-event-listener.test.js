@@ -10,6 +10,7 @@ import { createRunEventListener } from "../ws/chat-websocket/run-event-listener.
 
 test("run-event-listener forwards workflow planning frames verbatim", () => {
   const frames = [];
+  const received = [];
   const listener = createRunEventListener({
     sendEvent: (event, data) => frames.push({ event, data }),
     sessionId: "root-session",
@@ -18,6 +19,7 @@ test("run-event-listener forwards workflow planning frames verbatim", () => {
     getCurrentRunMeta: () => ({ turnScopeId: "turn-1" }),
     getCurrentRunHandle: () => null,
     getCurrentTurnScopeId: () => "turn-1",
+    onEventReceived: (event) => received.push(event),
   });
 
   listener.onEvent({
@@ -28,6 +30,8 @@ test("run-event-listener forwards workflow planning frames verbatim", () => {
       turnScopeId: "turn-1",
       workflowRunId: "workflow-run-1",
       nodeSessions: [{ nodeId: "node-1" }],
+      semanticText: "WORKFLOW_DSL/1",
+      sourceMessage: { type: "workflow", workflowRunId: "workflow-run-1" },
       extra: "keep-me",
     },
   });
@@ -40,7 +44,18 @@ test("run-event-listener forwards workflow planning frames verbatim", () => {
     turnScopeId: "turn-1",
     workflowRunId: "workflow-run-1",
     nodeSessions: [{ nodeId: "node-1" }],
+    semanticText: "WORKFLOW_DSL/1",
+    sourceMessage: { type: "workflow", workflowRunId: "workflow-run-1" },
     extra: "keep-me",
+  });
+  assert.equal(received.length, 1);
+  assert.equal(received[0].eventName, "workflow_planning_message_prepared");
+  assert.equal(received[0].workflowRunId, "workflow-run-1");
+  assert.equal(received[0].nodeSessionCount, 1);
+  assert.equal(received[0].semanticTextLength, 14);
+  assert.deepEqual(received[0].sourceMessage, {
+    type: "workflow",
+    workflowRunId: "workflow-run-1",
   });
 });
 

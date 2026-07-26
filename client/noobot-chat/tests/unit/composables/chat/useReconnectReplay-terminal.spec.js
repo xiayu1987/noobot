@@ -49,7 +49,7 @@ describe("useReconnectReplay", () => {
     expect(mocks.chatWebSocketClient.clearStopRequested).not.toHaveBeenCalled();
   });
 
-  it("EV-04a: DONE without channel_state only requests authoritative terminal resolution", async () => {
+  it("EV-04a: DONE without channel_state reconciles final detail and requests authoritative terminal resolution", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done-only" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -69,8 +69,12 @@ describe("useReconnectReplay", () => {
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).toBeUndefined();
     expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith("s-1", "turn-done-only", { commandId: "", sequence: 2, source: "reconnect_replay" });
-    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
-    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", expect.objectContaining({
+      source: "reconnectDoneFinalStatus",
+      force: true,
+      requireFresh: true,
+    }));
+    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
   });
 
   it("EV-04: channel_state completed remains notification-only", async () => {
@@ -103,8 +107,10 @@ describe("useReconnectReplay", () => {
     // independently schedules the authoritative read for the same Turn.
     expect(mocks.resolveTurnTerminalState).toHaveBeenCalledTimes(2);
     expect(mocks.resolveTurnTerminalState).toHaveBeenLastCalledWith("s-1", "turn-done", { commandId: "", sequence: 3, source: "reconnect_replay" });
-    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
-    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
+    // DONE owns presentation reconciliation. The following channel_state is
+    // still notification-only and must not start a second detail request.
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
   });
 
   it.each([

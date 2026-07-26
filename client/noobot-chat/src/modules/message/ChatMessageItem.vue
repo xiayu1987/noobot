@@ -22,6 +22,7 @@ const props = defineProps({
   deleteMonotonicMessage: { type: Function, default: null },
   resendMonotonicMessage: { type: Function, default: null },
   stopExecution: { type: Function, default: null },
+  hideHeader: { type: Boolean, default: false },
   attachmentPreviewDialogClass: {
     type: String,
     default: "attachment-preview-dialog",

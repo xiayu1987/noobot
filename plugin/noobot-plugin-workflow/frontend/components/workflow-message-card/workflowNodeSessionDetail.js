@@ -8,11 +8,9 @@ import {
   getWorkflowSessionThinkingDetailApi,
 } from "../../../../../client/noobot-chat/src/services/api/chatApi.js";
 
-function contentSessionSummary(summary = {}) {
+function sessionSummaryWithoutMutableRuntime(summary = {}) {
   const {
     turnRuntime: _turnRuntime,
-    turnStatuses: _turnStatuses,
-    turnTimings: _turnTimings,
     ...content
   } = summary && typeof summary === "object" ? summary : {};
   return content;
@@ -28,7 +26,7 @@ export function hydrateExecutionSessionDetail(detail = {}, {
     messages,
     rawMessages: Array.isArray(detail?.rawMessages) ? detail.rawMessages : messages,
     sessionSummary: {
-      ...contentSessionSummary(detail?.sessionSummary),
+      ...sessionSummaryWithoutMutableRuntime(detail?.sessionSummary),
       // The display projection consumes summary.messages first. Always bind
       // the normalized response so an empty/stale REST summary cannot mask it.
       messages,
@@ -79,15 +77,19 @@ export async function fetchExecutionSessionDetail({
     : Array.isArray(session?.messages)
       ? session.messages
       : [];
+  const executionLogs = Array.isArray(payload?.workflowSession?.executionLogs)
+    ? payload.workflowSession.executionLogs
+    : [];
   return {
     state: messages.length ? "ready" : "empty",
     sessionId: String(sessionSummary?.sessionId || session?.sessionId || session?.id || normalizedSessionId).trim(),
     sessionSummary: {
-      ...contentSessionSummary(session),
-      ...contentSessionSummary(sessionSummary),
+      ...sessionSummaryWithoutMutableRuntime(session),
+      ...sessionSummaryWithoutMutableRuntime(sessionSummary),
     },
     messages,
     rawMessages: messages,
+    executionLogs,
   };
 }
 

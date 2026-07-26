@@ -351,6 +351,11 @@ test("chat-websocket-server preserves authoritative identity for workflow child 
     assert.equal(Object.hasOwn(toolResult?.data?.route || {}, "messageId"), false);
     assert.equal(toolResult?.data?.channelKind, "message_event");
     assert.equal(toolResult?.data?.channelVersion, 1);
+    assert.equal(toolResult?.data?.sessionId, identity.sessionId);
+    assert.equal(toolResult?.data?.dialogProcessId, identity.dialogProcessId);
+    assert.equal(toolResult?.data?.turnScopeId, identity.turnScopeId);
+    assert.equal(toolResult?.data?.seq > 0, true);
+    assert.equal(toolResult?.data?.event?.sequence, 2);
   } finally {
     await closeServer(server);
   }

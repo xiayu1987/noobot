@@ -6,6 +6,7 @@
 import { StreamEventEnum } from "../../shared/constants/chatConstants";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervisor";
+import { logWorkflowDiagnostics } from "../../composables/chat/debug/workflowDiagnosticsLogger";
 
 const TERMINAL_CHANNEL_STATES = Object.freeze([
   "user_stopped",
@@ -191,6 +192,18 @@ export function createChatWebSocketClient({
           const parsed = JSON.parse(String(messageEvent?.data || "{}"));
           const event = String(parsed?.event || "message");
           const data = parsed?.data || {};
+          const hasLiveSubscriber = typeof liveEventSubscriber === "function";
+          logWorkflowDiagnostics("frontend.websocket.transportEventReceived", {
+            sessionId: normalizeTrimmedString(data?.sessionId),
+            dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
+            turnScopeId: normalizeTrimmedString(data?.turnScopeId),
+            protocolEvent: event,
+            transportSequence: Number(data?.seq || 0) || null,
+            authoritativeSequence: Number(data?.event?.sequence || 0) || null,
+            reconnecting,
+            activeStream: Boolean(activeStreamContext),
+            hasLiveSubscriber,
+          });
           if (event === "transport_ready") {
             transport.markReady(ws, { nextServerInstanceId: data?.serverInstanceId });
             return;
@@ -203,11 +216,20 @@ export function createChatWebSocketClient({
           if (
             !reconnecting &&
             !activeStreamContext &&
-            typeof liveEventSubscriber === "function" &&
+            hasLiveSubscriber &&
             event !== StreamEventEnum.RECONNECT_DATA &&
             event !== StreamEventEnum.RECONNECT_COMPLETE
           ) {
             liveEventSubscriber({ event, data });
+            logWorkflowDiagnostics("frontend.websocket.liveEventDispatched", {
+              sessionId: normalizeTrimmedString(data?.sessionId),
+              dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
+              turnScopeId: normalizeTrimmedString(data?.turnScopeId),
+              protocolEvent: event,
+              transportSequence: Number(data?.seq || 0) || null,
+              authoritativeSequence: Number(data?.event?.sequence || 0) || null,
+              route: "transport_live_subscriber",
+            });
           }
         } catch {}
       },
@@ -661,16 +683,31 @@ export function createChatWebSocketClient({
           const parsed = JSON.parse(String(messageEvent?.data || "{}"));
           const event = String(parsed?.event || "message");
           const data = parsed?.data || {};
-          if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) return;
           if (event === "transport_ready") return;
 
           if (event === StreamEventEnum.RECONNECT_DATA) {
+            if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) {
+              logWorkflowDiagnostics("frontend.websocket.reconnectControlRejected", {
+                sessionId: normalizeTrimmedString(data?.sessionId || currentSessionId),
+                protocolEvent: event,
+                reason: "request_id_mismatch",
+              });
+              return;
+            }
             trackReconnectData(data);
             onReconnectData(data);
             return;
           }
 
           if (event === StreamEventEnum.RECONNECT_COMPLETE) {
+            if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) {
+              logWorkflowDiagnostics("frontend.websocket.reconnectControlRejected", {
+                sessionId: normalizeTrimmedString(data?.sessionId || currentSessionId),
+                protocolEvent: event,
+                reason: "request_id_mismatch",
+              });
+              return;
+            }
             reconnecting = false;
             clearTimers();
             // A reconnect during an active stream necessarily created a
@@ -689,7 +726,19 @@ export function createChatWebSocketClient({
 
           trackIncomingEvent(data);
 
-          if (!activeStreamContext) onReconnectData({ event, data });
+          if (!activeStreamContext) {
+            onReconnectData({ event, data });
+            logWorkflowDiagnostics("frontend.websocket.liveEventDispatched", {
+              sessionId: normalizeTrimmedString(data?.sessionId),
+              dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
+              turnScopeId: normalizeTrimmedString(data?.turnScopeId),
+              protocolEvent: event,
+              transportSequence: Number(data?.seq || 0) || null,
+              authoritativeSequence: Number(data?.event?.sequence || 0) || null,
+              route: "reconnect_live_subscriber",
+              requestIdMatchesReconnect: normalizeTrimmedString(data?.requestId) === requestId,
+            });
+          }
           settlePendingJsonRequest(event, data);
         } catch (error) {
           failReconnect(error, { closeSocket: true });

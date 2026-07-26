@@ -68,6 +68,8 @@ import {
   SESSION_RUN_EVENT,
 } from "./sessionRunStateMachine";
 import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry";
+import { finalizeDoneSessionDetail as finalizeDoneSessionDetailWithContext } from "./chatEngine/sessionFinalize";
+import { logWorkflowDiagnostics } from "./debug/workflowDiagnosticsLogger";
 
 export function useReconnectReplay({
   sessions,
@@ -102,6 +104,7 @@ export function useReconnectReplay({
   applyExecutionSnapshot,
   applyExecutionChildren,
   applyExecutionTree,
+  applyWorkflowRuntimeEvent: reduceWorkflowRuntimeEvent,
 } = {}) {
   const reconnectReplayContext = createReconnectReplayContext();
   const { replayCache, appliedReconnectSeqByDialogProcessId, terminalDialogProcessIdSet, missingInteractionPayloadTimers } =
@@ -157,6 +160,32 @@ export function useReconnectReplay({
   const applyRunStateEvents = (events) => {
     const sourceEvents = Array.isArray(events) ? events : [];
     return applyTurnRuntimeEvents?.(sourceEvents);
+  };
+
+  const applyWorkflowRuntimeEvent = (event, data = {}) => {
+    sessionLogWebSocketClient?.log?.({
+      category: "debug",
+      level: "debug",
+      debugType: "workflow-diagnostics",
+      event: "frontend.workflowTransport.reconnectRuntimeReceived",
+      sessionId: String(data?.parentSessionId || data?.sessionId || ""),
+      dialogProcessId: String(data?.dialogProcessId || ""),
+      turnScopeId: String(data?.turnScopeId || ""),
+      data: {
+        workflowEvent: String(event || ""),
+        workflowRunId: String(data?.workflowRunId || ""),
+        nodeExecutionId: String(data?.nodeExecutionId || ""),
+        nodeSessionCount: Array.isArray(data?.nodeSessions) ? data.nodeSessions.length : 0,
+      },
+    });
+    if (typeof reduceWorkflowRuntimeEvent === "function") {
+      return reduceWorkflowRuntimeEvent({
+        event,
+        data,
+        transportSequence: Number(data?.transportSequence || data?.seq || 0),
+      }, { source: "reconnect" });
+    }
+    return { applied: false, reason: "workflow_runtime_projection_unavailable" };
   };
 
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
@@ -264,6 +293,37 @@ export function useReconnectReplay({
     });
   }
 
+  async function applySubSessionReplayMessages(messages = [], context = {}) {
+    let appliedCount = 0;
+    let authoritativeEventCount = 0;
+    for (const envelope of Array.isArray(messages) ? messages : []) {
+      const packet = envelope?.data || {};
+      const messageEvent = packet?.event && typeof packet.event === "object"
+        ? packet.event
+        : null;
+      if (!messageEvent) continue;
+      authoritativeEventCount += 1;
+      const result = applyWorkflowRuntimeEvent("workflow_message_event", messageEvent);
+      if (result?.applied === true) appliedCount += 1;
+    }
+    sessionLogWebSocketClient?.log?.({
+      category: "debug",
+      level: "debug",
+      debugType: "workflow-diagnostics",
+      event: "frontend.workflowTransport.subSessionReplayRouted",
+      sessionId: String(context?.rootSessionId || ""),
+      dialogProcessId: String(context?.dialogProcessId || ""),
+      turnScopeId: String(context?.turnScopeId || ""),
+      data: {
+        replayEnvelopeCount: Array.isArray(messages) ? messages.length : 0,
+        authoritativeEventCount,
+        appliedCount,
+        rootMessageProjectionSkipped: true,
+      },
+    });
+    return { applied: appliedCount > 0, appliedCount };
+  }
+
   async function applyReconnectData(reconnectData) {
     return applyReconnectDataReplay({
       reconnectData,
@@ -276,6 +336,7 @@ export function useReconnectReplay({
       applyChannelState,
       scheduleCacheExpiredSessionRefresh,
       reconcileSessionState,
+      applySubSessionReplayMessages,
       isDeletedTurn,
     });
   }
@@ -432,6 +493,7 @@ export function useReconnectReplay({
       replayCache,
       sessionId,
       applyReconnectMessagesToActiveSession,
+      applySubSessionReplayMessages,
     });
   }
 
@@ -502,6 +564,56 @@ export function useReconnectReplay({
       applyFoldedMessagesForDialogProcess: applyFoldedMessagesForDialogProcessWithContext,
       applyFoldedMessagesToActiveSession: applyFoldedMessagesToActiveSessionWithContext,
     });
+  }
+
+  async function finalizeReconnectDoneSessionDetail(eventData = {}) {
+    const sessionId = String(
+      eventData?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || "",
+    ).trim();
+    const turnScopeId = String(eventData?.turnScopeId || "").trim();
+    const botMessage = turnScopeId
+      ? findAssistantMessageByTurnScopeId(turnScopeId)
+      : null;
+    logWorkflowDiagnostics("frontend.workflowReplay.doneFinalDetailStarted", {
+      sessionId,
+      dialogProcessId: String(eventData?.dialogProcessId || "").trim(),
+      turnScopeId,
+      assistantFound: Boolean(botMessage),
+      doneMessageCount: Array.isArray(eventData?.messages) ? eventData.messages.length : 0,
+    });
+    const applied = await finalizeDoneSessionDetailWithContext({
+      activeSession,
+      activeSessionId,
+      botMessage,
+      finalDoneEventData: eventData,
+      fetchSessionDetail: (requestedSessionId) => chatList.fetchSessionDetail(requestedSessionId, {
+        source: "reconnectDoneFinalStatus",
+        force: true,
+        requireFresh: true,
+        reuseRecentlyLoaded: false,
+      }),
+      applySessionDetail: chatList.applySessionDetail,
+      applyAssistantFailureState: (targetAssistantMessage, error) =>
+        applyAssistantFailureStateWithContext({
+          targetAssistantMessage,
+          errorMessage: String(error?.message || error || ""),
+          translate,
+        }),
+      applyRunStateEvent,
+      refreshSessionConnectorsAsync,
+      preserveCurrentMessages: true,
+      logSessionEvent: (payload) => sessionLogWebSocketClient?.log?.(payload),
+    });
+    logWorkflowDiagnostics("frontend.workflowReplay.doneFinalDetailFinished", {
+      sessionId,
+      dialogProcessId: String(eventData?.dialogProcessId || "").trim(),
+      turnScopeId,
+      applied: applied === true,
+      activeMessageCount: Array.isArray(activeSession.value?.messages)
+        ? activeSession.value.messages.length
+        : 0,
+    });
+    return applied;
   }
 
   function logReconnectReplaySystemEvent(event, payload = {}) {
@@ -589,6 +701,9 @@ export function useReconnectReplay({
       applyExecutionSnapshot,
       applyExecutionChildren,
       applyExecutionTree,
+      applyWorkflowRuntimeEvent,
+      applySubSessionReplayMessages,
+      finalizeDoneSessionDetail: finalizeReconnectDoneSessionDetail,
       isDeletedTurn,
     });
   }

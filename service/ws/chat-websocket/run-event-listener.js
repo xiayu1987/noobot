@@ -55,6 +55,16 @@ export function createRunEventListener({
         turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
         envelopeKind: String(eventData?.envelopeKind || "").trim(),
         messageId: String(eventData?.messageId || "").trim(),
+        workflowRunId: String(eventData?.workflowRunId || "").trim(),
+        nodeExecutionId: String(eventData?.nodeExecutionId || "").trim(),
+        workflowStatus: String(eventData?.status || "").trim(),
+        workflowRevision: Number(eventData?.revision || 0),
+        workflowSequence: Number(eventData?.sequence || 0),
+        nodeSessionCount: Array.isArray(eventData?.nodeSessions) ? eventData.nodeSessions.length : 0,
+        semanticTextLength: String(eventData?.semanticText || "").length,
+        sourceMessage: eventData?.sourceMessage && typeof eventData.sourceMessage === "object"
+          ? eventData.sourceMessage
+          : null,
         sequence: Number(eventData?.sequence || 0),
         hasTool: Boolean(eventData?.tool),
         hasResult: eventData?.result !== undefined,

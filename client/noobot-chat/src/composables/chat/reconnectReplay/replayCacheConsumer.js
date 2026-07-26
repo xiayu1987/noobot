@@ -24,9 +24,23 @@ export async function consumeReconnectReplayCacheForSession({
   replayCache,
   sessionId = "",
   applyReconnectMessagesToActiveSession,
+  applySubSessionReplayMessages,
 } = {}) {
   const replayGroups = takeReplayCacheGroupsForSession(replayCache, sessionId);
   for (const { dialogProcessId, turnScopeId, replayMessages } of replayGroups) {
+    const isWorkflowNodeReplay = _trimStr(turnScopeId).startsWith("workflow-node:") ||
+      replayMessages.some(({ event = "", data = {} } = {}) =>
+        event === "subagent_message_event" ||
+        data?.route?.scope === "sub_session" ||
+        _trimStr(data?.event?.turnScopeId || data?.turnScopeId).startsWith("workflow-node:"));
+    if (isWorkflowNodeReplay) {
+      await applySubSessionReplayMessages?.(replayMessages, {
+        rootSessionId: _trimStr(sessionId),
+        dialogProcessId,
+        turnScopeId,
+      });
+      continue;
+    }
     await applyReconnectMessagesToActiveSession(replayMessages, dialogProcessId, {
       turnScopeId,
       ...(!turnScopeId ? { legacyDialogFallback: true } : {}),

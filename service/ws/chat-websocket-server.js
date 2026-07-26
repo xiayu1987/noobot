@@ -116,7 +116,13 @@ export function registerChatWebSocketServer(
 
     let eventSequence = 0;
     const sendEvent = (eventName, data = {}) => {
-      const eventType = String(data?.eventType || data?.messageEvent?.eventType || "").trim();
+      const authoritativeEvent =
+        data?.channelKind === "message_event" && data?.event && typeof data.event === "object"
+          ? data.event
+          : null;
+      const eventType = String(
+        authoritativeEvent?.eventType || data?.eventType || data?.messageEvent?.eventType || "",
+      ).trim();
       const toolFrame = eventType === "tool_call_start" || eventType === "tool_call_end";
       if (webSocket.readyState !== 1) {
         if (toolFrame) logConnection("service.websocket.toolFrame.dropped", {
@@ -129,10 +135,19 @@ export function registerChatWebSocketServer(
       eventSequence += 1;
       const enrichedData = {
         ...(data && typeof data === "object" ? data : {}),
+        // These are transport routing aliases, not Message Event identity.
+        // Canonical child packets keep their own per-message sequence inside
+        // `event`; the outer `seq` remains connection-local transport order.
         seq: eventSequence,
-        dialogProcessId: String(data?.dialogProcessId || "").trim(),
-        sessionId: String(data?.sessionId || "").trim(),
-        turnScopeId: String(data?.turnScopeId || state.currentRunMeta?.turnScopeId || "").trim(),
+        dialogProcessId: String(
+          authoritativeEvent?.dialogProcessId || data?.dialogProcessId || "",
+        ).trim(),
+        sessionId: String(
+          authoritativeEvent?.sessionId || data?.route?.sessionId || data?.sessionId || "",
+        ).trim(),
+        turnScopeId: String(
+          authoritativeEvent?.turnScopeId || data?.turnScopeId || state.currentRunMeta?.turnScopeId || "",
+        ).trim(),
       };
       try {
         webSocket.send(JSON.stringify({ event: eventName, data: enrichedData }));

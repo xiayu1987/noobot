@@ -8,6 +8,36 @@ import { applyReconnectEventReplay } from "../../../../src/composables/chat/reco
 import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
 
 describe("applyReconnectEventReplay", () => {
+  it.each([
+    "workflow_planning_message_prepared",
+    "workflow_node_state_committed",
+  ])("routes %s directly to workflow runtime projection after reconnect", async (event) => {
+    const data = {
+      sessionId: "s-1",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+      workflowRunId: "workflow-1",
+      nodeSessions: [{ nodeExecutionId: "node-1" }],
+    };
+    const applyWorkflowRuntimeEvent = vi.fn(() => ({ applied: true }));
+    const applyReconnectMessagesToActiveSession = vi.fn();
+
+    const result = await applyReconnectEventReplay({
+      event,
+      data,
+      replayCache: {},
+      isCurrentActiveSession: vi.fn(() => true),
+      consumeReplayCacheForSession: vi.fn(),
+      applyReconnectMessagesToActiveSession,
+      applyChannelState: vi.fn(),
+      applyWorkflowRuntimeEvent,
+    });
+
+    expect(result).toEqual({ applied: true });
+    expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith(event, data);
+    expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
+  });
+
   it("routes authoritative TURN_LIFECYCLE envelopes directly to the lifecycle reducer", async () => {
     const replayCache = {};
     const applyTurnLifecycleEnvelope = vi.fn(() => ({ applied: true }));

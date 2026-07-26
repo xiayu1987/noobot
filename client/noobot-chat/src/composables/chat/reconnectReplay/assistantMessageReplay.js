@@ -74,6 +74,27 @@ export function resolveReconnectTargetAssistantMessage({
       logResolution("turn-scope-match", matchedTurnAssistant, { accepted: true });
       return matchedTurnAssistant;
     }
+    // Reconnect can first restore a dialog-only channel snapshot and receive
+    // the authoritative Turn identity a moment later. Promote that one legacy
+    // placeholder instead of materializing a second Assistant. Explicitly
+    // scoped messages remain ineligible, so a reused dialog cannot join two
+    // different Turns.
+    const unscopedDialogAssistants = messageList.filter(
+      (messageItem) =>
+        normalizedDpId &&
+        _isAssistantRole(messageItem) &&
+        messageItem?.pending === true &&
+        !_trimStr(messageItem?.turnScopeId) &&
+        _matchesDialogProcessId(messageItem, normalizedDpId),
+    );
+    if (unscopedDialogAssistants.length === 1) {
+      const promotedAssistant = unscopedDialogAssistants[0];
+      promotedAssistant.turnScopeId = normalizedTurnScopeId;
+      logResolution("dialog-only-assistant-promoted", promotedAssistant, {
+        accepted: true,
+      });
+      return promotedAssistant;
+    }
     // A scoped authoritative event must never fall back to another turn that
     // happens to reuse the same dialog process (stop -> continue).
     logResolution("turn-scope-missing", null, { accepted: false });

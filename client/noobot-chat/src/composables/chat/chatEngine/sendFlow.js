@@ -196,6 +196,7 @@ export function createChatEngineSender({
   upsertWorkflowNodeStateEvent,
   upsertWorkflowPlanningEvent,
   upsertSubSessionEvent,
+  applyWorkflowRuntimeEvent,
   classifyRealtimeLog,
   clearMissingInteractionPayloadTimer,
   clearPendingInteraction,
@@ -487,17 +488,111 @@ export function createChatEngineSender({
           botMessage: summarizeDebugMessage(botMsg),
         });
         if (event === "workflow_node_state_committed") {
-          upsertWorkflowNodeStateEvent?.(data || {});
+          logSessionEvent({
+            category: "debug",
+            level: "debug",
+            debugType: "workflow-diagnostics",
+            event: "frontend.workflowTransport.nodeStateReceived",
+            sessionId: data?.parentSessionId || data?.sessionId || sessionId,
+            dialogProcessId: data?.dialogProcessId || "",
+            turnScopeId: data?.turnScopeId || turnScopeId,
+            data: {
+              workflowRunId: String(data?.workflowRunId || ""),
+              nodeExecutionId: String(data?.nodeExecutionId || ""),
+              status: String(data?.status || ""),
+              revision: Number(data?.revision || 0),
+              sequence: Number(data?.sequence || 0),
+              dataKeys: Object.keys(data || {}).sort(),
+            },
+          });
+          if (typeof applyWorkflowRuntimeEvent === "function") {
+            applyWorkflowRuntimeEvent({
+              event,
+              data: data || {},
+              transportSequence: Number(data?.seq || 0),
+            }, { source: "live" });
+          } else {
+            upsertWorkflowNodeStateEvent?.(data || {});
+          }
           return;
         }
         if (event === "workflow_planning_message_prepared") {
-          upsertWorkflowPlanningEvent?.(data || {});
+          logSessionEvent({
+            category: "debug",
+            level: "debug",
+            debugType: "workflow-diagnostics",
+            event: "frontend.workflowTransport.planningReceived",
+            sessionId: data?.sessionId || sessionId,
+            dialogProcessId: data?.dialogProcessId || "",
+            turnScopeId: data?.turnScopeId || turnScopeId,
+            data: {
+              workflowRunId: String(data?.workflowRunId || ""),
+              nodeSessionCount: Array.isArray(data?.nodeSessions) ? data.nodeSessions.length : 0,
+              semanticTextLength: String(data?.semanticText || "").length,
+              dataKeys: Object.keys(data || {}).sort(),
+            },
+          });
+          if (typeof applyWorkflowRuntimeEvent === "function") {
+            applyWorkflowRuntimeEvent({
+              event,
+              data: data || {},
+              transportSequence: Number(data?.seq || 0),
+            }, { source: "live" });
+          } else {
+            upsertWorkflowPlanningEvent?.(data || {});
+          }
           return;
         }
         if (shouldProjectSubSessionEvent(event, data || {})) {
           // Explicit channel is a type proof. This layer does not inspect
           // message identity, workflow scope, or event semantics.
-          upsertSubSessionEvent?.(data.event?.eventType, data.event || {});
+          const subSessionResult = typeof applyWorkflowRuntimeEvent === "function"
+            ? applyWorkflowRuntimeEvent({
+                event: "workflow_message_event",
+                data: data.event || {},
+                transportSequence: Number(data?.seq || 0),
+              }, { source: "live" })
+            : upsertSubSessionEvent?.(data.event?.eventType, data.event || {});
+          logSessionEvent({
+            category: "debug",
+            level: "debug",
+            debugType: "workflow-diagnostics",
+            event: "frontend.workflowTransport.subSessionMessageReduced",
+            sessionId: data.event?.sessionId || data.route?.subSessionId || "",
+            dialogProcessId: data.event?.dialogProcessId || "",
+            turnScopeId: data.event?.turnScopeId || "",
+            data: {
+              eventType: String(data.event?.eventType || ""),
+              eventId: String(data.event?.eventId || ""),
+              messageId: String(data.event?.messageId || ""),
+              sequence: Number(data.event?.sequence || 0),
+              applied: subSessionResult?.applied === true,
+              reason: String(subSessionResult?.reason || ""),
+              projectedMessageCount: Array.isArray(subSessionResult?.session?.messages)
+                ? subSessionResult.session.messages.length
+                : 0,
+            },
+          });
+          return;
+        }
+        if (event === "subagent_message_event") {
+          logSessionEvent({
+            category: "debug",
+            level: "warn",
+            debugType: "workflow-diagnostics",
+            event: "frontend.workflowTransport.subSessionMessageRejected",
+            sessionId: data?.event?.sessionId || data?.route?.subSessionId || "",
+            dialogProcessId: data?.event?.dialogProcessId || "",
+            turnScopeId: data?.event?.turnScopeId || "",
+            data: {
+              channelKind: String(data?.channelKind || ""),
+              channelVersion: Number(data?.channelVersion || 0),
+              routeScope: String(data?.route?.scope || ""),
+              hasEvent: Boolean(data?.event),
+              eventKeys: Object.keys(data?.event || {}).sort(),
+              packetKeys: Object.keys(data || {}).sort(),
+            },
+          });
           return;
         }
         if (shouldProjectMainSessionEvent(event, data || {})) {

@@ -8,6 +8,7 @@ import { emitEvent } from "./index.js";
 import {
   MESSAGE_EVENT_ENVELOPE_KIND,
   MESSAGE_EVENT_ENVELOPE_VERSION,
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
   assertMessageEventEnvelope,
   isMessageEventEnvelope,
 } from "@noobot/shared/message-event-protocol";
@@ -76,6 +77,7 @@ export function emitMessageEvent(eventListener, runtime = {}, eventType = "", da
     ...data,
     envelopeKind: MESSAGE_EVENT_ENVELOPE_KIND,
     envelopeVersion: MESSAGE_EVENT_ENVELOPE_VERSION,
+    sequenceDomain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
     eventId,
     eventType: text(eventType),
     sessionId: text(data?.sessionId || state?.sessionId || runtime?.sessionId),

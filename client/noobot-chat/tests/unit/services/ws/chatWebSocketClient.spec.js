@@ -205,6 +205,65 @@ describe("chatWebSocketClient", () => {
     expect(client.getLastReceivedSeqMap()).toEqual({ "dp-live-replay": 3 });
   });
 
+  it("delivers child canonical live events with a business requestId while reconnect replay is running", async () => {
+    const onReconnectData = vi.fn();
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const reconnectPromise = client.reconnect({
+      currentSessionId: "root-session",
+      userId: "u-1",
+      onReconnectData,
+    });
+    const socket = MockWebSocket.instances[0];
+    socket.onopen?.();
+    const reconnectRequestId = JSON.parse(socket.sent[0]).requestId;
+    const childEventData = {
+      requestId: "stream:original-business-turn",
+      sessionId: "child-session",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "workflow-node:node-1",
+      seq: 42,
+      event: {
+        eventId: "evt-child-tool-start",
+        type: "tool_call_start",
+        sequence: 1,
+      },
+    };
+
+    socket.emit("subagent_message_event", childEventData);
+
+    expect(onReconnectData).toHaveBeenCalledWith({
+      event: "subagent_message_event",
+      data: childEventData,
+    });
+    expect(client.getLastReceivedSeqMap()).toEqual({ "child-dialog": 42 });
+
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, {
+      requestId: reconnectRequestId,
+      totalSessions: 1,
+    });
+    await reconnectPromise;
+  });
+
+  it("does not use an inner message-event sequence as the reconnect transport cursor", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const reconnectPromise = client.reconnect({
+      currentSessionId: "root-session",
+      onReconnectData: vi.fn(),
+    });
+    const socket = MockWebSocket.instances[0];
+
+    socket.emit("subagent_message_event", {
+      sessionId: "child-session",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "workflow-node:node-1",
+      event: { type: "tool_call_start", sequence: 99 },
+    });
+
+    expect(client.getLastReceivedSeqMap()).toEqual({});
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
+    await reconnectPromise;
+  });
+
   it("does not duplicate live events while an active stream owns the turn", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onStreamEvent = vi.fn();

@@ -6,6 +6,7 @@
 
 export const MESSAGE_EVENT_ENVELOPE_KIND = "noobot.message_event";
 export const MESSAGE_EVENT_ENVELOPE_VERSION = 1;
+export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
 
 export const MESSAGE_EVENT_TYPE = Object.freeze({
   LLM_DELTA: "llm_delta",

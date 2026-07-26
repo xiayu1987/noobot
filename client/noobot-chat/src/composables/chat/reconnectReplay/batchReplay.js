@@ -38,6 +38,22 @@ import {
   TOOL_TIMELINE_AUTHORITY,
 } from "../chatEngine/toolTimeline";
 import { buildActivityTimelineFromLegacyLogs, mergeActivityTimelines } from "../chatEngine/activityTimeline";
+import { logWorkflowDiagnostics } from "../debug/workflowDiagnosticsLogger";
+
+function summarizeReconnectEnvelope(envelope = {}) {
+  return {
+    event: _trimStr(envelope?.event),
+    transportSequence: getReconnectEnvelopeSequence(envelope),
+    messageSequence: Number(
+      envelope?.data?.event?.sequence || envelope?.data?.messageEvent?.sequence || 0,
+    ) || null,
+    hasDoneMessages: Boolean(
+      _trimStr(envelope?.event) === StreamEventEnum.DONE &&
+      Array.isArray(envelope?.data?.messages) &&
+      envelope.data.messages.length,
+    ),
+  };
+}
 
 export function prepareReconnectReplayMessages({
   messages = [],
@@ -520,7 +536,34 @@ export async function applyReconnectReplayBatchToActiveSession({
     shouldSkipAfterTerminal,
     shouldCreateTarget,
   });
-  if (!nextMessages.length) return false;
+  logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchPlanned", {
+    sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
+    dialogProcessId: normalizedDpId,
+    turnScopeId: normalizedTurnScopeId,
+    inputCount: _ensureArray(messages).length,
+    replayCount: nextMessages.length,
+    filteredCount: Math.max(0, _ensureArray(messages).length - nextMessages.length),
+    lastAppliedTransportSequence: Number(lastAppliedSeq || 0),
+    maxTransportSequence: maxSequence,
+    terminalDialogSeen: Boolean(
+      normalizedDpId && terminalDialogProcessIdSet?.has?.(normalizedDpId),
+    ),
+    shouldSkipAfterTerminal,
+    shouldCreateTarget,
+    inputEnvelopes: _ensureArray(messages).map(summarizeReconnectEnvelope),
+    replayEnvelopes: nextMessages.map(summarizeReconnectEnvelope),
+  });
+  if (!nextMessages.length) {
+    logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchIgnored", {
+      sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
+      dialogProcessId: normalizedDpId,
+      turnScopeId: normalizedTurnScopeId,
+      reason: "all_envelopes_filtered_by_transport_cursor",
+      lastAppliedTransportSequence: Number(lastAppliedSeq || 0),
+      inputEnvelopes: _ensureArray(messages).map(summarizeReconnectEnvelope),
+    });
+    return false;
+  }
   if (shouldSkipAfterTerminal) {
     finalizeReconnectReplayBatch({
       normalizedDpId,
@@ -553,6 +596,15 @@ export async function applyReconnectReplayBatchToActiveSession({
     classifyRealtimeLog,
     normalizeExecutionLogForRealtime,
   })) {
+    logWorkflowDiagnostics("frontend.workflowReplay.doneSnapshotApplied", {
+      sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
+      dialogProcessId: normalizedDpId,
+      turnScopeId: normalizedTurnScopeId,
+      messageCount: Array.isArray(activeSession.value?.messages)
+        ? activeSession.value.messages.length
+        : 0,
+      maxTransportSequence: maxSequence,
+    });
     finalizeReconnectReplayBatch({
       normalizedDpId,
       sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),

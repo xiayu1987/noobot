@@ -6,6 +6,10 @@
 import { nowMs } from "../../infra/timeFields";
 import { findSessionByAnyId as findSessionByAnyIdInList } from "../../infra/sessionIdentity";
 import { normalizeSessionId } from "./sessionIdentity";
+import {
+  logWorkflowDiagnostics,
+  summarizeWorkflowMessages,
+} from "../debug/workflowDiagnosticsLogger";
 
 const RECENT_SESSION_DETAIL_REUSE_MS = 2000;
 
@@ -90,6 +94,13 @@ export function createSessionDetailRequests({
   async function fetchSessionDetail(sessionId, options = {}) {
     const normalizedSessionId = normalizeSessionId(sessionId);
     const decision = arbitrateSessionDetailRequest(normalizedSessionId || sessionId, options);
+    logWorkflowDiagnostics("frontend.workflowDetail.requestArbitrated", {
+      sessionId: normalizedSessionId || sessionId,
+      requestSource: decision.source,
+      action: decision.action,
+      force: options.force === true,
+      requireFresh: options.requireFresh === true,
+    });
     if (decision.action === "skip") return null;
     if (decision.action === "reuse") return decision.detail;
     if (decision.action === "wait") return decision.promise;
@@ -102,6 +113,20 @@ export function createSessionDetailRequests({
       if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
       const data = await res.json();
       if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
+      const sessionDocs = Array.isArray(data?.sessions) ? data.sessions : [];
+      const responseMessages = sessionDocs.flatMap((doc = {}) =>
+        Array.isArray(doc?.messages) ? doc.messages : []);
+      logWorkflowDiagnostics("frontend.workflowDetail.responseReceived", {
+        sessionId: normalizeSessionId(data.sessionId || normalizedSessionId || sessionId),
+        requestSource: decision.source,
+        summary: data?.summary === true,
+        sessionDocCount: sessionDocs.length,
+        messageCount: responseMessages.length,
+        workflowCandidates: summarizeWorkflowMessages(responseMessages),
+        workflowRuntimeEventCount: Array.isArray(data?.workflowRuntimeEvents)
+          ? data.workflowRuntimeEvents.length
+          : 0,
+      });
       recentSessionDetail = {
         sessionId: normalizeSessionId(data.sessionId || normalizedSessionId || sessionId),
         loadedAt: nowMs(),
@@ -125,6 +150,10 @@ export function createSessionDetailRequests({
   async function fetchSessionFullDetail(sessionId, options = {}) {
     const normalizedSessionId = normalizeSessionId(sessionId);
     const readFullDetail = getSessionFullDetailApi || getSessionDetailApi;
+    logWorkflowDiagnostics("frontend.workflowDetail.fullRequestStarted", {
+      sessionId: normalizedSessionId || sessionId,
+      requestSource: normalizeSessionId(options.source || options.reason || "full-detail"),
+    });
     const res = await readFullDetail(
       { userId: userId.value, sessionId: normalizedSessionId || sessionId },
       { fetcher: authFetch },
@@ -132,6 +161,19 @@ export function createSessionDetailRequests({
     if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
     const data = await res.json();
     if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
+    const sessionDocs = Array.isArray(data?.sessions) ? data.sessions : [];
+    const responseMessages = sessionDocs.flatMap((doc = {}) =>
+      Array.isArray(doc?.messages) ? doc.messages : []);
+    logWorkflowDiagnostics("frontend.workflowDetail.fullResponseReceived", {
+      sessionId: normalizeSessionId(data.sessionId || normalizedSessionId || sessionId),
+      requestSource: normalizeSessionId(options.source || options.reason || "full-detail"),
+      sessionDocCount: sessionDocs.length,
+      messageCount: responseMessages.length,
+      workflowCandidates: summarizeWorkflowMessages(responseMessages),
+      workflowRuntimeEventCount: Array.isArray(data?.workflowRuntimeEvents)
+        ? data.workflowRuntimeEvents.length
+        : 0,
+    });
     applySessionDetail(data, options);
     return data;
   }
