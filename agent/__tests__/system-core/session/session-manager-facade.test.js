@@ -117,6 +117,38 @@ test("createSessionFacade should delegate appendExecutionLog to executionLogServ
   assert.deepEqual(result, { ok: true });
 });
 
+test("createSessionFacade preserves scoped execution bundle fields", async () => {
+  let captured = null;
+  const session = createSessionFacade({
+    sessionTreeService: {},
+    sessionCrudService: {},
+    sessionMessageService: {},
+    sessionContextService: {},
+    taskService: {},
+    executionLogService: {
+      async getExecutionBundle(payload = {}) {
+        captured = payload;
+        return { logs: [] };
+      },
+    },
+  });
+  const persistenceContext = { locationResolver: { scopeId: "workflow-node" } };
+
+  await session.getExecutionBundle({
+    userId: "u1",
+    sessionId: "child-1",
+    parentSessionId: "parent-1",
+    persistenceContext,
+  });
+
+  assert.deepEqual(captured, {
+    userId: "u1",
+    sessionId: "child-1",
+    parentSessionId: "parent-1",
+    persistenceContext,
+  });
+});
+
 test("createSessionFacade should delegate CRUD and connector methods to sessionCrudService", async () => {
   const captured = [];
   const session = createSessionFacade({

@@ -12,6 +12,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { FileSystemSessionRepository } from "../../../src/system-core/session/repositories/file-system-session-repository.js";
 import { FileSystemTaskRepository } from "../../../src/system-core/session/repositories/file-system-task-repository.js";
 import { FileSystemExecutionRepository } from "../../../src/system-core/session/repositories/file-system-execution-repository.js";
+import { ExecutionLogRepository } from "../../../src/system-core/tracking/execution-log/execution-log-repository.js";
+import { ExecutionLogService } from "../../../src/system-core/tracking/execution-log/execution-log-service.js";
+import { createSessionFacade } from "../../../src/system-core/session/index.js";
 import { SessionMessageService } from "../../../src/system-core/session/services/session-message-service.js";
 import { SessionTurnPersister } from "../../../src/system-core/bot-manage/execution/turn-persister.js";
 import { StorageService } from "../../../src/system-core/session/storage-service.js";
@@ -146,6 +149,62 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     assert.equal(await sessionRepo.storageService.exists(path.join(defaultRoot, ".deleted-sessions.json")), false);
     assert.equal(await sessionRepo.storageService.exists(path.join(defaultRoot, "session-tree.json")), false);
     assert.equal(await sessionRepo.storageService.exists(scope.mutationLockDir), false);
+  } finally {
+    await harness.cleanup();
+  }
+});
+
+test("session facade execution reads do not create a default shadow session for scoped workflows", async () => {
+  const harness = buildHarness();
+  const { root, pathResolver, sessionRepo, executionRepo } = await harness.setup();
+  try {
+    const resolver = new ScopedSessionLocationResolver({
+      pathResolver,
+      userId: "alice",
+      sessionId: "child-facade",
+      parentSessionId: "parent-facade",
+      scopeId: "workflow:child-facade",
+      allowedRoot: "runtime/workflow/session",
+      relativeDir: "runtime/workflow/session/run-facade/node-facade",
+    });
+    const persistenceContext = createPersistenceContext({ locationResolver: resolver });
+    const executionLogService = new ExecutionLogService({
+      executionRepo: new ExecutionLogRepository({ executionRepository: executionRepo }),
+      sessionRepo,
+    });
+    const session = createSessionFacade({
+      sessionTreeService: {},
+      sessionCrudService: {},
+      sessionMessageService: {},
+      executionReadService: {},
+      sessionContextService: {},
+      taskService: {},
+      executionLogService,
+    });
+
+    await session.getExecutionBundle({
+      userId: "alice",
+      sessionId: "child-facade",
+      parentSessionId: "parent-facade",
+      persistenceContext,
+    });
+    await session.appendExecutionLog({
+      userId: "alice",
+      sessionId: "child-facade",
+      parentSessionId: "parent-facade",
+      persistenceContext,
+      event: "workflow_started",
+    });
+
+    const scope = await resolver.resolveSessionScope("alice", "child-facade", "parent-facade");
+    assert.equal(await sessionRepo.storageService.exists(scope.sessionFile), true);
+    assert.equal((await readJsonlArtifactFile(scope.executionEventsFile))[0].event, "workflow_started");
+    assert.equal(
+      await sessionRepo.storageService.exists(
+        path.join(root, "alice/runtime/session/child-facade/session.json"),
+      ),
+      false,
+    );
   } finally {
     await harness.cleanup();
   }

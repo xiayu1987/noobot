@@ -343,8 +343,8 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.hasDialogProcessIdInSession(payload);
     },
 
-    async getExecutionBundle({ userId, sessionId }) {
-      return executionLogService.getExecutionBundle({ userId, sessionId });
+    async getExecutionBundle(payload = {}) {
+      return executionLogService.getExecutionBundle(payload);
     },
 
     async appendExecutionLog(payload = {}) {

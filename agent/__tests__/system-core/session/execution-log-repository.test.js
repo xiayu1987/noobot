@@ -69,6 +69,37 @@ test("appendLog preserves logs and dialogProcessId for each dialog", async () =>
   assert.equal(bundle.logs[2].dialogProcessId, "d2");
 });
 
+test("getBundle and appendLog preserve scoped persistence context", async () => {
+  const calls = [];
+  const persistenceContext = { locationResolver: { scopeId: "workflow-node" } };
+  const executionRepository = {
+    async getBundle(...args) {
+      calls.push(["getBundle", args]);
+      return { logs: [], updatedAt: "" };
+    },
+    async appendLog(...args) {
+      calls.push(["appendLog", args]);
+    },
+  };
+  const repo = new ExecutionLogRepository({ executionRepository });
+
+  await repo.getBundle("u1", "child-1", "parent-1", persistenceContext);
+  await repo.appendLog(
+    "u1",
+    "child-1",
+    { event: "start" },
+    "parent-1",
+    persistenceContext,
+  );
+
+  assert.equal(calls[0][0], "getBundle");
+  assert.equal(calls[0][1][3], persistenceContext);
+  assert.equal(calls[1][0], "getBundle");
+  assert.equal(calls[1][1][3], persistenceContext);
+  assert.equal(calls[2][0], "appendLog");
+  assert.equal(calls[2][1][5], persistenceContext);
+});
+
 test("appendLog without dialogProcessId stays in current latest dialog", async () => {
   const sessionRepository = createInMemorySessionRepository();
   const repo = new ExecutionLogRepository({
