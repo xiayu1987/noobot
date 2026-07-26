@@ -5,10 +5,10 @@
  */
 import { RUNTIME_EVENT_SCOPES } from './constants.js';
 import { normalizeRuntimeEvent } from './schema.js';
-import { resolveRuntimeEventFile, resolveRuntimeEventsConfig } from './paths.js';
+import { resolveRuntimeEventFile, resolveRuntimeEventsConfig, resolveRuntimeEventStorageSessionId } from './paths.js';
 import { appendJsonLine } from './transports/jsonl.js';
 import { shouldRecordSessionLog } from './session-log-protocol.js';
-import { isWorkspaceSessionDeleted } from './session-deletion-guard.js';
+import { isWorkspaceSessionDeleted, isWorkspaceSessionPersisted } from './session-deletion-guard.js';
 
 export async function writeRuntimeEvent(event = {}, options = {}) {
   try {
@@ -18,12 +18,22 @@ export async function writeRuntimeEvent(event = {}, options = {}) {
     if (record.scope === RUNTIME_EVENT_SCOPES.SESSION && !shouldRecordSessionLog(record, { ...defaults, ...options, ...config })) {
       return { ok: true, skipped: true, record };
     }
-    if (record.scope === RUNTIME_EVENT_SCOPES.SESSION && !config.root && await isWorkspaceSessionDeleted({
-      workspaceRoot: record.workspaceRoot || config.workspaceRoot,
-      userId: record.userId,
-      sessionId: record.sessionId,
-    })) {
-      return { ok: true, skipped: true, deleted: true, record };
+    if (record.scope === RUNTIME_EVENT_SCOPES.SESSION && !config.root) {
+      const workspaceRoot = record.workspaceRoot || config.workspaceRoot;
+      const storageSessionId = resolveRuntimeEventStorageSessionId(record);
+      const sessionIds = [...new Set([record.sessionId, storageSessionId].filter(Boolean))];
+      for (const sessionId of sessionIds) {
+        if (await isWorkspaceSessionDeleted({ workspaceRoot, userId: record.userId, sessionId })) {
+          return { ok: true, skipped: true, deleted: true, record };
+        }
+      }
+      if (storageSessionId === record.sessionId && !await isWorkspaceSessionPersisted({
+        workspaceRoot,
+        userId: record.userId,
+        sessionId: storageSessionId,
+      })) {
+        return { ok: true, skipped: true, missingSession: true, record };
+      }
     }
     const file = resolveRuntimeEventFile(record, config);
     const writeResult = await appendJsonLine(file, record, {

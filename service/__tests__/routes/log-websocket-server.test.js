@@ -76,7 +76,12 @@ test("log-websocket-server: writes session logs by category", async () => {
 
 test("log-websocket-server: writes tool log window debug to its dedicated file", async () => {
   const logRoot = await withTempLogDir();
-  const logConfig = { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 };
+  const logConfig = {
+    logRoot,
+    retentionMs: 60000,
+    cleanupIntervalMs: 60000,
+    frontendToolLogWindowDebug: true,
+  };
   const { server, registered } = await startLogServer({ logConfig });
   try {
     const { port } = server.address();
@@ -105,6 +110,9 @@ test("log-websocket-server: writes tool log window debug to its dedicated file",
 
 test("log-websocket-server: writes to user runtime session directory by default", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-"));
+  const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s-runtime");
+  await fs.mkdir(sessionDir, { recursive: true });
+  await fs.writeFile(path.join(sessionDir, "session.json"), JSON.stringify({ sessionId: "s-runtime" }), "utf8");
   const config = resolveSessionLogConfig({ workspaceRoot, retentionMs: 60000, cleanupIntervalMs: 60000 });
   try {
     const result = await writeSessionLogEvent({

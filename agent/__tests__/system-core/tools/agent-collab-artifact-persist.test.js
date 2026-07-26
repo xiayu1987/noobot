@@ -60,7 +60,7 @@ test("collab artifact persistor writes failed attachment persistence to runtime-
     "u1",
     "runtime",
     "session",
-    "s-root",
+    "parent-s1",
     "events",
     "system.jsonl",
   ));

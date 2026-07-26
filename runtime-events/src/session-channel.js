@@ -11,7 +11,8 @@ import {
   SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY,
   SESSION_LOG_DEFAULT_CATEGORY,
 } from "./session-log-protocol.js";
-import { isWorkspaceSessionDeleted } from "./session-deletion-guard.js";
+import { isWorkspaceSessionDeleted, isWorkspaceSessionPersisted } from "./session-deletion-guard.js";
+import { normalizeOptionalSessionId, resolveOptionalSessionId } from "./session-id.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -67,11 +68,23 @@ export function resolveSessionChannelConfig(options = {}) {
   };
 }
 
-export function resolveSessionChannelDir({ sessionId, userId }, config = resolveSessionChannelConfig()) {
+export function resolveSessionChannelStorageSessionId(event = {}) {
+  return safeSessionChannelSegment(resolveOptionalSessionId(
+    event.storageSessionId,
+    event.rootSessionId,
+    event.parentSessionId,
+    event.data?.storageSessionId,
+    event.data?.rootSessionId,
+    event.data?.parentSessionId,
+    event.sessionId,
+  ));
+}
+
+export function resolveSessionChannelDir({ sessionId, storageSessionId, userId }, config = resolveSessionChannelConfig()) {
   const root = config.root || config.logRoot || "";
   if (root) return path.join(root, sessionId);
   const safeUserId = safeSessionChannelSegment(userId || "unknown-user");
-  return path.join(config.workspaceRoot, safeUserId, "runtime", "session", sessionId, config.dirName || config.logDirName || "logs");
+  return path.join(config.workspaceRoot, safeUserId, "runtime", "session", storageSessionId || sessionId, config.dirName || config.logDirName || "logs");
 }
 
 export function buildSessionChannelRecord(event = {}, options = {}) {
@@ -97,18 +110,32 @@ export async function writeSessionChannelEvent(event = {}, config = resolveSessi
   });
   record.sessionId = sessionId;
   record.userId = userId;
-  if (event.parentSessionId) record.parentSessionId = safeSessionChannelSegment(event.parentSessionId);
+  const parentSessionId = normalizeOptionalSessionId(event.parentSessionId);
+  if (parentSessionId) record.parentSessionId = safeSessionChannelSegment(parentSessionId);
   if (event.dialogProcessId) record.dialogProcessId = safeSessionChannelSegment(event.dialogProcessId);
   if (event.turnScopeId) record.turnScopeId = safeSessionChannelSegment(event.turnScopeId);
   record.source = safeSessionChannelSegment(record.source || "unknown");
   if (!shouldRecordSessionLog(record, config)) return { ok: true, skipped: true };
-  const dir = resolveSessionChannelDir({ sessionId, userId }, config);
-  if (!(config.root || config.logRoot) && await isWorkspaceSessionDeleted({
-    workspaceRoot: config.workspaceRoot,
-    userId,
-    sessionId,
-  })) {
-    return { ok: true, skipped: true, deleted: true };
+  const storageSessionId = resolveSessionChannelStorageSessionId(event);
+  const dir = resolveSessionChannelDir({ sessionId, storageSessionId, userId }, config);
+  if (!(config.root || config.logRoot)) {
+    const sessionIds = [...new Set([sessionId, storageSessionId].filter(Boolean))];
+    for (const candidateSessionId of sessionIds) {
+      if (await isWorkspaceSessionDeleted({
+        workspaceRoot: config.workspaceRoot,
+        userId,
+        sessionId: candidateSessionId,
+      })) {
+        return { ok: true, skipped: true, deleted: true };
+      }
+    }
+    if (storageSessionId === sessionId && !await isWorkspaceSessionPersisted({
+      workspaceRoot: config.workspaceRoot,
+      userId,
+      sessionId: storageSessionId,
+    })) {
+      return { ok: true, skipped: true, missingSession: true };
+    }
   }
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, `${record.category}.jsonl`);

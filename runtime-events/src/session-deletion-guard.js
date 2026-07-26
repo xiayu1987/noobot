@@ -31,6 +31,17 @@ export async function isWorkspaceSessionDeleted(context = {}) {
   }
 }
 
+export async function isWorkspaceSessionPersisted(context = {}) {
+  const paths = resolveWorkspaceSessionPaths(context);
+  if (!paths) return false;
+  try {
+    const stat = await fs.stat(path.join(paths.sessionDir, 'session.json'));
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
 export async function removeSessionDirectoryIfDeleted(context = {}) {
   const paths = resolveWorkspaceSessionPaths(context);
   if (!paths || !(await isWorkspaceSessionDeleted(context))) return false;

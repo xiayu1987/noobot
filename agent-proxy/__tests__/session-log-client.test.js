@@ -57,6 +57,25 @@ test("session log client keeps sent logs in flight until ack", () => {
   });
 });
 
+test("session log client preserves child storage ownership fields on the wire", () => {
+  MockWebSocket.instances = [];
+  const client = createSessionLogClient({ WebSocketImpl: MockWebSocket });
+
+  client.log("api-key-1", {
+    category: "transport",
+    event: "child.pending",
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+  });
+  const socket = MockWebSocket.instances[0];
+  socket.readyState = MockWebSocket.OPEN;
+  socket.onopen?.();
+
+  const sent = JSON.parse(socket.sent[0]);
+  assert.equal(sent.sessionId, "child-session");
+  assert.equal(sent.parentSessionId, "root-session");
+});
+
 test("session log client restores unacked logs on close", () => {
   MockWebSocket.instances = [];
   const client = createSessionLogClient({ WebSocketImpl: MockWebSocket });

@@ -45,6 +45,12 @@ async function readJsonl(filePath) {
   return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
+async function persistTestSession(workspaceRoot) {
+  const sessionDir = path.join(workspaceRoot, "primary-user", "runtime", "session", "session-1");
+  await fs.mkdir(sessionDir, { recursive: true });
+  await fs.writeFile(path.join(sessionDir, "session.json"), JSON.stringify({ sessionId: "session-1" }), "utf8");
+}
+
 test("ConnectorEventListener.notifyConnectorConnected: informational flow should emit connector_status notification", async () => {
   const emitCalls = [];
   const requestCalls = [];
@@ -110,6 +116,7 @@ test("ConnectorEventListener.notifyConnectorConnected: fallback to requestUserIn
 
 test("ConnectorEventListener.notifyConnectorConnected: failed bridge writes runtime-events session system event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-connector-runtime-events-"));
+  await persistTestSession(workspaceRoot);
   const listener = createBaseListener({
     workspaceRoot,
     bridge: {
@@ -148,6 +155,7 @@ test("ConnectorEventListener.notifyConnectorConnected: failed bridge writes runt
 
 test("ConnectorEventListener.notifyReconnectRequired: failed interaction writes runtime-events session system event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-connector-reconnect-"));
+  await persistTestSession(workspaceRoot);
   const listener = createBaseListener({
     workspaceRoot,
     bridge: {

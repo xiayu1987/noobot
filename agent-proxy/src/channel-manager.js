@@ -13,6 +13,7 @@ import { UpstreamTransportSupervisor } from "./upstream-transport-supervisor.js"
 import { CommandRegistry } from "./command-registry.js";
 import { config } from "./config.js";
 import { ChannelEventJournal } from "./channel-event-journal.js";
+import { resolveOptionalSessionId } from "@noobot/runtime-events/session-id";
 
 export class ChannelManager {
   constructor(WebSocket, { sessionLogClient = null } = {}) {
@@ -28,15 +29,33 @@ export class ChannelManager {
 
   logSessionEvent(channel, event = {}) {
     if (!this.sessionLogClient || !channel) return false;
-    const sessionId = String(
-      event.sessionId || event.data?.sessionId || channel.startPayload?.sessionId || this._extractSessionIdFromChannelKey?.(channel.key) || "agent-proxy",
-    ).trim();
-    return this.sessionLogClient.log(channel.apiKey || channel.ownerApiKey || "", {
+    const channelSessionId = resolveOptionalSessionId(this._extractSessionIdFromChannelKey?.(channel.key));
+    const sessionId = resolveOptionalSessionId(
+      event.sessionId,
+      event.data?.sessionId,
+      channel.startPayload?.sessionId,
+      channelSessionId,
+      "agent-proxy",
+    );
+    const parentSessionId = resolveOptionalSessionId(
+      event.parentSessionId,
+      event.data?.parentSessionId,
+      channelSessionId && channelSessionId !== sessionId ? channelSessionId : "",
+      channel.startPayload?.parentSessionId,
+    );
+    const logEvent = {
       ...event,
       sessionId,
+      ...(parentSessionId ? { parentSessionId } : {}),
       dialogProcessId: event.dialogProcessId || event.data?.dialogProcessId || channel.startPayload?.dialogProcessId || "",
       turnScopeId: event.turnScopeId || event.data?.turnScopeId || channel.startPayload?.turnScopeId || "",
-    });
+    };
+    if (!parentSessionId) delete logEvent.parentSessionId;
+    if (logEvent.data && !resolveOptionalSessionId(logEvent.data.parentSessionId)) {
+      logEvent.data = { ...logEvent.data };
+      delete logEvent.data.parentSessionId;
+    }
+    return this.sessionLogClient.log(channel.apiKey || channel.ownerApiKey || "", logEvent);
   }
 }
 

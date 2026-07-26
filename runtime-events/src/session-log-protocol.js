@@ -5,6 +5,7 @@
  */
 
 import { resolveRuntimeEventsSessionLogControls } from "@noobot/shared/runtime-events-config";
+import { normalizeOptionalSessionId } from "./session-id.js";
 
 export const SESSION_LOG_CATEGORIES = Object.freeze([
   "state",
@@ -64,6 +65,9 @@ export const SESSION_LOG_RECORD_FIELDS = Object.freeze([
   "level",
   "event",
   "sessionId",
+  "parentSessionId",
+  "rootSessionId",
+  "storageSessionId",
   "dialogProcessId",
   "turnScopeId",
   "message",
@@ -128,6 +132,11 @@ export function shouldRecordSessionLog(event = {}, options = {}) {
 
 export function buildSessionLogRecord(event = {}, options = {}) {
   const data = event.data && typeof event.data === "object" ? { ...event.data } : {};
+  for (const key of ["parentSessionId", "rootSessionId", "storageSessionId"]) {
+    const value = normalizeOptionalSessionId(data[key]);
+    if (value) data[key] = value;
+    else delete data[key];
+  }
   if (event.debugType && !data.debugType) data.debugType = event.debugType;
   const fallbackCategory = options.defaultCategory || SESSION_LOG_DEFAULT_CATEGORY;
   const category = normalizeSessionLogCategory(event.category || event.type, fallbackCategory);
@@ -143,6 +152,10 @@ export function buildSessionLogRecord(event = {}, options = {}) {
     message: normalizeSessionLogText(event.message || "", { maxLength: options.messageMaxLength || 4000 }),
     data,
   };
+  for (const key of ["parentSessionId", "rootSessionId", "storageSessionId"]) {
+    const value = normalizeOptionalSessionId(event[key]) || normalizeOptionalSessionId(data[key]);
+    if (value) record[key] = value;
+  }
   if (includeTimestamp) record.ts = event.ts || new Date().toISOString();
   return record;
 }
