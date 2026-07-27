@@ -9,6 +9,10 @@ import { clientFilePath as path } from "../path-resolver.js";
 import { createDesktopRuntimeEventWriter } from "./desktop-runtime-events.js";
 
 export const desktopAppName = "Noobot";
+export const DEFAULT_DESKTOP_LOG_MAX_BYTES = 10 * 1024 * 1024;
+export const DEFAULT_DESKTOP_LOG_RETAIN = 5;
+
+const desktopLogQueues = new Map();
 
 export const DESKTOP_LOG_FILES = Object.freeze({
   STARTUP: "desktop-startup.log",
@@ -18,6 +22,50 @@ export const DESKTOP_LOG_FILES = Object.freeze({
   AGENT_PROXY: "agent-proxy.log",
   FRONTEND: "frontend.log",
 });
+
+function resolvePositiveInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+async function rotateDesktopLog(filePath, retain) {
+  await fs.promises.rm(`${filePath}.${retain}`, { force: true });
+  for (let index = retain - 1; index >= 1; index -= 1) {
+    try {
+      await fs.promises.rename(`${filePath}.${index}`, `${filePath}.${index + 1}`);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  try {
+    await fs.promises.rename(filePath, `${filePath}.1`);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
+export function appendDesktopLogLine(filePath, line, {
+  maxBytes = resolvePositiveInteger(process.env.NOOBOT_DESKTOP_LOG_MAX_BYTES, DEFAULT_DESKTOP_LOG_MAX_BYTES),
+  retain = resolvePositiveInteger(process.env.NOOBOT_DESKTOP_LOG_RETAIN, DEFAULT_DESKTOP_LOG_RETAIN),
+} = {}) {
+  const previous = desktopLogQueues.get(filePath) || Promise.resolve();
+  const operation = previous.catch(() => {}).then(async () => {
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    const lineBytes = Buffer.byteLength(line, "utf8");
+    const stat = await fs.promises.stat(filePath).catch((error) => {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    });
+    if (stat?.isFile() && stat.size > 0 && stat.size + lineBytes > maxBytes) {
+      await rotateDesktopLog(filePath, retain);
+    }
+    await fs.promises.appendFile(filePath, line, "utf8");
+  });
+  desktopLogQueues.set(filePath, operation);
+  return operation.finally(() => {
+    if (desktopLogQueues.get(filePath) === operation) desktopLogQueues.delete(filePath);
+  });
+}
 
 export function getEarlyLogFilePath() {
   const base = process.platform === "win32"
@@ -30,9 +78,7 @@ export function appendEarlyLog(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   try {
     const logFile = getEarlyLogFilePath();
-    fs.promises.mkdir(path.dirname(logFile), { recursive: true })
-      .then(() => fs.promises.appendFile(logFile, line, "utf8"))
-      .catch(() => {});
+    appendDesktopLogLine(logFile, line).catch(() => {});
   } catch {
   }
 }
@@ -45,7 +91,7 @@ export function appendFallbackDebugLog(message) {
   ];
   for (const filePath of candidates) {
     try {
-      fs.promises.appendFile(filePath, line, "utf8").catch(() => {});
+      appendDesktopLogLine(filePath, line).catch(() => {});
     } catch {
     }
   }
@@ -87,8 +133,7 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     const line = `[${new Date().toISOString()}] ${message}\n`;
     try {
       const logFile = getLogFilePath(fileName);
-      fs.promises.mkdir(path.dirname(logFile), { recursive: true })
-        .then(() => fs.promises.appendFile(logFile, line, "utf8"))
+      appendDesktopLogLine(logFile, line)
         .catch((error) => {
           if (fileName !== DESKTOP_LOG_FILES.STARTUP) {
             writeStartupLog("desktop-log", "error", { fileName, message, error }, { debug: true });
