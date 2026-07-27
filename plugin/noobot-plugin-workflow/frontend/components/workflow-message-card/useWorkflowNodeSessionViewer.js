@@ -9,7 +9,11 @@ import {
   attachPersistedExecutionLogs,
   workflowSessionText as text,
 } from "./workflowNodeSessionProjection.js";
-import { logWorkflowNodeDetailProjection } from "./workflowNodeSessionDiagnostics.js";
+import {
+  createWorkflowNodeDetailTraceId,
+  logWorkflowNodeDetailProjection,
+  summarizeWorkflowNodeIdentity,
+} from "./workflowNodeSessionDiagnostics.js";
 import {
   createWorkflowNodeViewKey,
   findCurrentWorkflowRuntimeNode,
@@ -343,6 +347,7 @@ export function useWorkflowNodeSessionViewer({
 
   async function openNodeSession(nodeItem = {}, options = {}) {
     const { fromHistory = false } = options || {};
+    const traceId = text(options?.traceId) || createWorkflowNodeDetailTraceId();
     const canonicalNodeItem = resolveCanonicalWorkflowNodeItem(nodeItem, runtimeNodeSessions);
     const viewKey = createWorkflowNodeViewKey(canonicalNodeItem, workflowPayload.value);
     selectedGraphDialogProcessId.value = resolveWorkflowDialogProcessId(canonicalNodeItem);
@@ -350,6 +355,7 @@ export function useWorkflowNodeSessionViewer({
     const isNewProtocolNode = hasNewProtocolNodeIdentity(canonicalNodeItem);
     const canonicalRuntimeNode = resolveRuntimeNodeSession(canonicalNodeItem, runtimeNodeSessions);
     props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.openStarted", {
+      traceId,
       sessionId: resolveIsolatedNodeSessionId(canonicalNodeItem, canonicalRuntimeNode),
       dialogProcessId,
       turnScopeId: text(canonicalNodeItem?.turnScopeId),
@@ -360,6 +366,10 @@ export function useWorkflowNodeSessionViewer({
       activeChildExecutionId: text(canonicalNodeItem?.activeChildExecutionId || canonicalNodeItem?.childExecutionId),
       runtimeNodeCount: Array.isArray(runtimeNodeSessions?.value) ? runtimeNodeSessions.value.length : 0,
       fromHistory,
+      clickedIdentity: summarizeWorkflowNodeIdentity(nodeItem),
+      canonicalIdentity: summarizeWorkflowNodeIdentity(canonicalNodeItem),
+      runtimeIdentity: summarizeWorkflowNodeIdentity(canonicalRuntimeNode || {}),
+      routeIdentity: { rootSessionId, dialogProcessId },
     });
     if (!props.userId || (!isNewProtocolNode && (!rootSessionId || !dialogProcessId))) {
       ElMessage.warning(translate("workflow.nodeSessionMissing"));
@@ -403,6 +413,7 @@ export function useWorkflowNodeSessionViewer({
             sessionId: sessionIdHint,
             rootSessionId,
             dialogProcessId,
+            traceId,
           });
           props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.restLoaded", {
             sessionId: text(detail?.sessionId || sessionIdHint),
@@ -499,6 +510,15 @@ export function useWorkflowNodeSessionViewer({
           viewerState.value = "pending";
         }
       } catch (error) {
+        props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.openFailed", {
+          traceId, rootSessionId, dialogProcessId, sessionId: sessionIdHint,
+          viewKey, transactionAccepted: nodeViewTransaction.accepts(viewTicket),
+          transactionPhase: text(nodeViewTransaction.state.phase),
+          transactionOwnerKey: text(nodeViewTransaction.state.ownerKey),
+          errorName: String(error?.name || "Error"), errorMessage: String(error?.message || error || ""),
+          clickedIdentity: summarizeWorkflowNodeIdentity(nodeItem),
+          canonicalIdentity: summarizeWorkflowNodeIdentity(canonicalNodeItem),
+        });
         if (nodeViewTransaction.accepts(viewTicket)) {
           viewerError.value = String(error?.message || error || translate("workflow.readNodeSessionFailed"));
           viewerState.value = "failed";
@@ -555,16 +575,19 @@ export function useWorkflowNodeSessionViewer({
   }
 
   async function handleRuntimeStepClick(stepItem = {}) {
+    const traceId = createWorkflowNodeDetailTraceId();
     props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.stepClicked", {
+      traceId,
       sessionId: text(stepItem?.sessionId || stepItem?.nodeSessionId),
       dialogProcessId: resolveWorkflowDialogProcessId(stepItem),
       turnScopeId: text(stepItem?.turnScopeId),
       workflowRunId: text(stepItem?.workflowRunId),
       nodeExecutionId: text(stepItem?.nodeExecutionId),
       stepHasSession: stepHasSession(stepItem),
+      renderedIdentity: summarizeWorkflowNodeIdentity(stepItem),
     });
     if (!stepHasSession(stepItem)) return;
-    await openNodeSession(stepItem);
+    await openNodeSession(stepItem, { traceId });
   }
 
   function handleSelectedDialogProcessUpdate(dialogProcessId = "") {

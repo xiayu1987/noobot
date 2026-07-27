@@ -40,6 +40,7 @@ function toEntryModuleItem(item = {}, outputDir = "") {
     name: item.name,
     version: item.version,
     apiVersion: item.apiVersion,
+    authenticatedRoutePatterns: item.authenticatedRoutePatterns,
     entryImportPath,
   };
 }
@@ -52,6 +53,7 @@ function buildOutputSource(entries = []) {
     name: ${JSON.stringify(item.name)},
     version: ${JSON.stringify(item.version)},
     apiVersion: ${JSON.stringify(item.apiVersion)},
+    authenticatedRoutePatterns: ${JSON.stringify(item.authenticatedRoutePatterns)},
     loadModule: () => import(${JSON.stringify(item.entryImportPath)}),
   }`,
   );
@@ -101,6 +103,9 @@ async function discoverFrontendPluginEntries() {
       name: String(manifest.name || "").trim(),
       version: String(manifest.version || "").trim(),
       apiVersion,
+      authenticatedRoutePatterns: Array.isArray(frontend.authenticatedRoutePatterns)
+        ? frontend.authenticatedRoutePatterns.map(String)
+        : [],
       entryPath,
     });
   }

@@ -8,7 +8,7 @@ export function resolveWorkflowDialogProcessId(item = {}, ...fallbackItems) {
   const candidates = [item, ...fallbackItems];
   for (const candidate of candidates) {
     const value = String(
-      candidate?.dialogProcessId || candidate?.nodeDialogProcessId || candidate?.dialogId || candidate?.nodeDialogId || "",
+      candidate?.nodeDialogProcessId || candidate?.nodeDialogId || candidate?.dialogProcessId || candidate?.dialogId || "",
     ).trim();
     if (value) return value;
   }
@@ -23,4 +23,14 @@ export function collectWorkflowDialogProcessIds(...items) {
     })
     .map((value) => String(value || "").trim())
     .filter(Boolean);
+}
+
+export function summarizeWorkflowDialogProcessIdFields(item = {}) {
+  return {
+    dialogProcessId: String(item?.dialogProcessId || "").trim(),
+    nodeDialogProcessId: String(item?.nodeDialogProcessId || "").trim(),
+    nodeDialogId: String(item?.nodeDialogId || "").trim(),
+    dialogId: String(item?.dialogId || "").trim(),
+    resolvedDialogProcessId: resolveWorkflowDialogProcessId(item),
+  };
 }

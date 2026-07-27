@@ -73,7 +73,7 @@ test("runWorkflowExecution carries planning identity through events, strategy an
         return {
           lifecycle: { executionId: call?.strategy?.executionId || call?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
           sessionId: "child-a",
-          dialogProcessId: call.strategy.dialogProcessId,
+          dialogProcessId: "actual-child-dialog-a",
           persisted: { outputDir: "runtime/workflow/session/s1/child-a" },
           result: { messages: [{ role: "assistant", content: "done" }] },
         };
@@ -110,6 +110,7 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(run.commandId, identity.commandId);
   assert.equal(run.turnScopeId, identity.turnScopeId);
   assert.equal(run.nodeDialogProcessId, identity.dialogProcessId);
+  assert.equal(run.agentDialogProcessId, "actual-child-dialog-a");
   assert.equal(run.nodeSessionId, "child-a");
 
   const persistedNodeEvents = options.events.filter((item) => item?.event === "workflow_node_state_committed");
@@ -138,6 +139,9 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(realtimeNodeEvents[0].data.turnScopeId, identity.turnScopeId);
   assert.equal(realtimeNodeEvents[0].data.sessionId, subSessionCalls[0].strategy.sessionId);
   assert.equal(realtimeNodeEvents[0].data.parentSessionId, "s1");
+  assert.equal(realtimeNodeEvents[1].data.sessionId, "child-a");
+  assert.equal(realtimeNodeEvents[1].data.dialogProcessId, identity.dialogProcessId);
+  assert.equal(realtimeNodeEvents[1].data.agentDialogProcessId, "actual-child-dialog-a");
   assert.equal(persistedNodeEvents[0].parentSessionId, "s1");
   assert.equal(realtimeNodeEvents[1].data.sessionId, "child-a");
   assert.equal(realtimeNodeEvents[1].data.eventId, persistedNodeEvents[1].eventId);

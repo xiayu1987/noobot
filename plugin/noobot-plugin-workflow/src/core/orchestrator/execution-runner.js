@@ -118,6 +118,7 @@ async function publishWorkflowNodeStateCommitted({ options = {}, ctx = {}, fact 
     sessionId: node.sessionId,
     parentSessionId: String(node.parentSessionId || ctx?.sessionId || "").trim(),
     dialogProcessId: node.dialogProcessId,
+    agentDialogProcessId: node.agentDialogProcessId,
     turnScopeId: node.turnScopeId,
     nodeId: node.nodeId,
     nodeName: node.nodeName,
@@ -161,6 +162,7 @@ async function commitAndPublishWorkflowNodeState({
   status = "",
   expectedRevision = null,
   sessionId = "",
+  agentDialogProcessId = "",
   childExecutionId = "",
   failure = null,
 } = {}) {
@@ -170,6 +172,7 @@ async function commitAndPublishWorkflowNodeState({
     status,
     expectedRevision,
     sessionId,
+    agentDialogProcessId,
     childExecutionId,
     failure,
   });
@@ -256,6 +259,7 @@ function buildNodeAgentRunRecord({
     commandId: String(item?.nodeIdentity?.commandId || "").trim(),
     turnScopeId: String(item?.nodeIdentity?.turnScopeId || "").trim(),
     nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(item),
+    agentDialogProcessId: String(item?.subSession?.dialogProcessId || "").trim(),
     nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
     nodeSessionPersistedPath: String(item?.subSession?.persisted?.outputDir || "").trim(),
     actionNodeStateId: String(item?.step?.actionNodeStateId || "").trim(),
@@ -321,6 +325,7 @@ function rememberCompletedStepResult({
       ? Number(item.step.stepIndex)
       : -1,
     nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(item),
+    agentDialogProcessId: String(item?.subSession?.dialogProcessId || "").trim(),
     workflowRunId: String(item?.nodeIdentity?.workflowRunId || "").trim(),
     nodeExecutionId: String(item?.nodeIdentity?.nodeExecutionId || "").trim(),
     commandId: String(item?.nodeIdentity?.commandId || "").trim(),
@@ -434,6 +439,7 @@ export async function runWorkflowExecution({
               status: childTerminal.nodeStatus,
               expectedRevision: runningFact?.node?.revision ?? null,
               sessionId: action?.subSession?.sessionId || "",
+              agentDialogProcessId: action?.subSession?.dialogProcessId || "",
               childExecutionId,
               failure: childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED
                 ? childTerminal.lifecycle.failure || { message: "child execution failed" }
@@ -474,6 +480,7 @@ export async function runWorkflowExecution({
               status: stopped ? WORKFLOW_NODE_STATUS.STOPPED : WORKFLOW_NODE_STATUS.FAILED,
               expectedRevision: runningFact.node.revision,
               sessionId: action?.subSession?.sessionId || "",
+              agentDialogProcessId: action?.subSession?.dialogProcessId || "",
               childExecutionId,
               failure: {
                 name: error?.name || "Error",

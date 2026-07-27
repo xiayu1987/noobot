@@ -10,6 +10,7 @@ export const externalFrontendPluginEntries = [
     name: "noobot-plugin-harness",
     version: "4.1.3",
     apiVersion: "1",
+    authenticatedRoutePatterns: ["/api/internal/session/:userId/:sessionId/thinking-detail"],
     loadModule: () => import("../../../../../plugin/noobot-plugin-harness/frontend/index.js"),
   },
   {
@@ -18,6 +19,7 @@ export const externalFrontendPluginEntries = [
     name: "noobot-plugin-workflow",
     version: "4.1.3",
     apiVersion: "1",
+    authenticatedRoutePatterns: ["/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId","/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId/thinking-detail"],
     loadModule: () => import("../../../../../plugin/noobot-plugin-workflow/frontend/index.js"),
   }
 ];

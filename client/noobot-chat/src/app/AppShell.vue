@@ -39,6 +39,7 @@ import {
 import { selectTurnMessageRuntime } from "../composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 import { attachmentService } from "../services/attachmentService.js";
 import { thinkingDetailService } from "../services/thinkingDetailService.js";
+import { authenticatedHttpService } from "../services/authenticatedHttpService.js";
 import {
   classifyRealtimeLog,
   formatFileSize,
@@ -146,6 +147,7 @@ const {
 });
 attachmentService.configure({ fetcher: authFetch });
 thinkingDetailService.configure({ fetcher: authFetch });
+authenticatedHttpService.configure({ fetcher: authFetch });
 bindScenarioConfig(scenarioConfig);
 
 function navigateToLastMessage() {

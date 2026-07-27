@@ -228,6 +228,36 @@ describe("workflow node session view ownership", () => {
     wrapper.unmount();
   });
 
+  it("uses the node dialog identity when a clicked step also carries the parent dialog identity", async () => {
+    const clickedStep = {
+      rootSessionId: "root-session",
+      nodeExecutionId: "node-dual-dialog",
+      childExecutionId: "execution-dual-dialog",
+      sessionId: "child-dual-dialog",
+      dialogProcessId: "parent-dialog",
+      nodeDialogProcessId: "wf_node_dual_dialog",
+      stepId: "step-dual-dialog",
+    };
+    const fetcher = vi.fn(async () => detailResponse("child-dual-dialog", "child result"));
+    const { wrapper, state, viewer } = mountViewer({
+      fetcher,
+      sessionDocs: reactive({}),
+      runtimeNodes: [clickedStep],
+    });
+
+    await viewer.handleRuntimeStepClick(clickedStep);
+
+    expect(fetcher).toHaveBeenCalledWith({
+      userId: "user-1",
+      sessionId: "root-session",
+      dialogProcessId: "wf_node_dual_dialog",
+      traceId: expect.stringMatching(/^workflow-node-detail-/),
+    });
+    expect(state.viewerError.value).toBe("");
+    expect(state.selectedNodeSessionId.value).toBe("child-dual-dialog");
+    wrapper.unmount();
+  });
+
   it("adds the running assistant host when refreshed REST detail only has the child user", async () => {
     const staleStep = {
       rootSessionId: "root-session",

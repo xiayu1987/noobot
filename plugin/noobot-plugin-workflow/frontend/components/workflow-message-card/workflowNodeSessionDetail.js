@@ -45,6 +45,7 @@ export async function fetchExecutionSessionDetail({
   sessionId = "",
   rootSessionId = "",
   dialogProcessId = "",
+  traceId = "",
 }) {
   const normalizedSessionId = String(sessionId || "").trim();
   const normalizedRootSessionId = String(rootSessionId || "").trim();
@@ -52,15 +53,45 @@ export async function fetchExecutionSessionDetail({
   if (!props.userId || !normalizedSessionId || !normalizedRootSessionId || !normalizedDialogProcessId) {
     throw new Error(translate("workflow.nodeSessionMissing"));
   }
-  const response = await requireSessionService(props).getDetail({
+  const request = {
     userId: props.userId,
     sessionId: normalizedRootSessionId,
     dialogProcessId: normalizedDialogProcessId,
+    traceId: String(traceId || "").trim(),
+  };
+  props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.requestStarted", {
+    traceId: request.traceId, requestedChildSessionId: normalizedSessionId, ...request,
+  });
+  let response;
+  try {
+    response = await requireSessionService(props).getDetail(request);
+  } catch (error) {
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.requestTransportFailed", {
+      traceId: request.traceId, ...request, errorName: String(error?.name || "Error"),
+      errorMessage: String(error?.message || error || ""),
+    });
+    throw error;
+  }
+  props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.responseReceived", {
+    traceId: request.traceId, ...request, httpOk: response?.ok === true,
+    httpStatus: Number(response?.status || 0), httpStatusText: String(response?.statusText || ""),
   });
   if (!response.ok) {
-    throw new Error(translate("workflow.readNodeSessionFailed"));
+    let responseText = "";
+    try { responseText = String(await response.clone().text()).slice(0, 1000); } catch {}
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.responseRejected", {
+      traceId: request.traceId, ...request, httpStatus: Number(response?.status || 0), responseText,
+    });
+    throw new Error(`${translate("workflow.readNodeSessionFailed")} (${Number(response?.status || 0) || "network"})`);
   }
   const payload = await response.json();
+  props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.payloadParsed", {
+    traceId: request.traceId, ...request, payloadOk: payload?.ok === true,
+    responseSessionId: String(payload?.workflowSession?.sessionSummary?.sessionId || payload?.workflowSession?.session?.sessionId || ""),
+    responseDialogProcessId: String(payload?.dialogProcessId || ""),
+    responseDir: String(payload?.workflowSession?.dir || ""),
+    payloadError: String(payload?.error || ""),
+  });
   if (!payload?.ok) {
     throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
   }
