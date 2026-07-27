@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
 import { workflowSessionText as text } from "./workflowNodeSessionProjection.js";
 
 export function resolveWorkflowDetailSessionId(detail = {}) {

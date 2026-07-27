@@ -8,38 +8,38 @@ import { ElMessage } from "element-plus";
 import {
   attachPersistedExecutionLogs,
   workflowSessionText as text,
-} from "./workflowNodeSessionProjection.js";
+} from "../runtime/workflowNodeSessionProjection.js";
 import {
   createWorkflowNodeDetailTraceId,
   logWorkflowNodeDetailProjection,
   summarizeWorkflowNodeIdentity,
-} from "./workflowNodeSessionDiagnostics.js";
+} from "../runtime/workflowNodeSessionDiagnostics.js";
 import {
   createWorkflowNodeViewKey,
   findCurrentWorkflowRuntimeNode,
   findWorkflowOwningRuntimeNode,
   resolveWorkflowDetailSessionId,
-} from "./workflowNodeSessionRuntime.js";
+} from "../runtime/workflowNodeSessionRuntime.js";
 import {
   resolveCanonicalWorkflowNodeItem,
   shouldRejectRootSessionProjection,
-} from "./workflowNodeSessionIdentity.js";
+} from "../runtime/workflowNodeSessionIdentity.js";
 export {
   isSameWorkflowDrawerRoute,
   resolveCanonicalWorkflowNodeItem,
   shouldRejectRootSessionProjection,
-} from "./workflowNodeSessionIdentity.js";
-import { useWorkflowNodeSessionHistory } from "./workflowNodeSessionHistory.js";
-import { useWorkflowNodeSessionLabels } from "./workflowNodeSessionLabels.js";
-import { useWorkflowDrawerHistory } from "./workflowDrawerHistory.js";
+} from "../runtime/workflowNodeSessionIdentity.js";
+import { useWorkflowNodeSessionHistory } from "../runtime/workflowNodeSessionHistory.js";
+import { useWorkflowNodeSessionLabels } from "../runtime/workflowNodeSessionLabels.js";
+import { useWorkflowDrawerHistory } from "../services/workflowDrawerHistory.js";
 import {
   fetchExecutionSessionDetail,
   fetchWorkflowNodeSessionDetail,
   fetchWorkflowNodeThinkingDetail,
   hydrateExecutionSessionDetail,
-} from "./workflowNodeSessionDetail.js";
-import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
-import { createWorkflowNodeViewTransaction } from "./workflowNodeViewTransaction.js";
+} from "../runtime/workflowNodeSessionDetail.js";
+import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
+import { createWorkflowNodeViewTransaction } from "../runtime/workflowNodeViewTransaction.js";
 import {
   buildUnifiedSessionDetail,
   hasNewProtocolNodeIdentity,
@@ -49,7 +49,7 @@ import {
   resolveNodeChildExecutionIds,
   resolveRuntimeNodeSession,
   withRunningAssistantPlaceholder,
-} from "./workflowUnifiedSessionDetail.js";
+} from "../runtime/workflowUnifiedSessionDetail.js";
 
 export function useWorkflowNodeSessionViewer({
   props,

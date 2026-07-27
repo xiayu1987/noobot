@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { createActionRuntimeBySemanticKey } from "./workflowActionRuntimeMap.js";
-import { createFlowNodes } from "./workflowFlowNodes.js";
-import { createRuntimeNodeSessions } from "./workflowRuntimeSessions.js";
-import { createStepStatusResolver } from "./workflowRuntimeStatus.js";
-import { collectWorkflowDialogProcessIds } from "./workflowDialogProcessIdCompat.js";
+import { createActionRuntimeBySemanticKey } from "../runtime/workflowActionRuntimeMap.js";
+import { createFlowNodes } from "../services/workflowFlowNodes.js";
+import { createRuntimeNodeSessions } from "../runtime/workflowRuntimeSessions.js";
+import { createStepStatusResolver } from "../runtime/workflowRuntimeStatus.js";
+import { collectWorkflowDialogProcessIds } from "../utils/workflowDialogProcessIdCompat.js";
 
 export function useWorkflowRuntimeState(workflowPayload, runtimeRegistries = {}) {
   const nodeSessions = computed(() => {

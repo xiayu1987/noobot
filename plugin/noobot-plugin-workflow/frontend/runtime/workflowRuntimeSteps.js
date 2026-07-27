@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
 
 export function makeActionStateKey(item = {}, index = 0) {
   return String(
