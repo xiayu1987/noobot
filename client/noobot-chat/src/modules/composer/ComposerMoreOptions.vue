@@ -48,6 +48,18 @@ const safeConfirmLevels = ["low", "medium", "high", "critical"];
 const safeConfirmMarks = computed(() => Object.fromEntries(safeConfirmLevels.map((level, index) => [index, translate(`composer.safeConfirmLevel.${level}`)])));
 const safeConfirmSliderValue = computed(() => Math.max(0, safeConfirmLevels.indexOf(props.safeConfirmLevel)));
 
+// The selection is a Set and callers may mutate it in place when a plugin is
+// toggled.  Depending on the Set object itself therefore does not invalidate
+// the extension outlet.  Track its contents explicitly and pass a fresh Set
+// to extension predicates on every selection change.
+const selectedPluginKeys = computed(() =>
+  Array.from(props.selectedPluginKeySet instanceof Set ? props.selectedPluginKeySet : [])
+    .map((key) => String(key).trim())
+    .filter(Boolean)
+    .sort(),
+);
+const selectedPluginKeySetSnapshot = computed(() => new Set(selectedPluginKeys.value));
+
 function updateSafeConfirmSlider(value) {
   emit("update:safeConfirmLevel", safeConfirmLevels[Math.round(Number(value))] || "low");
 }
@@ -77,7 +89,7 @@ const normalizedModelOptions = computed(() => {
   (Array.isArray(props.modelOptions) ? props.modelOptions : []).forEach(addOption);
   addOption(props.selectedModel);
   provideExtensionValues(EXTENSION_POINTS.COMPOSER_MODEL_OPTIONS, {
-    selectedPluginKeySet: props.selectedPluginKeySet,
+    selectedPluginKeySet: selectedPluginKeySetSnapshot.value,
   }).forEach(addOption);
   return Array.from(optionMap.values());
 });
@@ -113,7 +125,7 @@ function getSelectedModelLabel() {
 const composerModelExtensionContext = computed(() => ({
   modelOptions: normalizedModelOptions.value,
   pluginModelConfig: props.pluginModelConfig && typeof props.pluginModelConfig === "object" ? props.pluginModelConfig : {},
-  selectedPluginKeySet: props.selectedPluginKeySet,
+  selectedPluginKeySet: selectedPluginKeySetSnapshot.value,
   updatePluginModelConfig,
   hasModelOptions: hasModelOptions.value,
   pluginContext,
@@ -126,7 +138,7 @@ const composerModelExtensionRenderers = computed(() =>
 const composerExtensionBaseProps = computed(() => ({
   modelOptions: normalizedModelOptions.value,
   pluginModelConfig: props.pluginModelConfig && typeof props.pluginModelConfig === "object" ? props.pluginModelConfig : {},
-  selectedPluginKeySet: props.selectedPluginKeySet,
+  selectedPluginKeySet: selectedPluginKeySetSnapshot.value,
   hasModelOptions: hasModelOptions.value,
   updatePluginModelConfig,
   pluginContext,

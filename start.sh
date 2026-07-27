@@ -15,6 +15,10 @@ OPENVSCODE_SERVER_REQUIRED="${OPENVSCODE_SERVER_REQUIRED:-0}"
 OPENVSCODE_SERVER_CHECK_UPDATE="${OPENVSCODE_SERVER_CHECK_UPDATE:-1}"
 OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE="${OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE:-1}"
 PM2_HOME_DIR="$ROOT_DIR/.pm2"
+PM2_LOG_ROTATE_ENABLED="${PM2_LOG_ROTATE_ENABLED:-true}"
+PM2_LOG_ROTATE_MAX_SIZE="${PM2_LOG_ROTATE_MAX_SIZE:-20M}"
+PM2_LOG_ROTATE_RETAIN="${PM2_LOG_ROTATE_RETAIN:-14}"
+PM2_LOG_ROTATE_WORKER_INTERVAL="${PM2_LOG_ROTATE_WORKER_INTERVAL:-3600}"
 PM2_CLEAN_START="${PM2_CLEAN_START:-0}"
 CLIENT_APP_NAME="noobot-client"
 SERVICE_APP_NAME="noobot-service"
@@ -437,6 +441,22 @@ start_pm2() {
   run_pm2 start "$@"
 }
 
+ensure_pm2_log_rotation() {
+  is_truthy "$PM2_LOG_ROTATE_ENABLED" || return 0
+  if ! run_pm2 describe pm2-logrotate >/dev/null 2>&1; then
+    log "Installing PM2 log rotation module"
+    if ! run_pm2 install pm2-logrotate; then
+      echo "Warning: PM2 log rotation module could not be installed; logs will not rotate until the next successful deployment." >&2
+      return 0
+    fi
+  fi
+  run_pm2 set pm2-logrotate:max_size "$PM2_LOG_ROTATE_MAX_SIZE"
+  run_pm2 set pm2-logrotate:retain "$PM2_LOG_ROTATE_RETAIN"
+  run_pm2 set pm2-logrotate:compress true
+  run_pm2 set pm2-logrotate:workerInterval "$PM2_LOG_ROTATE_WORKER_INTERVAL"
+  run_pm2 set pm2-logrotate:rotateModule true
+}
+
 start_or_restart_pm2_apps() {
   local has_service_app=0
   local has_client_app=0
@@ -575,6 +595,7 @@ main() {
   if is_truthy "$PM2_CLEAN_START"; then
     clean_pm2_cache
   fi
+  ensure_pm2_log_rotation
 
   log "$(msg step_start)"
   start_or_restart_pm2_apps
