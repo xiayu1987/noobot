@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import SharedChatMessageItem from "../../shared/message/SharedChatMessageItem.vue";
+import SharedChatMessageItem from "../../shared/message/components/SharedChatMessageItem.vue";
 
 defineEmits(["open-thinking-details"]);
 

@@ -6,10 +6,10 @@
 import { defineComponent, h, nextTick, ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import ChatComposer from "../../../../src/modules/composer/ChatComposer.vue";
-import ComposerInputActions from "../../../../src/modules/composer/ComposerInputActions.vue";
-import ComposerAttachmentToolbar from "../../../../src/modules/composer/ComposerAttachmentToolbar.vue";
-import { useComposerMediaCapture } from "../../../../src/modules/composer/useComposerMediaCapture.js";
+import ChatComposer from "../../../../src/modules/composer/components/ChatComposer.vue";
+import ComposerInputActions from "../../../../src/modules/composer/components/ComposerInputActions.vue";
+import ComposerAttachmentToolbar from "../../../../src/modules/composer/components/ComposerAttachmentToolbar.vue";
+import { useComposerMediaCapture } from "../../../../src/modules/composer/composables/useComposerMediaCapture.js";
 
 const messageMock = vi.hoisted(() => ({
   error: vi.fn(),

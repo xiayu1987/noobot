@@ -102,10 +102,10 @@ client/noobot-chat/src/shared/ui/
 
 | 候选共享组件 | 来源 | 当前重复点 | 建议落点 |
 | --- | --- | --- | --- |
-| `BaseStatusChipsRow` | `MessageStatusRow.vue` + workflow 节点状态展示 | “状态圆点 + chip + done/pending 样式”重复 | `client/noobot-chat/src/shared/ui/BaseStatusChipsRow.vue` |
-| `BaseFileCardList` | `MessageAttachments.vue` + `MessageWrittenFiles.vue` | 文件卡片壳、图标区、标题区、下载按钮样式重复 | `client/noobot-chat/src/shared/ui/BaseFileCardList.vue` |
-| `BaseActionButtons` | `AssistantCopyActions.vue` + 各类工具操作按钮组 | 小型按钮组布局/间距重复 | `client/noobot-chat/src/shared/ui/BaseActionButtons.vue` |
-| `BaseSectionHeader` | `ThinkingPanel.vue` + 文件区头部 | 分段标题 + 计数信息展示模式重复 | `client/noobot-chat/src/shared/ui/BaseSectionHeader.vue` |
+| `BaseStatusChipsRow` | `MessageStatusRow.vue` + workflow 节点状态展示 | “状态圆点 + chip + done/pending 样式”重复 | `client/noobot-chat/src/shared/ui/components/BaseStatusChipsRow.vue` |
+| `BaseFileCardList` | `MessageAttachments.vue` + `MessageWrittenFiles.vue` | 文件卡片壳、图标区、标题区、下载按钮样式重复 | `client/noobot-chat/src/shared/ui/components/BaseFileCardList.vue` |
+| `BaseActionButtons` | `AssistantCopyActions.vue` + 各类工具操作按钮组 | 小型按钮组布局/间距重复 | `client/noobot-chat/src/shared/ui/components/BaseActionButtons.vue` |
+| `BaseSectionHeader` | `ThinkingPanel.vue` + 文件区头部 | 分段标题 + 计数信息展示模式重复 | `client/noobot-chat/src/shared/ui/components/BaseSectionHeader.vue` |
 
 > 说明：本轮先只做“识别与落点”，不改变业务语义；`workflow-graph/*` 暂保留插件私有，不进入 shared。
 

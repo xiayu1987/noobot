@@ -5,7 +5,7 @@
  */
 import { createApp } from "vue";
 import { createPinia } from "pinia";
-import App from "./App.vue";
+import App from "./app/components/App.vue";
 import "./shared/styles/style.css";
 import { installElementPlusComponents, installFrontendPlugins } from "./app/entrypoints.js";
 

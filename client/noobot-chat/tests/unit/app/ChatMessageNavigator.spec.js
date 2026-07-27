@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const navigatorSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/ChatMessageNavigator.vue"),
+  path.resolve(__dirname, "../../../src/app/components/ChatMessageNavigator.vue"),
   "utf8",
 );
 

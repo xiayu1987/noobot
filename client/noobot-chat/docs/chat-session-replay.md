@@ -280,7 +280,7 @@ role + (dialogProcessId || taskId || tool_call_id || index) + index
 
 相关位置：
 
-- `src/app/ChatMessageListPanel.vue#getMessageRenderKey()`
+- `src/app/components/ChatMessageListPanel.vue#getMessageRenderKey()`
 
 ## 8. 用户交互弹窗去重
 

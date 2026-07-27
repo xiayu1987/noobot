@@ -15,7 +15,7 @@ const files = {
   reducer: "src/composables/chat/sessionRunStateMachine/turnReducer.js",
   registry: "src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js",
   interaction: "src/composables/chat/useAgentInteraction.js",
-  messageList: "src/app/ChatMessageListPanel.vue",
+  messageList: "src/app/components/ChatMessageListPanel.vue",
   sendFinalize: "src/composables/chat/chatEngine/sendFinalize.js",
   webSocketClient: "src/services/ws/chatWebSocketClient.js",
 };
@@ -148,9 +148,9 @@ describe("lifecycle architecture guard", () => {
       "src/composables/message/useMessageFiles.js",
       "src/composables/message/useMessageMeta.js",
       "src/shared/message/useThinkingPanel.js",
-      "src/shared/message/SharedChatMessageItem.vue",
+      "src/shared/message/components/SharedChatMessageItem.vue",
       "src/modules/message/ChatMessageItem.vue",
-      "src/shared/message/ThinkingPanel.vue",
+      "src/shared/message/components/ThinkingPanel.vue",
     ];
     for (const relativePath of renderConsumers) {
       expect(source(relativePath)).not.toMatch(/messageItem\?*\.completedToolLogs/);

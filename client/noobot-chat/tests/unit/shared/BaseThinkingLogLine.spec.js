@@ -5,7 +5,7 @@
  */
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
-import BaseThinkingLogLine from "../../../src/shared/ui/BaseThinkingLogLine.vue";
+import BaseThinkingLogLine from "../../../src/shared/ui/components/BaseThinkingLogLine.vue";
 
 describe("BaseThinkingLogLine", () => {
   it("renders a readable call label for tool calls", () => {

@@ -1,0 +1,390 @@
+<!--
+  Copyright (c) 2026 xiayu
+  Contact: 126240622+xiayu1987@users.noreply.github.com
+  SPDX-License-Identifier: MIT
+-->
+<script setup>
+import { computed, ref } from "vue";
+import {
+  ArrowDown,
+  CircleCheckFilled,
+  WarningFilled,
+  CircleCloseFilled,
+  Connection,
+} from "@element-plus/icons-vue";
+import { useLocale } from "../../../shared/i18n/useLocale.js";
+
+const CONNECTOR_GROUP_DEFINITIONS = [
+  { key: "database", labelKey: "common.database" },
+  { key: "terminal", labelKey: "common.terminal" },
+  { key: "email", labelKey: "common.email" },
+];
+const CONNECTOR_GROUP_KEYS = new Set(
+  CONNECTOR_GROUP_DEFINITIONS.map((groupDefinition) => groupDefinition.key),
+);
+
+const props = defineProps({
+  connectorPanelState: { type: Object, default: () => ({}) },
+  embedded: { type: Boolean, default: false },
+});
+
+const emit = defineEmits(["connector-selected"]);
+
+const connectorPanelExpanded = ref(false);
+const { translate } = useLocale();
+const panelExpanded = computed(() => (props.embedded ? true : connectorPanelExpanded.value));
+
+const connectorGroups = computed(() => {
+  const sourceGroups =
+    props?.connectorPanelState?.groups &&
+    typeof props.connectorPanelState.groups === "object"
+      ? props.connectorPanelState.groups
+      : {};
+  return {
+    database: Array.isArray(sourceGroups.database) ? sourceGroups.database : [],
+    terminal: Array.isArray(sourceGroups.terminal) ? sourceGroups.terminal : [],
+    email: Array.isArray(sourceGroups.email) ? sourceGroups.email : [],
+  };
+});
+
+const selectedConnectors = computed(() => {
+  const selectedSource =
+    props?.connectorPanelState?.selectedConnectors &&
+    typeof props.connectorPanelState.selectedConnectors === "object"
+      ? props.connectorPanelState.selectedConnectors
+      : {};
+  return {
+    database: String(selectedSource?.database || "").trim(),
+    terminal: String(selectedSource?.terminal || "").trim(),
+    email: String(selectedSource?.email || "").trim(),
+  };
+});
+
+const collapsedConnectorSummaryItems = computed(() =>
+  CONNECTOR_GROUP_DEFINITIONS.map((groupDefinition) => {
+    const selectedConnectorName = String(
+      selectedConnectors.value?.[groupDefinition.key] || "",
+    ).trim();
+    if (!selectedConnectorName) return null;
+    return `${translate(groupDefinition.labelKey)}: ${selectedConnectorName}`;
+  }).filter(Boolean),
+);
+
+function connectorStatusIcon(status = "") {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (normalizedStatus === "connected") return CircleCheckFilled;
+  if (normalizedStatus === "error") return CircleCloseFilled;
+  return WarningFilled;
+}
+
+function connectorStatusClass(status = "") {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (normalizedStatus === "connected") return "status-connected";
+  if (normalizedStatus === "error") return "status-error";
+  return "status-unknown";
+}
+
+function onConnectorSelected(connectorType = "", connectorName = "") {
+  const normalizedType = String(connectorType || "").trim();
+  if (!CONNECTOR_GROUP_KEYS.has(normalizedType)) return;
+  const normalizedName = String(connectorName || "").trim();
+  emit("connector-selected", {
+    connectorType: normalizedType,
+    connectorName: normalizedName,
+  });
+}
+
+function toggleConnectorPanelExpanded() {
+  connectorPanelExpanded.value = !connectorPanelExpanded.value;
+}
+</script>
+
+<template>
+  <div
+    class="connector-panel-shell noobot-flat-card"
+    :class="{ 'is-expanded': panelExpanded, 'is-embedded': props.embedded }"
+  >
+    <div v-if="!props.embedded" class="connector-panel-header" @click="toggleConnectorPanelExpanded">
+      <div class="connector-panel-title">
+        <el-icon class="title-icon"><Connection /></el-icon>
+        <span>{{ translate("composer.connectors") }}</span>
+      </div>
+
+      <div class="connector-collapsed-summary" v-show="!panelExpanded">
+        <span
+          v-for="summaryItem in collapsedConnectorSummaryItems"
+          :key="summaryItem"
+          class="connector-summary-pill noobot-flat-chip"
+        >
+          {{ summaryItem }}
+        </span>
+        <span
+          v-if="!collapsedConnectorSummaryItems.length"
+          class="connector-summary-empty"
+        >
+          {{ translate("composer.noConnectorSelected") }}
+        </span>
+      </div>
+
+      <div class="connector-toggle-btn noobot-flat-soft-btn">
+        <span class="toggle-text">{{ panelExpanded ? translate("message.collapse") : translate("composer.expand") }}</span>
+        <el-icon class="connector-toggle-icon" :class="{ 'is-rotated': panelExpanded }">
+          <ArrowDown />
+        </el-icon>
+      </div>
+    </div>
+
+    <el-collapse-transition>
+      <div v-show="panelExpanded" class="connector-panel">
+        <div class="connector-categories-grid">
+          <div
+            v-for="groupDefinition in CONNECTOR_GROUP_DEFINITIONS"
+            :key="groupDefinition.key"
+            class="connector-group noobot-flat-card"
+          >
+            <div class="connector-group-title">{{ translate(groupDefinition.labelKey) }}</div>
+            <el-radio-group
+              class="vertical-radio-group"
+              :model-value="selectedConnectors[groupDefinition.key]"
+              @update:model-value="onConnectorSelected(groupDefinition.key, $event)"
+            >
+              <el-radio
+                v-for="connectorItem in connectorGroups[groupDefinition.key]"
+                :key="`${groupDefinition.key}-${connectorItem.connectorName}`"
+                :value="connectorItem.connectorName"
+                class="custom-radio noobot-selectable-row"
+              >
+                <span class="connector-option">
+                  <el-icon
+                    class="connector-status-icon"
+                    :class="connectorStatusClass(connectorItem.status)"
+                  >
+                    <component :is="connectorStatusIcon(connectorItem.status)" />
+                  </el-icon>
+                  <span class="connector-name" :title="connectorItem.connectorName">
+                    {{ connectorItem.connectorName }}
+                  </span>
+                </span>
+              </el-radio>
+
+              <div v-if="!connectorGroups[groupDefinition.key]?.length" class="empty-group-tip">
+                {{ translate("composer.noAvailableConnections") }}
+              </div>
+            </el-radio-group>
+          </div>
+        </div>
+      </div>
+    </el-collapse-transition>
+  </div>
+</template>
+
+<style scoped>
+.connector-panel-shell {
+  overflow: hidden;
+  transition: border-color 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.connector-panel-shell.is-expanded {
+  box-shadow: none;
+}
+
+.connector-panel-shell.is-embedded {
+  border-radius: var(--noobot-radius-lg);
+}
+
+.connector-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.connector-panel-header:hover {
+  background: var(--noobot-panel-muted);
+}
+
+.connector-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--noobot-font-size-md);
+  font-weight: 500;
+  color: var(--noobot-text-secondary);
+  flex-shrink: 0;
+}
+
+.title-icon {
+  font-size: var(--noobot-font-size-base);
+  color: var(--noobot-text-accent);
+}
+
+.connector-collapsed-summary {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.connector-collapsed-summary::-webkit-scrollbar {
+  display: none;
+}
+
+.connector-summary-pill {
+  padding: 2px 8px;
+  color: var(--noobot-text-main);
+  flex-shrink: 0;
+}
+
+.connector-summary-empty {
+  font-size: var(--noobot-font-size-sm);
+  color: var(--noobot-text-muted);
+}
+
+.connector-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--noobot-font-size-sm);
+  color: var(--noobot-text-muted);
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: var(--noobot-radius-pill);
+  transition: color 0.2s ease, background-color 0.2s ease;
+  margin-left: auto;
+}
+
+.connector-panel-header:hover .connector-toggle-btn {
+  color: var(--noobot-text-main);
+}
+
+.connector-toggle-icon {
+  transition: transform 0.3s ease;
+}
+
+.connector-toggle-icon.is-rotated {
+  transform: rotate(180deg);
+}
+
+.connector-panel {
+  padding: 0 12px 12px 12px;
+  border-top: 1px solid var(--noobot-divider);
+}
+
+.connector-panel-shell.is-embedded .connector-panel {
+  border-top: none;
+  padding: 10px 12px 12px;
+}
+
+.connector-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 0;
+}
+
+.connector-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: var(--noobot-radius-md);
+}
+
+.connector-group-title {
+  font-size: var(--noobot-font-size-sm);
+  font-weight: 600;
+  color: var(--noobot-text-strong, var(--noobot-text-secondary));
+  margin-bottom: 8px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.vertical-radio-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+}
+
+.custom-radio {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin-right: 0;
+  height: 30px;
+  padding: 3px 6px;
+}
+
+.custom-radio :deep(.el-radio__input) {
+  display: flex;
+  align-items: center;
+}
+
+.custom-radio :deep(.el-radio__label) {
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  height: 100%;
+}
+
+.custom-radio :deep(.el-radio__inner) {
+  background-color: color-mix(in srgb, var(--noobot-panel-bg) 88%, var(--noobot-surface-sidebar));
+  border-color: var(--noobot-panel-border);
+}
+
+.connector-option {
+  display: flex;
+  gap: 6px;
+  height: 100%;
+  align-items: center;
+  min-width: 0;
+}
+
+.connector-status-icon {
+  font-size: var(--noobot-font-size-md);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.connector-status-icon.status-connected {
+  color: var(--noobot-status-success);
+}
+.connector-status-icon.status-error {
+  color: var(--noobot-status-error);
+}
+.connector-status-icon.status-unknown {
+  color: var(--noobot-text-accent);
+}
+
+.connector-name {
+  font-size: var(--noobot-font-size-md);
+  color: var(--noobot-text-main);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.empty-group-tip {
+  font-size: var(--noobot-font-size-sm);
+  color: var(--noobot-text-muted);
+  padding: 4px 0;
+}
+
+@media (max-width: 768px) {
+  .connector-categories-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+</style>

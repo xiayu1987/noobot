@@ -7,7 +7,7 @@ import { defineComponent, nextTick, onMounted, onUnmounted, reactive } from "vue
 import { mount } from "@vue/test-utils";
 import { createPinia, getActivePinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import ChatMessageListPanel from "../../../src/app/ChatMessageListPanel.vue";
+import ChatMessageListPanel from "../../../src/app/components/ChatMessageListPanel.vue";
 import { RoleEnum } from "../../../src/shared/constants/chatConstants.js";
 import { useChatStore } from "../../../src/shared/stores/useChatStore.js";
 

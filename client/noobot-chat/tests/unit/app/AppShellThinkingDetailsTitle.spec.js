@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appShellSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/AppShell.vue"),
+  path.resolve(__dirname, "../../../src/app/components/AppShell.vue"),
   "utf8",
 );
 const thinkingDetailsStateSource = readFileSync(

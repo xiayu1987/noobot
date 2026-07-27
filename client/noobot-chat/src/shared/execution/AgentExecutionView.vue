@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import SharedChatMessageItem from "../message/SharedChatMessageItem.vue";
+import SharedChatMessageItem from "../message/components/SharedChatMessageItem.vue";
 import { BaseEmptyHint } from "../ui/index.js";
 import { getMessageTurnScopeId, normalizeTurnScopeIdKey } from "../../composables/infra/messageIdentity.js";
 
