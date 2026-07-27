@@ -99,6 +99,23 @@ export class ExecutionLogRepository {
     );
   }
 
+  async _getAppendMetadataStore(
+    userId,
+    sessionId,
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    if (this.executionRepository?.getBundleMetadata) {
+      return this.executionRepository.getBundleMetadata(
+        userId,
+        sessionId,
+        parentSessionId,
+        persistenceContext,
+      );
+    }
+    return this._getBundleStore(userId, sessionId, parentSessionId, persistenceContext);
+  }
+
   async _saveBundleStore(
     userId,
     sessionId,
@@ -183,21 +200,21 @@ export class ExecutionLogRepository {
     }
     const queueKey = this._appendQueueKey(userId, normalizedSessionId, parentSessionId);
     return this._withAppendQueue(queueKey, async () => {
-      const bundle = await this.getBundle(
+      const bundle = await this._getAppendMetadataStore(
         userId,
         normalizedSessionId,
         parentSessionId,
         persistenceContext,
       );
       const normalizedLog = normalizeExecutionLogEntity(executionLog, this.now);
-      bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
       const incomingDialogProcessId = resolveMessageDialogProcessId(normalizedLog);
-      const existingLatestDialogProcessId = [...bundle.logs]
-        .reverse()
-        .map((logItem) => resolveMessageDialogProcessId(logItem))
-        .find(Boolean);
+      const existingLatestDialogProcessId = Array.isArray(bundle.logs)
+        ? bundle.logs.findLast((logItem) => Boolean(resolveMessageDialogProcessId(logItem)))
+        : null;
       const bundleDialogProcessId = resolveMessageDialogProcessId(bundle);
-      const targetDialogProcessId = incomingDialogProcessId || bundleDialogProcessId || existingLatestDialogProcessId;
+      const targetDialogProcessId = incomingDialogProcessId ||
+        bundleDialogProcessId ||
+        resolveMessageDialogProcessId(existingLatestDialogProcessId);
       let resetExecutionLogs = false;
       if (!incomingDialogProcessId && targetDialogProcessId) {
         normalizedLog.dialogProcessId = targetDialogProcessId;

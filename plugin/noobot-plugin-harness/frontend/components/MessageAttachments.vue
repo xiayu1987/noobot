@@ -4,10 +4,9 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useLocale } from "noobot-chat/plugin-api/locale";
 import {
-  resolveAttachmentAccessMeta,
   resolveBaseName,
   resolveParsedResultAccessMeta,
 } from "noobot-chat/plugin-api/attachment-domain";
@@ -20,7 +19,6 @@ const props = defineProps({
   canPreviewParsedResult: { type: Function, default: null },
   formatFileSize: { type: Function, required: true },
   userId: { type: String, default: "" },
-  attachmentService: { type: Object, default: null },
 });
 
 const emit = defineEmits(["preview", "preview-resolved", "download"]);
@@ -50,8 +48,6 @@ const pluginAttachments = computed(() =>
       .map((item = {}) => normalizeAttachmentParsedResultForDisplay(item)),
   ),
 );
-const thumbnailUrlByKey = ref({});
-const thumbnailAttemptedKeys = new Set();
 
 function resolveAttachmentOwnerType(attachmentItem = {}) {
   return String(
@@ -153,77 +149,6 @@ function makeAttachmentKey(attachmentItem = {}, attachmentIndex = 0) {
   ).trim();
 }
 
-function setThumbnailUrl(key = "", url = "") {
-  if (!key) return;
-  const nextMap = { ...(thumbnailUrlByKey.value || {}) };
-  nextMap[key] = url;
-  thumbnailUrlByKey.value = nextMap;
-}
-
-function clearThumbnailUrl(key = "") {
-  if (!key) return;
-  const existingUrl = String(thumbnailUrlByKey.value?.[key] || "").trim();
-  if (existingUrl.startsWith("blob:")) URL.revokeObjectURL(existingUrl);
-  const nextMap = { ...(thumbnailUrlByKey.value || {}) };
-  delete nextMap[key];
-  thumbnailUrlByKey.value = nextMap;
-}
-
-function clearAllThumbnailUrls() {
-  const current = thumbnailUrlByKey.value || {};
-  for (const url of Object.values(current)) {
-    const normalized = String(url || "").trim();
-    if (normalized.startsWith("blob:")) URL.revokeObjectURL(normalized);
-  }
-  thumbnailUrlByKey.value = {};
-  thumbnailAttemptedKeys.clear();
-}
-
-function resolveAttachmentFetchUrl(attachmentItem = {}) {
-  return resolveAttachmentAccessMeta(attachmentItem, {
-    userId: String(props.userId || "").trim(),
-  }).url;
-}
-
-function isMediaThumbnailCandidate(attachmentItem = {}) {
-  const mimeType = String(attachmentItem?.mimeType || "").trim();
-  const isImage = isImageMime(mimeType);
-  const isVideo = mimeType.startsWith("video/");
-  return (isImage || isVideo) && canPreviewAttachment(attachmentItem);
-}
-
-function resolveThumbnailUrl(attachmentItem = {}, attachmentIndex = 0) {
-  const key = makeAttachmentKey(attachmentItem, attachmentIndex);
-  return String(thumbnailUrlByKey.value?.[key] || "").trim();
-}
-
-async function ensureThumbnailUrl(attachmentItem = {}, attachmentIndex = 0) {
-  if (!isMediaThumbnailCandidate(attachmentItem)) return;
-  const key = makeAttachmentKey(attachmentItem, attachmentIndex);
-  if (!key || thumbnailAttemptedKeys.has(key) || resolveThumbnailUrl(attachmentItem, attachmentIndex)) return;
-  thumbnailAttemptedKeys.add(key);
-  const sourceUrl = resolveAttachmentFetchUrl(attachmentItem);
-  if (!sourceUrl) return;
-
-  if (sourceUrl.startsWith("blob:") || sourceUrl.startsWith("data:")) {
-    setThumbnailUrl(key, sourceUrl);
-    return;
-  }
-
-  try {
-    const blob = await props.attachmentService?.getThumbnailBlob?.(sourceUrl);
-    if (!blob) return;
-    setThumbnailUrl(key, URL.createObjectURL(blob));
-  } catch {
-  }
-}
-
-function scheduleThumbnailPrefetch(list = []) {
-  for (const [index, attachmentItem] of list.entries()) {
-    void ensureThumbnailUrl(attachmentItem, index);
-  }
-}
-
 watch(
   () => pluginAttachments.value.length,
   (nextCount, prevCount) => {
@@ -232,31 +157,6 @@ watch(
   },
   { immediate: true },
 );
-
-watch(
-  attachments,
-  (nextList = [], prevList = []) => {
-    const nextKeys = new Set(
-      (Array.isArray(nextList) ? nextList : []).map((item = {}, index) =>
-        makeAttachmentKey(item, index),
-      ),
-    );
-    const prevKeys = new Set(
-      (Array.isArray(prevList) ? prevList : []).map((item = {}, index) =>
-        makeAttachmentKey(item, index),
-      ),
-    );
-    for (const key of prevKeys) {
-      if (!nextKeys.has(key)) clearThumbnailUrl(key);
-    }
-    scheduleThumbnailPrefetch(Array.isArray(nextList) ? nextList : []);
-  },
-  { immediate: true },
-);
-
-onBeforeUnmount(() => {
-  clearAllThumbnailUrls();
-});
 
 function emitPreviewParsedResult(attachmentItem = {}) {
   const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
@@ -299,7 +199,6 @@ function emitDownloadParsedResult(attachmentItem = {}) {
       v-for="(attachmentItem, attachmentIndex) in normalAttachments"
       :key="attachmentIndex"
       :attachment-item="attachmentItem"
-      :thumbnail-url="resolveThumbnailUrl(attachmentItem, attachmentIndex)"
       :is-image-mime="isImageMime"
       :can-preview-attachment="canPreviewAttachment"
       :can-preview-parsed-result="canPreviewParsedResult"
@@ -331,7 +230,6 @@ function emitDownloadParsedResult(attachmentItem = {}) {
           v-for="(attachmentItem, attachmentIndex) in pluginAttachments"
           :key="`plugin-${attachmentIndex}`"
           :attachment-item="attachmentItem"
-          :thumbnail-url="resolveThumbnailUrl(attachmentItem, attachmentIndex)"
           :is-image-mime="isImageMime"
           :can-preview-attachment="canPreviewAttachment"
           :format-file-size="formatFileSize"

@@ -12,14 +12,15 @@ import {
 } from "../../../../src/services/api/attachmentAccess.js";
 
 describe("attachmentAccess", () => {
-  it("preserves explicit source attachment access urls", () => {
+  it("ignores explicit source urls and builds access from attachment identity", () => {
     expect(
       resolveAttachmentAccessMeta(
         {
           attachmentId: "file-1",
           sessionId: "session-1",
           attachmentSource: "upload",
-          previewUrl: "/legacy-preview",
+          previewUrl: "https://attacker.example/legacy-preview",
+          url: "/api/internal/unrelated",
         },
         { userId: "admin" },
       ),
@@ -27,7 +28,7 @@ describe("attachmentAccess", () => {
       attachmentId: "file-1",
       sessionId: "session-1",
       attachmentSource: "upload",
-      url: "/legacy-preview",
+      url: "/api/internal/attachment/admin/file-1?sessionId=session-1&attachmentSource=upload",
     });
   });
 
@@ -79,17 +80,17 @@ describe("attachmentAccess", () => {
     });
   });
 
-  it("uses explicit parsed result urls when no parsed attachment id exists", () => {
+  it("rejects explicit parsed result urls when no parsed attachment identity exists", () => {
     expect(
       resolveParsedResultAccessMeta({
-        parsedResultUrl: "/api/parsed/result",
+        parsedResultUrl: "https://attacker.example/result",
         parsedResultName: "result.md",
       }),
     ).toMatchObject({
       attachmentId: "",
-      url: "/api/parsed/result",
+      url: "",
       name: "result.md",
-      hasIdentity: true,
+      hasIdentity: false,
     });
   });
 

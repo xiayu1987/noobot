@@ -41,20 +41,14 @@ export function resolveAttachmentAccessMeta(attachmentItem = {}, { userId = "" }
   const attachmentId = resolveAttachmentId(attachmentItem);
   const sessionId = resolveAttachmentSessionId(attachmentItem);
   const attachmentSource = resolveAttachmentSource(attachmentItem);
-  const existingUrl = firstString(
-    attachmentItem?.previewUrl,
-    attachmentItem?.url,
-    attachmentItem?.downloadUrl,
-  );
-  const url = existingUrl ||
-    (attachmentId
+  const url = attachmentId
       ? buildAttachmentUrl({
           userId,
           attachmentId,
           sessionId,
           attachmentSource,
         })
-      : "");
+      : "";
   return {
     attachmentId,
     sessionId,
@@ -94,21 +88,14 @@ export function resolveParsedResultAccessMeta(
     parsedResult?.relative_path,
     attachmentItem?.parsedResultRelativePath,
   );
-  const existingUrl = firstString(
-    attachmentItem?.parsedResultUrl,
-    parsedResult?.url,
-    parsedResult?.previewUrl,
-    parsedResult?.downloadUrl,
-  );
-  const url = existingUrl ||
-    (attachmentId
+  const url = attachmentId
       ? buildAttachmentUrl({
           userId,
           attachmentId,
           sessionId,
           attachmentSource,
         })
-      : "");
+      : "";
   const name = firstString(
     attachmentItem?.parsedResultName,
     parsedResult?.name,
@@ -141,7 +128,7 @@ export function resolveParsedResultAccessMeta(
     name,
     mimeType,
     size,
-    hasIdentity: Boolean(attachmentId || url),
+    hasIdentity: Boolean(attachmentId && url),
   };
 }
 

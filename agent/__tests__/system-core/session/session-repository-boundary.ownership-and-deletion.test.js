@@ -95,6 +95,12 @@ test("session/task/execution repositories should keep file ownership boundaries"
     assert.equal(restoredBundle.logs.length, 1);
     assert.equal(restoredBundle.logs[0].event, "start");
     assert.equal(restoredBundle.logs[0].dialogProcessId, "dp-1");
+    const metadata = await runtime.repositories.fileSystemExecutionRepository.getBundleMetadata(
+      userId,
+      sessionId,
+    );
+    assert.equal(metadata.dialogProcessId, "dp-1");
+    assert.equal("logs" in metadata, false);
   });
 });
 

@@ -69,6 +69,25 @@ export class FileSystemExecutionRepository {
     };
   }
 
+  async getBundleMetadata(userId, sessionId, parentSessionId = "", persistenceContext = null) {
+    const { executionFile } = await this._resolveExecutionScope(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    const bundle = await this.storageService.readJson(executionFile, {
+      sessionId,
+      updatedAt: this.now(),
+    });
+    const dialogProcessId = String(bundle?.dialogProcessId || "").trim();
+    return {
+      sessionId: String(bundle?.sessionId || sessionId || "").trim(),
+      ...(dialogProcessId ? { dialogProcessId } : {}),
+      updatedAt: bundle?.updatedAt || this.now(),
+    };
+  }
+
   async saveBundle(userId, sessionId, executionBundle = {}, parentSessionId = "", persistenceContext = null) {
     if (await this.sessionRepository?.isSessionDeleted(userId, sessionId)) return false;
     const save = async () => {

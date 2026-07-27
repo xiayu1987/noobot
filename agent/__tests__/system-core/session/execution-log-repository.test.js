@@ -100,6 +100,32 @@ test("getBundle and appendLog preserve scoped persistence context", async () => 
   assert.equal(calls[2][1][5], persistenceContext);
 });
 
+test("appendLog uses metadata-only reads when the execution store supports them", async () => {
+  const calls = [];
+  const executionRepository = {
+    async getBundle() {
+      throw new Error("append path must not load execution history");
+    },
+    async getBundleMetadata(...args) {
+      calls.push(["getBundleMetadata", args]);
+      return { sessionId: "s1", dialogProcessId: "d1", updatedAt: "" };
+    },
+    async appendLog(...args) {
+      calls.push(["appendLog", args]);
+    },
+  };
+  const repo = new ExecutionLogRepository({
+    executionRepository,
+    now: () => "2026-05-13T00:00:00.000Z",
+  });
+
+  await repo.appendLog("u1", "s1", { event: "heartbeat" }, "p1");
+
+  assert.deepEqual(calls.map(([name]) => name), ["getBundleMetadata", "appendLog"]);
+  assert.equal(calls[1][1][2].dialogProcessId, "d1");
+  assert.equal("logs" in calls[1][1][3], false);
+});
+
 test("appendLog without dialogProcessId stays in current latest dialog", async () => {
   const sessionRepository = createInMemorySessionRepository();
   const repo = new ExecutionLogRepository({

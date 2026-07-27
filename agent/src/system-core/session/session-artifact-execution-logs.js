@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "../utils/path-resolver.js";
-import { appendFile, mkdir, readFile, rename, rm } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import { SESSION_ARTIFACT_FILE_NAMES, writeJsonArtifactFile } from "./session-artifact-files.js";
@@ -149,28 +149,45 @@ async function appendRollingJsonlArtifactLogUnlocked({
   let active = index.segments[index.segments.length - 1];
   if (active) {
     const activePath = path.join(directory, String(active.file || ""));
-    let raw = "";
+    let handle = null;
     try {
-      raw = await readFile(activePath, "utf8");
+      handle = await open(activePath, "r");
+      const fileStat = await handle.stat();
+      const actualBytes = Number(fileStat.size || 0);
+      if (actualBytes > 0) {
+        const tail = Buffer.allocUnsafe(1);
+        await handle.read(tail, 0, 1, actualBytes - 1);
+        if (tail[0] !== 0x0a) {
+          const failure = new Error("active execution segment has a torn final record");
+          failure.code = "EXECUTION_EVENT_SEGMENT_TORN_WRITE";
+          throw failure;
+        }
+      }
+      if (
+        Number(active.bytes) !== actualBytes ||
+        !Number.isInteger(Number(active.records)) ||
+        Number(active.records) < 0
+      ) {
+        const raw = await readFile(activePath, "utf8");
+        const records = raw ? raw.split("\n").filter(Boolean) : [];
+        try {
+          for (const record of records) JSON.parse(record);
+        } catch (error) {
+          const failure = new Error("active execution segment is invalid JSONL");
+          failure.code = "EXECUTION_EVENT_JSONL_CORRUPTED";
+          failure.cause = error;
+          throw failure;
+        }
+        active.bytes = actualBytes;
+        active.records = records.length;
+      }
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
+      active.bytes = 0;
+      active.records = 0;
+    } finally {
+      await handle?.close().catch(() => {});
     }
-    if (raw && !raw.endsWith("\n")) {
-      const failure = new Error("active execution segment has a torn final record");
-      failure.code = "EXECUTION_EVENT_SEGMENT_TORN_WRITE";
-      throw failure;
-    }
-    const records = raw ? raw.split("\n").filter(Boolean) : [];
-    try {
-      for (const record of records) JSON.parse(record);
-    } catch (error) {
-      const failure = new Error("active execution segment is invalid JSONL");
-      failure.code = "EXECUTION_EVENT_JSONL_CORRUPTED";
-      failure.cause = error;
-      throw failure;
-    }
-    active.bytes = Buffer.byteLength(raw, "utf8");
-    active.records = records.length;
   }
   const limit = Math.max(1, Number(maxSegmentBytes) || LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes);
   if (!active || (Number(active.bytes || 0) > 0 && Number(active.bytes || 0) + lineBytes > limit)) {
