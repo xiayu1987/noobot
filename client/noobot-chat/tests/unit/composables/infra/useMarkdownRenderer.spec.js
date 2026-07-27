@@ -34,17 +34,17 @@ describe("useMarkdownRenderer", () => {
     expect(html).not.toContain("<!-- test -->");
   });
 
-  it("hides harness final summary and acceptance collapse blocks", () => {
+  it("hides generic summary and acceptance collapse blocks", () => {
     const { renderMarkdown } = useMarkdownRenderer();
 
     const html = renderMarkdown([
       "final answer",
-      '<<<NOOBOT_HARNESS_COLLAPSE:start kind="latest_complete_summary" title="summary" default="closed">>>',
+      '<<<NOOBOT_COLLAPSE:start kind="latest_complete_summary" title="summary" default="closed">>>',
       "hidden summary",
-      '<<<NOOBOT_HARNESS_COLLAPSE:end kind="latest_complete_summary">>>',
-      '<<<NOOBOT_HARNESS_COLLAPSE:start kind="acceptance" title="acceptance" default="closed">>>',
+      '<<<NOOBOT_COLLAPSE:end kind="latest_complete_summary">>>',
+      '<<<NOOBOT_COLLAPSE:start kind="acceptance" title="acceptance" default="closed">>>',
       "hidden acceptance",
-      '<<<NOOBOT_HARNESS_COLLAPSE:end kind="acceptance">>>',
+      '<<<NOOBOT_COLLAPSE:end kind="acceptance">>>',
     ].join("\n"));
 
     expect(html).toContain("final answer");

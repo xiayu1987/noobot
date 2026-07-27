@@ -91,6 +91,16 @@ function resolveRuntimeDialogProcessId(ctx = {}) {
   ).trim();
 }
 
+function resolveRuntimeTurnScopeId(ctx = {}) {
+  return String(
+    ctx?.turnScopeId ||
+      ctx?.agentContext?.execution?.turnScopeId ||
+      ctx?.runtimeAgentContext?.execution?.turnScopeId ||
+      ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.turnScopeId ||
+      "",
+  ).trim();
+}
+
 export class ModelMessageRuntimeHelpers {
   constructor({ session = null } = {}) {
     this.session = session;
@@ -252,10 +262,13 @@ export class ModelMessageRuntimeHelpers {
       const sessionIds = getSessionIdsFromAgentContext(ctx?.agentContext || {}, runtime);
       const userId = String(ctx?.userId || sessionIds.userId || "").trim();
       const sessionId = String(ctx?.sessionId || sessionIds.sessionId || "").trim();
+      const dialogProcessId = resolveRuntimeDialogProcessId(ctx);
+      const turnScopeId = resolveRuntimeTurnScopeId(ctx);
       if (
         !limitToProvidedMessagesOnly &&
         userId &&
         sessionId &&
+        dialogProcessId &&
         this.session?.markSessionMessagesSummarized
       ) {
         const resolvedParentSessionId = resolveParentSessionId({
@@ -266,6 +279,8 @@ export class ModelMessageRuntimeHelpers {
           changedCount += await this.session.markSessionMessagesSummarized({
             userId,
             sessionId,
+            dialogProcessId,
+            turnScopeId,
             parentSessionId: resolvedParentSessionId,
             shouldMark: (messageItem) => shouldMark(messageItem, normalizedTaskSummaryToolName),
           });

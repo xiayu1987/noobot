@@ -262,6 +262,8 @@ test("ModelMessageRuntimeHelpers markMessagesSummarized can persist session mark
       userId: "u1",
       sessionId: "s1",
       parentSessionId: "p1",
+      dialogProcessId: "d1",
+      turnScopeId: "t1",
     },
   });
 
@@ -269,5 +271,27 @@ test("ModelMessageRuntimeHelpers markMessagesSummarized can persist session mark
   assert.equal(capturedPayload.userId, "u1");
   assert.equal(capturedPayload.sessionId, "s1");
   assert.equal(capturedPayload.parentSessionId, "p1");
+  assert.equal(capturedPayload.dialogProcessId, "d1");
+  assert.equal(capturedPayload.turnScopeId, "t1");
   assert.equal(typeof capturedPayload.shouldMark, "function");
+});
+
+test("ModelMessageRuntimeHelpers refuses unscoped session summary marking", async () => {
+  let callCount = 0;
+  const helpers = new ModelMessageRuntimeHelpers({
+    session: {
+      async markSessionMessagesSummarized() {
+        callCount += 1;
+        return 1;
+      },
+    },
+  });
+
+  const marked = await helpers.createMarkMessagesSummarized()({
+    messages: [],
+    ctx: { userId: "u1", sessionId: "s1" },
+  });
+
+  assert.equal(marked, 0);
+  assert.equal(callCount, 0);
 });

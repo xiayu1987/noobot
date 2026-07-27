@@ -224,6 +224,7 @@ export class SessionExecutionEngine {
       stampReusedUserTurnDialogProcessId: (payload = {}) =>
         this._stampReusedUserTurnDialogProcessId(payload),
       getSessionTurns: (payload = {}) => this.session?.getSessionTurns?.(payload),
+      getTurnSummaryCheckpointState: (payload = {}) => this.session?.getTurnSummaryCheckpointState?.(payload),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
     };

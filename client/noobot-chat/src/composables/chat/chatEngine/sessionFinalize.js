@@ -188,9 +188,7 @@ export async function refreshFinalSessionDetail({
       detailMessageCount: detailMessages.length,
       botMessage: summarizeFinalizeMessage(botMessage),
     });
-
-
-    refreshSessionConnectorsAsync?.(activeSession?.value?.id || doneSessionId);
+    await refreshSessionConnectorsAsync?.(activeSession?.value?.id || doneSessionId);
     return true;
   } catch (loadDetailError) {
     logStateMachineDebug("stateMachine.detailRequest.failed", {

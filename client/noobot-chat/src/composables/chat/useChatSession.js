@@ -38,9 +38,8 @@ import { finalizeStoppedSessionDetail } from "./chatEngine/sessionFinalize.js";
 import { useReconnectReplay } from "./useReconnectReplay.js";
 import { useChatStore } from "../../shared/stores/useChatStore.js";
 import { useProcessStore } from "../../shared/stores/useProcessStore.js";
-import {
-  hydrateWorkflowRegistryFromSessionDetail,
-} from "./workflowSessionHydration.js";
+import { hydrateSessionDetailExtensions } from "../../extensions/session-detail-hydrator.js";
+import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry.js";
 import { useLocale } from "../../shared/i18n/useLocale.js";
 import {
   getMessageDialogProcessId,
@@ -292,14 +291,16 @@ export function useChatSession({
     sessionItem = null,
     mainSessionDoc = {},
   } = {}) {
-    hydrateWorkflowRegistryFromSessionDetail({
+    hydrateSessionDetailExtensions({
       detail,
       sessionItem,
       mainSessionDoc,
+    }, {
       upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
       upsertWorkflowNodeStateEvent: chatStore.upsertWorkflowNodeStateEvent,
       applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
       turnRuntimeRegistry: turnRuntimeRegistry.value,
+      isTurnRuntimeDeleted,
     });
     const sessionId = String(
       sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "",

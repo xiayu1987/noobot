@@ -12,7 +12,7 @@ import {
   hasDialogProcessConflictForTurn, isEventForCurrentTurn, isUserStoppedEvent,
 } from "./sendFlowSupport.js";
 import { handleBasicStreamEvent, handleInteractionRequestStreamEvent } from "./streamHandlers.js";
-import { routeWorkflowStreamEvent } from "./workflowStreamRouter.js";
+import { routeRuntimeStreamEvent } from "../../../extensions/runtime-stream-router.js";
 import { routeCurrentTurnLifecycleEvent, routeForeignTurnLifecycleEvent } from "./turnLifecycleRouter.js";
 import { isIgnoredSubSessionEvent, routeMessageProjectionEvent } from "./messageProjectionRouter.js";
 import { routeTerminalStreamEvent } from "./terminalStreamRouter.js";
@@ -86,12 +86,13 @@ export function createSendStreamEventHandler(context) {
       state: data?.state,
       botMessage: summarizeDebugMessage(botMsg),
     });
-    if (routeWorkflowStreamEvent(event, data, {
+    if (routeRuntimeStreamEvent(event, data, {
+      source: "live",
       applyWorkflowRuntimeEvent, logSessionEvent, sessionId, turnScopeId,
       upsertWorkflowNodeStateEvent, upsertWorkflowPlanningEvent,
     })) return;
     if (routeMessageProjectionEvent(event, data, {
-      applyWorkflowRuntimeEvent, botMessage: botMsg, classifyRealtimeLog,
+      botMessage: botMsg, classifyRealtimeLog,
       locateSendingStartedMessageOnce, logSessionEvent, navigateOnFirstResponseOnce,
       sessionId, turnScopeId, upsertSubSessionEvent,
     })) return;

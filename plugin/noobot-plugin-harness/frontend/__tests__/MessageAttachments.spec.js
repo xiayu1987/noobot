@@ -6,9 +6,9 @@
 import { mount } from "@vue/test-utils";
 import { defineComponent } from "vue";
 import { describe, expect, it, vi } from "vitest";
-import MessageAttachments from "../../../../../../plugin/noobot-plugin-harness/frontend/components/MessageAttachments.vue";
+import MessageAttachments from "../components/MessageAttachments.vue";
 
-vi.mock("../../../../src/shared/ui", () => ({
+vi.mock("noobot-chat/plugin-api/ui", () => ({
   BaseFileCardList: defineComponent({
     name: "BaseFileCardList",
     template: "<div class='base-file-card-list-stub'><slot /></div>",
@@ -43,7 +43,7 @@ vi.mock("../../../../src/shared/ui", () => ({
   }),
 }));
 
-vi.mock("../../../../src/shared/i18n/useLocale", () => ({
+vi.mock("noobot-chat/plugin-api/locale", () => ({
   useLocale: () => ({
     translate: (key, params = {}) => ({
       "message.parsedResult": "解析结果",

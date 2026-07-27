@@ -3,11 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  logWorkflowDiagnostics,
-  summarizeWorkflowMessages,
-} from "./debug/workflowDiagnosticsLogger.js";
-import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry.js";
+function summarizeWorkflowMessages(messages = []) {
+  return (Array.isArray(messages) ? messages : []).map((message, index) => ({
+    index,
+    id: String(message?.id || message?.messageId || ""),
+    type: String(message?.type || ""),
+    pluginSource: String(message?.pluginMeta?.source || ""),
+    turnScopeId: String(message?.turnScopeId || ""),
+  })).filter((message) => message.type === "workflow" || message.pluginSource === "workflow-plugin");
+}
 
 function text(value) {
   return String(value || "").trim();
@@ -50,7 +54,10 @@ export function hydrateWorkflowRegistryFromSessionDetail({
   upsertWorkflowNodeStateEvent,
   applyWorkflowRuntimeEvent,
   turnRuntimeRegistry = {},
+  isTurnRuntimeDeleted = () => false,
+  logRuntimeDiagnostic = () => {},
 } = {}) {
+  const logWorkflowDiagnostics = (event, payload) => logRuntimeDiagnostic(event, payload);
   if (typeof applyWorkflowRuntimeEvent !== "function" && typeof upsertWorkflowPlanningEvent !== "function") {
     logWorkflowDiagnostics("frontend.workflowHydration.skipped", {
       sessionId: text(detail?.sessionId || sessionItem?.backendSessionId || sessionItem?.id),

@@ -5,7 +5,7 @@
  */
 import { nextTick, reactive, ref } from "vue";
 import { describe, expect, it } from "vitest";
-import { useWorkflowViewerState } from "../../../../../plugin/noobot-plugin-workflow/frontend/components/workflow-message-card/useWorkflowViewerState.js";
+import { useWorkflowViewerState } from "../components/workflow-message-card/useWorkflowViewerState.js";
 
 describe("workflow viewer state ownership", () => {
   it("preserves selection without reopening after the live-to-persisted remount", async () => {

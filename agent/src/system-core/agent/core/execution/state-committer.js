@@ -13,6 +13,7 @@ import { compactToolResultTextForModel } from "../../../semantic-transfer/core/c
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { appendMessage } from "../message-context/message-store.js";
 import { applyAuthoritativeMessageId } from "../../../event/message-event-stream.js";
+import { createSessionMessageUid } from "../../../context/session/message-uid.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
@@ -137,6 +138,7 @@ export function createStateCommitter({
     } = {}) {
       if (!turnMessageStore?.push) return;
       const assistantMessage = {
+        messageUid: createSessionMessageUid(),
         role: "assistant",
         content: String(content || ""),
         type,
@@ -193,6 +195,7 @@ export function createStateCommitter({
       const rawTransferPayload = parseTransferPayloadFromToolResultText(toolResultText);
       const compactedToolResultText = compactToolResultTextForModel(toolResultText);
       const toolResultPayload = {
+        messageUid: createSessionMessageUid(),
         role: "tool",
         content: compactedToolResultText,
         type: "tool_result",

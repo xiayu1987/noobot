@@ -155,13 +155,125 @@ test("continue identity round-trips and a stopped source can only be consumed on
 });
 
 test("internal append, status and summarization use mutation lock without changing public version", async () => {
-  const h = harness({ version: 7, revision: 7, messages: [{ role: "user", content: "q", turnScopeId: "t", dialogProcessId: "dp" }] });
+  const h = harness({
+    version: 7,
+    revision: 7,
+    messages: [
+      { role: "user", content: "q", turnScopeId: "t", dialogProcessId: "dp" },
+      { role: "user", content: "historical", turnScopeId: "old", dialogProcessId: "dp-old" },
+    ],
+  });
   await h.service.appendTurn({ userId: "u1", sessionId: "s1", role: "assistant", content: "a", turnScopeId: "t", dialogProcessId: "dp" });
   await h.service.upsertTurnStatus({ userId: "u1", sessionId: "s1", turnScopeId: "t", dialogProcessId: "dp", command: "completed" });
-  await h.service.markSessionMessagesSummarized({ userId: "u1", sessionId: "s1" });
+  await h.service.markSessionMessagesSummarized({ userId: "u1", sessionId: "s1", dialogProcessId: "dp" });
   assert.equal(h.get().version, 7); assert.equal(h.get().revision, 7);
-  assert.equal(h.get().messages.every((m) => m.summarized), true);
+  assert.equal(h.get().messages.filter((m) => m.dialogProcessId === "dp").every((m) => m.summarized), true);
+  assert.equal(h.get().messages.find((m) => m.dialogProcessId === "dp-old").summarized, undefined);
   assert.equal(h.locks(), 3);
+});
+
+test("summarization without a dialog scope fails closed", async () => {
+  const h = harness({
+    messages: [{ role: "user", content: "historical", dialogProcessId: "dp-old" }],
+  });
+
+  const marked = await h.service.markSessionMessagesSummarized({
+    userId: "u1",
+    sessionId: "s1",
+  });
+
+  assert.equal(marked, 0);
+  assert.equal(h.get().messages[0].summarized, undefined);
+  assert.equal(h.locks(), 0);
+});
+
+test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped receipt", async () => {
+  const h = harness({
+    messages: [
+      { messageUid: "sm_target", role: "assistant", content: "same", dialogProcessId: "dp", turnScopeId: "t" },
+      { messageUid: "sm_keep", role: "assistant", content: "same", dialogProcessId: "dp", turnScopeId: "t" },
+      { messageUid: "sm_history", role: "assistant", content: "same", dialogProcessId: "old", turnScopeId: "old-t" },
+    ],
+    turnLifecycle: {
+      activeTurnScopeId: "t",
+      turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
+    },
+  });
+  const input = {
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "t",
+    checkpointId: "cp-1",
+    persistedMessageUids: ["sm_target", "sm_keep"],
+    summarizedMessageUids: ["sm_target"],
+  };
+
+  const committed = await h.service.commitTurnSummaryCheckpoint(input);
+  const replay = await h.service.commitTurnSummaryCheckpoint(input);
+
+  assert.equal(committed.committed, true);
+  assert.equal(committed.checkpointRevision, 1);
+  assert.equal(replay.deduplicated, true);
+  assert.equal(replay.checkpointRevision, 1);
+  assert.equal(h.get().messages.find((m) => m.messageUid === "sm_target").summarized, true);
+  assert.equal(h.get().messages.find((m) => m.messageUid === "sm_keep").summarized, undefined);
+  assert.equal(h.get().messages.find((m) => m.messageUid === "sm_history").summarized, undefined);
+  assert.equal(h.get().turnSummaryCheckpoints.t.checkpointRevision, 1);
+  assert.equal("sequence" in h.get().turnSummaryCheckpoints.t, false);
+});
+
+test("turn summary checkpoints reject cross-turn messages and terminal turns", async () => {
+  const crossTurn = harness({
+    messages: [{ messageUid: "sm_old", role: "assistant", content: "old", dialogProcessId: "old", turnScopeId: "old-t" }],
+    turnLifecycle: {
+      activeTurnScopeId: "t",
+      turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
+    },
+  });
+  await assert.rejects(crossTurn.service.commitTurnSummaryCheckpoint({
+    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
+    checkpointId: "cp-cross", summarizedMessageUids: ["sm_old"],
+  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT");
+
+  const terminal = harness({
+    messages: [{ messageUid: "sm_done", role: "assistant", content: "done", dialogProcessId: "dp", turnScopeId: "t" }],
+    turnLifecycle: {
+      activeTurnScopeId: "",
+      turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "completed" } },
+    },
+  });
+  await assert.rejects(terminal.service.commitTurnSummaryCheckpoint({
+    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
+    checkpointId: "cp-terminal", summarizedMessageUids: ["sm_done"],
+  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_TERMINAL");
+});
+
+test("turn summary checkpoint receipts reject stale revisions and are pruned with removed turns", async () => {
+  const h = harness({
+    messages: [
+      { messageUid: "sm_1", role: "assistant", content: "one", dialogProcessId: "dp", turnScopeId: "t" },
+      { messageUid: "sm_2", role: "assistant", content: "two", dialogProcessId: "dp", turnScopeId: "t" },
+    ],
+  });
+  await h.service.commitTurnSummaryCheckpoint({
+    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
+    checkpointId: "cp-1", summarizedMessageUids: ["sm_1"],
+  });
+  await assert.rejects(h.service.commitTurnSummaryCheckpoint({
+    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
+    checkpointId: "cp-2", expectedCheckpointRevision: 0, summarizedMessageUids: ["sm_2"],
+  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_REVISION_CONFLICT" && error.currentCheckpointRevision === 1);
+  await assert.rejects(h.service.commitTurnSummaryCheckpoint({
+    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
+    checkpointId: "cp-1", summarizedMessageUids: ["sm_2"],
+  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_ID_REUSED");
+
+  const normalized = normalizeSessionEntity({
+    ...h.get(),
+    messages: [],
+  }, { now: () => "2026-01-01T00:00:00.000Z" });
+  assert.equal(normalized.turnSummaryCheckpoints, undefined);
 });
 
 test("canonical attachment rejects placeholders and cross-session injection", async (t) => {

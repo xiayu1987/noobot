@@ -6,6 +6,9 @@
 import { mount } from "@vue/test-utils";
 import { vi } from "vitest";
 import ThinkingPanel from "../../../src/shared/message/ThinkingPanel.vue";
+import { contributeExtension } from "../../../src/extensions/extension-registry.js";
+import { EXTENSION_POINTS } from "../../../src/extensions/extension-point-ids.js";
+import { registerFrontendPlugin as registerHarnessFrontendPlugin } from "../../../../../plugin/noobot-plugin-harness/frontend/index.js";
 
 if (!globalThis.localStorage?.getItem) {
   const values = new Map();
@@ -82,6 +85,14 @@ vi.mock("../../../src/shared/ui", async () => {
 });
 
 export function mountThinkingPanel(messageItem, props = {}) {
+  registerHarnessFrontendPlugin({
+    contributeExtension: (point, contribution) => contributeExtension(point, {
+      ...contribution,
+      pluginId: "harness",
+    }),
+    extensionPoints: EXTENSION_POINTS,
+    services: {},
+  });
   return mount(ThinkingPanel, {
     props: { messageItem, allMessages: [], ...props },
     global: {

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildUnifiedSessionDetail,
   projectTurnStatusOntoAssistant,
-} from "../../../../../plugin/noobot-plugin-workflow/frontend/components/workflow-message-card/workflowUnifiedSessionDetail.js";
+} from "../components/workflow-message-card/workflowUnifiedSessionDetail.js";
 
 const childIdentity = {
   sessionId: "child-session",

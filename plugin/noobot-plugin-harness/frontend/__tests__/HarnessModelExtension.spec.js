@@ -5,7 +5,7 @@
  */
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
-import HarnessModelExtension from "../../../../../../plugin/noobot-plugin-harness/frontend/components/HarnessModelExtension.vue";
+import HarnessModelExtension from "../components/HarnessModelExtension.vue";
 
 function mountHarnessModelExtension(props = {}) {
   const { pluginConfig = {}, patch = vi.fn(), ...componentProps } = props;

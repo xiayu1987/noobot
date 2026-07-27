@@ -7,7 +7,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it } from "vitest";
 import { normalizeWorkflowRuntimeEvent } from "@noobot/shared/workflow-runtime-event-protocol";
 import { useChatStore } from "../../../../src/shared/stores/useChatStore.js";
-import { hydrateWorkflowRegistryFromSessionDetail } from "../../../../src/composables/chat/workflowSessionHydration.js";
+import { hydrateWorkflowRegistryFromSessionDetail } from "../../../../../../plugin/noobot-plugin-workflow/frontend/runtime/sessionHydration.js";
 
 function runtimeEvents() {
   const identity = {
@@ -129,6 +129,6 @@ describe("workflow runtime live/replay homomorphism", () => {
     }, { source: "replay" });
 
     expect(result).toMatchObject({ applied: false, reason: "sequence_domain_mismatch" });
-    expect(store.workflowNodeStateRegistry.workflows).toEqual({});
+    expect(store.workflowNodeStateRegistry).toBeNull();
   });
 });

@@ -26,6 +26,7 @@ function createRunner({
   prepareAgentTurnExecution,
   runtime,
   getSessionTurns,
+  getTurnSummaryCheckpointState,
 }) {
   const defaultRuntime = runtime || { attachmentMetas: [] };
   return new SessionExecutionRunner({
@@ -81,6 +82,7 @@ function createRunner({
       callOrder.push("appendSessionTurn");
     },
     getSessionTurns,
+    getTurnSummaryCheckpointState,
     finalizeRunSession,
     upsertParentAsyncTask: () => {
       callOrder.push("upsertParentAsyncTask");
@@ -131,6 +133,90 @@ test("runSession restores only the checkpoint-persisted agent prefix at finaliza
   assert.deepEqual(
     capturedFinalizePayload.persistedTurnMessages.map((message) => message.content),
     ["persisted-1", "retained-persisted"],
+  );
+});
+
+test("runSession restores checkpoint messages by exact persistent UID when available", async () => {
+  const callOrder = [];
+  const runtime = {
+    attachmentMetas: [],
+    summaryCheckpointPersistedCount: 1,
+    summaryCheckpointPersistedTotal: 2,
+    summaryCheckpointPersistedMessageUids: ["sm_first", "sm_retained"],
+  };
+  let capturedFinalizePayload = null;
+  const runner = createRunner({
+    callOrder,
+    runtime,
+    agentRunner: async () => ({
+      output: "tail",
+      traces: [],
+      turnMessages: [
+        { messageUid: "sm_retained", role: "tool", content: "retained-persisted" },
+        { messageUid: "sm_tail", role: "assistant", content: "tail" },
+      ],
+      turnTasks: [],
+    }),
+    getSessionTurns: async () => [
+      { messageUid: "sm_first", role: "assistant", content: "persisted-1", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
+      { messageUid: "sm_unrelated", role: "assistant", content: "inserted", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
+      { messageUid: "sm_retained", role: "tool", content: "retained-persisted", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
+    ],
+    finalizeRunSession: async (payload = {}) => {
+      capturedFinalizePayload = payload;
+      return { ok: true };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    turnScopeId: "turn-a",
+  });
+
+  assert.deepEqual(
+    capturedFinalizePayload.persistedTurnMessages.map((message) => message.messageUid),
+    ["sm_first", "sm_retained"],
+  );
+});
+
+test("runSession recovers checkpoint UIDs and active prefix from the durable receipt", async () => {
+  const callOrder = [];
+  const runtime = { attachmentMetas: [] };
+  let capturedFinalizePayload = null;
+  const runner = createRunner({
+    callOrder,
+    runtime,
+    agentRunner: async () => ({
+      output: "tail",
+      traces: [],
+      turnMessages: [
+        { messageUid: "sm_retained", role: "tool", content: "retained-persisted" },
+        { messageUid: "sm_tail", role: "assistant", content: "tail" },
+      ],
+      turnTasks: [],
+    }),
+    getTurnSummaryCheckpointState: async () => ({
+      checkpointRevision: 1,
+      receipts: [{ persistedMessageUids: ["sm_first", "sm_retained"] }],
+    }),
+    getSessionTurns: async () => [
+      { messageUid: "sm_first", role: "assistant", content: "persisted-1", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
+      { messageUid: "sm_retained", role: "tool", content: "retained-persisted", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
+    ],
+    finalizeRunSession: async (payload = {}) => {
+      capturedFinalizePayload = payload;
+      return { ok: true };
+    },
+  });
+
+  await runner.runSession({ userId: "u1", sessionId: "s1", message: "hello", turnScopeId: "turn-a" });
+
+  assert.equal(capturedFinalizePayload.alreadyPersistedTurnMessageCount, 1);
+  assert.deepEqual(
+    capturedFinalizePayload.persistedTurnMessages.map((message) => message.messageUid),
+    ["sm_first", "sm_retained"],
   );
 });
 
