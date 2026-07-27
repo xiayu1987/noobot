@@ -140,7 +140,6 @@ async function promptRenameSession(sessionItem = {}) {
     );
     emit("rename-session", { sessionId: sessionItem.id, title: String(value || "").trim() });
   } catch {
-    // User cancelled.
   }
 }
 

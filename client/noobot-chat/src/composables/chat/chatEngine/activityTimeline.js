@@ -36,9 +36,6 @@ function activityKey(value = {}, index = 0) {
   const sequence = sequenceOf(value);
   const type = text(value.event || value.type || value.rawEvent).toLowerCase() || "activity";
   if (sequence) return `activity:${type}:${sequence}`;
-  // Legacy arrays frequently omit both event identity and sequence. Include
-  // their observable payload in the migration identity so independently
-  // materialized chunks do not collapse merely because both start at index 0.
   const payload = text(value.text || value.output || value?.data?.text || value?.data?.output);
   const timestamp = text(value.timestamp || value.ts);
   return `activity:${type}:${timestamp}:${payload || index + 1}`;

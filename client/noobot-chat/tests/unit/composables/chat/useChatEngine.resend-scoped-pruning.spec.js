@@ -50,9 +50,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     const target = { turnScopeId: "client-turn:old-stale", role: RoleEnum.ASSISTANT, content: "target" };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
-  
+
     await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
-  
+
     expect(stream).toHaveBeenCalledTimes(1);
     expect(observedUserMessage).toEqual(expect.objectContaining({
       role: RoleEnum.USER,
@@ -94,8 +94,6 @@ describe("useChatEngine.resend scoped pruning", () => {
         replacementTurnScopeIds: [turnScopeId],
       },
       session: makeSession("local-resend-replace-mapping", {
-        // Simulate a stale refresh/apply race that still contains the old
-        // turn. The explicit backend mapping must decide what to remove.
         messages: [oldUser, oldAssistant, replacementUser],
         rawMessages: [oldUser, oldAssistant, replacementUser],
         messageCount: 3,
@@ -115,9 +113,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     activeSession.value.messages = [oldUser, oldAssistant];
     activeSession.value.rawMessages = [oldUser, oldAssistant];
     activeSession.value.version = 3;
-  
+
     await expect(engine.resendMonotonicMessage(oldAssistant, "edited question")).resolves.toBe(true);
-  
+
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(observedMessagesAtStream.find((message) => message.id === "old-user")).toBeUndefined();
     expect(observedMessagesAtStream.find((message) => message.id === "old-assistant")).toBeUndefined();
@@ -194,9 +192,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     activeSession.value.messages = [previousUser, previousAssistant, latestUser];
     activeSession.value.rawMessages = [previousUser, previousAssistant, latestUser];
     activeSession.value.version = 3;
-  
+
     await expect(engine.resendMonotonicMessage(latestUser, "same question")).resolves.toBe(true);
-  
+
     expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
       anchor: { turnScopeId: "client-turn:latest" },
     }), expect.any(Object));
@@ -249,9 +247,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     input.value = "draft before replace";
-  
+
     await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
-  
+
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0]?.[0]).toEqual(expect.objectContaining({

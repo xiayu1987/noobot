@@ -2,8 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Central runtime logging/event configuration.
  */
 
 function deepFreeze(value) {
@@ -65,21 +63,13 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     stateMachineDebug: true,
     resendDebug: false,
     stopDebug: false,
-    // Keep session-log transport diagnostics available while frontend
-    // lifecycle recovery is under investigation. Environment overrides remain
-    // authoritative in deployed environments.
     sessionLogWsDebug: false,
     frontendStopContinueDebug: false,
     frontendReconnectTimingDebug: false,
-    // Temporarily enabled by default while refreshed thinking-detail loading
-    // and visibility projection are under active investigation.
     frontendThinkingReplayDebug: false,
-    // Enabled while tracing tool-log ordering from transport ingestion through
-    // the canonical timeline to the final ten rows consumed by the renderer.
     frontendToolLogWindowDebug: false,
     frontendTerminalResolutionDebug: false,
     agentProxyRouteDebug: false,
-    // Keep verbose workflow diagnostics opt-in outside active investigations.
     workflowDiagnosticsDebug: false,
     frontendLifecycleLog: true,
     agentProxyHttpLog: true,

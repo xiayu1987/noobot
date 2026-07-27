@@ -29,10 +29,6 @@ const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
 const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS =
   TIME_THRESHOLDS.client.monotonicActionStopPollIntervalMs;
 
-// Build a detached draft without structuredClone: the runtime registry keeps
-// injectable functions (for example lifecycleOptions.now), which are valid
-// runtime dependencies but make the graph non-structured-cloneable. Functions
-// are immutable references here; all mutable containers are cloned recursively.
 function cloneTerminalDraft(value, seen = new WeakMap()) {
   if (value === null || typeof value !== "object") return value;
   const raw = toRaw(value);
@@ -160,11 +156,6 @@ export function useChatEngine({
           projectedTerminal: projected?.terminal || null,
           activeTurnScopeId: nextRegistry?.sessions?.[sessionId]?.activeTurnScopeId || "",
         });
-        // TERMINAL_RESOLVED is the sole terminal write. Message fields are a
-        // read-model projection of that committed canonical Turn, not another
-        // source of terminal truth. Project exactly once, after the Registry
-        // commit, so realtime, refresh and reconnect share identical UI
-        // settlement semantics.
         if (!runtimeEventsAlreadyProjected) {
           applyRunStateMessageRuntimePatch({
             sessions,
@@ -186,9 +177,6 @@ export function useChatEngine({
   const terminalResolutionCoordinator = createTerminalResolutionCoordinator({
     userId,
     fetcher: terminalResolutionFetcher || authFetch,
-    // Terminal responses must pass through the registry's validated adapter.
-    // It atomically flattens the authoritative Turn and is the only path that
-    // may dispatch TERMINAL_RESOLVED to the reducer.
     applyTurnTerminalResolution: applyAuthoritativeTerminalResolution,
     onDiscovery: (details = {}) => logTerminalResolutionDebug(
       "frontend.terminalResolution.discovery", details,
@@ -253,9 +241,6 @@ export function useChatEngine({
         messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
       },
     });
-    // Standalone engine consumers own their projection here. The application
-    // composition root passes an already-projecting submitter and opts out, so
-    // production still has exactly one projection per Registry transition.
     if (!runtimeEventsAlreadyProjected) {
       applyRunStateMessageRuntimePatch({
         sessions,

@@ -1,6 +1,4 @@
 :root {
-  /* ========== Component Tokens · Message ========== */
-  /* Message colors: flat, modern, high-contrast in both light/dark themes */
   --noobot-msg-avatar-bg: var(--noobot-base-blue-500);
   --noobot-msg-avatar-text: var(--noobot-base-white);
   --noobot-msg-assistant-avatar: var(--noobot-msg-avatar-bg);
@@ -30,7 +28,6 @@
   --noobot-msg-code-block-bg: var(--noobot-base-slate-900);
   --noobot-msg-code-block-text: var(--noobot-base-slate-200);
 
-  /* ========== Component Tokens · Message Size ========== */
   --noobot-msg-avatar-size: 30px;
   --noobot-msg-avatar-font-size: var(--noobot-font-size-sm);
   --noobot-msg-meta-font-size: var(--noobot-font-size-sm);

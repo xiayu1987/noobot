@@ -26,7 +26,6 @@ function buildScope(sessionDir, resolvedParentSessionId = "") {
   });
 }
 
-/** Execution-scoped location strategy. It deliberately contains no plugin semantics. */
 export class ScopedSessionLocationResolver {
   constructor({
     pathResolver,

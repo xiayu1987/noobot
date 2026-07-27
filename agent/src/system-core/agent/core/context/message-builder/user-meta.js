@@ -176,9 +176,9 @@ export function shouldBuildUserMetaForHistoryMessage(
   if (msg?.frontendUserMessage === true) return true;
   const identityKey = buildUserSourceIdentityKey(msg);
   if (identityKey && restorableUserMetaKeys?.has?.(identityKey)) return true;
-  // Legacy stopped/resend snapshots may not have the frontend marker. Their
-  // full round identity remains the compatibility signal; injected messages
-  // are rejected above using the semantics preserved in additional_kwargs.
+
+
+
   return Boolean(resolveMessageDialogProcessId(msg) && resolveMessageTurnScopeId(msg));
 }
 
@@ -310,4 +310,3 @@ export function normalizeRestoredUserSource(msg = {}, restoredUserMetaIndex = ne
       : {}),
   };
 }
-

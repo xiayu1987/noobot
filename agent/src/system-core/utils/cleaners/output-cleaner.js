@@ -8,10 +8,6 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 
-/**
- * Normalize text: CRLF→LF, strip NUL, trim trailing whitespace on lines,
- * collapse 4+ blank lines to 3, and trim.
- */
 export function normalizeText(input = "") {
   return String(input || "")
     .replace(/\r\n/g, "\n")
@@ -22,9 +18,6 @@ export function normalizeText(input = "") {
     .trim();
 }
 
-/**
- * Normalize terminal text: strip ANSI escape codes, then apply base normalization.
- */
 export function normalizeTerminalText(input = "") {
   return String(input || "")
     .replace(ANSI_PATTERN, "")
@@ -36,9 +29,6 @@ export function normalizeTerminalText(input = "") {
     .trim();
 }
 
-/**
- * Compact stdout: try JSON parse first (for DB results), fall back to normalizeText.
- */
 export function compactStdout(input = "") {
   const text = String(input || "").trim();
   if (!text) return "";
@@ -48,15 +38,10 @@ export function compactStdout(input = "") {
       return JSON.stringify(parsed);
     }
   } catch {
-    // keep raw text
   }
   return normalizeText(text);
 }
 
-/**
- * Tail-clip text to maxChars, keeping the end portion.
- * Returns { text, truncated, originalLength }.
- */
 export function tailClip(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars) {
   const text = String(input || "");
   const limit = Math.max(256, Number(maxChars || LENGTH_THRESHOLDS.toolIO.connectorOutputChars));
@@ -79,9 +64,6 @@ export function tailClip(input = "", maxChars = LENGTH_THRESHOLDS.toolIO.connect
   };
 }
 
-/**
- * Clean terminal output for LLM consumption.
- */
 export function cleanTerminalOutputForLLM(
   output = {},
   { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
@@ -108,9 +90,6 @@ export function cleanTerminalOutputForLLM(
   };
 }
 
-/**
- * Clean database output for LLM consumption.
- */
 export function cleanDatabaseOutputForLLM(
   output = {},
   { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},

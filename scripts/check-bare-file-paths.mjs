@@ -8,8 +8,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-// Runtime source is guarded here. Repository scripts and legacy tests still use
-// Node's path module directly because they are not shipped path-payload code.
 const runtimeSourceRoots = ["client", "agent/src"];
 const ignoredDirectories = new Set(["node_modules", "dist", "build", "coverage", ".git"]);
 const sourceExtension = /\.(?:[cm]?js|jsx|ts|tsx)$/;
@@ -34,8 +32,6 @@ function report(file, text, pattern, message) {
 function inspect(file) {
   if (resolverFiles.has(file)) return;
   const text = fs.readFileSync(path.join(root, file), "utf8");
-  // Resolver facades intentionally retain the familiar `path.*` call shape;
-  // the enforceable bypass is importing Node's path module anywhere else.
   report(file, text, directPathModulePattern, "direct path module access");
 }
 

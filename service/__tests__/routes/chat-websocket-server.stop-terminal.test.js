@@ -370,9 +370,6 @@ test("chat-websocket-server: pending stop is consumed by a later run with the sa
     bot: {
       persistStoppedAssistantMessage: async (payload = {}) => {
         persistStopCalls += 1;
-        // Simulate the only case that should retain a pending stop: the idle
-        // request could not persist an authoritative terminal fact. The later
-        // run then consumes that pending stop and persists it successfully.
         if (persistStopCalls === 1) throw new Error("temporary persistence failure");
         capturedStopPayload = payload;
         return {

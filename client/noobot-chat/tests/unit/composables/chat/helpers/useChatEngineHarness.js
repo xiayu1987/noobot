@@ -109,9 +109,6 @@ export const createHarness = ({
 } = {}) => {
   const activeSessionId = ref(sessionId);
   const sessions = ref([makeSession(sessionId)]);
-  // Mirror production: activeSession is a view over the sessions collection.
-  // Terminal Resolution atomically replaces the collection item, so a detached
-  // ref here would keep tests pointed at the pre-commit Session object.
   const activeSession = computed({
     get: () => sessions.value.find((item) =>
       [item?.id, item?.sessionId, item?.backendSessionId].includes(activeSessionId.value)) || null,
@@ -222,9 +219,6 @@ export const createHarness = ({
       json: async () => terminalResolutionFromUrl(
         url,
         terminalResolutionState,
-        // The authoritative service returns the complete committed projection,
-        // not an empty lifecycle-only payload. Clone the harness projection so
-        // the atomic apply cannot alias mutable test messages.
         JSON.parse(JSON.stringify(activeSession.value?.rawMessages || [])),
       ),
     })),

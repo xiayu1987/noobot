@@ -210,7 +210,6 @@ function buildTopologyRows(nodes = [], flowtos = []) {
     });
   }
 
-  // Keep cyclic or isolated nodes in original order to avoid dropping nodes.
   let fallbackRank = Math.max(0, ...Array.from(rankById.values()).map((value) => Number(value || 0)));
   for (const id of nodeById.keys()) {
     if (visited.has(id)) continue;

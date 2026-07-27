@@ -17,16 +17,6 @@ import {
   parentOwnsChildRunEventData,
 } from "./child-run-events.js";
 
-/**
- * Builds the per-run `eventListener` passed to `bot.runSession`. It maps agent
- * runtime events onto WebSocket frames, handling non-streaming suppression,
- * attachment forwarding and sub-run (child) event re-parenting.
- *
- * Connection-level state is read through accessors so the listener keeps
- * observing live run metadata; `currentRunMeta`/`currentRunHandle` are mutated
- * in place to record the resolved dialogProcessId, matching the original inline
- * behavior.
- */
 export function createRunEventListener({
   sendEvent,
   sessionId,
@@ -86,10 +76,6 @@ export function createRunEventListener({
         }
         return;
       }
-      // Session version is committed by Agent before execution starts. Keep it
-      // as a first-class wire event so the next frontend mutation cannot reuse
-      // a stale version. Generic SSE normalization would turn this into a
-      // thinking event and silently discard the concurrency token.
       if (eventName === "turn_committed") {
         sendEvent("turn_committed", {
           ...eventData,
@@ -104,16 +90,9 @@ export function createRunEventListener({
       const workflowChildRunEvent = Boolean(
         childRunEvent && (eventData?.workflowRunId || eventData?.nodeExecutionId),
       );
-      // A producer that marks an event as authoritative must satisfy the whole
-      // contract. Do not silently downgrade malformed envelopes into the
-      // legacy normalization path: that would reintroduce inferred identity.
       if (eventData?.envelopeKind === MESSAGE_EVENT_ENVELOPE_KIND) {
         assertMessageEventEnvelope(eventData);
       }
-      // Authoritative message envelopes are already the wire contract. Never
-      // normalize, classify, or reconstruct them here: doing so can silently
-      // sever message/tool identity. Transport layers may add scope aliases,
-      // but the envelope itself remains the single source of truth.
       if (isMessageEventEnvelope(eventData)) {
         const authoritativeSessionId = String(eventData?.sessionId || "").trim();
         const rootSessionId = String(sessionId || "").trim();
@@ -149,8 +128,6 @@ export function createRunEventListener({
           hasResult: eventData?.result !== undefined,
         });
         if (suppressed) return;
-        // The authoritative event is an immutable inner contract. Transport
-        // scope lives beside it and can never overwrite message identity.
         sendEvent(
           routedEventName,
           buildAuthoritativeMessagePacket(eventData, {
@@ -187,7 +164,6 @@ export function createRunEventListener({
       }
       if (eventName === "llm_delta") {
         if (!textStreamingEnabled) {
-          // Non-streaming mode: suppress token deltas, keep other system/tool events.
           return;
         }
         if (workflowChildRunEvent) {

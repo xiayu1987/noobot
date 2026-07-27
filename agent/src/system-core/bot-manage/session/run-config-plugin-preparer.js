@@ -201,8 +201,6 @@ export class RunConfigPluginPreparer {
     }
     if (String(next?.planningGuidanceMode || "").trim().toLowerCase() === "separate_model") {
       const timeoutMs = Number(next?.timeoutMs);
-      // Separate-model planning performs external model calls; 1s timeout is too
-      // aggressive and causes repeated scheduling across turns.
       if (!Number.isFinite(timeoutMs) || timeoutMs < AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS) {
         next.timeoutMs = AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS;
       }
@@ -277,8 +275,6 @@ export class RunConfigPluginPreparer {
     const normalizedRunMode = String(runBotPlugin?.mode ?? "")
       .trim()
       .toLowerCase();
-    // keep user/global on as baseline; runConfig should primarily elevate the bot plugin,
-    // unless it explicitly disables plugin via enabled=false (used by node sub-session strategy)
     const resolvedMode =
       botPluginSelected || normalizedRunMode === "on" || normalizedEffectiveMode === "on"
         ? "on"
@@ -416,7 +412,6 @@ export class RunConfigPluginPreparer {
         debugPluginPreparer("register plugin missing", { pluginName, capability, runtimeKey });
       }
     } else if (typeof pluginApi?.policy?.appendDenyToolNames === "function") {
-      // Keep per-run policy patch behavior even when hook registration is reused.
       pluginApi.policy.appendDenyToolNames(options?.denyToolNames || []);
     }
     const existingRuntimeMeta =

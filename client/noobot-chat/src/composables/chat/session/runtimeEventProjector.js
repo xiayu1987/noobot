@@ -16,9 +16,6 @@ export function createRuntimeEventProjector({ sessions, activeSession, turnRunti
       (item) => sessionRuntimeId(item) === requestedSessionId,
     );
     const canonicalTiming = findCanonicalTurnTiming(owningSession, requestedTurnScopeId);
-    // Reconnect transport events do not carry lifecycle timing. Join the
-    // persisted Session timing at the single Registry ingress so a restored
-    // Turn never derives its clock from transport createdAtMs.
     const timedEvent = canonicalTiming
       ? {
         ...event,
@@ -48,11 +45,6 @@ export function createRuntimeEventProjector({ sessions, activeSession, turnRunti
       canonicalTerminal: result?.turn?.terminal || null,
       activeBucketTurnScopeId: String(activeBucket?.activeTurnScopeId || "").trim(),
     });
-    // Runtime events have one projection contract regardless of whether they
-    // arrive through the single-event composer/finalization path or reconnect's
-    // batch path.  In particular, a backend event may atomically promote an
-    // optimistic local Session; always project with the Registry's canonical
-    // Turn rather than the pre-promotion input event.
     applyRunStateMessageRuntimePatch({
       sessions,
       activeSession,

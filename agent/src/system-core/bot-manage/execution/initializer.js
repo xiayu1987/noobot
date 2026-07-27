@@ -8,9 +8,6 @@ import { v4 as uuidv4 } from "uuid";
 import { createExecutionEventListener, emitEvent } from "../../event/index.js";
 import { CALLER_ROLE } from "../config/constants.js";
 
-/**
- * Session runtime initializer.
- */
 export class SessionExecutionInitializer {
   constructor({
     session = null,

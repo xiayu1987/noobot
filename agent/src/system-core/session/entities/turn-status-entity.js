@@ -128,11 +128,6 @@ export function isSameTurnStatus(left = {}, right = {}) {
   );
 }
 
-/**
- * Apply one immutable terminal fact to a session aggregate.
- * The first persisted terminal outcome wins; same-status retries are idempotent
- * updates. Messages are used only to bridge the two canonical turn identities.
- */
 export function upsertTurnStatusEntity({
   statuses = [],
   messages = [],

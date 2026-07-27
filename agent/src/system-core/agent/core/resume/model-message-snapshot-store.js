@@ -136,15 +136,6 @@ function deserializeMessage(item = {}) {
 export function syncStoppedModelMessageSnapshotCandidate(runtime = {}, modelMessages = []) {
   const candidate = runtime?.stoppedModelMessageSnapshotCandidate;
   if (!candidate || !Array.isArray(modelMessages)) return candidate || null;
-  // `modelMessages` is the final LLM input projection after
-  // filterForModelContext().  It may flatten assistant/tool messages into
-  // human text, inject derived user_meta messages and reorder the model input
-  // for provider compatibility.  Stopped snapshots must persist the canonical
-  // message fact source instead: candidate.messageBlocks is initialized from
-  // loopState.messageBlocks and appendMessage() keeps that same block object up
-  // to date during the turn.  Never rebuild snapshot history from the projected
-  // model input, otherwise a resume->stop lifecycle progressively degrades
-  // ai/tool messages into empty human messages and duplicates user_meta.
   return runtime.stoppedModelMessageSnapshotCandidate;
 }
 

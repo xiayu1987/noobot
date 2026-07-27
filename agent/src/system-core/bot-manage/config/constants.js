@@ -5,9 +5,6 @@
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-// ========================
-// Async Domain Constants
-// ========================
 
 export const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
@@ -98,9 +95,6 @@ export const DEFAULT_ASYNC_JOB_CONFIG = {
   retentionMs: ASYNC_JOB_RETENTION_MS,
 };
 
-// ========================
-// Scenario Domain Constants
-// ========================
 
 export const SCENARIO_CONFIG_KEYS = [
   "tools",
@@ -112,9 +106,6 @@ export const SCENARIO_CONFIG_KEYS = [
   "maxTokens",
 ];
 
-// ========================
-// Tool Policy Constants
-// ========================
 
 export const TOOL_POLICY_MODE = {
   NONE: "none",

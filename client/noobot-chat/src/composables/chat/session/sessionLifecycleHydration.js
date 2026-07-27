@@ -29,24 +29,12 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
       timingSnapshotReason: timingResult?.reason || "",
     });
     if (snapshot && typeof snapshot === "object") {
-      // A snapshot is only discovery metadata for terminal Turns. Schedule the
-      // authoritative read independently of whether its non-terminal runtime
-      // projection is applicable (older snapshots may intentionally lack the
-      // complete terminal commit required by the current protocol).
       const candidates = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])]
         .filter((turn) => {
-          // Refresh has no guarantee that the snapshot was captured after the
-          // backend committed the terminal state.  The active Turn is therefore
-          // also a discovery trigger; the terminal service decides whether it
-          // is already resolved and supplies retry guidance otherwise.
           if (!turn || !getMessageTurnScopeId(turn) && !turn?.turnScopeId) return false;
           return turn === snapshot.activeTurn || isAuthoritativeTerminalState(turn?.state);
         })
         .sort((left, right) => Number(right?.sequence || right?.revision || 0) - Number(left?.sequence || left?.revision || 0));
-      // Terminal discovery must not depend on the selected Session view being
-      // ready. During refresh the summary can arrive before activeSession has
-      // resolved its backend identity; gating here would permanently lose the
-      // only trigger for the authoritative terminal read.
       if (sessionId && candidates[0]) {
         const turn = candidates[0];
         scheduleTerminalResolution(sessionId, getMessageTurnScopeId(turn) || turn?.turnScopeId, {
@@ -66,10 +54,6 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
         resultApplied: result?.applied === true,
         resultReason: result?.reason || "",
       });
-      // Apply the snapshot before the second local observation. A terminal GET
-      // can finish while the refresh reducer is still materializing the
-      // Session bucket; the coordinator will reuse its cached response and
-      // project it now that the canonical bucket is available.
       if (sessionId && candidates[0]) {
         const turn = candidates[0];
         const postHydrateMetadata = {
@@ -84,9 +68,6 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
       }
       return result;
     }
-    // Some refresh/detail responses contain only persisted turnStatuses. These
-    // rows are discovery metadata, never runtime facts: feed the newest terminal
-    // identity into the same authoritative resolver used by snapshots/realtime.
     const terminalStatus = (Array.isArray(sessionItem?.turnStatuses) ? sessionItem.turnStatuses : [])
       .filter((turn) => isLegacyTerminalDiscoveryState(turn?.status || turn?.state))
       .sort((left, right) => {
@@ -108,8 +89,6 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
   }
 
 
-  // Snapshot and persisted status rows are discovery inputs only. Both converge
-  // on the same authoritative terminal service and neither writes runtime state.
   for (const sessionItem of sessions.value) {
     hydrateSessionLifecycle(sessionItem);
     chatStore.pruneTerminalTurns({
@@ -118,8 +97,6 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
     });
   }
 
-  // Reconcile replacements, refreshes, reconnects, and non-active sessions
-  // from the lifecycle protocol; message order is never consulted.
   watch(
     [sessions, activeSessionId],
     ([sessionItems]) => {

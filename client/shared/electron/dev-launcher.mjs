@@ -4,9 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * Cross-platform Electron dev launcher.
- */
 import { spawn } from "node:child_process";
 
 const electronCommand = process.platform === "win32" ? "electron.cmd" : "electron";

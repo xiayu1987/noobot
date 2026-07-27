@@ -10,9 +10,6 @@ import {
   VALID_TOOL_POLICY_MODES,
 } from "./constants.js";
 
-/**
- * Build tool policies for session execution.
- */
 export class ToolPolicyManager {
   build(scenario) {
     const policy = { ...DEFAULT_TOOL_POLICY };

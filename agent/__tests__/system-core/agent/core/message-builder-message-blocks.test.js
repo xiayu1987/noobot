@@ -43,9 +43,6 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
   assert.equal(Array.isArray(blocks.history), true);
   assert.equal(Array.isArray(blocks.incremental), true);
   assert.equal(blocks.system.length, 1);
-  // The history user carries only a dialogProcessId (no turnScopeId, no
-  // frontendUserMessage, no restorable snapshot user_meta), so it is not a
-  // real frontend user turn and must not gain a derived user_meta.
   assert.equal(blocks.history.length, 2);
   assert.equal(blocks.incremental.length, 2);
   assert.equal(blocks.messages.length, 5);

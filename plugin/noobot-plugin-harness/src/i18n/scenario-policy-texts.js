@@ -6,11 +6,6 @@
 
 import { LOCALE } from "./locale.js";
 
-// -----------------------------------------------------------------------------
-// Harness 默认场景策略文本
-// -----------------------------------------------------------------------------
-// 这里是 general / text / programming 三个场景的默认策略正文。
-// 这些文本会并入主流程 system 层 [HARNESS_POLICY_SELECTION] 策略消息；动态策略只替换正文部分。
 export const HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS = Object.freeze({
   [LOCALE.ZH_CN]: Object.freeze({
     general: `通用场景策略：

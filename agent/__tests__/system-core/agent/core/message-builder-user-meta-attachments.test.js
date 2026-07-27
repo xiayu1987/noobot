@@ -428,8 +428,6 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
     { currentUserMessage: "current" },
   );
 
-  // LangChain HumanMessage instances expose their type through _getType(),
-  // rather than a persisted `role` property.
   const historicalBodies = messages.filter(
     (message) => message?.content === "你好" && message?._getType?.() === "human",
   );

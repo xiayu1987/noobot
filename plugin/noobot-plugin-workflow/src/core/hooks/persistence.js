@@ -119,7 +119,6 @@ export function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null)
     : [];
   for (const item of nodeAgentRuns) {
     if (!item || typeof item !== "object") continue;
-    // Keep sub-agent execution body out of the parent session; preserve only attachment meta and session linkage.
     delete item.nodeResultText;
   }
   return payload;

@@ -4,12 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Execution is the common identity/projection shared by root Agents, child
- * Agents and Workflow runs. Turn remains the compatibility transport for an
- * Agent execution; lifecycle state and transition semantics stay authoritative
- * in the existing Turn state machine.
- */
 export const EXECUTION_KIND = Object.freeze({
   AGENT: "agent",
   WORKFLOW: "workflow",
@@ -87,7 +81,6 @@ export function createExecutionLifecycleEnvelope(source = {}) {
   };
 }
 
-/** Build a read model without creating another writable lifecycle fact. */
 export function buildExecutionTree(executions = []) {
   const byId = new Map();
   for (const source of Array.isArray(executions) ? executions : []) {

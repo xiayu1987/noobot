@@ -4,12 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/*
- * Shared right-side drawer shell.
- * Use `class="noobot-side-drawer"` on el-drawer so app panels and plugins share
- * the same header/body treatment. `workspace-drawer` is kept as a compatibility
- * alias for the built-in workspace drawer.
- */
 .noobot-side-drawer.el-drawer,
 .workspace-drawer.el-drawer {
   background: var(--noobot-panel-bg);

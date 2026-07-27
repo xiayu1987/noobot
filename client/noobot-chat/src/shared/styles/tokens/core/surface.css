@@ -1,5 +1,4 @@
 :root {
-  /* ========== Semantic Tokens · Surface / Text / Status ========== */
   --noobot-surface-sidebar: color-mix(in srgb, var(--noobot-base-slate-900) 78%, var(--noobot-base-black));
   --noobot-surface-soft: color-mix(in srgb, var(--noobot-base-white) 3%, transparent);
   --noobot-surface-soft-hover: color-mix(in srgb, var(--noobot-base-white) 5%, transparent);

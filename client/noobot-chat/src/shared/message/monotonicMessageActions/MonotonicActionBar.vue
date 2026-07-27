@@ -4,10 +4,6 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-/**
- * 本轮消息的查看态操作栏：编辑重发 / 删除两个 chip 按钮。
- * 仅负责展示与触发事件，具体动作由父组件处理。
- */
 defineProps({
   disabled: { type: Boolean, default: false },
   operating: { type: Boolean, default: false },

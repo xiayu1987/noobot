@@ -153,10 +153,6 @@ export async function refreshFinalSessionDetail({
         : String(doneSessionId || "") === String(activeSession?.value?.backendSessionId || "") &&
           String(activeSession?.value?.id || "") === String(activeSessionId?.value || "");
 
-    // Cancelling a stream as part of message deletion can reject sendFlow and
-    // bring execution here after the delete has already trimmed the local
-    // list. The detail request is an older snapshot in that case; applying it
-    // would resurrect the deleted Turn until the next refresh.
     const currentSession = activeSession?.value;
     const currentMessages = Array.isArray(currentSession?.messages)
       ? currentSession.messages
@@ -193,8 +189,6 @@ export async function refreshFinalSessionDetail({
       botMessage: summarizeFinalizeMessage(botMessage),
     });
 
-    // Detail hydration is presentation-only. It must not settle the Turn;
-    // settlement belongs exclusively to the authoritative terminal service.
 
     refreshSessionConnectorsAsync?.(activeSession?.value?.id || doneSessionId);
     return true;
@@ -204,16 +198,9 @@ export async function refreshFinalSessionDetail({
       error: String(loadDetailError?.message || loadDetailError || ""),
       botMessage: summarizeFinalizeMessage(botMessage),
     });
-    // The detail request is asynchronous.  A resend, session switch, or a
-    // replacement assistant message may have made this completion obsolete;
-    // stale failures must never overwrite the currently active run.
     const currentMessages = Array.isArray(activeSession?.value?.messages)
       ? activeSession.value.messages
       : [];
-    // DONE/detail application may replace the message array while preserving
-    // the Turn. Object identity is therefore not an ownership proof. Resolve
-    // the current assistant exclusively by Turn identity; dialogProcessId is
-    // execution-chain metadata and must not provide a cross-Turn fallback.
     const currentMessage = currentMessages.find((messageItem) =>
       messageItem &&
       getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
@@ -223,10 +210,6 @@ export async function refreshFinalSessionDetail({
       String(activeSession?.value?.backendSessionId || "") === completionEventScope.sessionId &&
       String(activeSession?.value?.id || "") === String(activeSessionId?.value || "");
     const isCurrentCompletion = activeSessionMatches && (
-      // Authoritative reconnect snapshots can complete a run before its
-      // assistant message has been hydrated. In that case the state-machine
-      // identity guards, rather than a missing message object, decide whether
-      // the scoped failure still belongs to the current run.
       !botMessage ||
       Boolean(currentMessage)
     );
@@ -238,8 +221,6 @@ export async function refreshFinalSessionDetail({
       });
       return false;
     }
-    // A detail failure is not a business terminal outcome. Keep it local to the
-    // message while terminal resolution performs authoritative reconciliation.
     if (currentMessage) {
       applyAssistantFailureState?.(currentMessage, loadDetailError);
     }
@@ -292,15 +273,8 @@ export async function finalizeDoneTurnPresentation({
   return applied;
 }
 
-// Compatibility name for callers migrating to the explicit Turn presentation
-// boundary. All completion paths must share the policy above.
 export const finalizeDoneSessionDetail = finalizeDoneTurnPresentation;
 
-/**
- * Read-after-write convergence for a persisted user stop.  USER_STOPPED is a
- * backend terminal fact, not the frontend terminal: only applying this summary
- * may move USER_STOPPING to USER_STOP_COMPLETED.
- */
 export async function finalizeStoppedSessionDetail({
   activeSession,
   activeSessionId,
@@ -329,8 +303,6 @@ export async function finalizeStoppedSessionDetail({
       reuseRecentlyLoaded: false,
     });
     if (!detail) throw new Error("stopped session summary is empty");
-    // This snapshot may predate a deletion performed while the request was in
-    // flight. Never merge it after its owning Session or Turn has disappeared.
     const currentSession = activeSession?.value;
     const currentMessages = Array.isArray(currentSession?.messages) ? currentSession.messages : [];
     const activeSessionMatches =
@@ -348,10 +320,6 @@ export async function finalizeStoppedSessionDetail({
       });
       return false;
     }
-    // Keep the live turn placeholder and converge it with the authoritative
-    // turnStatus from the summary. Replacing the whole message array here used
-    // to discard the reactive placeholder and inject a second synthetic one,
-    // which broke its position, status-step updates, and last-message actions.
     applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
     return true;
   } catch (error) {

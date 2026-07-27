@@ -12,9 +12,6 @@ import { getRuntimeFromAgentContext } from "../../../context/agent-context-acces
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
 
-/**
- * Build and normalize agent runtime context.
- */
 export class AgentContextFactory {
   constructor({
     globalConfig = {},

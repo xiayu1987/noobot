@@ -56,7 +56,6 @@ export function createOpenVSCodeService({
     try {
       await rm(getMetaPath(instance.workspacePath), { force: true });
     } catch {
-      // ignore metadata cleanup errors
     }
   }
 

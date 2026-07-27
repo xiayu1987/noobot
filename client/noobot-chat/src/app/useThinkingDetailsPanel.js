@@ -112,9 +112,6 @@ export function useThinkingDetailsPanel({
     const requestFetchDetail = typeof payload?.fetchThinkingDetail === "function"
       ? payload.fetchThinkingDetail
       : null;
-    // Select the fetcher for this request before loading anything. Otherwise
-    // a normal message opened after a workflow node can reuse the node fetcher
-    // that is still stored from the previous drawer contents.
     currentFetchDetail = requestFetchDetail || fetchThinkingDetail;
     const openRequestVersion = ++detailRequestVersion;
     const needsFullDetail =
@@ -199,7 +196,6 @@ export function useThinkingDetailsPanel({
           detailSessionDocs,
         );
       } catch {
-        // Keep the already opened panel stable; explicit open still reports load errors.
       }
     },
   );

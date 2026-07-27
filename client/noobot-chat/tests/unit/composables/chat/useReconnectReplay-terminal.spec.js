@@ -103,12 +103,8 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).toBeUndefined();
-    // DONE and channel_state=completed are both terminal notifications; each
-    // independently schedules the authoritative read for the same Turn.
     expect(mocks.resolveTurnTerminalState).toHaveBeenCalledTimes(2);
     expect(mocks.resolveTurnTerminalState).toHaveBeenLastCalledWith("s-1", "turn-done", { commandId: "", sequence: 3, source: "reconnect_replay" });
-    // DONE owns presentation reconciliation. The following channel_state is
-    // still notification-only and must not start a second detail request.
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledTimes(1);
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
   });
@@ -183,8 +179,6 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).toBeUndefined();
-    // USER_STOPPED is transport replay data, not a terminal notification; only
-    // the terminal channel-state triggers the single authoritative read.
     expect(mocks.resolveTurnTerminalState).toHaveBeenCalledTimes(1);
     expect(mocks.resolveTurnTerminalState).toHaveBeenLastCalledWith("s-1", "turn-stopped", { commandId: "", sequence: 3, source: "reconnect_replay" });
     expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();

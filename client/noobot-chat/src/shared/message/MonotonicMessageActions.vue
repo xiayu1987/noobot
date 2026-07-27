@@ -4,10 +4,6 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-/**
- * 本轮消息操作装配层：编排查看态操作栏与编辑重发卡片两个子视图，
- * 并把附件编辑态（composable）、本地翻译器与删除/重发动作串起来。
- */
 import { nextTick, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { createLocalTranslator } from "./monotonicMessageActions/localTranslations.js";

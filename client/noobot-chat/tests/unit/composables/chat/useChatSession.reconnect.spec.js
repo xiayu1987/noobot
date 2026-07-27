@@ -120,8 +120,6 @@ describe("useChatSession reconnect replay", () => {
     }];
     store.activeSessionId = "s-live";
     const envelope = (eventType, sequence, extra = {}) => ({
-      // `message_event` is the WebSocket routing name. It is intentionally not
-      // part of StreamEventEnum, whose values describe projected stream events.
       event: "message_event",
       data: {
         channelKind: "message_event",
@@ -343,7 +341,6 @@ describe("useChatSession reconnect replay", () => {
           turnScopeId: "turn-new",
           messages: [
             { role: RoleEnum.USER, content: "old q" },
-            // old answer content changed in snapshot: should not overwrite current turn dp-old.
             {
               role: RoleEnum.ASSISTANT,
               dialogProcessId: "dp-old",
@@ -440,10 +437,6 @@ describe("useChatSession reconnect replay", () => {
     expect(oldAssistant.content).toBe("old keep");
     expect(newAssistant.content).toBe("new final answer");
     expect(newAssistant.modelAlias).toBe("alias-1");
-    // Completion uses the same fresh-detail and connector reconciliation as
-    // realtime, while all terminal discovery sources converge on one Turn GET.
-    // The final detail materializes the assistant presentation immediately;
-    // the unresolved terminal fixture must not manufacture registry state.
     const requestedUrls = authFetch.mock.calls.map(([url]) => url);
     expect(requestedUrls).toHaveLength(3);
     expect(requestedUrls.filter((url) => url === "/api/internal/session/u-1/s-1")).toHaveLength(1);

@@ -14,8 +14,6 @@ export function resolveRawAttachmentFile(fileItem) {
 }
 
 export async function attachmentFileToBase64(file) {
-  // FileReader is browser-only. Blob/File also expose arrayBuffer(), which
-  // keeps serialization usable in workers, SSR and the Node test runtime.
   if (typeof FileReader === "undefined" && typeof file?.arrayBuffer === "function") {
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (typeof Buffer !== "undefined") return Buffer.from(bytes).toString("base64");

@@ -79,8 +79,6 @@ describe("useReconnectReplay", () => {
 
     await vi.advanceTimersByTimeAsync(1200);
 
-    // A local timeout may surface diagnostics, but cannot authoritatively
-    // settle the Turn or release its capability lock.
     expect(refs.sending.value).toBe(true);
     expect(assistant?.statusLabel).toBe("");
     expect(assistant?.error).toBeUndefined();
@@ -159,8 +157,6 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT,
     );
-    // Cache refresh failure is local recovery evidence only. It must not
-    // manufacture a Turn terminal transition.
     expect(refs.sending.value).toBe(false);
     expect(assistant?.statusLabel).toBe("");
     expect(assistant?.error).toBeUndefined();

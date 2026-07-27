@@ -89,7 +89,6 @@ export class StorageService {
       try {
         await fsRm(tempFile, { force: true });
       } catch {
-        // Best-effort cleanup; preserve the original write/rename error.
       }
       throw error;
     }

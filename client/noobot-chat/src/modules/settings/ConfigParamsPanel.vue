@@ -377,7 +377,6 @@ watch(
 </template>
 
 <style scoped>
-/* 面板通用样式 */
 .workspace-panel {
   display: flex;
   flex-direction: column;

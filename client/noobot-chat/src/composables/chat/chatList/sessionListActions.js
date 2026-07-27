@@ -159,10 +159,6 @@ export function createSessionListActions({
           );
         });
 
-      // Keep the sessions array reference stable. Replacing the whole array
-      // during reconnect/background refresh can make the app shell feel like it
-      // refreshed. Splice updates the list in place while preserving existing
-      // session object references from reconcileSessionObject().
       sessions.value.splice(0, sessions.value.length, ...nextSessions);
 
       for (const session of sessions.value) {

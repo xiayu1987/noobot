@@ -8,8 +8,6 @@ function normalizeString(value = "") {
   return String(value || "").trim();
 }
 
-// Only flag strong executable-script signals; ordinary code snippets and prose
-// must not produce a risk notice.
 export function containsExecutableScriptText(value = "") {
   const text = normalizeString(value);
   if (!text) return false;

@@ -35,8 +35,6 @@ export function normalizeTurnTransportEnvelope({
     },
     transportCursor: {
       sequenceDomain: TURN_TRANSPORT_SEQUENCE_DOMAIN,
-      // Transport ordering is exclusively the outer packet sequence. Never
-      // fall back to an authoritative inner event sequence.
       sequence: Number(payload?.seq || payload?.transportSequence || 0),
       event: text(event),
     },

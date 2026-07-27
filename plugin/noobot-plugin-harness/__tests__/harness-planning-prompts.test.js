@@ -306,9 +306,6 @@ test("harness planning operation directory uses sandbox view without losing host
     messages,
     agentContext: {
       environment: {
-        // Simulates the harness-side bug class: environment.workspace has
-        // already been rewritten to sandbox view, while runtime.basePath still
-        // keeps the non-sandbox host path.
         workspace: { basePath: sandboxBasePath },
         staticInfo: { defaultWorkdir: `${sandboxBasePath}/runtime/ops_workdir` },
       },

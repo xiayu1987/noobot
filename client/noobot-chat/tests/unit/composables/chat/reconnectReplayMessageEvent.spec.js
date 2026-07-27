@@ -97,8 +97,6 @@ describe("reconnect authoritative message event replay", () => {
     const historyReplay = createTarget();
 
     for (const envelope of events) {
-      // Both live transports use this canonical consumer after independently
-      // resolving their target message; replay additionally unwraps transport.
       dispatchTurnEnvelope({
         targetMessage: normalLive,
         envelope: envelope.data.event,
@@ -214,14 +212,11 @@ describe("reconnect authoritative message event replay", () => {
       classifyRealtimeLog: classify,
     });
 
-    // Cross-protocol sequence numbers express order, not fact identity. Until
-    // producers provide a shared eventId/sourceEventId, neither fact may be
-    // silently discarded merely because their sequence happens to match.
     expect(targetMessage.content).toBe("canonical duplicate");
     expect([
       ...selectToolTimelineLogs(targetMessage),
       ...selectActivityTimelineLogs(targetMessage),
-      ...(targetMessage.realtimeLogs || []), // legacy THINKING until its adapter is migrated
+      ...(targetMessage.realtimeLogs || []),
     ]).toHaveLength(2);
   });
 });

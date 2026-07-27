@@ -9,7 +9,6 @@ import {
 } from "./detailMessages.js";
 import { applyCompletedToolLogsToMessages } from "../../infra/sessionToolLogs.js";
 
-/** Single display projection used by both primary and child Agent viewers. */
 export function buildSessionDetailProjection({
   sessionDetail = {},
   sessionDocs = [],

@@ -4,14 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * 编辑重发场景的附件编辑态 composable。
- * 统一管理历史附件回填、新增文件、移除记录、预览 URL 生命周期与提交 payload 构建。
- *
- * @param {object} options
- * @param {() => object} options.getMessageItem 读取当前消息对象（含 attachments）
- * @param {import("vue").Ref<boolean>} options.operating 操作进行中标志，用于阻止并发编辑
- */
 import { computed, onBeforeUnmount, ref } from "vue";
 import {
   attachmentKey,

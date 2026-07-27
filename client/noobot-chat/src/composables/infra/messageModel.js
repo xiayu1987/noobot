@@ -187,8 +187,6 @@ function normalizeMessageType(messageItem = {}) {
 }
 
 function createMessageModel(messageItem = {}) {
-  // Message construction is the persisted-document boundary. Convert legacy
-  // log projections once, then expose only canonical timelines at runtime.
   const canonicalMessage = adaptLegacyMessageTimelines(messageItem);
   const normalizedAttachments = getMessageAttachments(canonicalMessage);
   const transferEnvelopes = getMessageTransferEnvelopes(canonicalMessage);
@@ -208,9 +206,6 @@ function createMessageModel(messageItem = {}) {
     tool_calls: normalizeArray(canonicalMessage.tool_calls),
     toolCalls: normalizeArray(canonicalMessage.toolCalls),
     tool_call_id: canonicalMessage.tool_call_id || "",
-    // Child-session realtime projection stores execution facets on the
-    // addressed assistant message. Keep them on the view model so the agent
-    // drawer can render the same thinking/tool timeline as the main chat.
     thinking: canonicalMessage.thinking,
     toolCall: canonicalMessage.toolCall,
     toolResult: canonicalMessage.toolResult,
@@ -239,9 +234,6 @@ function createMessageModel(messageItem = {}) {
     status: canonicalMessage.status || "",
     channelState: canonicalMessage.channelState || "",
     statusLabel: canonicalMessage.statusLabel || "",
-    // Child execution state is a read-only display projection. Preserve it
-    // through the shared view-model boundary without folding it into Turn
-    // Runtime protocol state or comparing unrelated sequence domains.
     statusTurnScopeId: String(canonicalMessage.statusTurnScopeId || "").trim(),
     projectedStatusStepState: normalizeStatusStepDisplayState(
       canonicalMessage.projectedStatusStepState,

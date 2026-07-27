@@ -77,10 +77,6 @@ function attachmentIdentityKey(attachment = {}) {
 }
 
 function mergeAttachmentMetas(historyAttachments = [], transportAttachments = []) {
-  // raw transport attachments are payloads only. When writing back to
-  // the local user message, always merge with the richer history/session meta so
-  // parsedResult, path/session addressing and preview/download fields cannot be
-  // downgraded by { name, mimeType, size } payloads.
   return mergeAttachments(
     dedupeAttachmentMetas(historyAttachments),
     dedupeAttachmentMetas(transportAttachments),
@@ -284,12 +280,6 @@ function createTurnScopeId() {
   return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/**
- * Frontend resend transaction for backend replace-turn.
- *
- * turnScopeId is the frontend-owned request identity. Each resend creates a
- * fresh turnScopeId and only accepts backend replacement data for that scope.
- */
 export function createResendMessageTransaction({
   activeSession,
   activeSessionId,
@@ -481,8 +471,6 @@ export function createResendMessageTransaction({
           expectedVersion,
           idempotencyKey: operation?.opId || "",
           attempt,
-          // The backend transaction ingests raw files before replacing the
-          // turn, so the returned user message is canonical and durable.
           attachments: finalAttachments,
         }),
       });
@@ -575,9 +563,6 @@ export function createResendMessageTransaction({
         return false;
       }
       if (resendPlaceholder && Array.isArray(activeSession?.value?.messages)) {
-        // The replacement user can be appended only after detail reconciliation.
-        // Reinsert the single resend placeholder afterwards so the visual turn
-        // order is always replacement user -> assistant placeholder.
         activeSession.value.messages = [
           ...removeTurnPlaceholderMessages(activeSession.value.messages, {
             turnScopeId: resendTurnScopeId,
@@ -586,10 +571,6 @@ export function createResendMessageTransaction({
         ];
         syncSessionMessageSummary(activeSession.value);
       }
-      // replace-turn has already persisted raw uploads and returned the
-      // canonical attachment snapshot in session detail. From this point on
-      // that snapshot is the source of truth; the base64 transport objects are
-      // only upload payloads and must never be sent to Agent as metadata.
       const persistedAttachments = dedupeAttachmentMetas(replacementUserMessage.attachments || []);
       const attachmentsForDisplay = mergeAttachmentMetas(
         persistedAttachments,
@@ -616,10 +597,6 @@ export function createResendMessageTransaction({
         prunedStopped,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       });
-      // replace-turn usually only mutates the stored user turn. It must not be
-      // treated as a completed resend just because an old assistant snapshot is
-      // still present in the preserved frontend message list. Only an explicit
-      // backend protocol flag can prove that generation already completed.
       if (payload?.generation === "completed" || payload?.generated === true) {
         logResendDebug("resend.completedWithoutStream", {
           sessionId,

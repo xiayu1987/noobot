@@ -76,9 +76,6 @@ export function scheduleMissingInteractionPayloadFailure({
   const timer = setTimeout(() => {
     missingInteractionPayloadTimers.delete(key);
     if (hasPendingInteractionForDialog(pendingInteractionRequest, dialogProcessId)) return;
-    // Missing interaction transport data is local recovery evidence, not an
-    // authoritative Turn failure. Keep the Turn locked and let reconciliation
-    // obtain a Terminal Resolution (or a later interaction payload).
     interactionSubmitting.value = false;
     clearPendingInteraction();
     const missingInteractionError = translate("chat.interactionPayloadMissing");
@@ -195,11 +192,6 @@ export async function applyReconnectChannelState({
     targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
   });
   if (isInFlightConversationState(state)) {
-    // A standalone reconnect channel_state can be the first fact observed
-    // after a page reload. Rebuild the required action-request phase before
-    // applying the backend processing fact; this is state hydration only and
-    // must not issue another network request. Existing turns reject this
-    // bootstrap event harmlessly and continue with the backend event below.
     const existingTurnRuntime = selectTurnMessageRuntime(
       turnRuntimeRegistry?.value || turnRuntimeRegistry,
       { sessionId, turnScopeId },
@@ -292,15 +284,9 @@ export async function applyReconnectChannelState({
         return replayObservation();
       }
     }
-    // Message runtime state is projected exclusively by
-    // turnRuntimeRegistry -> messageRuntimePatch after applyRunStateEvent.
-    // Reconnect replay must not maintain a second mutable runtime mirror.
     return replayObservation();
   }
   if (isTerminalConversationState(state)) {
-    // Defensive boundary for direct callers. Terminal channel facts are only
-    // notifications; the composition root schedules the authoritative read.
-    // This projector must not settle lifecycle, messages, or business locks.
     return replayObservation();
   }
   return replayObservation();

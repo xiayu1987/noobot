@@ -79,10 +79,6 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
   const turnScopeKey = turnScopeId ? `${sessionId || "active"}::${turnScopeId}` : "";
   const taskId = String(messageItem?.taskId || "").trim();
   const toolCallId = String(messageItem?.tool_call_id || "").trim();
-  // Do not include content or ts in the key: both can change when backend
-  // snapshots/replay patch an existing message. If the key changes Vue remounts
-  // the message component, which looks like the AI message flashes and can also
-  // make the previous message blink when a DONE snapshot is folded back.
   const stablePrimaryId = turnScopeKey || taskId || toolCallId || String(stableIndex);
   return [role, stablePrimaryId, stableIndex]
     .map((item) => String(item ?? "").replaceAll("|", "/"))

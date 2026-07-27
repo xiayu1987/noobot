@@ -293,8 +293,6 @@ export function useApiConnection({
       if (runConnected) await runConnectedCallback();
       return true;
     } catch (error) {
-      // Background recovery preserves the last credential during transient
-      // Service downtime. A foreground connect or authoritative HTTP 401 clears it.
       if (runConnected) clearApiAuth();
       if (!silent) notify({ type: "error", message: error.message || translate("infra.connectFailed") });
       return false;
@@ -311,7 +309,6 @@ export function useApiConnection({
   async function tryAutoConnect() {
     if (!String(userId.value || "").trim()) return false;
     if (!String(connectCode.value || "").trim()) return false;
-    // 刷新页面时始终向后端重新申请一次连接，避免服务重启后本地旧 apiKey 失效
     return Boolean(await connectBackend({ silent: true }));
   }
 

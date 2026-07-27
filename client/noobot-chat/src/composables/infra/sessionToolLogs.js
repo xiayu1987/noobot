@@ -396,12 +396,6 @@ function applyCompletedToolLogsToMessages(messages = [], sessionDocuments = []) 
     const sessionId = rootSessionId || String(messageItem?.sessionId || messageItem?.session_id || "").trim();
     const turnScopeId = getMessageTurnScopeId(messageItem);
     const turnScopeKey = buildTurnScopeGroupKey(sessionId, turnScopeId);
-    // The view message can carry the root session id while the persisted
-    // assistant/tool messages are stored in a descendant session.  Matching
-    // by the composite key in that case silently drops the assistant
-    // tool_call rows and leaves only a partial projection (usually results).
-    // Session detail is the source of truth; use the turn scope to locate the
-    // complete session timeline when the exact session key is unavailable.
     let matchedToolLogs = groupedLogs.get(turnScopeKey) || [];
     if (!matchedToolLogs.length && turnScopeId) {
       const suffix = `::${turnScopeId}`;

@@ -44,9 +44,6 @@ export function isInFlightAssistantMessage(messageItem = {}, {
   const turnScopeId = getMessageTurnScopeId(messageItem);
   const dialogProcessId = getMessageDialogProcessId(messageItem);
   const registryView = selectTurnMessageRuntime(registry, { sessionId, turnScopeId, dialogProcessId });
-  // Registry is the runtime source of truth. Message runtime projection is only
-  // a bootstrap fallback while the registry has not observed this Turn yet;
-  // legacy turnStatuses never participate in this decision.
   const runtimeView = registryView?.source
     ? { ...registryView, inFlightAssistant: registryView.running === true }
     : resolveSessionRunMessageRuntimeView(messageItem);

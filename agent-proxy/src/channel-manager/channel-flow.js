@@ -17,7 +17,6 @@ import { normalizeApiKey, createChannelKey, buildFingerprint } from "../utils.js
 import { writeAgentProxyRouteDebugEvent } from "../route-debug-runtime-events.js";
 
 class ChannelFlowMethods {
-// ---- Channel Resolution ----
 
 resolveChannelFromSocketMessage(socket, payload = {}) {
   const action = String(payload?.action || "").trim().toLowerCase();
@@ -68,7 +67,6 @@ resolveChannelFromSocketMessage(socket, payload = {}) {
   return null;
 }
 
-// ---- Forward ----
 
 forwardToUpstream(channel, payload = {}) {
   if (!channel?.upstreamSocket || channel.upstreamSocket.readyState !== this.WebSocket.OPEN) {
@@ -116,7 +114,6 @@ forwardToUpstream(channel, payload = {}) {
   }
 }
 
-// ---- Start / Join ----
 
 startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
   const normalizedConnectionApiKey = normalizeApiKey(connectionApiKey);

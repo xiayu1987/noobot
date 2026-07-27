@@ -75,14 +75,8 @@ export function createComposerActions({
   }
 
   function stopSendingWithComposerActionState(...args) {
-    // An explicit Execution target owns its own authoritative capabilities.
-    // The composer state only describes the currently opened root turn and
-    // must not block stopping a child/workflow execution in another channel.
     const explicitExecutionId = String(args[0] || "").trim();
     if (!explicitExecutionId && !composerActionState.value.canStop) return false;
-    // chatEngine.stopSending atomically records LOCAL_USER_STOP_REQUEST_STARTED
-    // after it has resolved the active assistant identity. Dispatching it here
-    // first would turn canStop off and make the engine reject its own request.
     const requested = stopSending(...args);
     return requested;
   }

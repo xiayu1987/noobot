@@ -125,8 +125,6 @@ function collectPiiRanges(text) {
   };
   addMatches(/(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w.-])/giu);
   addMatches(/(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)/g);
-  // International numbers require an explicit country prefix to avoid masking
-  // arbitrary identifiers and source-code numbers.
   addMatches(/(?<![\w+])\+\d(?:[ ()-]*\d){7,14}(?!\d)/g, isValidInternationalPhone);
   addMatches(/(?<!\d)\d{17}[\dXx](?![\dXx])/g, isValidCnId);
   addMatches(/(?<![\d-])\d{3}-\d{2}-\d{4}(?![\d-])/g, isValidUsSsn);
@@ -134,14 +132,10 @@ function collectPiiRanges(text) {
   addMatches(/(?<![A-Z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}(?![A-Z0-9])/gi, isValidIban);
   addMatches(/(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])/g,
     (value) => isIP(value) === 4 && !isPrivateOrLocalIpv4(value));
-  // Let node:net perform the strict validation; the candidate pattern also
-  // admits compressed forms such as 2001:db8::1 and ::1.
   addMatches(/(?<![\w:])(?=[A-F0-9:]*:)[A-F0-9:]{2,39}(?![\w:])/gi,
     (value) => isIP(value) === 6 && !isPrivateOrLocalIpv6(value));
   addMatches(/(?<![A-F0-9])(?:[A-F0-9]{2}[:-]){5}[A-F0-9]{2}(?![A-F0-9])/gi);
 
-  // Passport numbers have no safe universal shape. Only mask them when a
-  // multilingual passport label supplies strong context.
   const passport = /(?:passport(?:\s+(?:no|number))?|passport[_-]?(?:no|number)|护照(?:号|号码)?|旅券番号)\s*[:=#]?\s*([A-Z0-9][A-Z0-9 -]{5,18}[A-Z0-9])/gi;
   for (const match of text.matchAll(passport)) {
     const candidate = match[1];
@@ -161,8 +155,6 @@ function shannonEntropy(value = '') {
   }
   return entropy;
 }
-// Deliberately limited to strong prefixes and structured credentials. No global
-// "long/high-entropy string" rule: hashes and ordinary source code must survive.
 const SECRET_RULES = [
   /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
@@ -176,8 +168,6 @@ const SECRET_RULES = [
   /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
   /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g,
 ];
-// `Bearer` already provides strong credential context, so do not impose a
-// length/entropy threshold. Short development and test tokens are secrets too.
 const BEARER_SECRET = /\bBearer\s+([A-Za-z0-9._~+/=-]+)/gi;
 const SECRET_ASSIGNMENT = /\b(?:api[_-]?key|secret|token|password|passwd|pwd|client[_-]?secret|access[_-]?token|refresh[_-]?token|private[_-]?key|auth)\b\s*[:=]\s*(['"]?)([^\s'"]{8,})\1/gi;
 function collectSecretRanges(text) {
@@ -236,7 +226,6 @@ function sanitizeToolResultText(toolResultText = '', options = {}) {
   try {
     fieldSanitized = JSON.stringify(sanitizeSensitiveFields(JSON.parse(text)));
   } catch {
-    // Plain text still receives content-level secret and PII sanitization.
   }
   return sanitizeText(fieldSanitized, options);
 }

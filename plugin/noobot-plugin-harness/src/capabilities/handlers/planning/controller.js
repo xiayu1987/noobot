@@ -211,7 +211,6 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           if (planUpdateScheduled) {
             holder.state.counters.planUpdateTurns = 0;
           } else if (blockedByPendingPlanUpdate) {
-            // Keep threshold pressure while a prior plan-update is still pending.
             holder.state.counters.planUpdateTurns = planUpdateTriggerTurnsThreshold;
             blockedActions.push(PLANNING_DECISION.label.planUpdateRevision);
             blockedReasons.push("plan_update_blocked_by_pending_plan_update");
@@ -249,9 +248,6 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
               decisionReason = PLANNING_DECISION.reason.phaseAcceptanceThreshold;
             }
           } else {
-            // Keep threshold pressure when blocked by higher-priority flows
-            // (summary/guidance/plan-update), so phase acceptance can be
-            // scheduled immediately after they are cleared.
             holder.state.counters.phaseAcceptanceTurns = phaseAcceptanceTriggerTurnsThreshold;
             blockedActions.push(WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance);
             blockedReasons.push("phase_acceptance_blocked_by_higher_priority_pending");

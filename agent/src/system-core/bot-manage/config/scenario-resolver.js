@@ -22,9 +22,6 @@ function writeScenarioResolveFailedEvent(event = "", error = null) {
   });
 }
 
-/**
- * Resolve and parse scenario configuration from input and options.
- */
 export class ScenarioResolver {
   constructor(workspaceService) {
     this.workspaceService = workspaceService;

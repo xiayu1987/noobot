@@ -12,7 +12,6 @@ import {
   normalizeSelectedConnectors
 } from '../../src/system-core/session/entities.js';
 
-// ========== 2. 字段对齐测试 ==========
 describe('2. 字段对齐测试', () => {
   describe('normalizeMessageEntity 字段对齐', () => {
     it('应把权威 messageId 规范化为一致的 id/messageId', () => {
@@ -171,7 +170,6 @@ describe('2. 字段对齐测试', () => {
   });
 });
 
-// ========== 3. Session 字段完整性测试 ==========
 describe('3. Session 字段完整性测试', () => {
   describe('Session 运行时实体结构验证', () => {
     it('Session 应包含 sessionId, userId, scenario, status, createdAt, updatedAt', () => {
@@ -234,7 +232,6 @@ describe('3. Session 字段完整性测试', () => {
   });
 });
 
-// ========== 4. 落盘字段完整性测试 ==========
 describe('4. 落盘字段完整性测试', () => {
   describe('session.json 落盘结构', () => {
     it('落盘 session.json 应包含完整字段', () => {

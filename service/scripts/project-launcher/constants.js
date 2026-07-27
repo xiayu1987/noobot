@@ -24,7 +24,7 @@ export const BUILTIN_CONFIG_PRUNE_PATHS = Object.freeze([
   ["memoryMaxItems"],
   ["max_tool_loop_turns"],
   ["maxToolLoopTurns"],
-  ["run_timeout_ms"], // legacyKeys prune
+  ["run_timeout_ms"],
   ["runTimeoutMs"],
   ["attachments", "max_file_count"],
   ["attachments", "maxFileCount"],

@@ -192,7 +192,6 @@ export class SessionExecutionEngine {
   }
 
   _createRunner() {
-    // SessionExecutionRunner dependency wiring (grouped by concern)
     const runnerValidationDeps = {
       normalizeRunMessage: (message) => this._normalizeRunMessage(message),
       validateRunInput: (payload = {}) => this._validateRunInput(payload),

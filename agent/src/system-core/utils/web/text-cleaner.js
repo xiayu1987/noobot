@@ -81,7 +81,7 @@ function removeShortTextNodes(doc, minLength = MIN_TAG_TEXT_LENGTH) {
   );
   for (let targetIndex = targets.length - 1; targetIndex >= 0; targetIndex -= 1) {
     const node = targets[targetIndex];
-    if (!node || node.children?.length > 0) continue; // 只清理叶子节点，避免误删正文容器
+    if (!node || node.children?.length > 0) continue;
     const text = normalizeText(node.textContent || "");
     if (!text || text.length < minLength) {
       node.remove();

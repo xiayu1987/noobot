@@ -40,10 +40,6 @@ function resolveServiceFilter(includeRefs = []) {
 export function resolveServices(effectiveConfig = {}, { includeRefs = [] } = {}) {
   const services = effectiveConfig?.services || {};
   const { serviceNameSet, endpointRefSet, hasWildcard } = resolveServiceFilter(includeRefs);
-  // 语义约定：
-  // - ["*"] => 全量可用 service
-  // - [] / 未配置 => 不传任何 service
-  // - ["svc"] / ["svc.ep"] => 仅传指定 service 或 endpoint
   if (!hasWildcard && serviceNameSet.size === 0 && endpointRefSet.size === 0) {
     return [];
   }

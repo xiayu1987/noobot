@@ -10,9 +10,6 @@ import { isValidSessionId } from "../utils/session-utils.js";
 import { CALLER_ROLE, VALID_CALLER_ROLES } from "./constants.js";
 import { ERROR_CODE } from "../../error/constants.js";
 
-/**
- * Centralized validator for bot-manage runtime input/config.
- */
 export class BotManageValidator {
   normalizeRunMessage(message = "") {
     const normalizedMessage = String(message ?? "").trim();

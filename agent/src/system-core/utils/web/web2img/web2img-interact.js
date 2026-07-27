@@ -23,7 +23,6 @@ async function waitPageReady(page, runtimeDefaults) {
       timeout: pageCfg.networkIdleTimeoutMs,
     });
   } catch {
-    // Some sites keep long-polling connections; timeout is acceptable here.
   }
   await page.waitForTimeout(pageCfg.readyPostWaitMs);
 }
@@ -42,11 +41,9 @@ async function tryExpandContent(page, patterns, runtimeDefaults) {
             await page.waitForTimeout(expandCfg.postClickWaitMs);
           }
         } catch {
-          // Ignore per-element click failures and continue expanding other candidates.
         }
       }
     } catch {
-      // Ignore selector/query failures for this keyword; continue with next keyword.
     }
   }
 }

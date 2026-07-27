@@ -240,7 +240,6 @@ async function main() {
         `[openvscode] update available: ${installedTagName || "unknown"} -> ${release?.tag_name || "unknown"}`,
       );
     } catch {
-      // continue install
     }
   }
 

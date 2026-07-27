@@ -74,7 +74,6 @@ test("reconnect should not replay resolved interaction_request", () => {
     seq: 2,
   });
 
-  // simulate interaction_response already forwarded upstream
   channel.pendingInteractionRequests.delete("req-resolved");
   manager.requestChannelMap.delete("req-resolved");
 
@@ -119,7 +118,6 @@ test("reconnect should replay unresolved interaction_request with pending marker
 
   manager.handleReconnect(socket, {
     currentSessionId: "session-1",
-    // client has already received seq=2, reconnect should still resend pending request
     lastReceivedSeqMap: { "dp-1": 2 },
   });
 

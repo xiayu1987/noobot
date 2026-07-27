@@ -29,7 +29,6 @@ export function registerConfigAndTemplateRoutes(
     translateText,
   } = {},
 ) {
-  // ── Config params routes (unchanged) ──
 
   app.get(
     "/internal/config-params",
@@ -148,9 +147,6 @@ export function registerConfigAndTemplateRoutes(
     ),
   );
 
-  // ── Template file CRUD routes via factory ──
-  // Note: buildDirectoryArchiveFile is intentionally omitted so that
-  // the /download route is NOT registered (matches original behavior).
 
   registerFileCrudRoutes(app, {
     routePrefix: "/internal/admin/template",

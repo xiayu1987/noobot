@@ -2,30 +2,17 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Tool binding adapter: validate names, deduplicate, resolve strict schema policy.
  */
 import { mergeConfig } from "../../config/index.js";
 
 const OPENAI_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 const STRICT_INCOMPATIBLE_TOOL_NAMES = new Set(["call_service"]);
 
-/**
- * Check if the model is a Codex-like model.
- * @param {string} modelName
- * @param {string} modelAlias
- * @returns {boolean}
- */
 function isCodexLikeModel(modelName = "", modelAlias = "") {
   const token = `${String(modelName || "").toLowerCase()} ${String(modelAlias || "").toLowerCase()}`;
   return token.includes("codex") || token.includes("gpt-5.3-codex");
 }
 
-/**
- * Resolve strict tool schema policy from config or model detection.
- * @param {object} modelState
- * @returns {boolean}
- */
 function resolveStrictToolSchemaPolicy(modelState = {}) {
   const effectiveConfig = mergeConfig(
     modelState?.globalConfig || {},
@@ -94,12 +81,6 @@ function removeToolSearchDeferral(toolItem = {}) {
   return normalizedTool;
 }
 
-/**
- * Adapt tools for model binding: validate, deduplicate, resolve strict mode.
- * @param {Array<object>} tools
- * @param {object} modelState
- * @returns {{ tools: Array<object>, droppedToolNames: string[], strictDowngradedTools: string[], bindOptions: object }}
- */
 export function adaptToolsForBinding(tools = [], modelState = {}) {
   const sourceTools = Array.isArray(tools) ? tools : [];
   const seenNames = new Set();

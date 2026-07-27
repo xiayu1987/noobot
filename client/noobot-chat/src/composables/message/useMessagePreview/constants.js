@@ -5,7 +5,6 @@
  */
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-// --- 常量集合（避免每次调用 new Set） ---
 export const MARKDOWN_EXTS = new Set(["md", "markdown", "mdx"]);
 export const IMAGE_EXTS = new Set([
   "png",
@@ -85,7 +84,6 @@ export const TEXT_PREVIEW_EXTS = new Set([
   "kts",
   "scala",
   "sh",
-  // cross-platform-allow: this is a file extension label, not a shell execution dependency.
   "bash",
   "zsh",
   "fish",

@@ -9,12 +9,6 @@ import { filePath as path } from "../../utils/path-resolver.js";
 import { safeStr } from "../../utils/shared-utils.js";
 import { MIME_TO_EXTENSION } from "../constants.js";
 
-/**
- * 根据扩展名或文件名解析 MIME 类型。
- *
- * @param {string} fileNameOrExtension - 文件名或扩展名。
- * @returns {string}
- */
 export function getMimeTypeFromExtension(fileNameOrExtension = "") {
   const raw = safeStr(fileNameOrExtension).toLowerCase();
   if (!raw) return "";
@@ -32,12 +26,6 @@ export function getMimeTypeFromExtension(fileNameOrExtension = "") {
   return "";
 }
 
-/**
- * 判断 MIME 类型字符串是否有效。
- *
- * @param {string} mimeType - MIME 字符串。
- * @returns {boolean}
- */
 export function isValidMimeType(mimeType = "") {
   return Boolean(safeStr(mimeType).trim());
 }

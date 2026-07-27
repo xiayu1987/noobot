@@ -43,7 +43,6 @@ function applyTheme(nextTheme = "dark") {
   try {
     globalThis.localStorage?.setItem?.(STORAGE_KEY, resolvedTheme);
   } catch {
-    // Storage can be unavailable in privacy-restricted or sandboxed contexts.
   }
 }
 

@@ -4,15 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * Agent concrete-plugin coupling guard
- *
- * Goal:
- * - Agent core must not add new direct knowledge of concrete plugins such as
- *   harness/workflow in main paths.
- * - No compatibility allowlist is maintained for concrete plugin terms in
- *   agent core. Remove the coupling instead of adding exceptions.
- */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -48,9 +39,6 @@ const IGNORE_PATH_PARTS = [
   `${path.sep}__tests__${path.sep}`,
 ];
 
-// Concrete plugin terms that must not appear in agent core.
-// Keep this broad: it catches identifiers, strings, legacy relay labels, and
-// plugin-specific header names.
 const COUPLING_REGEX = /harness|workflow|Harness|Workflow|HARNESS|WORKFLOW|来自harness外部模型输出|Relay from harness/g;
 
 function toPosix(filePath) {

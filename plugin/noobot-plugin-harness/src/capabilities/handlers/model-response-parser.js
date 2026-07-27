@@ -24,8 +24,6 @@ export function isSummaryCompletionMarked(content = "", locale = LOCALE.ZH_CN) {
   const zhMatched = /\u5c0f\u7ed3\u5b8c\u6210[\u3002\uff01\uff1f\u201d"]?$/.test(lastLine);
   const enMatched = /summary complete[.!?。！？”"]?$/.test(lastLine);
   if (zhMatched || enMatched) return true;
-  // Relaxed rule: as long as summary has non-empty content, treat it as completed.
-  // Marker is now optional to avoid blocking revision/refinement chaining.
   void locale;
   return true;
 }

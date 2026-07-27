@@ -20,9 +20,6 @@ function sessionIdFromSession(session = {}) {
 }
 
 function effectiveMessageSessionId(message = {}, fallbackSessionId = "") {
-  // Membership in activeSession is the authoritative container ownership.
-  // This also canonicalizes an optimistic local Session id after backend
-  // promotion without teaching Turn selection about transport aliases.
   return text(fallbackSessionId) || getMessageSessionId(message);
 }
 
@@ -161,11 +158,6 @@ function coalescePersistedWorkflowShells(messages = [], activeSessionId = "") {
   return output;
 }
 
-/**
- * Builds the only message/card presentation sequence used by the chat view.
- * Runtime workflow state and persisted workflow messages converge here; no
- * renderer is allowed to infer a second assistant shell from the registry.
- */
 export function selectTurnPresentations({
   activeSession = {},
   workflowRegistry = {},

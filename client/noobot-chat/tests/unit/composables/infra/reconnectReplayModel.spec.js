@@ -168,7 +168,6 @@ describe("reconnectReplayModel", () => {
     expect(target.completedToolLogs).toEqual([{ id: 1 }]);
     expect(target.realtimeLogs).toEqual([{ id: 1 }]);
     expect(target.transferEnvelopes).toEqual([envelope]);
-    // Pure UI state is owned by turnUiStore and is not a snapshot concern.
     expect(target.statusLabel).toBe("pending");
   });
 

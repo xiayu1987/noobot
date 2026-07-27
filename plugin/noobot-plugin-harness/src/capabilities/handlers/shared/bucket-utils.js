@@ -215,7 +215,6 @@ export function ensureHarnessBucket(ctx = {}) {
     bucket.__harnessBucketVersion !== HARNESS_BUCKET_VERSION &&
     legacyStateVersion === HARNESS_BUCKET_VERSION
   ) {
-    // Backward-compat recovery for payloads that only carried state version.
     bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
   }
 

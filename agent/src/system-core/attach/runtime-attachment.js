@@ -20,9 +20,6 @@ function appendUniqueTransferEnvelope(target = [], envelope = null, seen = new S
   target.push(envelope);
 }
 
-/**
- * 将附件元数据追加到运行时上下文和当前 turn 中
- */
 export function appendAttachmentMetasToRuntimeAndTurn(
   runtimeOrPayload,
   turnArg,
@@ -64,7 +61,6 @@ export function appendAttachmentMetasToRuntimeAndTurn(
   );
   const transferPayload = buildTransferPayloadFromAttachmentMetas(semanticTransferMetas);
 
-  // 更新 runtime。标准字段统一为 attachments。
   runtime.attachments = mergeAttachmentMetas(
     Array.isArray(runtime.attachments) ? runtime.attachments : [],
     mappedMetas,
@@ -97,7 +93,6 @@ export function appendAttachmentMetasToRuntimeAndTurn(
     };
   };
 
-  // 更新 turn（支持当前 turn store / 普通对象 / 数组）
   const isTurnStore =
     turn &&
     typeof turn === "object" &&

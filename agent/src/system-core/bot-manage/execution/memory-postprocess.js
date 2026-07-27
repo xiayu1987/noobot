@@ -28,9 +28,6 @@ function isAbortLikeError(error = {}) {
   );
 }
 
-/**
- * Memory post-process configuration + flow.
- */
 export class MemoryPostProcessService {
   constructor({
     globalConfig = {},
@@ -164,8 +161,6 @@ export class MemoryPostProcessService {
     Promise.resolve()
       .then(() => this.runMemorySummarizeFlow(payload))
       .catch(() => {
-        // runMemorySummarizeFlow already emits/logs failures; keep background
-        // long-memory and experience processing from surfacing unhandled rejections.
       });
   }
 

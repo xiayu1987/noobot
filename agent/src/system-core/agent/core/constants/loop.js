@@ -6,9 +6,6 @@
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
-/**
- * 引擎 I18n 键名映射
- */
 export const ENGINE_I18N_KEY_MAP = {
   toolLoopLimitReached: "agent.toolLoopLimitReached",
   toolConsecutiveFailureHelpPrompt:
@@ -22,40 +19,18 @@ export const ENGINE_I18N_KEY_MAP = {
   phaseSummaryPrompt: "agent.phaseSummaryPrompt",
 };
 
-/**
- * 工具连续错误触发帮助提示默认阈值
- */
 export const DEFAULT_TOOL_FAILURE_HELP_COUNT =
   TURN_THRESHOLDS.agent.toolFailureHelpCount;
 
-/**
- * 工具调用循环默认最大轮数
- * 内置阈值，不通过配置覆盖
- */
 export const DEFAULT_MAX_TOOL_LOOP_TURNS =
   TURN_THRESHOLDS.agent.maxToolLoopTurns;
 
-/**
- * 超过工具调用循环最大轮数后的缓冲轮数。
- *
- * 达到 maxTurns 后，先给模型最多 5 轮继续收尾/自纠的机会；如果缓冲轮
- * 之后仍未结束工具循环，则强制切换到无工具模型调用生成最终答复。
- * 内置阈值，不通过配置覆盖。
- */
 export const DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS =
   TURN_THRESHOLDS.agent.toolLoopLimitBufferTurns;
 
-/**
- * 阶段小结默认触发工具循环轮数。
- * 内置阈值，不通过配置覆盖。
- */
 export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS =
   TURN_THRESHOLDS.agent.phaseSummaryLoopTurns;
 
-/**
- * 阶段小结默认触发消息字符阈值（未 summarized 的上下文总字符数）。
- * 内置阈值，不通过配置覆盖。
- */
 export const DEFAULT_PHASE_SUMMARY_MESSAGE_CHARS_THRESHOLD =
   LENGTH_THRESHOLDS.context.phaseSummaryMessageChars;
 export const PHASE_SUMMARY_OVERFLOW_POLICY = Object.freeze({
@@ -65,20 +40,11 @@ export const PHASE_SUMMARY_OVERFLOW_POLICY = Object.freeze({
   ENFORCE_NO_TOOLS_WHEN_STILL_OVERFLOW: true,
 });
 
-/**
- * 帮助提示默认循环轮数
- */
 export const DEFAULT_HELP_PROMPT_LOOP_TURNS =
   TURN_THRESHOLDS.agent.helpPromptLoopTurns;
 
-/**
- * Internal message type markers for system-injected prompts.
- */
 export const PHASE_SUMMARY_PROMPT_MARKER = "noobot.phase_summary_prompt";
 export const HELP_TOOL_LOOP_PROMPT_MARKER = "noobot.help_tool_loop_prompt";
 export const HELP_TOOL_FAILURE_PROMPT_MARKER = "noobot.help_tool_failure_prompt";
 
-/**
- * Tool names used internally by the engine.
- */
 export const TASK_SUMMARY_TOOL_NAME = "task_summary";

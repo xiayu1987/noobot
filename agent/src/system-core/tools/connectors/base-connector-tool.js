@@ -38,14 +38,6 @@ import {
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../error/constants.js";
 
-/**
- * Build the Zod schema for a connector connect tool.
- *
- * @param {object} runtime
- * @param {string} toolName
- * @param {Array<{name: string, zodType: z.ZodTypeAny}>} [extraParams]
- * @returns {z.ZodObject}
- */
 function buildConnectSchema(runtime, toolName, extraParams = []) {
   const shape = {
     connector_name: z
@@ -64,21 +56,6 @@ function buildConnectSchema(runtime, toolName, extraParams = []) {
   return z.object(shape);
 }
 
-/**
- * Factory: create a connector "connect" tool.
- *
- * @param {object} opts
- * @param {string}   opts.connectorType       - "email" | "database" | "terminal"
- * @param {string}   opts.toolName            - e.g. "email_connect_connector"
- * @param {Array}    [opts.extraSchemaParams] - extra schema fields
- * @param {Function} opts.normalizeDefaults   - (rawDefaultValues) => object
- * @param {Function} opts.getFields           - (typeValue, locale) => field[]
- * @param {string}   [opts.typeParamName]     - e.g. "database_type"
- * @param {Function} [opts.resolveTypeValue]  - (inputParams) => string | undefined
- * @param {Function} [opts.validateType]      - (typeValue) => errorString | undefined
- * @param {object}   opts.context             - connector tool context
- * @returns {DynamicStructuredTool}
- */
 export function createConnectConnectorTool(opts) {
   const {
     connectorType,
@@ -110,7 +87,6 @@ export function createConnectConnectorTool(opts) {
   const func = async (inputParams) => {
     const runtimeLocale = resolveRuntimeLocale(runtime);
 
-    // --- pre-checks ---
     if (!store || typeof store.connectConnector !== "function") {
       throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
         code: ERROR_CODE.RECOVERABLE_CONNECTOR_STORE_MISSING,
@@ -129,12 +105,10 @@ export function createConnectConnectorTool(opts) {
       });
     }
 
-    // resolve type value dynamically from inputParams
     const typeValue = resolveTypeValue
       ? resolveTypeValue(inputParams)
       : undefined;
 
-    // optional type validation
     if (validateType) {
       const typeError = validateType(typeValue);
       if (typeError) {
@@ -144,7 +118,6 @@ export function createConnectConnectorTool(opts) {
       }
     }
 
-    // --- already connected? ---
     const existingConnected = findConnectedConnector({
       store,
       rootSessionId,
@@ -159,7 +132,6 @@ export function createConnectConnectorTool(opts) {
       return buildAlreadyConnectedResponse(toolName, existingConnected, runtime);
     }
 
-    // --- merge connection info ---
     let connectionInfo = resolveConfiguredConnectorInfo({
       effectiveConfig,
       connectorName,
@@ -176,14 +148,12 @@ export function createConnectConnectorTool(opts) {
     connectionInfo = mergeConnectionInfo(connectionInfo, rememberedConnectionInfo);
     connectionInfo = mergeConnectionInfo(connectionInfo, providedDefaults);
 
-    // merge type param if applicable
     if (typeParamName && typeValue) {
       connectionInfo = mergeConnectionInfo(connectionInfo, {
         [typeParamName]: typeValue,
       });
     }
 
-    // --- build fields ---
     const baseFields = attachDefaultValuesToFields(
       alignFieldsWithConnectionInfo(
         getFields(typeValue, runtimeLocale),
@@ -207,7 +177,6 @@ export function createConnectConnectorTool(opts) {
     const missing = getMissingFieldNames(fields, connectionInfo);
     const needConnectionInfo = missing.length > 0;
 
-    // --- user interaction ---
     if (needConnectionInfo) {
       if (!allowUserInteraction) {
         throw recoverableToolError(
@@ -229,7 +198,6 @@ export function createConnectConnectorTool(opts) {
         );
       }
 
-      // i18n key: fillEmailConnectionInfo / fillDatabaseConnectionInfo / fillTerminalConnectionInfo
       const i18nKey = `fill${connectorType.charAt(0).toUpperCase()}${connectorType.slice(1)}ConnectionInfo`;
       const i18nVars = typeParamName ? { [typeParamName]: typeValue } : undefined;
       const interactionResult = await bridge.requestUserInteraction({
@@ -259,7 +227,6 @@ export function createConnectConnectorTool(opts) {
       connectionInfo = mergeConnectionInfo(connectionInfo, interactionResult);
     }
 
-    // --- connect ---
     const connected = store.connectConnector({
       sessionId: rootSessionId,
       connectorName,
@@ -275,7 +242,6 @@ export function createConnectConnectorTool(opts) {
     });
     const connectedSuccess = String(runtimeStatus?.status || "") === "connected";
 
-    // build extra payload
     const extraPayload = {
       need_connection_info: needConnectionInfo,
       connection_info_masked: maskConnectionInfo(connectionInfo),

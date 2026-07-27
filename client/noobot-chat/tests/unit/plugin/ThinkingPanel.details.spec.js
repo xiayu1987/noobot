@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-// Tests split by responsibility from ThinkingPanel.spec.js.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
@@ -16,23 +15,23 @@ describe("ThinkingPanel", () => {
     vi.useRealTimers();
   });
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
+
+
+
+
+
+
+
+
+
 
   it("uses thinking detail count rather than execution total for detail action label", () => {
     const wrapper = mountThinkingPanel({
@@ -51,7 +50,7 @@ describe("ThinkingPanel", () => {
     expect(wrapper.find("button").text()).not.toContain("9");
   });
 
-  
+
 
   it("emits thinking details event from execution process detail button", async () => {
     const completedToolLogs = Array.from({ length: 12 }, (_, index) => ({
@@ -233,7 +232,7 @@ describe("ThinkingPanel", () => {
     expect(panes[1].text()).toContain("injected context");
   });
 
-  
+
 
   it("does not backfill injected messages while current assistant is pending before streaming starts", () => {
     const wrapper = mountThinkingPanel(
@@ -262,15 +261,15 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).not.toContain("injected context");
   });
 
-  
 
-  
 
-  
 
-  
 
-  
+
+
+
+
+
 
   it("renders session logs directly without mixing message-derived tool calls", () => {
     const wrapper = mountThinkingPanel(
@@ -440,11 +439,11 @@ describe("ThinkingPanel", () => {
     ]);
   });
 
-  
 
-  
 
-  
 
-  
+
+
+
+
 });

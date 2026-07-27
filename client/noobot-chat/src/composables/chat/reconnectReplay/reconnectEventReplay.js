@@ -133,8 +133,6 @@ export async function applyReconnectEventReplay({
         dialogProcessId,
         state: BackendChannelState.COMPLETED,
         sourceEvent: "done",
-        // A dialog-only payload cannot prove Turn ownership and therefore
-        // cannot grant lifecycle completion authority.
         authoritativeSnapshot: false,
       });
     }
@@ -142,8 +140,6 @@ export async function applyReconnectEventReplay({
   }
 
   if (sessionId) {
-    // New writes are physically isolated by canonical turn ownership. Legacy
-    // dialog/session keys remain read-only compatible in replayCache.js.
     const replayKey = normalizeReplayCacheKey(dialogProcessId, sessionId, turnScopeId);
     if (!replayCache[sessionId]) replayCache[sessionId] = {};
     if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];

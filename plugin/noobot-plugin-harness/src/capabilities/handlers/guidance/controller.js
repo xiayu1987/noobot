@@ -1,9 +1,9 @@
-import { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {

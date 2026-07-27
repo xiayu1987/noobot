@@ -16,7 +16,7 @@ const props = defineProps({
   canPreviewParsedResult: { type: Function, default: null },
   formatFileSize: { type: Function, required: true },
   translate: { type: Function, default: (key = "") => key },
-  badgeMode: { type: String, default: "auto" }, // auto | plugin
+  badgeMode: { type: String, default: "auto" },
   customBadgeText: { type: String, default: "" },
   customBadgeClass: { type: String, default: "" },
   nameText: { type: String, default: "" },

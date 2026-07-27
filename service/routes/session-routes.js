@@ -118,12 +118,7 @@ function filterWorkflowRuntimeProjectionForSession({ result = {}, sessionId = ""
       collectIdentity(timing);
     }
   }
-  // execution.jsonl is immutable audit history. An empty authoritative Session
-  // document means no Turn still owns a UI projection, even though audit events
-  // remain on disk after message deletion.
   if (!persistedTurnCount) return [];
-  // Legacy Session documents may not carry either canonical identity. Keep
-  // their historical behavior; modern Turns are filtered by exact ownership.
   if (!turnScopeIds.size && !dialogProcessIds.size) return events;
 
   const acceptedWorkflowRunIds = new Set();

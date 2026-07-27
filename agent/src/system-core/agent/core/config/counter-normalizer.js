@@ -4,12 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Normalizes systemRuntime counters to ensure they are valid numbers.
- * IMPORTANT: toolLoopExecutionCount MUST be normalized before
- * phaseSummaryLoopCount, because phaseSummaryLoopCount falls back to
- * the already-normalized toolLoopExecutionCount value.
- */
 import {
   MAIN_FLOW_CONTROL_REASON,
   requestMainFlowFinalNoToolsTurn,

@@ -309,7 +309,7 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 10 to
     },
     meta: {
       harness: {
-        // UI analysis intensity 10 is persisted as turnsThreshold 1.
+
         guidance: { analysis: { turnsThreshold: 1 } },
       },
     },
@@ -344,7 +344,7 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
     },
     meta: {
       harness: {
-        // UI analysis intensity 9 is persisted as turnsThreshold 2.
+
         guidance: { analysis: { turnsThreshold: 2 } },
       },
     },
@@ -371,7 +371,7 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
     },
     meta: {
       harness: {
-        // UI analysis intensity 9 is persisted as turnsThreshold 2.
+
         guidance: { analysis: { turnsThreshold: 2 } },
       },
     },
@@ -385,4 +385,3 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
   assert.equal(scheduledLog?.detail?.triggerTurns, 2);
   assert.equal(scheduledLog?.detail?.thresholdSource, "runtime");
 });
-

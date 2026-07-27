@@ -29,10 +29,8 @@ export function allocatePort(host = DEFAULT_HOST) {
 export function stopInstanceBestEffort(instance = {}, { forceAfterMs = DEFAULT_SHUTDOWN_GRACE_MS } = {}) {
   if (!instance?.pid) return; const pid = Number(instance.pid);
   if (process.platform === "win32") { taskkillProcessTreeBestEffort(pid); return; }
-  // cross-platform-allow: Windows uses taskkill above; POSIX OpenVSCode cleanup uses signals.
   try { process.kill(pid, "SIGTERM"); } catch { return; }
   if (Number(forceAfterMs || 0) > 0) { const timer = setTimeout(() => { if (!isProcessAlive(pid)) return; try {
-    // cross-platform-allow: Windows uses taskkill above; POSIX OpenVSCode cleanup uses signals.
     process.kill(pid, "SIGKILL");
   } catch {} }, Number(forceAfterMs)); timer.unref?.(); }
 }

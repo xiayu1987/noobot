@@ -170,8 +170,6 @@ export class WsRouter {
       }
       const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
       if (forwarded) return;
-      // A failed proxy hop is a transport/command failure, not an authoritative
-      // Turn failure. Service lifecycle events remain the only business source.
       this.channelManager.sendSocketError(
         socket,
         AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,

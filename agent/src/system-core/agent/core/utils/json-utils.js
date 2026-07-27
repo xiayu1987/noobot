@@ -13,7 +13,6 @@ export function parseJsonObjectSafely(input = "") {
       return parsed;
     }
   } catch {
-    // Invalid JSON is expected for free-form model output; return null for caller fallback.
   }
   return null;
 }

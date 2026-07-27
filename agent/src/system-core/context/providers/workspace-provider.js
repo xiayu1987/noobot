@@ -39,7 +39,6 @@ export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
       directories.add(["runtime", entry.name].join("/"));
     }
   } catch {
-    // runtime/ is optional; ignore when missing or inaccessible.
   }
   return Array.from(directories).sort((leftDir, rightDir) =>
     leftDir.localeCompare(rightDir),

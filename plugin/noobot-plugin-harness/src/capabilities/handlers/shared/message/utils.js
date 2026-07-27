@@ -57,13 +57,6 @@ function resolveMessageRole(message = {}) {
   return type;
 }
 
-/**
- * Determine whether the latest model response in the main flow contains both
- * tool calls and non-empty content. Search backward for the nearest assistant
- * message not injected by the harness because tool results may trail it during
- * scheduling analysis. Both inject and separate_model analysis paths share
- * this guard as their single source of truth.
- */
 export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
   const items = Array.isArray(messages) ? messages : [];
   for (let index = items.length - 1; index >= 0; index -= 1) {

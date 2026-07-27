@@ -57,7 +57,6 @@ export class BotManager {
       errorLogger: this.errorLogger,
     });
 
-    // Backward compatibility for any legacy callers that read this map directly.
     this.asyncJobs = this.asyncJobManager.asyncJobs;
   }
 
@@ -166,7 +165,6 @@ export class BotManager {
         ]);
         deletedSessionIds.push(sessionId);
       } catch {
-        // ignore per-session cleanup failures (best effort)
       }
     }
     return { deletedSessionIds, deletedCount: deletedSessionIds.length };

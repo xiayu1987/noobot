@@ -234,9 +234,6 @@ function pickPayloadSemantic(semantic = {}) {
 
 function pickPayloadNodeRun(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-  // Summary snapshots may include legacy plugin payloads. Keep dialogId/nodeDialogId
-  // here only as read-only history fields; new plugin payloads must write
-  // dialogProcessId/nodeDialogProcessId instead.
   const picked = pickPlainFields(item, [
     "transition", "stepId", "stepIndex", "actionNodeStateId", "nodeDialogProcessId", "dialogProcessId",
     "nodeDialogId", "dialogId",
@@ -255,8 +252,6 @@ function pickPayloadNodeRun(item = {}) {
 
 function pickPayloadNodeSession(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-  // dialogId is retained only for summarizing historical plugin payloads.
-  // It is not a new payload write target.
   const picked = pickPlainFields(item, [
     "transition", "nodeName", "nodeId", "nodeType", "actionNodeStateId", "stepId", "stepIndex",
     "type", "stateType", "rootSessionId", "dialogProcessId", "dialogId", "sessionId", "stepStatus", "status",
@@ -294,7 +289,6 @@ function pickPluginPayloadSnapshot(payload = {}) {
     .map((item) => pickPayloadNodeSession(item))
     .filter(Boolean);
   if (nodeSessions.length) picked.nodeSessions = nodeSessions;
-  // dialogId remains in summary allow-lists only for historical payload snapshots.
   const planningDialog = pickPlainFields(
     payload?.planningDialog,
     ["sessionId", "dialogProcessId", "dialogId", "parentSessionId"],

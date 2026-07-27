@@ -159,8 +159,6 @@ export function resolveThinkingDurationMs({
   const startMs = resolveTimeMs(messageStartedAt);
   if (startMs <= 0) return null;
   const finishedMs = resolveTimeMs(messageFinishedAt);
-  // Persisted start/finish facts always win over transient runtime state.
-  // Runtime state is only allowed to advance a timing that has no finish.
   if (finishedMs > 0) {
     return finishedMs >= startMs ? finishedMs - startMs : null;
   }

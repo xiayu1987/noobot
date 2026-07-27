@@ -48,14 +48,6 @@ import {
   resolveBotDispatchOutcome,
 } from "@noobot/shared/bot-dispatch-protocol";
 
-/**
- * Main execution runner (pipeline orchestration).
- *
- * Responsibilities:
- * - Decide when a session enters each orchestration phase
- * - Delegate agent-side implementation details to prepareAgentTurnExecution/agentRunner
- * - Keep bot-level concerns (session I/O, bot hooks, async task status, error logging)
- */
 export class SessionExecutionRunner {
   constructor({
     agentRunner,
@@ -621,9 +613,6 @@ export class SessionExecutionRunner {
           dispatchError.dispatchOutcome = dispatchOutcome;
           throw dispatchError;
         }
-        // Hooks that take over dispatch claim the lifecycle when takeover is
-        // decided. Keep this fallback for hook implementations that only set
-        // the legacy override fields at completion.
         claimAgentDispatch({
           owner: dispatchOutcome.owner,
           source: "before_agent_dispatch_override",

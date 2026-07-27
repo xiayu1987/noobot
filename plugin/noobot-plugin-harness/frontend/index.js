@@ -77,9 +77,6 @@ export function registerFrontendPlugin(ctx = {}) {
         slot: "pre",
         priority: 10,
         component: ThinkingPanel,
-        // Every assistant Turn uses the same shell. A live workflow is merely
-        // another card on that shell, so thinking/runtime state must be
-        // selected exactly as it is for persisted assistant messages.
         match: matchesThinkingPanel,
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},

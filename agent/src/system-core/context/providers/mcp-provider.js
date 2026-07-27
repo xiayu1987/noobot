@@ -19,10 +19,6 @@ export function resolveAvailableMcpServers(
   const normalizedNames = normalizeStringArray(includeNames);
   const hasWildcard = normalizedNames.includes("*");
   const includeNameSet = new Set(normalizedNames);
-  // 语义约定：
-  // - ["*"] => 全量可用 MCP
-  // - [] / 未配置 => 不传任何 MCP
-  // - ["a", "b"] => 仅传指定 MCP
   if (!hasWildcard && includeNameSet.size === 0) {
     return [];
   }

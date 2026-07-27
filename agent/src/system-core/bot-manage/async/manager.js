@@ -9,9 +9,6 @@ import { AsyncJobResponseBuilder } from "./response-builder.js";
 import { ASYNC_JOB_STATUS } from "./constants.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 
-/**
- * Generic async job lifecycle manager.
- */
 export class AsyncJobLifecycleManager {
   constructor({
     jobStore = null,

@@ -80,11 +80,6 @@ export class ConfigService {
       this.globalConfig?.configParams && typeof this.globalConfig.configParams === "object"
         ? this.globalConfig.configParams
         : {};
-    // precedence:
-    // 1) process.env (resolved at template stage, highest)
-    // 2) user config-params (only non-empty value overrides)
-    // 3) workspace config-params
-    // 4) global resolved configParams snapshot
     const mergedWorkspaceConfigParams = mergeConfigParamsWithFallback(
       systemConfigParams,
       workspaceConfigParams,

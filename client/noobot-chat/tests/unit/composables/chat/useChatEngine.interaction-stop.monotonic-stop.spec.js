@@ -44,8 +44,6 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
 
     await vi.advanceTimersByTimeAsync(510);
     await rejectionExpectation;
-    // The stop precondition failed, but no authoritative turn terminal was
-    // produced, so the original run remains active.
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
     vi.useRealTimers();

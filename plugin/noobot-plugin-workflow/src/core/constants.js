@@ -73,10 +73,6 @@ export const WORKFLOW_PROTOCOL = Object.freeze({
   ORCHESTRATION_VERSION: "workflow.orchestration.v2",
 });
 
-/**
- * Attachment scope aliases accepted by workflow DSL compatibility layer.
- * Keep legacy zh aliases for backward compatibility with historical plans.
- */
 export const WORKFLOW_ATTACHMENT_SCOPE = Object.freeze({
   USER_ALL_TOKENS: Object.freeze(["*", "all", "user:*", "user:all", "\u7528\u6237:*", "\u7528\u6237:\u5168\u90e8"]),
 });

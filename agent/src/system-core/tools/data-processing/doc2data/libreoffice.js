@@ -93,7 +93,6 @@ export function decodeLibreOfficeTextBuffer(outputBuffer = Buffer.alloc(0)) {
         bestScore = score;
       }
     } catch {
-      // Encoding is not available in this Node/ICU build; try the next fallback.
     }
   }
   return bestText.replace(/^\uFEFF/, "");
@@ -176,7 +175,6 @@ function resolveLibreOfficeConverters() {
         return libreOfficeConverters;
       }
     } catch {
-      // Try next libreoffice implementation.
     }
   }
   return null;
@@ -293,7 +291,6 @@ async function collectDirectoryBytes(directoryPath = "") {
         totalBytes += Number(entryStat?.size || 0);
       }
     } catch {
-      // Ignore files that disappear while LibreOffice is working.
     }
   }
   return totalBytes;
@@ -305,7 +302,6 @@ export function resolveLibreOfficeTempRoots() {
     process.env.TEMP,
     process.env.TMP,
     os.tmpdir(),
-    // cross-platform-allow: /tmp is a macOS/Linux fallback in addition to platform temp env vars.
     "/tmp",
   ]).map((item) => path.resolve(item));
 }
@@ -382,7 +378,6 @@ async function listWindowsLibreOfficeProcesses() {
     );
     return parseWindowsProcessRows(stdout);
   } catch {
-    // Fall back to wmic for older Windows environments.
   }
   try {
     const { stdout } = await execFileAsync(
@@ -438,7 +433,6 @@ async function killLibreOfficeProcessesForNodePid(pid = process.pid, extraPathTo
         }).catch(() => {}),
       ));
     } catch {
-      // Best-effort cleanup only; timeout result should still be returned.
     }
     return;
   }
@@ -465,26 +459,21 @@ async function killLibreOfficeProcessesForNodePid(pid = process.pid, extraPathTo
 
     for (const processId of targetPids) {
       try {
-        // cross-platform-allow: Windows uses taskkill above; POSIX LibreOffice cleanup uses signals.
         process.kill(processId, "SIGTERM");
       } catch {
-        // Process may have exited between ps and kill.
       }
     }
     if (targetPids.length) {
       setTimeout(() => {
         for (const processId of targetPids) {
           try {
-            // cross-platform-allow: Windows uses taskkill above; POSIX LibreOffice cleanup uses signals.
             process.kill(processId, "SIGKILL");
           } catch {
-            // Process already exited.
           }
         }
       }, 1500).unref?.();
     }
   } catch {
-    // Best-effort cleanup only; timeout result should still be returned.
   }
 }
 
@@ -593,10 +582,6 @@ export async function parseDocumentToTextViaLibreOffice({
     }
     if (runtime?.abortSignal?.aborted) throw createLibreOfficeAbortError();
     convertBudget = resolveLibreOfficeConvertBudget(inputBuffer.length);
-    // `libreoffice` / `libreoffice-convert` expect format without leading dot.
-    // Passing ".txt" makes them probe `source..txt`, which can trigger ENOENT.
-    // Also pass the original filename (with extension) when supported so soffice
-    // can infer source type correctly for binary office documents.
     const inputPathBaseName = path.basename(String(inputFile || "").trim());
     const sourceAttachmentName = String(sourceAttachmentMeta?.name || "").trim();
     inputFileName =
@@ -680,8 +665,6 @@ function sanitizeArtifactBaseName(input = "", fallback = "doc2data_result") {
 
 function resolveLibreOfficeOutputFormat(inputFileName = "") {
   const extension = path.extname(String(inputFileName || "").trim()).toLowerCase();
-  // Calc/Spreadsheet documents usually cannot export directly to plain txt.
-  // Use csv as a stable text representation.
   if ([
     ".xlsx",
     ".xls",

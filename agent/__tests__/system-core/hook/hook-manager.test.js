@@ -69,7 +69,6 @@ test("hook manager off/remove works (including disposer)", async () => {
   await manager.emit("off_point", {});
   assert.equal(count, 0);
 
-  // no-op disposer should not throw
   dispose();
 });
 

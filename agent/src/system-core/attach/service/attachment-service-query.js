@@ -11,9 +11,6 @@ import { readAttachIndex } from "../index-manager.js";
 import { findRecordAcrossScopedIndexes, resolveAttachmentScope, resolveBasePath } from "./attachment-scope-resolver.js";
 import { buildPublicRecord } from "./record-builder.js";
 
-/**
- * 按附件 ID 查询附件元数据与绝对路径。
- */
 export async function getAttachmentById(service, { userId, attachmentId, sessionId = "", attachmentSource = "" }) {
   const id = safeStr(attachmentId);
   if (!id) return null;
@@ -45,9 +42,6 @@ export async function getAttachmentById(service, { userId, attachmentId, session
   };
 }
 
-/**
- * 读取某个 scope 下的附件元数据列表。
- */
 export async function readAttachmentMetas(service, { userId, sessionId = "", attachmentSource = "" } = {}) {
   const basePath = resolveBasePath(service.globalConfig, userId);
   const scope = resolveAttachmentScope({ sessionId, attachmentSource });
@@ -61,10 +55,6 @@ function normalizeComparablePath(basePath, filePath = "") {
   return path.resolve(path.isAbsolute(normalized) ? normalized : path.join(basePath, normalized));
 }
 
-/**
- * Resolve the canonical source attachment for a tool input inside one session.
- * Identity is preferred; path matching is exact and scoped, never filename based.
- */
 export async function resolveSourceAttachment(service, {
   userId,
   sessionId = "",
@@ -126,9 +116,6 @@ export async function resolveSourceAttachment(service, {
   return null;
 }
 
-/**
- * 读取附件内容。
- */
 export async function readAttachmentContent(service, { userId, attachmentId }) {
   const record = await getAttachmentById(service, { userId, attachmentId });
   if (!record) return null;

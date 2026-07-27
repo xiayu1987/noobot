@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-// Tests split by responsibility from session-repository-boundary.test.js.
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";

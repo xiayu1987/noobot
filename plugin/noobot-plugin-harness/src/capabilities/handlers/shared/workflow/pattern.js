@@ -48,7 +48,6 @@ export function appendWorkflowPriorityDecision(
       chosenStage: String(chosenStage || "").trim() || undefined,
       candidateActions: normalizedCandidateActions,
       deferredActions: Array.isArray(deferredActions) ? deferredActions : [],
-      // Keep legacy field for downstream consumers during migration.
       triggeredActions: normalizedTriggeredActions.length ? normalizedTriggeredActions : normalizedCandidateActions,
       blockedActions: Array.isArray(blockedActions) ? blockedActions : [],
       blockedReasons: Array.isArray(blockedReasons) ? blockedReasons : [],

@@ -34,7 +34,6 @@ export function appendEarlyLog(message) {
       .then(() => fs.promises.appendFile(logFile, line, "utf8"))
       .catch(() => {});
   } catch {
-    // Diagnostics must not break startup.
   }
 }
 
@@ -48,7 +47,6 @@ export function appendFallbackDebugLog(message) {
     try {
       fs.promises.appendFile(filePath, line, "utf8").catch(() => {});
     } catch {
-      // Diagnostics must not break startup.
     }
   }
 }

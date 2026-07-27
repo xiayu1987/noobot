@@ -2,18 +2,11 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Tool compatibility logging: build log lines and append to file.
  */
 import { appendFile, mkdir } from "node:fs/promises";
 import { filePath as path } from "../../utils/path-resolver.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 
-/**
- * Resolve the workspace root from runtime or config.
- * @param {object} params
- * @returns {string}
- */
 function resolveWorkspaceRoot({ runtime = {}, modelState = {} } = {}) {
   const runtimeBasePath = String(runtime?.basePath || "").trim();
   if (runtimeBasePath) {
@@ -31,11 +24,6 @@ function resolveWorkspaceRoot({ runtime = {}, modelState = {} } = {}) {
   return path.resolve(process.cwd(), "workspace");
 }
 
-/**
- * Build a JSON log line for tool compatibility events.
- * @param {object} params
- * @returns {string}
- */
 export function buildToolCompatibilityLogLine({
   modelState = {},
   runtime = {},
@@ -56,11 +44,6 @@ export function buildToolCompatibilityLogLine({
   });
 }
 
-/**
- * Append a tool compatibility log entry to the workspace log file.
- * @param {object} params
- * @returns {Promise<string>} The path of the log file.
- */
 export async function appendToolCompatibilityLog({
   modelState = {},
   runtime = {},

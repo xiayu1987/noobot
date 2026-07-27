@@ -102,8 +102,6 @@ function resolveDeniedToolNamesByRuntimePolicy(runtime = {}) {
     runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
       ? runConfig.toolPolicy
       : {};
-  // Canonical field: runConfig.toolPolicy.denyToolNames
-  // Legacy aliases are accepted for transition compatibility.
   const denyToolNames = new Set([
     ...normalizeToolNameList(toolPolicy?.denyToolNames),
     ...normalizeToolNameList(toolPolicy?.deny_tool_names),
@@ -247,8 +245,6 @@ async function buildToolsDefault(ctx) {
     ...createWebSearchTool(ctx),
     ...(enableMultimodalGenerateTool ? createMultimodalGenerateTool(ctx) : []),
     ...createConnectorAccessTool(ctx),
-    // Multi-agent collaboration tools are intentionally not registered here.
-    // This is a hard disable at the agent registry level, independent of config/runtime policy.
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),
     ...createRequestHelpTool(ctx),

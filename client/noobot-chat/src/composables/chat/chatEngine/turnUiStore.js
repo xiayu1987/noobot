@@ -58,7 +58,6 @@ export function clearSessionTurnUiStates(sessionId = "") {
   return removed;
 }
 
-/** Move ephemeral UI state when an optimistic session receives its canonical id. */
 export function promoteSessionTurnUiStates(fromSessionId = "", toSessionId = "") {
   const from = String(fromSessionId || "").trim();
   const to = String(toSessionId || "").trim();

@@ -40,10 +40,6 @@ export function applyDoneMessagesFromReconnect({
   if (!sessionMessages.length) return false;
   const returnedSessionId = _trimStr(eventData?.sessionId);
   activeSession.value.loaded = true;
-  // Reconnect DONE messages are a replay snapshot for reconciling the current
-  // pending/streaming overlay.  Keep them local to this pass instead of
-  // publishing another completed-message array on session.rawMessages; completed
-  // display state is rebuilt from normalized session detail.
   const doneTurnScopeId = _trimStr(eventData?.turnScopeId);
   let turnMergeResult = { applied: false, reason: "legacy_unscoped_done" };
   if (
@@ -59,8 +55,6 @@ export function applyDoneMessagesFromReconnect({
       mergeAssistantAttachments,
     });
   } else if (!activeSession.value.messages.length) {
-    // Unscoped legacy DONE is allowed to initialize an empty historical view,
-    // but must never reconcile or fold a live turn by execution-chain identity.
     const replayMessagesForView = sessionMessages.map((messageItem) => makeViewMessage(messageItem));
     applyFoldedMessagesToActiveSession(activeSession, foldMessagesForView(replayMessagesForView));
   }
@@ -102,10 +96,6 @@ export function applyDoneRealtimeLogsFromReconnectBatch({
   if (!doneEnvelopeWithMessages) return false;
   const doneData = doneEnvelopeWithMessages.data || {};
   const turnScopeId = _trimStr(doneData?.turnScopeId);
-  // A DONE snapshot belongs to a turn, not to its reusable execution chain.
-  // Legacy snapshots without a turn are intentionally not projected into a
-  // running assistant: session-detail hydration handles those at its isolated
-  // history boundary.
   if (!turnScopeId) return true;
   const executionSummarySteps = Array.isArray(doneData?.executionSummary?.steps)
     ? doneData.executionSummary.steps

@@ -80,7 +80,7 @@ export async function fetchRemoteMediaArtifact(
   const normalizedUrl = String(url || "").trim();
   if (!normalizedUrl || !/^https?:\/\//i.test(normalizedUrl)) return null;
   if (typeof fetchImpl !== "function") return null;
-  
+
   try {
     const response = await fetchImpl(normalizedUrl);
     if (!response?.ok) {
@@ -180,8 +180,7 @@ export async function persistModelGeneratedArtifacts({
   const remoteMediaCandidates = [];
   if (Array.isArray(aiContent)) {
     let remoteMediaIndex = 0;
-    
-    // Use Promise.all to fetch remote media concurrently
+
     const fetchPromises = [];
     for (const contentPart of aiContent) {
       if (!contentPart || typeof contentPart !== "object") continue;
@@ -193,7 +192,7 @@ export async function persistModelGeneratedArtifacts({
       const remoteUrl = imageUrl || videoUrl || directUrl;
       if (!/^https?:\/\//i.test(remoteUrl)) continue;
       remoteMediaIndex += 1;
-      
+
       fetchPromises.push(
         fetchRemoteMediaArtifact(
           remoteUrl,
@@ -203,7 +202,7 @@ export async function persistModelGeneratedArtifacts({
         )
       );
     }
-    
+
     if (fetchPromises.length > 0) {
       const results = await Promise.all(fetchPromises);
       for (const remoteArtifact of results) {

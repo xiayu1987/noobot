@@ -237,9 +237,6 @@ export async function syncParsedResultToSessionSnapshots({
     const sessionDir = path.dirname(sessionJsonFile);
     const sessionPayload = await readSessionArtifact({ sessionDir, fallback: null });
     if (!sessionPayload) continue;
-    // Preserve the snapshot's existing summary depth when rewriting turn artifacts.
-    // writeSessionArtifact defaults to depth 0, which would otherwise silently
-    // downgrade runtime/plugin snapshot summaries during attachment linking.
     let summaryDepth = 0;
     try {
       const summary = JSON.parse(await fsReadFile(path.join(sessionDir, "session-summary.json"), "utf8"));
@@ -289,7 +286,6 @@ export async function syncParsedResultToSessionSnapshots({
     try {
       await writeSessionArtifact({ sessionDir, sessionPayload: nextSessionPayload, depth: summaryDepth });
     } catch {
-      // ignore snapshot sync failures
     }
   }
 }

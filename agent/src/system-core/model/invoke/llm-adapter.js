@@ -2,8 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * LLM adapter for invocation and streaming fallback helpers.
  */
 import { emitEvent } from "../../event/index.js";
 import { createChatModel, createChatModelByName } from "../factory/chat-model.js";
@@ -12,11 +10,6 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 const STREAMING_TOOL_CALL_MISMATCH_THRESHOLD =
   TURN_THRESHOLDS.agent.streamingToolCallMismatchThreshold;
 
-/**
- * Get or create a cached non-streaming LLM instance.
- * @param {object} modelState
- * @returns {object}
- */
 function getNonStreamingInvokeLlm(modelState = {}) {
   const preferredModel =
     String(modelState?.activeModelAlias || "").trim() ||
@@ -109,13 +102,6 @@ export function resolveRetryInvokeLlm(modelState = {}, { mode = "", reason = "" 
   return nonStreamingLlm;
 }
 
-/**
- * Resolve the LLM instance to use for invocation.
- * Default keeps streaming behavior for all models.
- * @param {object} modelState
- * @param {string} mode
- * @returns {object}
- */
 export function resolveInvokeLlm(modelState = {}, mode = "") {
   if (shouldForceNonStreamingByMismatchBudget(modelState)) {
     const nonStreamingLlm = getNonStreamingInvokeLlm(modelState);

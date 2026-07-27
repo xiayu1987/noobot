@@ -87,8 +87,6 @@ describe("useChatSession send/continue actions", () => {
     expect(session.composerActionState.value.canStop).toBe(true);
     expect(session.composerActionState.value.sendRequesting).toBe(false);
     expect(await session.send()).toBe(false);
-    // The first action reaches transport; the last in-flight message prevents
-    // the duplicate without relying on a global interaction lock.
     expect(wsClientMock.stream).toHaveBeenCalledTimes(1);
   });
 

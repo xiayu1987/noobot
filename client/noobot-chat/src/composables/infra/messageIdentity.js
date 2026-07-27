@@ -257,9 +257,5 @@ export function shouldCollectAttachmentsFromMessage(targetMessage = {}, candidat
     return true;
   }
 
-  // Avoid leaking the previous assistant's generated attachments into a newly
-  // sent assistant turn when snapshots do not carry turnScopeId yet.
-  // Tool/child messages are collected through sessionId + turnScopeId instead
-  // of dialogProcessId; dialogProcessId remains backend execution metadata.
   return isSameExplicitMessageTurn(targetMessage, candidateMessage);
 }

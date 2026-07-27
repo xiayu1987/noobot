@@ -1,8 +1,8 @@
 /*
-  Copyright (c) 2026 xiayu
-  Contact: 126240622+xiayu1987@users.noreply.github.com
-  SPDX-License-Identifier: MIT
-*/
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 
 export function normalizeStatus(value = "") {
   const status = String(value || "").trim().toLowerCase();
@@ -23,9 +23,6 @@ export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
     }
 
     const nodeExecutionId = String(stepItem?.nodeExecutionId || "").trim();
-    // New-protocol nodes have an authoritative Node Repository identity. Old
-    // payload status fields are only a read-only compatibility source for
-    // historical messages that do not have that identity.
     if (!nodeExecutionId) {
       const explicit = normalizeStatus(stepItem?.stepStatus || stepItem?.status || stepItem?._status || "");
       if (explicit) return explicit;

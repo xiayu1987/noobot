@@ -4,5 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-// Compatibility shim: keep legacy import path stable.
 export { createRegisterWorkflowHooks, registerWorkflowHooks } from "./orchestrator.js";

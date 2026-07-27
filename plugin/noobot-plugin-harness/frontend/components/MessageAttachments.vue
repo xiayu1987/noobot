@@ -217,7 +217,6 @@ async function ensureThumbnailUrl(attachmentItem = {}, attachmentIndex = 0) {
     const blob = await response.blob();
     setThumbnailUrl(key, URL.createObjectURL(blob));
   } catch {
-    // Ignore thumbnail fetch failures; preview/download remains available.
   }
 }
 

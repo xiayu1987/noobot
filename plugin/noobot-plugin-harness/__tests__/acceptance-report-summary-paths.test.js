@@ -206,14 +206,11 @@ test("semantic acceptance overrides phase checklist status and updates summary",
 
   const after = Array.isArray(report?.finalPlanChecklist) ? report.finalPlanChecklist : [];
   assert.equal(after.length, 3);
-  // semantic > phase：主计划1由 completed -> pending
   assert.equal(after[0]?.status, "pending");
   assert.equal(after[0]?.effectiveStatus, "pending");
   assert.equal(after[0]?.statusSource, "semantic");
-  // 子计划1.1 继承主计划1的语义状态
   assert.equal(after[1]?.status, "pending");
   assert.equal(after[1]?.statusSource, "semantic");
-  // 主计划2由 pending -> completed
   assert.equal(after[2]?.status, "completed");
   assert.equal(after[2]?.statusSource, "semantic");
 

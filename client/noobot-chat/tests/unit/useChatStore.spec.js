@@ -562,7 +562,6 @@ describe("useChatStore sub session projection", () => {
         },
       } },
     });
-    // A corrupted read index must not make the UI selector loop forever.
     store.turnRuntimeRegistry.childExecutionIdsByParentId.grandchild = ["child"];
 
     expect(store.selectExecutionDescendants("workflow").map((item) => item.executionId)).toEqual(["child", "grandchild"]);

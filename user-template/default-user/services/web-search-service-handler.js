@@ -80,14 +80,12 @@ function parseSearxInstancesYaml(text = "") {
   for (const raw of lines) {
     const line = String(raw || "").trim();
     if (!line || line.startsWith("#")) continue;
-    // 示例：https://search.unredacted.org: {}
     const matched = line.match(/^(https?:\/\/.+):\s*\{\s*\}\s*$/);
     if (!matched?.[1]) continue;
     try {
       const normalized = new URL(matched[1]).toString().replace(/\/+$/, "");
       if (!out.includes(normalized)) out.push(normalized);
     } catch {
-      // ignore invalid line
     }
   }
   return out;
@@ -102,7 +100,6 @@ function normalizeInstanceList(list = []) {
         .replace(/\/+$/, "");
       if (normalized && !out.includes(normalized)) out.push(normalized);
     } catch {
-      // ignore invalid instance
     }
   }
   return out;
@@ -192,7 +189,6 @@ async function requestWithFallback({
         source: "primary",
       };
     }
-    // 4xx 通常是请求参数问题，不走兜底
     if (res.status >= 400 && res.status < 500) {
       return {
         ok: false,
@@ -207,7 +203,6 @@ async function requestWithFallback({
       };
     }
   } catch {
-    // primary 不可访问，走兜底
   }
 
   const normalizedCustomParam = String(customParam || "").trim();
@@ -265,7 +260,6 @@ async function requestWithFallback({
         };
       }
     } catch {
-      // try next
     }
   }
 

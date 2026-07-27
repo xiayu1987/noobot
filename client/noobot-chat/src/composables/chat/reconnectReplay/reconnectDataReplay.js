@@ -145,8 +145,6 @@ export async function applyReconnectDataReplay({
     );
     if (!hasReconnectMessages && isCurrentActiveSession(recoverableSessionId)) {
       const currentRunMeta = normalizeTurnMeta(recoverableSessionEntry?.currentRun || {});
-      // Diagnostic data is emitted by the caller-facing replay bridge when available.
-      // Keep the raw identity visible to that bridge, including an empty value.
       resolveReconnectTargetAssistantMessage(currentRunMeta.dialogProcessId, {
         allowCreate: true,
         turnScopeId: currentRunMeta.turnScopeId,
@@ -206,9 +204,6 @@ export async function applyReconnectDataReplay({
             (!currentRunMeta.dialogProcessId || dpId === currentRunMeta.dialogProcessId),
           );
           await applyReconnectMessagesToActiveSession(messages, dpId, {
-            // A terminal authoritative run may still need an exact-Turn
-            // assistant to project its final delta/error. Creation does not
-            // grant lifecycle authority; currentRun remains the sole source.
             allowCreate: isDialogProcessRecoverable(sessionEntry, messages) ||
               belongsToAuthoritativeCurrentRun,
             authoritativeCurrentRun: belongsToAuthoritativeCurrentRun,

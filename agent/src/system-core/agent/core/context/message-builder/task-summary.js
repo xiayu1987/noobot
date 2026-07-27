@@ -47,7 +47,6 @@ function extractTaskSummaryTextFromToolResult(msg = {}) {
       : "";
     if (summary) return summary;
   } catch {
-    // fall through to raw content
   }
   return rawContent;
 }

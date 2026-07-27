@@ -7,8 +7,6 @@ import { mount } from "@vue/test-utils";
 import { vi } from "vitest";
 import ThinkingPanel from "../../../src/shared/message/ThinkingPanel.vue";
 
-// Node exposes an unavailable localStorage getter unless a backing file is
-// configured. Keep component tests deterministic and browser-like.
 if (!globalThis.localStorage?.getItem) {
   const values = new Map();
   Object.defineProperty(globalThis, "localStorage", {

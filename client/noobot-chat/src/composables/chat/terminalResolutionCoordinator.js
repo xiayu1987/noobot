@@ -64,8 +64,6 @@ function maxVersion(left = {}, right = {}) {
   if (!hasVersion(left)) return right;
   if (!hasVersion(right)) return left;
   const comparison = compareVersion(left, right);
-  // Incomparable metadata may describe a different commit. Preserve the new
-  // target so it cannot be hidden by an older cached watermark.
   return comparison === 1 ? left : right;
 }
 
@@ -77,13 +75,6 @@ function isTerminalNotification(event = {}) {
     TERMINAL_CHANNEL_STATES.has(clean(event.state || event.backendState).toLowerCase());
 }
 
-/**
- * Single-flight authoritative terminal reader.
- *
- * All notification/replay/hydration callers share one Turn-keyed request. A
- * successfully applied commit is retained as a version watermark, so replaying
- * the same (or an unversioned) discovery cannot issue another network read.
- */
 export function createTerminalResolutionCoordinator({
   userId = "",
   fetcher,
@@ -149,15 +140,8 @@ export function createTerminalResolutionCoordinator({
       entry.cooldownResult = null;
     }
 
-    // An unversioned discovery describes the already-known Turn. A versioned
-    // notification only invalidates the cache when it is strictly newer.
     const resolvedComparison = compareVersion(requestedVersion, entry.resolvedVersion || {});
     if (entry.resolvedResult && resolvedComparison !== null && resolvedComparison <= 0) {
-      // The authoritative GET may have completed before Session detail was
-      // hydrated, so the first local projection can legitimately return
-      // `session_projection_unavailable`. Re-apply the cached response when a
-      // later discovery arrives instead of treating that temporary result as
-      // a settled UI projection.
       if (entry.resolvedResult.applied !== true && entry.resolvedResult.retryable === true && entry.resolvedResponse) {
         const reapplied = applyTurnTerminalResolution?.(entry.resolvedResponse) || {
           applied: false,
@@ -168,10 +152,6 @@ export function createTerminalResolutionCoordinator({
       }
       return Promise.resolve(entry.resolvedResult);
     }
-    // A valid authoritative read can arrive while its Session projection is not
-    // loaded (for example during list/detail switching). Do not hit the server
-    // again for the same commit. Re-try only the local atomic projection; once
-    // the Session is available this settles the Turn without another GET.
     const exhaustedComparison = compareVersion(requestedVersion, entry.exhaustedVersion || {});
     if (entry.exhaustedResult && exhaustedComparison !== null && exhaustedComparison <= 0) {
       return Promise.resolve(entry.exhaustedResult);
@@ -197,14 +177,7 @@ export function createTerminalResolutionCoordinator({
             applied: false,
             reason: "resolution_apply_unavailable",
           };
-          // Cache the authoritative commit independently from the UI projection.
-          // Projection may legitimately be deferred until the Session detail is
-          // loaded; treating that as a failed read causes every discovery source
-          // to issue another GET and can trigger rate limiting.
           if (generation === entry.generation) {
-            // A resolved response is authoritative even when the current
-            // session projection is temporarily unavailable. Keep the response
-            // so later lifecycle notifications only retry local application.
             entry.resolvedVersion = versionOf(response);
             entry.resolvedResult = result;
             entry.resolvedResponse = response;
@@ -219,8 +192,6 @@ export function createTerminalResolutionCoordinator({
             entry.exhaustedResult = null;
             const pendingComparison = compareVersion(entry.targetVersion, entry.resolvedVersion);
             if (pendingComparison === 1 || pendingComparison === null) {
-              // A newer notification arrived while this request was running.
-              // Release this generation before starting exactly one follow-up.
               if (entry.inFlight === request) entry.inFlight = null;
               return resolve(session, scope, {
                 commandId,
@@ -238,8 +209,6 @@ export function createTerminalResolutionCoordinator({
           const retryPromise = new Promise((resolveRetry) => {
             timerId = setTimeout(() => {
               if (entry.timer?.id === timerId) entry.timer = null;
-              // The parent promise is waiting for this retry. It must not remain
-              // the Turn's single-flight value or resolve() would return itself.
               if (entry.inFlight === request) entry.inFlight = null;
               resolveRetry(resolve(session, scope, {
                 retry: retry + 1,
@@ -253,11 +222,6 @@ export function createTerminalResolutionCoordinator({
           return retryPromise;
         }
         const result = { applied: false, reason: response?.reason || "terminal_unresolved", response };
-        // A non-retryable unresolved response is also authoritative for this
-        // discovery generation. Cache it just like an exhausted retry series,
-        // otherwise DONE, final-detail hydration and CHANNEL_STATE each issue
-        // the same GET for one Turn. A newer version or force still clears the
-        // watermark through the normal invalidation path above.
         if (response?.retryable !== true || retry >= maxRetries) {
           entry.exhaustedVersion = { ...entry.targetVersion };
           entry.exhaustedResult = result;
@@ -274,9 +238,6 @@ export function createTerminalResolutionCoordinator({
           retryAfterMs,
           error,
         };
-        // A rate-limited request must not be retriggered by every replay source.
-        // Keep a short per-Turn circuit breaker; a newer lifecycle event or an
-        // explicit force can still reconcile once the server has cooled down.
         if (generation === entry.generation) {
           entry.cooldownUntil = Date.now() + (status === 429 ? retryAfterMs : 1000);
           entry.cooldownResult = result;
@@ -290,9 +251,6 @@ export function createTerminalResolutionCoordinator({
     return request;
   };
 
-  // Re-apply an already accepted authoritative response after a Session is
-  // hydrated. This is deliberately local-only: it cannot create a request,
-  // retry timer, or 429 storm.
   const observe = (event = {}) => {
     if (!isTerminalNotification(event)) return null;
     return resolve(event.sessionId, event.turnScopeId, {

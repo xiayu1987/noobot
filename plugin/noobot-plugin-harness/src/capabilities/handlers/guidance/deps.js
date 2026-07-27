@@ -1,9 +1,9 @@
-export { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+export { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 
 export {
   CAPABILITY_DOMAIN,

@@ -1,4 +1,3 @@
-/* 预览弹框主色调（全局，适配 teleported el-dialog） */
 .attachment-preview-dialog,
 .generated-file-preview-dialog {
   background: var(--noobot-panel-bg);
@@ -29,7 +28,6 @@
   color: var(--noobot-text-strong);
 }
 
-/* 消息内容与 markdown 区视觉收敛 */
 .md pre,
 .preview-markdown pre {
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 88%, transparent);

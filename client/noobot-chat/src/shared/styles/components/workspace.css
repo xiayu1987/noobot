@@ -1,4 +1,3 @@
-/* 工作区类页面通用布局 */
 .noobot-workspace-layout {
   display: grid;
   grid-template-columns: 280px 1fr;
@@ -95,7 +94,6 @@
   opacity: 0.3;
 }
 
-/* 设置/明细类通用 Tabs：用户设置、参数管理、思考明细等页面统一使用 */
 .settings-tabs {
   height: calc(100vh - 80px);
   box-sizing: border-box;
@@ -147,7 +145,6 @@
   padding: 40px 0;
 }
 
-/* 思考明细复用设置页的简约扁平基础，同时保留抽屉内自适应高度。 */
 .thinking-details-tabs {
   box-sizing: border-box;
   color: var(--noobot-text-main);
@@ -323,7 +320,6 @@
   font-size: var(--noobot-font-size-md);
 }
 
-/* 工作区/配置类页面的统一面板语义类 */
 .noobot-workspace-panel {
   display: flex;
   flex-direction: column;
@@ -378,7 +374,6 @@
   border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 24%, var(--noobot-border-weak));
 }
 
-/* 编辑器 textarea：桌面端填满面板，移动端在媒体查询里交给 autosize 自增高。 */
 .noobot-editor-textarea {
   height: 100%;
   display: flex;

@@ -68,9 +68,6 @@ function isSandboxEnabled(runtime = {}) {
 }
 
 function resolveHostBasePath(ctx = {}, runtime = null) {
-  // Prefer runtime.basePath because agentContext.environment may already be
-  // rendered in sandbox view before harness sees it. Falling back to
-  // environment.workspace.basePath is kept only for legacy/non-runtime tests.
   return normalizePath(
     runtime?.basePath ||
       runtime?.systemRuntime?.staticInfo?.basePath ||

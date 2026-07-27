@@ -4,24 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Build execution context for session.
- */
 export class ContextBuilder {
-  /**
-   * @param {Object} workspaceService - Workspace service instance
-   */
   constructor(workspaceService) {
     this.workspaceService = workspaceService;
   }
 
-  /**
-   * Build context for session execution.
-   * @param {string} sessionId - Session identifier
-   * @param {Object} scenario - Resolved scenario configuration
-   * @param {Object} toolPolicy - Tool policy object
-   * @returns {Object} Execution context
-   */
   async build(sessionId, scenario, toolPolicy) {
     const workspacePath = await this.workspaceService.getWorkspacePath(
       sessionId,

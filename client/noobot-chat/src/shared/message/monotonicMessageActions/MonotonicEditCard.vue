@@ -4,11 +4,6 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-/**
- * 编辑重发卡片：内容输入、附件增删预览与提交/取消操作。
- * textarea 与 file input 的 ref 随模板一并内聚于此，
- * 通过 defineExpose 暴露 focusTextarea 供父组件在进入编辑态时聚焦。
- */
 import { ref } from "vue";
 import {
   attachmentIcon,
@@ -276,7 +271,6 @@ defineExpose({ focusTextarea });
   gap: 8px;
 }
 
-/* Textarea */
 .monotonic-edit-textarea :deep(.el-textarea__inner) {
   padding: 14px 16px;
   border-radius: var(--noobot-radius-xs);
@@ -298,7 +292,6 @@ defineExpose({ focusTextarea });
   box-shadow: inset 0 0 0 1px var(--el-color-primary), 0 0 0 2px var(--el-color-primary-light-8);
 }
 
-/* Attachments Area */
 .monotonic-edit-attachments {
   display: flex;
   flex-direction: column;
@@ -340,7 +333,7 @@ defineExpose({ focusTextarea });
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 8px;
-  padding-right: 8px; /* For scrollbar */
+  padding-right: 8px;
 }
 
 .monotonic-attachment-item {
@@ -479,7 +472,6 @@ defineExpose({ focusTextarea });
   border-color: var(--el-border-color-lighter);
 }
 
-/* Footer */
 .monotonic-edit-footer {
   display: flex;
   align-items: center;

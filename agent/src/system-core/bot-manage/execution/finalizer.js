@@ -173,9 +173,6 @@ function promoteGeneratedTransfersToFinalAssistant(messages = []) {
   return outputMessages;
 }
 
-/**
- * Session execution finalizer.
- */
 export class SessionExecutionFinalizer {
   constructor({
     session = null,
@@ -302,7 +299,6 @@ export class SessionExecutionFinalizer {
           }),
         )
         .catch(() => {
-          // error already handled in _runMemorySummarizeFlow or error logger
         });
     } else {
       await this.runMemoryPostProcessFlow({

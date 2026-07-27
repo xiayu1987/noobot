@@ -1,4 +1,3 @@
-/* Element Plus 全局收敛 */
 .el-input__wrapper,
 .el-textarea__inner,
 .el-select__wrapper {
@@ -83,7 +82,6 @@
   backdrop-filter: none;
 }
 
-/* 头部设置下拉菜单（teleported）统一系统色调 */
 .noobot-settings-dropdown.el-popper {
   border: 1px solid var(--noobot-panel-border);
 }
@@ -114,7 +112,6 @@
   overflow: hidden;
 }
 
-/* Tabs / Drawer / Collapse 统一 */
 .el-tabs__header {
   border-bottom: 1px solid var(--noobot-divider);
 }
@@ -155,7 +152,6 @@
   color: var(--noobot-text-main);
 }
 
-/* 空态与提示收敛 */
 .el-empty__description p,
 .el-alert__description {
   color: var(--noobot-text-secondary);

@@ -80,8 +80,6 @@ export async function readDirectTextDocumentIfAvailable(filePath = "") {
 
   const extension = path.extname(normalizedFilePath).toLowerCase();
   const extensionMarkedAsText = TEXT_EXTENSIONS.has(extension);
-  // For files explicitly marked as text (e.g. .txt/.md/.csv), keep parsing via
-  // direct read even when file is larger than MAX_DIRECT_TEXT_BYTES.
   if (!extensionMarkedAsText && Number(fileStat.size || 0) > MAX_DIRECT_TEXT_BYTES) return null;
 
   const contentBuffer = await readFile(normalizedFilePath);

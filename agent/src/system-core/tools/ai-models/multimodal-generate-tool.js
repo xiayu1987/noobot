@@ -207,7 +207,6 @@ function checkImageGenerationSupport(modelSpec = {}) {
 function parseDataUrlToImageArtifact(dataUrl = "", fileName = "generated_image_1.png") {
   const parsed = parseDataUrl(dataUrl);
   if (!parsed) return null;
-  // Use the detected mimeType to generate a proper filename if fileName is default
   const finalFileName = fileName === "generated_image_1.png"
     ? sanitizeGeneratedArtifactName("generated_image_1", parsed.mimeType, 1)
     : fileName;

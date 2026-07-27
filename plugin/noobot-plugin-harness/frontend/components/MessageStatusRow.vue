@@ -59,7 +59,6 @@ const stepView = computed(() => {
 </template>
 
 <style scoped>
-/* Share the card styling with the thinking panel; status colors distinguish outcomes. */
 .message-status-steps {
   box-sizing: border-box;
   width: 100%;
@@ -89,7 +88,6 @@ const stepView = computed(() => {
   background: color-mix(in srgb, var(--noobot-status-warning) 5%, var(--noobot-thinking-bg));
 }
 
-/* 2. Replace the default elements with compact dots. */
 .message-status-steps :deep(.el-step__icon) {
   width: 6px !important;
   height: 6px !important;
@@ -99,24 +97,21 @@ const stepView = computed(() => {
   transition: all 0.3s ease;
 }
 
-/* Hide text and check marks inside the icon. */
 .message-status-steps :deep(.el-step__icon-inner) {
   display: none !important;
 }
 
-/* 3. Center the connector on the 6px dot. */
 .message-status-steps :deep(.el-step__line) {
-  top: 3px !important; /* Half of the 6px dot. */
+  top: 3px !important;
   height: 1px !important;
   background-color: var(--noobot-divider);
   left: 50% !important;
   right: -50% !important;
 }
 .message-status-steps :deep(.el-step__line-inner) {
-  border-width: 0 !important; /* Disable the default progress animation. */
+  border-width: 0 !important;
 }
 
-/* 4. Keep typography minimal, compact, and subtle. */
 .message-status-steps :deep(.el-step__title) {
   font-size: 11px !important;
   line-height: 1 !important;
@@ -126,9 +121,7 @@ const stepView = computed(() => {
   letter-spacing: 0.5px;
 }
 
-/* --- Status-specific styles --- */
 
-/* Completed nodes. */
 .message-status-steps :deep(.el-step__head.is-success .el-step__icon),
 .message-status-steps :deep(.el-step__head.is-finish .el-step__icon) {
   background-color: var(--noobot-text-muted);
@@ -138,7 +131,6 @@ const stepView = computed(() => {
   color: var(--noobot-text-secondary);
 }
 
-/* Active node with a highlighted glow. */
 .message-status-steps :deep(.el-step__head.is-process .el-step__icon) {
   background-color: var(--el-color-primary);
   box-shadow: 0 0 8px 1px color-mix(in srgb, var(--el-color-primary) 60%, transparent);
@@ -158,7 +150,6 @@ const stepView = computed(() => {
   text-shadow: 0 0 12px color-mix(in srgb, var(--el-color-primary) 36%, transparent);
 }
 
-/* Error and warning states. */
 .message-status-steps.is-error :deep(.el-step__head.is-error .el-step__icon) {
   background-color: var(--noobot-status-error);
   box-shadow: 0 0 6px color-mix(in srgb, var(--noobot-status-error) 45%, transparent);
@@ -175,7 +166,6 @@ const stepView = computed(() => {
   color: var(--noobot-status-warning);
 }
 
-/* Pulsing glow animation. */
 @keyframes dot-glow {
   0% {
     box-shadow: 0 0 3px 0 color-mix(in srgb, var(--el-color-primary) 50%, transparent);
@@ -203,7 +193,6 @@ const stepView = computed(() => {
   }
 }
 
-/* Mobile adjustments. */
 @media (max-width: 560px) {
   .message-status-steps {
     padding: 10px var(--noobot-space-md) 8px;

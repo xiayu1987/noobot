@@ -12,8 +12,6 @@ const LOCAL_EVENT_STATE_BY_TYPE = Object.freeze({
   [SESSION_RUN_EVENT.LOCAL_SEND_STARTED]: FrontendRunState.ACTION_REQUESTING,
   [SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED]: FrontendRunState.ACTION_REQUESTING,
   [SESSION_RUN_EVENT.LOCAL_RESEND_STARTED]: FrontendRunState.ACTION_REQUESTING,
-  // Replacing the old turn and opening the stream are still request work.
-  // Only an identity-matched backend `sending` fact starts processing.
   [SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN]: FrontendRunState.ACTION_REQUESTING,
   [SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING]: FrontendRunState.ACTION_REQUESTING,
   [SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED]: FrontendRunState.FRONTEND_COMPLETED,
@@ -33,11 +31,6 @@ export const TURN_RUNTIME_AUTHORITY = Object.freeze({
 
 function resolveRuntimeAuthority(type, wireState, rawEvent = {}) {
   if (rawEvent?.authority) return trim(rawEvent.authority);
-  // A validated Terminal Resolution response already contains the complete,
-  // committed lifecycle and materialization view.  It is therefore the new
-  // protocol equivalent of the legacy "authoritative detail applied" signal.
-  // Assign the authority at normalization time so every terminal outcome
-  // (complete, stop and failure) has the same settlement semantics.
   if (type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_APPLIED;
   }
@@ -70,9 +63,6 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
   const turnMeta = normalizeTurnMeta(rawEvent);
   const type = trim(rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE);
   const wireState = normalizeState(rawEvent?.state);
-  // A local failure belongs to the frontend phase in which it happened.  Some
-  // callers also carry `state: error`; do not let that backend-shaped value
-  // erase the more precise action/processing/completion/stop attribution.
   let state = type === SESSION_RUN_EVENT.LOCAL_FAILURE
     ? normalizeState(rawEvent?.failureState)
     : wireState;
@@ -81,8 +71,6 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
   ].includes(type);
   if (isBackendStateEvent && wireState === BackendChannelState.USER_STOPPED) {
-    // Backend persistence is confirmed, but the frontend still has to read and
-    // apply the authoritative session summary before exposing its stop terminal.
     state = FrontendRunState.USER_STOPPING;
   }
   if (isBackendStateEvent && wireState === BackendChannelState.STOPPING) {
@@ -116,21 +104,12 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     authority: resolveRuntimeAuthority(type, wireState, rawEvent),
     authoritativeSnapshot: rawEvent?.authoritativeSnapshot === true,
     sourceEvent: trim(rawEvent?.sourceEvent),
-    // Keep the legacy seq field for compatibility, but expose typed sequence
-    // domains so reducers cannot compare transport ordering with Turn order.
     seq: rawSequence,
     transportSeq: isBackendStateEvent ? rawSequence : Number(rawEvent?.transportSeq || 0),
     lifecycleSeq: isLifecycleEvent ? rawSequence : Number(rawEvent?.lifecycleSeq || 0),
     revision: Number(rawEvent?.revision || 0),
     summaryVersion: Number(rawEvent?.summaryVersion || 0),
     completionCommitId: trim(rawEvent?.completionCommitId),
-    // Keep protocol terminal facts separate from the normalized UI `state`.
-    // `raw` below intentionally contains the complete dispatched event, so
-    // consumers must not depend on a caller-provided nested `raw` surviving at
-    // event.raw.turn.
-    // Terminal Resolution carries a raw TURN_STATE protocol token (for
-    // example stop_completed or completion_failed). normalizeState only knows
-    // transport/frontend enums and would erase those protocol values.
     authoritativeTurnState: type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
       ? trim(rawEvent?.state || rawEvent?.raw?.turn?.state).toLowerCase()
       : "",

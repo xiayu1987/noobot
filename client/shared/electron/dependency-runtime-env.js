@@ -60,7 +60,6 @@ function getUserDataPath(app = null) {
   try {
     if (app?.isReady?.()) return app.getPath("userData");
   } catch {
-    // Fall back below.
   }
   return process.env.HOME || os.tmpdir();
 }

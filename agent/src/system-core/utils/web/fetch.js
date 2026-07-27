@@ -47,7 +47,6 @@ export function buildBrowserLikeHeaders(urlValue = "", headers = {}) {
   };
   if (!merged.Referer) delete merged.Referer;
 
-  // 避免 undefined / null 头
   for (const key of Object.keys(merged)) {
     const value = merged[key];
     if (value === undefined || value === null || value === "") {

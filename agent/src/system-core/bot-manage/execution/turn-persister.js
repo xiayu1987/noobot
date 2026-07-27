@@ -79,10 +79,6 @@ function filterSessionAttachments(attachments = []) {
 }
 
 function filterSessionTransferEnvelopes(transferEnvelopes = []) {
-  // Transfer envelopes are lightweight descriptors required to rebuild
-  // refresh-time attachment/file cards from session.json.  Do not drop them
-  // solely because they originate from a tool; the heavy tool body is
-  // sanitized separately by sanitizeToolContentForSession().
   return compactTransferEnvelopes(
     (Array.isArray(transferEnvelopes) ? transferEnvelopes : []).filter(isPlainObject),
   );
@@ -221,9 +217,6 @@ function summarizeSessionTurnPayload(fullTurnPayload = {}) {
   };
 }
 
-/**
- * Persist session turns and agent messages.
- */
 export class SessionTurnPersister {
   constructor({ session = null } = {}) {
     this.session = session;
@@ -375,7 +368,6 @@ export class SessionTurnPersister {
         });
       }
     } catch {
-      // ignore execution-log failures to avoid blocking the main turn flow
     }
     await this.messagePersister.appendTurn({
       userId,
@@ -523,8 +515,6 @@ export class SessionTurnPersister {
       description: "用户停止了本轮生成",
       persistenceContext,
     });
-    // Persisting the terminal fact does not depend on there being partial model
-    // content. Return the confirmed fact even when no assistant message is added.
     if (!userId || !sessionId || !content || !dialogProcessId) {
       return turnStatusResult?.turnStatus || null;
     }

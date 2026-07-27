@@ -58,7 +58,6 @@ export function useMessagePreview({
   const noCopyableContentTexts = buildNoCopyableSet(translate, "noCopyableContent");
   const noCopyableTextTexts = buildNoCopyableSet(translate, "noCopyableText");
 
-  // --- 预览状态（统一结构） ---
   const filePreview = {
     visible: ref(false),
     loading: ref(false),
@@ -161,7 +160,6 @@ export function useMessagePreview({
     });
   }
 
-  // --- 下载 ---
 
   async function onDownloadFile(fileItem = {}) {
     const traceId = createFileAccessTraceId("download");
@@ -278,7 +276,6 @@ export function useMessagePreview({
     });
   }
 
-  // --- 文件预览 ---
 
   async function openFilePreview(fileItem = {}) {
     const traceId = createFileAccessTraceId("preview");
@@ -458,7 +455,6 @@ export function useMessagePreview({
     resetPreviewState();
   }
 
-  // --- 附件预览 ---
 
   function canPreviewAttachment(attachmentItem = {}) {
     const mimeType = String(attachmentItem?.mimeType || "").trim();
@@ -475,7 +471,6 @@ export function useMessagePreview({
     }
     const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
     if (officeLike) return hasParsedResult(attachmentItem);
-    // Source preview is allowed for image/audio/video/text.
     return (
       isImagePreviewType(mimeType, name, isImageMime) ||
       mimeType.startsWith("video/") ||
@@ -616,7 +611,6 @@ export function useMessagePreview({
     resetAttachmentPreviewState();
   }
 
-  // --- 复制 ---
 
   async function onCopyMarkdownRich(renderedPreviewHtml = "") {
     await copyMarkdownFromText({
@@ -672,7 +666,6 @@ export function useMessagePreview({
   });
 
   return {
-    // 文件预览
     previewVisible: filePreview.visible,
     previewLoading: filePreview.loading,
     previewError: filePreview.error,
@@ -680,7 +673,6 @@ export function useMessagePreview({
     previewMode: filePreview.mode,
     previewTextContent: filePreview.textContent,
     previewImageUrl: filePreview.imageUrl,
-    // 附件预览
     attachmentPreviewVisible: attachmentPreview.visible,
     attachmentPreviewType: attachmentPreview.type,
     attachmentPreviewUrl: attachmentPreview.url,
@@ -688,7 +680,6 @@ export function useMessagePreview({
     attachmentPreviewLoading: attachmentPreview.loading,
     attachmentPreviewError: attachmentPreview.error,
     attachmentPreviewTextContent: attachmentPreview.textContent,
-    // 方法
     canPreviewAttachment,
     canPreviewParsedResult,
     canPreviewFile,

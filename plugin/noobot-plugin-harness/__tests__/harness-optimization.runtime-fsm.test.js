@@ -1,4 +1,3 @@
-// Tests split by responsibility from harness-optimization.test.js.
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -245,30 +244,3 @@ test("buildEvent promotes mini-runner tool turn limit flag to top level", () => 
 
   assert.equal(event.toolTurnLimitReached, true);
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

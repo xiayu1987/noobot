@@ -50,7 +50,6 @@ export function createDesktopServiceManager({
       }, () => {});
       return;
     }
-    // cross-platform-allow: Windows uses taskkill above; POSIX children use signals.
     child.kill("SIGTERM");
   }
 

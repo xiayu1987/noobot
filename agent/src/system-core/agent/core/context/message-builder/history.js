@@ -64,8 +64,6 @@ export function buildHistoryMessages({
   for (const sourceMessage of effectiveHistoryMessages) {
     const msg = normalizeRestoredUserSource(sourceMessage, restoredUserMetaIndex);
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
-    // Metadata is derived from a real user message. Restored snapshots may
-    // contain an older projection, which must not become a new user source.
     if (isDerivedUserMetaMessage(msg, runtime)) continue;
     const role = resolveMessageRole(msg);
     if (role === MESSAGE_ROLE.SYSTEM) {
@@ -121,8 +119,6 @@ export function buildHistoryMessages({
     }
     if (shouldBuildUserMetaForHistoryMessage(msg, runtime, { restorableUserMetaKeys })) {
       history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
-        // Historical metadata is message-scoped. Never fill a historical
-        // message with the current request's identity or attachments.
         allowFallbackAttachments: false,
         allowFallbackIdentity: false,
         allowMessageAttachments,

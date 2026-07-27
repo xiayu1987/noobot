@@ -25,11 +25,6 @@ export function dedupeAttachments(attachments = []) {
 export function normalizeIncomingAttachmentsForSessionMessage(existingAttachments = [], incomingAttachments = []) {
   if (!Array.isArray(incomingAttachments)) return undefined;
   if (incomingAttachments.length === 0) return [];
-  // Payload attachments may be raw transport refs ({ name, mimeType, size }).
-  // Session user-message attachments are the display/edit-back carrier, so write
-  // paths must merge rich-first instead of letting raw refs downgrade parsedResult
-  // or preview/download addressing.  Only preserve rich fields for attachments
-  // still present in the explicit incoming set; [] remains delete-all.
   return dedupeAttachments(incomingAttachments.map((incoming) => {
     const existing = findMatchingAttachmentMeta(incoming, existingAttachments);
     return existing ? mergeAttachmentMetaPreferRich(existing, incoming) : incoming;

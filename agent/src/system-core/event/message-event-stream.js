@@ -47,9 +47,6 @@ export function beginAssistantMessageEventStream(runtime = {}, { turn = 0 } = {}
   const messageId = `msg_${randomUUID()}`;
   state.messageEventStream.activeMessageId = messageId;
   state.messageEventStream.activeTurn = Number(turn || 0);
-  // `sequence` belongs to the active message stream. A new messageId starts a
-  // new ordering domain; carrying the prior message cursor forward makes a
-  // correct consumer wait forever for events owned by another message.
   state.messageEventStream.sequence = 0;
   return messageId;
 }

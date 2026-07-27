@@ -4,14 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * Numeric literal style guard:
- * - Use plain decimal digits for numeric literals.
- * - Do not use JavaScript numeric separators such as 18_000_000.
- *
- * This intentionally scans code tokens only, so strings like model names
- * (for example GLM_5_1) and comments are ignored.
- */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 

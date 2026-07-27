@@ -7,7 +7,6 @@ import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { clientFilePath as path } from "../shared/path-resolver.js";
 
-// https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const connectToken = String(
@@ -17,10 +16,6 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [vue()],
     resolve: {
-      // Workspace peer dependencies can otherwise resolve Vue from the repo
-      // root while application modules resolve a nested copy. Separate Vue
-      // runtimes do not share reactivity tracking, so refs update without
-      // scheduling component renders.
       dedupe: ["vue"],
     },
     test: {
@@ -28,8 +23,8 @@ export default defineConfig(({ mode }) => {
       include: ["tests/unit/**/*.spec.js"],
     },
     server: {
-      host: "0.0.0.0", // 允许局域网访问，可改成具体 IP
-      port: 10060, // 指定端口
+      host: "0.0.0.0",
+      port: 10060,
       fs: {
         allow: [path.resolve(process.cwd(), "../..")],
       },

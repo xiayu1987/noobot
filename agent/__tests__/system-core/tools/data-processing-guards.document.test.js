@@ -31,9 +31,9 @@ import { buildAgentContext, readJsonl } from "./data-processing-guards.test-help
 
 test("doc_to_data: LibreOffice text output decoder handles Windows Chinese encodings", () => {
   const gbkBuffer = Buffer.from([
-    0xd6, 0xd0, 0xce, 0xc4, // 中文
+    0xd6, 0xd0, 0xce, 0xc4,
     0x0d, 0x0a,
-    0xb2, 0xe2, 0xca, 0xd4, // 测试
+    0xb2, 0xe2, 0xca, 0xd4,
   ]);
 
   assert.equal(decodeLibreOfficeTextBuffer(gbkBuffer), "中文\r\n测试");

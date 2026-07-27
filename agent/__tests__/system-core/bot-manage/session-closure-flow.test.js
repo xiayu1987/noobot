@@ -65,7 +65,6 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             definitions: {
               programming: {
                 model: "gpt-4.1-mini",
-                // 内置编程情景只允许覆盖 model；其它字段即使配置也会被忽略。
                 tools: ["switch_model", "task_summary"],
                 context: ["base_prompt", "attachments"],
               },

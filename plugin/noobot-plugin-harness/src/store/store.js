@@ -10,10 +10,9 @@ import { DEFAULT_OPTIONS } from "../core/options.js";
 import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-// ---- Manifest Cache & Debounce ----
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
-const manifestLastAccessed = new Map(); // Track last access time for LRU cleanup
+const manifestLastAccessed = new Map();
 
 const MANIFEST_CACHE_MAX_AGE_MS = TIME_THRESHOLDS.harness.manifestCacheMaxAgeMs;
 const MANIFEST_CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.harness.manifestCleanupIntervalMs;
@@ -22,7 +21,6 @@ function cleanupStaleManifests() {
   const now = Date.now();
   for (const [key, lastAccess] of manifestLastAccessed.entries()) {
     if (now - lastAccess > MANIFEST_CACHE_MAX_AGE_MS) {
-      // Flush stale entry
       const timer = manifestWriteTimers.get(key);
       if (timer) {
         clearTimeout(timer);
@@ -52,10 +50,6 @@ ensureIntervalCleanupTask(
   MANIFEST_CLEANUP_INTERVAL_MS,
 );
 
-/**
- * Update manifest with memory cache + debounced write.
- * Terminal states (success/error/abort) flush immediately.
- */
 export async function updateManifestCached(
   paths,
   ctx,
@@ -67,7 +61,7 @@ export async function updateManifestCached(
 ) {
   if (!paths?.manifest) return;
   const key = paths.manifest;
-  manifestLastAccessed.set(key, Date.now()); // P0#2: Track access time
+  manifestLastAccessed.set(key, Date.now());
   let current = manifestCache.get(key);
   if (!current) {
     try {
@@ -80,14 +74,12 @@ export async function updateManifestCached(
   const next = mergeFn(current, ctx, patch, options, capabilityRuntime);
   manifestCache.set(key, next);
 
-  // Clear existing timer
   const existingTimer = manifestWriteTimers.get(key);
   if (existingTimer) clearTimeout(existingTimer);
 
   const isTerminal = HARNESS_TERMINAL_RUN_STATUSES.has(String(patch.status || ""));
 
   if (isTerminal) {
-    // Flush immediately for terminal states
     clearTimeout(manifestWriteTimers.get(key));
     manifestWriteTimers.delete(key);
     await writeJsonValidated(key, next);
@@ -117,9 +109,6 @@ export async function updateManifestCached(
   }
 }
 
-/**
- * Flush all pending manifest writes immediately.
- */
 export async function flushAllManifests() {
   const entries = Array.from(manifestCache.entries());
   for (const [key, value] of entries) {
@@ -133,24 +122,23 @@ export async function flushAllManifests() {
       manifestCache.delete(key);
       manifestLastAccessed.delete(key);
     } catch (err) {
-      console.error(`[harness] Failed to flush manifest ${key}:`, err.message); // P2#7
+      console.error(`[harness] Failed to flush manifest ${key}:`, err.message);
     }
   }
 }
 
-// ---- JSONL Buffer ----
-const jsonlBuffers = new Map(); // filePath -> string[]
-const jsonlFlushTimers = new Map(); // filePath -> Timer
+const jsonlBuffers = new Map();
+const jsonlFlushTimers = new Map();
 
 const DEFAULT_JSONL_BATCH_SIZE = DEFAULT_OPTIONS.jsonlBatchSize;
 const DEFAULT_JSONL_FLUSH_INTERVAL_MS = DEFAULT_OPTIONS.jsonlFlushIntervalMs;
 const DEFAULT_JSONL_FLUSH_STRATEGY = DEFAULT_OPTIONS.jsonlFlushStrategy;
 const JSONL_RETRY_BASE_DELAY_MS = TIME_THRESHOLDS.harness.jsonlRetryBaseDelayMs;
 const JSONL_RETRY_MAX_DELAY_MS = TIME_THRESHOLDS.harness.jsonlRetryMaxDelayMs;
-const jsonlFlushFailures = new Map(); // filePath -> number
-const jsonlFlushStrategies = new Map(); // filePath -> strategy
-const tmpCleanupLastRunByFile = new Map(); // filePath -> timestamp
-const runWriteLockRefCounts = new Map(); // runDir -> count
+const jsonlFlushFailures = new Map();
+const jsonlFlushStrategies = new Map();
+const tmpCleanupLastRunByFile = new Map();
+const runWriteLockRefCounts = new Map();
 const TMP_FILE_MAX_AGE_MS = TIME_THRESHOLDS.harness.tmpFileMaxAgeMs;
 const TMP_CLEANUP_MIN_INTERVAL_MS = TIME_THRESHOLDS.harness.tmpCleanupMinIntervalMs;
 
@@ -346,7 +334,6 @@ async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = 
       await fs.unlink(tmpPath);
       removed += 1;
     } catch {
-      // ignore cleanup failures for best-effort stale temp cleanup
     }
   }
   if (removed > 0) {
@@ -355,9 +342,6 @@ async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = 
   return removed;
 }
 
-/**
- * Append to JSONL buffer. Flushes when batch size reached or on interval.
- */
 export async function appendJsonlBuffered(
   filePath,
   record,
@@ -391,18 +375,13 @@ export async function appendJsonlBuffered(
   }
 }
 
-/**
- * Flush a single JSONL buffer to disk.
- * P0#1: Fixed race condition using atomic swap pattern.
- */
 async function flushJsonlBuffer(filePath, strategy = DEFAULT_JSONL_FLUSH_STRATEGY) {
   const buffer = jsonlBuffers.get(filePath);
   if (!buffer || buffer.length === 0) return;
 
-  // P0#1: Atomic swap - extract current buffer, replace with new empty array immediately
   const lines = buffer.join("\n") + "\n";
   const newBuffer = [];
-  jsonlBuffers.set(filePath, newBuffer); // Atomically replace with new empty buffer
+  jsonlBuffers.set(filePath, newBuffer);
 
   try {
     await appendFileValidated(filePath, lines, strategy);
@@ -413,12 +392,9 @@ async function flushJsonlBuffer(filePath, strategy = DEFAULT_JSONL_FLUSH_STRATEG
       jsonlFlushStrategies.delete(filePath);
     }
   } catch (err) {
-    // P2#7: Log the error
     console.error(`[harness] JSONL flush failed for ${filePath}:`, err.message);
     const retries = Number(jsonlFlushFailures.get(filePath) || 0) + 1;
     jsonlFlushFailures.set(filePath, retries);
-    // P0#1: On failure, merge the extracted buffer INTO the new buffer (which may have new entries)
-    // Prepend old data so it gets retried first, but preserve any new records that arrived during write
     const current = jsonlBuffers.get(filePath) || [];
     const merged = [...buffer, ...current];
     trimJsonlBuffer(filePath, merged, strategy);
@@ -437,9 +413,6 @@ async function flushJsonlBuffer(filePath, strategy = DEFAULT_JSONL_FLUSH_STRATEG
   }
 }
 
-/**
- * Flush all JSONL buffers immediately.
- */
 export async function flushAllJsonlBuffers() {
   const filePaths = Array.from(jsonlBuffers.keys());
   for (const filePath of filePaths) {
@@ -448,7 +421,6 @@ export async function flushAllJsonlBuffers() {
   }
 }
 
-// ---- Basic JSON read/write with validation ----
 export async function readJson(filePath, fallback = null) {
   try {
     const content = await fs.readFile(filePath, "utf-8");
@@ -462,10 +434,6 @@ export async function writeJson(filePath, data) {
   await writeJsonValidated(filePath, data);
 }
 
-/**
- * P1#4: Optimized JSON write - atomic write with temp file + rename.
- * Falls back to read-back validation only in dev mode or on first failure.
- */
 async function writeJsonValidated(filePath, data, devMode = false) {
   const content = JSON.stringify(data, null, 2);
   const dir = path.dirname(filePath);
@@ -475,18 +443,15 @@ async function writeJsonValidated(filePath, data, devMode = false) {
     await fs.mkdir(dir, { recursive: true });
     await cleanupStaleTmpFilesForTarget(filePath);
 
-    // Atomic write: write to temp file, then rename
     await fs.writeFile(tmpPath, content, "utf-8");
     await fs.rename(tmpPath, filePath);
 
-    // P1#4: Only validate in dev mode or if explicitly requested
     if (devMode || process.env.HARNESS_VALIDATE_WRITES === "1") {
       try {
         const written = await fs.readFile(filePath, "utf-8");
         JSON.parse(written);
       } catch (err) {
-        console.error(`[harness] JSON validation failed for ${filePath}:`, err.message); // P2#7
-        // Fallback: try writing again
+        console.error(`[harness] JSON validation failed for ${filePath}:`, err.message);
         await fs.writeFile(filePath, content, "utf-8");
       }
     }
@@ -529,7 +494,6 @@ async function pruneRotatedJsonlFiles(filePath = "", maxFiles = 0) {
       const stat = await fs.stat(rotatedPath);
       rotated.push({ path: rotatedPath, mtimeMs: Number(stat?.mtimeMs || 0) });
     } catch {
-      // best-effort pruning
     }
   }
   if (rotated.length <= keep) return;

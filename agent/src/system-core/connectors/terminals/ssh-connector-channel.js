@@ -60,12 +60,10 @@ function resetSshState(key = "") {
   try {
     state?.stream?.end?.();
   } catch {
-    // ignore
   }
   try {
     state?.client?.end?.();
   } catch {
-    // ignore
   }
   sshShellStates.delete(normalizedKey);
 }

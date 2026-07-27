@@ -3,10 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * Capability mini-runner for plugin-side external model calls.
- * Independent entry + reuse existing Noobot model/tool core.
- */
 import {
   createChatModel,
   createChatModelByName,

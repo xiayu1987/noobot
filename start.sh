@@ -221,10 +221,6 @@ run_pm2() {
   err_file="$(mktemp)"
   out_file="$(mktemp)"
 
-  # With `set -e` enabled, a failing PM2 command would normally abort the
-  # whole script before we can inspect stderr and repair a broken local PM2
-  # runtime. Capture the exit code explicitly so the recovery path below can
-  # run on deployment machines with stale PM2 daemon/module paths.
   set +e
   (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx --no-install pm2 "$@" >"$out_file" 2>"$err_file")
   local exit_code=$?
@@ -279,9 +275,6 @@ ensure_service_pm2_compat_link() {
   service_bin_dir="$SERVICE_DIR/node_modules/.bin"
   service_pm2_bin="$service_bin_dir/pm2"
 
-  # Older PM2 daemons may have cached .../service/node_modules/pm2 as their
-  # own runtime location. In npm workspaces pm2 is usually hoisted to the repo
-  # root, so provide a compatibility symlink as well.
   if [[ -L "$service_pm2_dir" && ! -e "$service_pm2_dir" ]]; then
     rm -f "$service_pm2_dir"
   fi
@@ -330,7 +323,6 @@ repair_pm2_runtime() {
 
 ensure_pm2_runtime_preflight() {
   install_or_repair_pm2_package
-  # Always restart PM2 daemon before rebuild/start to avoid stale runtime path cache.
   kill_pm2_daemon_best_effort
 }
 
@@ -557,8 +549,6 @@ main() {
   [[ -f "$PROJECT_LAUNCHER_SCRIPT" ]] || { echo "Project launcher script not found: $PROJECT_LAUNCHER_SCRIPT" >&2; exit 1; }
   mkdir -p "$PM2_HOME_DIR"
 
-  # log "1/5 更新代码"
-  # update_code
 
   log "$(msg step_launcher)"
   (cd "$ROOT_DIR" && node "./scripts/project-launcher.mjs")

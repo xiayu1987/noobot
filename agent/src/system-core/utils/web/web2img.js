@@ -49,7 +49,6 @@ function hostDirName(url) {
   try {
     host = new URL(url).host || host;
   } catch {
-    // URL parse failure should not block capture; fallback to unknown host.
   }
   return `web_${safeName(host)}`;
 }
@@ -146,7 +145,6 @@ async function processOneUrl(url, outputDir, browser, preferTrafilatura, config)
           await fsp.unlink(rawImagePath);
         }
       } catch {
-        // Best-effort cleanup: keep raw screenshot when unlink fails.
       }
     }
 

@@ -24,9 +24,6 @@ export class SessionTreeService {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return false;
     return this.treeRepo.withLock(userId, async () => {
-      // Deletion and tree mutation share this lock. Checking the durable
-      // repository tombstone here prevents a late execution initializer from
-      // adding a session back after deleteSessionBranch has completed.
       if (await this.sessionRepo.isSessionDeleted(userId, normalizedSessionId)) {
         return false;
       }

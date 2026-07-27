@@ -55,10 +55,6 @@ export function markReconnectSequenceApplied(
       };
     }
   }
-  // Legacy reconnect envelopes can omit turnScopeId even when they belong to
-  // the currently active canonical turn. Keep the execution-chain cursor as a
-  // read-only compatibility alias so those envelopes cannot replay facts that
-  // were already consumed by a TurnKey batch. It is never used for ownership.
   if (normalizedDpId) {
     const legacySequence = Number(appliedReconnectSequenceByTurnKey?.[normalizedDpId] || 0);
     if (normalizedSequence > legacySequence) {
@@ -94,8 +90,6 @@ export function takeReplayCacheGroupsForSession(replayCache, sessionId = "") {
       dialogProcessId: dialogProcessIds.size === 1
         ? [...dialogProcessIds][0]
         : (keyIdentity || String(replayKey || "").startsWith("__session__") ? "" : String(replayKey || "")),
-      // A batch can target a turn only when every scoped event agrees. Never
-      // guess across continuation turns which intentionally reuse a process id.
       turnScopeId: keyIdentity?.turnScopeId || (turnScopeIds.size === 1 ? [...turnScopeIds][0] : ""),
       replayMessages: normalizedReplayMessages,
     };

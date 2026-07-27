@@ -87,7 +87,6 @@ export async function materializeOutputResult({
     return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: persistedEnvelope });
   }
 
-  // Preserve caller-visible behavior when persistence is unavailable: do not drop content unless explicitly disabled later.
   if (transferPolicy.allowFallbackDirect !== false) {
     const envelope = directOutput(text, {
       ...outputMeta,

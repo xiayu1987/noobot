@@ -106,8 +106,6 @@ function sanitizeArtifactBaseName(input = "", fallback = "doc2data_result") {
 
 function resolveLibreOfficeOutputFormat(inputFileName = "") {
   const extension = path.extname(String(inputFileName || "").trim()).toLowerCase();
-  // Calc/Spreadsheet documents usually cannot export directly to plain txt.
-  // Use csv as a stable text representation.
   if ([
     ".xlsx",
     ".xls",

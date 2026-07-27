@@ -213,9 +213,6 @@ export function useAgentInteraction({
         response: responsePayload,
       });
     } catch (error) {
-      // Local websocket send is not an acknowledgement. Preserve the request
-      // and leave it retryable after reconnect; only a successful local send
-      // may retire the queue item.
       interactionSubmitting.value = false;
       throw error;
     }

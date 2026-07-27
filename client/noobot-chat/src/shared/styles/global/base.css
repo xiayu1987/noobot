@@ -29,7 +29,6 @@ body {
   color: var(--noobot-text-strong);
 }
 
-/* Mermaid tooltip 使用 absolute 定位时可能撑大页面滚动区域 */
 .mermaidTooltip {
   position: fixed;
   z-index: 4000;
@@ -37,7 +36,6 @@ body {
   pointer-events: none;
 }
 
-/* 统一滚动条视觉 */
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -52,7 +50,6 @@ body {
   background: var(--noobot-surface-soft);
 }
 
-/* 低动态偏好兼容 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

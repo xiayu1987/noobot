@@ -58,8 +58,6 @@ function terminalSnapshotOwnsMessage(stateSnapshot = {}, messageItem = {}, activ
   if (!isRunStateForActiveSession(stateSnapshot, activeSession)) return false;
   const runTurnScopeId = trim(stateSnapshot?.turnScopeId);
   const messageTurnScopeId = getMessageTurnScopeId(messageItem);
-  // Terminal projection is deliberately stricter than the legacy in-flight
-  // matcher: a dialog is an execution-chain route and can span several turns.
   return Boolean(runTurnScopeId && messageTurnScopeId && runTurnScopeId === messageTurnScopeId);
 }
 
@@ -148,8 +146,6 @@ export function resolveTurnRuntimeView({
   );
   const persistedStatus = normalizeState(turnStatus?.status || turnStatus?.state);
   const messageStatus = normalizeState(messageItem?.status || messageItem?.state);
-  // A persisted terminal fact is monotonic and must win over a late realtime
-  // event. Before persistence catches up, the realtime state fills the gap.
   const state = isTerminalMessageRuntimeState(persistedStatus)
     ? persistedStatus
     : realtimeStatus || persistedStatus || messageStatus;
@@ -157,20 +153,12 @@ export function resolveTurnRuntimeView({
   const hasStartedAt = Boolean(turnTiming?.thinkingStartedAt);
   const hasFinishedAt = Boolean(turnTiming?.thinkingFinishedAt);
   const terminal = isTerminalMessageRuntimeState(state);
-  // Session detail snapshots intentionally do not persist transient message
-  // channelState/pending fields.  A persisted start without a finish or a
-  // terminal status is therefore the authoritative in-flight fact after a
-  // refresh.
   const running = !hasFinishedAt && !terminal && (
     hasStartedAt || pending || MESSAGE_RUNNING_CHANNEL_STATES.includes(state)
   );
   const inFlightAssistant = getMessageRole(messageItem) === "assistant" && (
     running || (!hasFinishedAt && !terminal && MESSAGE_IN_FLIGHT_CHANNEL_STATES.includes(state))
   );
-  // Message projection must obey the same authority boundary as the Turn
-  // reducer: pending/reconnecting/interaction waiting are not proof that the
-  // backend execution is currently stoppable. Only an explicit SENDING fact
-  // may expose a stop target.
   const canStopTarget = inFlightAssistant && MESSAGE_CAN_STOP_TARGET_STATES.includes(state);
   return {
     state,
@@ -229,17 +217,11 @@ export function buildClearMessageRuntimePatch({
 } = {}) {
   const stateTiming = normalizeTimePair(stateSnapshot);
   const channelState = getMessageChannelState(messageItem);
-  // The frontend detail result closes the canonical Turn interval. When the
-  // backend does not persist a separate finish time, use the already confirmed
-  // Turn start rather than a later transport timestamp.
   const finishedAt = trim(stateSnapshot?.startedAt) || stateTiming.updatedAt || toIsoTime(nowMs());
   return {
     clearRuntimeMark: true,
     pending: false,
     channelState: {
-      // Backend `completed` is only the transport observation. Reaching this
-      // patch requires AUTHORITATIVE_DETAIL_APPLIED, so the message projection
-      // must expose the committed frontend terminal state.
       state: FrontendRunState.FRONTEND_COMPLETED,
     },
     thinkingFinishedAt: finishedAt,
@@ -314,11 +296,6 @@ export function resolveSessionRunMessageRuntimePatch({
     messageItem,
     activeSession,
   });
-  // A persisted backend stop observation is sufficient to settle the exact
-  // Turn's transient assistant projection, even though the Turn state itself
-  // deliberately remains USER_STOPPING until the authoritative session summary
-  // is applied.  Handling this before the generic in-flight branch prevents a
-  // just-created resend placeholder from being kept pending by USER_STOPPING.
   if (
     stateBelongsToActiveSession &&
     terminalOwnsMessage &&
@@ -385,8 +362,6 @@ export function resolveSessionRunMessageRuntimePatch({
   if (
     stateBelongsToActiveSession && terminalOwnsMessage &&
     normalizeState(stateSnapshot?.state) === FrontendRunState.FRONTEND_COMPLETED &&
-    // Completion authority is an explicit Turn fact. Never infer it from the
-    // mutable message projection (`pending`) or from transport completion.
     stateSnapshot?.authority === TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_APPLIED
   ) {
     return {

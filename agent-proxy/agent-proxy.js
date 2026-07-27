@@ -52,7 +52,6 @@ const websocketLibrary = await loadWebSocketLibrary();
 const WebSocket = websocketLibrary.default || websocketLibrary.WebSocket;
 const WebSocketServer = websocketLibrary.WebSocketServer;
 
-// ---- State ----
 const sessionLogClient = createSessionLogClient({ WebSocketImpl: WebSocket });
 const channelManager = new ChannelManager(WebSocket, { sessionLogClient });
 const wsRouter = new WsRouter(channelManager);
@@ -249,7 +248,6 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
   upstreamRequest.end(head);
 }
 
-// ---- HTTP Server ----
 const httpServer = http.createServer((request, response) => {
   const locale = resolveLocaleFromRequest(request);
   const pathname = parseRequestPathname(request);
@@ -318,7 +316,6 @@ const httpServer = http.createServer((request, response) => {
   proxyHttpRequest(request, response);
 });
 
-// ---- WebSocket Server ----
 const websocketServer = new WebSocketServer({
   noServer: true,
   maxPayload: config.wsMaxPayloadBytes,
@@ -411,13 +408,11 @@ websocketServer.on("connection", (socket, request) => {
     try {
       socket.close(1008, AGENT_PROXY_CLOSE_REASON.MISSING_APIKEY);
     } catch {
-      // ignore close errors
     }
     downstreamConnections.finalize(socket, "missing_apikey");
     return;
   }
 
-  // Delegate message routing to WsRouter
   wsRouter.handle(socket, connectionApiKey, connectionLocale);
   channelManager.sendSocketEvent(socket, {
     event: CHANNEL_EVENT.TRANSPORT_READY,
@@ -453,7 +448,6 @@ websocketServer.on("connection", (socket, request) => {
   socket.on("pong", () => downstreamConnections.touch(socket));
 });
 
-// ---- Cleanup Timer ----
 const cleanupTimer = setInterval(() => {
   channelManager.cleanupExpiredChannels();
   httpRateLimiter.cleanup(config.httpRateLimitWindowMs * 3);
@@ -484,7 +478,6 @@ const heartbeatTimer = setInterval(() => {
 
 heartbeatTimer.unref?.();
 
-// ---- Start ----
 httpServer.listen(config.proxyPort, config.proxyHost, () => {
   void writeAgentProxyHttpServerListenStartedEvent({
     host: config.proxyHost,

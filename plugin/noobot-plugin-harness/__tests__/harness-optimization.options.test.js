@@ -1,4 +1,3 @@
-// Tests split by responsibility from harness-optimization.test.js.
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -85,44 +84,3 @@ test("normalizeOptions keeps custom harness denyToolNames", () => {
   });
   assert.deepEqual(options.denyToolNames, ["plan_multi_task_collaboration"]);
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

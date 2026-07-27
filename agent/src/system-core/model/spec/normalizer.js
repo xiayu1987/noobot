@@ -2,17 +2,9 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Model spec normalization and default value resolution.
  */
 import { getModelDefaultFields } from "./defaults.js";
 
-/**
- * Normalize model spec input to a consistent object shape.
- * @param {string|object} input
- * @param {object} fallback
- * @returns {object}
- */
 export function normalizeModelSpecInput(input, fallback = {}) {
   if (!input) return { ...fallback };
   if (typeof input === "string") return { ...fallback, model: input };
@@ -31,36 +23,16 @@ function normalizeBooleanValue(value, fallback = false) {
   return Boolean(fallback);
 }
 
-/**
- * Parse a value to a finite number, returning fallback if not finite.
- * @param {*} value
- * @param {number} fallback
- * @returns {number}
- */
 export function toFiniteNumber(value, fallback) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return parsed;
 }
 
-/**
- * Clamp a number within [min, max].
- * @param {number} value
- * @param {number} min
- * @param {number} max
- * @returns {number}
- */
 export function clampNumber(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-/**
- * Normalize a model parameter value with type-specific clamping.
- * @param {string} fieldKey
- * @param {*} value
- * @param {number} fallback
- * @returns {number}
- */
 export function normalizeModelParamValue(fieldKey = "", value, fallback) {
   const numericValue = toFiniteNumber(value, fallback);
   if (!Number.isFinite(numericValue)) return fallback;
@@ -81,21 +53,10 @@ export function normalizeModelParamValue(fieldKey = "", value, fallback) {
   return numericValue;
 }
 
-/**
- * Check if an object has an own property with any value (including undefined).
- * @param {object} spec
- * @param {string} key
- * @returns {boolean}
- */
 export function hasOwnValue(spec = {}, key = "") {
   return Object.prototype.hasOwnProperty.call(spec || {}, key);
 }
 
-/**
- * Normalize a model spec with format-specific default values.
- * @param {object} modelSpec
- * @returns {object}
- */
 export function normalizeModelSpecWithDefaults(modelSpec = {}) {
   const normalized = { ...(modelSpec || {}) };
   const format = String(normalized?.format || "").trim().toLowerCase();

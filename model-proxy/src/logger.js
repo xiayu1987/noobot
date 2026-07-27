@@ -99,7 +99,6 @@ function createLogger({
         try {
           if (!fs.readdirSync(filePath).length) fs.rmdirSync(filePath);
         } catch (_) {
-          // ignore
         }
         continue;
       }
@@ -108,7 +107,6 @@ function createLogger({
       try {
         if (now - stat.mtimeMs > retainMs) fs.unlinkSync(filePath);
       } catch (_) {
-        // ignore
       }
     }
   }
@@ -156,7 +154,6 @@ function createLogger({
         }
       }
     } catch (_) {
-      // ignore
     }
 
     return filePath;

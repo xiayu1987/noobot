@@ -2,14 +2,8 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Centralized enum definitions with alias normalization support.
  */
 
-/**
- * Database type enum with alias mapping.
- * Canonical values: "mysql" | "postgres" | "sqlite"
- */
 export const DATABASE_TYPE = {
   MYSQL: "mysql",
   POSTGRES: "postgres",
@@ -22,10 +16,6 @@ export const DATABASE_TYPE_ALIASES = {
   sqlite: [DATABASE_TYPE.SQLITE, "sqlite3"],
 };
 
-/**
- * Terminal type enum with alias mapping.
- * Canonical values: "ssh"
- */
 export const TERMINAL_TYPE = {
   SSH: "ssh",
 };
@@ -34,10 +24,6 @@ export const TERMINAL_TYPE_ALIASES = {
   ssh: [TERMINAL_TYPE.SSH, "linux_ssh", "server_ssh"],
 };
 
-/**
- * Connector type enum with alias mapping.
- * Canonical values: "database" | "terminal" | "email"
- */
 export const CONNECTOR_TYPE = {
   DATABASE: "database",
   TERMINAL: "terminal",
@@ -50,10 +36,6 @@ export const CONNECTOR_TYPE_ALIASES = {
   email: [CONNECTOR_TYPE.EMAIL, "mail", "smtp_imap"],
 };
 
-/**
- * Sandbox provider enum with alias mapping.
- * Canonical values: "docker" | "firejail" | "bubblewrap"
- */
 export const SANDBOX_PROVIDER = {
   DOCKER: "docker",
   FIREJAIL: "firejail",
@@ -66,10 +48,6 @@ export const SANDBOX_PROVIDER_ALIASES = {
   bubblewrap: [SANDBOX_PROVIDER.BUBBLEWRAP, "bwrap"],
 };
 
-/**
- * Docker container scope enum with alias mapping.
- * Canonical values: "global" | "user"
- */
 export const DOCKER_CONTAINER_SCOPE = {
   GLOBAL: "global",
   USER: "user",
@@ -80,19 +58,11 @@ export const DOCKER_CONTAINER_SCOPE_ALIASES = {
   user: [DOCKER_CONTAINER_SCOPE.USER, "per_user", "per-user"],
 };
 
-/**
- * Model provider format enum.
- * Canonical values: "openai_compatible" | "dashscope"
- */
 export const PROVIDER_FORMAT = {
   OPENAI_COMPATIBLE: "openai_compatible",
   DASHSCOPE: "dashscope",
 };
 
-/**
- * MCP server type enum.
- * Canonical values: "streamableHttp" | "sse"
- */
 export const MCP_SERVER_TYPE = {
   STREAMABLE_HTTP: "streamableHttp",
   SSE: "sse",
@@ -113,10 +83,6 @@ export const MCP_SERVER_TYPE_ALIASES = {
   ],
 };
 
-/**
- * Skill task action enum.
- * Canonical values: "start" | "completed"
- */
 export const SKILL_ACTION = {
   START: "start",
   COMPLETED: "completed",
@@ -127,11 +93,6 @@ export const SKILL_ACTION_ALIASES = {
   [SKILL_ACTION.COMPLETED]: [SKILL_ACTION.COMPLETED, "done", "finish", "finished"],
 };
 
-/**
- * Doc2Data image format enum.
- * Canonical values: "png" | "jpeg"
- * Note: "jpg" is normalized to "jpeg" as the canonical form.
- */
 export const DOC2DATA_FORMAT = {
   PNG: "png",
   JPEG: "jpeg",
@@ -142,10 +103,6 @@ export const DOC2DATA_FORMAT_ALIASES = {
   [DOC2DATA_FORMAT.JPEG]: [DOC2DATA_FORMAT.JPEG, "jpg"],
 };
 
-/**
- * Doc2Data parse engine enum.
- * Canonical values: "libreoffice" | "vision"
- */
 export const DOC2DATA_PARSE_ENGINE = {
   LIBREOFFICE: "libreoffice",
   VISION: "vision",
@@ -164,20 +121,12 @@ export const DOC2DATA_PARSE_ENGINE_ALIASES = {
   ],
 };
 
-/**
- * Multimodal generation scope enum.
- * Canonical values: "image" | "audio" | "video"
- */
 export const MULTIMODAL_SCOPE = {
   IMAGE: "image",
   AUDIO: "audio",
   VIDEO: "video",
 };
 
-/**
- * Context section enum for scenario context inclusion.
- * Canonical values define which system prompt sections can be included.
- */
 export const CONTEXT_SECTION = {
   BASE_PROMPT: "base_prompt",
   SYSTEM_RUNTIME: "system_runtime",
@@ -221,14 +170,6 @@ export const CONTEXT_SECTION_ALIASES = {
   [CONTEXT_SECTION.ATTACHMENTS]: [CONTEXT_SECTION.ATTACHMENTS],
 };
 
-/**
- * Normalize input value against a canonical enum with alias support.
- * Returns the canonical value or empty string if not matched.
- *
- * @param {string} input - Raw input value
- * @param {Record<string, string[]>} aliasesMap - Map of canonical value to alias array
- * @returns {string} Canonical value or empty string
- */
 export function normalizeWithAliases(input = "", aliasesMap = {}) {
   const value = String(input || "").trim().toLowerCase();
   if (!value) return "";
@@ -240,108 +181,50 @@ export function normalizeWithAliases(input = "", aliasesMap = {}) {
   return "";
 }
 
-/**
- * Normalize database type input.
- * @param {string} input
- * @returns {string} Canonical database type or empty string
- */
 export function normalizeDatabaseType(input = "") {
   return normalizeWithAliases(input, DATABASE_TYPE_ALIASES);
 }
 
-/**
- * Normalize terminal type input.
- * @param {string} input
- * @returns {string} Canonical terminal type or empty string
- */
 export function normalizeTerminalType(input = "") {
   return normalizeWithAliases(input, TERMINAL_TYPE_ALIASES);
 }
 
-/**
- * Normalize connector type input.
- * @param {string} input
- * @returns {string} Canonical connector type or empty string
- */
 export function normalizeConnectorType(input = "") {
   return normalizeWithAliases(input, CONNECTOR_TYPE_ALIASES);
 }
 
-/**
- * Normalize sandbox provider input.
- * Defaults to "docker" if not matched.
- * @param {string} input
- * @returns {string} Canonical sandbox provider
- */
 export function normalizeSandboxProvider(input = "") {
   const result = normalizeWithAliases(input, SANDBOX_PROVIDER_ALIASES);
   return result || SANDBOX_PROVIDER.DOCKER;
 }
 
-/**
- * Normalize Docker container scope input.
- * Defaults to "global" if not matched.
- * @param {string} input
- * @returns {string} Canonical container scope
- */
 export function normalizeDockerContainerScope(input = "") {
   const result = normalizeWithAliases(input, DOCKER_CONTAINER_SCOPE_ALIASES);
   return result || DOCKER_CONTAINER_SCOPE.GLOBAL;
 }
 
-/**
- * Normalize model provider format input.
- * Defaults to "openai_compatible" if not matched.
- * @param {string} input
- * @returns {string} Canonical provider format
- */
 export function normalizeProviderFormat(input = "") {
   const value = String(input || "").trim().toLowerCase();
   if (value === PROVIDER_FORMAT.DASHSCOPE) return PROVIDER_FORMAT.DASHSCOPE;
   return PROVIDER_FORMAT.OPENAI_COMPATIBLE;
 }
 
-/**
- * Normalize MCP server type input.
- * @param {string} input
- * @returns {string} Canonical MCP server type or empty string
- */
 export function normalizeMcpServerType(input = "") {
   return normalizeWithAliases(input, MCP_SERVER_TYPE_ALIASES);
 }
 
-/**
- * Normalize skill task action input.
- * @param {string} input
- * @returns {string} Canonical skill action or empty string
- */
 export function normalizeSkillAction(input = "") {
   return normalizeWithAliases(input, SKILL_ACTION_ALIASES);
 }
 
-/**
- * Normalize doc2data image format input.
- * @param {string} input
- * @returns {string} Canonical image format or empty string
- */
 export function normalizeDoc2DataFormat(input = "") {
   return normalizeWithAliases(input, DOC2DATA_FORMAT_ALIASES);
 }
 
-/**
- * Normalize doc2data parse engine input.
- * @param {string} input
- * @returns {string} Canonical parse engine or empty string
- */
 export function normalizeDoc2DataParseEngine(input = "") {
   return normalizeWithAliases(input, DOC2DATA_PARSE_ENGINE_ALIASES);
 }
 
-/**
- * Normalize context section input.
- * @param {string} input
- * @returns {string} Canonical context section or empty string
- */
 export function normalizeContextSection(input = "") {
   return normalizeWithAliases(input, CONTEXT_SECTION_ALIASES);
 }

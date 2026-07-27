@@ -95,8 +95,6 @@ export function applyRunStateMessageRuntimePatch({
     const messageDialogProcessId = getMessageDialogProcessId(message);
     const sameTurn = stateSnapshot.turnScopeId && messageTurnScopeId === stateSnapshot.turnScopeId;
     const sameDialog = stateSnapshot.dialogProcessId && messageDialogProcessId === stateSnapshot.dialogProcessId;
-    // A turn-scoped runtime can only project to the same turn. Dialog ids are
-    // execution-chain metadata and may be reused by stop/continue.
     if (stateSnapshot.turnScopeId ? !sameTurn : !sameDialog) return;
     const effect = resolveSessionRunMessageRuntimePatch({
       stateSnapshot,
@@ -118,10 +116,6 @@ export function applyRunStateMessageRuntimePatch({
     const timingPatch = effect.patch || {};
     if (turnScopeId && (timingPatch.thinkingStartedAt || timingPatch.thinkingFinishedAt)) {
       const canonicalTiming = mergeCanonicalTurnTiming(session, turnScopeId);
-      // Reconnect channel state carries a transport createdAtMs fallback. It
-      // must never replace a persisted canonical Turn timing, even when the
-      // disposable projection map has not been rebuilt on the new Session
-      // object yet.
       const existingTiming = canonicalTiming;
       const projectedTiming = {};
       if (existingTiming.thinkingStartedAt) {

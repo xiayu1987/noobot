@@ -119,9 +119,6 @@ export function buildContextMessageBlocks(
     fallbackUserMeta,
     includeUserMeta: false,
   });
-  // Process the complete incremental block together. Building each message in
-  // isolation prevented a ToolMessage from seeing its preceding
-  // AIMessage.tool_calls, so restored tool results were discarded.
   const incremental = buildHistoryMessages({
     effectiveHistoryMessages: resolvedMainBlocks.incremental,
     runtime,

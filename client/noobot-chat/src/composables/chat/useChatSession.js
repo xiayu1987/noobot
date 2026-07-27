@@ -126,9 +126,6 @@ export function useChatSession({
   const pendingTerminalResolutionDiscoveries = new Map();
   let resolveDiscoveredTerminalTurn = null;
   function resolveActiveSessionIdentity() {
-    // Registry, lifecycle snapshots and terminal resolution are keyed by the
-    // backend Session identity. activeSessionId may intentionally remain the
-    // optimistic/local UI key after refresh or during first-send promotion.
     const sessionId = String(
       activeSession.value?.backendSessionId
       || activeSession.value?.sessionId
@@ -148,9 +145,6 @@ export function useChatSession({
       turnRuntimeRegistry.value?.sessions?.[canonicalSessionId]?.activeTurnScopeId || "",
     ).trim();
     if (activeScope) return activeScope;
-    // Message order/status is a display projection, not Turn identity.  If the
-    // canonical bucket has no active pointer there is no current runtime for the
-    // Session-level action mutex.
     return "";
   }
 
@@ -202,9 +196,6 @@ export function useChatSession({
     resolveActiveTurnScopeIdentity,
   });
 
-  // Composition-root boundary for runtime events. Every producer (composer,
-  // stream, reconnect and finalization) submits here so a Registry transition
-  // is projected to messages exactly once.
   const submitTurnRuntimeEvent = createRuntimeEventProjector({
     sessions,
     activeSession,
@@ -275,8 +266,6 @@ export function useChatSession({
         updatedAt,
     });
 
-    // The realtime event is only a trigger for terminal resolution. It must
-    // never settle a Turn from the legacy turnStatuses projection.
     if (state.toLowerCase() === "user_stopped" && sessionId && (turnScopeId || dialogProcessId)) {
       const currentSessionId = resolveActiveSessionIdentity();
       const currentTurn = resolveSessionTurnRuntime(
@@ -290,9 +279,6 @@ export function useChatSession({
       );
       const reconciliationKey = `${sessionId}::${turnScopeId || dialogProcessId}`;
       if (identityMatches && !currentTurn.terminal && !pendingStoppedSummaryReconciliations.has(reconciliationKey)) {
-        // The engine-level coordinator observes the same notification through
-        // submitTurnRuntimeEvent. This session layer must not create a second
-        // resolver or a second terminal fact source.
         pendingStoppedSummaryReconciliations.set(reconciliationKey, Promise.resolve({
           applied: false,
           reason: "terminal_resolution_delegated",
@@ -318,19 +304,9 @@ export function useChatSession({
     const sessionId = String(
       sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "",
     ).trim();
-    // Legacy turnStatuses may be displayed as history, but cannot determine
-    // lifecycle state. Terminal state is resolved through the single service.
     const terminalTurn = null;
     const isCurrentSession = Boolean(sessionId && sessionId === resolveActiveSessionIdentity());
 
-    // Detail hydration is the deterministic boundary at which a cached
-    // authoritative response may be projected locally. This never performs a
-    // terminal GET and therefore cannot amplify replay/discovery traffic.
-    // Session detail is authoritative after a reload. Clear every frontend stop
-    // lease for this exact persisted turn; otherwise a remembered request or the
-    // WebSocket confirmation timer can put the new page back into "stopping".
-    // No matching terminal turn needs an additional runtime mutation. Hydration
-    // above already reconciled this session without touching other sessions.
   }
 
   const {
@@ -582,10 +558,6 @@ export function useChatSession({
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     applyTurnRuntimeEvents: (events = []) => {
       const sourceEvents = Array.isArray(events) ? events : [];
-      // Replay events always reach the runtime registry. Legacy turnStatuses are
-      // history/discovery metadata and are not allowed to suppress lifecycle
-      // observations; registry identity and revision/sequence guards own stale
-      // event rejection.
       return sourceEvents.map((event) => submitTurnRuntimeEvent(event));
     },
   });

@@ -68,7 +68,6 @@ function extractTaskSummaryText(messageItem = {}) {
       : "";
     if (summary) return summary;
   } catch {
-    // fall through to raw content
   }
   return rawContent;
 }

@@ -123,7 +123,6 @@ export async function ensureUserWorkspaceInitialized({
         details: { base },
       });
     }
-    // 目录已存在时，补齐模板中的缺失结构，不覆盖用户已有内容
     await cp(templateBase, base, {
       recursive: true,
       force: false,

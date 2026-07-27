@@ -1,7 +1,6 @@
 :root {
   --noobot-thinking-log-detail-radius: 4px;
   --noobot-thinking-log-event-radius: 3px;
-  /* ========== Component Tokens · Thinking Panel ========== */
   --noobot-thinking-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 88%, var(--noobot-base-black));
   --noobot-thinking-header: var(--noobot-text-secondary);
   --noobot-thinking-text: var(--noobot-text-main);
