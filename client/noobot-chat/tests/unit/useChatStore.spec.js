@@ -273,6 +273,22 @@ describe("useChatStore sub session projection", () => {
     expect(store.selectSubSessionMessages("sub-session-1")?.messages.map((message) => message.content)).toEqual(["second"]);
   });
 
+  it("rejects a message-event cursor declared for another message scope", () => {
+    const store = useChatStore();
+    const result = store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({
+      sequenceDomain: "message-event",
+      sequenceScopeId: "different-message",
+      content: "must not apply",
+    }));
+
+    expect(result).toMatchObject({
+      applied: false,
+      reason: "invalid_authoritative_message_event",
+      errors: ["sequence_scope_mismatch"],
+    });
+    expect(store.selectSubSessionMessages("sub-session-1")).toBeNull();
+  });
+
   it("does not treat an unscoped snapshot sequence as message-event ordering", () => {
     const store = useChatStore();
     store.mergeSubSessionSnapshot({
@@ -479,14 +495,18 @@ describe("useChatStore sub session projection", () => {
   it("keeps multiple assistant turns and distinct tool calls separate during realtime projection", () => {
     const store = useChatStore();
     store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "assistant-1", messageId: "msg-1", turnScopeId: "turn-1", sequence: 1, content: "first" }));
-    store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "assistant-2", messageId: "msg-2", turnScopeId: "turn-2", sequence: 2, content: "second" }));
-    store.upsertSubSessionEvent("subagent_tool_call", createSubSessionEvent({ eventId: "tool-1", messageId: "msg-2", turnScopeId: "turn-2", sequence: 3, toolCallId: "call-1", toolCall: { name: "one" }, content: "" }));
-    store.upsertSubSessionEvent("subagent_tool_call", createSubSessionEvent({ eventId: "tool-2", messageId: "msg-2", turnScopeId: "turn-2", sequence: 4, toolCallId: "call-2", toolCall: { name: "two" }, content: "" }));
+    store.upsertSubSessionEvent("subagent_delta", createSubSessionEvent({ eventId: "assistant-2", messageId: "msg-2", turnScopeId: "turn-2", sequence: 1, content: "second" }));
+    store.upsertSubSessionEvent("subagent_tool_call", createSubSessionEvent({ eventId: "tool-1", messageId: "msg-2", turnScopeId: "turn-2", sequence: 2, toolCallId: "call-1", toolCall: { name: "one" }, content: "" }));
+    store.upsertSubSessionEvent("subagent_tool_call", createSubSessionEvent({ eventId: "tool-2", messageId: "msg-2", turnScopeId: "turn-2", sequence: 3, toolCallId: "call-2", toolCall: { name: "two" }, content: "" }));
 
     const messages = store.selectSubSessionMessages("sub-session-1")?.messages || [];
     expect(messages.map((message) => message.content)).toEqual(["first", "second"]);
     expect(messages[1].toolCall).toEqual({ name: "two" });
     expect(messages[1].rawEvents).toHaveLength(3);
+    expect(store.selectSubSessionMessages("sub-session-1")?.sequenceByScopeKey).toMatchObject({
+      "message-event:msg-1": 1,
+      "message-event:msg-2": 3,
+    });
   });
 
   it("selects sub session messages by id and returns null for unknown sessions", () => {

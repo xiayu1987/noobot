@@ -5,7 +5,11 @@
  */
 import { reduceMessageEvent, MESSAGE_EVENT_REDUCE_RESULT } from "./messageEventReducer";
 import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdentity";
-import { initializeMessageEventState } from "../../infra/messageEventState";
+import {
+  initializeMessageEventState,
+  resolveMessageEventLaneState,
+  syncMessageEventAggregateState,
+} from "../../infra/messageEventState";
 import { mergeToolTimelines } from "./toolTimeline";
 import { mergeActivityTimelines } from "./activityTimeline";
 import { createTurnObservation } from "./turnObservation";
@@ -63,7 +67,7 @@ export function dispatchTurnEnvelope({
       reason: targetMessage ? "turn_identity_conflict" : "target_missing",
     });
   }
-  const state = initializeMessageEventState(targetMessage).messageEventState;
+  const state = resolveMessageEventLaneState(targetMessage, envelope);
   const sequence = Number(envelope?.sequence || 0);
   const lastSequence = Number(state.lastSequence || 0);
   if (lastSequence && sequence > lastSequence + 1) {
@@ -91,6 +95,7 @@ export function dispatchTurnEnvelope({
     if (state.pendingEnvelopes && !Object.keys(state.pendingEnvelopes).length) {
       delete state.pendingEnvelopes;
     }
+    syncMessageEventAggregateState(targetMessage);
   }
   return observe({
     ...reduced,

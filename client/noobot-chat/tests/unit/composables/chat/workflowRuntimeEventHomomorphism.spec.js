@@ -110,6 +110,9 @@ describe("workflow runtime live/replay homomorphism", () => {
       "workflow-node-state": 3,
       "message-event": 50,
     });
+    expect(child.sequenceByScopeKey).toMatchObject({
+      "message-event:assistant-1": 50,
+    });
   });
 
   it("rejects sequence values explicitly labeled with another domain", () => {

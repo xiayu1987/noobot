@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MESSAGE_EVENT_TYPE, projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
+import {
+  MESSAGE_EVENT_TYPE,
+  projectMessageEventToolFacets,
+  resolveMessageEventSequenceIdentity,
+} from "@noobot/shared/message-event-protocol";
 import {
   compareTimelineFacts,
   preferTimelineFact,
@@ -85,9 +89,11 @@ export function reduceToolTimeline(timeline = [], envelope = {}, displayLog = nu
   const index = next.findIndex((item) => item.key === key);
   const current = index >= 0 ? next[index] : { key, toolCallId: toolCallIdOf(envelope) };
   const { toolCall, toolResult } = projectMessageEventToolFacets(envelope);
+  const sequenceIdentity = resolveMessageEventSequenceIdentity(envelope);
   const eventFact = {
     eventId: text(envelope.eventId),
     sequence: sequenceOf(envelope),
+    sequenceScopeId: sequenceIdentity.sequenceScopeId,
     authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
     sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
     timestamp: text(envelope.timestamp),
@@ -124,6 +130,7 @@ export function selectToolTimelineLogs(message = {}, { completedOnly = false } =
       logs.push({
         ...item.call.log,
         sequence: sequenceOf(item.call) || sequenceOf(item.call.log),
+        sequenceScopeId: text(item.call.sequenceScopeId || item.call.sequenceScope),
         authority: facetAuthority(item.call),
         sequenceDomain: facetSequenceDomain(item.call),
         timelineTimestamp: text(item.call.timestamp || item.call.log?.timestamp || item.call.log?.ts),
@@ -133,6 +140,7 @@ export function selectToolTimelineLogs(message = {}, { completedOnly = false } =
       logs.push({
         ...item.resultEvent.log,
         sequence: sequenceOf(item.resultEvent) || sequenceOf(item.resultEvent.log),
+        sequenceScopeId: text(item.resultEvent.sequenceScopeId || item.resultEvent.sequenceScope),
         authority: facetAuthority(item.resultEvent),
         sequenceDomain: facetSequenceDomain(item.resultEvent),
         timelineTimestamp: text(

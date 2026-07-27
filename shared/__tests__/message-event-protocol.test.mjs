@@ -14,6 +14,7 @@ import {
   hasMessageEventToolPayload,
   projectMessageEventContent,
   projectMessageEventToolFacets,
+  resolveMessageEventSequenceIdentity,
 } from "../message-event-protocol.mjs";
 
 function envelope(overrides = {}) {
@@ -35,6 +36,30 @@ function envelope(overrides = {}) {
 test("message event protocol validates the authoritative identity envelope", () => {
   assert.equal(assertMessageEventEnvelope(envelope()).sessionId, "child-1");
   assert.throws(() => assertMessageEventEnvelope(envelope({ messageId: "" })), /invalid authoritative/);
+});
+
+test("message event protocol makes the message-scoped sequence identity explicit", () => {
+  assert.deepEqual(
+    resolveMessageEventSequenceIdentity(envelope()),
+    {
+      sequenceDomain: "message-event",
+      sequenceScopeKind: "message",
+      sequenceScopeId: "message-1",
+      sequence: 1,
+      sequenceKey: "message-event:message-1",
+    },
+  );
+  assert.deepEqual(
+    validateMessageEventEnvelope(envelope({
+      sequenceDomain: "message-event",
+      sequenceScopeId: "different-message",
+    })).errors,
+    ["sequence_scope_mismatch"],
+  );
+  assert.deepEqual(
+    validateMessageEventEnvelope(envelope({ sequenceDomain: "turn" })).errors,
+    ["sequence_domain_mismatch"],
+  );
 });
 
 test("message event protocol validates semantic payloads without requiring display text for tools", () => {

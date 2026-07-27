@@ -40,6 +40,8 @@ describe("turnTransportEnvelope", () => {
     });
     expect(normalized.messageEventCursor).toMatchObject({
       sequenceDomain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+      sequenceScopeId: "message-1",
+      sequenceKey: "message-event:message-1",
       sequence: 7,
       eventId: "event-1",
     });

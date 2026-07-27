@@ -66,6 +66,8 @@ export function createRunEventListener({
           ? eventData.sourceMessage
           : null,
         sequence: Number(eventData?.sequence || 0),
+        sequenceDomain: String(eventData?.sequenceDomain || "").trim(),
+        sequenceScopeId: String(eventData?.sequenceScopeId || eventData?.messageId || "").trim(),
         hasTool: Boolean(eventData?.tool),
         hasResult: eventData?.result !== undefined,
         dataKeys: Object.keys(eventData).sort(),
@@ -136,6 +138,7 @@ export function createRunEventListener({
           messageId: String(eventData?.messageId || "").trim(),
           sequence: Number(eventData?.sequence || 0),
           sequenceDomain: String(eventData?.sequenceDomain || "").trim(),
+          sequenceScopeId: String(eventData?.sequenceScopeId || eventData?.messageId || "").trim(),
           textStreamingEnabled: Boolean(textStreamingEnabled),
           delivery: suppressed ? "suppressed" : "delivered",
           suppressionReason: suppressed ? "non_streaming_delta" : "",

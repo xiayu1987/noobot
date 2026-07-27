@@ -52,6 +52,7 @@ export function normalizeRunActivity(value = {}, index = 0) {
     activityId: activityKey(value, index),
     eventId,
     sequence,
+    sequenceScopeId: text(value.sequenceScopeId || value.sequenceScope),
     authority: text(value.authority) || TIMELINE_AUTHORITY.COMPATIBILITY,
     sequenceDomain: text(value.sequenceDomain) || SEQUENCE_DOMAIN.LEGACY,
     type: text(value.event || value.type || value.rawEvent).toLowerCase() || "activity",
@@ -98,6 +99,10 @@ export function selectActivityTimelineLogs(message = {}) {
     .map((item) => ({
       ...item.log,
       sequence: sequenceOf(item) || sequenceOf(item.log),
+      sequenceScopeId: text(
+        item.sequenceScopeId || item.sequenceScope ||
+        item.log?.sequenceScopeId || item.log?.sequenceScope,
+      ),
       authority: text(item.authority || item.log?.authority) || TIMELINE_AUTHORITY.COMPATIBILITY,
       sequenceDomain: text(item.sequenceDomain || item.log?.sequenceDomain) || SEQUENCE_DOMAIN.LEGACY,
       timelineTimestamp: text(item.timestamp || item.log?.timestamp || item.log?.ts),

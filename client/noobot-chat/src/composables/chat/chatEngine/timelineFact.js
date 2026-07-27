@@ -30,6 +30,9 @@ const timestampOf = (value = {}) => {
   return Number.isFinite(timestamp) ? timestamp : null;
 };
 
+const sequenceScopeOf = (value = {}) =>
+  text(value.sequenceScopeId || value.sequenceScope || value.messageId || value.message_id);
+
 /** Select between observations of the same fact. Cross-domain sequence values
  * are incomparable, so equal-authority caller order is the explicit tiebreak. */
 export function preferTimelineFact(left, right) {
@@ -41,9 +44,12 @@ export function preferTimelineFact(left, right) {
   const rightDomain = text(right.sequenceDomain);
   const leftSequence = sequenceOf(left);
   const rightSequence = sequenceOf(right);
+  const leftScope = sequenceScopeOf(left);
+  const rightScope = sequenceScopeOf(right);
   if (
     leftDomain &&
     leftDomain === rightDomain &&
+    leftScope === rightScope &&
     leftSequence !== null &&
     rightSequence !== null
   ) {
@@ -59,9 +65,12 @@ export function compareTimelineFacts(left = {}, right = {}) {
   const rightDomain = text(right.sequenceDomain);
   const leftSequence = sequenceOf(left);
   const rightSequence = sequenceOf(right);
+  const leftScope = sequenceScopeOf(left);
+  const rightScope = sequenceScopeOf(right);
   if (
     leftDomain &&
     leftDomain === rightDomain &&
+    leftScope === rightScope &&
     leftSequence !== null &&
     rightSequence !== null &&
     leftSequence !== rightSequence
