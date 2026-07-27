@@ -4,21 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { ThinkingPanel } from "../../../client/noobot-chat/src/public/chat-ui.js";
-import AssistantCopyActions from "./components/AssistantCopyActions.vue";
-import MessageStatusRow from "./components/MessageStatusRow.vue";
 import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
 import MessageAttachments from "./components/MessageAttachments.vue";
 import HarnessModelExtension from "./components/HarnessModelExtension.vue";
-
-export function matchesMessageStatusRow(messageItem = {}) {
-  return messageItem?.role === "assistant" && Boolean(
-    messageItem?.pending ||
-    messageItem?.statusLabel ||
-    messageItem?.statusTurnScopeId ||
-    messageItem?.projectedStatusStepState ||
-    messageItem?.persistedStatusStepState
-  );
-}
 
 export function matchesThinkingPanel(messageItem = {}) {
   return messageItem?.role === "assistant";
@@ -40,21 +28,6 @@ export function registerFrontendPlugin(ctx = {}) {
         priority: 10,
         component: HarnessModelExtension,
         resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("harness") }),
-  });
-  contribute(points.MESSAGE_CARD_PRE, {
-        id: "message-status-row",
-        capability: "message.panel.status",
-        slot: "pre",
-        priority: 5,
-        component: MessageStatusRow,
-        when: (context = {}) => matchesMessageStatusRow(context?.messageItem),
-        resolveProps: (context = {}) => ({
-          pending: context?.messageItem?.pending,
-          statusLabel: context?.messageItem?.statusLabel,
-          showSubTask: context?.showSubTaskActivity === true,
-          subTaskStatusText: context?.subTaskStatusText,
-          statusStepState: context?.statusStepState,
-        }),
   });
   contribute(points.MESSAGE_CARD_PRE, {
         id: "thinking-panel",
@@ -82,34 +55,6 @@ export function registerFrontendPlugin(ctx = {}) {
             }
           },
         }),
-  });
-  contribute(points.MESSAGE_ACTION_AFTER_PRE_CARDS, {
-        id: "assistant-copy-actions",
-        capability: "message.action.assistant.copy",
-        placement: "after-pre-cards",
-        priority: 100,
-        component: AssistantCopyActions,
-        when: (context = {}) => context?.messageItem?.role === "assistant",
-        resolveProps: (context = {}) => {
-          const messageItem =
-            context?.messageItem && typeof context.messageItem === "object"
-              ? context.messageItem
-              : {};
-          const content = String(messageItem?.content || "").trim();
-          return {
-            visible: messageItem?.role === "assistant" && Boolean(content),
-            onCopyRich:
-              typeof context?.onCopyMessageRich === "function"
-                ? context.onCopyMessageRich
-                : null,
-            onCopyText:
-              typeof context?.onCopyMessageText === "function"
-                ? context.onCopyMessageText
-                : null,
-            translate:
-              typeof context?.translate === "function" ? context.translate : (key = "") => key,
-          };
-        },
   });
   contribute(points.MESSAGE_CARD_POST, {
         id: "message-written-files",

@@ -5,9 +5,11 @@
  */
 
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { createHash, randomUUID } from "node:crypto";
 import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
 import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
 import { normalizeTurnLifecycleEntity } from "./turn-lifecycle-entity.js";
+import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   const seen = new Set();
@@ -19,6 +21,32 @@ function normalizeTransferEnvelopesFromMessage(message = {}) {
     seen.add(key);
     return true;
   });
+}
+
+function normalizeMessageUid(value = "") {
+  return String(value || "").trim();
+}
+
+export function createSessionMessageUid() {
+  return `sm_${randomUUID()}`;
+}
+
+function deriveLegacyMessageUid(message = {}, { sessionId = "", index = 0 } = {}) {
+  const runtimeMessageId = String(message?.messageId || message?.id || "").trim();
+  const seed = runtimeMessageId
+    ? [sessionId, resolveMessageDialogProcessId(message), message?.turnScopeId, runtimeMessageId]
+    : [
+        sessionId,
+        resolveMessageDialogProcessId(message),
+        message?.turnScopeId,
+        message?.role,
+        message?.type,
+        message?.ts,
+        message?.tool_call_id,
+        index,
+        message?.content,
+      ];
+  return `sm_legacy_${createHash("sha256").update(JSON.stringify(seed)).digest("hex").slice(0, 32)}`;
 }
 
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
@@ -65,7 +93,9 @@ export function normalizeMessageEntity(
   const normalizedAttachments = Array.isArray(message?.attachments)
     ? dedupeAttachmentRefs(message.attachments.map((item) => compactAttachmentRef(item)).filter(Boolean))
     : [];
-  const messageId = String(
+  // Provider/runtime IDs may be scoped to one model run. They are retained for
+  // streaming correlation, while messageUid is the persistence identity.
+  const runtimeMessageId = String(
     message?.messageId ||
       message?.id ||
       message?.additional_kwargs?.noobotMessageId ||
@@ -93,9 +123,11 @@ export function normalizeMessageEntity(
     summarized: message?.summarized === true,
     ts: String(message?.ts || "").trim() || now(),
   };
-  if (messageId) {
-    normalizedMessage.id = messageId;
-    normalizedMessage.messageId = messageId;
+  const messageUid = normalizeMessageUid(message?.messageUid);
+  if (messageUid) normalizedMessage.messageUid = messageUid;
+  if (runtimeMessageId) {
+    normalizedMessage.id = runtimeMessageId;
+    normalizedMessage.messageId = runtimeMessageId;
   }
   if (message?.turnCommit && typeof message.turnCommit === "object" && !Array.isArray(message.turnCommit)) {
     const action = String(message.turnCommit.action || "").trim().toLowerCase();
@@ -186,10 +218,33 @@ export function normalizeMessageEntity(
 export function normalizeMessagesEntity(
   messages = [],
   now = () => new Date().toISOString(),
+  { sessionId = "" } = {},
 ) {
-  return (messages || []).map((messageItem) =>
-    normalizeMessageEntity(messageItem, now),
-  );
+  return (messages || []).map((messageItem, index) => {
+    const normalized = normalizeMessageEntity(messageItem, now);
+    normalized.messageUid ||= deriveLegacyMessageUid(normalized, { sessionId, index });
+    return normalized;
+  });
+}
+
+export function assertSessionMessageIdentityInvariants(messages = []) {
+  const seen = new Set();
+  for (const [index, message] of (Array.isArray(messages) ? messages : []).entries()) {
+    const messageUid = normalizeMessageUid(message?.messageUid);
+    if (!messageUid) {
+      const error = new Error(`session message is missing messageUid at index ${index}`);
+      error.code = "SESSION_MESSAGE_UID_MISSING";
+      throw error;
+    }
+    if (seen.has(messageUid)) {
+      const error = new Error(`duplicate session messageUid: ${messageUid}`);
+      error.code = "SESSION_MESSAGE_UID_DUPLICATE";
+      error.messageUid = messageUid;
+      throw error;
+    }
+    seen.add(messageUid);
+  }
+  return true;
 }
 
 export function normalizeTurnTimingEntity(timing = {}) {
@@ -254,6 +309,9 @@ export function normalizeSessionEntity(
   const normalizedShortMemoryCheckpoint = Number(session?.shortMemoryCheckpoint);
   const normalizedCustomTitle = String(session?.customTitle || "").trim();
   const normalizedMutationReceipts = normalizeMutationReceipts(session?.mutationReceipts || []);
+  const normalizedMessages = normalizeMessagesEntity(session?.messages || [], now, {
+    sessionId: normalizedSessionId,
+  });
   const normalizedSession = {
     ...(session && typeof session === "object" ? session : {}),
     sessionId: normalizedSessionId,
@@ -264,7 +322,8 @@ export function normalizeSessionEntity(
     shortMemoryCheckpoint: Number.isFinite(normalizedShortMemoryCheckpoint)
       ? normalizedShortMemoryCheckpoint
       : 0,
-    messages: normalizeMessagesEntity(session?.messages || [], now),
+    messages: normalizedMessages,
+    dialogOrder: normalizeDialogOrderEntity(session?.dialogOrder || [], normalizedMessages),
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     turnStatuses: normalizeTurnStatusesEntity(session?.turnStatuses || [], now),
     turnLifecycle: normalizeTurnLifecycleEntity(lifecycleWithLegacyTerminalStatuses(session)),

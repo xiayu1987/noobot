@@ -240,11 +240,13 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
   const sessionPayload = JSON.parse(await fs.readFile(persisted.files.session, "utf8"));
   assert.equal(sessionPayload.sessionId, "s1");
   assert.equal(sessionPayload.parentSessionId, "p1");
-  assert.equal(sessionPayload.schemaVersion, 2);
+  assert.equal(sessionPayload.schemaVersion, 4);
+  assert.equal(sessionPayload.messageIdentityVersion, 1);
   assert.equal("messages" in sessionPayload, false);
   assert.equal(sessionPayload.turnOrder.length, 1);
+  assert.deepEqual(sessionPayload.messageOrder, [{ turnId: "turn-000001", messageIndex: 0 }]);
   assert.equal(sessionPayload.turnOrder[0].turnId, "turn-000001");
-  assert.equal(sessionPayload.turnOrder[0].sequence, 1);
+  assert.equal(sessionPayload.turnOrder[0].artifactOrdinal, 1);
   assert.equal(sessionPayload.turnOrder[0].turnScopeId, "");
   assert.equal(sessionPayload.turnOrder[0].file, "turns/turn-000001.json");
   assert.equal(sessionPayload.turnOrder[0].messageCount, 1);

@@ -11,7 +11,8 @@ import {
   buildSessionDisplaySummary,
   isSessionDisplaySummaryPayload,
 } from "./session-summary-builders.js";
-import { normalizeSessionEntity } from "./entities/session-entity.js";
+import { assertSessionMessageIdentityInvariants, normalizeSessionEntity } from "./entities/session-entity.js";
+import { resolveMessageDialogProcessId } from "../context/session/dialog-process-id-resolver.js";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 
 export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
@@ -297,23 +298,70 @@ async function appendRollingJsonlArtifactLogUnlocked({
   return index;
 }
 
-function splitSessionMessages(messages = []) {
-  const turns = [];
-  for (const message of Array.isArray(messages) ? messages : []) {
-    const scope = String(message?.turnScopeId || "").trim();
-    const previous = turns[turns.length - 1];
-    const startsNew = !previous || scope !== previous.turnScopeId || (!scope && message?.role === "user");
-    if (startsNew) {
-      turns.push({
-        turnId: `turn-${String(turns.length + 1).padStart(6, "0")}`,
-        sequence: turns.length + 1,
-        turnScopeId: scope,
-        messages: [],
-      });
+function splitSessionMessages(messages = [], dialogOrder = []) {
+  const source = Array.isArray(messages) ? messages : [];
+  const logicalOrder = new Map(
+    (Array.isArray(dialogOrder) ? dialogOrder : []).map((entry, index) => [
+      String(entry?.dialogProcessId || entry?.dialogId || "").trim(),
+      Number(entry?.dialogOrdinal) || index + 1,
+    ]),
+  );
+  const buckets = new Map();
+  let legacySegment = 0;
+  let previousLegacyKey = "";
+  source.forEach((message, sourceIndex) => {
+    const dialogProcessId = resolveMessageDialogProcessId(message);
+    const turnScopeId = String(message?.turnScopeId || "").trim();
+    let key = dialogProcessId ? `dialog:${dialogProcessId}` : "";
+    if (!key) {
+      const scopeKey = turnScopeId ? `scope:${turnScopeId}` : "scope:missing";
+      if (scopeKey !== previousLegacyKey || (!turnScopeId && message?.role === "user")) legacySegment += 1;
+      previousLegacyKey = scopeKey;
+      key = `legacy:${legacySegment}:${scopeKey}`;
     }
-    turns[turns.length - 1].messages.push(message);
+    const bucket = buckets.get(key) || {
+      dialogProcessId,
+      turnScopeId,
+      firstSourceIndex: sourceIndex,
+      messages: [],
+      sourceIndices: [],
+    };
+    bucket.messages.push(message);
+    bucket.sourceIndices.push(sourceIndex);
+    buckets.set(key, bucket);
+  });
+  const ordered = [...buckets.values()].sort((left, right) => {
+    const leftDialogOrdinal = logicalOrder.get(left.dialogProcessId);
+    const rightDialogOrdinal = logicalOrder.get(right.dialogProcessId);
+    if (Number.isFinite(leftDialogOrdinal) && Number.isFinite(rightDialogOrdinal)) return leftDialogOrdinal - rightDialogOrdinal;
+    if (Number.isFinite(leftDialogOrdinal) !== Number.isFinite(rightDialogOrdinal)) return Number.isFinite(leftDialogOrdinal) ? -1 : 1;
+    return left.firstSourceIndex - right.firstSourceIndex;
+  });
+  const turns = ordered.map((bucket, index) => {
+    const artifactOrdinal = index + 1;
+    return {
+      turnId: `turn-${String(artifactOrdinal).padStart(6, "0")}`,
+      artifactOrdinal,
+      turnScopeId: bucket.turnScopeId,
+      dialogProcessId: bucket.dialogProcessId,
+      messages: bucket.messages,
+      sourceIndices: bucket.sourceIndices,
+    };
+  });
+  const locationBySourceIndex = new Map();
+  for (const turn of turns) {
+    turn.sourceIndices.forEach((sourceIndex, messageIndex) => {
+      locationBySourceIndex.set(sourceIndex, { turnId: turn.turnId, messageIndex });
+    });
   }
-  return turns;
+  const messageOrder = source.map((_, sourceIndex) => {
+    const location = locationBySourceIndex.get(sourceIndex);
+    return {
+      turnId: location.turnId,
+      messageIndex: location.messageIndex,
+    };
+  });
+  return { turns, messageOrder };
 }
 
 function resolveTurnArtifactPath(sessionDir = "", file = "") {
@@ -337,7 +385,7 @@ export async function readRecentSessionTurns({ sessionDir = "", limit = 10, fall
   const session = await readJsonArtifactFile(files.session, fallback);
   if (!session || typeof session !== "object") return [];
   const count = Math.max(0, Number(limit) || 0);
-  if (Array.isArray(session.messages)) return splitSessionMessages(session.messages).slice(-count);
+  if (Array.isArray(session.messages)) return splitSessionMessages(session.messages, session.dialogOrder).turns.slice(-count);
   const order = (Array.isArray(session.turnOrder) ? session.turnOrder : []).slice(-count);
   const turns = [];
   for (const item of order) {
@@ -372,6 +420,7 @@ export async function readSessionArtifact({
   if (!session || typeof session !== "object") return fallback;
   if (Array.isArray(session.messages)) return session;
   const messages = [];
+  const messagesByTurnId = new Map();
   const order = Array.isArray(session.turnOrder) ? session.turnOrder : [];
   for (const item of order) {
     const file = typeof item === "string" ? item : item?.file;
@@ -386,9 +435,15 @@ export async function readSessionArtifact({
       error.code = "SESSION_TURN_ARTIFACT_MISSING";
       throw error;
     }
+    const turnId = String(item?.turnId || turn?.turnId || "").trim();
+    if (turnId) messagesByTurnId.set(turnId, turn.messages);
     messages.push(...turn.messages);
   }
-  return { ...session, messages };
+  const messageOrder = Array.isArray(session.messageOrder) ? session.messageOrder : [];
+  const restoredMessages = messageOrder.length
+    ? messageOrder.map((reference) => messagesByTurnId.get(String(reference?.turnId || "").trim())?.[Number(reference?.messageIndex)]).filter(Boolean)
+    : messages;
+  return { ...session, messages: restoredMessages };
 }
 
 export async function migrateSessionArtifacts({
@@ -494,27 +549,39 @@ export async function writeSessionArtifact({
   const files = buildSessionArtifactFileMap(sessionDir);
   await mkdir(sessionDir, { recursive: true });
   const normalizedSessionPayload = normalizeSessionEntity(sessionPayload, { now });
+  assertSessionMessageIdentityInvariants(normalizedSessionPayload.messages);
   const summaryPayload = buildSessionDisplaySummary(normalizedSessionPayload, { depth });
-  const turns = splitSessionMessages(normalizedSessionPayload.messages);
+  const { turns, messageOrder } = splitSessionMessages(
+    normalizedSessionPayload.messages,
+    normalizedSessionPayload.dialogOrder,
+  );
   const previousManifest = await readJsonWithStorage({ storageService, artifactPath: files.session, fallback: null });
   const previousById = new Map((Array.isArray(previousManifest?.turnOrder) ? previousManifest.turnOrder : []).map((item) => [item?.turnId, item]));
-  const turnOrder = turns.map((turn) => ({
-    turnId: turn.turnId,
-    sequence: turn.sequence,
-    turnScopeId: turn.turnScopeId,
-    file: `${SESSION_ARTIFACT_FILE_NAMES.turnsDir}/${turn.turnId}.json`,
-    ...turnContentMetadata(turn),
-  }));
+  const artifactTurns = turns.map(({ sourceIndices, ...turn }) => turn);
+  const turnOrder = artifactTurns.map((turn) => ({
+      turnId: turn.turnId,
+      artifactOrdinal: turn.artifactOrdinal,
+      turnScopeId: turn.turnScopeId,
+      dialogProcessId: turn.dialogProcessId,
+      file: `${SESSION_ARTIFACT_FILE_NAMES.turnsDir}/${turn.turnId}.json`,
+      ...turnContentMetadata(turn),
+    }));
   await mkdir(files.turnsDir, { recursive: true });
   for (let index = 0; index < turns.length; index += 1) {
-    const turn = turns[index];
+    const turn = artifactTurns[index];
     const artifactPath = path.join(files.turnsDir, `${turn.turnId}.json`);
     const previous = previousById.get(turn.turnId);
     if (!previous?.contentHash || previous.contentHash !== turnOrder[index].contentHash) {
       await writeJsonWithStorage({ storageService, artifactPath, payload: turn, atomic: true });
     }
   }
-  const manifest = { ...normalizedSessionPayload, schemaVersion: 2, turnOrder };
+  const manifest = {
+    ...normalizedSessionPayload,
+    schemaVersion: 4,
+    messageIdentityVersion: 1,
+    turnOrder,
+    messageOrder,
+  };
   delete manifest.messages;
   const [sessionArtifact] = await Promise.all([
     writeJsonWithStorage({

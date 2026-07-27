@@ -72,7 +72,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     pathResolver,
     sessionPathResolver,
     storageService,
-    normalizeMessages: (messages) => normalizeMessagesEntity(messages, nowFn),
+    normalizeMessages: (messages, options = {}) => normalizeMessagesEntity(messages, nowFn, options),
     normalizeSelectedConnectors,
     now: nowFn,
   });
@@ -337,6 +337,10 @@ export function createSessionFacade(runtime = {}) {
 
     async getSessionTurns({ userId, sessionId }) {
       return sessionMessageService.getSessionTurns({ userId, sessionId });
+    },
+
+    async getSessionContextSource({ userId, sessionId }) {
+      return sessionMessageService.getSessionContextSource({ userId, sessionId });
     },
 
     async hasDialogProcessIdInSession(payload = {}) {

@@ -3,12 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeMessageEntity } from "../../entities/session-entity.js";
+import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
 import { isSameTurnStatus } from "../../entities/turn-status-entity.js";
 import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { dedupeAttachments, assertCanonicalAttachments } from "./attachment-helpers.js";
 import { resolveSessionVersion } from "./anchor-utils.js";
 import { createRequestHash, assertIdempotencyRequestMatches, normalizeExpectedVersion } from "./idempotency-guards.js";
+import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";
 
 export async function commitTurn({
     userId, sessionId, parentSessionId = "", content = "", action = "send",
@@ -67,7 +68,7 @@ export async function commitTurn({
       const nowValue = this.now();
       assertCanonicalAttachments(attachments, sessionId);
       const canonicalAttachments = dedupeAttachments(Array.isArray(attachments) ? attachments : []);
-      const userMessage = normalizeMessageEntity({ role: "user", type: "message", content: normalizedContent,
+      const userMessage = normalizeMessageEntity({ messageUid: createSessionMessageUid(), role: "user", type: "message", content: normalizedContent,
         userName: String(userId), sessionId, parentSessionId: resolvedParentSessionId,
         dialogProcessId: String(dialogProcessId || "").trim(), parentDialogProcessId: String(parentDialogProcessId || "").trim(),
         turnScopeId: normalizedTurnScopeId,
@@ -77,6 +78,7 @@ export async function commitTurn({
         turnCommit: { action: normalizedAction, idempotencyKey: normalizedIdempotencyKey, requestHash, runState: "pending_start", ...(normalizedAction === "continue" ? { resumeDialogProcessId: String(resumeDialogProcessId).trim(), resumeTurnScopeId: String(resumeTurnScopeId).trim() } : {}) }, ts: nowValue,
       }, () => nowValue);
       session.messages = [...messages, userMessage];
+      session.dialogOrder = appendDialogOrderEntry(session.dialogOrder, userMessage);
       session.version = currentVersion + 1; session.revision = session.version; session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion, persistenceContext });

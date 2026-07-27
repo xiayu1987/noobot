@@ -71,6 +71,8 @@ test("session manifest stores ordered turn references and reads legacy and v2 se
   const manifest = JSON.parse(await readFile(files.session, "utf8"));
   assert.equal("messages" in manifest, false);
   assert.equal(manifest.turnOrder.length, 2);
+  assert.equal(manifest.turnOrder[0].artifactOrdinal, 1);
+  assert.equal("sequence" in manifest.turnOrder[0], false);
   assert.deepEqual((await readSessionArtifact({ sessionDir: root })).messages.map((m) => m.content), ["u1", "a1", "u2"]);
 
   const legacy = path.join(root, "legacy");
@@ -147,6 +149,45 @@ test("session turns preserve empty, missing, and non-contiguous scopes without r
   const emptyManifest = JSON.parse(await readFile(files.session, "utf8"));
   assert.deepEqual(emptyManifest.turnOrder, []);
   assert.deepEqual((await readSessionArtifact({ sessionDir: root })).messages, []);
+}));
+
+test("session artifacts group interleaved messages by logical dialog without changing replay order", async () => withTemp(async (root) => {
+  const messages = [
+    { role: "user", content: "a user", dialogProcessId: "a", turnScopeId: "turn-a", frontendUserMessage: true, ts: "2026-01-01T00:00:00Z" },
+    { role: "user", content: "b user", dialogProcessId: "b", turnScopeId: "turn-b", frontendUserMessage: true, ts: "2026-01-01T00:01:00Z" },
+    { role: "assistant", content: "a late", dialogProcessId: "a", turnScopeId: "turn-a", ts: "2026-01-01T00:02:00Z" },
+    { role: "assistant", content: "b answer", dialogProcessId: "b", turnScopeId: "turn-b", ts: "2026-01-01T00:03:00Z" },
+  ];
+  await writeSessionArtifact({ sessionDir: root, sessionPayload: { sessionId: "interleaved", messages } });
+
+  const files = buildSessionArtifactFileMap(root);
+  const manifest = JSON.parse(await readFile(files.session, "utf8"));
+  assert.equal(manifest.schemaVersion, 4);
+  assert.equal(manifest.messageIdentityVersion, 1);
+  assert.deepEqual(manifest.turnOrder.map((turn) => turn.artifactOrdinal), [1, 2]);
+  assert.equal(manifest.turnOrder.some((turn) => "sequence" in turn), false);
+  assert.deepEqual(manifest.turnOrder.map(({ dialogProcessId, messageCount }) => ({ dialogProcessId, messageCount })), [
+    { dialogProcessId: "a", messageCount: 2 },
+    { dialogProcessId: "b", messageCount: 2 },
+  ]);
+  assert.equal(manifest.messageOrder.length, messages.length);
+  assert.deepEqual(
+    (await readSessionArtifact({ sessionDir: root })).messages.map((message) => message.content),
+    messages.map((message) => message.content),
+  );
+}));
+
+test("session artifact publication rejects duplicate persistent message UIDs", async () => withTemp(async (root) => {
+  await assert.rejects(writeSessionArtifact({
+    sessionDir: root,
+    sessionPayload: {
+      sessionId: "duplicate-uids",
+      messages: [
+        { messageUid: "sm_same", role: "user", content: "one", dialogProcessId: "d1", turnScopeId: "t1" },
+        { messageUid: "sm_same", role: "assistant", content: "two", dialogProcessId: "d1", turnScopeId: "t1" },
+      ],
+    },
+  }), (error) => error.code === "SESSION_MESSAGE_UID_DUPLICATE");
 }));
 
 test("session reader reports missing and corrupted turn artifacts", async () => withTemp(async (root) => {

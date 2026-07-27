@@ -19,6 +19,16 @@ function createSessionContextService(messages = [], { globalConfig = {} } = {}) 
   });
 }
 
+function createIndexedSessionContextService(messages = [], dialogOrder = []) {
+  return new SessionContextService({
+    sessionService: {
+      async getSessionContextSource() {
+        return { messages, dialogOrder };
+      },
+    },
+  });
+}
+
 test("getRecentSessionMessages preserves legacy history without dialog identity", async () => {
   const messages = [
     {
@@ -306,6 +316,35 @@ test("getContextRecords uses fixed latest dialog history", async () => {
       "latest user",
     ],
   );
+});
+
+test("getRecentSessionMessages follows persisted dialog order instead of artifact order", async () => {
+  const messages = [
+    { role: "user", content: "d6 user", dialogProcessId: "d6" },
+    { role: "assistant", content: "d1 late append", dialogProcessId: "d1" },
+    { role: "user", content: "d1 user", dialogProcessId: "d1" },
+    { role: "user", content: "d2 user", dialogProcessId: "d2" },
+    { role: "user", content: "d3 user", dialogProcessId: "d3" },
+    { role: "user", content: "d4 user", dialogProcessId: "d4" },
+    { role: "user", content: "d5 user", dialogProcessId: "d5" },
+  ];
+  const service = createIndexedSessionContextService(messages, [
+    { dialogProcessId: "d1", dialogOrdinal: 1 },
+    { dialogProcessId: "d2", dialogOrdinal: 2 },
+    { dialogProcessId: "d3", dialogOrdinal: 3 },
+    { dialogProcessId: "d4", dialogOrdinal: 4 },
+    { dialogProcessId: "d5", dialogOrdinal: 5 },
+    { dialogProcessId: "d6", dialogOrdinal: 6 },
+  ]);
+
+  const result = await service.getRecentSessionMessages({
+    userId: "u1",
+    sessionId: "s1",
+  });
+
+  assert.deepEqual(result.map((messageItem) => messageItem.content), [
+    "d2 user", "d3 user", "d4 user", "d5 user", "d6 user",
+  ]);
 });
 
 test("session context config always uses the central main history round limit", async () => {

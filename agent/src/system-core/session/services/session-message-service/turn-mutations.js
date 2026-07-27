@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeMessageEntity } from "../../entities/session-entity.js";
+import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
 import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import { resolveSessionVersion, createMessageAnchorMatcher, resolveUserTurnStartIndex, clearReplacementUserRuntimeState, resolveTurnScopeId, uniqueValues } from "./anchor-utils.js";
@@ -195,12 +195,14 @@ export async function replaceTurn({
     delete replacementBaseMessage.messageId;
     delete replacementBaseMessage.message_id;
     delete replacementBaseMessage.id;
+    delete replacementBaseMessage.messageUid;
     const nextAttachments = normalizeIncomingAttachmentsForSessionMessage(
       replacedUserMessage?.attachments,
       attachments,
     );
     const newMessage = normalizeMessageEntity({
       ...replacementBaseMessage,
+      messageUid: createSessionMessageUid(),
       role: "user",
       type: "message",
       content: normalizedNewContent,

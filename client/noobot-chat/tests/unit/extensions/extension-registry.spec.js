@@ -37,13 +37,14 @@ describe("extension registry contract", () => {
     expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST)).toEqual([]);
   });
 
-  it("selects only the highest-priority contribution at a first-match point", () => {
+  it("keeps different message actions while arbitrating duplicate capabilities", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const point = EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS;
-    contributeExtension(point, { id: "fallback", pluginId: "fallback", priority: 100 });
-    contributeExtension(point, { id: "preferred", pluginId: "preferred", priority: 10 });
-    expect(resolveExtensionPoint(point).map(({ id }) => id)).toEqual(["preferred"]);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('selected "preferred"'));
+    contributeExtension(point, { id: "translate", priority: 5, exclusiveGroup: "message.action.translate" });
+    contributeExtension(point, { id: "copy-fallback", priority: 100, exclusiveGroup: "message.action.copy" });
+    contributeExtension(point, { id: "copy-preferred", priority: 10, exclusiveGroup: "message.action.copy" });
+    expect(resolveExtensionPoint(point).map(({ id }) => id)).toEqual(["translate", "copy-preferred"]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("exclusive:message.action.copy"));
     warn.mockRestore();
   });
 

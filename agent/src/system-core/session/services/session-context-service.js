@@ -24,9 +24,15 @@ export class SessionContextService {
     };
   }
 
-  async _getSessionTurns({ userId, sessionId }) {
-    if (!this.sessionMessageService?.getSessionTurns) return [];
-    return this.sessionMessageService.getSessionTurns({ userId, sessionId });
+  async _getSessionContextSource({ userId, sessionId }) {
+    if (this.sessionMessageService?.getSessionContextSource) {
+      return this.sessionMessageService.getSessionContextSource({ userId, sessionId });
+    }
+    if (!this.sessionMessageService?.getSessionTurns) return { messages: [], dialogOrder: [] };
+    return {
+      messages: await this.sessionMessageService.getSessionTurns({ userId, sessionId }),
+      dialogOrder: [],
+    };
   }
 
   _filterCurrentTurnMessages(messages = [], { currentTurnScopeId = "" } = {}) {
@@ -68,13 +74,15 @@ export class SessionContextService {
     void userConfig;
     void limit;
     const config = this._sessionContextConfig(userConfig);
+    const source = await this._getSessionContextSource({ userId, sessionId });
     const messages = this._filterCurrentRunMessages(
-      await this._getSessionTurns({ userId, sessionId }),
+      source.messages,
       { currentTurnScopeId, currentDialogProcessId },
     );
     return resolveMainModelHistoryMessages({
       sourceMessages: messages,
       historyLimit: config.historyRoundLimit,
+      dialogOrder: source.dialogOrder,
     });
   }
 

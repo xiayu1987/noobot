@@ -17,6 +17,8 @@ test("appendTurn updates an existing message with the same authoritative message
       type: "message",
       id: "message-1",
       messageId: "message-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
       ts: "2026-07-25T00:00:00.000Z",
     }],
   };
@@ -38,15 +40,54 @@ test("appendTurn updates an existing message with the same authoritative message
     content: "completed",
     type: "message",
     messageId: "message-1",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
   });
 
   assert.equal(session.messages.length, 1);
   assert.equal(session.messages[0].content, "completed");
   assert.equal(session.messages[0].id, "message-1");
   assert.equal(session.messages[0].messageId, "message-1");
+  assert.match(session.messages[0].messageUid, /^sm_/);
   assert.equal(session.messages[0].ts, "2026-07-25T00:00:00.000Z");
   assert.equal(result.messageId, "message-1");
+  assert.equal(result.messageUid, session.messages[0].messageUid);
   assert.equal(saveCount, 1);
+});
+
+test("appendTurn does not overwrite another dialog when local message ids collide", async () => {
+  const session = {
+    currentTaskId: "",
+    messages: [{
+      role: "user",
+      content: "old guidance",
+      id: "am_1g",
+      messageId: "am_1g",
+      dialogProcessId: "dialog-old",
+      turnScopeId: "turn-old",
+      ts: "2026-07-25T00:00:00.000Z",
+      injectedMessage: true,
+    }],
+  };
+  const service = {
+    now: () => "2026-07-25T01:00:00.000Z",
+    _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
+    _resolveParentSessionId: async () => "",
+    sessionRepo: { findById: async () => session, save: async () => {} },
+  };
+
+  await appendTurn.call(service, {
+    userId: "u1", sessionId: "s1", role: "user", content: "new guidance",
+    messageId: "am_1g", dialogProcessId: "dialog-new", turnScopeId: "turn-new",
+    injectedMessage: true,
+  });
+
+  assert.equal(session.messages.length, 2);
+  assert.notEqual(session.messages[0].messageUid, session.messages[1].messageUid);
+  assert.deepEqual(session.messages.map(({ content, dialogProcessId, ts }) => ({ content, dialogProcessId, ts })), [
+    { content: "old guidance", dialogProcessId: "dialog-old", ts: "2026-07-25T00:00:00.000Z" },
+    { content: "new guidance", dialogProcessId: "dialog-new", ts: "2026-07-25T01:00:00.000Z" },
+  ]);
 });
 
 test("appendTurn still appends messages without an authoritative messageId", async () => {
@@ -70,4 +111,44 @@ test("appendTurn still appends messages without an authoritative messageId", asy
 
   assert.equal(session.messages.length, 1);
   assert.equal("messageId" in session.messages[0], false);
+  assert.match(session.messages[0].messageUid, /^sm_/);
+});
+
+test("appendTurn uses messageUid as the persistence identity and validates its dialog scope", async () => {
+  const session = {
+    currentTaskId: "",
+    messages: [{
+      messageUid: "sm_fixed",
+      role: "assistant", content: "partial", messageId: "am_1",
+      dialogProcessId: "dialog-1", turnScopeId: "turn-1",
+      ts: "2026-07-25T00:00:00.000Z",
+    }],
+  };
+  const service = {
+    now: () => "2026-07-25T00:01:00.000Z",
+    _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
+    _resolveParentSessionId: async () => "",
+    sessionRepo: { findById: async () => session, save: async () => {} },
+  };
+
+  const updated = await appendTurn.call(service, {
+    userId: "u1", sessionId: "s1", messageUid: "sm_fixed",
+    role: "assistant", content: "done", messageId: "a-different-runtime-id",
+    dialogProcessId: "dialog-1", turnScopeId: "turn-1",
+  });
+  assert.equal(session.messages.length, 1);
+  assert.equal(updated.messageUid, "sm_fixed");
+  assert.equal(updated.content, "done");
+
+  await assert.rejects(appendTurn.call(service, {
+    userId: "u1", sessionId: "s1", messageUid: "sm_fixed",
+    role: "assistant", content: "wrong dialog", messageId: "am_1",
+    dialogProcessId: "dialog-2", turnScopeId: "turn-2",
+  }), (error) => error.code === "SESSION_MESSAGE_IDENTITY_CONFLICT");
+
+  await assert.rejects(appendTurn.call(service, {
+    userId: "u1", sessionId: "s1", messageUid: "sm_unknown",
+    role: "assistant", content: "ambiguous update", messageId: "a-different-runtime-id",
+    dialogProcessId: "dialog-1", turnScopeId: "turn-1",
+  }), (error) => error.code === "SESSION_MESSAGE_UID_MISMATCH");
 });

@@ -252,6 +252,41 @@ test("resolveMainModelHistoryMessages orders dialog groups by first natural occu
   );
 });
 
+test("resolveMainModelHistoryMessages selects recent user dialogs when artifact writes are interleaved", () => {
+  const sourceMessages = [
+    { role: "user", content: "u1", dialogProcessId: "d1", frontendUserMessage: true, ts: "2026-07-27T01:00:00Z" },
+    { role: "user", content: "u2", dialogProcessId: "d2", frontendUserMessage: true, ts: "2026-07-27T02:00:00Z" },
+    { role: "assistant", content: "a1 late", dialogProcessId: "d1", ts: "2026-07-27T03:00:00Z" },
+    { role: "user", content: "u3", dialogProcessId: "d3", frontendUserMessage: true, ts: "2026-07-27T03:00:00Z" },
+    { role: "user", content: "u4", dialogProcessId: "d4", frontendUserMessage: true, ts: "2026-07-27T04:00:00Z" },
+    { role: "user", content: "u5", dialogProcessId: "d5", frontendUserMessage: true, ts: "2026-07-27T05:00:00Z" },
+    { role: "user", content: "u6", dialogProcessId: "d6", frontendUserMessage: true, ts: "2026-07-27T06:00:00Z" },
+    { role: "assistant", content: "a2 very late", dialogProcessId: "d2", ts: "2026-07-27T07:00:00Z" },
+  ];
+
+  const result = resolveMainModelHistoryMessages({ sourceMessages, historyLimit: 5 });
+
+  assert.deepEqual(result.map((item) => item.content), [
+    "u2", "a2 very late", "u3", "u4", "u5", "u6",
+  ]);
+});
+
+test("resolveMainModelHistoryMessages uses authoritative dialog ordinal over timestamps", () => {
+  const sourceMessages = [
+    { role: "user", content: "second", dialogProcessId: "d2", ts: "2026-07-27T01:00:00Z" },
+    { role: "user", content: "first", dialogProcessId: "d1", ts: "2026-07-27T02:00:00Z" },
+  ];
+  const result = resolveMainModelHistoryMessages({
+    sourceMessages,
+    historyLimit: 1,
+    dialogOrder: [
+      { dialogProcessId: "d1", dialogOrdinal: 1 },
+      { dialogProcessId: "d2", dialogOrdinal: 2 },
+    ],
+  });
+  assert.deepEqual(result.map((item) => item.content), ["second"]);
+});
+
 test("resolveMainModelHistoryMessages preserves legacy messages without dialogProcessId", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [

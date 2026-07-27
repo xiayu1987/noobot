@@ -237,6 +237,7 @@ export class SessionTurnPersister {
     sessionId,
     userName = userId,
     role,
+    messageUid = "",
     messageId = "",
     content,
     type = "",
@@ -284,6 +285,7 @@ export class SessionTurnPersister {
     const sessionTransferEnvelopes = filterSessionTransferEnvelopes(transferEnvelopes);
     const fullTurnPayload = {
       role,
+      ...(String(messageUid || "").trim() ? { messageUid: String(messageUid || "").trim() } : {}),
       ...(String(messageId || "").trim() ? { messageId: String(messageId || "").trim() } : {}),
       content: sessionContent,
       type: type || "",
@@ -374,6 +376,7 @@ export class SessionTurnPersister {
       sessionId,
       parentSessionId: normalizedParentSessionId,
       role,
+      messageUid: String(messageUid || "").trim(),
       messageId: String(messageId || "").trim(),
       content: sessionContent,
       type,
@@ -430,6 +433,7 @@ export class SessionTurnPersister {
         userId,
         sessionId,
         role: messageItem.role || MESSAGE_ROLE.ASSISTANT,
+        messageUid: String(messageItem?.messageUid || "").trim(),
         messageId: resolveAuthoritativeMessageId(messageItem),
         content: messageItem.content || "",
         type: messageItem.type || "",
