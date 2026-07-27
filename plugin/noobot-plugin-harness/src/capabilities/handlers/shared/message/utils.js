@@ -6,10 +6,14 @@
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 
-function isHarnessInjectedMessage(message = {}) {
+export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
+  const expectedRole = String(role || "").trim();
+  const expectedType = String(type || "").trim();
   return (
     message?.injectedMessage === true &&
-    String(message?.injectedBy || "").trim() === "harness-plugin"
+    String(message?.injectedBy || "").trim() === "harness-plugin" &&
+    (!expectedRole || String(message?.role || "").trim() === expectedRole) &&
+    (!expectedType || String(message?.injectedMessageType || "").trim() === expectedType)
   );
 }
 

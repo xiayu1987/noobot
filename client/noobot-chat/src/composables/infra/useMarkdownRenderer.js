@@ -18,12 +18,13 @@ const MERMAID_PREFIXES = [
   "mindmap",
   "timeline",
 ];
-const HARNESS_COLLAPSE_MARKER_NAME = "NOOBOT_HARNESS_COLLAPSE";
-const HARNESS_COLLAPSE_START_RE = new RegExp(
-  `^\\s*<<<${HARNESS_COLLAPSE_MARKER_NAME}:start\\s+([\\s\\S]*?)>>>\\s*$`,
+const COLLAPSE_MARKER_NAMES = ["NOOBOT_COLLAPSE", "NOOBOT_HARNESS_COLLAPSE"];
+const COLLAPSE_MARKER_PATTERN = COLLAPSE_MARKER_NAMES.join("|");
+const COLLAPSE_START_RE = new RegExp(
+  `^\\s*<<<(?:${COLLAPSE_MARKER_PATTERN}):start\\s+([\\s\\S]*?)>>>\\s*$`,
 );
-const HARNESS_COLLAPSE_END_RE = new RegExp(
-  `^\\s*<<<${HARNESS_COLLAPSE_MARKER_NAME}:end(?:\\s+([\\s\\S]*?))?>>>\\s*$`,
+const COLLAPSE_END_RE = new RegExp(
+  `^\\s*<<<(?:${COLLAPSE_MARKER_PATTERN}):end(?:\\s+([\\s\\S]*?))?>>>\\s*$`,
 );
 
 function looksLikeMermaidLine(rawLine = "") {
@@ -110,7 +111,7 @@ function renderMarkdownSegment(text = "") {
   return md.render(normalizeMermaidMarkdown(content));
 }
 
-function buildHarnessCollapseHtml({ attrs = {}, innerMarkdown = "" } = {}) {
+function buildCollapseHtml({ attrs = {}, innerMarkdown = "" } = {}) {
   const kind = String(attrs.kind || "unknown").trim() || "unknown";
   const kindClass = normalizeCssModifier(kind);
   const title = String(attrs.title || kind).trim() || kind;
@@ -118,21 +119,21 @@ function buildHarnessCollapseHtml({ attrs = {}, innerMarkdown = "" } = {}) {
   const openAttr = defaultState === "open" ? " open" : "";
   const renderedInner = renderMarkdownSegment(innerMarkdown);
   return [
-    `<details class="noobot-harness-collapse noobot-harness-collapse--${escapeHtmlAttribute(kindClass)}" data-noobot-harness-collapse="${escapeHtmlAttribute(kind)}"${openAttr}>`,
+    `<details class="noobot-collapse noobot-collapse--${escapeHtmlAttribute(kindClass)}" data-noobot-collapse="${escapeHtmlAttribute(kind)}"${openAttr}>`,
     `<summary>${escapeHtmlAttribute(title)}</summary>`,
-    `<div class="noobot-harness-collapse__body">${renderedInner}</div>`,
+    `<div class="noobot-collapse__body">${renderedInner}</div>`,
     "</details>",
   ].join("\n");
 }
 
-function shouldHideHarnessCollapse({ attrs = {} } = {}) {
+function shouldHideCollapse({ attrs = {} } = {}) {
   const kind = String(attrs.kind || "").trim();
   return kind === "latest_complete_summary" || kind === "acceptance";
 }
 
-function renderHarnessCollapsibleMarkdown(text = "") {
+function renderCollapsibleMarkdown(text = "") {
   const source = String(text || "");
-  if (!source.includes(`<<<${HARNESS_COLLAPSE_MARKER_NAME}:start`)) {
+  if (!COLLAPSE_MARKER_NAMES.some((markerName) => source.includes(`<<<${markerName}:start`))) {
     return renderMarkdownSegment(source);
   }
   const lines = source.split(/\r?\n/);
@@ -147,7 +148,7 @@ function renderHarnessCollapsibleMarkdown(text = "") {
 
   for (let index = 0; index < lines.length; index += 1) {
     const currentLine = lines[index] || "";
-    const startMatch = currentLine.match(HARNESS_COLLAPSE_START_RE);
+    const startMatch = currentLine.match(COLLAPSE_START_RE);
     if (!startMatch) {
       plainBuffer.push(currentLine);
       continue;
@@ -158,7 +159,7 @@ function renderHarnessCollapsibleMarkdown(text = "") {
     const innerLines = [];
     let endIndex = -1;
     for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-      const endMatch = String(lines[cursor] || "").match(HARNESS_COLLAPSE_END_RE);
+      const endMatch = String(lines[cursor] || "").match(COLLAPSE_END_RE);
       if (!endMatch) {
         innerLines.push(lines[cursor]);
         continue;
@@ -179,8 +180,8 @@ function renderHarnessCollapsibleMarkdown(text = "") {
     }
 
     flushPlain();
-    if (!shouldHideHarnessCollapse({ attrs })) {
-      renderedParts.push(buildHarnessCollapseHtml({
+    if (!shouldHideCollapse({ attrs })) {
+      renderedParts.push(buildCollapseHtml({
         attrs,
         innerMarkdown: innerLines.join("\n"),
       }));
@@ -194,13 +195,13 @@ function renderHarnessCollapsibleMarkdown(text = "") {
 
 export function useMarkdownRenderer() {
   function renderMarkdown(text) {
-    return renderHarnessCollapsibleMarkdown(text || "");
+    return renderCollapsibleMarkdown(text || "");
   }
 
   return {
     renderMarkdown,
     normalizeMermaidMarkdown,
     looksLikeMermaidLine,
-    renderHarnessCollapsibleMarkdown,
+    renderCollapsibleMarkdown,
   };
 }

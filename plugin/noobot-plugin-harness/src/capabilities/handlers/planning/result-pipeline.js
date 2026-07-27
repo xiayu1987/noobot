@@ -32,6 +32,7 @@ import {
 } from "../shared/message/injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../shared/runtime/dialog-process-id.js";
 import { appendMessage } from "../../../core/message-store.js";
+import { isHarnessInjectedMessage } from "../shared/message/utils.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -76,11 +77,7 @@ function parsePlanningTextProtocol(text = "") {
 }
 
 function isCurrentTaskGoalInjectedMessage(message = {}) {
-  return (
-    message?.injectedMessage === true &&
-    String(message?.injectedBy || "").trim() === "harness-plugin" &&
-    String(message?.injectedMessageType || "").trim() === CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE
-  );
+  return isHarnessInjectedMessage(message, { type: CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE });
 }
 
 function removeCurrentTaskGoalInjectedMessagesFromList(messages = []) {

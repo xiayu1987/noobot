@@ -32,15 +32,9 @@ import {
   getPlanningToolContextMarker,
 } from "../shared/workflow/prompts.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
+import { isHarnessInjectedMessage } from "../shared/message/utils.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
-
-function isHarnessInjectedMessage(message = {}) {
-  return (
-    message?.injectedMessage === true &&
-    String(message?.injectedBy || "").trim() === "harness-plugin"
-  );
-}
 
 function resolvePlanningToolCatalog(ctx = {}, locale = LOCALE.ZH_CN) {
   const registry = Array.isArray(ctx?.agentContext?.payload?.tools?.registry)

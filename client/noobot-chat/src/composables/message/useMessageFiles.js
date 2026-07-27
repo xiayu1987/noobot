@@ -198,14 +198,14 @@ function isFreshPendingAssistant(messageItem = {}) {
   );
 }
 
-function isHarnessPluginInjectedMessage(messageItem = {}) {
+function isPluginInjectedMessage(messageItem = {}) {
   return (
     messageItem?.injectedMessage === true &&
-    String(messageItem?.injectedBy || "").trim() === "harness-plugin"
+    Boolean(String(messageItem?.injectedBy || "").trim())
   );
 }
 
-function isHarnessPluginAttachmentMeta(attachmentItem = {}) {
+function isPluginAttachmentMeta(attachmentItem = {}) {
   const nestedOwner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : null;
   const turnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : null;
   for (const ownerSource of [nestedOwner, turnScope]) {
@@ -213,7 +213,7 @@ function isHarnessPluginAttachmentMeta(attachmentItem = {}) {
     const nestedOwnerType = String(ownerSource?.type || "").trim();
     const nestedOwnerName = String(ownerSource?.id || "").trim();
     if (nestedOwnerType === "plugin") return true;
-    if (nestedOwnerName === "harness-plugin") return true;
+    if (nestedOwnerName && !nestedOwnerType) return true;
   }
   return false;
 }
@@ -222,7 +222,7 @@ function splitAttachmentsByOwner(attachments = []) {
   const plugin = [];
   const agent = [];
   for (const attachmentItem of Array.isArray(attachments) ? attachments : []) {
-    if (isHarnessPluginAttachmentMeta(attachmentItem)) plugin.push(attachmentItem);
+    if (isPluginAttachmentMeta(attachmentItem)) plugin.push(attachmentItem);
     else agent.push(attachmentItem);
   }
   return { agent, plugin };

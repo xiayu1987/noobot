@@ -143,10 +143,10 @@ function normalizeAttachment(
   };
 }
 
-function isHarnessInjectedMessage(messageItem = {}) {
+function isPluginInjectedMessage(messageItem = {}) {
   return (
     messageItem?.injectedMessage === true &&
-    String(messageItem?.injectedBy || "").trim() === "harness-plugin"
+    Boolean(String(messageItem?.injectedBy || "").trim())
   );
 }
 
@@ -154,7 +154,7 @@ function findVisibleLastMessage(messages = []) {
   if (!Array.isArray(messages)) return null;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const messageItem = messages[index];
-    if (!isHarnessInjectedMessage(messageItem)) return messageItem || null;
+    if (!isPluginInjectedMessage(messageItem)) return messageItem || null;
   }
   return null;
 }
@@ -287,7 +287,7 @@ function buildViewMessage(
 function foldConversationMessages(messages = [], buildView) {
   const foldedMessages = normalizeArray(messages)
     .filter((messageItem) => {
-      if (isHarnessInjectedMessage(messageItem)) return false;
+      if (isPluginInjectedMessage(messageItem)) return false;
       const role = getMessageRole(messageItem);
       return role === "assistant" || role === "user";
     })
@@ -407,6 +407,6 @@ export {
   createMessageModel,
   getMessageAttachments,
   findVisibleLastMessage,
-  isHarnessInjectedMessage,
+  isPluginInjectedMessage,
   isWorkflowMessageLike,
 };

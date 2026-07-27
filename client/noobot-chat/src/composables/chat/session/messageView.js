@@ -9,7 +9,7 @@ import {
   buildViewMessage,
   findVisibleLastMessage,
   foldConversationMessages,
-  isHarnessInjectedMessage,
+  isPluginInjectedMessage,
 } from "../../infra/messageModel.js";
 import { nowIso } from "../../infra/timeFields.js";
 import { RoleEnum } from "../../../shared/constants/chatConstants.js";
@@ -44,7 +44,7 @@ export function createSessionMessageView({
     const messageTurnScopeId = getMessageTurnScopeId(messageItem);
     const childWorkflowMessage = messageTurnScopeId.startsWith("workflow-node:");
     const shouldRender = messageRole !== RoleEnum.TOOL &&
-      !isHarnessInjectedMessage(messageItem) &&
+      !isPluginInjectedMessage(messageItem) &&
       !childWorkflowMessage;
     const summary = summarizeWorkflowMessage(messageItem);
     if (summary.type === "workflow" || summary.pluginSource === "workflow-plugin" || childWorkflowMessage) {
