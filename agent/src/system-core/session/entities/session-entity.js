@@ -5,7 +5,8 @@
  */
 
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
-import { createHash, randomUUID } from "node:crypto";
+import { createSessionMessageUid } from "../../context/session/message-uid.js";
+import { createHash } from "node:crypto";
 import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
 import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
 import { normalizeTurnLifecycleEntity } from "./turn-lifecycle-entity.js";
@@ -27,9 +28,7 @@ function normalizeMessageUid(value = "") {
   return String(value || "").trim();
 }
 
-export function createSessionMessageUid() {
-  return `sm_${randomUUID()}`;
-}
+export { createSessionMessageUid };
 
 function deriveLegacyMessageUid(message = {}, { sessionId = "", index = 0 } = {}) {
   const runtimeMessageId = String(message?.messageId || message?.id || "").trim();
@@ -293,6 +292,52 @@ function normalizeMutationReceipts(receipts = []) {
   }).filter(Boolean).slice(-100);
 }
 
+function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
+  if (!checkpoints || typeof checkpoints !== "object" || Array.isArray(checkpoints)) return {};
+  const normalized = {};
+  for (const [scopeKey, value] of Object.entries(checkpoints)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const turnScopeId = String(value.turnScopeId || scopeKey || "").trim();
+    const dialogProcessId = String(value.dialogProcessId || "").trim();
+    if (!turnScopeId || !dialogProcessId) continue;
+    const checkpointRevision = Math.max(0, Number(value.checkpointRevision) || 0);
+    const ownedMessageUids = new Set((Array.isArray(messages) ? messages : [])
+      .filter((message) =>
+        resolveMessageDialogProcessId(message) === dialogProcessId &&
+        String(message?.turnScopeId || "").trim() === turnScopeId)
+      .map((message) => String(message?.messageUid || "").trim())
+      .filter(Boolean));
+    if (!ownedMessageUids.size) continue;
+    const receipts = (Array.isArray(value.receipts) ? value.receipts : []).map((receipt) => {
+      if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
+      const checkpointId = String(receipt.checkpointId || "").trim();
+      const requestHash = String(receipt.requestHash || "").trim();
+      if (!checkpointId || !requestHash) return null;
+      const persistedMessageUids = [...new Set((Array.isArray(receipt.persistedMessageUids) ? receipt.persistedMessageUids : [])
+        .map((uid) => String(uid || "").trim()).filter(Boolean))];
+      const summarizedMessageUids = [...new Set((Array.isArray(receipt.summarizedMessageUids) ? receipt.summarizedMessageUids : [])
+        .map((uid) => String(uid || "").trim()).filter(Boolean))];
+      if ([...persistedMessageUids, ...summarizedMessageUids].some((uid) => !ownedMessageUids.has(uid))) return null;
+      return {
+        checkpointId,
+        checkpointRevision: Math.max(0, Number(receipt.checkpointRevision) || 0),
+        requestHash,
+        persistedMessageUids,
+        summarizedMessageUids,
+        markedCount: Math.max(0, Number(receipt.markedCount) || 0),
+        committedAt: String(receipt.committedAt || "").trim(),
+      };
+    }).filter(Boolean).slice(-50);
+    normalized[turnScopeId] = {
+      dialogProcessId,
+      turnScopeId,
+      checkpointRevision,
+      receipts,
+    };
+  }
+  return normalized;
+}
+
 export function normalizeSessionEntity(
   session = {},
   {
@@ -312,6 +357,10 @@ export function normalizeSessionEntity(
   const normalizedMessages = normalizeMessagesEntity(session?.messages || [], now, {
     sessionId: normalizedSessionId,
   });
+  const normalizedTurnSummaryCheckpoints = normalizeTurnSummaryCheckpoints(
+    session?.turnSummaryCheckpoints || {},
+    normalizedMessages,
+  );
   const normalizedSession = {
     ...(session && typeof session === "object" ? session : {}),
     sessionId: normalizedSessionId,
@@ -336,6 +385,11 @@ export function normalizeSessionEntity(
   else delete normalizedSession.customTitle;
   if (normalizedMutationReceipts.length) normalizedSession.mutationReceipts = normalizedMutationReceipts;
   else delete normalizedSession.mutationReceipts;
+  if (Object.keys(normalizedTurnSummaryCheckpoints).length) {
+    normalizedSession.turnSummaryCheckpoints = normalizedTurnSummaryCheckpoints;
+  } else {
+    delete normalizedSession.turnSummaryCheckpoints;
+  }
   return normalizedSession;
 }
 

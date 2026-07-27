@@ -9,9 +9,11 @@ import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../src/composab
 import { applyTurnRuntimeEvent } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
 import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline.js";
+import { clearExtensionRegistry } from "../../../../src/extensions/extension-registry.js";
 
 afterEach(() => {
   vi.useRealTimers();
+  clearExtensionRegistry();
 });
 
 describe("useReconnectReplay", () => {

@@ -20,7 +20,11 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "jsdom",
-      include: ["tests/unit/**/*.spec.js"],
+      include: [
+        "tests/unit/**/*.spec.js",
+        "../../plugin/noobot-plugin-harness/frontend/__tests__/**/*.spec.js",
+        "../../plugin/noobot-plugin-workflow/frontend/__tests__/**/*.spec.js",
+      ],
     },
     server: {
       host: "0.0.0.0",

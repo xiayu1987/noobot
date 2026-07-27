@@ -5,8 +5,47 @@
  */
 import WorkflowMessageCard from "./components/WorkflowMessageCard.vue";
 import WorkflowModelExtension from "./components/WorkflowModelExtension.vue";
+import { hydrateWorkflowRegistryFromSessionDetail } from "./runtime/sessionHydration.js";
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
+
+const WORKFLOW_NODE_STATE_EVENT = "workflow_node_state_committed";
+const WORKFLOW_PLANNING_EVENT = "workflow_planning_message_prepared";
+
+function routeWorkflowRuntimeEvent({ event, data = {}, context = {} } = {}) {
+  if (![WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT].includes(event)) return false;
+  const {
+    applyWorkflowRuntimeEvent, logSessionEvent, sessionId, turnScopeId,
+    upsertWorkflowNodeStateEvent, upsertWorkflowPlanningEvent,
+  } = context;
+  const planning = event === WORKFLOW_PLANNING_EVENT;
+  logSessionEvent?.({
+    category: "debug",
+    level: "debug",
+    debugType: "workflow-diagnostics",
+    event: planning
+      ? "frontend.workflowTransport.planningReceived"
+      : "frontend.workflowTransport.nodeStateReceived",
+    sessionId: data?.parentSessionId || data?.sessionId || sessionId,
+    dialogProcessId: data?.dialogProcessId || "",
+    turnScopeId: data?.turnScopeId || turnScopeId,
+    data: {
+      workflowRunId: String(data?.workflowRunId || ""),
+      nodeExecutionId: String(data?.nodeExecutionId || ""),
+      status: String(data?.status || ""),
+      revision: Number(data?.revision || 0),
+      sequence: Number(data?.sequence || 0),
+      nodeSessionCount: Array.isArray(data?.nodeSessions) ? data.nodeSessions.length : 0,
+      semanticTextLength: String(data?.semanticText || "").length,
+      dataKeys: Object.keys(data || {}).sort(),
+    },
+  });
+  if (typeof applyWorkflowRuntimeEvent === "function") {
+    applyWorkflowRuntimeEvent({ event, data, transportSequence: Number(data?.seq || 0) }, { source: context?.source || "live" });
+  } else if (planning) upsertWorkflowPlanningEvent?.(data);
+  else upsertWorkflowNodeStateEvent?.(data);
+  return true;
+}
 
 function isWorkflowMessageLike(messageItem = {}) {
   const type = String(messageItem?.type || "").trim().toLowerCase();
@@ -68,5 +107,19 @@ export function registerFrontendPlugin(ctx = {}) {
             ? context.logWorkflowDiagnostics
             : null,
         }),
+  });
+  contribute(points.RUNTIME_STREAM_ROUTE, {
+    id: "workflow-runtime-stream-route",
+    priority: 20,
+    when: ({ event } = {}) => [WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT].includes(event),
+    provide: () => [routeWorkflowRuntimeEvent],
+  });
+  contribute(points.SESSION_DETAIL_HYDRATOR, {
+    id: "workflow-session-detail-hydrator",
+    priority: 20,
+    provide: () => [(payload, context) => hydrateWorkflowRegistryFromSessionDetail({
+      ...payload,
+      ...context,
+    })],
   });
 }

@@ -45,7 +45,7 @@ describe("useChatStore workflow node state registry", () => {
       applied: false,
       reason: "missing_identity",
     });
-    expect(store.workflowNodeStateRegistry.workflows).toEqual({});
+    expect(store.workflowNodeStateRegistry).toBeNull();
   });
 
   it("applies newer revisions and rejects revision rollback", () => {
@@ -116,7 +116,7 @@ describe("useChatStore workflow node state registry", () => {
     expect(storedNode(store)).toBeTruthy();
     store.resetChatStore();
 
-    expect(store.workflowNodeStateRegistry.workflows).toEqual({});
+    expect(store.workflowNodeStateRegistry).toBeNull();
   });
 
   it("applies workflow planning nodes with initial monotonic revisions", () => {
@@ -182,6 +182,6 @@ describe("useChatStore workflow node state registry", () => {
       applied: false,
       reason: "missing_planning_nodes",
     });
-    expect(store.workflowNodeStateRegistry.workflows).toEqual({});
+    expect(store.workflowNodeStateRegistry).toBeNull();
   });
 });

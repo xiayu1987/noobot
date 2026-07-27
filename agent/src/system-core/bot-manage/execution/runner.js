@@ -63,6 +63,7 @@ export class SessionExecutionRunner {
     commitSessionTurn,
     stampReusedUserTurnDialogProcessId,
     getSessionTurns,
+    getTurnSummaryCheckpointState,
     finalizeRunSession,
     upsertParentAsyncTask,
     now,
@@ -83,6 +84,7 @@ export class SessionExecutionRunner {
     this.commitSessionTurn = commitSessionTurn;
     this.stampReusedUserTurnDialogProcessId = stampReusedUserTurnDialogProcessId;
     this.getSessionTurns = getSessionTurns;
+    this.getTurnSummaryCheckpointState = getTurnSummaryCheckpointState;
     this.finalizeRunSession = finalizeRunSession;
     this.upsertParentAsyncTask = upsertParentAsyncTask;
     this.now = now;
@@ -489,6 +491,7 @@ export class SessionExecutionRunner {
       const finalizedResult = await finalizeAgentTurn({
         resolvedRunConfig, runtimeEventListener, usedSessionId, dialogProcessId,
         resolvedTurnScopeId, dispatchRuntime, getSessionTurns: this.getSessionTurns,
+        getTurnSummaryCheckpointState: this.getTurnSummaryCheckpointState,
         finalizeRunSession: this.finalizeRunSession, userId, parentSessionId,
         parentDialogProcessId, caller, agentResult, executionStartIndex, userConfig,
         resolvedParentAsyncResultContainer, lifecycle, persistenceContext,

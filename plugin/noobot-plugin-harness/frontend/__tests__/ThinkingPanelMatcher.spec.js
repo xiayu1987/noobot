@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { matchesThinkingPanel } from "../../../../../plugin/noobot-plugin-harness/frontend/index.js";
+import { matchesThinkingPanel } from "../index.js";
 
 describe("harness thinking panel renderer", () => {
   it("does not attach to user messages", () => {

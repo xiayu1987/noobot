@@ -3,15 +3,28 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyReconnectEventReplay } from "../../../../src/composables/chat/reconnectReplay/reconnectEventReplay.js";
 import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { clearExtensionRegistry, contributeExtension } from "../../../../src/extensions/extension-registry.js";
+import { EXTENSION_POINTS } from "../../../../src/extensions/extension-point-ids.js";
+import { registerFrontendPlugin as registerWorkflowFrontendPlugin } from "../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
 
 describe("applyReconnectEventReplay", () => {
+  afterEach(() => clearExtensionRegistry());
+
   it.each([
     "workflow_planning_message_prepared",
     "workflow_node_state_committed",
   ])("routes %s directly to workflow runtime projection after reconnect", async (event) => {
+    registerWorkflowFrontendPlugin({
+      contributeExtension: (point, contribution) => contributeExtension(point, {
+        ...contribution,
+        pluginId: "workflow",
+      }),
+      extensionPoints: EXTENSION_POINTS,
+      services: {},
+    });
     const data = {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
@@ -34,8 +47,25 @@ describe("applyReconnectEventReplay", () => {
     });
 
     expect(result).toEqual({ applied: true });
-    expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith(event, data);
+    expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith(event, data, { source: "reconnect" });
     expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
+  });
+
+  it("does not activate the optional workflow runtime domain without its plugin", async () => {
+    const applyWorkflowRuntimeEvent = vi.fn();
+    const applyReconnectMessagesToActiveSession = vi.fn();
+    await applyReconnectEventReplay({
+      event: "workflow_node_state_committed",
+      data: { sessionId: "s-1", workflowRunId: "workflow-1" },
+      replayCache: {},
+      isCurrentActiveSession: vi.fn(() => true),
+      consumeReplayCacheForSession: vi.fn(),
+      applyReconnectMessagesToActiveSession,
+      applyChannelState: vi.fn(),
+      applyWorkflowRuntimeEvent,
+    });
+    expect(applyWorkflowRuntimeEvent).not.toHaveBeenCalled();
+    expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledOnce();
   });
 
   it("routes authoritative TURN_LIFECYCLE envelopes directly to the lifecycle reducer", async () => {

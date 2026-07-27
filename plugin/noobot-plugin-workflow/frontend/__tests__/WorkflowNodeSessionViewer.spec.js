@@ -11,8 +11,8 @@ import {
   resolveCanonicalWorkflowNodeItem,
   shouldRejectRootSessionProjection,
   useWorkflowNodeSessionViewer,
-} from "../../../../../plugin/noobot-plugin-workflow/frontend/components/workflow-message-card/useWorkflowNodeSessionViewer.js";
-import { writeWorkflowDrawerHistory } from "../../../../../plugin/noobot-plugin-workflow/frontend/components/workflow-message-card/workflowDrawerHistory.js";
+} from "../components/workflow-message-card/useWorkflowNodeSessionViewer.js";
+import { writeWorkflowDrawerHistory } from "../components/workflow-message-card/workflowDrawerHistory.js";
 
 vi.mock("element-plus", () => ({
   ElMessage: { warning: vi.fn() },

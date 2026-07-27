@@ -269,6 +269,7 @@ export const enUSMessages = {
     "executionProcess": "Execution ({count})",
     "injectedMessages": "Injected Messages ({count})",
     "noInjectedMessages": "No injected messages",
+    "injectedSourcePlugin": "plugin",
     "thinkingDetails": "Thinking Details ({count})",
     "details": "Details",
     "waitingRealtimeLog": "Running, waiting for realtime logs...",

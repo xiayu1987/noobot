@@ -11,6 +11,10 @@ export const EXTENSION_POINTS = Object.freeze({
   MESSAGE_ACTION_POST_CONTENT: "message.action.post-content",
   COMPOSER_OPTIONS_MODEL: "composer.options.model",
   COMPOSER_MODEL_OPTIONS: "composer.model-options",
+  MESSAGE_LOG_COMPATIBILITY: "message.log.compatibility",
+  MARKDOWN_COLLAPSE_MARKERS: "markdown.collapse.markers",
+  RUNTIME_STREAM_ROUTE: "runtime.stream.route",
+  SESSION_DETAIL_HYDRATOR: "session.detail.hydrator",
 });
 
 export const KNOWN_EXTENSION_POINTS = Object.freeze(new Set(Object.values(EXTENSION_POINTS)));
@@ -29,4 +33,8 @@ export const EXTENSION_POINT_DEFINITIONS = Object.freeze({
   [EXTENSION_POINTS.MESSAGE_ACTION_POST_CONTENT]: Object.freeze({ strategy: EXTENSION_ARBITRATION.MULTI }),
   [EXTENSION_POINTS.COMPOSER_OPTIONS_MODEL]: Object.freeze({ strategy: EXTENSION_ARBITRATION.MULTI }),
   [EXTENSION_POINTS.COMPOSER_MODEL_OPTIONS]: Object.freeze({ strategy: EXTENSION_ARBITRATION.MULTI }),
+  [EXTENSION_POINTS.MESSAGE_LOG_COMPATIBILITY]: Object.freeze({ strategy: EXTENSION_ARBITRATION.MULTI }),
+  [EXTENSION_POINTS.MARKDOWN_COLLAPSE_MARKERS]: Object.freeze({ strategy: EXTENSION_ARBITRATION.MULTI }),
+  [EXTENSION_POINTS.RUNTIME_STREAM_ROUTE]: Object.freeze({ strategy: EXTENSION_ARBITRATION.MULTI }),
+  [EXTENSION_POINTS.SESSION_DETAIL_HYDRATOR]: Object.freeze({ strategy: EXTENSION_ARBITRATION.MULTI }),
 });

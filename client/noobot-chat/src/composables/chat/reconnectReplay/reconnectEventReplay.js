@@ -8,11 +8,7 @@ import { BackendChannelState } from "../sessionRunStateMachine.js";
 import { normalizeReplayCacheKey } from "./replayCache.js";
 import { _trimStr } from "./utils.js";
 import { normalizeTurnTransportEnvelope } from "../chatEngine/turnTransportEnvelope.js";
-
-const WORKFLOW_RUNTIME_EVENT_NAMES = new Set([
-  "workflow_planning_message_prepared",
-  "workflow_node_state_committed",
-]);
+import { routeRuntimeStreamEvent } from "../../../extensions/runtime-stream-router.js";
 
 export async function applyReconnectEventReplay({
   event: incomingEvent,
@@ -58,12 +54,15 @@ export async function applyReconnectEventReplay({
       turnScopeId: replayTurnScopeId,
     }) || { applied: false, reason: "sub_session_projection_unavailable" };
   }
-  if (WORKFLOW_RUNTIME_EVENT_NAMES.has(replayEvent)) {
-    return applyWorkflowRuntimeEvent?.(replayEvent, data || {}) || {
-      applied: false,
-      reason: "workflow_runtime_projection_unavailable",
-    };
-  }
+  let runtimeResult = null;
+  const runtimeRouted = routeRuntimeStreamEvent(replayEvent, data, {
+    source: "reconnect",
+    applyWorkflowRuntimeEvent: (record, options) => {
+      runtimeResult = applyWorkflowRuntimeEvent?.(record?.event || replayEvent, record?.data || data, options);
+      return runtimeResult;
+    },
+  });
+  if (runtimeRouted) return runtimeResult || { applied: true };
   if (replayEvent === StreamEventEnum.EXECUTION_SNAPSHOT) return applyExecutionSnapshot?.(data || {});
   if (replayEvent === StreamEventEnum.EXECUTION_CHILDREN) return applyExecutionChildren?.(data || {});
   if (replayEvent === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(data || {});

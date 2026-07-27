@@ -7,10 +7,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   hydrateWorkflowRegistryFromSessionDetail,
   workflowPlanningEventFromMessage,
-} from "../../../../src/composables/chat/workflowSessionHydration.js";
+} from "../../../../../../plugin/noobot-plugin-workflow/frontend/runtime/sessionHydration.js";
 import {
   confirmTurnRuntimeDeletion,
   createTurnRuntimeRegistryState,
+  isTurnRuntimeDeleted,
 } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 function workflowMessage() {
@@ -115,6 +116,7 @@ describe("workflow session hydration", () => {
       mainSessionDoc: { messages: [workflowMessage()] },
       applyWorkflowRuntimeEvent: applyRuntimeEvent,
       turnRuntimeRegistry,
+      isTurnRuntimeDeleted,
     })).toBe(0);
     expect(applyRuntimeEvent).not.toHaveBeenCalled();
   });
@@ -139,6 +141,7 @@ describe("workflow session hydration", () => {
       },
       applyWorkflowRuntimeEvent: applyRuntimeEvent,
       turnRuntimeRegistry,
+      isTurnRuntimeDeleted,
     })).toBe(1);
     expect(applyRuntimeEvent).toHaveBeenCalledOnce();
   });

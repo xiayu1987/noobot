@@ -335,12 +335,20 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.markSessionMessagesSummarized(payload);
     },
 
+    async commitTurnSummaryCheckpoint(payload = {}) {
+      return sessionMessageService.commitTurnSummaryCheckpoint(payload);
+    },
+
     async getSessionTurns({ userId, sessionId }) {
       return sessionMessageService.getSessionTurns({ userId, sessionId });
     },
 
     async getSessionContextSource({ userId, sessionId }) {
       return sessionMessageService.getSessionContextSource({ userId, sessionId });
+    },
+
+    async getTurnSummaryCheckpointState(payload = {}) {
+      return sessionMessageService.getTurnSummaryCheckpointState(payload);
     },
 
     async hasDialogProcessIdInSession(payload = {}) {

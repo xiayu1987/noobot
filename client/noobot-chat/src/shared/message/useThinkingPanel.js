@@ -43,6 +43,11 @@ import {
   selectToolTimelineLogs,
 } from "../../composables/chat/chatEngine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../composables/chat/chatEngine/activityTimeline.js";
+import {
+  getPluginFlow,
+  isPluginCapabilityResponseEvent,
+  stripPluginModelResponsePrefix,
+} from "./pluginLogCompatibility.js";
 import { adaptLegacyMessageTimelines } from "../../composables/chat/chatEngine/legacyTimelineAdapter.js";
 import { compareTimelineFacts } from "../../composables/chat/chatEngine/timelineFact.js";
 
@@ -204,12 +209,7 @@ export function useThinkingPanel(props, emit) {
     const purpose = normalizeLogString(
       logItem?.purpose || logItem?.data?.purpose,
     );
-    const pluginFlow = normalizeLogString(
-      logItem?.pluginFlow ||
-        logItem?.data?.pluginFlow ||
-        logItem?.harnessFlow ||
-        logItem?.data?.harnessFlow,
-    );
+    const pluginFlow = normalizeLogString(getPluginFlow(logItem));
     const chain = normalizeLogString(
       logItem?.chain ||
         logItem?.data?.chain ||
@@ -269,10 +269,7 @@ export function useThinkingPanel(props, emit) {
 
   function isPluginCapabilityResponseLog(logItem = {}) {
     const eventName = normalizeLogString(logItem?.event || logItem?.type);
-    return (
-      eventName === "plugin_capability_response" ||
-      eventName === "harness_capability_response"
-    );
+    return isPluginCapabilityResponseEvent(eventName);
   }
 
   function getPluginAnalysisLogOutput(logItem = {}) {
@@ -281,9 +278,7 @@ export function useThinkingPanel(props, emit) {
     ).trim();
     if (output) return output;
     const text = String(logItem?.text || "").trim();
-    return text
-      .replace(/^(?:Plugin|Harness)\s+模型返回\s*\/\s*[^\n]+\n?/i, "")
-      .trim();
+    return stripPluginModelResponsePrefix(text);
   }
 
   function getLatestPluginAnalysisLog(messageItem = {}) {
@@ -617,7 +612,7 @@ export function useThinkingPanel(props, emit) {
   function formatInjectedMessageTitle(messageItem = {}, messageIndex = 0) {
     const timeText = String(messageItem?.ts || "").trim();
     const sourceText = String(
-      messageItem?.injectedBy || translate("message.injectedSourceHarness"),
+      messageItem?.injectedBy || translate("message.injectedSourcePlugin"),
     ).trim();
     return `${messageIndex + 1}. ${sourceText}${timeText ? ` · ${timeText}` : ""}`;
   }

@@ -192,3 +192,41 @@ test("summary completion does not over-mark duplicate messages after an id match
   assert.equal(shouldMark({ role: "assistant", content: "same" }), true);
   assert.equal(shouldMark({ role: "assistant", content: "same" }), false);
 });
+
+test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint API is available", async () => {
+  const runtime = {
+    currentTurnMessages: createCurrentTurnMessagesStore([
+      { messageUid: "sm_1", role: "assistant", content: "M1", summarized: true },
+      { messageUid: "sm_2", role: "assistant", content: "M2" },
+    ]),
+  };
+  let checkpointPayload = null;
+  let legacyMarkCalls = 0;
+  const result = await commitSummaryCheckpoint({
+    session: {
+      async commitTurnSummaryCheckpoint(payload) {
+        checkpointPayload = payload;
+        return { committed: true, markedCount: 1, checkpointRevision: 4 };
+      },
+      async markSessionMessagesSummarized() {
+        legacyMarkCalls += 1;
+        return 1;
+      },
+    },
+    turnPersister: { async appendAgentMessages() {} },
+    runtime,
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "t",
+  });
+
+  assert.equal(result.committed, true);
+  assert.equal(legacyMarkCalls, 0);
+  assert.deepEqual(checkpointPayload.persistedMessageUids, ["sm_1", "sm_2"]);
+  assert.deepEqual(checkpointPayload.summarizedMessageUids, ["sm_1"]);
+  assert.equal(checkpointPayload.expectedCheckpointRevision, undefined);
+  assert.equal(runtime.summaryCheckpointRevision, 4);
+  assert.deepEqual(runtime.summaryCheckpointPersistedMessageUids, ["sm_1", "sm_2"]);
+  assert.deepEqual(runtime.currentTurnMessages.toArray().map((message) => message.messageUid), ["sm_2"]);
+});

@@ -5,6 +5,7 @@
  */
 
 import { pruneSummarizedIncrementalMessages } from "../../agent/core/message-context/message-store.js";
+import { createHash } from "node:crypto";
 
 function isSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
@@ -128,6 +129,20 @@ function compactPromotionSource(message = {}) {
   };
 }
 
+function resolveMessageUid(message = {}) {
+  return String(message?.messageUid || "").trim();
+}
+
+function buildCheckpointId({ dialogProcessId = "", turnScopeId = "", persistedMessageUids = [], summarizedMessageUids = [] } = {}) {
+  const digest = createHash("sha256").update(JSON.stringify({
+    dialogProcessId,
+    turnScopeId,
+    persistedMessageUids,
+    summarizedMessageUids,
+  })).digest("hex").slice(0, 32);
+  return `summary_checkpoint_${digest}`;
+}
+
 export async function commitSummaryCheckpoint({
   session = null,
   turnPersister = null,
@@ -188,14 +203,59 @@ export async function commitSummaryCheckpoint({
       Math.max(0, Number(runtime?.summaryCheckpointPersistedTotal) || 0) + pendingMessages.length;
   }
 
-  const markedCount = await session.markSessionMessagesSummarized({
-    userId,
-    sessionId,
-    parentSessionId,
-    persistenceContext,
-    shouldMark: createSummaryMarker ? createSummaryMarker() : shouldMark,
-    forceArchive: true,
-  });
+  const persistedMessageUids = pendingMessages.map(resolveMessageUid).filter(Boolean);
+  const summarizedMessageUids = markedTurnMessages
+    .filter(isSummarized)
+    .map(resolveMessageUid)
+    .filter(Boolean);
+  const canCommitExactCheckpoint =
+    typeof session?.commitTurnSummaryCheckpoint === "function" &&
+    Boolean(String(dialogProcessId || "").trim()) &&
+    Boolean(String(turnScopeId || "").trim()) &&
+    persistedMessageUids.length === pendingMessages.length &&
+    summarizedMessageUids.length === markedTurnMessages.filter(isSummarized).length;
+  const checkpointResult = canCommitExactCheckpoint
+    ? await session.commitTurnSummaryCheckpoint({
+        userId,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        parentSessionId,
+        persistenceContext,
+        checkpointId: buildCheckpointId({
+          dialogProcessId,
+          turnScopeId,
+          persistedMessageUids,
+          summarizedMessageUids,
+        }),
+        expectedCheckpointRevision: runtime?.summaryCheckpointRevision,
+        persistedMessageUids,
+        summarizedMessageUids,
+      })
+    : null;
+  if (checkpointResult && Number.isFinite(Number(checkpointResult.checkpointRevision))) {
+    runtime.summaryCheckpointRevision = Number(checkpointResult.checkpointRevision);
+  }
+  if (persistedMessageUids.length) {
+    runtime.summaryCheckpointPersistedMessageUids = [...new Set([
+      ...(Array.isArray(runtime?.summaryCheckpointPersistedMessageUids)
+        ? runtime.summaryCheckpointPersistedMessageUids
+        : []),
+      ...persistedMessageUids,
+    ])];
+  }
+  const markedCount = checkpointResult
+    ? Number(checkpointResult.markedCount) || 0
+    : await session.markSessionMessagesSummarized({
+        userId,
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        parentSessionId,
+        persistenceContext,
+        shouldMark: createSummaryMarker ? createSummaryMarker() : shouldMark,
+        forceArchive: true,
+      });
   const committed = pendingMessages.length > 0 || Number(markedCount) > 0;
   if (!committed) {
     runtime.summaryCheckpointPersistedCount = markedTurnMessages.length;

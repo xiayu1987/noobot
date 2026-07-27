@@ -16,7 +16,6 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
     }),
     message: Object.freeze({
       toolResultFallback: "tool_result",
-      injectedSourceHarness: "harness-plugin",
       unknownShort: "unknown",
       monotonicActionFailed: "操作失败，请稍后重试",
       contentRequired: "内容不能为空",
@@ -47,7 +46,6 @@ const HARNESS_FRONTEND_MESSAGES = Object.freeze({
     }),
     message: Object.freeze({
       toolResultFallback: "tool_result",
-      injectedSourceHarness: "harness-plugin",
       unknownShort: "unknown",
       monotonicActionFailed: "Action failed. Please try again later.",
       contentRequired: "Content is required",

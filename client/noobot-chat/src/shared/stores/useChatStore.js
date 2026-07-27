@@ -9,12 +9,14 @@ import { createTurnRuntimeRegistryState } from "../../composables/chat/sessionRu
 import { createTurnRuntimeStoreActions } from "./chatStoreTurnRuntime.js";
 import { createChatExecutionSelectors } from "./chatStoreExecutionSelectors.js";
 import { createSubSessionMessageRegistry, createSubSessionStore } from "./chatStoreSubSessions.js";
-import { createWorkflowNodeStateRegistry, createWorkflowStore } from "./chatStoreWorkflows.js";
+import { createWorkflowStore } from "./chatStoreWorkflows.js";
 
 export const useChatStore = defineStore("chat", () => {
   const input=ref(""); const uploadFiles=ref([]);
   const turnRuntimeRegistry=ref(createTurnRuntimeRegistryState());
-  const workflowNodeStateRegistry=ref(createWorkflowNodeStateRegistry());
+  // Workflow owns this optional state domain. It is materialized by the
+  // workflow reducers only after the plugin routes a workflow event.
+  const workflowNodeStateRegistry=ref(null);
   const subSessionMessageRegistry=ref(createSubSessionMessageRegistry());
   const sessions=ref([]); const activeSessionId=ref("");
   const loadingSessions=ref(false); const loadingSessionDetail=ref(false);
@@ -24,6 +26,6 @@ export const useChatStore = defineStore("chat", () => {
   const subSessions=createSubSessionStore({subSessionMessageRegistry});
   const workflows=createWorkflowStore({workflowNodeStateRegistry,subSessionMessageRegistry,upsertSubSessionEvent:subSessions.upsertSubSessionEvent});
   const executionSelectors=createChatExecutionSelectors({turnRuntimeRegistry,sessions,selectSubSessionMessages:subSessions.selectSubSessionMessages});
-  function resetChatStore(){ input.value=""; uploadFiles.value=[]; turnRuntimeRegistry.value=createTurnRuntimeRegistryState(); workflowNodeStateRegistry.value=createWorkflowNodeStateRegistry(); subSessionMessageRegistry.value=createSubSessionMessageRegistry(); sessions.value=[]; activeSessionId.value=""; loadingSessions.value=false; loadingSessionDetail.value=false; pendingInteractionRequest.value=null; pendingInteractionRequests.value=[]; interactionSubmitting.value=false; }
+  function resetChatStore(){ input.value=""; uploadFiles.value=[]; turnRuntimeRegistry.value=createTurnRuntimeRegistryState(); workflowNodeStateRegistry.value=null; subSessionMessageRegistry.value=createSubSessionMessageRegistry(); sessions.value=[]; activeSessionId.value=""; loadingSessions.value=false; loadingSessionDetail.value=false; pendingInteractionRequest.value=null; pendingInteractionRequests.value=[]; interactionSubmitting.value=false; }
   return { input,uploadFiles,turnRuntimeRegistry,workflowNodeStateRegistry,subSessionMessageRegistry,sessions,activeSessionId,activeSession,loadingSessions,loadingSessionDetail,pendingInteractionRequest,pendingInteractionRequests,interactionSubmitting,...turnActions,...workflows,...subSessions,...executionSelectors,resetChatStore };
 });

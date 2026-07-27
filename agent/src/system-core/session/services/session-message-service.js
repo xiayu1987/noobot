@@ -7,7 +7,8 @@ import { commitTurn } from "./session-message-service/commit-turn.js";
 import { appendTurn } from "./session-message-service/append-turn.js";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
 import { applyTurnLifecycleEvent, getTurnLifecycleSnapshot, upsertTurnStatus, upsertTurnTiming, stampReusedUserTurnDialogProcessId } from "./session-message-service/turn-state.js";
-import { markSessionMessagesSummarized, getSessionTurns, getSessionContextSource, hasDialogProcessIdInSession } from "./session-message-service/message-queries.js";
+import { markSessionMessagesSummarized, getSessionTurns, getSessionContextSource, getTurnSummaryCheckpointState, hasDialogProcessIdInSession } from "./session-message-service/message-queries.js";
+import { commitTurnSummaryCheckpoint } from "./session-message-service/turn-summary-checkpoint.js";
 
 export class SessionMessageService {
   constructor({ sessionRepo, sessionCrudService = null, now = () => new Date().toISOString() } = {}) {
@@ -63,7 +64,9 @@ export class SessionMessageService {
   async upsertTurnTiming(payload = {}) { return upsertTurnTiming.call(this, payload); }
   async stampReusedUserTurnDialogProcessId(payload = {}) { return stampReusedUserTurnDialogProcessId.call(this, payload); }
   async markSessionMessagesSummarized(payload = {}) { return markSessionMessagesSummarized.call(this, payload); }
+  async commitTurnSummaryCheckpoint(payload = {}) { return commitTurnSummaryCheckpoint.call(this, payload); }
   async getSessionTurns(payload = {}) { return getSessionTurns.call(this, payload); }
   async getSessionContextSource(payload = {}) { return getSessionContextSource.call(this, payload); }
+  async getTurnSummaryCheckpointState(payload = {}) { return getTurnSummaryCheckpointState.call(this, payload); }
   async hasDialogProcessIdInSession(payload = {}) { return hasDialogProcessIdInSession.call(this, payload); }
 }

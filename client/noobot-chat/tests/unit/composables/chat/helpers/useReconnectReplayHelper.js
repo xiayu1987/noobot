@@ -15,6 +15,9 @@ import {
   selectSessionTurnRuntime,
 } from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 import { applyRunStateMessageRuntimePatch } from "../../../../../src/composables/chat/chatEngine/messageRuntimePatch.js";
+import { contributeExtension } from "../../../../../src/extensions/extension-registry.js";
+import { EXTENSION_POINTS } from "../../../../../src/extensions/extension-point-ids.js";
+import { registerFrontendPlugin as registerWorkflowFrontendPlugin } from "../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
 
 function createSession(id) {
   return {
@@ -51,6 +54,14 @@ export function createFakeProcessStore() {
 }
 
 export function createFixture({ activeId = "s-1", processStore = null, currentRun = null } = {}) {
+  registerWorkflowFrontendPlugin({
+    contributeExtension: (point, contribution) => contributeExtension(point, {
+      ...contribution,
+      pluginId: "workflow",
+    }),
+    extensionPoints: EXTENSION_POINTS,
+    services: {},
+  });
   const s1 = createSession("s-1");
   const s2 = createSession("s-2");
   if (currentRun) s1.currentRun = { ...currentRun, sessionId: "s-1" };

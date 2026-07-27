@@ -8,11 +8,17 @@ import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from
 export async function markSessionMessagesSummarized({
     userId,
     sessionId,
+    dialogProcessId = "",
+    turnScopeId = "",
     parentSessionId = "",
     persistenceContext = null,
     shouldMark = null,
   } = {}) {
-    if (!userId || !sessionId) return 0;
+    const normalizedDialogProcessId = resolveDialogProcessIdFromContext({
+      dialogProcessId,
+    });
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    if (!userId || !sessionId || !normalizedDialogProcessId) return 0;
     return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
@@ -30,8 +36,13 @@ export async function markSessionMessagesSummarized({
     const messages = Array.isArray(session.messages) ? session.messages : [];
     let updatedCount = 0;
     session.messages = messages.map((messageItem) => {
+      const belongsToDialog =
+        resolveMessageDialogProcessId(messageItem) === normalizedDialogProcessId;
+      const belongsToTurn = !normalizedTurnScopeId ||
+        String(messageItem?.turnScopeId || "").trim() === normalizedTurnScopeId;
       const shouldUpdate =
-        typeof shouldMark === "function" ? shouldMark(messageItem) : true;
+        belongsToDialog && belongsToTurn &&
+        (typeof shouldMark === "function" ? shouldMark(messageItem) : true);
       if (!shouldUpdate || messageItem?.summarized === true) return messageItem;
       updatedCount += 1;
       return { ...messageItem, summarized: true };
@@ -54,6 +65,34 @@ export async function getSessionContextSource({ userId, sessionId }) {
       messages: Array.isArray(session?.messages) ? session.messages : [],
       dialogOrder: Array.isArray(session?.dialogOrder) ? session.dialogOrder : [],
     };
+  }
+
+export async function getTurnSummaryCheckpointState({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    persistenceContext = null,
+    dialogProcessId = "",
+    turnScopeId = "",
+  } = {}) {
+    const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    if (!userId || !sessionId || !normalizedDialogProcessId || !normalizedTurnScopeId) return null;
+    const resolvedParentSessionId = await this._resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
+      persistenceContext,
+    );
+    const state = session?.turnSummaryCheckpoints?.[normalizedTurnScopeId];
+    if (!state || String(state?.dialogProcessId || "").trim() !== normalizedDialogProcessId) return null;
+    return structuredClone(state);
   }
 
 export async function hasDialogProcessIdInSession({

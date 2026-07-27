@@ -8,13 +8,11 @@ import { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./s
 
 export function routeMessageProjectionEvent(event, data, context) {
   const {
-    applyWorkflowRuntimeEvent, botMessage, classifyRealtimeLog, locateSendingStartedMessageOnce,
+    botMessage, classifyRealtimeLog, locateSendingStartedMessageOnce,
     logSessionEvent, navigateOnFirstResponseOnce, sessionId, turnScopeId, upsertSubSessionEvent,
   } = context;
   if (shouldProjectSubSessionEvent(event, data || {})) {
-    const result = typeof applyWorkflowRuntimeEvent === "function"
-      ? applyWorkflowRuntimeEvent({ event: "workflow_message_event", data: data.event || {}, transportSequence: Number(data?.seq || 0) }, { source: "live" })
-      : upsertSubSessionEvent?.(data.event?.eventType, data.event || {});
+    const result = upsertSubSessionEvent?.(data.event?.eventType, data.event || {});
     logSessionEvent({
       category: "debug", level: "debug", debugType: "workflow-diagnostics",
       event: "frontend.workflowTransport.subSessionMessageReduced",
