@@ -4,14 +4,44 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "../utils/path-resolver.js";
+import { createReadStream } from "node:fs";
 import { appendFile, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import { SESSION_ARTIFACT_FILE_NAMES, writeJsonArtifactFile } from "./session-artifact-files.js";
 
-export async function* iterateExecutionLogs(filePath = "", { limit = Infinity, signal = null } = {}) {
+async function* iterateJsonlLines(filePath = "", { signal = null } = {}) {
+  const stream = createReadStream(filePath, { encoding: "utf8" });
+  let pending = "";
+  try {
+    for await (const chunk of stream) {
+      if (signal?.aborted) return;
+      pending += chunk;
+      let newlineIndex = pending.indexOf("\n");
+      while (newlineIndex >= 0) {
+        const line = pending.slice(0, newlineIndex);
+        pending = pending.slice(newlineIndex + 1);
+        if (line.trim()) yield line;
+        if (signal?.aborted) return;
+        newlineIndex = pending.indexOf("\n");
+      }
+    }
+    if (pending.trim() && !signal?.aborted) yield pending;
+  } finally {
+    stream.destroy();
+  }
+}
+
+export async function* iterateExecutionLogs(filePath = "", {
+  limit = Infinity,
+  skip = 0,
+  signal = null,
+} = {}) {
   const segmentDir = path.join(path.dirname(filePath), SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
   let yielded = 0;
+  let skipped = 0;
+  const maximum = Number.isFinite(Number(limit)) ? Math.max(0, Math.floor(Number(limit))) : Infinity;
+  const offset = Math.max(0, Math.floor(Number(skip) || 0));
   try {
     let index;
     try {
@@ -34,26 +64,29 @@ export async function* iterateExecutionLogs(filePath = "", { limit = Infinity, s
         failure.code = "EXECUTION_EVENT_INDEX_CORRUPTED";
         throw failure;
       }
-      let raw;
-      try { raw = await readFile(path.join(segmentDir, file), "utf8"); }
-      catch (error) {
+      try {
+        for await (const line of iterateJsonlLines(path.join(segmentDir, file), { signal })) {
+          if (signal?.aborted || yielded >= maximum) return;
+          if (skipped < offset) {
+            skipped += 1;
+            continue;
+          }
+          try {
+            yield JSON.parse(line);
+            yielded += 1;
+          } catch (error) {
+            const failure = new Error(`execution event segment is invalid JSONL: ${file}`);
+            failure.code = "EXECUTION_EVENT_JSONL_CORRUPTED";
+            failure.cause = error;
+            throw failure;
+          }
+        }
+      } catch (error) {
+        if (error?.code === "EXECUTION_EVENT_JSONL_CORRUPTED") throw error;
         const failure = new Error(`execution event segment is missing: ${file}`);
         failure.code = "EXECUTION_EVENT_SEGMENT_MISSING";
         failure.cause = error;
         throw failure;
-      }
-      for (const line of raw.split("\n").filter(Boolean)) {
-        try {
-          if (signal?.aborted || yielded >= limit) return;
-          yield JSON.parse(line);
-          yielded += 1;
-        }
-        catch (error) {
-          const failure = new Error(`execution event segment is invalid JSONL: ${file}`);
-          failure.code = "EXECUTION_EVENT_JSONL_CORRUPTED";
-          failure.cause = error;
-          throw failure;
-        }
       }
     }
     return;
@@ -61,9 +94,12 @@ export async function* iterateExecutionLogs(filePath = "", { limit = Infinity, s
     if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
   }
   try {
-    const raw = await readFile(filePath, "utf8");
-    for (const line of raw.trim().split("\n").filter(Boolean)) {
-      if (signal?.aborted || yielded >= limit) return;
+    for await (const line of iterateJsonlLines(filePath, { signal })) {
+      if (signal?.aborted || yielded >= maximum) return;
+      if (skipped < offset) {
+        skipped += 1;
+        continue;
+      }
       yield JSON.parse(line);
       yielded += 1;
     }

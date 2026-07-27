@@ -6,6 +6,18 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+const DEFAULT_CLEANUP_INTERVAL_MS = 60 * 1000;
+const MAX_CACHED_FILES = 512;
+const appendQueues = new Map();
+const directoryPromises = new Map();
+const activeFileStates = new Map();
+const cleanupTimes = new Map();
+
+function cacheSet(cache, key, value) {
+  if (!cache.has(key) && cache.size >= MAX_CACHED_FILES) cache.delete(cache.keys().next().value);
+  cache.set(key, value);
+}
+
 function resolveMaxFileBytes(options = {}) {
   const value = Number(options.maxFileBytes);
   if (!Number.isFinite(value) || value <= 0) return 0;
@@ -46,17 +58,64 @@ async function nextArchiveFile(file) {
 async function rotateIfNeeded(file, line, options = {}) {
   const maxFileBytes = resolveMaxFileBytes(options);
   if (!maxFileBytes) return null;
-  let stat;
-  try {
-    stat = await fs.stat(file);
-  } catch (error) {
-    if (error?.code === 'ENOENT') return null;
-    throw error;
+  let state = activeFileStates.get(file);
+  if (!state) {
+    let bytes = 0;
+    let exists = false;
+    try {
+      const stat = await fs.stat(file);
+      if (!stat.isFile()) return null;
+      bytes = Number(stat.size || 0);
+      exists = true;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    state = { bytes, exists };
+    cacheSet(activeFileStates, file, state);
   }
-  if (!stat.isFile() || stat.size + Buffer.byteLength(line, 'utf8') <= maxFileBytes) return null;
+  if (!state.exists) return null;
+  if (state.bytes + Buffer.byteLength(line, 'utf8') <= maxFileBytes) return null;
   const archive = await nextArchiveFile(file);
   await fs.rename(file, archive);
+  state.bytes = 0;
   return archive;
+}
+
+async function ensureDirectory(directory) {
+  let pending = directoryPromises.get(directory);
+  if (!pending) {
+    pending = fs.mkdir(directory, { recursive: true });
+    cacheSet(directoryPromises, directory, pending);
+  }
+  try {
+    await pending;
+  } catch (error) {
+    if (directoryPromises.get(directory) === pending) directoryPromises.delete(directory);
+    throw error;
+  }
+}
+
+function resolveCleanupIntervalMs(options = {}) {
+  const value = Number(options.cleanupIntervalMs);
+  if (!Number.isFinite(value)) return DEFAULT_CLEANUP_INTERVAL_MS;
+  return Math.max(0, Math.floor(value));
+}
+
+function shouldCleanup(file, rotatedFile, options = {}) {
+  if (!resolveNonNegativeInteger(options.retentionDays) && !resolveNonNegativeInteger(options.maxArchives)) return false;
+  if (rotatedFile) return true;
+  const interval = resolveCleanupIntervalMs(options);
+  const last = cleanupTimes.get(file) || 0;
+  return interval === 0 || Date.now() - last >= interval;
+}
+
+function enqueueAppend(file, operation) {
+  const previous = appendQueues.get(file) || Promise.resolve();
+  const current = previous.catch(() => {}).then(operation);
+  appendQueues.set(file, current);
+  return current.finally(() => {
+    if (appendQueues.get(file) === current) appendQueues.delete(file);
+  });
 }
 
 function isArchiveForActiveFile(activeFile, candidate) {
@@ -116,15 +175,31 @@ async function cleanupArchives(file, options = {}) {
 }
 
 export async function appendJsonLine(file, record, options = {}) {
-  await fs.mkdir(path.dirname(file), { recursive: true });
   const line = `${JSON.stringify(record)}\n`;
-  const rotatedFile = await rotateIfNeeded(file, line, options);
-  await fs.appendFile(file, line, 'utf8');
-  let cleanup = { deletedFiles: [] };
-  try {
-    cleanup = await cleanupArchives(file, options);
-  } catch {
-    cleanup = { deletedFiles: [], error: true };
-  }
-  return { ok: true, file, rotatedFile, deletedFiles: cleanup.deletedFiles, cleanupError: Boolean(cleanup.error) };
+  return enqueueAppend(file, async () => {
+    await ensureDirectory(path.dirname(file));
+    let rotatedFile = null;
+    try {
+      rotatedFile = await rotateIfNeeded(file, line, options);
+      await fs.appendFile(file, line, 'utf8');
+      const state = activeFileStates.get(file);
+      if (state) {
+        state.bytes += Buffer.byteLength(line, 'utf8');
+        state.exists = true;
+      }
+    } catch (error) {
+      activeFileStates.delete(file);
+      throw error;
+    }
+    let cleanup = { deletedFiles: [] };
+    if (shouldCleanup(file, rotatedFile, options)) {
+      try {
+        cleanup = await cleanupArchives(file, options);
+        cacheSet(cleanupTimes, file, Date.now());
+      } catch {
+        cleanup = { deletedFiles: [], error: true };
+      }
+    }
+    return { ok: true, file, rotatedFile, deletedFiles: cleanup.deletedFiles, cleanupError: Boolean(cleanup.error) };
+  });
 }

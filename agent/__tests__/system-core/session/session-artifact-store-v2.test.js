@@ -40,6 +40,23 @@ test("execution events roll by UTF-8 byte size and preserve order", async () => 
   ]);
 }));
 
+test("execution event reader streams ordered pages across segments", async () => withTemp(async (root) => {
+  for (let id = 0; id < 12; id += 1) {
+    await appendRollingJsonlArtifactLog({
+      sessionDir: root,
+      log: { id, text: `event-${id}` },
+      maxSegmentBytes: 65,
+    });
+  }
+  const files = buildSessionArtifactFileMap(root);
+  assert.deepEqual(
+    (await readJsonlArtifactFile(files.executionEvents, { skip: 4, limit: 5 })).map((item) => item.id),
+    [4, 5, 6, 7, 8],
+  );
+  assert.deepEqual(await readJsonlArtifactFile(files.executionEvents, { skip: 20, limit: 5 }), []);
+  assert.deepEqual(await readJsonlArtifactFile(files.executionEvents, { limit: 0 }), []);
+}));
+
 test("execution reset and concurrent appends keep a valid index", async () => withTemp(async (root) => {
   await Promise.all(Array.from({ length: 20 }, (_, id) => appendRollingJsonlArtifactLog({
     sessionDir: root, log: { id }, maxSegmentBytes: 80,

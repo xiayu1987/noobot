@@ -40,6 +40,7 @@ export async function writeRuntimeEvent(event = {}, options = {}) {
       maxFileBytes: config.maxFileBytes,
       retentionDays: config.retentionDays,
       maxArchives: config.maxArchives,
+      cleanupIntervalMs: options.cleanupIntervalMs,
     });
     return {
       ok: true,

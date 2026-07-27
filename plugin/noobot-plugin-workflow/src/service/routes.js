@@ -10,11 +10,17 @@ import { RUNTIME_EVENT_CATEGORIES, RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEve
 import { readSessionArtifactSnapshot } from "noobot-agent/session";
 import {
   buildThinkingDetailPayload,
+  iterateExecutionLogs,
   normalizeSessionThinkingRouteText as normalizeRouteText,
-  readJsonlArtifactFile,
 } from "noobot-agent/session";
 
-export async function readSegmentedChildExecutionLogs({ workspacePath = "", rootSessionId = "", childSessionId = "" } = {}) {
+export async function readSegmentedChildExecutionLogs({
+  workspacePath = "",
+  rootSessionId = "",
+  childSessionId = "",
+  skip = 0,
+  limit = Infinity,
+} = {}) {
   const workspaceRoot = path.resolve(String(workspacePath || ""));
   const sessionsRoot = path.resolve(workspaceRoot, "runtime/session");
   const executionEventsDir = path.resolve(
@@ -37,14 +43,39 @@ export async function readSegmentedChildExecutionLogs({ workspacePath = "", root
     .filter((entry) => entry.isFile() && /^segment-\d+\.jsonl$/.test(entry.name))
     .map((entry) => entry.name)
     .sort();
-  const segments = await Promise.all(segmentNames.map(async (segmentName) => {
+  const logs = [];
+  let seen = 0;
+  const offset = Math.max(0, Math.floor(Number(skip) || 0));
+  const maximum = Number.isFinite(Number(limit)) ? Math.max(0, Math.floor(Number(limit))) : Infinity;
+  for (const segmentName of segmentNames) {
     try {
-      return await readJsonlArtifactFile(path.join(executionEventsDir, segmentName));
+      for await (const log of iterateExecutionLogs(path.join(executionEventsDir, segmentName))) {
+        if (seen < offset) {
+          seen += 1;
+          continue;
+        }
+        if (logs.length >= maximum) return logs;
+        logs.push(log);
+      }
     } catch {
-      return [];
+      continue;
     }
-  }));
-  return segments.flat();
+  }
+  return logs;
+}
+
+function parseExecutionPage(query = {}) {
+  const rawCursor = normalizeRouteText(query?.executionCursor);
+  const rawLimit = normalizeRouteText(query?.executionLimit);
+  if (!rawCursor && !rawLimit) return null;
+  const cursor = rawCursor ? Number(rawCursor) : 0;
+  const limit = rawLimit ? Number(rawLimit) : 500;
+  if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 5000) {
+    const error = new Error("executionCursor and executionLimit must be valid integers");
+    error.statusCode = HTTP_STATUS.BAD_REQUEST;
+    throw error;
+  }
+  return { cursor, limit };
 }
 
 function resolveWorkflowSessionDir({ bot = null, userId = "", sessionId = "", dialogProcessId = "", translateText = null, locale = "" } = {}) {
@@ -96,6 +127,7 @@ export function registerServiceRoutes(app, context = {}) {
   registerGet(app, sessionDetailPaths, jsonRoute(async (req, res) => {
     const { userId, sessionId, dialogProcessId } = req.params;
     const traceId = normalizeRouteText(req.query?.traceId);
+    const executionPage = parseExecutionPage(req.query);
     const workflowDir = resolveWorkflowSessionDir({
       bot,
       userId,
@@ -114,7 +146,12 @@ export function registerServiceRoutes(app, context = {}) {
       } });
     let snapshot;
     try {
-      snapshot = await readSessionArtifactSnapshot({ outputDir: workflowDir });
+      snapshot = await readSessionArtifactSnapshot({
+        outputDir: workflowDir,
+        executionLogOptions: executionPage
+          ? { skip: executionPage.cursor, limit: executionPage.limit + 1 }
+          : {},
+      });
     } catch (error) {
       void logDetail({ userId, sessionId, dialogProcessId, traceId,
         event: "service.workflowNodeDetail.snapshotFailed", level: "error", data: {
@@ -126,13 +163,22 @@ export function registerServiceRoutes(app, context = {}) {
     const { session, sessionSummary, task, execution, executionLogs, meta } = snapshot;
     const childSessionId = String(sessionSummary?.sessionId || session?.sessionId || "").trim();
     const scopedExecutionLogs = Array.isArray(executionLogs) ? executionLogs : [];
-    const restoredExecutionLogs = scopedExecutionLogs.length
+    const hasScopedExecutionArtifacts = directoryEntries.includes("execution-events")
+      || directoryEntries.includes("execution-events.jsonl");
+    const useScopedExecutionLogs = scopedExecutionLogs.length > 0 || Boolean(executionPage && hasScopedExecutionArtifacts);
+    const restoredExecutionLogs = useScopedExecutionLogs
       ? scopedExecutionLogs
       : await readSegmentedChildExecutionLogs({
           workspacePath: bot?.getWorkspacePath?.(userId),
           rootSessionId: sessionId,
           childSessionId,
+          skip: executionPage?.cursor || 0,
+          limit: executionPage ? executionPage.limit + 1 : Infinity,
         });
+    const hasMoreExecutionLogs = Boolean(executionPage && restoredExecutionLogs.length > executionPage.limit);
+    const responseExecutionLogs = executionPage
+      ? restoredExecutionLogs.slice(0, executionPage.limit)
+      : restoredExecutionLogs;
     void logDetail({ userId, sessionId, dialogProcessId, traceId,
       event: "service.workflowNodeDetail.snapshotLoaded", data: {
         workflowDir, childSessionId,
@@ -140,7 +186,7 @@ export function registerServiceRoutes(app, context = {}) {
         summarySessionId: String(sessionSummary?.sessionId || ""),
         executionSessionId: String(execution?.sessionId || ""),
         messageCount: Array.isArray(sessionSummary?.messages) ? sessionSummary.messages.length : Array.isArray(session?.messages) ? session.messages.length : 0,
-        executionLogCount: restoredExecutionLogs.length,
+        executionLogCount: responseExecutionLogs.length,
       } });
     res.json({
       ok: true,
@@ -152,7 +198,13 @@ export function registerServiceRoutes(app, context = {}) {
         sessionSummary,
         task,
         execution,
-        executionLogs: restoredExecutionLogs,
+        executionLogs: responseExecutionLogs,
+        executionLogsPage: executionPage ? {
+          cursor: executionPage.cursor,
+          nextCursor: hasMoreExecutionLogs ? executionPage.cursor + responseExecutionLogs.length : null,
+          limit: executionPage.limit,
+          hasMore: hasMoreExecutionLogs,
+        } : null,
         meta,
         dir: workflowDir,
       },
@@ -180,7 +232,10 @@ export function registerServiceRoutes(app, context = {}) {
       translateText,
       locale: req.locale,
     });
-    const { session } = await readSessionArtifactSnapshot({ outputDir: workflowDir });
+    const { session } = await readSessionArtifactSnapshot({
+      outputDir: workflowDir,
+      includeExecutionLogs: false,
+    });
     const detail = buildThinkingDetailPayload(
       {
         exists: Boolean(session?.sessionId),
