@@ -51,6 +51,22 @@ test("execution reset and concurrent appends keep a valid index", async () => wi
   assert.deepEqual(logs, [{ id: 99 }]);
 }));
 
+test("execution append repairs stale index counters before writing", async () => withTemp(async (root) => {
+  const files = buildSessionArtifactFileMap(root);
+  await appendRollingJsonlArtifactLog({ sessionDir: root, log: { id: 1 } });
+  const indexPath = path.join(files.executionEventsDir, "index.json");
+  const index = JSON.parse(await readFile(indexPath, "utf8"));
+  index.segments[0].bytes = 0;
+  index.segments[0].records = 0;
+  await writeFile(indexPath, JSON.stringify(index), "utf8");
+
+  await appendRollingJsonlArtifactLog({ sessionDir: root, log: { id: 2 } });
+
+  assert.deepEqual(await readJsonlArtifactFile(files.executionEvents), [{ id: 1 }, { id: 2 }]);
+  const repairedIndex = JSON.parse(await readFile(indexPath, "utf8"));
+  assert.equal(repairedIndex.segments[0].records, 2);
+}));
+
 test("an oversized execution event stays whole in its own segment", async () => withTemp(async (root) => {
   await appendRollingJsonlArtifactLog({ sessionDir: root, log: { text: "x".repeat(100) }, maxSegmentBytes: 20 });
   const files = buildSessionArtifactFileMap(root);

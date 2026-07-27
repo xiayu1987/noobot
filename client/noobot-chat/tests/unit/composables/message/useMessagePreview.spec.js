@@ -58,6 +58,8 @@ describe("useMessagePreview attachment downloads", () => {
     await onDownloadAttachment({
       name: "missing-id.txt",
       mimeType: "text/plain",
+      previewUrl: "https://attacker.example/file",
+      downloadUrl: "/api/internal/unrelated",
     });
 
     expect(attachmentService.fetchUrl).not.toHaveBeenCalled();
@@ -84,7 +86,7 @@ describe("useMessagePreview attachment downloads", () => {
     const attachmentService = createAttachmentService(createBlobResponse);
     const preview = useMessagePreview({ userId: "admin", attachmentService });
     const attachment = {
-      previewUrl: "/api/internal/attachment/admin/generated-image",
+      attachmentId: "generated-image",
       name: "generated.jfif",
       mimeType: "",
     };
@@ -103,7 +105,7 @@ describe("useMessagePreview attachment downloads", () => {
     const attachmentService = createAttachmentService(() => createTextResponse("hello\nworld"));
     const preview = useMessagePreview({ userId: "admin", attachmentService });
     const attachment = {
-      previewUrl: "/api/internal/attachment/admin/report-log",
+      attachmentId: "report-log",
       name: "report.log",
       mimeType: "application/octet-stream",
     };
@@ -207,7 +209,7 @@ describe("useMessagePreview attachment downloads", () => {
       previewUrl: "/api/attachments/parsed-1",
     });
 
-    expect(attachmentService.fetchUrl).toHaveBeenCalledWith("/api/attachments/parsed-1");
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith("/api/internal/attachment/admin/parsed-1");
     expect(preview.attachmentPreviewVisible.value).toBe(true);
     expect(preview.attachmentPreviewType.value).toBe("markdown");
     expect(preview.attachmentPreviewTextContent.value).toBe("# parsed payload");
@@ -227,7 +229,7 @@ describe("useMessagePreview attachment downloads", () => {
       { parsedResult: true },
     );
 
-    expect(attachmentService.fetchUrl).toHaveBeenCalledWith("/api/attachments/parsed-1");
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith("/api/internal/attachment/admin/parsed-1");
     expect(preview.attachmentPreviewType.value).toBe("markdown");
     expect(preview.attachmentPreviewTextContent.value).toBe("# compat payload");
   });

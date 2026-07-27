@@ -455,7 +455,11 @@ export function useMessagePreview({
       return false;
     }
     const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
-    if (officeLike) return hasParsedResult(attachmentItem);
+    if (officeLike) {
+      return resolveParsedResultAccessMeta(attachmentItem, {
+        userId: String(userId || "").trim(),
+      }).hasIdentity;
+    }
     return (
       isImagePreviewType(mimeType, name, isImageMime) ||
       mimeType.startsWith("video/") ||
@@ -467,8 +471,13 @@ export function useMessagePreview({
   }
 
   function canPreviewParsedResult(attachmentItem = {}) {
-    if (!hasParsedResult(attachmentItem)) return false;
-    const parsedItem = buildParsedResultPreviewItem(attachmentItem);
+    const parsedMeta = resolveParsedResultAccessMeta(attachmentItem, {
+      userId: String(userId || "").trim(),
+    });
+    if (!parsedMeta.hasIdentity) return false;
+    const parsedItem = buildParsedResultPreviewItem(attachmentItem, {
+      userId: String(userId || "").trim(),
+    });
     return !isNonImagePreviewOverSizeLimit({
       fileItem: parsedItem,
       mimeType: parsedItem.mimeType,
@@ -583,7 +592,12 @@ export function useMessagePreview({
     }
     const mimeType = String(attachmentItem?.mimeType || "").trim();
     const name = String(attachmentItem?.name || "").trim();
-    if ((isOfficeMime(mimeType) || isOfficeFile(name)) && hasParsedResult(attachmentItem)) {
+    if (
+      (isOfficeMime(mimeType) || isOfficeFile(name)) &&
+      resolveParsedResultAccessMeta(attachmentItem, {
+        userId: String(userId || "").trim(),
+      }).hasIdentity
+    ) {
       await openParsedResultPreview(attachmentItem);
       return;
     }

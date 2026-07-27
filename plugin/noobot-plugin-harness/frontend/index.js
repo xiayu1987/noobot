@@ -32,7 +32,6 @@ function createThinkingDetailService(authenticatedGet) {
 export function registerFrontendPlugin(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
-  const attachmentService = ctx?.services?.attachments || null;
   const thinkingDetailService = createThinkingDetailService(ctx?.services?.authenticatedRequest?.get);
   if (typeof contribute !== "function" || !points) {
     throw new Error("frontend contribution API is required");
@@ -57,6 +56,7 @@ export function registerFrontendPlugin(ctx = {}) {
         capability: "composer.model-extension",
         priority: 10,
         component: HarnessModelExtension,
+        when: (context = {}) => context?.selectedPluginKeySet?.has?.("harness") === true,
         resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("harness") }),
   });
   contribute(points.MESSAGE_CARD_PRE, {
@@ -121,7 +121,6 @@ export function registerFrontendPlugin(ctx = {}) {
           canPreviewParsedResult: context?.canPreviewParsedResult,
           formatFileSize: context?.formatFileSize,
           userId: String(context?.userId || ""),
-          attachmentService,
         }),
         resolveListeners: (context = {}) => ({
           preview:
