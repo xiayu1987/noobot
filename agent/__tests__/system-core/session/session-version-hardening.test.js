@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../../src/system-core/session/services/session-message-service.js";
+import { normalizeSessionEntity } from "../../../src/system-core/session/entities/session-entity.js";
 
 function harness(initial = {}) {
   let session = structuredClone({
@@ -60,6 +61,59 @@ test("commitTurn persists internal run origin without frontend user identity", a
   });
   assert.equal(result.userMessage.frontendUserMessage, undefined);
   assert.equal(result.userMessage.messageOrigin, "internal");
+});
+
+test("commitTurn assigns an immutable logical dialog ordinal", async () => {
+  const h = harness();
+  await h.service.commitTurn({
+    userId: "u1", sessionId: "s1", content: "first", turnScopeId: "t1",
+    dialogProcessId: "d1", idempotencyKey: "i1",
+  });
+  await h.service.commitTurn({
+    userId: "u1", sessionId: "s1", content: "second", turnScopeId: "t2",
+    dialogProcessId: "d2", idempotencyKey: "i2",
+  });
+
+  assert.deepEqual(h.get().dialogOrder.map(({ dialogProcessId, dialogOrdinal }) => ({ dialogProcessId, dialogOrdinal })), [
+    { dialogProcessId: "d1", dialogOrdinal: 1 },
+    { dialogProcessId: "d2", dialogOrdinal: 2 },
+  ]);
+  assert.equal(h.get().dialogOrder.some((entry) => "sequence" in entry), false);
+  assert.equal(new Set(h.get().messages.map((message) => message.messageUid)).size, 2);
+  assert.equal(h.get().messages.every((message) => /^sm_/.test(message.messageUid)), true);
+});
+
+test("legacy dialog sequence is read only at the compatibility boundary", () => {
+  const normalized = normalizeSessionEntity({
+    sessionId: "s1",
+    messages: [{
+      role: "user", content: "legacy", dialogProcessId: "d1", turnScopeId: "t1",
+      messageId: "m1", ts: "2026-01-01T00:00:00.000Z",
+    }],
+    dialogOrder: [{ dialogProcessId: "d1", sequence: 7 }],
+  }, { now: () => "2026-01-01T00:00:00.000Z" });
+
+  assert.deepEqual(normalized.dialogOrder.map(({ userMessageUid, ...entry }) => entry), [{
+    dialogProcessId: "d1", turnScopeId: "t1",
+    startedAt: "2026-01-01T00:00:00.000Z", dialogOrdinal: 7,
+  }]);
+  assert.equal(normalized.dialogOrder[0].userMessageUid, normalized.messages[0].messageUid);
+  assert.equal("userMessageId" in normalized.dialogOrder[0], false);
+  assert.equal("sequence" in normalized.dialogOrder[0], false);
+});
+
+test("legacy messages receive deterministic persistent message UIDs", () => {
+  const legacy = {
+    sessionId: "s1",
+    messages: [{
+      role: "assistant", content: "legacy", messageId: "am_1",
+      dialogProcessId: "d1", turnScopeId: "t1", ts: "2026-01-01T00:00:00.000Z",
+    }],
+  };
+  const first = normalizeSessionEntity(legacy, { now: () => "2026-01-01T00:00:00.000Z" });
+  const second = normalizeSessionEntity(legacy, { now: () => "2026-01-01T00:00:00.000Z" });
+  assert.match(first.messages[0].messageUid, /^sm_legacy_[0-9a-f]{32}$/);
+  assert.equal(first.messages[0].messageUid, second.messages[0].messageUid);
 });
 
 test("same idempotency identity wins before stale version check", async () => {

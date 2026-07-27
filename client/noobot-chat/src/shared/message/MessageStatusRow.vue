@@ -4,14 +4,10 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { useLocale } from "../../../../client/noobot-chat/src/public/locale.js";
+import { useLocale } from "../i18n/useLocale";
 import { computed } from "vue";
 
 const props = defineProps({
-  pending: { type: Boolean, default: false },
-  statusLabel: { type: String, default: "" },
-  showSubTask: { type: Boolean, default: false },
-  subTaskStatusText: { type: String, default: "" },
   statusStepState: { type: String, default: "" },
 });
 const { translate } = useLocale();

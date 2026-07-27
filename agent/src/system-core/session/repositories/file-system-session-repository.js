@@ -603,7 +603,7 @@ export class FileSystemSessionRepository {
       parentSessionId: String(session.parentSessionId || resolvedParentSessionId || "").trim(),
       caller: String(session.caller || "user").trim() || "user",
       modelAlias: String(session.modelAlias || ""),
-      messages: this.normalizeMessages(session.messages || []),
+      messages: this.normalizeMessages(session.messages || [], { sessionId }),
       selectedConnectors: this.normalizeSelectedConnectors(session.selectedConnectors || {}),
     }, { now: this.now, sessionId, parentSessionId: resolvedParentSessionId });
   }

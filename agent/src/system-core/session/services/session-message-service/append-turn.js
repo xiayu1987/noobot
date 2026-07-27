@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeMessageEntity } from "../../entities/session-entity.js";
+import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
 import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { getTransferAttachmentMetas } from "../../../semantic-transfer/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
@@ -14,6 +14,7 @@ export async function appendTurn({
     sessionId,
     userName = userId,
     role,
+    messageUid = "",
     messageId = "",
     content,
     type = "",
@@ -66,6 +67,7 @@ export async function appendTurn({
 
     const turn = normalizeMessageEntity({
       role,
+      messageUid,
       messageId,
       content,
       type: type || "",
@@ -119,21 +121,49 @@ export async function appendTurn({
     }
 
     session.messages = Array.isArray(session.messages) ? session.messages : [];
-    const existingIndex = turn.messageId
+    const turnDialogProcessId = resolveMessageDialogProcessId(turn);
+    const turnScope = String(turn?.turnScopeId || "").trim();
+    const normalizedMessageUid = String(turn.messageUid || "").trim();
+    const compositeIdentityIndex = turn.messageId
       ? session.messages.findIndex((message = {}) =>
-          String(message?.messageId || message?.id || "").trim() === turn.messageId)
+          String(message?.messageId || message?.id || "").trim() === turn.messageId &&
+          resolveMessageDialogProcessId(message) === turnDialogProcessId &&
+          String(message?.turnScopeId || "").trim() === turnScope)
       : -1;
+    const existingIndex = normalizedMessageUid
+      ? session.messages.findIndex((message = {}) => String(message?.messageUid || "").trim() === normalizedMessageUid)
+      : compositeIdentityIndex;
+    if (normalizedMessageUid && existingIndex < 0 && compositeIdentityIndex >= 0) {
+      const error = new Error("messageUid does not match the persisted runtime message identity");
+      error.code = "SESSION_MESSAGE_UID_MISMATCH";
+      throw error;
+    }
+    let persistedTurn;
     if (existingIndex >= 0) {
       const existing = session.messages[existingIndex] || {};
-      session.messages[existingIndex] = normalizeMessageEntity({
+      if (normalizedMessageUid && (
+        resolveMessageDialogProcessId(existing) !== turnDialogProcessId ||
+        String(existing?.turnScopeId || "").trim() !== turnScope
+      )) {
+        const error = new Error("messageUid does not belong to the requested dialog and turn");
+        error.code = "SESSION_MESSAGE_IDENTITY_CONFLICT";
+        throw error;
+      }
+      persistedTurn = normalizeMessageEntity({
         ...existing,
         ...turn,
+        messageUid: existing.messageUid || normalizedMessageUid || createSessionMessageUid(),
         id: turn.messageId,
         messageId: turn.messageId,
         ts: existing.ts || turn.ts,
       }, this.now);
+      session.messages[existingIndex] = persistedTurn;
     } else {
-      session.messages.push(turn);
+      persistedTurn = normalizeMessageEntity({
+        ...turn,
+        messageUid: normalizedMessageUid || createSessionMessageUid(),
+      }, this.now);
+      session.messages.push(persistedTurn);
     }
     upsertSessionTurnTiming(session, {
       turnScopeId: turn.turnScopeId,
@@ -144,6 +174,6 @@ export async function appendTurn({
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
-    return turn;
+    return persistedTurn;
     }, parentSessionId, persistenceContext);
   }

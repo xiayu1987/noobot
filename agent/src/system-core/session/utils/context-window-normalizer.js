@@ -12,6 +12,7 @@ import {
 } from "../../context/session/message-context-policy.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { deriveDialogOrderFromMessages } from "../entities/dialog-order-entity.js";
 
 
 
@@ -134,6 +135,7 @@ export function resolveMainModelSystemMessages({
 export function resolveMainModelHistoryMessages({
   sourceMessages = [],
   historyLimit = MAIN_MODEL_HISTORY_ROUND_LIMIT,
+  dialogOrder = [],
 } = {}) {
   const source = Array.isArray(sourceMessages) ? sourceMessages : [];
   const groupsByDialog = new Map();
@@ -156,17 +158,38 @@ export function resolveMainModelHistoryMessages({
     appendDialogGroupMessage(groupsByDialog, leadingGroupKey, messageItem, index);
   });
 
+  const authoritativeOrder = Array.isArray(dialogOrder) && dialogOrder.length
+    ? dialogOrder
+    : deriveDialogOrderFromMessages(source);
+  const orderByDialog = new Map(
+    authoritativeOrder.map((entry, index) => [
+      String(entry?.dialogProcessId || entry?.dialogId || "").trim(),
+      Number(entry?.dialogOrdinal) || index + 1,
+    ]),
+  );
   const rounds = [];
-  for (const value of groupsByDialog.values()) {
+  for (const [dialogKey, value] of groupsByDialog) {
     if (value.startIndex < 0) continue;
     rounds.push({
+      dialogKey,
+      dialogOrdinal: orderByDialog.get(dialogKey),
       startIndex: value.startIndex,
       endIndex: Number.POSITIVE_INFINITY,
       messages: value.messages,
     });
   }
 
-  rounds.sort((left, right) => left.startIndex - right.startIndex);
+  rounds.sort((left, right) => {
+    const leftDialogOrdinal = left.dialogOrdinal;
+    const rightDialogOrdinal = right.dialogOrdinal;
+    if (Number.isFinite(leftDialogOrdinal) && Number.isFinite(rightDialogOrdinal)) {
+      return leftDialogOrdinal - rightDialogOrdinal;
+    }
+    if (Number.isFinite(leftDialogOrdinal) !== Number.isFinite(rightDialogOrdinal)) {
+      return Number.isFinite(leftDialogOrdinal) ? 1 : -1;
+    }
+    return left.startIndex - right.startIndex;
+  });
   const selectedRounds = recentSlice(rounds, historyLimit);
   return selectedRounds.flatMap((round) =>
     round.messages
@@ -197,6 +220,7 @@ export function resolveMainModelFinalMessages({
   historyMessages = [],
   incrementalMessages = [],
   historyLimit = MAIN_MODEL_HISTORY_ROUND_LIMIT,
+  dialogOrder = [],
 } = {}) {
   const system = resolveMainModelSystemMessages({
     sourceMessages: systemMessages,
@@ -216,6 +240,7 @@ export function resolveMainModelFinalMessages({
     resolveMainModelHistoryMessages({
       sourceMessages: historyMessages,
       historyLimit,
+      dialogOrder,
     }),
     blockedHistoryKeys,
   );

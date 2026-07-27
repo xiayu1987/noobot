@@ -5,6 +5,8 @@
  */
 
 export {
+  assertSessionMessageIdentityInvariants,
+  createSessionMessageUid,
   normalizeMessageEntity,
   normalizeMessagesEntity,
   normalizeSessionEntity,

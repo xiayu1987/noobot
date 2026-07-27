@@ -19,6 +19,8 @@ import { selectTurnMessageRuntime } from "../../composables/chat/sessionRunState
 import { useLocale } from "../i18n/useLocale";
 import { useChatStore } from "../stores/useChatStore";
 import MonotonicMessageActions from "./MonotonicMessageActions.vue";
+import AssistantCopyActions from "./AssistantCopyActions.vue";
+import MessageStatusRow from "./MessageStatusRow.vue";
 import { resolveMonotonicMessageActionProps } from "./monotonicMessageActionRules";
 import {
   BaseMarkdownContent,
@@ -267,6 +269,10 @@ async function handleCopyAssistantMessageText() {
     :hide-header="hideHeader"
   >
     <BaseMessageTypeTag v-if="showMessageTypeTag" :type="messageItem.type" />
+    <MessageStatusRow
+      v-if="getMessageRole(messageItem) === 'assistant' && statusStepState"
+      :status-step-state="statusStepState"
+    />
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_CARD_PRE"
       :context="resolveRendererContext()"
@@ -274,6 +280,13 @@ async function handleCopyAssistantMessageText() {
     />
 
     <BaseMessageErrorAlert :error="messageItem.error" />
+
+    <AssistantCopyActions
+      :visible="getMessageRole(messageItem) === 'assistant' && Boolean(String(messageItem.content || '').trim())"
+      :translate="translate"
+      :on-copy-rich="handleCopyAssistantMessageRich"
+      :on-copy-text="handleCopyAssistantMessageText"
+    />
 
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS"

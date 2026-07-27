@@ -48,6 +48,14 @@ export async function getSessionTurns({ userId, sessionId }) {
     return session?.messages || [];
   }
 
+export async function getSessionContextSource({ userId, sessionId }) {
+    const session = await this.sessionRepo.findById(userId, sessionId);
+    return {
+      messages: Array.isArray(session?.messages) ? session.messages : [],
+      dialogOrder: Array.isArray(session?.dialogOrder) ? session.dialogOrder : [],
+    };
+  }
+
 export async function hasDialogProcessIdInSession({
     userId,
     sessionId,

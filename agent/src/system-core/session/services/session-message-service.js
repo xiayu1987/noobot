@@ -7,7 +7,7 @@ import { commitTurn } from "./session-message-service/commit-turn.js";
 import { appendTurn } from "./session-message-service/append-turn.js";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
 import { applyTurnLifecycleEvent, getTurnLifecycleSnapshot, upsertTurnStatus, upsertTurnTiming, stampReusedUserTurnDialogProcessId } from "./session-message-service/turn-state.js";
-import { markSessionMessagesSummarized, getSessionTurns, hasDialogProcessIdInSession } from "./session-message-service/message-queries.js";
+import { markSessionMessagesSummarized, getSessionTurns, getSessionContextSource, hasDialogProcessIdInSession } from "./session-message-service/message-queries.js";
 
 export class SessionMessageService {
   constructor({ sessionRepo, sessionCrudService = null, now = () => new Date().toISOString() } = {}) {
@@ -64,5 +64,6 @@ export class SessionMessageService {
   async stampReusedUserTurnDialogProcessId(payload = {}) { return stampReusedUserTurnDialogProcessId.call(this, payload); }
   async markSessionMessagesSummarized(payload = {}) { return markSessionMessagesSummarized.call(this, payload); }
   async getSessionTurns(payload = {}) { return getSessionTurns.call(this, payload); }
+  async getSessionContextSource(payload = {}) { return getSessionContextSource.call(this, payload); }
   async hasDialogProcessIdInSession(payload = {}) { return hasDialogProcessIdInSession.call(this, payload); }
 }
