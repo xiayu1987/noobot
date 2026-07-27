@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ThinkingPanel } from "../../../client/noobot-chat/src/public/chat-ui.js";
+import { ThinkingPanel } from "noobot-chat/plugin-api/chat-ui";
 import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
 import MessageAttachments from "./components/MessageAttachments.vue";
 import HarnessModelExtension from "./components/HarnessModelExtension.vue";

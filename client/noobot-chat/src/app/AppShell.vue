@@ -8,44 +8,44 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount } from "vue";
 import noobotLogo from "../shared/assets/noobot.svg";
 import AppShellDrawers from "./AppShellDrawers.vue";
 import AppShellLayout from "./AppShellLayout.vue";
-import { buildAppShellDrawerPanels } from "./state/drawerPanelsState";
+import { buildAppShellDrawerPanels } from "./state/drawerPanelsState.js";
 import ThinkingPanel from "../shared/message/ThinkingPanel.vue";
 import {
   ConfigParamsPanel,
   UserSettingsPanel,
   WorkspacePanel,
-} from "./entrypoints";
-import { useApiConnection } from "../composables/infra/useApiConnection";
-import { useChatSession } from "../composables/chat/useChatSession";
-import { useUiFeedback } from "../composables/infra/useUiFeedback";
-import { useLocale } from "../shared/i18n/useLocale";
-import { useMarkdownRenderer } from "../composables/infra/useMarkdownRenderer";
-import { useReconnect } from "../composables/infra/useReconnect";
-import { usePanelState } from "../composables/infra/usePanelState";
-import { frontendConfig } from "../shared/config/frontendConfig";
-import { PSEUDO_PANEL, useAppShellPseudoRoute } from "./useAppShellPseudoRoute";
-import { useAppShellPreferences } from "./useAppShellPreferences";
-import { useThinkingDetailsPanel } from "./useThinkingDetailsPanel";
-import { useOpenVSCodeAction } from "./useOpenVSCodeAction";
-import { useChatMessageNavigatorPanel } from "./useChatMessageNavigatorPanel";
-import { useAppShellPanelActions } from "./useAppShellPanelActions";
-import { useAppShellSessionActions } from "./useAppShellSessionActions";
-import { useAppShellInteractionActions } from "./useAppShellInteractionActions";
+} from "./entrypoints.js";
+import { useApiConnection } from "../composables/infra/useApiConnection.js";
+import { useChatSession } from "../composables/chat/useChatSession.js";
+import { useUiFeedback } from "../composables/infra/useUiFeedback.js";
+import { useLocale } from "../shared/i18n/useLocale.js";
+import { useMarkdownRenderer } from "../composables/infra/useMarkdownRenderer.js";
+import { useReconnect } from "../composables/infra/useReconnect.js";
+import { usePanelState } from "../composables/infra/usePanelState.js";
+import { frontendConfig } from "../shared/config/frontendConfig.js";
+import { PSEUDO_PANEL, useAppShellPseudoRoute } from "./useAppShellPseudoRoute.js";
+import { useAppShellPreferences } from "./useAppShellPreferences.js";
+import { useThinkingDetailsPanel } from "./useThinkingDetailsPanel.js";
+import { useOpenVSCodeAction } from "./useOpenVSCodeAction.js";
+import { useChatMessageNavigatorPanel } from "./useChatMessageNavigatorPanel.js";
+import { useAppShellPanelActions } from "./useAppShellPanelActions.js";
+import { useAppShellSessionActions } from "./useAppShellSessionActions.js";
+import { useAppShellInteractionActions } from "./useAppShellInteractionActions.js";
 import {
   getMessageDialogProcessId,
   getMessageSessionId,
   getMessageTurnScopeId,
-} from "../composables/infra/messageIdentity";
-import { selectTurnMessageRuntime } from "../composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { attachmentService } from "../services/attachmentService";
-import { thinkingDetailService } from "../services/thinkingDetailService";
+} from "../composables/infra/messageIdentity.js";
+import { selectTurnMessageRuntime } from "../composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { attachmentService } from "../services/attachmentService.js";
+import { thinkingDetailService } from "../services/thinkingDetailService.js";
 import {
   classifyRealtimeLog,
   formatFileSize,
   formatTime,
   hasActiveSessionForReconnect as hasActiveSessionForReconnectState,
   isImageMime,
-} from "./state/sessionMessageState";
+} from "./state/sessionMessageState.js";
 
 const { renderMarkdown } = useMarkdownRenderer();
 

@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { applyRunStateMessageRuntimePatch } from "../chatEngine/messageRuntimePatch";
-import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
-import { findCanonicalTurnTiming } from "../sessionRunStateMachine/turnTiming";
-import { sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
+import { applyRunStateMessageRuntimePatch } from "../chatEngine/messageRuntimePatch.js";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger.js";
+import { findCanonicalTurnTiming } from "../sessionRunStateMachine/turnTiming.js";
+import { sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 export function createRuntimeEventProjector({ sessions, activeSession, turnRuntimeRegistry, chatStore, resolveActiveSessionIdentity }) {
   const submitTurnRuntimeEvent = (event) => {

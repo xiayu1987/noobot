@@ -9,7 +9,7 @@ import {
   resolveExtensionListeners,
   resolveExtensionPoint,
   resolveExtensionProps,
-} from "./extension-registry";
+} from "./extension-registry.js";
 
 const props = defineProps({
   point: { type: String, required: true },

@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants";
+import { RoleEnum, StreamEventEnum } from "../../shared/constants/chatConstants.js";
 import {
   getMessageTransferAttachments,
   getMessageTransferEnvelopes,
   normalizeTransferEnvelopes,
-} from "./transferEnvelopes";
-import { getMessageAttachments } from "./messageModel";
+} from "./transferEnvelopes.js";
+import { getMessageAttachments } from "./messageModel.js";
 import {
   canUseTurnScopedAssets,
   clearTurnScopedAssets,
@@ -17,14 +17,14 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
   hasMessageTurnScopeConflict,
-} from "./messageIdentity";
-import { parseTimeMs } from "./timeFields";
+} from "./messageIdentity.js";
+import { parseTimeMs } from "./timeFields.js";
 import {
   BackendTerminalStates,
   resolveSessionRunMessageRuntimeView,
-} from "../chat/sessionRunStateMachine";
+} from "../chat/sessionRunStateMachine.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { hydrateTurnSnapshot } from "../chat/chatEngine/turnProjectionStore";
+import { hydrateTurnSnapshot } from "../chat/chatEngine/turnProjectionStore.js";
 
 function isReconnectTerminalEvent(eventName = "") {
   return [

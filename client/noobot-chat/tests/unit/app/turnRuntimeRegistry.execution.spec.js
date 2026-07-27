@@ -9,7 +9,7 @@ import {
   applyExecutionTree,
   createTurnRuntimeRegistryState,
   selectExecutionChildren,
-} from "../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 const execution = (executionId, overrides = {}) => ({
   executionId,

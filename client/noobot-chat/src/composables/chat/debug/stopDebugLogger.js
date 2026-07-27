@@ -7,7 +7,7 @@
 import {
   summarizeDebugMessage,
   summarizeDebugMessages,
-} from "./resendDebugLogger";
+} from "./resendDebugLogger.js";
 
 let sessionLogSink = null;
 

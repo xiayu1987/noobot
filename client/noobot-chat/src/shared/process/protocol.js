@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowIso } from "../../composables/infra/timeFields";
+import { nowIso } from "../../composables/infra/timeFields.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
 export const PROCESS_EVENT_VERSION = 1;

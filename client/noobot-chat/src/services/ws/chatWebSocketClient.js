@@ -3,68 +3,23 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../shared/constants/chatConstants";
+import { StreamEventEnum } from "../../shared/constants/chatConstants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervisor";
-import { logWorkflowDiagnostics } from "../../composables/chat/debug/workflowDiagnosticsLogger";
+import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervisor.js";
+import { logWorkflowDiagnostics } from "../../composables/chat/debug/workflowDiagnosticsLogger.js";
 
-const TERMINAL_CHANNEL_STATES = Object.freeze([
-  "user_stopped",
-  "error",
-  "no_conversation",
-  "expired",
-  "cancelled",
-]);
-
-function normalizeTrimmedString(value = "") {
-  return String(value || "").trim();
-}
-
-function normalizeErrorMessage(value, fallback = "") {
-  if (typeof value === "string") return value.trim() || fallback;
-  if (!value || typeof value !== "object") return fallback;
-  for (const candidate of [value.message, value.reason, value.description, value.error]) {
-    const normalized = normalizeErrorMessage(candidate, "");
-    if (normalized) return normalized;
-  }
-  return fallback;
-}
-
-function isTerminalChannelStateEvent(event = "", data = {}) {
-  return (
-    normalizeTrimmedString(event) === StreamEventEnum.CHANNEL_STATE &&
-    TERMINAL_CHANNEL_STATES.includes(normalizeTrimmedString(data?.state))
-  );
-}
-
-function isEventForStreamScope(data = {}, payload = {}) {
-  const payloadTurnScopeId = normalizeTrimmedString(payload?.turnScopeId);
-  const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
-  if (payloadTurnScopeId && eventTurnScopeId && payloadTurnScopeId !== eventTurnScopeId) {
-    return false;
-  }
-  const payloadDialogProcessId = normalizeTrimmedString(payload?.dialogProcessId);
-  const eventDialogProcessId = normalizeTrimmedString(data?.dialogProcessId);
-  if (
-    payloadDialogProcessId &&
-    eventDialogProcessId &&
-    payloadDialogProcessId !== eventDialogProcessId
-  ) {
-    return false;
-  }
-  return true;
-}
-
-function canSettleStreamForEvent(data = {}, payload = {}) {
-  if (!isEventForStreamScope(data, payload)) return false;
-  const payloadTurnScopeId = normalizeTrimmedString(payload?.turnScopeId);
-  const payloadDialogProcessId = normalizeTrimmedString(payload?.dialogProcessId);
-  if (!payloadTurnScopeId && !payloadDialogProcessId) return true;
-  return Boolean(
-    normalizeTrimmedString(data?.turnScopeId) ||
-      normalizeTrimmedString(data?.dialogProcessId),
-  );
-}
+import { createReconnectCursorStore } from "./chatWebSocketReconnectCursor.js";
+import { createWebSocketCommandRequests } from "./chatWebSocketCommandRequests.js";
+import { createSocketHandlerRegistry } from "./chatWebSocketSocketHandlers.js";
+import {
+  canSettleStreamForEvent,
+  createStopConfirmationTimeoutError,
+  createStreamEventError,
+  isEventForStreamScope,
+  isTerminalChannelStateEvent,
+  normalizeErrorMessage,
+  normalizeTrimmedString,
+} from "./chatWebSocketProtocol.js";
 
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
@@ -95,66 +50,36 @@ export function createChatWebSocketClient({
   let activeStopLease = null;
   let protocolRequestSerial = 0;
 
-  let lastReceivedSeqMap = {};
-  let lastReceivedTurnScopeIdMap = {};
+  const reconnectCursor = createReconnectCursorStore();
+  const {
+    clear: clearLastReceivedSeqMap,
+    getSeqMap: getLastReceivedSeqMap,
+    hasState: hasReconnectState,
+    remove: removeLastReceivedSeq,
+    trackEvent: trackIncomingEvent,
+    trackReconnectData,
+  } = reconnectCursor;
   let reconnecting = false;
   let reconnectResolve = null;
   let reconnectReject = null;
   let reconnectTimeout = null;
   let liveEventSubscriber = null;
-  const pendingJsonRequests = new Map();
-  const socketHandlerStores = new WeakMap();
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
+  const commandRequests = createWebSocketCommandRequests({
+    getActiveSocket: () => getActiveSocket(),
+    timeoutMs: RECONNECT_TIMEOUT_MS,
+    translateText,
+  });
+  const { register: registerSocketHandlers } = createSocketHandlerRegistry();
 
   function nextRequestId(kind = "command") {
     protocolRequestSerial += 1;
     return `${kind}:${Date.now()}:${protocolRequestSerial}`;
   }
 
-  function registerSocketHandlers(socket, owner, handlers = {}) {
-    if (!socket || !owner) return () => {};
-    let store = socketHandlerStores.get(socket);
-    if (!store) {
-      store = new Map();
-      socketHandlerStores.set(socket, store);
-      for (const eventName of ["open", "message", "error", "close"]) {
-        socket[`on${eventName}`] = (event) => {
-          for (const subscriber of [...store.values()]) {
-            subscriber?.[eventName]?.(event);
-          }
-        };
-      }
-    }
-    store.set(owner, handlers);
-    return () => {
-      if (store.get(owner) === handlers) store.delete(owner);
-    };
-  }
 
-  function rejectPendingJsonRequests(error) {
-    for (const pending of pendingJsonRequests.values()) {
-      clearTimeout(pending.timeout);
-      pending.reject(error);
-    }
-    pendingJsonRequests.clear();
-  }
 
-  function settlePendingJsonRequest(event, data = {}) {
-    const commandId = normalizeTrimmedString(data?.commandId);
-    const pending = commandId ? pendingJsonRequests.get(commandId) : null;
-    if (!pending) return;
-    if (event !== "error" && pending.expectedEvents.size && !pending.expectedEvents.has(event)) return;
-    pendingJsonRequests.delete(commandId);
-    clearTimeout(pending.timeout);
-    if (event === "error") {
-      const error = new Error(data?.error || data?.errorCode || "execution_query_failed");
-      error.event = event;
-      error.data = data;
-      pending.reject(error);
-    } else {
-      pending.resolve({ event, data });
-    }
-  }
+
 
   function normalizeScopeFromPayload(payload = {}) {
     return {
@@ -221,7 +146,7 @@ export function createChatWebSocketClient({
           if (event === StreamEventEnum.DONE || event === StreamEventEnum.USER_STOPPED) {
             removeLastReceivedSeq(data?.dialogProcessId);
           }
-          settlePendingJsonRequest(event, data);
+          commandRequests.settle(event, data);
           if (
             !reconnecting &&
             !activeStreamContext &&
@@ -280,98 +205,7 @@ export function createChatWebSocketClient({
     return stopRequestedTurnScopeId;
   }
 
-  function getLastReceivedSeqMap() {
-    return { ...lastReceivedSeqMap };
-  }
 
-  function clearLastReceivedSeqMap() {
-    lastReceivedSeqMap = {};
-    lastReceivedTurnScopeIdMap = {};
-  }
-
-  function hasReconnectState() {
-    return Object.keys(lastReceivedSeqMap).length > 0;
-  }
-
-  function updateLastReceivedSeq(dialogProcessId, seq, turnScopeId = "") {
-    const dpId = String(dialogProcessId || "").trim();
-    if (!dpId) return;
-    const currentSeq = Number(lastReceivedSeqMap[dpId] || 0);
-    if (Number(seq || 0) > currentSeq) {
-      lastReceivedSeqMap[dpId] = Number(seq);
-    }
-    const normalizedTurnScopeId = String(turnScopeId || "").trim();
-    if (normalizedTurnScopeId) {
-      lastReceivedTurnScopeIdMap[dpId] = normalizedTurnScopeId;
-    }
-  }
-
-  function trackIncomingEvent(data = {}) {
-    const dialogProcessId = String(data?.dialogProcessId || "").trim();
-    const sequence = Number(data?.seq || 0);
-    if (dialogProcessId && sequence > 0) {
-      updateLastReceivedSeq(dialogProcessId, sequence, data?.turnScopeId);
-    }
-  }
-
-  function createStreamEventError(data = {}) {
-    const fallback = normalizeTrimmedString(data?.message || data?.errorCode) ||
-      translateText("infra.websocketStreamError");
-    const error = new Error(normalizeErrorMessage(data?.error, fallback));
-    error.event = StreamEventEnum.ERROR;
-    error.data = data || {};
-    return error;
-  }
-
-  function createStopConfirmationTimeoutError(data = {}) {
-    const error = new Error(
-      translateText("chat.stopRequestTimeout") ||
-        translateText("infra.websocketStreamError") ||
-        "Stop request timed out before backend confirmation",
-    );
-    error.event = "stop_confirmation_timeout";
-    error.code = "STOP_CONFIRMATION_TIMEOUT";
-    error.data = {
-      error: error.message,
-      ...(data || {}),
-    };
-    return error;
-  }
-
-  function trackReconnectData(data = {}) {
-    const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
-    for (const sessionEntry of sessions) {
-      const dialogProcesses = Array.isArray(sessionEntry?.dialogProcesses)
-        ? sessionEntry.dialogProcesses
-        : [];
-      for (const dialogProcess of dialogProcesses) {
-        const dialogProcessId = String(dialogProcess?.dialogProcessId || "").trim();
-        const messages = Array.isArray(dialogProcess?.messages)
-          ? dialogProcess.messages
-          : [];
-        for (const envelope of messages) {
-          const event = String(envelope?.event || "").trim();
-          const eventData =
-            envelope?.data && typeof envelope.data === "object" ? envelope.data : {};
-          trackIncomingEvent({
-            ...eventData,
-            dialogProcessId: String(eventData?.dialogProcessId || dialogProcessId || "").trim(),
-          });
-          if (event === StreamEventEnum.DONE || event === StreamEventEnum.USER_STOPPED) {
-            removeLastReceivedSeq(dialogProcessId || eventData?.dialogProcessId || "");
-          }
-        }
-      }
-    }
-  }
-
-  function removeLastReceivedSeq(dialogProcessId) {
-    const dpId = String(dialogProcessId || "").trim();
-    if (dpId) {
-      delete lastReceivedSeqMap[dpId];
-      delete lastReceivedTurnScopeIdMap[dpId];
-    }
-  }
 
   function connect() {
     const attempt = transport.acquire();
@@ -567,7 +401,7 @@ export function createChatWebSocketClient({
             const eventMatchesCurrentStream = isEventForStreamScope(data, payload);
             const eventCanSettleCurrentStream = canSettleStreamForEvent(data, payload);
             if (event === StreamEventEnum.ERROR && eventMatchesCurrentStream) {
-              finalize(() => reject(createStreamEventError(data)));
+              finalize(() => reject(createStreamEventError(data, translateText)));
               return;
             }
             if (event === StreamEventEnum.DONE && eventCanSettleCurrentStream) {
@@ -655,7 +489,7 @@ export function createChatWebSocketClient({
         const rejectFn = reconnectReject;
         reconnectReject = null;
         reconnectResolve = null;
-        if (rejectRequests) rejectPendingJsonRequests(error);
+        if (rejectRequests) commandRequests.rejectAll(error);
         if (closeSocket) {
           try { ws.close(1011, "reconnect_failed"); } catch {}
         }
@@ -672,8 +506,8 @@ export function createChatWebSocketClient({
           ws.send(JSON.stringify({
             action: "reconnect",
             requestId,
-            lastReceivedSeqMap: { ...lastReceivedSeqMap },
-            lastReceivedTurnScopeIdMap: { ...lastReceivedTurnScopeIdMap },
+            lastReceivedSeqMap: reconnectCursor.getSeqMap(),
+            lastReceivedTurnScopeIdMap: reconnectCursor.getTurnScopeIdMap(),
             currentTurnScopeId: String(activeStreamContext?.scope?.turnScopeId || "").trim(),
             currentSessionId: String(currentSessionId || "").trim(),
             userId: String(userId || "").trim(),
@@ -741,7 +575,7 @@ export function createChatWebSocketClient({
               requestIdMatchesReconnect: normalizeTrimmedString(data?.requestId) === requestId,
             });
           }
-          settlePendingJsonRequest(event, data);
+          commandRequests.settle(event, data);
         } catch (error) {
           failReconnect(error, { closeSocket: true });
         }
@@ -815,7 +649,7 @@ export function createChatWebSocketClient({
           sessionId: stopScope.sessionId,
           dialogProcessId: stopScope.dialogProcessId,
           turnScopeId: stopScope.turnScopeId,
-        }));
+        }, translateText));
       }
     };
 
@@ -844,44 +678,12 @@ export function createChatWebSocketClient({
     return false;
   }
 
-  function sendJson(payload = {}) {
-    const ws = getActiveSocket();
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      throw new Error(translateText("infra.interactionChannelUnavailable"));
-    }
-    ws.send(JSON.stringify(payload || {}));
-  }
-
-  function requestJson(payload = {}, { expectedEvents = [], timeoutMs = RECONNECT_TIMEOUT_MS } = {}) {
-    const commandId = normalizeTrimmedString(payload?.commandId);
-    if (!commandId) return Promise.reject(new Error("commandId is required"));
-    if (pendingJsonRequests.has(commandId)) {
-      return Promise.reject(new Error("commandId request already pending"));
-    }
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        pendingJsonRequests.delete(commandId);
-        reject(new Error(translateText("infra.websocketRequestTimeout") || "websocket_request_timeout"));
-      }, Number(timeoutMs) > 0 ? Number(timeoutMs) : RECONNECT_TIMEOUT_MS);
-      pendingJsonRequests.set(commandId, {
-        resolve,
-        reject,
-        timeout,
-        expectedEvents: new Set((Array.isArray(expectedEvents) ? expectedEvents : [expectedEvents]).filter(Boolean)),
-      });
-      try {
-        sendJson(payload);
-      } catch (error) {
-        clearTimeout(timeout);
-        pendingJsonRequests.delete(commandId);
-        reject(error);
-      }
-    });
-  }
+  const sendJson = commandRequests.sendJson;
+  const requestJson = commandRequests.requestJson;
 
   function dispose() {
     clearTimers();
-    rejectPendingJsonRequests(new Error("websocket_client_disposed"));
+    commandRequests.rejectAll(new Error("websocket_client_disposed"));
     transport.dispose();
     resolveCurrentStream = null;
     activeStreamContext = null;

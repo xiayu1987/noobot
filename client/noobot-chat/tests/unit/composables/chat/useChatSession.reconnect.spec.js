@@ -9,22 +9,22 @@ import {
   sessionLogClientMock,
   wsClientMock,
 } from "./useChatSession.test-helpers.js";
-import { useChatSession } from "../../../../src/composables/chat/useChatSession";
+import { useChatSession } from "../../../../src/composables/chat/useChatSession.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref, toRef } from "vue";
-import { useChatStore } from "../../../../src/shared/stores/useChatStore";
-import { classifyRealtimeLog } from "../../../../src/app/state/sessionMessageState";
-import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger";
-import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
-import { selectToolTimeline, selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
-import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
+import { useChatStore } from "../../../../src/shared/stores/useChatStore.js";
+import { classifyRealtimeLog } from "../../../../src/app/state/sessionMessageState.js";
+import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger.js";
+import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { selectToolTimeline, selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline.js";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline.js";
 import {
   BackendChannelState,
   FrontendRunState,
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine";
-import { confirmTurnRuntimeDeletion } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../../../src/composables/chat/sessionRunStateMachine.js";
+import { confirmTurnRuntimeDeletion } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
     setActivePinia(createPinia());

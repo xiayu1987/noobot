@@ -9,12 +9,12 @@ import {
   makeSession,
   assistantMessage,
   emitChannelState,
-} from "./helpers/useChatEngineHarness";
+} from "./helpers/useChatEngineHarness.js";
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../src/shared/constants/chatConstants";
-import { isTurnRuntimeDeleted } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../../../src/shared/constants/chatConstants.js";
+import { isTurnRuntimeDeleted } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 describe("useChatEngine.resend scoped pruning", () => {
   it("resendMonotonicMessage keeps edited content when reusing a stale user message object", async () => {

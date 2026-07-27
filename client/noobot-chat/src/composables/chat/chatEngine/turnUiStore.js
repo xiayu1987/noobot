@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { reactive } from "vue";
-import { createTurnKey, parseTurnKey, resolveTurnIdentity } from "./turnIdentity";
+import { createTurnKey, parseTurnKey, resolveTurnIdentity } from "./turnIdentity.js";
 
 const states = reactive(Object.create(null));
 

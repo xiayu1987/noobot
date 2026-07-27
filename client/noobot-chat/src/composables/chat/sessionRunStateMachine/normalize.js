@@ -8,7 +8,7 @@ import {
   FrontendRunState,
   SESSION_RUN_TRANSITION_RULE,
   SESSION_RUN_TRANSITION_TABLE,
-} from "./constants";
+} from "./constants.js";
 
 export function trim(value = "") {
   return String(value || "").trim();

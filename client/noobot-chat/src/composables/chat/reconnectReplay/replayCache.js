@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { _trimStr } from "./utils";
+import { _trimStr } from "./utils.js";
 import {
   createTurnKey,
   parseTurnKey,
   resolveTurnIdentity,
-} from "../chatEngine/turnIdentity";
+} from "../chatEngine/turnIdentity.js";
 
 export function normalizeReplayCacheKey(dialogProcessId = "", sessionId = "", turnScopeId = "") {
   const turnKey = createTurnKey({ sessionId, turnScopeId });

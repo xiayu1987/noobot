@@ -8,8 +8,8 @@ import {
   getMessageSessionId,
   getMessageTurnScopeId,
   normalizeTurnScopeIdKey,
-} from "../../infra/messageIdentity";
-import { isTurnRuntimeDeleted } from "../sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../infra/messageIdentity.js";
+import { isTurnRuntimeDeleted } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 function text(value = "") {
   return String(value || "").trim();

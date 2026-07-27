@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { watch } from "vue";
-import { getMessageTurnScopeId } from "../../infra/messageIdentity";
-import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
-import { isAuthoritativeTerminalState, isLegacyTerminalDiscoveryState } from "../sessionRunStateMachine";
-import { sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
+import { getMessageTurnScopeId } from "../../infra/messageIdentity.js";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger.js";
+import { isAuthoritativeTerminalState, isLegacyTerminalDiscoveryState } from "../sessionRunStateMachine.js";
+import { sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 export function installSessionLifecycleHydration({ sessions, activeSessionId, chatStore, scheduleTerminalResolution }) {
   function hydrateSessionLifecycle(sessionItem) {

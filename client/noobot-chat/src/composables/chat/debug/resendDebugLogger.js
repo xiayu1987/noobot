@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { getMessageRuntimeChannelState } from "../sessionRunStateMachine";
+import { getMessageRuntimeChannelState } from "../sessionRunStateMachine.js";
 
 let sessionLogSink = null;
 

@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 import {
   buildDialogProcessParentMap,
   flattenSessionMessages,
   mergeAttachments,
   resolveRootDialogProcessIdByChain,
-} from "../../infra/dialogProcessChain";
+} from "../../infra/dialogProcessChain.js";
 import {
   buildMessageIdentityKey,
   canUseTurnScopedAssets,
@@ -21,29 +21,29 @@ import {
   getMessageTurnScopeIdKey,
   isAssistantWithoutTurnScope,
   normalizeTurnScopeIdKey,
-} from "../../infra/messageIdentity";
-import { getMessageAttachments } from "../../infra/messageModel";
+} from "../../infra/messageIdentity.js";
+import { getMessageAttachments } from "../../infra/messageModel.js";
 import {
   buildToolTimelineFromLegacyLogs,
   countCompletedToolAttachments,
   fillMissingToolTimelineFacets,
-} from "../chatEngine/toolTimeline";
-import { adaptLegacyMessageTimelines } from "../chatEngine/legacyTimelineAdapter";
+} from "../chatEngine/toolTimeline.js";
+import { adaptLegacyMessageTimelines } from "../chatEngine/legacyTimelineAdapter.js";
 import {
   getMessageRuntimeChannelState,
   isMessageInFlightAssistant,
   resolveSessionRunMessageRuntimeView,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
-} from "../sessionRunStateMachine";
-import { selectTurnMessageRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry";
+} from "../sessionRunStateMachine.js";
+import { selectTurnMessageRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 import {
   logResendDebug,
   summarizeDebugMessage,
-} from "../debug/resendDebugLogger";
+} from "../debug/resendDebugLogger.js";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
-} from "../debug/stateMachineLogger";
+} from "../debug/stateMachineLogger.js";
 
 const TURN_STATUS_PLACEHOLDER_STATES = new Set([
   "user_stopped",

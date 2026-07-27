@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../../shared/constants/chatConstants";
-import { BackendChannelState } from "../sessionRunStateMachine";
-import { normalizeReplayCacheKey } from "./replayCache";
-import { _trimStr } from "./utils";
-import { normalizeTurnTransportEnvelope } from "../chatEngine/turnTransportEnvelope";
+import { StreamEventEnum } from "../../../shared/constants/chatConstants.js";
+import { BackendChannelState } from "../sessionRunStateMachine.js";
+import { normalizeReplayCacheKey } from "./replayCache.js";
+import { _trimStr } from "./utils.js";
+import { normalizeTurnTransportEnvelope } from "../chatEngine/turnTransportEnvelope.js";
 
 const WORKFLOW_RUNTIME_EVENT_NAMES = new Set([
   "workflow_planning_message_prepared",

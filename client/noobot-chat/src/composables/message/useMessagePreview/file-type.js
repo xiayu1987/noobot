@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveParsedResultAccessMeta } from "../../../services/api/attachmentAccess";
+import { resolveParsedResultAccessMeta } from "../../../services/api/attachmentAccess.js";
 import {
   MARKDOWN_EXTS,
   IMAGE_EXTS,
@@ -11,7 +11,7 @@ import {
   OFFICE_EXTS,
   MARKDOWN_MIMES,
   NON_IMAGE_PREVIEW_MAX_BYTES,
-} from "./constants";
+} from "./constants.js";
 
 export function getFileExtension(fileName = "") {
   const normalized = String(fileName || "").trim().toLowerCase();

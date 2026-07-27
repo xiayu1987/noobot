@@ -10,7 +10,7 @@ import {
   normalizeChatMessageNavigatorAnchor,
   openChatMessageNavigator,
   selectChatMessageNavigatorItem,
-} from "../../../src/app/state/chatMessageNavigatorState";
+} from "../../../src/app/state/chatMessageNavigatorState.js";
 
 function ref(value) {
   return { value };

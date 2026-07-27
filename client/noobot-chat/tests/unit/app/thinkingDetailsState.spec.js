@@ -11,7 +11,7 @@ import {
   getThinkingDetailsTitle,
   resolveFallbackThinkingDetailsPayload,
   resolveThinkingDetailsPanelPayload,
-} from "../../../src/app/state/thinkingDetailsState";
+} from "../../../src/app/state/thinkingDetailsState.js";
 
 describe("thinking details state", () => {
   it("counts the canonical tool timeline before other thinking sources", () => {

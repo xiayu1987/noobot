@@ -16,7 +16,7 @@ import {
 } from "@element-plus/icons-vue";
 import noobotLogo from "../../shared/assets/noobot.svg";
 import SessionListPanel from "./SessionListPanel.vue";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 
 const props = defineProps({
   sidebarCollapsed: { type: Boolean, default: false },

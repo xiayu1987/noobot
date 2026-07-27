@@ -3,15 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
-import { normalizeTrimmedString } from "./utils";
-import { resolveSessionRunMessageRuntimeView } from "../sessionRunStateMachine";
-import { selectTurnMessageRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../infra/messageIdentity.js";
+import { normalizeTrimmedString } from "./utils.js";
+import { resolveSessionRunMessageRuntimeView } from "../sessionRunStateMachine.js";
+import { selectTurnMessageRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 export const SESSION_DETAIL_APPLY_MODE = Object.freeze({
   AUTO: "auto",

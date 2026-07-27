@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants";
-import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
-import { shouldProjectMainSessionEvent } from "../chatEngine/sendFlow";
-import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../chatEngine/turnProjectionStore";
-import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
-import { isTurnRuntimeDeleted, resolveSessionTurnRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry";
+import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants.js";
+import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity.js";
+import { shouldProjectMainSessionEvent } from "../chatEngine/sendFlow.js";
+import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../chatEngine/turnProjectionStore.js";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger.js";
+import { isTurnRuntimeDeleted, resolveSessionTurnRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 export function createReconnectCoordinator({
   activeSession, activeSessionId, turnRuntimeRegistry, userId, chatWebSocketClient,

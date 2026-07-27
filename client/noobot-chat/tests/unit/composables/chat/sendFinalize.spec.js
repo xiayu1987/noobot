@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { applyStopRequestedState } from "../../../../src/composables/chat/chatEngine/sendFinalize";
-import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
+import { applyStopRequestedState } from "../../../../src/composables/chat/chatEngine/sendFinalize.js";
+import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
 
 describe("sendFinalize", () => {
   it("applies the runtime stop state without mutating persisted message state", () => {

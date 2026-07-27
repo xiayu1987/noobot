@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { nextTick, watch } from "vue";
-import { PSEUDO_PANEL, usePseudoRoute } from "../composables/infra/usePseudoRoute";
+import { PSEUDO_PANEL, usePseudoRoute } from "../composables/infra/usePseudoRoute.js";
 import {
   buildClosePseudoPanelRoute,
   buildPanelPseudoRoute,
   buildPanelVisibilityPseudoRoute,
   buildSessionPseudoRoute,
   resolveActivePseudoPanel as resolveActivePseudoPanelState,
-} from "./payload/appShellRoutePayload";
+} from "./payload/appShellRoutePayload.js";
 
 export { PSEUDO_PANEL };
 

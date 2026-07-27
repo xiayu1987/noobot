@@ -6,17 +6,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
-import { useChatStore } from "../../../../src/shared/stores/useChatStore";
-import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import { useChatStore } from "../../../../src/shared/stores/useChatStore.js";
+import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
 import {
   FrontendRunState,
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine";
+} from "../../../../src/composables/chat/sessionRunStateMachine.js";
 import {
   applyTurnRuntimeEvent,
   selectSessionTurnRuntime,
-} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { mapSummaryToSession } from "../../../../src/composables/chat/chatList/sessionRecords";
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { mapSummaryToSession } from "../../../../src/composables/chat/chatList/sessionRecords.js";
 import {
   createChatSession,
   createSessionFixture,

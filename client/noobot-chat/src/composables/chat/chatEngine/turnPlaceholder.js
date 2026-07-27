@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
+} from "../../infra/messageIdentity.js";
 
 const normalize = (value = "") => String(value || "").trim();
 

@@ -6,7 +6,7 @@
 <script setup>
 import { nextTick, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 
 const props = defineProps({
   request: { type: Object, default: null },

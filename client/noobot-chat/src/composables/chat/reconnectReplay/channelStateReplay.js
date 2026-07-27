@@ -8,24 +8,24 @@ import {
   getInteractionPayloadWaitKey,
   hasPendingInteractionForDialog,
   normalizePendingInteractionPayloads,
-} from "./interactionReplay";
+} from "./interactionReplay.js";
 import {
   isInFlightConversationState,
   isTerminalConversationState,
-} from "./conversationState";
-import { _trimStr } from "./utils";
+} from "./conversationState.js";
+import { _trimStr } from "./utils.js";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
-} from "../sessionRunStateMachine";
-import { selectTurnMessageRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry";
-import { normalizeTurnMeta } from "../../infra/messageIdentity";
-import { normalizeTimePair } from "../../infra/timeFields";
+} from "../sessionRunStateMachine.js";
+import { selectTurnMessageRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
+import { normalizeTurnMeta } from "../../infra/messageIdentity.js";
+import { normalizeTimePair } from "../../infra/timeFields.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
-import { createTurnObservation } from "../chatEngine/turnObservation";
-import { createTurnKey } from "../chatEngine/turnIdentity";
+import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger.js";
+import { createTurnObservation } from "../chatEngine/turnObservation.js";
+import { createTurnKey } from "../chatEngine/turnIdentity.js";
 
 
 export function emitSyntheticReconnectErrorConversationState({

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { frontendConfig } from "../../shared/config/frontendConfig";
-import { nowMs } from "./timeFields";
+import { frontendConfig } from "../../shared/config/frontendConfig.js";
+import { nowMs } from "./timeFields.js";
 
 export function useReconnect({
   connected,

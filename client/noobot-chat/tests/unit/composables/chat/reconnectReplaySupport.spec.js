@@ -8,11 +8,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine";
-import { disposeReconnectReplayTimers } from "../../../../src/composables/chat/reconnectReplay/cleanup";
-import { scheduleCacheExpiredSessionRefresh } from "../../../../src/composables/chat/reconnectReplay/cacheExpiredRefresh";
-import { renderActiveSessionBeforeReplay } from "../../../../src/composables/chat/reconnectReplay/hydrationReplay";
-import { createReconnectReplayPublicApi } from "../../../../src/composables/chat/reconnectReplay/publicApi";
+} from "../../../../src/composables/chat/sessionRunStateMachine.js";
+import { disposeReconnectReplayTimers } from "../../../../src/composables/chat/reconnectReplay/cleanup.js";
+import { scheduleCacheExpiredSessionRefresh } from "../../../../src/composables/chat/reconnectReplay/cacheExpiredRefresh.js";
+import { renderActiveSessionBeforeReplay } from "../../../../src/composables/chat/reconnectReplay/hydrationReplay.js";
+import { createReconnectReplayPublicApi } from "../../../../src/composables/chat/reconnectReplay/publicApi.js";
 
 describe("reconnectReplay support modules", () => {
   it("exposes test internals only in test mode", () => {

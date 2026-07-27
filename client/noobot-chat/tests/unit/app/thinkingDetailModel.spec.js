@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import fixture from "../../fixtures/thinking-detail/tool-calls-and-results.json";
-import { normalizeThinkingToolLogs } from "../../../src/composables/infra/thinkingDetailModel";
+import { normalizeThinkingToolLogs } from "../../../src/composables/infra/thinkingDetailModel.js";
 
 describe("thinking detail model", () => {
   it("normalizes a real response shape with empty call text", () => {

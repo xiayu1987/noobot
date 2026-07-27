@@ -7,11 +7,11 @@ import { describe, expect, it } from "vitest";
 import {
   mergeMessagePresentationFacets,
   resolveStatusStepPresentation,
-} from "../../../../src/composables/infra/messagePresentation";
+} from "../../../../src/composables/infra/messagePresentation.js";
 import {
   buildViewMessage,
   foldConversationMessages,
-} from "../../../../src/composables/infra/messageModel";
+} from "../../../../src/composables/infra/messageModel.js";
 
 describe("message presentation status steps", () => {
   it("uses an active Turn Runtime ahead of an older child execution projection", () => {

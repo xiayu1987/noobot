@@ -13,7 +13,7 @@ import {
   preferTimelineFact,
   SEQUENCE_DOMAIN,
   TIMELINE_AUTHORITY,
-} from "./timelineFact";
+} from "./timelineFact.js";
 
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);

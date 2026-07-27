@@ -6,8 +6,8 @@
 import {
   applyTurnRuntimeEvent,
   applyTurnTerminalResolution,
-} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { SESSION_RUN_EVENT } from "../../../../../src/composables/chat/sessionRunStateMachine/constants";
+} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT } from "../../../../../src/composables/chat/sessionRunStateMachine/constants.js";
 import { createTurnTerminalResolution } from "../../../../../../../shared/turn-lifecycle-protocol.mjs";
 
 export function sendStart(registry, { sessionId, turnScopeId, seq = 1 }) {

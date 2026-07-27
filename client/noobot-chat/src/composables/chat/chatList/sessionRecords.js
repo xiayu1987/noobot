@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowIso } from "../../infra/timeFields";
-import { findVisibleLastMessage, isHarnessInjectedMessage } from "../../infra/messageModel";
+import { nowIso } from "../../infra/timeFields.js";
+import { findVisibleLastMessage, isHarnessInjectedMessage } from "../../infra/messageModel.js";
 
 export function createLocalSessionItem({ id, title, createConnectorPanelState }) {
   return {

@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../shared/constants/chatConstants";
-import { getMessageRole } from "../../composables/infra/messageIdentity";
+import { RoleEnum } from "../../shared/constants/chatConstants.js";
+import { getMessageRole } from "../../composables/infra/messageIdentity.js";
 
 export function normalizeChatMessageNavContent(messageItem = {}) {
   return String(messageItem?.content || messageItem?.text || "")

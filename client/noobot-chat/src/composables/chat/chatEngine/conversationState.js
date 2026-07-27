@@ -3,39 +3,39 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants.js";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
   resolveConnectorConnectedPayload,
-} from "../interactionPayload";
+} from "../interactionPayload.js";
 import {
   isBlankCompatibleSameId,
   isInFlightConversationState,
   isTerminalConversationState,
   normalizePendingInteractionPayloads,
   normalizeTrimmedString,
-} from "./utils";
+} from "./utils.js";
 import {
   BackendChannelState,
   FrontendRunState,
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
   getMessageRuntimeChannelState,
-} from "../sessionRunStateMachine";
+} from "../sessionRunStateMachine.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
   normalizeTurnMeta,
-} from "../../infra/messageIdentity";
+} from "../../infra/messageIdentity.js";
 import {
   normalizeTimePair,
   nowIso,
   nowMs,
   parseTimeMs,
-} from "../../infra/timeFields";
-import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
+} from "../../infra/timeFields.js";
+import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger.js";
 
 function parseThinkingTimingMs(value) {
   return parseTimeMs(value);

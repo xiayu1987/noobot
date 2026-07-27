@@ -7,7 +7,7 @@
 import {
   getMessageRuntimeChannelState,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
-} from "../sessionRunStateMachine";
+} from "../sessionRunStateMachine.js";
 
 let sessionLogSink = null;
 

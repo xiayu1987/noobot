@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../../shared/constants/chatConstants";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
-import { normalizeTrimmedString } from "./utils";
-import { applyLatestSessionVersion, getCurrentSessionVersion, isNewerSessionVersion } from "./sessionVersionManager";
+import { StreamEventEnum } from "../../../shared/constants/chatConstants.js";
+import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
+import { normalizeTrimmedString } from "./utils.js";
+import { applyLatestSessionVersion, getCurrentSessionVersion, isNewerSessionVersion } from "./sessionVersionManager.js";
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
   const { activeSession, sessionId, upsertSubSessionEvent } = context;

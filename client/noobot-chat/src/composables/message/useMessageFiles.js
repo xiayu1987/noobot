@@ -6,7 +6,7 @@
 import { computed } from "vue";
 import {
   mergeAttachments,
-} from "../infra/dialogProcessChain";
+} from "../infra/dialogProcessChain.js";
 import {
   getMessageRole,
   getMessageSessionId,
@@ -16,16 +16,16 @@ import {
   isSameMessageRound,
   normalizeTurnMeta,
   shouldCollectAttachmentsFromMessage,
-} from "../infra/messageIdentity";
-import { getMessageAttachments as resolveRenderableMessageAttachments } from "../infra/messageModel";
+} from "../infra/messageIdentity.js";
+import { getMessageAttachments as resolveRenderableMessageAttachments } from "../infra/messageModel.js";
 import {
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
-} from "../chat/sessionRunStateMachine";
+} from "../chat/sessionRunStateMachine.js";
 import {
   selectCompletedToolArtifacts,
-} from "../chat/chatEngine/toolTimeline";
-import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
-import { logStateMachineDebug } from "../chat/debug/stateMachineLogger";
+} from "../chat/chatEngine/toolTimeline.js";
+import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter.js";
+import { logStateMachineDebug } from "../chat/debug/stateMachineLogger.js";
 
 function tryParseJsonContent(content = "") {
   try {

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { useMessageFiles } from "../../../../../src/composables/message/useMessageFiles";
+import { useMessageFiles } from "../../../../../src/composables/message/useMessageFiles.js";
 
 export function createMessageFiles(options) {
   return useMessageFiles({

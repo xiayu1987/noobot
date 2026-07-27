@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { createMessageFiles } from "./helpers/useMessageFiles-helper";
+import { createMessageFiles } from "./helpers/useMessageFiles-helper.js";
 
 describe("useMessageFiles path parsing", () => {
   it("recognizes markdown file path without trailing full-width status suffix", () => {

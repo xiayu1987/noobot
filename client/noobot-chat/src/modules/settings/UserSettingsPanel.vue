@@ -13,8 +13,8 @@ import {
   getTemplateTreeApi,
   putRegularUsersApi,
   putTemplateFileApi,
-} from "../../services/api/chatApi";
-import { useLocale } from "../../shared/i18n/useLocale";
+} from "../../services/api/chatApi.js";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 import {
   SettingsActionGroup,
   SettingsJsonEditor,
@@ -22,7 +22,7 @@ import {
   SettingsTreeActionButton,
   SettingsWorkspaceLayout,
   SettingsWorkspacePanel,
-} from "./components";
+} from "./components/index.js";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },

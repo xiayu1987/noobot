@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, watch } from "vue";
-import { buildViewMessage, foldConversationMessages } from "../../../../../client/noobot-chat/src/public/session-domain.js";
-import { buildSessionDetailProjection } from "../../../../../client/noobot-chat/src/public/session-domain.js";
+import { buildViewMessage, foldConversationMessages } from "noobot-chat/plugin-api/session-domain";
+import { buildSessionDetailProjection } from "noobot-chat/plugin-api/session-domain";
 
 export function useWorkflowNodeMessages({
   props,

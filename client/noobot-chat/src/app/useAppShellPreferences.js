@@ -10,7 +10,7 @@ import {
   normalizeAvailablePlugins,
   persistSelectedPlugins as persistSelectedPluginsState,
   syncSelectedPluginsWithConfig as syncSelectedPluginsWithConfigState,
-} from "./state/pluginSelectionState";
+} from "./state/pluginSelectionState.js";
 import {
   hasStoredSelectedModelPreference,
   loadUiPreferences,
@@ -29,7 +29,7 @@ import {
   persistMemoryModelPreference,
   updateSelectedModelPreference,
   updateStreamOutputPreference,
-} from "./storage/uiPreferencesStorage";
+} from "./storage/uiPreferencesStorage.js";
 
 function resolveModelValue(value) {
   return String(value || "").trim();

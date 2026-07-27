@@ -6,15 +6,15 @@
 <script setup>
 import { computed, ref } from "vue";
 import ChatMessageItem from "../modules/message/ChatMessageItem.vue";
-import { useChatStore } from "../shared/stores/useChatStore";
-import { selectTurnPresentations } from "../composables/chat/chatEngine/turnPresentation";
-import { logWorkflowDiagnostics, summarizeWorkflowMessages } from "../composables/chat/debug/workflowDiagnosticsLogger";
-import { useLocale } from "../shared/i18n/useLocale";
+import { useChatStore } from "../shared/stores/useChatStore.js";
+import { selectTurnPresentations } from "../composables/chat/chatEngine/turnPresentation.js";
+import { logWorkflowDiagnostics, summarizeWorkflowMessages } from "../composables/chat/debug/workflowDiagnosticsLogger.js";
+import { useLocale } from "../shared/i18n/useLocale.js";
 import {
   getMessageSessionId,
   getMessageTurnScopeId,
   getMessageRole,
-} from "../composables/infra/messageIdentity";
+} from "../composables/infra/messageIdentity.js";
 
 defineEmits(["open-thinking-details"]);
 

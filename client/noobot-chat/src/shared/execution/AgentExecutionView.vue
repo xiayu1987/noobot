@@ -5,8 +5,8 @@
 -->
 <script setup>
 import SharedChatMessageItem from "../message/SharedChatMessageItem.vue";
-import { BaseEmptyHint } from "../ui";
-import { getMessageTurnScopeId, normalizeTurnScopeIdKey } from "../../composables/infra/messageIdentity";
+import { BaseEmptyHint } from "../ui/index.js";
+import { getMessageTurnScopeId, normalizeTurnScopeIdKey } from "../../composables/infra/messageIdentity.js";
 
 const props = defineProps({
   executionId: { type: String, required: true },

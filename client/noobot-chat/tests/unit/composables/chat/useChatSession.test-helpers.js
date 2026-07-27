@@ -5,7 +5,7 @@
  */
 import { ref } from "vue";
 import { vi } from "vitest";
-import { useChatSession } from "../../../../src/composables/chat/useChatSession";
+import { useChatSession } from "../../../../src/composables/chat/useChatSession.js";
 
 export const wsClientMock = {
   connect: vi.fn(), dispose: vi.fn(), sendJson: vi.fn(), requestJson: vi.fn(), stream: vi.fn(),

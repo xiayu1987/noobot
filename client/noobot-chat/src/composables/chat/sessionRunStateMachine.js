@@ -19,9 +19,9 @@ export {
   SESSION_RUN_MESSAGE_RUNTIME_REASON,
   SESSION_RUN_TRANSITION_DECISION_REASON,
   SESSION_RUN_TRANSITION_TABLE,
-} from "./sessionRunStateMachine/constants";
-export { resolveEventScope } from "./sessionRunStateMachine/runIdentity";
-export { SESSION_RUN_TRANSITION_GUARDS } from "./sessionRunStateMachine/transitionDecision";
+} from "./sessionRunStateMachine/constants.js";
+export { resolveEventScope } from "./sessionRunStateMachine/runIdentity.js";
+export { SESSION_RUN_TRANSITION_GUARDS } from "./sessionRunStateMachine/transitionDecision.js";
 export {
   createInitialSessionRunState,
   evaluateSessionRunState,
@@ -29,7 +29,7 @@ export {
   isStopLockedSessionRunState,
   isTerminalSessionRunState,
   normalizeSessionRunEvent,
-} from "./sessionRunStateMachine/core";
+} from "./sessionRunStateMachine/core.js";
 export {
   getMessageRuntimeChannelState,
   isMessageInFlightAssistant,
@@ -39,9 +39,9 @@ export {
   resolveSessionRunMessageRuntimeView,
   resolveTurnRuntimeView,
   resolveSessionRunStateForMessage,
-} from "./sessionRunStateMachine/messageRuntime";
+} from "./sessionRunStateMachine/messageRuntime.js";
 export {
   clearRememberedStopRequests,
   rememberStopRequestedEvent,
   resolveRememberedStopRequestedEvent,
-} from "./sessionRunStateMachine/stopRequests";
+} from "./sessionRunStateMachine/stopRequests.js";

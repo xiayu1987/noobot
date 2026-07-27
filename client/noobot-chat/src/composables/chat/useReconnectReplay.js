@@ -5,47 +5,47 @@
  */
 import {
   findSessionByAnyId as findSessionByAnyIdInList,
-} from "../infra/sessionIdentity";
+} from "../infra/sessionIdentity.js";
 import {
   findLatestPendingAssistantAfterLastUser,
-} from "../infra/reconnectReplayModel";
-import { RoleEnum } from "../../shared/constants/chatConstants";
-import { getMessageRole } from "../infra/messageIdentity";
+} from "../infra/reconnectReplayModel.js";
+import { RoleEnum } from "../../shared/constants/chatConstants.js";
+import { getMessageRole } from "../infra/messageIdentity.js";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
   resolveConnectorConnectedPayload,
   resolveConnectorStatusPayload,
-} from "./interactionPayload";
-import { mergeAttachments } from "../infra/dialogProcessChain";
-import { terminalResolutionMetadata } from "./terminalResolutionMetadata";
+} from "./interactionPayload.js";
+import { mergeAttachments } from "../infra/dialogProcessChain.js";
+import { terminalResolutionMetadata } from "./terminalResolutionMetadata.js";
 import {
   createReconnectInteractionEnvelopeCallbacks,
   tryAutoResolveReconnectInteraction,
-} from "./reconnectReplay/interactionHandlers";
+} from "./reconnectReplay/interactionHandlers.js";
 import {
   applyReconnectChannelState,
   emitSyntheticReconnectErrorConversationState,
   scheduleMissingInteractionPayloadFailure as scheduleMissingInteractionPayloadFailureWithContext,
-} from "./reconnectReplay/channelStateReplay";
-import { applyReconnectDataReplay } from "./reconnectReplay/reconnectDataReplay";
-import { applyReconnectEventReplay } from "./reconnectReplay/reconnectEventReplay";
-import { scheduleCacheExpiredSessionRefresh as scheduleCacheExpiredSessionRefreshWithContext } from "./reconnectReplay/cacheExpiredRefresh";
+} from "./reconnectReplay/channelStateReplay.js";
+import { applyReconnectDataReplay } from "./reconnectReplay/reconnectDataReplay.js";
+import { applyReconnectEventReplay } from "./reconnectReplay/reconnectEventReplay.js";
+import { scheduleCacheExpiredSessionRefresh as scheduleCacheExpiredSessionRefreshWithContext } from "./reconnectReplay/cacheExpiredRefresh.js";
 import {
   _ensureArray,
   _isAssistantRole,
   _matchesDialogProcessId,
-} from "./reconnectReplay/utils";
-import { createReconnectReplayContext } from "./reconnectReplay/context";
+} from "./reconnectReplay/utils.js";
+import { createReconnectReplayContext } from "./reconnectReplay/context.js";
 import {
   ensureReconnectSessionActive as ensureReconnectSessionActiveWithContext,
   isCurrentActiveSession as isCurrentActiveSessionWithContext,
-} from "./reconnectReplay/sessionActivation";
+} from "./reconnectReplay/sessionActivation.js";
 import {
   applyReconnectMessagesToActiveSessionReplay,
   consumeReconnectReplayCacheForSession,
   markReconnectSequenceApplied as markReconnectSequenceAppliedInConsumer,
-} from "./reconnectReplay/replayCacheConsumer";
+} from "./reconnectReplay/replayCacheConsumer.js";
 import {
   applyAssistantFailureState as applyAssistantFailureStateWithContext,
   applyFoldedMessagesForDialogProcess as applyFoldedMessagesForDialogProcessWithContext,
@@ -57,19 +57,19 @@ import {
   hasAssistantMessageWithContent as hasAssistantMessageWithContentWithContext,
   mergeAssistantAttachments as mergeAssistantAttachmentsWithContext,
   resolveReconnectTargetAssistantMessage as resolveReconnectTargetAssistantMessageWithContext,
-} from "./reconnectReplay/messageReplay";
+} from "./reconnectReplay/messageReplay.js";
 import {
   applyDoneMessagesFromReconnect as applyDoneMessagesFromReconnectWithContext,
-} from "./reconnectReplay/doneReplay";
-import { createReconnectReplayPublicApi } from "./reconnectReplay/publicApi";
-import { registerReconnectReplayLifecycleCleanup } from "./reconnectReplay/lifecycle";
+} from "./reconnectReplay/doneReplay.js";
+import { createReconnectReplayPublicApi } from "./reconnectReplay/publicApi.js";
+import { registerReconnectReplayLifecycleCleanup } from "./reconnectReplay/lifecycle.js";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
-} from "./sessionRunStateMachine";
-import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry";
-import { finalizeDoneTurnPresentation } from "./chatEngine/sessionFinalize";
-import { logWorkflowDiagnostics } from "./debug/workflowDiagnosticsLogger";
+} from "./sessionRunStateMachine.js";
+import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry.js";
+import { finalizeDoneTurnPresentation } from "./chatEngine/sessionFinalize.js";
+import { logWorkflowDiagnostics } from "./debug/workflowDiagnosticsLogger.js";
 
 export function useReconnectReplay({
   sessions,

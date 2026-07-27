@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { PSEUDO_PANEL } from "./useAppShellPseudoRoute";
-import { updateDrawerModelVisibility } from "./appShellEventHandlers";
+import { PSEUDO_PANEL } from "./useAppShellPseudoRoute.js";
+import { updateDrawerModelVisibility } from "./appShellEventHandlers.js";
 
 export function useAppShellPanelActions({
   activeSessionId,

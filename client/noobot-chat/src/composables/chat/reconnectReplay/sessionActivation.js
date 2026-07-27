@@ -6,8 +6,8 @@
 import {
   findSessionByAnyId as findSessionByAnyIdInList,
   isCurrentActiveSessionId,
-} from "../../infra/sessionIdentity";
-import { _trimStr } from "./utils";
+} from "../../infra/sessionIdentity.js";
+import { _trimStr } from "./utils.js";
 
 export function isCurrentActiveSession({
   sessionId = "",

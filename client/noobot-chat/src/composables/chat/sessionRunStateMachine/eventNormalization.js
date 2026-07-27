@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeTurnMeta } from "../../infra/messageIdentity";
-import { nowMs } from "../../infra/timeFields";
-import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants";
-import { normalizeState, trim } from "./normalize";
+import { normalizeTurnMeta } from "../../infra/messageIdentity.js";
+import { nowMs } from "../../infra/timeFields.js";
+import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
+import { normalizeState, trim } from "./normalize.js";
 
 const LOCAL_EVENT_STATE_BY_TYPE = Object.freeze({
   [SESSION_RUN_EVENT.LOCAL_SEND_STARTED]: FrontendRunState.ACTION_REQUESTING,

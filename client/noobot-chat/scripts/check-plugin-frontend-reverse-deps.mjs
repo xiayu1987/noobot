@@ -5,17 +5,81 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { init, parse } from "es-module-lexer";
 import { clientFilePath as path } from "../../shared/path-resolver.js";
 
-const projectRoot = path.resolve(process.cwd());
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(scriptDir, "..");
 const repoRoot = path.resolve(projectRoot, "../..");
+const clientSourceRoot = path.resolve(projectRoot, "src");
 const pluginRoot = path.resolve(repoRoot, "plugin");
+const targetExtensions = new Set([".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"]);
+const ignoredDirectories = new Set(["build", "coverage", "dist", "node_modules"]);
+export const allowedPluginApiSpecifiers = new Set([
+  "noobot-chat/plugin-api",
+  "noobot-chat/plugin-api/ui",
+  "noobot-chat/plugin-api/chat-ui",
+  "noobot-chat/plugin-api/locale",
+  "noobot-chat/plugin-api/attachment-domain",
+  "noobot-chat/plugin-api/session-domain",
+]);
 
-const TARGET_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".vue", ".ts"]);
-const CLIENT_SOURCE_MARKER = "client/noobot-chat/src/";
-const PUBLIC_SOURCE_MARKER = `${CLIENT_SOURCE_MARKER}public/`;
+function isInside(parent, candidate) {
+  const relative = path.relative(parent, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
 
-async function walkFiles(rootDir = "") {
+function stripResourceSuffix(specifier) {
+  const suffixAt = specifier.search(/[?#]/);
+  return suffixAt < 0 ? specifier : specifier.slice(0, suffixAt);
+}
+
+export function classifyFrontendImport(importer, specifier) {
+  if (typeof specifier !== "string" || !specifier) return null;
+  if (specifier.startsWith("./") || specifier.startsWith("../")) {
+    const target = path.resolve(path.dirname(importer), stripResourceSuffix(specifier));
+    if (isInside(clientSourceRoot, target)) {
+      return "plugin frontend must not import client source by relative file path";
+    }
+    return null;
+  }
+  if (specifier === "noobot-chat" || specifier.startsWith("noobot-chat/")) {
+    if (!allowedPluginApiSpecifiers.has(specifier)) {
+      return "plugin frontend must use an exported noobot-chat/plugin-api subpath";
+    }
+  }
+  return null;
+}
+
+function scriptRegions(filePath, content) {
+  if (!filePath.endsWith(".vue")) return [content];
+  const scripts = [];
+  for (const match of content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)) scripts.push(match[1]);
+  return scripts;
+}
+
+export async function inspectFrontendSource(filePath, content) {
+  await init;
+  const violations = [];
+  for (const script of scriptRegions(filePath, content)) {
+    let imports;
+    try {
+      [imports] = parse(script, filePath);
+    } catch (error) {
+      violations.push({ specifier: "", reason: `module parse failed: ${error.message}` });
+      continue;
+    }
+    for (const moduleImport of imports) {
+      const specifier = moduleImport.n;
+      const reason = classifyFrontendImport(filePath, specifier);
+      if (reason) violations.push({ specifier, reason });
+    }
+  }
+  return violations;
+}
+
+async function walkFiles(rootDir) {
   const output = [];
   let entries = [];
   try {
@@ -24,77 +88,53 @@ async function walkFiles(rootDir = "") {
     return output;
   }
   for (const entry of entries) {
-    const absPath = path.resolve(rootDir, entry.name);
-    if (entry.isDirectory()) {
-      output.push(...(await walkFiles(absPath)));
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    const ext = path.extname(entry.name).toLowerCase();
-    if (!TARGET_EXTENSIONS.has(ext)) continue;
-    output.push(absPath);
+    if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
+    const absolute = path.resolve(rootDir, entry.name);
+    if (entry.isDirectory()) output.push(...(await walkFiles(absolute)));
+    else if (entry.isFile() && targetExtensions.has(path.extname(entry.name).toLowerCase())) output.push(absolute);
   }
   return output;
 }
 
-function findForbiddenHits(content = "") {
-  const hits = [];
-  let offset = 0;
-  while ((offset = content.indexOf(CLIENT_SOURCE_MARKER, offset)) >= 0) {
-    const candidate = content.slice(offset, offset + PUBLIC_SOURCE_MARKER.length);
-    if (candidate !== PUBLIC_SOURCE_MARKER) hits.push(CLIENT_SOURCE_MARKER);
-    offset += CLIENT_SOURCE_MARKER.length;
-  }
-  return [...new Set(hits)];
-}
-
-async function main() {
+export async function checkPluginFrontendBoundaries() {
   let pluginDirs = [];
   try {
     pluginDirs = await fs.readdir(pluginRoot, { withFileTypes: true });
   } catch {
-    console.log("[plugin-frontend-reverse-deps] skip: plugin root not found");
-    return;
+    return [];
   }
   const violations = [];
   for (const dirent of pluginDirs) {
-    if (!dirent?.isDirectory?.()) continue;
+    if (!dirent.isDirectory()) continue;
     const frontendDir = path.resolve(pluginRoot, dirent.name, "frontend");
-    let stat;
-    try {
-      stat = await fs.stat(frontendDir);
-    } catch {
-      continue;
-    }
-    if (!stat.isDirectory()) continue;
-    const files = await walkFiles(frontendDir);
-    for (const filePath of files) {
+    for (const filePath of await walkFiles(frontendDir)) {
       const content = await fs.readFile(filePath, "utf8");
-      const hits = findForbiddenHits(content);
-      if (!hits.length) continue;
-      violations.push({
-        filePath,
-        hits,
-      });
+      for (const violation of await inspectFrontendSource(filePath, content)) {
+        violations.push({ filePath, ...violation });
+      }
     }
   }
+  return violations;
+}
+
+async function main() {
+  const violations = await checkPluginFrontendBoundaries();
   if (!violations.length) {
-    console.log("[plugin-frontend-reverse-deps] ok: no forbidden reverse imports");
+    console.log("[plugin-frontend-boundary] ok: package exports are the only client API boundary");
     return;
   }
-  console.error("[plugin-frontend-reverse-deps] found forbidden reverse imports:");
-  for (const item of violations) {
-    const relativeFile = path.relative(repoRoot, item.filePath).replaceAll("\\", "/");
-    console.error(`- ${relativeFile}`);
-    for (const hit of item.hits) {
-      console.error(`  hit: ${hit}`);
-    }
+  console.error("[plugin-frontend-boundary] found forbidden imports:");
+  for (const { filePath, specifier, reason } of violations) {
+    const relativeFile = path.relative(repoRoot, filePath).replaceAll("\\", "/");
+    console.error(`- ${relativeFile}: ${reason}: ${JSON.stringify(specifier)}`);
   }
   process.exitCode = 1;
 }
 
-main().catch((error) => {
-  console.error("[plugin-frontend-reverse-deps] failed:", error?.message || error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main().catch((error) => {
+    console.error("[plugin-frontend-boundary] failed:", error?.message || error);
+    process.exitCode = 1;
+  });
+}
 

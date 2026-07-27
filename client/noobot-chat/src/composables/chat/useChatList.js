@@ -3,15 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { useLocale } from "../../shared/i18n/useLocale";
-import { createSessionDetailApplicator } from "./chatList/sessionDetailApply";
-import { createSessionDetailRequests } from "./chatList/sessionDetailRequests";
-import { createSessionListActions } from "./chatList/sessionListActions";
-import { createSessionIdentityHelpers } from "./chatList/sessionIdentity";
+import { useLocale } from "../../shared/i18n/useLocale.js";
+import { createSessionDetailApplicator } from "./chatList/sessionDetailApply.js";
+import { createSessionDetailRequests } from "./chatList/sessionDetailRequests.js";
+import { createSessionListActions } from "./chatList/sessionListActions.js";
+import { createSessionIdentityHelpers } from "./chatList/sessionIdentity.js";
 import {
   createLocalSessionItem,
   revokeMessagePreviewUrls,
-} from "./chatList/sessionRecords";
+} from "./chatList/sessionRecords.js";
 
 export function useChatList({
   userId,

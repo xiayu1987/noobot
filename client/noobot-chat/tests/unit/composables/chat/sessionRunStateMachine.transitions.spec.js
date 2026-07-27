@@ -8,12 +8,12 @@ import {
   BackendChannelState,
   FrontendRunState,
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine";
+} from "../../../../src/composables/chat/sessionRunStateMachine.js";
 import {
   deriveTurnCapabilities,
   reduceTurnRuntimeEvent,
   TURN_TRANSITION_REASON,
-} from "../../../../src/composables/chat/sessionRunStateMachine/turnReducer";
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnReducer.js";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/shared/turn-lifecycle-protocol";
 
 const identity = { sessionId: "s1", turnScopeId: "turn-1", dialogProcessId: "dp-1" };

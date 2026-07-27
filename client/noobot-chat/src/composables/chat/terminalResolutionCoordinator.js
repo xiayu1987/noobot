@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveTurnTerminalStateApi } from "../../services/api/chatApi";
-import { SESSION_RUN_EVENT } from "./sessionRunStateMachine/constants";
-import { terminalResolutionMetadata } from "./terminalResolutionMetadata";
+import { resolveTurnTerminalStateApi } from "../../services/api/chatApi.js";
+import { SESSION_RUN_EVENT } from "./sessionRunStateMachine/constants.js";
+import { terminalResolutionMetadata } from "./terminalResolutionMetadata.js";
 
 const TERMINAL_NOTIFICATION_TYPES = new Set([
   "turn.completed",

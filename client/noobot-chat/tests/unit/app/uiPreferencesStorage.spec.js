@@ -25,7 +25,7 @@ import {
   updatePluginModelConfigPreference,
   updateStreamOutputPreference,
   writeStorageValue,
-} from "../../../src/app/storage/uiPreferencesStorage";
+} from "../../../src/app/storage/uiPreferencesStorage.js";
 
 describe("ui preferences storage", () => {
   const storage = new Map();

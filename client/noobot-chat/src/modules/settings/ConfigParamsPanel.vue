@@ -7,8 +7,8 @@
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { Plus } from "@element-plus/icons-vue";
-import { getConfigParamsApi, putConfigParamsApi } from "../../services/api/chatApi";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { getConfigParamsApi, putConfigParamsApi } from "../../services/api/chatApi.js";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 import {
   SettingsActionGroup,
   SettingsJsonEditor,
@@ -16,7 +16,7 @@ import {
   SettingsTreeActionButton,
   SettingsWorkspaceLayout,
   SettingsWorkspacePanel,
-} from "./components";
+} from "./components/index.js";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },

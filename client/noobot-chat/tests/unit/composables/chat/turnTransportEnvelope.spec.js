@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeTurnTransportEnvelope,
   TURN_TRANSPORT_SEQUENCE_DOMAIN,
-} from "../../../../src/composables/chat/chatEngine/turnTransportEnvelope";
+} from "../../../../src/composables/chat/chatEngine/turnTransportEnvelope.js";
 import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/shared/message-event-protocol";
 
 describe("turnTransportEnvelope", () => {

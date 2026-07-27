@@ -3,16 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { StreamEventEnum } from "../../../shared/constants/chatConstants.js";
 import { isMessageEventEnvelope } from "@noobot/shared/message-event-protocol";
-import { getMessageDialogProcessId, getMessageTurnScopeId } from "../../infra/messageIdentity";
-import { nowMs } from "../../infra/timeFields";
+import { getMessageDialogProcessId, getMessageTurnScopeId } from "../../infra/messageIdentity.js";
+import { nowMs } from "../../infra/timeFields.js";
 import {
   resolveSessionTurnRuntime,
   sessionRuntimeId,
   turnRuntimeDisplayState,
-} from "../sessionRunStateMachine/turnRuntimeRegistry";
-import { normalizeTrimmedString } from "./utils";
+} from "../sessionRunStateMachine/turnRuntimeRegistry.js";
+import { normalizeTrimmedString } from "./utils.js";
 
 export function createTurnScopeId() {
   const randomUuid = globalThis?.crypto?.randomUUID?.();

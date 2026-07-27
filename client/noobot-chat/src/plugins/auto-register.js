@@ -3,15 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { externalFrontendPluginEntries } from "./generated/external-entries";
-import { contributeExtension, removePluginExtensions } from "../extensions/extension-registry";
-import { EXTENSION_POINTS } from "../extensions/extension-point-ids";
+import { externalFrontendPluginEntries } from "./generated/external-entries.js";
+import { contributeExtension, removePluginExtensions } from "../extensions/extension-registry.js";
+import { EXTENSION_POINTS } from "../extensions/extension-point-ids.js";
 import {
   getWorkflowSessionDetailApi,
   getWorkflowSessionThinkingDetailApi,
-} from "../services/api/chatApi";
-import { attachmentService } from "../services/attachmentService";
-import { thinkingDetailService } from "../services/thinkingDetailService";
+} from "../services/api/chatApi.js";
+import { attachmentService } from "../services/attachmentService.js";
+import { thinkingDetailService } from "../services/thinkingDetailService.js";
 
 const REQUIRED_FRONTEND_PLUGIN_API_VERSION = "1";
 const pluginAttachmentService = Object.freeze({

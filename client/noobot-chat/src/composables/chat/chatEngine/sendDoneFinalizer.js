@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { finalizeDoneTurnPresentation } from "./sessionFinalize";
-import { logStateMachineDebug, summarizeStateMachineMessage } from "../debug/stateMachineLogger";
+import { finalizeDoneTurnPresentation } from "./sessionFinalize.js";
+import { logStateMachineDebug, summarizeStateMachineMessage } from "../debug/stateMachineLogger.js";
 
 export function createDoneTurnFinalizer({
   activeSession,

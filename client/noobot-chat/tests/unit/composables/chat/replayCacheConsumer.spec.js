@@ -8,10 +8,10 @@ import {
   applyReconnectMessagesToActiveSessionReplay,
   consumeReconnectReplayCacheForSession,
   markReconnectSequenceApplied,
-} from "../../../../src/composables/chat/reconnectReplay/replayCacheConsumer";
-import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
-import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
-import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
+} from "../../../../src/composables/chat/reconnectReplay/replayCacheConsumer.js";
+import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline.js";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline.js";
 
 function createActiveReplayFixture(overrides = {}) {
   const activeSession = {

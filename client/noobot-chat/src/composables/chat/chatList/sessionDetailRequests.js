@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowMs } from "../../infra/timeFields";
-import { findSessionByAnyId as findSessionByAnyIdInList } from "../../infra/sessionIdentity";
-import { normalizeSessionId } from "./sessionIdentity";
+import { nowMs } from "../../infra/timeFields.js";
+import { findSessionByAnyId as findSessionByAnyIdInList } from "../../infra/sessionIdentity.js";
+import { normalizeSessionId } from "./sessionIdentity.js";
 import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
-} from "../debug/workflowDiagnosticsLogger";
+} from "../debug/workflowDiagnosticsLogger.js";
 
 const RECENT_SESSION_DETAIL_REUSE_MS = 2000;
 

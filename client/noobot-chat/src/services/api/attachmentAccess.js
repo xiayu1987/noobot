@@ -8,7 +8,7 @@ import {
   resolveAttachmentId,
   resolveAttachmentSessionId,
   resolveAttachmentSource,
-} from "./chatApi";
+} from "./chatApi.js";
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));

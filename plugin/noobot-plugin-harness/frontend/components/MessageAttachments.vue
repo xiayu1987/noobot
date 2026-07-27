@@ -5,13 +5,13 @@
 -->
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { useLocale } from "../../../../client/noobot-chat/src/public/locale.js";
+import { useLocale } from "noobot-chat/plugin-api/locale";
 import {
   resolveAttachmentAccessMeta,
   resolveBaseName,
   resolveParsedResultAccessMeta,
-} from "../../../../client/noobot-chat/src/public/attachment-domain.js";
-import { BaseAttachmentFileCard, BaseFileCardList } from "../../../../client/noobot-chat/src/public/ui.js";
+} from "noobot-chat/plugin-api/attachment-domain";
+import { BaseAttachmentFileCard, BaseFileCardList } from "noobot-chat/plugin-api/ui";
 
 const props = defineProps({
   attachments: { type: Array, default: () => [] },

@@ -3,9 +3,18 @@
   "private": true,
   "version": "4.1.3",
   "type": "module",
+  "exports": {
+    "./plugin-api": "./src/public/index.js",
+    "./plugin-api/ui": "./src/public/ui.js",
+    "./plugin-api/chat-ui": "./src/public/chat-ui.js",
+    "./plugin-api/locale": "./src/public/locale.js",
+    "./plugin-api/attachment-domain": "./src/public/attachment-domain.js",
+    "./plugin-api/session-domain": "./src/public/session-domain.js"
+  },
   "scripts": {
     "generate:frontend-plugin-entries": "node scripts/generate-frontend-plugin-entries.mjs",
     "check:plugin-frontend-reverse-deps": "node scripts/check-plugin-frontend-reverse-deps.mjs",
+    "test:plugin-frontend-boundary-guard": "node --test scripts/check-plugin-frontend-reverse-deps.test.mjs",
     "prebuild": "npm run -s generate:frontend-plugin-entries",
     "dev": "vite",
     "build": "vite build",
@@ -15,7 +24,7 @@
     "serve:caddy": "bash ./deploy/run-caddy.sh",
     "serve:caddy:restart": "bash ./deploy/restart-caddy.sh",
     "check:i18n-imports": "node ../../scripts/check-i18n-imports.mjs --project=client",
-    "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:plugin-frontend-reverse-deps && npm run -s check:i18n-imports"
+    "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
   },
   "dependencies": {
     "@noobot/shared": "file:../../shared",
@@ -30,6 +39,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.11",
+    "es-module-lexer": "^2.1.0",
     "jsdom": "^29.1.1",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"

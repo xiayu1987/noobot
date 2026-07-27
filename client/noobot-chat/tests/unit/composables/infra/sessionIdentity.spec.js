@@ -9,7 +9,7 @@ import {
   findSessionByAnyId,
   normalizeSessionId,
   promoteSessionIdentityToBackendId,
-} from "../../../../src/composables/infra/sessionIdentity";
+} from "../../../../src/composables/infra/sessionIdentity.js";
 
 describe("sessionIdentity", () => {
   it("normalizeSessionId trims invalid and empty values", () => {

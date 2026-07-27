@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getMessageRole, isAssistantWithoutTurnScope } from "../../composables/infra/messageIdentity";
-import { hasToolTimeline, selectToolTimelineCount } from "../../composables/chat/chatEngine/toolTimeline";
+import { getMessageRole, isAssistantWithoutTurnScope } from "../../composables/infra/messageIdentity.js";
+import { hasToolTimeline, selectToolTimelineCount } from "../../composables/chat/chatEngine/toolTimeline.js";
 
 export function getThinkingDetailsCount(messageItem = {}) {
   if (isAssistantWithoutTurnScope(messageItem)) return 0;

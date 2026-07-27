@@ -5,15 +5,15 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import { createTerminalResolutionCoordinator } from "../../../../src/composables/chat/terminalResolutionCoordinator";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine/constants";
+import { createTerminalResolutionCoordinator } from "../../../../src/composables/chat/terminalResolutionCoordinator.js";
+import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine/constants.js";
 import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 import {
   applyTurnRuntimeEvent,
   applyTurnTerminalResolution,
   createTurnRuntimeRegistryState,
   selectSessionTurnRuntime,
-} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 function response({
   resolved = true,

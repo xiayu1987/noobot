@@ -4,47 +4,47 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { useLocale } from "../i18n/useLocale";
-import { isHarnessInjectedMessage } from "../../composables/infra/messageModel";
+import { useLocale } from "../i18n/useLocale.js";
+import { isHarnessInjectedMessage } from "../../composables/infra/messageModel.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageSessionId,
   getMessageTurnScopeId,
   isAssistantWithoutTurnScope,
-} from "../../composables/infra/messageIdentity";
-import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils";
+} from "../../composables/infra/messageIdentity.js";
+import { sanitizeExecutionLogForDisplay } from "../../composables/chat/chatEngine/utils.js";
 import {
   formatDurationMs,
   nowMs,
   resolveThinkingDurationMs,
   resolveTimeMs,
-} from "../../composables/infra/timeFields";
+} from "../../composables/infra/timeFields.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { logReconnectTimingDebug } from "../../composables/chat/debug/reconnectTimingDebugLogger";
-import { logThinkingReplayDebug } from "../../composables/chat/debug/thinkingReplayDebugLogger";
+import { logReconnectTimingDebug } from "../../composables/chat/debug/reconnectTimingDebugLogger.js";
+import { logThinkingReplayDebug } from "../../composables/chat/debug/thinkingReplayDebugLogger.js";
 import {
   logToolLogWindowDebug,
   summarizeToolLogWindow,
-} from "../../composables/chat/debug/toolLogWindowDebugLogger";
-import { normalizeThinkingToolLogs } from "../../composables/infra/thinkingDetailModel";
+} from "../../composables/chat/debug/toolLogWindowDebugLogger.js";
+import { normalizeThinkingToolLogs } from "../../composables/infra/thinkingDetailModel.js";
 import {
   getCachedThinkingDetail,
   loadThinkingDetail,
   resolveThinkingDetailIdentity,
-} from "./thinkingDetailCache";
+} from "./thinkingDetailCache.js";
 import {
   getTurnUiState,
   setTurnThinkingOpenNames,
   toggleTurnDetailKey,
-} from "../../composables/chat/chatEngine/turnUiStore";
+} from "../../composables/chat/chatEngine/turnUiStore.js";
 import {
   selectToolTimelineCount,
   selectToolTimelineLogs,
-} from "../../composables/chat/chatEngine/toolTimeline";
-import { selectActivityTimelineLogs } from "../../composables/chat/chatEngine/activityTimeline";
-import { adaptLegacyMessageTimelines } from "../../composables/chat/chatEngine/legacyTimelineAdapter";
-import { compareTimelineFacts } from "../../composables/chat/chatEngine/timelineFact";
+} from "../../composables/chat/chatEngine/toolTimeline.js";
+import { selectActivityTimelineLogs } from "../../composables/chat/chatEngine/activityTimeline.js";
+import { adaptLegacyMessageTimelines } from "../../composables/chat/chatEngine/legacyTimelineAdapter.js";
+import { compareTimelineFacts } from "../../composables/chat/chatEngine/timelineFact.js";
 
 export function useThinkingPanel(props, emit) {
   const timelineMessage = (messageItem = {}) => adaptLegacyMessageTimelines(messageItem);

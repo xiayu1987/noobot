@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowMs } from "../../infra/timeFields";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
-import { resolveSessionTurnRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry";
+import { nowMs } from "../../infra/timeFields.js";
+import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
+import { resolveSessionTurnRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 export function createComposerActions({
   composerActionState, turnRuntimeRegistry, resolveActiveSessionIdentity,

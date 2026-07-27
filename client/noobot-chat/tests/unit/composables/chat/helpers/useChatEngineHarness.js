@@ -5,19 +5,19 @@
  */
 import { computed, ref } from "vue";
 import { vi } from "vitest";
-import { useChatEngine } from "../../../../../src/composables/chat/useChatEngine";
-import { createSessionDetailApplicator } from "../../../../../src/composables/chat/chatList/sessionDetailApply";
+import { useChatEngine } from "../../../../../src/composables/chat/useChatEngine.js";
+import { createSessionDetailApplicator } from "../../../../../src/composables/chat/chatList/sessionDetailApply.js";
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../../src/shared/constants/chatConstants";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/composables/chat/sessionRunStateMachine";
+} from "../../../../../src/shared/constants/chatConstants.js";
+import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/composables/chat/sessionRunStateMachine.js";
 import {
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
-} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 const terminalResolutionFromUrl = (url, state = "completed", messages = []) => {
   const match = String(url).match(/\/session\/[^/]+\/([^/]+)\/turns\/([^/]+)\/terminal/);

@@ -8,9 +8,9 @@ import {
   FrontendRunState,
   SESSION_RUN_EVENT,
   isAuthoritativeTerminalState,
-} from "./constants";
-import { normalizeSessionRunEvent } from "./eventNormalization";
-import { deriveTurnCapabilities, isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer";
+} from "./constants.js";
+import { normalizeSessionRunEvent } from "./eventNormalization.js";
+import { deriveTurnCapabilities, isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer.js";
 import {
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleSnapshot,
@@ -18,7 +18,7 @@ import {
 } from "@noobot/shared/turn-lifecycle-protocol";
 import { validateExecutionIdentity } from "@noobot/shared/execution-lifecycle-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { normalizeTurnScopeIdKey } from "../../infra/messageIdentity";
+import { normalizeTurnScopeIdKey } from "../../infra/messageIdentity.js";
 
 export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
 export const DEFAULT_TERMINAL_MAX_AGE_MS = TIME_THRESHOLDS.client.terminalTurnRetentionMs;

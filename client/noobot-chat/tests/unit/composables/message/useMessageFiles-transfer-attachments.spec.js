@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { createMessageFiles } from "./helpers/useMessageFiles-helper";
+import { createMessageFiles } from "./helpers/useMessageFiles-helper.js";
 
 describe("useMessageFiles transfer attachments", () => {
   it("keeps legacy attachment metadata while augmenting display with semantic-transfer fields", () => {

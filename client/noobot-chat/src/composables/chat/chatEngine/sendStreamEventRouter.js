@@ -3,19 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { StreamEventEnum } from "../../../shared/constants/chatConstants.js";
 import { MESSAGE_EVENT_ENVELOPE_KIND } from "@noobot/shared/message-event-protocol";
-import { normalizeTrimmedString } from "./utils";
-import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
-import { normalizeTurnTransportEnvelope } from "./turnTransportEnvelope";
+import { normalizeTrimmedString } from "./utils.js";
+import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger.js";
+import { normalizeTurnTransportEnvelope } from "./turnTransportEnvelope.js";
 import {
   hasDialogProcessConflictForTurn, isEventForCurrentTurn, isUserStoppedEvent,
-} from "./sendFlowSupport";
-import { handleBasicStreamEvent, handleInteractionRequestStreamEvent } from "./streamHandlers";
-import { routeWorkflowStreamEvent } from "./workflowStreamRouter";
-import { routeCurrentTurnLifecycleEvent, routeForeignTurnLifecycleEvent } from "./turnLifecycleRouter";
-import { isIgnoredSubSessionEvent, routeMessageProjectionEvent } from "./messageProjectionRouter";
-import { routeTerminalStreamEvent } from "./terminalStreamRouter";
+} from "./sendFlowSupport.js";
+import { handleBasicStreamEvent, handleInteractionRequestStreamEvent } from "./streamHandlers.js";
+import { routeWorkflowStreamEvent } from "./workflowStreamRouter.js";
+import { routeCurrentTurnLifecycleEvent, routeForeignTurnLifecycleEvent } from "./turnLifecycleRouter.js";
+import { isIgnoredSubSessionEvent, routeMessageProjectionEvent } from "./messageProjectionRouter.js";
+import { routeTerminalStreamEvent } from "./terminalStreamRouter.js";
 
 export function createSendStreamEventHandler(context) {
   const {

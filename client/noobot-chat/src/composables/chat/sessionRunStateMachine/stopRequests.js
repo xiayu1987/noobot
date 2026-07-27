@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { FrontendRunState, SESSION_RUN_EVENT, USER_STOP_REQUEST_STORAGE_KEY, USER_STOP_REQUEST_TTL_MS } from "./constants";
-import { normalizeSessionRunEvent } from "./core";
-import { trim } from "./normalize";
-import { nowMs } from "../../infra/timeFields";
+import { FrontendRunState, SESSION_RUN_EVENT, USER_STOP_REQUEST_STORAGE_KEY, USER_STOP_REQUEST_TTL_MS } from "./constants.js";
+import { normalizeSessionRunEvent } from "./core.js";
+import { trim } from "./normalize.js";
+import { nowMs } from "../../infra/timeFields.js";
 
 export function readStopRequests() {
   try {

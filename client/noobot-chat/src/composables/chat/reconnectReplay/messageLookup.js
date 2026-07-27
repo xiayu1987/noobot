@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
-import { _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
+import { _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
+} from "../../infra/messageIdentity.js";
 
 export function findAssistantMessageByDialogProcessId(activeSession, dialogProcessId = "") {
   const normalizedDpId = _trimStr(dialogProcessId);

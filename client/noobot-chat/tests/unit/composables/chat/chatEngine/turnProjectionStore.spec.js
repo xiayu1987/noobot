@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { classifyRealtimeLog } from "../../../../../src/app/state/sessionMessageState";
+import { classifyRealtimeLog } from "../../../../../src/app/state/sessionMessageState.js";
 import {
   dispatchTurnEnvelope,
   hydrateTurnSnapshot,
   TURN_PROJECTION_SOURCE,
-} from "../../../../../src/composables/chat/chatEngine/turnProjectionStore";
+} from "../../../../../src/composables/chat/chatEngine/turnProjectionStore.js";
 
 const identity = { sessionId: "session-1", turnScopeId: "turn-1" };
 const message = () => ({ ...identity, id: "message-1", messageId: "message-1", content: "" });

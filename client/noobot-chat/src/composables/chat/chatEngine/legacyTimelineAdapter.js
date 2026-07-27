@@ -5,12 +5,12 @@
  */
 import {
   buildToolTimelineFromLegacyLogs,
-} from "./toolTimeline";
+} from "./toolTimeline.js";
 import {
   buildActivityTimelineFromLegacyLogs,
-} from "./activityTimeline";
-import { createTurnKey, resolveTurnIdentity } from "./turnIdentity";
-import { createTurnObservation } from "./turnObservation";
+} from "./activityTimeline.js";
+import { createTurnKey, resolveTurnIdentity } from "./turnIdentity.js";
+import { createTurnObservation } from "./turnObservation.js";
 
 const array = (value) => Array.isArray(value) ? value : [];
 

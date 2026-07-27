@@ -6,29 +6,29 @@
 import {
   reconcileStaleResendMessages,
   syncSessionMessageSummary,
-} from "./resendReconciler";
-import { normalizeTrimmedString } from "./utils";
+} from "./resendReconciler.js";
+import { normalizeTrimmedString } from "./utils.js";
 import {
   getMessageRole,
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
-import { getMessageRuntimeChannelState, SESSION_RUN_EVENT } from "../sessionRunStateMachine";
-import { confirmTurnRuntimeDeletion } from "../sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../infra/messageIdentity.js";
+import { getMessageRuntimeChannelState, SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
+import { confirmTurnRuntimeDeletion } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 import {
   logResendDebug,
   summarizeDebugAttachments,
   summarizeDebugMessage,
   summarizeDebugMessages,
-} from "../debug/resendDebugLogger";
-import { createSessionVersionManager } from "./sessionVersionManager";
-import { serializeAttachments } from "./attachmentSerialization";
-import { mergeAttachments } from "../../infra/dialogProcessChain";
-import { nowMs } from "../../infra/timeFields";
+} from "../debug/resendDebugLogger.js";
+import { createSessionVersionManager } from "./sessionVersionManager.js";
+import { serializeAttachments } from "./attachmentSerialization.js";
+import { mergeAttachments } from "../../infra/dialogProcessChain.js";
+import { nowMs } from "../../infra/timeFields.js";
 import {
   createTurnPlaceholderMessage,
   findTurnPlaceholderMessage,
   removeTurnPlaceholderMessages,
-} from "./turnPlaceholder";
+} from "./turnPlaceholder.js";
 
 
 function normalizeAttachmentMeta(attachment = {}) {

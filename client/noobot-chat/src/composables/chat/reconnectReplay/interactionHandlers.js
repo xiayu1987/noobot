@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { _trimStr } from "./utils";
-import { applyReconnectInteractionRequest } from "./interactionReplay";
-import { applyReconnectConnectorStatus } from "./connectorReplay";
+import { _trimStr } from "./utils.js";
+import { applyReconnectInteractionRequest } from "./interactionReplay.js";
+import { applyReconnectConnectorStatus } from "./connectorReplay.js";
 
 export function tryAutoResolveReconnectInteraction({
   rawRequest = {},

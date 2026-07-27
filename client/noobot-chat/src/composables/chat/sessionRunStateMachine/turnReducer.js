@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants";
-import { normalizeSessionRunEvent } from "./eventNormalization";
+import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
+import { normalizeSessionRunEvent } from "./eventNormalization.js";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/shared/turn-lifecycle-protocol";
 
 export const TURN_TRANSITION_REASON = Object.freeze({

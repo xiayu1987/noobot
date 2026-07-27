@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { storeToRefs } from "pinia";
-import { useChatStore } from "../../shared/stores/useChatStore";
-import { resolveRawAttachmentFile, serializeAttachments } from "./chatEngine/attachmentSerialization";
+import { useChatStore } from "../../shared/stores/useChatStore.js";
+import { resolveRawAttachmentFile, serializeAttachments } from "./chatEngine/attachmentSerialization.js";
 
 export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   const chatStore = useChatStore();

@@ -8,13 +8,13 @@ import {
   normalizeTrimmedString,
   patchAssistantFromWorkflowMessage,
   pickAssistantMessagesForCurrentTurn,
-} from "./utils";
+} from "./utils.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
-import { RoleEnum } from "../../../shared/constants/chatConstants";
+} from "../../infra/messageIdentity.js";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 
 function insertTurnAssistant(activeMessages = [], targetMessage = {}, turnScopeId = "") {
   let lastTurnMessageIndex = -1;

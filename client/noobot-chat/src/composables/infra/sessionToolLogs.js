@@ -10,18 +10,18 @@ import {
   getMessageParentDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-} from "./messageIdentity";
-import { getMessageTimestamp, nowIso } from "./timeFields";
+} from "./messageIdentity.js";
+import { getMessageTimestamp, nowIso } from "./timeFields.js";
 import {
   buildToolCallSummary,
   buildToolResultSummary,
-} from "./toolLogFormatting";
-import { deduplicateToolLogs } from "./toolLogIdentity";
+} from "./toolLogFormatting.js";
+import { deduplicateToolLogs } from "./toolLogIdentity.js";
 import { projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
 import {
   buildToolTimelineFromLegacyLogs,
   fillMissingToolTimelineFacets,
-} from "../chat/chatEngine/toolTimeline";
+} from "../chat/chatEngine/toolTimeline.js";
 
 function buildTurnScopeGroupKey(sessionId = "", turnScopeId = "") {
   const normalizedSessionId = String(sessionId || "").trim();

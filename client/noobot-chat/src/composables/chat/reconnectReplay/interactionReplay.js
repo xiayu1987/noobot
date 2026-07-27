@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { _trimStr } from "./utils";
+import { _trimStr } from "./utils.js";
 
 export function getInteractionPayloadWaitKey({ sessionId = "", dialogProcessId = "" } = {}) {
   return `${_trimStr(sessionId)}::${_trimStr(dialogProcessId)}`;

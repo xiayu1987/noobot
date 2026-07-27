@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createHarness, activateRuntimeTurn } from "./helpers/useChatEngineHarness";
-import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
-import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
-import { applyExecutionSnapshot } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { createHarness, activateRuntimeTurn } from "./helpers/useChatEngineHarness.js";
+import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine.js";
+import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { applyExecutionSnapshot } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 describe("useChatEngine.interaction-stop: stop-request", () => {
   it("send enables stop while stream is active", async () => {

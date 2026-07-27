@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowIso } from "../../infra/timeFields";
-import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { nowIso } from "../../infra/timeFields.js";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 import { messages } from "noobot-i18n/client/messages";
-import { foldConversationMessages } from "../../infra/messageModel";
-import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
-import { BackendChannelState, BackendTerminalStates, FrontendRunState } from "../sessionRunStateMachine";
+import { foldConversationMessages } from "../../infra/messageModel.js";
+import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity.js";
+import { BackendChannelState, BackendTerminalStates, FrontendRunState } from "../sessionRunStateMachine.js";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();

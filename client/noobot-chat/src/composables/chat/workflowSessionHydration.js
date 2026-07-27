@@ -6,8 +6,8 @@
 import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
-} from "./debug/workflowDiagnosticsLogger";
-import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry";
+} from "./debug/workflowDiagnosticsLogger.js";
+import { isTurnRuntimeDeleted } from "./sessionRunStateMachine/turnRuntimeRegistry.js";
 
 function text(value) {
   return String(value || "").trim();

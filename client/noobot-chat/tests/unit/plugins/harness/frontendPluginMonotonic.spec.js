@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   isMonotonicMessage,
   resolveMonotonicMessageActionProps,
-} from "../../../../src/shared/message/monotonicMessageActionRules";
+} from "../../../../src/shared/message/monotonicMessageActionRules.js";
 
 describe("noobot-chat monotonic message action rules", () => {
   function getMonotonicAction() {

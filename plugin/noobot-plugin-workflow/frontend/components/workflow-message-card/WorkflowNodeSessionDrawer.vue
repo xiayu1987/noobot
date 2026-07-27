@@ -5,8 +5,8 @@
 -->
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { BaseEmptyHint, BaseMessageErrorAlert } from "../../../../../client/noobot-chat/src/public/ui.js";
-import { AgentExecutionView } from "../../../../../client/noobot-chat/src/public/chat-ui.js";
+import { BaseEmptyHint, BaseMessageErrorAlert } from "noobot-chat/plugin-api/ui";
+import { AgentExecutionView } from "noobot-chat/plugin-api/chat-ui";
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 
 function resolveDialogProcessId(item = {}) {

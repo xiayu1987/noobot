@@ -7,7 +7,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { ElMessageBox } from "element-plus";
 import { ChatDotRound, Delete, EditPen } from "@element-plus/icons-vue";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 
 const props = defineProps({
   sessions: { type: Array, default: () => [] },

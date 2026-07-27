@@ -3,33 +3,33 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeTrimmedString } from "./utils";
-import { createResendMessageTransaction } from "./resendTransaction";
-import { syncSessionMessageSummary } from "./resendReconciler";
-import { createSessionVersionManager } from "./sessionVersionManager";
+import { normalizeTrimmedString } from "./utils.js";
+import { createResendMessageTransaction } from "./resendTransaction.js";
+import { syncSessionMessageSummary } from "./resendReconciler.js";
+import { createSessionVersionManager } from "./sessionVersionManager.js";
 import {
   buildMessageAnchor,
   getMessageDialogProcessId,
   findMessageIdentityIndex,
   getMessageRole,
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
-import { nowMs } from "../../infra/timeFields";
+} from "../../infra/messageIdentity.js";
+import { nowMs } from "../../infra/timeFields.js";
 import {
   SESSION_RUN_EVENT,
   FrontendRunState,
   getMessageRuntimeChannelState,
-} from "../sessionRunStateMachine";
-import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards";
+} from "../sessionRunStateMachine.js";
+import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
 import {
   confirmTurnRuntimeDeletion,
   resolveSessionTurnRuntime,
   removeTurnRuntime,
   sessionRuntimeId,
   turnRuntimeDisplayState,
-} from "../sessionRunStateMachine/turnRuntimeRegistry";
-import { clearTurnUiState } from "./turnUiStore";
-import { logWorkflowDiagnostics } from "../debug/workflowDiagnosticsLogger";
+} from "../sessionRunStateMachine/turnRuntimeRegistry.js";
+import { clearTurnUiState } from "./turnUiStore.js";
+import { logWorkflowDiagnostics } from "../debug/workflowDiagnosticsLogger.js";
 
 const delay = (ms) => new Promise((resolve) => {
   setTimeout(resolve, ms);

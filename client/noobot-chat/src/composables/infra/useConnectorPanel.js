@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createConnectorService } from "../../services/connector/connectorService";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { createConnectorService } from "../../services/connector/connectorService.js";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 
 export function useConnectorPanel({
   ensureConnected,

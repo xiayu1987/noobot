@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { createMessageFiles } from "./helpers/useMessageFiles-helper";
+import { createMessageFiles } from "./helpers/useMessageFiles-helper.js";
 
 describe("useMessageFiles harness attachments", () => {
   it("classifies explicitly marked harness assistant attachments as plugin attachments", () => {

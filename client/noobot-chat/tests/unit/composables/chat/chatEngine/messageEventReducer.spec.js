@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { classifyRealtimeLog } from "../../../../../src/app/state/sessionMessageState";
+import { classifyRealtimeLog } from "../../../../../src/app/state/sessionMessageState.js";
 import {
   MESSAGE_EVENT_REDUCE_RESULT,
   reduceMessageEvent,
-} from "../../../../../src/composables/chat/chatEngine/messageEventReducer";
-import { selectToolTimeline, selectToolTimelineLogs } from "../../../../../src/composables/chat/chatEngine/toolTimeline";
+} from "../../../../../src/composables/chat/chatEngine/messageEventReducer.js";
+import { selectToolTimeline, selectToolTimelineLogs } from "../../../../../src/composables/chat/chatEngine/toolTimeline.js";
 
 function event(overrides = {}) {
   return {

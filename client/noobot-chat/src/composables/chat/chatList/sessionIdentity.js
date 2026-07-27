@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { findSessionByAnyId as findSessionByAnyIdInList } from "../../infra/sessionIdentity";
+import { findSessionByAnyId as findSessionByAnyIdInList } from "../../infra/sessionIdentity.js";
 
 export function normalizeSessionId(value = "") {
   return String(value || "").trim();

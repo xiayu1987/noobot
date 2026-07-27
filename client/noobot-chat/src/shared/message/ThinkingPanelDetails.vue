@@ -10,7 +10,7 @@ import {
   BaseNoteBlock,
   BaseTabPanelBody,
   BaseThinkingLogLine,
-} from "../ui";
+} from "../ui/index.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },

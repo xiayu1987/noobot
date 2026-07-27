@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { CONNECTOR_TYPES } from "../constants/chatConstants";
+import { CONNECTOR_TYPES } from "../constants/chatConstants.js";
 import { messages } from "noobot-i18n/client/messages";
-import { getConnectorTimestamp, nowIso, parseTimeMs } from "../../composables/infra/timeFields";
+import { getConnectorTimestamp, nowIso, parseTimeMs } from "../../composables/infra/timeFields.js";
 
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =

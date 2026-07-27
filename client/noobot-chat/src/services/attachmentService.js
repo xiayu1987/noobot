@@ -8,7 +8,7 @@ import {
   downloadWorkspaceFileApi,
   getHostFileApi,
   getWorkspaceFileApi,
-} from "./api/chatApi";
+} from "./api/chatApi.js";
 
 let authenticatedFetcher = null;
 

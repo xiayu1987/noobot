@@ -10,7 +10,7 @@ import {
   patchAssistantFromWorkflowMessage,
   sanitizeExecutionLogForDisplay,
   stripInternalEventPlaceholderLines,
-} from "../../../../src/composables/chat/chatEngine/utils";
+} from "../../../../src/composables/chat/chatEngine/utils.js";
 
 describe("chatEngine utils", () => {
   it("strips internal event placeholder lines from assistant content", () => {

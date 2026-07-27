@@ -8,7 +8,7 @@ import {
   CHAT_MESSAGE_NAVIGATOR_SCROLL_LOCK_MS,
   createChatMessageScrollSync,
   lockChatMessageScrollSyncToAnchor,
-} from "../../../src/app/chatMessageScrollSync";
+} from "../../../src/app/chatMessageScrollSync.js";
 
 function createAnchor({ top, anchorId = "", id = "" }) {
   return {

@@ -3,13 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { CONNECTOR_TYPES } from "../../shared/constants/chatConstants";
+import { CONNECTOR_TYPES } from "../../shared/constants/chatConstants.js";
 import {
   createConnectorPanelState,
   normalizeSelectedConnectors,
   resolveSelectedConnectorsWithDefaults,
-} from "../../shared/models/sessionModel";
-import { getConnectorTimestamp, nowIso } from "../../composables/infra/timeFields";
+} from "../../shared/models/sessionModel.js";
+import { getConnectorTimestamp, nowIso } from "../../composables/infra/timeFields.js";
 
 function normalizeConnectorType(connectorType = "") {
   return String(connectorType || "").trim();

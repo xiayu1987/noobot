@@ -5,7 +5,7 @@
 -->
 <script setup>
 import noobotIcon from "../assets/noobot.svg";
-import { useLocale } from "../i18n/useLocale";
+import { useLocale } from "../i18n/useLocale.js";
 
 defineProps({
   role: { type: String, default: "assistant" },

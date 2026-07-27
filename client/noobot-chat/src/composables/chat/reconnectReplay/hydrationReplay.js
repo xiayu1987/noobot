@@ -3,15 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants";
-import { findLatestPendingAssistantAfterLastUser } from "../../infra/reconnectReplayModel";
-import { getMessageRole } from "../../infra/messageIdentity";
-import { _ensureArray, _trimStr } from "./utils";
-import { findAssistantMessageByDialogProcessId } from "./messageLookup";
+import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants.js";
+import { findLatestPendingAssistantAfterLastUser } from "../../infra/reconnectReplayModel.js";
+import { getMessageRole } from "../../infra/messageIdentity.js";
+import { _ensureArray, _trimStr } from "./utils.js";
+import { findAssistantMessageByDialogProcessId } from "./messageLookup.js";
 import {
   logResendDebug,
   summarizeDebugMessages,
-} from "../debug/resendDebugLogger";
+} from "../debug/resendDebugLogger.js";
 
 export function shouldHydrateSessionBeforeReplay({
   activeSession,

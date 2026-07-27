@@ -11,8 +11,8 @@ import {
   promoteSessionTurnUiStates,
   setTurnThinkingOpenNames,
   toggleTurnDetailKey,
-} from "../../../../../src/composables/chat/chatEngine/turnUiStore";
-import { hydrateTurnSnapshot } from "../../../../../src/composables/chat/chatEngine/turnProjectionStore";
+} from "../../../../../src/composables/chat/chatEngine/turnUiStore.js";
+import { hydrateTurnSnapshot } from "../../../../../src/composables/chat/chatEngine/turnProjectionStore.js";
 
 const turn = (sessionId, turnScopeId) => ({ sessionId, turnScopeId });
 

@@ -20,14 +20,14 @@ import {
   getWorkspaceTreeApi,
   putWorkspaceAllFileApi,
   putWorkspaceFileApi,
-} from "../../services/api/chatApi";
-import { useLocale } from "../../shared/i18n/useLocale";
+} from "../../services/api/chatApi.js";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 import {
   SettingsWorkspaceLayout,
   WorkspaceResourcePanel,
   WorkspaceEditorPanel,
   WorkspaceResetDialog,
-} from "./components";
+} from "./components/index.js";
 
 const props = defineProps({
   userId: { type: String, default: "" },

@@ -11,7 +11,7 @@ import {
   ProcessStatus,
   normalizeProcessString,
   toProcessSequence,
-} from "./protocol";
+} from "./protocol.js";
 
 export function createEmptyProcessState() {
   return {

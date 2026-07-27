@@ -3,22 +3,22 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants.js";
 import {
   collectReconnectDeltaText,
   findLatestPendingAssistantAfterLastUser,
-} from "../../infra/reconnectReplayModel";
-import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr, normalizeReplayError } from "./utils";
+} from "../../infra/reconnectReplayModel.js";
+import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr, normalizeReplayError } from "./utils.js";
 import {
   findAssistantMessageByDialogProcessId,
   hasAssistantMessageWithContent,
-} from "./messageLookup";
-import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger";
-import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
+} from "./messageLookup.js";
+import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger.js";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger.js";
 import {
   createTurnPlaceholderMessage,
   findTurnPlaceholderMessage,
-} from "../chatEngine/turnPlaceholder";
+} from "../chatEngine/turnPlaceholder.js";
 
 export function resolveReconnectTargetAssistantMessage({
   activeSession,

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { formatDurationMs, resolveThinkingDurationMs } from "../../../../src/composables/infra/timeFields";
+import { formatDurationMs, resolveThinkingDurationMs } from "../../../../src/composables/infra/timeFields.js";
 
 describe("timeFields thinking duration responsibilities", () => {
   it("formats milliseconds as mm:ss or hh:mm:ss", () => {

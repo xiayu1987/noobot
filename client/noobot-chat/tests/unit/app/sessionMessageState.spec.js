@@ -10,7 +10,7 @@ import {
   formatTime,
   hasActiveSessionForReconnect,
   isImageMime,
-} from "../../../src/app/state/sessionMessageState";
+} from "../../../src/app/state/sessionMessageState.js";
 
 describe("sessionMessageState", () => {
   it("classifies realtime tool logs while normalizing event, text, ids, and timestamps", () => {

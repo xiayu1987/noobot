@@ -13,7 +13,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   createWebSocketTransportSupervisor,
   WEB_SOCKET_TRANSPORT_PHASE,
-} from "./webSocketTransportSupervisor";
+} from "./webSocketTransportSupervisor.js";
 
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 

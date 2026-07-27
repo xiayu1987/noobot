@@ -5,8 +5,8 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { useChatStore } from "../../src/shared/stores/useChatStore";
-import { applyExecutionTree } from "../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { useChatStore } from "../../src/shared/stores/useChatStore.js";
+import { applyExecutionTree } from "../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 function createSubSessionEvent(overrides = {}) {
   const eventType = overrides.eventType || (

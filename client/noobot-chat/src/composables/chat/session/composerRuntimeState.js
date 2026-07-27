@@ -7,7 +7,7 @@ import { computed } from "vue";
 import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
-} from "../sessionRunStateMachine/turnRuntimeRegistry";
+} from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 export function createComposerRuntimeState({
   turnRuntimeRegistry,

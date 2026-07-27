@@ -11,8 +11,8 @@ import {
   SESSION_RUN_EVENT,
   SESSION_RUN_TRANSITION_RULE,
   USER_STOP_LOCK_REOPEN_STATES,
-} from "./constants";
-import { normalizeState, trim } from "./normalize";
+} from "./constants.js";
+import { normalizeState, trim } from "./normalize.js";
 
 export function resolveEventScope(value = {}) {
   return trim(value.turnScopeId);

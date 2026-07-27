@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { nextTick, ref, watch } from "vue";
-import { useLocale } from "../shared/i18n/useLocale";
+import { useLocale } from "../shared/i18n/useLocale.js";
 
 const props = defineProps({
   items: { type: Array, default: () => [] },

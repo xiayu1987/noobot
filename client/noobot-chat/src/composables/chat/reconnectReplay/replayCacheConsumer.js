@@ -6,19 +6,19 @@
 import {
   isReconnectTerminalBatch,
   isReconnectTerminalEvent,
-} from "../../infra/reconnectReplayModel";
+} from "../../infra/reconnectReplayModel.js";
 import {
   markReconnectSequenceApplied as markReconnectSequenceAppliedInCache,
   normalizeReplayCacheKey,
   takeReplayCacheGroupsForSession,
-} from "./replayCache";
+} from "./replayCache.js";
 import {
   applyReconnectReplayBatchToActiveSession,
-} from "./messageReplay";
+} from "./messageReplay.js";
 import {
   _trimStr,
   normalizeExecutionLogForRealtime,
-} from "./utils";
+} from "./utils.js";
 
 export async function consumeReconnectReplayCacheForSession({
   replayCache,

@@ -9,16 +9,16 @@ import {
   getThinkingDetailsTitle as getThinkingDetailsTitleState,
   resolveFallbackThinkingDetailsPayload as resolveFallbackThinkingDetailsPayloadState,
   resolveThinkingDetailsPanelPayload,
-} from "./state/thinkingDetailsState";
+} from "./state/thinkingDetailsState.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   isAssistantWithoutTurnScope,
-} from "../composables/infra/messageIdentity";
-import { loadThinkingDetail } from "../shared/message/thinkingDetailCache";
-import { adaptLegacyMessageTimelines } from "../composables/chat/chatEngine/legacyTimelineAdapter";
-import { selectToolTimelineCount } from "../composables/chat/chatEngine/toolTimeline";
-import { selectActivityTimelineLogs } from "../composables/chat/chatEngine/activityTimeline";
+} from "../composables/infra/messageIdentity.js";
+import { loadThinkingDetail } from "../shared/message/thinkingDetailCache.js";
+import { adaptLegacyMessageTimelines } from "../composables/chat/chatEngine/legacyTimelineAdapter.js";
+import { selectToolTimelineCount } from "../composables/chat/chatEngine/toolTimeline.js";
+import { selectActivityTimelineLogs } from "../composables/chat/chatEngine/activityTimeline.js";
 
 function getSessionDocsFromDetail(detail = {}) {
   if (Array.isArray(detail?.sessionDocs)) return detail.sessionDocs;

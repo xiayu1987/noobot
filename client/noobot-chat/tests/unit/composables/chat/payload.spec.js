@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildChatPayload } from "../../../../src/composables/chat/chatEngine/payload";
+import { buildChatPayload } from "../../../../src/composables/chat/chatEngine/payload.js";
 
 describe("buildChatPayload model preferences", () => {
   it("enables output sanitization by default and sends an explicit opt-out", () => {

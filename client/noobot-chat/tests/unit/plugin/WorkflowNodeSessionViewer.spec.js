@@ -8,6 +8,7 @@ import { defineComponent, h, nextTick, reactive, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   isSameWorkflowDrawerRoute,
+  resolveCanonicalWorkflowNodeItem,
   shouldRejectRootSessionProjection,
   useWorkflowNodeSessionViewer,
 } from "../../../../../plugin/noobot-plugin-workflow/frontend/components/workflow-message-card/useWorkflowNodeSessionViewer.js";
@@ -102,6 +103,17 @@ function mountViewer({
 }
 
 describe("workflow node session view ownership", () => {
+  it("keeps the canonical node resolver available from the viewer entrypoint", () => {
+    expect(resolveCanonicalWorkflowNodeItem(
+      { nodeExecutionId: "node-a", sessionId: "root-session" },
+      [{ nodeExecutionId: "node-a", sessionId: "child-session", rootSessionId: "root-session" }],
+    )).toEqual(expect.objectContaining({
+      nodeExecutionId: "node-a",
+      sessionId: "child-session",
+      rootSessionId: "root-session",
+    }));
+  });
+
   it("recognizes only a fully matching workflow drawer route", () => {
     expect(isSameWorkflowDrawerRoute(
       { rootSessionId: "root", dialogProcessId: "dialog" },

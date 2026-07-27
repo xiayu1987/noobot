@@ -5,16 +5,16 @@
  */
 import { computed, ref } from "vue";
 import { vi } from "vitest";
-import { useReconnectReplay } from "../../../../../src/composables/chat/useReconnectReplay";
-import { RoleEnum } from "../../../../../src/shared/constants/chatConstants";
+import { useReconnectReplay } from "../../../../../src/composables/chat/useReconnectReplay.js";
+import { RoleEnum } from "../../../../../src/shared/constants/chatConstants.js";
 import {
   applyTurnTerminalResolution,
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
-} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { applyRunStateMessageRuntimePatch } from "../../../../../src/composables/chat/chatEngine/messageRuntimePatch";
+} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { applyRunStateMessageRuntimePatch } from "../../../../../src/composables/chat/chatEngine/messageRuntimePatch.js";
 
 function createSession(id) {
   return {

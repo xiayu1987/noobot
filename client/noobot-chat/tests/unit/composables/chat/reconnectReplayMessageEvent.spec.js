@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { applyReconnectEnvelopeToTargetMessage } from "../../../../src/composables/chat/reconnectReplay/batchReplay";
+import { applyReconnectEnvelopeToTargetMessage } from "../../../../src/composables/chat/reconnectReplay/batchReplay.js";
 import {
   dispatchTurnEnvelope,
   hydrateTurnSnapshot,
   TURN_PROJECTION_SOURCE,
-} from "../../../../src/composables/chat/chatEngine/turnProjectionStore";
-import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
-import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
+} from "../../../../src/composables/chat/chatEngine/turnProjectionStore.js";
+import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline.js";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline.js";
 
 const classify = (event) => ({
   ...event,

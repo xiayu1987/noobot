@@ -14,7 +14,7 @@ import {
   ConversationStateDebugPanel,
   SessionSidebar,
   UserInteractionForm,
-} from "./entrypoints";
+} from "./entrypoints.js";
 
 defineProps({
   sidebarCollapsed: { type: Boolean, default: false },
