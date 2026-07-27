@@ -5,7 +5,7 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useLocale } from "../i18n/useLocale.js";
-import { isHarnessInjectedMessage } from "../../composables/infra/messageModel.js";
+import { isPluginInjectedMessage } from "../../composables/infra/messageModel.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
@@ -578,7 +578,7 @@ export function useThinkingPanel(props, emit) {
       ? props.allMessages
       : [];
     return candidateMessages.filter((item = {}) => {
-      if (!isHarnessInjectedMessage(item)) return false;
+      if (!isPluginInjectedMessage(item)) return false;
       if (isSameFrontendTurnScope(messageItem, item)) return true;
       if (!getMessageTurnScopeId(messageItem) && dialogProcessId) {
         return getMessageDialogProcessId(item) === dialogProcessId;

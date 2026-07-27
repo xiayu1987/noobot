@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../../infra/timeFields.js";
-import { findVisibleLastMessage, isHarnessInjectedMessage } from "../../infra/messageModel.js";
+import { findVisibleLastMessage, isPluginInjectedMessage } from "../../infra/messageModel.js";
 
 export function createLocalSessionItem({ id, title, createConnectorPanelState }) {
   return {
@@ -36,7 +36,7 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
   const summaryLastMessage = item.lastMessage && typeof item.lastMessage === "object"
     ? item.lastMessage
     : null;
-  const lastMessage = summaryLastMessage && !isHarnessInjectedMessage(summaryLastMessage)
+  const lastMessage = summaryLastMessage && !isPluginInjectedMessage(summaryLastMessage)
     ? summaryLastMessage
     : findVisibleLastMessage(messages);
   return {

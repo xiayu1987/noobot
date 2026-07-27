@@ -110,7 +110,7 @@ defineExpose({ getHtml });
   background: var(--noobot-accent-soft);
 }
 
-.base-markdown-content :deep(.noobot-harness-collapse) {
+.base-markdown-content :deep(.noobot-collapse) {
   margin: var(--noobot-space-md) 0;
   border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-md);
@@ -118,7 +118,7 @@ defineExpose({ getHtml });
   overflow: hidden;
 }
 
-.base-markdown-content :deep(.noobot-harness-collapse > summary) {
+.base-markdown-content :deep(.noobot-collapse > summary) {
   cursor: pointer;
   user-select: none;
   padding: var(--noobot-space-sm) var(--noobot-space-md);
@@ -128,19 +128,19 @@ defineExpose({ getHtml });
   border-bottom: 1px solid transparent;
 }
 
-.base-markdown-content :deep(.noobot-harness-collapse[open] > summary) {
+.base-markdown-content :deep(.noobot-collapse[open] > summary) {
   border-bottom-color: var(--noobot-panel-border);
 }
 
-.base-markdown-content :deep(.noobot-harness-collapse__body) {
+.base-markdown-content :deep(.noobot-collapse__body) {
   padding: var(--noobot-space-md);
 }
 
-.base-markdown-content :deep(.noobot-harness-collapse__body > :first-child) {
+.base-markdown-content :deep(.noobot-collapse__body > :first-child) {
   margin-top: 0;
 }
 
-.base-markdown-content :deep(.noobot-harness-collapse__body > :last-child) {
+.base-markdown-content :deep(.noobot-collapse__body > :last-child) {
   margin-bottom: 0;
 }
 

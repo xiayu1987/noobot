@@ -223,12 +223,10 @@ export function markHarnessPluginTransferPayload(payload = {}) {
   };
 }
 
+import { isHarnessInjectedMessage as isHarnessInjectedMessageBase } from "./message/utils.js";
+
 function isHarnessInjectedMessage(message = {}) {
-  return (
-    message?.injectedMessage === true &&
-    String(message?.injectedBy || "").trim() === "harness-plugin" &&
-    String(message?.role || "").trim() === "user"
-  );
+  return isHarnessInjectedMessageBase(message, { role: "user" });
 }
 
 export function attachMetasToLatestInjectedMessage(ctx = {}, metas = [], transferPayload = null) {
