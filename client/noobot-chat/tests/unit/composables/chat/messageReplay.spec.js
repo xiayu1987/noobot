@@ -7,9 +7,9 @@ import { describe, expect, it } from "vitest";
 import {
   applyFoldedMessagesForDialogProcess,
   applyFoldedMessagesToActiveSession,
-} from "../../../../src/composables/chat/reconnectReplay/messageReplay";
-import { resolveReconnectTargetAssistantMessage } from "../../../../src/composables/chat/reconnectReplay/assistantMessageReplay";
-import { selectToolTimeline } from "../../../../src/composables/chat/chatEngine/toolTimeline";
+} from "../../../../src/composables/chat/reconnectReplay/messageReplay.js";
+import { resolveReconnectTargetAssistantMessage } from "../../../../src/composables/chat/reconnectReplay/assistantMessageReplay.js";
+import { selectToolTimeline } from "../../../../src/composables/chat/chatEngine/toolTimeline.js";
 
 describe("messageReplay", () => {
   it("promotes a dialog-only reconnect assistant when the authoritative turn scope arrives", () => {

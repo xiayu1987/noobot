@@ -8,14 +8,14 @@ import {
   getMessageRole,
   getMessageSessionId,
   getMessageTurnScopeId,
-} from "./messageIdentity";
+} from "./messageIdentity.js";
 import {
   buildToolCallSummary,
   buildToolResultSummary,
   buildToolNameByCallId,
   stringifyToolValue,
-} from "./toolLogFormatting";
-import { deduplicateToolLogs } from "./toolLogIdentity";
+} from "./toolLogFormatting.js";
+import { deduplicateToolLogs } from "./toolLogIdentity.js";
 import { projectMessageEventToolFacets } from "@noobot/shared/message-event-protocol";
 
 function eventName(item = {}) {
@@ -132,8 +132,8 @@ function buildLogsFromMessages(messageItem, messages, toolResultFallback) {
   return logs;
 }
 
-import { selectToolTimelineLogs } from "../chat/chatEngine/toolTimeline";
-import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
+import { selectToolTimelineLogs } from "../chat/chatEngine/toolTimeline.js";
+import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter.js";
 
 export function normalizeThinkingToolLogs({
   messageItem = {}, allMessages = [], sessionDocs = [], variant = "panel",

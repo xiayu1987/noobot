@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { injectTurnStatusPlaceholders } from "../../../../src/composables/chat/chatList/detailMessages";
+import { injectTurnStatusPlaceholders } from "../../../../src/composables/chat/chatList/detailMessages.js";
 
 const user = { role: "user", content: "hello", turnScopeId: "t1", dialogProcessId: "d1" };
 

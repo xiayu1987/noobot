@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 import {
   reconcileStaleResendMessages,
   syncSessionMessageSummary,
-} from "../../../../src/composables/chat/chatEngine/resendReconciler";
-import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
+} from "../../../../src/composables/chat/chatEngine/resendReconciler.js";
+import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
 
 describe("resendReconciler", () => {
   it("prefers explicit turnScope replacement mapping and keeps replacement user", () => {

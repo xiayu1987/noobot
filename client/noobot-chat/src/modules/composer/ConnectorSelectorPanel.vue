@@ -12,7 +12,7 @@ import {
   CircleCloseFilled,
   Connection,
 } from "@element-plus/icons-vue";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 
 const CONNECTOR_GROUP_DEFINITIONS = [
   { key: "database", labelKey: "common.database" },

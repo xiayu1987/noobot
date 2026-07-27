@@ -5,8 +5,8 @@
 -->
 <script setup>
 import { computed, watch, nextTick, ref } from "vue";
-import { renderMermaidInElement } from "../utils/mermaid-renderer";
-import { useLocale } from "../i18n/useLocale";
+import { renderMermaidInElement } from "../utils/mermaid-renderer.js";
+import { useLocale } from "../i18n/useLocale.js";
 
 const props = defineProps({
   contentType: { type: String, default: "file" },

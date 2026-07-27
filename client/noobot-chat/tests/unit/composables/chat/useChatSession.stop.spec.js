@@ -9,18 +9,18 @@ import {
   sessionLogClientMock,
   wsClientMock,
 } from "./useChatSession.test-helpers.js";
-import { useChatSession } from "../../../../src/composables/chat/useChatSession";
+import { useChatSession } from "../../../../src/composables/chat/useChatSession.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref } from "vue";
-import { useChatStore } from "../../../../src/shared/stores/useChatStore";
-import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger";
-import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import { useChatStore } from "../../../../src/shared/stores/useChatStore.js";
+import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger.js";
+import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine";
-import { applyTurnRuntimeEvent, selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../../../src/composables/chat/sessionRunStateMachine.js";
+import { applyTurnRuntimeEvent, selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 function applyRuntimeEvent(store, event) {
   const registry = store.turnRuntimeRegistry;

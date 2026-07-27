@@ -10,11 +10,11 @@ import {
   findVisibleLastMessage,
   foldConversationMessages,
   isHarnessInjectedMessage,
-} from "../../infra/messageModel";
-import { nowIso } from "../../infra/timeFields";
-import { RoleEnum } from "../../../shared/constants/chatConstants";
-import { getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
-import { logWorkflowDiagnostics, summarizeWorkflowMessage } from "../debug/workflowDiagnosticsLogger";
+} from "../../infra/messageModel.js";
+import { nowIso } from "../../infra/timeFields.js";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
+import { getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity.js";
+import { logWorkflowDiagnostics, summarizeWorkflowMessage } from "../debug/workflowDiagnosticsLogger.js";
 
 export function createSessionMessageView({
   activeSession,

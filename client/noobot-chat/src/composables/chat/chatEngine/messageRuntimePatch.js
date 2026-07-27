@@ -7,15 +7,15 @@ import {
   resolveSessionRunMessageRuntimePatch,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
-} from "../sessionRunStateMachine";
+} from "../sessionRunStateMachine.js";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
-} from "../debug/stateMachineLogger";
-import { mergeCanonicalTurnTiming } from "../sessionRunStateMachine/turnTiming";
-import { getMessageTurnScopeId } from "../../infra/messageIdentity";
-import { getMessageDialogProcessId } from "../../infra/messageIdentity";
-import { selectTurnMessageRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
+} from "../debug/stateMachineLogger.js";
+import { mergeCanonicalTurnTiming } from "../sessionRunStateMachine/turnTiming.js";
+import { getMessageTurnScopeId } from "../../infra/messageIdentity.js";
+import { getMessageDialogProcessId } from "../../infra/messageIdentity.js";
+import { selectTurnMessageRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 export function applyRunStateMessagePatch(message, patch = {}) {
   if (!message || !patch || typeof patch !== "object") return;

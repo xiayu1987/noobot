@@ -6,22 +6,22 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { useMessagePreview } from "../../composables/message/useMessagePreview";
-import { useMessageFiles } from "../../composables/message/useMessageFiles";
-import { useMessageMeta } from "../../composables/message/useMessageMeta";
+import { useMessagePreview } from "../../composables/message/useMessagePreview.js";
+import { useMessageFiles } from "../../composables/message/useMessageFiles.js";
+import { useMessageMeta } from "../../composables/message/useMessageMeta.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageSessionId,
   getMessageTurnScopeId,
-} from "../../composables/infra/messageIdentity";
-import { selectTurnMessageRuntime } from "../../composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { useLocale } from "../i18n/useLocale";
-import { useChatStore } from "../stores/useChatStore";
+} from "../../composables/infra/messageIdentity.js";
+import { selectTurnMessageRuntime } from "../../composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { useLocale } from "../i18n/useLocale.js";
+import { useChatStore } from "../stores/useChatStore.js";
 import MonotonicMessageActions from "./MonotonicMessageActions.vue";
 import AssistantCopyActions from "./AssistantCopyActions.vue";
 import MessageStatusRow from "./MessageStatusRow.vue";
-import { resolveMonotonicMessageActionProps } from "./monotonicMessageActionRules";
+import { resolveMonotonicMessageActionProps } from "./monotonicMessageActionRules.js";
 import {
   BaseMarkdownContent,
   BaseAttachmentFileCard,
@@ -30,14 +30,14 @@ import {
   BaseMessageShell,
   BaseMessageTypeTag,
   BasePreviewContent,
-} from "../ui";
-import { EXTENSION_POINTS } from "../../extensions/extension-point-ids";
+} from "../ui/index.js";
+import { EXTENSION_POINTS } from "../../extensions/extension-point-ids.js";
 import ExtensionOutlet from "../../extensions/ExtensionOutlet.vue";
-import { resolveExtensionPoint } from "../../extensions/extension-registry";
+import { resolveExtensionPoint } from "../../extensions/extension-registry.js";
 import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessage,
-} from "../../composables/chat/debug/workflowDiagnosticsLogger";
+} from "../../composables/chat/debug/workflowDiagnosticsLogger.js";
 
 const emit = defineEmits(["open-thinking-details"]);
 

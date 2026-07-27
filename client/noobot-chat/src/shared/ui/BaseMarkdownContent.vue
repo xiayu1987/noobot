@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { computed } from "vue";
-import { useMermaidRender } from "../../composables/message/useMermaidRender";
+import { useMermaidRender } from "../../composables/message/useMermaidRender.js";
 
 const props = defineProps({
   content: { type: String, default: "" },

@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createHarness, activateRuntimeTurn } from "./helpers/useChatEngineHarness";
-import { BackendChannelState, createInitialSessionRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
-import { RoleEnum } from "../../../../src/shared/constants/chatConstants";
+import { createHarness, activateRuntimeTurn } from "./helpers/useChatEngineHarness.js";
+import { BackendChannelState, createInitialSessionRunState } from "../../../../src/composables/chat/sessionRunStateMachine.js";
+import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
 
 describe("useChatEngine.interaction-stop: monotonic-stop", () => {
   it("prepareMonotonicMessageAction treats stop confirmation timeout as stop precondition failure", async () => {

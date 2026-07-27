@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { ElMessage, ElMessageBox } from "element-plus";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 
 export function useUiFeedback() {
   const { translate } = useLocale();

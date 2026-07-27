@@ -8,20 +8,20 @@ import {
   isDialogProcessRecoverable,
   resolveDialogProcessIdFromReplay,
   splitReconnectMessagesByTurnIdentity,
-} from "../../infra/reconnectReplayModel";
-import { nowMs } from "../../infra/timeFields";
+} from "../../infra/reconnectReplayModel.js";
+import { nowMs } from "../../infra/timeFields.js";
 import {
   isInFlightConversationState,
   isTerminalConversationState,
-} from "./conversationState";
-import { _trimStr } from "./utils";
+} from "./conversationState.js";
+import { _trimStr } from "./utils.js";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
   resolveRememberedStopRequestedEvent,
-} from "../sessionRunStateMachine";
-import { normalizeTurnMeta } from "../../infra/messageIdentity";
-import { normalizeReplayCacheKey } from "./replayCache";
+} from "../sessionRunStateMachine.js";
+import { normalizeTurnMeta } from "../../infra/messageIdentity.js";
+import { normalizeReplayCacheKey } from "./replayCache.js";
 
 function resolveAuthoritativeConversationStates(sessionEntry = {}) {
   const sessionId = _trimStr(sessionEntry?.sessionId);

@@ -9,7 +9,7 @@ import {
   mergeAttachmentMetaFields,
   mergeAttachmentSnapshot,
   mergeAttachments,
-} from "../../../../src/composables/infra/dialogProcessChain";
+} from "../../../../src/composables/infra/dialogProcessChain.js";
 
 describe("dialogProcessChain attachment rich-first merge", () => {
   it("keeps parsed result and preview/download fields when incoming payload is raw", () => {

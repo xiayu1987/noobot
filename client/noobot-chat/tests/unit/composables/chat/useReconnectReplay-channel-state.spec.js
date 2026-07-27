@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper";
-import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper.js";
+import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine";
-import { selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline";
-import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline";
+} from "../../../../src/composables/chat/sessionRunStateMachine.js";
+import { selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline.js";
+import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline.js";
 import {
   scheduleMissingInteractionPayloadFailure,
-} from "../../../../src/composables/chat/reconnectReplay/channelStateReplay";
+} from "../../../../src/composables/chat/reconnectReplay/channelStateReplay.js";
 
 afterEach(() => {
   vi.useRealTimers();

@@ -12,10 +12,10 @@ import ComposerSelectedTags from "./ComposerSelectedTags.vue";
 import ComposerInputActions from "./ComposerInputActions.vue";
 import ComposerMoreOptions from "./ComposerMoreOptions.vue";
 import ComposerCameraDialog from "./ComposerCameraDialog.vue";
-import { useComposerMediaCapture } from "./useComposerMediaCapture";
-import { useComposerOptions } from "./useComposerOptions";
-import { useLocale } from "../../shared/i18n/useLocale";
-import { logResendDebug } from "../../composables/chat/debug/resendDebugLogger";
+import { useComposerMediaCapture } from "./useComposerMediaCapture.js";
+import { useComposerOptions } from "./useComposerOptions.js";
+import { useLocale } from "../../shared/i18n/useLocale.js";
+import { logResendDebug } from "../../composables/chat/debug/resendDebugLogger.js";
 
 const props = defineProps({
   modelValue: { type: String, default: "" },

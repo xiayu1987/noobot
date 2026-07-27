@@ -5,8 +5,8 @@
 -->
 <script setup>
 import { Menu, MoreFilled, Refresh, Setting } from "@element-plus/icons-vue";
-import { useLocale } from "../shared/i18n/useLocale";
-import { useTheme } from "../shared/theme/useTheme";
+import { useLocale } from "../shared/i18n/useLocale.js";
+import { useTheme } from "../shared/theme/useTheme.js";
 
 defineProps({
   title: { type: String, default: "" },

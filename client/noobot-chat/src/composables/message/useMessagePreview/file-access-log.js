@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createFileAccessTraceId } from "./path-utils";
+import { createFileAccessTraceId } from "./path-utils.js";
 
 export function logFileAccess(event, payload = {}) {
   try {

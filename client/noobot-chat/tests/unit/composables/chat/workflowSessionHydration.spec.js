@@ -7,11 +7,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   hydrateWorkflowRegistryFromSessionDetail,
   workflowPlanningEventFromMessage,
-} from "../../../../src/composables/chat/workflowSessionHydration";
+} from "../../../../src/composables/chat/workflowSessionHydration.js";
 import {
   confirmTurnRuntimeDeletion,
   createTurnRuntimeRegistryState,
-} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 function workflowMessage() {
   return {

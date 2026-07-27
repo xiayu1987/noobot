@@ -42,7 +42,7 @@ import {
   ElUpload,
 } from "element-plus";
 import "element-plus/dist/index.css";
-import { registerExternalFrontendPlugins } from "../plugins/auto-register";
+import { registerExternalFrontendPlugins } from "../plugins/auto-register.js";
 
 const ELEMENT_PLUS_COMPONENTS = [
   ElAffix,

@@ -9,11 +9,11 @@ import {
   makeSession,
   assistantMessage,
   emitChannelState,
-} from "./helpers/useChatEngineHarness";
+} from "./helpers/useChatEngineHarness.js";
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../src/shared/constants/chatConstants";
+} from "../../../../src/shared/constants/chatConstants.js";
 
 describe("useChatEngine.resend final reconcile", () => {
   it("resendMonotonicMessage keeps final edited messages after backend delete fallback", async () => {

@@ -3,14 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../../shared/constants/chatConstants";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
-import { logStateMachineDebug, summarizeStateMachineMessage } from "../debug/stateMachineLogger";
-import { normalizeTrimmedString } from "./utils";
+import { StreamEventEnum } from "../../../shared/constants/chatConstants.js";
+import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
+import { logStateMachineDebug, summarizeStateMachineMessage } from "../debug/stateMachineLogger.js";
+import { normalizeTrimmedString } from "./utils.js";
 import {
   buildFinalDoneEventData, hasCompletableRunIdentity, isCompletedChannelStateEvent, requirePersistedTurnStatus,
-} from "./sendFlowSupport";
-import { handleDoneStreamEvent } from "./streamHandlers";
+} from "./sendFlowSupport.js";
+import { handleDoneStreamEvent } from "./streamHandlers.js";
 
 export function routeTerminalStreamEvent(event, data, context) {
   const {

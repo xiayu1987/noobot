@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, nextTick, ref, watch } from "vue";
-import { createChatMessageScrollSync } from "./chatMessageScrollSync";
+import { createChatMessageScrollSync } from "./chatMessageScrollSync.js";
 import {
   closeChatMessageNavigator,
   openChatMessageNavigator as openChatMessageNavigatorState,
   selectChatMessageNavigatorItem,
-} from "./state/chatMessageNavigatorState";
-import { buildChatMessageNavItems } from "./state/chatMessageNavItemsState";
-import { selectTurnPresentations } from "../composables/chat/chatEngine/turnPresentation";
+} from "./state/chatMessageNavigatorState.js";
+import { buildChatMessageNavItems } from "./state/chatMessageNavItemsState.js";
+import { selectTurnPresentations } from "../composables/chat/chatEngine/turnPresentation.js";
 
 export function useChatMessageNavigatorPanel({
   activeSession,

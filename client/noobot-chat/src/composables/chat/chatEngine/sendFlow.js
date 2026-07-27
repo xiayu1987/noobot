@@ -3,33 +3,33 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { buildChatPayload } from "./payload";
+import { buildChatPayload } from "./payload.js";
 import {
   applySendErrorState,
   applyStopRequestedState,
   applyStreamCompletedFallback,
   finalizeSendCleanup,
-} from "./sendFinalize";
-import { prepareChatSend } from "./sendPrepare";
-import { finalizeDoneTurnPresentation, finalizeStoppedSessionDetail } from "./sessionFinalize";
-import { createDoneTurnFinalizer } from "./sendDoneFinalizer";
-import { createSendStreamEventHandler } from "./sendStreamEventRouter";
-import { normalizeTrimmedString } from "./utils";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
-import { selectSessionTurnRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry";
+} from "./sendFinalize.js";
+import { prepareChatSend } from "./sendPrepare.js";
+import { finalizeDoneTurnPresentation, finalizeStoppedSessionDetail } from "./sessionFinalize.js";
+import { createDoneTurnFinalizer } from "./sendDoneFinalizer.js";
+import { createSendStreamEventHandler } from "./sendStreamEventRouter.js";
+import { normalizeTrimmedString } from "./utils.js";
+import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
+import { selectSessionTurnRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 import {
   logResendDebug,
   summarizeDebugAttachments,
   summarizeDebugMessage,
   summarizeDebugMessages,
-} from "../debug/resendDebugLogger";
-import { logStateMachineDebug, summarizeStateMachineMessage } from "../debug/stateMachineLogger";
+} from "../debug/resendDebugLogger.js";
+import { logStateMachineDebug, summarizeStateMachineMessage } from "../debug/stateMachineLogger.js";
 import {
   createTurnScopeId,
   hasActiveTurnInFlight,
-} from "./sendFlowSupport";
+} from "./sendFlowSupport.js";
 
-export { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./sendFlowSupport";
+export { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./sendFlowSupport.js";
 
 export function createChatEngineSender({
   activeSession,

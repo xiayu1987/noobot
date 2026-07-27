@@ -5,7 +5,7 @@
 -->
 <script setup>
 import WorkflowGraphStatusBadge from "./WorkflowGraphStatusBadge.vue";
-import { useWorkflowLocale } from "../../i18n";
+import { useWorkflowLocale } from "../../i18n.js";
 
 defineProps({
   nodeItem: { type: Object, default: () => ({}) },

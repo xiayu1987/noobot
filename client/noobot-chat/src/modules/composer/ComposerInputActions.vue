@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { VideoPause, MoreFilled, Microphone, Camera } from "@element-plus/icons-vue";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 
 const props = defineProps({
   modelValue: { type: String, default: "" },

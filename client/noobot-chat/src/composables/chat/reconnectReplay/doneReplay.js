@@ -3,26 +3,26 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { findVisibleLastMessage } from "../../infra/messageModel";
+import { findVisibleLastMessage } from "../../infra/messageModel.js";
 import {
   findReconnectDoneEnvelopeWithMessages,
-} from "../../infra/reconnectReplayModel";
-import { nowIso } from "../../infra/timeFields";
-import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
+} from "../../infra/reconnectReplayModel.js";
+import { nowIso } from "../../infra/timeFields.js";
+import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils.js";
 import {
   buildToolTimelineFromLegacyLogs,
   fillMissingToolTimelineFacets,
   TOOL_SEQUENCE_DOMAIN,
   TOOL_TIMELINE_AUTHORITY,
-} from "../chatEngine/toolTimeline";
-import { _trimStr } from "./utils";
-import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity";
-import { RoleEnum } from "../../../shared/constants/chatConstants";
+} from "../chatEngine/toolTimeline.js";
+import { _trimStr } from "./utils.js";
+import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../infra/messageIdentity.js";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessage,
-} from "../debug/workflowDiagnosticsLogger";
-import { reconcileDoneTurnSnapshot } from "../chatEngine/messagePatch";
+} from "../debug/workflowDiagnosticsLogger.js";
+import { reconcileDoneTurnSnapshot } from "../chatEngine/messagePatch.js";
 
 export function applyDoneMessagesFromReconnect({
   activeSession,

@@ -17,5 +17,8 @@
     "@noobot/shared": "file:../../shared",
     "@langchain/core": "^1.2.3",
     "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "noobot-chat": "^4.1.3"
   }
 }

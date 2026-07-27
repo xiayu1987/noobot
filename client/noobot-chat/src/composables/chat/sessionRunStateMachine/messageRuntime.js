@@ -7,12 +7,12 @@ import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
+} from "../../infra/messageIdentity.js";
 import {
   normalizeTimePair,
   nowMs,
   toIsoTime,
-} from "../../infra/timeFields";
+} from "../../infra/timeFields.js";
 import {
   BackendChannelState,
   BackendTerminalStates,
@@ -22,10 +22,10 @@ import {
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
   SESSION_RUN_MESSAGE_RUNTIME_REASON,
-} from "./constants";
-import { createInitialSessionRunState, isInFlightSessionRunState } from "./core";
-import { normalizeState, trim } from "./normalize";
-import { TURN_RUNTIME_AUTHORITY } from "./eventNormalization";
+} from "./constants.js";
+import { createInitialSessionRunState, isInFlightSessionRunState } from "./core.js";
+import { normalizeState, trim } from "./normalize.js";
+import { TURN_RUNTIME_AUTHORITY } from "./eventNormalization.js";
 
 const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   BackendChannelState.SENDING,

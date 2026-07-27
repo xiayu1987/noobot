@@ -5,7 +5,7 @@
  */
 import { getCurrentScope, onScopeDispose } from "vue";
 
-import { disposeReconnectReplayTimers } from "./cleanup";
+import { disposeReconnectReplayTimers } from "./cleanup.js";
 
 export function registerReconnectReplayLifecycleCleanup({
   missingInteractionPayloadTimers,

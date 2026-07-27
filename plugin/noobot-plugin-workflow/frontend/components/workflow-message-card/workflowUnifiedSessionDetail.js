@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
-import { mergeCanonicalSessionDetail } from "../../../../../client/noobot-chat/src/public/session-domain.js";
+import { mergeCanonicalSessionDetail } from "noobot-chat/plugin-api/session-domain";
 
 function getListValue(value) {
   const resolved = value && typeof value === "object" && "value" in value ? value.value : value;

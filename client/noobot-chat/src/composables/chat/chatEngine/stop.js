@@ -3,33 +3,33 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
-import { normalizeTrimmedString } from "./utils";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
+import { normalizeTrimmedString } from "./utils.js";
 import {
   BackendChannelState,
   FrontendRunState,
   SESSION_RUN_EVENT,
   rememberStopRequestedEvent,
-} from "../sessionRunStateMachine";
-import { isInFlightAssistantMessage } from "./messageStateGuards";
+} from "../sessionRunStateMachine.js";
+import { isInFlightAssistantMessage } from "./messageStateGuards.js";
 import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
-import { nowMs } from "../../infra/timeFields";
+} from "../../infra/messageIdentity.js";
+import { nowMs } from "../../infra/timeFields.js";
 import {
   logResendDebug,
   summarizeDebugMessage,
   summarizeDebugMessages,
-} from "../debug/resendDebugLogger";
-import { logStopDebug } from "../debug/stopDebugLogger";
+} from "../debug/resendDebugLogger.js";
+import { logStopDebug } from "../debug/stopDebugLogger.js";
 import {
   resolveSessionTurnRuntime,
   selectExecution,
   sessionRuntimeId,
-} from "../sessionRunStateMachine/turnRuntimeRegistry";
+} from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 function resolveStopTurnScopeId({ session, turnRuntimeRegistry, preferredTurnScopeId = "" } = {}) {
   const preferred = normalizeTrimmedString(preferredTurnScopeId);

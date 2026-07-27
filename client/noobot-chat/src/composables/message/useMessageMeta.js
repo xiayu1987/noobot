@@ -4,20 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
-import { logResendDebug, summarizeDebugMessage } from "../chat/debug/resendDebugLogger";
-import { getMessageTurnScopeId } from "../infra/messageIdentity";
+import { logResendDebug, summarizeDebugMessage } from "../chat/debug/resendDebugLogger.js";
+import { getMessageTurnScopeId } from "../infra/messageIdentity.js";
 import { storeToRefs } from "pinia";
-import { useChatStore } from "../../shared/stores/useChatStore";
+import { useChatStore } from "../../shared/stores/useChatStore.js";
 import {
   resolveTurnRuntimeByScope,
   turnRuntimeDisplayState,
-} from "../chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
-import { selectCompletedToolArtifacts } from "../chat/chatEngine/toolTimeline";
-import { resolveStatusStepPresentation } from "../infra/messagePresentation";
+} from "../chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter.js";
+import { selectCompletedToolArtifacts } from "../chat/chatEngine/toolTimeline.js";
+import { resolveStatusStepPresentation } from "../infra/messagePresentation.js";
 
 export function useMessageMeta({
   getMessageItem = () => ({}),

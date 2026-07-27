@@ -3,17 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { reduceMessageEvent, MESSAGE_EVENT_REDUCE_RESULT } from "./messageEventReducer";
-import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdentity";
+import { reduceMessageEvent, MESSAGE_EVENT_REDUCE_RESULT } from "./messageEventReducer.js";
+import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdentity.js";
 import {
   initializeMessageEventState,
   resolveMessageEventLaneState,
   syncMessageEventAggregateState,
-} from "../../infra/messageEventState";
-import { mergeToolTimelines } from "./toolTimeline";
-import { mergeActivityTimelines } from "./activityTimeline";
-import { createTurnObservation } from "./turnObservation";
-import { mergeAttachmentSnapshot } from "../../infra/dialogProcessChain";
+} from "../../infra/messageEventState.js";
+import { mergeToolTimelines } from "./toolTimeline.js";
+import { mergeActivityTimelines } from "./activityTimeline.js";
+import { createTurnObservation } from "./turnObservation.js";
+import { mergeAttachmentSnapshot } from "../../infra/dialogProcessChain.js";
 
 export const TURN_PROJECTION_SOURCE = Object.freeze({
   NORMAL_LIVE: "normal_live",

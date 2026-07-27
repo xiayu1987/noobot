@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { useLocale } from "../i18n/useLocale";
+import { useLocale } from "../i18n/useLocale.js";
 import { computed } from "vue";
 
 const props = defineProps({

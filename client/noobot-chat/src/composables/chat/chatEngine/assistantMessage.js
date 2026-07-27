@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeAttachments } from "../../infra/dialogProcessChain";
+import { mergeAttachments } from "../../infra/dialogProcessChain.js";
 
 export function createAssistantMessageHelpers({ translate, makeViewMessage }) {
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {

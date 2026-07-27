@@ -10,7 +10,7 @@ import {
   EXTENSION_ARBITRATION,
   EXTENSION_POINT_DEFINITIONS,
   KNOWN_EXTENSION_POINTS,
-} from "./extension-point-ids";
+} from "./extension-point-ids.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();

@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ChatComposer from "../../../../src/modules/composer/ChatComposer.vue";
 import ComposerInputActions from "../../../../src/modules/composer/ComposerInputActions.vue";
 import ComposerAttachmentToolbar from "../../../../src/modules/composer/ComposerAttachmentToolbar.vue";
-import { useComposerMediaCapture } from "../../../../src/modules/composer/useComposerMediaCapture";
+import { useComposerMediaCapture } from "../../../../src/modules/composer/useComposerMediaCapture.js";
 
 const messageMock = vi.hoisted(() => ({
   error: vi.fn(),

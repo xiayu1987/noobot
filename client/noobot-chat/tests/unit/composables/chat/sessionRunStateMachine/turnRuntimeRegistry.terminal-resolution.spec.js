@@ -26,14 +26,14 @@ import {
   applyExecutionTree,
   executionTurnKey,
   isTurnRuntimeDeleted,
-} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../src/composables/chat/sessionRunStateMachine/constants";
+} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../src/composables/chat/sessionRunStateMachine/constants.js";
 import {
   backendState,
   sendStart,
   settleTerminal,
   snapshot,
-} from "./turnRuntimeRegistryTestFixtures";
+} from "./turnRuntimeRegistryTestFixtures.js";
 
   it("does not compare reconnect transport sequence with terminal lifecycle sequence", () => {
     const registry = createTurnRuntimeRegistryState();

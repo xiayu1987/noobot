@@ -12,8 +12,8 @@ import {
   resolveExtensionListeners,
   resolveExtensionPoint,
   resolveExtensionProps,
-} from "../../../src/extensions/extension-registry";
-import { EXTENSION_POINTS } from "../../../src/extensions/extension-point-ids";
+} from "../../../src/extensions/extension-registry.js";
+import { EXTENSION_POINTS } from "../../../src/extensions/extension-point-ids.js";
 
 const TEST_POINT = EXTENSION_POINTS.MESSAGE_CARD_PRE;
 

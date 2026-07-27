@@ -5,8 +5,8 @@
  */
 import { ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { applyCompletedToolLogsToMessages } from "../infra/sessionToolLogs";
-import { normalizeTimePair, nowMs } from "../infra/timeFields";
+import { applyCompletedToolLogsToMessages } from "../infra/sessionToolLogs.js";
+import { normalizeTimePair, nowMs } from "../infra/timeFields.js";
 import {
   buildChatWebSocketUrl,
   buildLogWebSocketUrl,
@@ -19,34 +19,34 @@ import {
   getSessionsApi,
   replaceSessionTurnApi,
   renameSessionApi,
-} from "../../services/api/chatApi";
-import { encryptPayloadBySessionId } from "../../shared/utils/sessionCrypto";
-import { RoleEnum } from "../../shared/constants/chatConstants";
+} from "../../services/api/chatApi.js";
+import { encryptPayloadBySessionId } from "../../shared/utils/sessionCrypto.js";
+import { RoleEnum } from "../../shared/constants/chatConstants.js";
 import {
   createConnectorPanelState,
   generateSessionId,
   sessionTitleFromMessages,
-} from "../../shared/models/sessionModel";
-import { createChatWebSocketClient } from "../../services/ws/chatWebSocketClient";
-import { createSessionLogWebSocketClient } from "../../services/ws/sessionLogWebSocketClient";
-import { useChatInput } from "./useChatInput";
-import { useAgentInteraction } from "./useAgentInteraction";
-import { useConnectorPanel } from "../infra/useConnectorPanel";
-import { useChatList } from "./useChatList";
-import { useChatEngine } from "./useChatEngine";
-import { finalizeStoppedSessionDetail } from "./chatEngine/sessionFinalize";
-import { useReconnectReplay } from "./useReconnectReplay";
-import { useChatStore } from "../../shared/stores/useChatStore";
-import { useProcessStore } from "../../shared/stores/useProcessStore";
+} from "../../shared/models/sessionModel.js";
+import { createChatWebSocketClient } from "../../services/ws/chatWebSocketClient.js";
+import { createSessionLogWebSocketClient } from "../../services/ws/sessionLogWebSocketClient.js";
+import { useChatInput } from "./useChatInput.js";
+import { useAgentInteraction } from "./useAgentInteraction.js";
+import { useConnectorPanel } from "../infra/useConnectorPanel.js";
+import { useChatList } from "./useChatList.js";
+import { useChatEngine } from "./useChatEngine.js";
+import { finalizeStoppedSessionDetail } from "./chatEngine/sessionFinalize.js";
+import { useReconnectReplay } from "./useReconnectReplay.js";
+import { useChatStore } from "../../shared/stores/useChatStore.js";
+import { useProcessStore } from "../../shared/stores/useProcessStore.js";
 import {
   hydrateWorkflowRegistryFromSessionDetail,
-} from "./workflowSessionHydration";
-import { useLocale } from "../../shared/i18n/useLocale";
+} from "./workflowSessionHydration.js";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-} from "../infra/messageIdentity";
+} from "../infra/messageIdentity.js";
 import {
   BackendChannelState,
   clearRememberedStopRequests,
@@ -55,34 +55,34 @@ import {
   SESSION_RUN_EVENT,
   isAuthoritativeTerminalState,
   isLegacyTerminalDiscoveryState,
-} from "./sessionRunStateMachine";
-import { setStateMachineDebugLogSink } from "./debug/stateMachineLogger";
-import { setResendDebugLogSink } from "./debug/resendDebugLogger";
-import { setStopDebugLogSink } from "./debug/stopDebugLogger";
-import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger";
-import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger";
+} from "./sessionRunStateMachine.js";
+import { setStateMachineDebugLogSink } from "./debug/stateMachineLogger.js";
+import { setResendDebugLogSink } from "./debug/resendDebugLogger.js";
+import { setStopDebugLogSink } from "./debug/stopDebugLogger.js";
+import { setStopContinueDebugLogSink } from "./debug/stopContinueDebugLogger.js";
+import { setReconnectTimingDebugLogSink } from "./debug/reconnectTimingDebugLogger.js";
 import {
   setWorkflowDiagnosticsLogSink,
-} from "./debug/workflowDiagnosticsLogger";
+} from "./debug/workflowDiagnosticsLogger.js";
 import {
   logThinkingReplayDebug,
   setThinkingReplayDebugLogSink,
-} from "./debug/thinkingReplayDebugLogger";
-import { setToolLogWindowDebugLogSink } from "./debug/toolLogWindowDebugLogger";
-import { setTerminalResolutionDebugLogSink } from "./debug/terminalResolutionDebugLogger";
+} from "./debug/thinkingReplayDebugLogger.js";
+import { setToolLogWindowDebugLogSink } from "./debug/toolLogWindowDebugLogger.js";
+import { setTerminalResolutionDebugLogSink } from "./debug/terminalResolutionDebugLogger.js";
 import {
   resolveSessionTurnRuntime,
   sessionRuntimeId,
-} from "./sessionRunStateMachine/turnRuntimeRegistry";
+} from "./sessionRunStateMachine/turnRuntimeRegistry.js";
 import {
   closeMobileSidebarOnSelect,
   createSessionMessageView,
-} from "./session/messageView";
-import { createComposerRuntimeState } from "./session/composerRuntimeState";
-import { createComposerActions } from "./session/composerActions";
-import { createReconnectCoordinator } from "./session/reconnectCoordinator";
-import { installSessionLifecycleHydration } from "./session/sessionLifecycleHydration";
-import { createRuntimeEventProjector } from "./session/runtimeEventProjector";
+} from "./session/messageView.js";
+import { createComposerRuntimeState } from "./session/composerRuntimeState.js";
+import { createComposerActions } from "./session/composerActions.js";
+import { createReconnectCoordinator } from "./session/reconnectCoordinator.js";
+import { installSessionLifecycleHydration } from "./session/sessionLifecycleHydration.js";
+import { createRuntimeEventProjector } from "./session/runtimeEventProjector.js";
 
 export function useChatSession({
   userId,

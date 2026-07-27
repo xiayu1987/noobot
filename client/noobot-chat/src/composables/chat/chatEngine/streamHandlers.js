@@ -3,39 +3,39 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { StreamEventEnum } from "../../../shared/constants/chatConstants.js";
 import {
   getMessageDialogProcessId,
   getMessageTurnScopeId,
   normalizeTurnMeta,
-} from "../../infra/messageIdentity";
-import { applyDoneMessagesPatch } from "./messagePatch";
+} from "../../infra/messageIdentity.js";
+import { applyDoneMessagesPatch } from "./messagePatch.js";
 import {
   normalizeExecutionLogForRealtime,
   normalizeTrimmedString,
   sanitizeExecutionLogForDisplay,
   stripInternalEventPlaceholderLines,
-} from "./utils";
+} from "./utils.js";
 import {
   normalizeInteractionRequestPayload,
   resolveConnectorStatusPayload,
-} from "../interactionPayload";
-import { BackendChannelState } from "../sessionRunStateMachine";
-import { mergeAttachments } from "../../infra/dialogProcessChain";
-import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
+} from "../interactionPayload.js";
+import { BackendChannelState } from "../sessionRunStateMachine.js";
+import { mergeAttachments } from "../../infra/dialogProcessChain.js";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger.js";
 import {
   logToolLogWindowDebug,
   summarizeToolLogWindow,
   summarizeToolLogWindowItem,
-} from "../debug/toolLogWindowDebugLogger";
-import { isToolActivityLog, reduceActivityTimeline } from "./activityTimeline";
+} from "../debug/toolLogWindowDebugLogger.js";
+import { isToolActivityLog, reduceActivityTimeline } from "./activityTimeline.js";
 import {
   buildToolTimelineFromLegacyLogs,
   fillMissingToolTimelineFacets,
   selectToolTimelineLogs,
   TOOL_SEQUENCE_DOMAIN,
   TOOL_TIMELINE_AUTHORITY,
-} from "./toolTimeline";
+} from "./toolTimeline.js";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;

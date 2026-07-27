@@ -3,16 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
-import { BackendChannelState } from "../sessionRunStateMachine";
-import { nowMs, toIsoTime } from "../../infra/timeFields";
-import { mergeAttachments } from "../../infra/dialogProcessChain";
+import { BackendChannelState } from "../sessionRunStateMachine.js";
+import { nowMs, toIsoTime } from "../../infra/timeFields.js";
+import { mergeAttachments } from "../../infra/dialogProcessChain.js";
 import {
   createTurnPlaceholderMessage,
   findTurnPlaceholderMessage,
-} from "./turnPlaceholder";
+} from "./turnPlaceholder.js";
 
 export function prepareChatSend({
   input,

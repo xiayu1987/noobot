@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
-import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
-import { nowIso } from "../../infra/timeFields";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
+import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity.js";
+import { nowIso } from "../../infra/timeFields.js";
 
 export function _trimStr(x) {
   return String(x || "").trim();

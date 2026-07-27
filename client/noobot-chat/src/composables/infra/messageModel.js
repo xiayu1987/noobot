@@ -6,12 +6,12 @@
 import {
   resolveAttachmentAccessMeta,
   resolveParsedResultAccessMeta,
-} from "../../services/api/attachmentAccess";
-import { mergeAttachments } from "./dialogProcessChain";
+} from "../../services/api/attachmentAccess.js";
+import { mergeAttachments } from "./dialogProcessChain.js";
 import {
   getMessageTransferAttachments,
   getMessageTransferEnvelopes,
-} from "./transferEnvelopes";
+} from "./transferEnvelopes.js";
 import {
   getMessageContentIdentity,
   getMessageDialogProcessId,
@@ -19,21 +19,21 @@ import {
   getMessageRole,
   getMessageSessionId,
   getMessageTurnScopeId,
-} from "./messageIdentity";
+} from "./messageIdentity.js";
 import {
   getMessageTimestamp,
   nowIso,
   nowMs,
-} from "./timeFields";
+} from "./timeFields.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-import { initializeMessageEventState } from "./messageEventState";
-import { mergeToolTimelines } from "../chat/chatEngine/toolTimeline";
-import { mergeActivityTimelines } from "../chat/chatEngine/activityTimeline";
-import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
+import { initializeMessageEventState } from "./messageEventState.js";
+import { mergeToolTimelines } from "../chat/chatEngine/toolTimeline.js";
+import { mergeActivityTimelines } from "../chat/chatEngine/activityTimeline.js";
+import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter.js";
 import {
   mergeMessagePresentationFacets,
   normalizeStatusStepDisplayState,
-} from "./messagePresentation";
+} from "./messagePresentation.js";
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : [];

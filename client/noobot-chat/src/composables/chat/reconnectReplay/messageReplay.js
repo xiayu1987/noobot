@@ -3,25 +3,25 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../../shared/constants/chatConstants";
+import { StreamEventEnum } from "../../../shared/constants/chatConstants.js";
 import {
   findLatestPendingAssistantAfterLastUser,
   findReusableMessageObject,
   mergeCurrentUserMessagesIntoFoldedMessages,
   patchMessageObjectPreservingUiState,
-} from "../../infra/reconnectReplayModel";
-import { getMessageDialogProcessId } from "../../infra/messageIdentity";
-import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils";
+} from "../../infra/reconnectReplayModel.js";
+import { getMessageDialogProcessId } from "../../infra/messageIdentity.js";
+import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils.js";
 import {
   findAssistantMessageByDialogProcessId,
   hasAssistantMessageWithContent,
-} from "./messageLookup";
+} from "./messageLookup.js";
 
 export {
   hydrateSessionBeforeReconnectReplayIfNeeded,
   renderActiveSessionBeforeReplay,
   shouldHydrateSessionBeforeReplay,
-} from "./hydrationReplay";
+} from "./hydrationReplay.js";
 export {
   applyReconnectReplayBatchToActiveSession,
   applyDoneSnapshotReconnectBatch,
@@ -34,22 +34,22 @@ export {
   prepareReconnectReplayMessages,
   resolveReconnectTargetOrApplyFallbackAssistant,
   shouldSkipReconnectBatchAfterTerminal,
-} from "./batchReplay";
+} from "./batchReplay.js";
 export {
   findAssistantMessageByDialogProcessId,
   findAssistantMessageByTurnScopeId,
   findLatestAssistantMessageForRealtimeLogs,
   hasAssistantMessageWithContent,
-} from "./messageLookup";
+} from "./messageLookup.js";
 export {
   createFinalAssistantFromReconnectReplay,
   hasReconnectInFlightEvent,
   resolveReconnectTargetAssistantMessage,
-} from "./assistantMessageReplay";
+} from "./assistantMessageReplay.js";
 export {
   applyDoneMessagesFromReconnect,
   applyDoneRealtimeLogsFromReconnectBatch,
-} from "./doneReplay";
+} from "./doneReplay.js";
 
 export function applyAssistantFailureState({ targetAssistantMessage, errorMessage = "", translate } = {}) {
   if (!targetAssistantMessage) return;

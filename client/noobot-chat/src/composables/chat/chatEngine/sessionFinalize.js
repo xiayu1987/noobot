@@ -3,17 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
-import { normalizeTrimmedString } from "./utils";
-import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity";
-import { getMessageAttachments } from "../../infra/messageModel";
-import { adaptLegacyMessageTimelines } from "./legacyTimelineAdapter";
-import { countCompletedToolAttachments } from "./toolTimeline";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
+import { normalizeTrimmedString } from "./utils.js";
+import { getMessageDialogProcessId, getMessageRole } from "../../infra/messageIdentity.js";
+import { getMessageAttachments } from "../../infra/messageModel.js";
+import { adaptLegacyMessageTimelines } from "./legacyTimelineAdapter.js";
+import { countCompletedToolAttachments } from "./toolTimeline.js";
+import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
-} from "../debug/stateMachineLogger";
+} from "../debug/stateMachineLogger.js";
 
 function summarizeFinalizeMessage(messageItem = {}) {
   const summary = summarizeStateMachineMessage(messageItem);

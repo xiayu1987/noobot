@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { buildAppShellDrawerPanels } from "../../../src/app/state/drawerPanelsState";
+import { buildAppShellDrawerPanels } from "../../../src/app/state/drawerPanelsState.js";
 
 describe("drawerPanelsState", () => {
   it("builds AppShell drawer panel descriptors with existing keys, models, components and props", () => {

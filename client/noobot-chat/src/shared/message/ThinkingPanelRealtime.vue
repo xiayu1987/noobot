@@ -14,11 +14,11 @@ import {
   BaseTabPanelBody,
   BaseThinkingLogLine,
   BaseThinkingPanelShell,
-} from "../ui";
+} from "../ui/index.js";
 import {
   logToolLogWindowDebug,
   summarizeToolLogWindow,
-} from "../../composables/chat/debug/toolLogWindowDebugLogger";
+} from "../../composables/chat/debug/toolLogWindowDebugLogger.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },

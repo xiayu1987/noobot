@@ -5,11 +5,11 @@
 -->
 <script setup>
 import { computed } from "vue";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 import ExtensionOutlet from "../../extensions/ExtensionOutlet.vue";
-import { EXTENSION_POINTS } from "../../extensions/extension-point-ids";
-import { provideExtensionValues, resolveExtensionPoint } from "../../extensions/extension-registry";
-import { createPluginContext } from "../../extensions/create-plugin-context";
+import { EXTENSION_POINTS } from "../../extensions/extension-point-ids.js";
+import { provideExtensionValues, resolveExtensionPoint } from "../../extensions/extension-registry.js";
+import { createPluginContext } from "../../extensions/create-plugin-context.js";
 
 const props = defineProps({
   allowUserInteraction: { type: Boolean, default: true },

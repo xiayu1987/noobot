@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { ref } from "vue";
-import { useWorkflowMeta } from "./useWorkflowMeta";
-import { useWorkflowRuntimeState } from "./useWorkflowRuntimeState";
-import { useWorkflowNodeMessages } from "./useWorkflowNodeMessages";
-import { useWorkflowNodeSessionViewer } from "./useWorkflowNodeSessionViewer";
-import { useWorkflowViewerState } from "./useWorkflowViewerState";
+import { useWorkflowMeta } from "./useWorkflowMeta.js";
+import { useWorkflowRuntimeState } from "./useWorkflowRuntimeState.js";
+import { useWorkflowNodeMessages } from "./useWorkflowNodeMessages.js";
+import { useWorkflowNodeSessionViewer } from "./useWorkflowNodeSessionViewer.js";
+import { useWorkflowViewerState } from "./useWorkflowViewerState.js";
 
 export function useWorkflowMessageCardState(props, emit, translate) {
   const viewerLoading = ref(false);

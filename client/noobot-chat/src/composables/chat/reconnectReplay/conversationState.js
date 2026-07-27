@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { BackendChannelState, BackendTerminalStates, FrontendRunState } from "../sessionRunStateMachine";
-import { _trimStr } from "./utils";
+import { BackendChannelState, BackendTerminalStates, FrontendRunState } from "../sessionRunStateMachine.js";
+import { _trimStr } from "./utils.js";
 
 export function isInFlightConversationState(state = "") {
   return [

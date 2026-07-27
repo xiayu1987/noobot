@@ -5,8 +5,8 @@
  */
 import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { connectApi } from "../../../../src/services/api/chatApi";
-import { useApiConnection } from "../../../../src/composables/infra/useApiConnection";
+import { connectApi } from "../../../../src/services/api/chatApi.js";
+import { useApiConnection } from "../../../../src/composables/infra/useApiConnection.js";
 
 vi.mock("../../../../src/services/api/chatApi", () => ({ connectApi: vi.fn() }));
 vi.mock("../../../../src/shared/i18n/useLocale", () => ({

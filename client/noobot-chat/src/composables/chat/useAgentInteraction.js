@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { storeToRefs } from "pinia";
-import { useChatStore } from "../../shared/stores/useChatStore";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { useChatStore } from "../../shared/stores/useChatStore.js";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 
 export function useAgentInteraction({
   encryptPayloadBySessionId,

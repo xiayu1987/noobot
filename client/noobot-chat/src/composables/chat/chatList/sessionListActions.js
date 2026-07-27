@@ -3,20 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 import {
   buildSessionIdentityMap,
   findSessionByAnyId as findSessionByAnyIdInList,
   resolveSessionPrimaryId as resolveSessionPrimaryIdInList,
-} from "../../infra/sessionIdentity";
-import { parseTimeMs } from "../../infra/timeFields";
+} from "../../infra/sessionIdentity.js";
+import { parseTimeMs } from "../../infra/timeFields.js";
 import {
   mapSummaryToSession,
   reconcileSessionObject,
   revokeMessagePreviewUrls,
-} from "./sessionRecords";
-import { promoteSessionRuntimeIdentity, removeSessionRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry";
-import { clearSessionTurnUiStates } from "../chatEngine/turnUiStore";
+} from "./sessionRecords.js";
+import { promoteSessionRuntimeIdentity, removeSessionRuntime, sessionRuntimeId } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
+import { clearSessionTurnUiStates } from "../chatEngine/turnUiStore.js";
 
 export function createSessionListActions({
   sessions,

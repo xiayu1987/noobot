@@ -6,7 +6,7 @@
 import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
-} from "./messageIdentity";
+} from "./messageIdentity.js";
 
 export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) {
   const existing = existingItem && typeof existingItem === "object" ? existingItem : {};

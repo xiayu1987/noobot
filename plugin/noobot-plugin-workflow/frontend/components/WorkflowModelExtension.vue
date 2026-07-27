@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { computed } from "vue";
-import { useWorkflowLocale } from "../i18n";
+import { useWorkflowLocale } from "../i18n.js";
 
 const props = defineProps({
   modelOptions: { type: Array, default: () => [] },

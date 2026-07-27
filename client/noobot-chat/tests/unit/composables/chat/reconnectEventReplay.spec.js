@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { applyReconnectEventReplay } from "../../../../src/composables/chat/reconnectReplay/reconnectEventReplay";
-import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import { applyReconnectEventReplay } from "../../../../src/composables/chat/reconnectReplay/reconnectEventReplay.js";
+import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
 
 describe("applyReconnectEventReplay", () => {
   it.each([

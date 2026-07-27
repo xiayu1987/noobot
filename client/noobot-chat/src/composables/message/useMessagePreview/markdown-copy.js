@@ -6,7 +6,7 @@
 import {
   copyMarkdownRichAsHtmlPage,
   copyMarkdownText,
-} from "../../../shared/utils/markdown-copy";
+} from "../../../shared/utils/markdown-copy.js";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 

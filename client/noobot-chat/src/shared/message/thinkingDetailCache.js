@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { reactive } from "vue";
-import { normalizeTurnScopeIdKey, getMessageDialogProcessId, getMessageSessionId, getMessageTurnScopeId } from "../../composables/infra/messageIdentity";
-import { thinkingDetailService as defaultThinkingDetailService } from "../../services/thinkingDetailService";
+import { normalizeTurnScopeIdKey, getMessageDialogProcessId, getMessageSessionId, getMessageTurnScopeId } from "../../composables/infra/messageIdentity.js";
+import { thinkingDetailService as defaultThinkingDetailService } from "../../services/thinkingDetailService.js";
 
 const cache = reactive({ entries: {} });
 const inflight = new Map();

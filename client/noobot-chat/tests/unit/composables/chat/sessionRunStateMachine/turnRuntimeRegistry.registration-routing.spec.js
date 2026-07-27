@@ -26,14 +26,14 @@ import {
   applyExecutionTree,
   executionTurnKey,
   isTurnRuntimeDeleted,
-} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../src/composables/chat/sessionRunStateMachine/constants";
+} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../src/composables/chat/sessionRunStateMachine/constants.js";
 import {
   backendState,
   sendStart,
   settleTerminal,
   snapshot,
-} from "./turnRuntimeRegistryTestFixtures";
+} from "./turnRuntimeRegistryTestFixtures.js";
 
 describe("turnRuntimeRegistry: registration and routing", () => {
   it("indexes canonical Execution Turn identities per Session and removes only the targeted Session", () => {

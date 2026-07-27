@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createHarness, assistantMessage, emitChannelState } from "./helpers/useChatEngineHarness";
-import { StreamEventEnum, RoleEnum } from "../../../../src/shared/constants/chatConstants";
-import { FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine";
-import { createSessionListActions } from "../../../../src/composables/chat/chatList/sessionListActions";
+import { createHarness, assistantMessage, emitChannelState } from "./helpers/useChatEngineHarness.js";
+import { StreamEventEnum, RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine.js";
+import { createSessionListActions } from "../../../../src/composables/chat/chatList/sessionListActions.js";
 import {
   applyTurnRuntimeEvent,
   applyTurnLifecycleSnapshot,
   selectSessionTurnRuntime,
-} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine/constants";
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine/constants.js";
 
 describe("useChatEngine.interaction-stop: terminal", () => {
   it("applies the real refresh terminal payload atomically when discovery races snapshot hydration", async () => {

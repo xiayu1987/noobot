@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createPluginContext } from "../../../src/extensions/create-plugin-context";
+import { createPluginContext } from "../../../src/extensions/create-plugin-context.js";
 
 describe("plugin context", () => {
   it("isolates reads and merges patches inside the plugin namespace", () => {

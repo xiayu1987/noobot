@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper";
-import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants";
+import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper.js";
+import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
 import {
   FrontendRunState,
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine";
+} from "../../../../src/composables/chat/sessionRunStateMachine.js";
 
 afterEach(() => {
   vi.useRealTimers();

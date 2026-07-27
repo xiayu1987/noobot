@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getMessageRuntimeChannelState } from "../../composables/chat/sessionRunStateMachine";
+import { getMessageRuntimeChannelState } from "../../composables/chat/sessionRunStateMachine.js";
 function normalizeText(value = "") {
   return String(value || "").trim().toLowerCase();
 }

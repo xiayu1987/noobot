@@ -10,7 +10,7 @@ import {
   normalizePseudoPanel,
   parsePseudoRouteFromLocation,
   usePseudoRoute,
-} from "../../../../src/composables/infra/usePseudoRoute";
+} from "../../../../src/composables/infra/usePseudoRoute.js";
 
 function resetUrl(url = "/chat") {
   window.history.replaceState({}, "", url);

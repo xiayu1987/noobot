@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { FrontendRunState } from "./constants";
+import { FrontendRunState } from "./constants.js";
 
 export function createInitialSessionRunState(overrides = {}) {
   return {

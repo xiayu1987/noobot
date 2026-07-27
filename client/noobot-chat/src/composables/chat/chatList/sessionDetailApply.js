@@ -3,49 +3,49 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
-import { findVisibleLastMessage } from "../../infra/messageModel";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
+import { findVisibleLastMessage } from "../../infra/messageModel.js";
 import {
   findSessionByAnyId as findSessionByAnyIdInList,
   promoteSessionIdentityToBackendId,
-} from "../../infra/sessionIdentity";
+} from "../../infra/sessionIdentity.js";
 import {
   clearTurnScopedAssets,
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
+} from "../../infra/messageIdentity.js";
 import {
   applySummaryToolLogs,
   buildWorkflowMessageSignature,
   mergePreservedDetailMessages,
   patchExistingWorkflowMessage,
-} from "./detailMessages";
-import { buildSessionDetailProjection } from "./sessionDetailProjection";
-import { mergeCanonicalSessionDetail } from "../../infra/sessionDetailMerge";
-import { promoteSessionTurnUiStates } from "../chatEngine/turnUiStore";
-import { revokeMessagePreviewUrls } from "./sessionRecords";
+} from "./detailMessages.js";
+import { buildSessionDetailProjection } from "./sessionDetailProjection.js";
+import { mergeCanonicalSessionDetail } from "../../infra/sessionDetailMerge.js";
+import { promoteSessionTurnUiStates } from "../chatEngine/turnUiStore.js";
+import { revokeMessagePreviewUrls } from "./sessionRecords.js";
 import {
   logResendDebug,
   summarizeDebugMessages,
-} from "../debug/resendDebugLogger";
-import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger";
-import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
+} from "../debug/resendDebugLogger.js";
+import { logReconnectTimingDebug } from "../debug/reconnectTimingDebugLogger.js";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger.js";
 import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
-} from "../debug/workflowDiagnosticsLogger";
-import { applyLatestSessionVersion } from "../chatEngine/sessionVersionManager";
+} from "../debug/workflowDiagnosticsLogger.js";
+import { applyLatestSessionVersion } from "../chatEngine/sessionVersionManager.js";
 import {
   confirmTurnRuntimeDeletion,
   isTurnRuntimeDeleted,
-} from "../sessionRunStateMachine/turnRuntimeRegistry";
+} from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 import {
   SESSION_DETAIL_APPLY_MODE,
   hasInFlightAssistantMissingFromDetail,
   isAuthoritativeSessionDetailApplyMode,
   normalizeSessionDetailApplyMode,
-} from "../chatEngine/messageStateGuards";
+} from "../chatEngine/messageStateGuards.js";
 
 export function createSessionDetailApplicator({
   sessions,

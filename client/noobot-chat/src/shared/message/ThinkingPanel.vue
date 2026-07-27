@@ -5,10 +5,10 @@
 -->
 <script setup>
 import { computed, watch } from "vue";
-import { useLocale } from "../i18n/useLocale";
-import { useThinkingPanel } from "./useThinkingPanel";
-import { normalizeTurnScopeIdKey } from "../../composables/infra/messageIdentity";
-import { getTurnUiState, setTurnThinkingOpenNames } from "../../composables/chat/chatEngine/turnUiStore";
+import { useLocale } from "../i18n/useLocale.js";
+import { useThinkingPanel } from "./useThinkingPanel.js";
+import { normalizeTurnScopeIdKey } from "../../composables/infra/messageIdentity.js";
+import { getTurnUiState, setTurnThinkingOpenNames } from "../../composables/chat/chatEngine/turnUiStore.js";
 import ThinkingPanelRealtime from "./ThinkingPanelRealtime.vue";
 import ThinkingPanelDetails from "./ThinkingPanelDetails.vue";
 

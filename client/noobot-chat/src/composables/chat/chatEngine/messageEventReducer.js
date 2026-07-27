@@ -14,21 +14,21 @@ import {
   initializeMessageEventState,
   resolveMessageEventLaneState,
   syncMessageEventAggregateState,
-} from "../../infra/messageEventState";
+} from "../../infra/messageEventState.js";
 import {
   reduceToolTimeline,
   selectToolTimelineLogs,
   TOOL_SEQUENCE_DOMAIN,
   TOOL_TIMELINE_AUTHORITY,
-} from "./toolTimeline";
-import { reduceActivityTimeline } from "./activityTimeline";
+} from "./toolTimeline.js";
+import { reduceActivityTimeline } from "./activityTimeline.js";
 import {
   logToolLogWindowDebug,
   summarizeToolLogWindow,
   summarizeToolLogWindowItem,
-} from "../debug/toolLogWindowDebugLogger";
+} from "../debug/toolLogWindowDebugLogger.js";
 
-export { initializeMessageEventState } from "../../infra/messageEventState";
+export { initializeMessageEventState } from "../../infra/messageEventState.js";
 
 const text = (value) => String(value || "").trim();
 

@@ -9,7 +9,7 @@ import {
   buildChatMessageNavItems,
   normalizeChatMessageNavContent,
   resolveChatMessageNavRoleLabel,
-} from "../../../src/app/state/chatMessageNavItemsState";
+} from "../../../src/app/state/chatMessageNavItemsState.js";
 
 describe("chatMessageNavItemsState", () => {
   it("normalizes message content from content, text, whitespace, and missing values", () => {

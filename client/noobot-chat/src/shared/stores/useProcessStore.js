@@ -12,7 +12,7 @@ import {
   hydrateProcessSnapshot,
   selectProcessCompatView,
   selectProcessSnapshot,
-} from "../process/reducer";
+} from "../process/reducer.js";
 
 export const useProcessStore = defineStore("process", () => {
   const state = reactive(createEmptyProcessState());

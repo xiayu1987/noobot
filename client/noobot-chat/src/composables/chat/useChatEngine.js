@@ -4,25 +4,25 @@
  * SPDX-License-Identifier: MIT
  */
 import { getCurrentScope, onScopeDispose, toRaw } from "vue";
-import { useLocale } from "../../shared/i18n/useLocale";
-import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePatch";
-import { createAssistantMessageHelpers } from "./chatEngine/assistantMessage";
-import { createChatEngineConversationState } from "./chatEngine/conversationState";
+import { useLocale } from "../../shared/i18n/useLocale.js";
+import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePatch.js";
+import { createAssistantMessageHelpers } from "./chatEngine/assistantMessage.js";
+import { createChatEngineConversationState } from "./chatEngine/conversationState.js";
 import {
   handleStopConfirmationTimeout,
   stopSending as requestStopSending,
-} from "./chatEngine/stop";
-import { createMonotonicMessageActions } from "./chatEngine/monotonicMessageActions";
-import { createChatEngineSender } from "./chatEngine/sendFlow";
-import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore";
-import { logStateMachineDebug } from "./debug/stateMachineLogger";
+} from "./chatEngine/stop.js";
+import { createMonotonicMessageActions } from "./chatEngine/monotonicMessageActions.js";
+import { createChatEngineSender } from "./chatEngine/sendFlow.js";
+import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore.js";
+import { logStateMachineDebug } from "./debug/stateMachineLogger.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   applyTurnTerminalResolution,
   selectSessionTurnRuntime,
-} from "./sessionRunStateMachine/turnRuntimeRegistry";
-import { createTerminalResolutionCoordinator } from "./terminalResolutionCoordinator";
-import { logTerminalResolutionDebug } from "./debug/terminalResolutionDebugLogger";
+} from "./sessionRunStateMachine/turnRuntimeRegistry.js";
+import { createTerminalResolutionCoordinator } from "./terminalResolutionCoordinator.js";
+import { logTerminalResolutionDebug } from "./debug/terminalResolutionDebugLogger.js";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
   TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;

@@ -10,8 +10,8 @@ import {
   createTurnRuntimeRegistryState,
   removeSessionRuntime,
   resolveTurnRuntimeByScope,
-} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/composables/chat/sessionRunStateMachine/constants";
+} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/composables/chat/sessionRunStateMachine/constants.js";
 import { createTurnTerminalResolution } from "../../../../../../../shared/turn-lifecycle-protocol.mjs";
 
 function event(registry, type, sessionId, turnScopeId, dialogProcessId, extra = {}) {

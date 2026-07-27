@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { onBeforeUnmount, ref } from "vue";
-import { attachmentService as defaultAttachmentService } from "../../services/attachmentService";
+import { attachmentService as defaultAttachmentService } from "../../services/attachmentService.js";
 import {
   buildParsedResultPreviewItem,
   resolveAttachmentAccessMeta,
   resolveParsedResultAccessMeta,
-} from "../../services/api/attachmentAccess";
-import { useLocale } from "../../shared/i18n/useLocale";
+} from "../../services/api/attachmentAccess.js";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 import {
   hasParsedResult,
   isAudioPreviewMime,
@@ -23,7 +23,7 @@ import {
   isOfficeMime,
   isTextPreviewFile,
   isTextPreviewMime,
-} from "./useMessagePreview/file-type";
+} from "./useMessagePreview/file-type.js";
 import {
   createFileAccessTraceId,
   maskHostPath,
@@ -32,15 +32,15 @@ import {
   resolveFileItemHostPath,
   resolveFileItemName,
   resolveFileItemRelativePath,
-} from "./useMessagePreview/path-utils";
+} from "./useMessagePreview/path-utils.js";
 import {
   logFileAccess,
   triggerBlobDownload,
-} from "./useMessagePreview/file-access-log";
+} from "./useMessagePreview/file-access-log.js";
 import {
   buildNoCopyableSet,
   handleCopyMarkdown,
-} from "./useMessagePreview/markdown-copy";
+} from "./useMessagePreview/markdown-copy.js";
 
 export function useMessagePreview({
   userId = "",

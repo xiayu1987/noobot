@@ -3,15 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum } from "../../../shared/constants/chatConstants";
+import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
   normalizeTurnMeta,
-} from "../../infra/messageIdentity";
-import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger";
-import { BackendChannelState } from "../sessionRunStateMachine";
+} from "../../infra/messageIdentity.js";
+import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger.js";
+import { BackendChannelState } from "../sessionRunStateMachine.js";
 
 function normalizeTrimmedString(value = "") {
   return String(value || "").trim();

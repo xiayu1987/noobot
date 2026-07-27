@@ -15,7 +15,7 @@ import {
   persistSelectedPlugins,
   safeParseStringArray,
   syncSelectedPluginsWithConfig,
-} from "../../../src/app/state/pluginSelectionState";
+} from "../../../src/app/state/pluginSelectionState.js";
 
 describe("plugin selection state", () => {
   const storage = new Map();

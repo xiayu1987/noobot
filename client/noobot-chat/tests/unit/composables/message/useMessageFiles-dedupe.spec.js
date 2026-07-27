@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { createMessageFiles } from "./helpers/useMessageFiles-helper";
+import { createMessageFiles } from "./helpers/useMessageFiles-helper.js";
 
 describe("useMessageFiles dedupe", () => {
   it("does not render the same file in both attachment and written-file lists when paths match", () => {

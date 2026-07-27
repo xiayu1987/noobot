@@ -5,9 +5,9 @@
  */
 import {
   getMessageTurnScopeId,
-} from "../../infra/messageIdentity";
-import { findVisibleLastMessage } from "../../infra/messageModel";
-import { nowIso } from "../../infra/timeFields";
+} from "../../infra/messageIdentity.js";
+import { findVisibleLastMessage } from "../../infra/messageModel.js";
+import { nowIso } from "../../infra/timeFields.js";
 
 function createRemovedIdentitySnapshot(anchorMessage = {}, removedMessages = []) {
   const removedReferences = new Set(removedMessages.filter(Boolean));

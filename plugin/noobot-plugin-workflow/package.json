@@ -15,5 +15,8 @@
   "dependencies": {
     "@noobot/shared": "file:../../shared",
     "workflow": "file:../../workflow"
+  },
+  "peerDependencies": {
+    "noobot-chat": "^4.1.3"
   }
 }

@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { postOpenVSCodeServerApi } from "../services/api/chatApi";
-import { shouldOpenOpenVSCodeInCurrentTab as shouldOpenOpenVSCodeInCurrentTabState } from "./appShellEventHandlers";
+import { postOpenVSCodeServerApi } from "../services/api/chatApi.js";
+import { shouldOpenOpenVSCodeInCurrentTab as shouldOpenOpenVSCodeInCurrentTabState } from "./appShellEventHandlers.js";
 
 export function useOpenVSCodeAction({
   userId,

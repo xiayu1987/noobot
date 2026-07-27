@@ -6,8 +6,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
-import { useChatStore } from "../../../../src/shared/stores/useChatStore";
-import { applyTurnTerminalResolution } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { useChatStore } from "../../../../src/shared/stores/useChatStore.js";
+import { applyTurnTerminalResolution } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 import {
   createChatSession,

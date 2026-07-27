@@ -5,12 +5,12 @@
 -->
 <script setup>
 import { View } from "@element-plus/icons-vue";
-import { useLocale } from "../../../../client/noobot-chat/src/public/locale.js";
+import { useLocale } from "noobot-chat/plugin-api/locale";
 import {
   BaseAttachmentFileCard,
   BaseSectionHeader,
   BaseFileCardList,
-} from "../../../../client/noobot-chat/src/public/ui.js";
+} from "noobot-chat/plugin-api/ui";
 
 defineProps({
   writtenFiles: { type: Array, default: () => [] },

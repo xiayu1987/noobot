@@ -10,8 +10,8 @@ import {
   SESSION_RUN_TRANSITION_DECISION_REASON,
   SESSION_RUN_TRANSITION_GUARD_ID,
   SESSION_RUN_TRANSITION_TABLE,
-} from "./constants";
-import { normalizeState } from "./normalize";
+} from "./constants.js";
+import { normalizeState } from "./normalize.js";
 import {
   hasEventState,
   isNotLeavingTerminal,
@@ -19,7 +19,7 @@ import {
   isNotStaleSeqRegression,
   isPriorityForwardOrNewTurn,
   isSameConversationScopeOrNewTurn,
-} from "./runIdentity";
+} from "./runIdentity.js";
 
 export const SESSION_RUN_TRANSITION_GUARDS = Object.freeze([
   Object.freeze({

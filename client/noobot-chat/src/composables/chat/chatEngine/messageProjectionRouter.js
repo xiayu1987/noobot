@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "./turnProjectionStore";
-import { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./sendFlowSupport";
+import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "./turnProjectionStore.js";
+import { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./sendFlowSupport.js";
 
 export function routeMessageProjectionEvent(event, data, context) {
   const {

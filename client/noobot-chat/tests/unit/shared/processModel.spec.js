@@ -7,18 +7,18 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createProcessEventFromLog,
   createProcessSnapshotFromLogs,
-} from "../../../src/shared/process/aggregator";
+} from "../../../src/shared/process/aggregator.js";
 import {
   applyProcessEvents,
   createEmptyProcessState,
   hydrateProcessSnapshot,
   selectProcessCompatView,
-} from "../../../src/shared/process/reducer";
+} from "../../../src/shared/process/reducer.js";
 import {
   PROCESS_EVENT_VERSION,
   ProcessEventSource,
   resolveExplicitProcessTimestamp,
-} from "../../../src/shared/process/protocol";
+} from "../../../src/shared/process/protocol.js";
 
 describe("process model", () => {
   it("normalizes seq into unified ProcessEvent metadata", () => {

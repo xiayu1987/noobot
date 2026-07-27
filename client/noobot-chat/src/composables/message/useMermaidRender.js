@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { nextTick, onMounted, onUpdated, ref } from "vue";
-import { renderMermaidInElement } from "../../shared/utils/mermaid-renderer";
+import { renderMermaidInElement } from "../../shared/utils/mermaid-renderer.js";
 
 export function useMermaidRender() {
   const mermaidHostRef = ref(null);

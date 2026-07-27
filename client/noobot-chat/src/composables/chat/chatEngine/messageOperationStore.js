@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowIso, nowMs } from "../../infra/timeFields";
+import { nowIso, nowMs } from "../../infra/timeFields.js";
 
 function normalizeOperationId(value = "") {
   return String(value || "").trim();

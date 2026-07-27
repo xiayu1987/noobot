@@ -9,15 +9,15 @@ import {
   makeSession,
   assistantMessage,
   emitChannelState,
-} from "./helpers/useChatEngineHarness";
+} from "./helpers/useChatEngineHarness.js";
 import {
   BackendChannelState,
   FrontendRunState,
-} from "../../../../src/composables/chat/sessionRunStateMachine";
+} from "../../../../src/composables/chat/sessionRunStateMachine.js";
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../src/shared/constants/chatConstants";
+} from "../../../../src/shared/constants/chatConstants.js";
 
 describe("useChatEngine.resend replace turn", () => {
   it("resendMonotonicMessage continues generation after atomic replace-turn returns user-only snapshot", async () => {

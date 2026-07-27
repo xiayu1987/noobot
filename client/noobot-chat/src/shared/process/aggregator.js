@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowIso } from "../../composables/infra/timeFields";
+import { nowIso } from "../../composables/infra/timeFields.js";
 import {
   PROCESS_EVENT_VERSION,
   ProcessEventSource,
@@ -16,11 +16,11 @@ import {
   resolveProcessId,
   resolveProcessTimestamp,
   toProcessSequence,
-} from "./protocol";
+} from "./protocol.js";
 import {
   normalizeExecutionLogForRealtime,
   sanitizeExecutionLogForDisplay,
-} from "../../composables/chat/chatEngine/utils";
+} from "../../composables/chat/chatEngine/utils.js";
 
 function stableNodeId({
   processId = "",

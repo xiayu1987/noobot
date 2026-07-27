@@ -10,8 +10,8 @@ import {
   __resetThinkingDetailCacheForTests,
   getCachedThinkingDetail,
   resolveThinkingDetailIdentity,
-} from "../../../src/shared/message/thinkingDetailCache";
-import { normalizeThinkingToolLogs } from "../../../src/composables/infra/thinkingDetailModel";
+} from "../../../src/shared/message/thinkingDetailCache.js";
+import { normalizeThinkingToolLogs } from "../../../src/composables/infra/thinkingDetailModel.js";
 import ThinkingPanelRealtime from "../../../src/shared/message/ThinkingPanelRealtime.vue";
 
 async function flushAsync() {

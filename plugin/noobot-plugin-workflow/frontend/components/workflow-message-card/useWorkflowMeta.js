@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { parseWorkflowDslPayload } from "./workflowDsl";
+import { parseWorkflowDslPayload } from "./workflowDsl.js";
 
 function text(value) {
   return String(value || "").trim();

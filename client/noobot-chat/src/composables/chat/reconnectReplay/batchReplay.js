@@ -3,42 +3,42 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants";
-import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils";
+import { RoleEnum, StreamEventEnum } from "../../../shared/constants/chatConstants.js";
+import { sanitizeExecutionLogForDisplay } from "../chatEngine/utils.js";
 import {
   findReconnectDoneEnvelopeWithMessages,
   getReconnectEnvelopeSequence,
   getReconnectMaxSequence,
   isPendingInteractionReplay,
-} from "../../infra/reconnectReplayModel";
-import { getMessageDialogProcessId } from "../../infra/messageIdentity";
-import { _ensureArray, _trimStr, normalizeReplayError } from "./utils";
+} from "../../infra/reconnectReplayModel.js";
+import { getMessageDialogProcessId } from "../../infra/messageIdentity.js";
+import { _ensureArray, _trimStr, normalizeReplayError } from "./utils.js";
 import {
   hydrateSessionBeforeReconnectReplayIfNeeded,
-} from "./hydrationReplay";
+} from "./hydrationReplay.js";
 import {
   applyDoneRealtimeLogsFromReconnectBatch,
-} from "./doneReplay";
+} from "./doneReplay.js";
 import {
   createFinalAssistantFromReconnectReplay,
   resolveReconnectTargetAssistantMessage,
-} from "./assistantMessageReplay";
-import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger";
+} from "./assistantMessageReplay.js";
+import { logThinkingReplayDebug } from "../debug/thinkingReplayDebugLogger.js";
 import {
   logToolLogWindowDebug,
   summarizeToolLogWindow,
   summarizeToolLogWindowItem,
-} from "../debug/toolLogWindowDebugLogger";
-import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../chatEngine/turnProjectionStore";
+} from "../debug/toolLogWindowDebugLogger.js";
+import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../chatEngine/turnProjectionStore.js";
 import {
   buildToolTimelineFromLegacyLogs,
   fillMissingToolTimelineFacets,
   selectToolTimelineLogs,
   TOOL_SEQUENCE_DOMAIN,
   TOOL_TIMELINE_AUTHORITY,
-} from "../chatEngine/toolTimeline";
-import { buildActivityTimelineFromLegacyLogs, mergeActivityTimelines } from "../chatEngine/activityTimeline";
-import { logWorkflowDiagnostics } from "../debug/workflowDiagnosticsLogger";
+} from "../chatEngine/toolTimeline.js";
+import { buildActivityTimelineFromLegacyLogs, mergeActivityTimelines } from "../chatEngine/activityTimeline.js";
+import { logWorkflowDiagnostics } from "../debug/workflowDiagnosticsLogger.js";
 
 function summarizeReconnectEnvelope(envelope = {}) {
   return {

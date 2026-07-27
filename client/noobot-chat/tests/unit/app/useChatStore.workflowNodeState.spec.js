@@ -5,7 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { useChatStore } from "../../../src/shared/stores/useChatStore";
+import { useChatStore } from "../../../src/shared/stores/useChatStore.js";
 
 function nodeEvent(overrides = {}) {
   return {

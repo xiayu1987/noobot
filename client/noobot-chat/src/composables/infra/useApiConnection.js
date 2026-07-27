@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, ref, watch } from "vue";
-import { connectApi } from "../../services/api/chatApi";
-import { useLocale } from "../../shared/i18n/useLocale";
+import { connectApi } from "../../services/api/chatApi.js";
+import { useLocale } from "../../shared/i18n/useLocale.js";
 
 export function useApiConnection({
   userId,

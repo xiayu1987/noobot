@@ -6,7 +6,7 @@
 import {
   submitInteractionCancel,
   submitInteractionConfirm,
-} from "./appShellEventHandlers";
+} from "./appShellEventHandlers.js";
 
 export function useAppShellInteractionActions({
   submitInteractionResponse,

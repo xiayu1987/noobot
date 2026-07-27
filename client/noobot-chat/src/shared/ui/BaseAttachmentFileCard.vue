@@ -6,7 +6,7 @@
 <script setup>
 import { computed } from "vue";
 import { Document, Download } from "@element-plus/icons-vue";
-import { resolveParsedResultAccessMeta } from "../../services/api/attachmentAccess";
+import { resolveParsedResultAccessMeta } from "../../services/api/attachmentAccess.js";
 
 const props = defineProps({
   attachmentItem: { type: Object, required: true },
