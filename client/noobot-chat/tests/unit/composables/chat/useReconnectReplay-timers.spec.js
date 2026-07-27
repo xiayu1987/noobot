@@ -115,6 +115,5 @@ describe("useReconnectReplay", () => {
     });
 
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
-    expect(mocks.chatWebSocketClient.clearStopRequested).not.toHaveBeenCalled();
   });
 });

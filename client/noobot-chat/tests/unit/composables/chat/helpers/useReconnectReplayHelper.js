@@ -143,7 +143,6 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
   };
 
   const chatWebSocketClient = {
-    clearStopRequested: vi.fn(),
     reconnect: vi.fn(async () => {}),
   };
 

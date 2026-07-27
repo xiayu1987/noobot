@@ -65,7 +65,6 @@ describe("useChatSession send/continue actions", () => {
     setActivePinia(createPinia());
     useChatStore().resetChatStore();
     Object.values(wsClientMock).forEach((fn) => fn?.mockReset?.());
-    wsClientMock.isStopRequested.mockReturnValue(false);
     wsClientMock.reconnect.mockResolvedValue(undefined);
     sessionLogClientMock.log.mockClear();
     sessionLogClientMock.debug.mockClear();

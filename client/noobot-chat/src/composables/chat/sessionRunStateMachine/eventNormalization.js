@@ -90,6 +90,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
     state,
     backendState: trim(rawEvent?.executionState).toLowerCase() || wireState,
     action: trim(rawEvent?.action),
+    commandId: trim(rawEvent?.commandId),
     sessionId: trim(rawEvent?.sessionId),
     dialogProcessId: [
       SESSION_RUN_EVENT.LOCAL_SEND_STARTED,

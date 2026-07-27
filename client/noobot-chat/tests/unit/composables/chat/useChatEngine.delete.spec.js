@@ -123,7 +123,7 @@ describe("useChatEngine.delete", () => {
     expect(activeSession.value.messages).toEqual([]);
   });
 
-  it("resendMonotonicMessage does not continue when stop confirmation is still pending", async () => {
+  it("resendMonotonicMessage does not continue while stop completion is pending", async () => {
     const stream = vi.fn(async () => {});
     const { engine, activeSession, deps, input, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend",
@@ -134,10 +134,7 @@ describe("useChatEngine.delete", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-resend", turnScopeId: target.turnScopeId });
-    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onStopConfirmationTimeout) => {
-      onStopConfirmationTimeout();
-      return true;
-    });
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
 
     await expect(engine.resendMonotonicMessage(target, "edited question"))
       .rejects.toThrow("chat.monotonicActionStopTimeout");
@@ -359,7 +356,7 @@ describe("useChatEngine.delete", () => {
 
   it("deleteMonotonicMessage does not delete when stop precondition fails", async () => {
     vi.useFakeTimers();
-    const { engine, activeSession, sending, activeTurnRuntime, turnRuntimeRegistry } = createHarness({ sessionId: "local-delete-fail" });
+    const { engine, activeSession, deps, sending, activeTurnRuntime, turnRuntimeRegistry } = createHarness({ sessionId: "local-delete-fail" });
     const first = { id: "m1", role: RoleEnum.USER, content: "first", turnScopeId: "turn-delete-fail" };
     const target = {
       id: "m2",
@@ -372,6 +369,7 @@ describe("useChatEngine.delete", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-delete-fail", turnScopeId: "turn-delete-fail" });
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
     const actionPromise = engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 });
     const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
     await vi.advanceTimersByTimeAsync(25);
@@ -383,7 +381,7 @@ describe("useChatEngine.delete", () => {
   it("resendMonotonicMessage does not delete or send when stop precondition fails", async () => {
     vi.useFakeTimers();
     const stream = vi.fn(async () => {});
-    const { engine, activeSession, sending, input, activeTurnRuntime, turnRuntimeRegistry } = createHarness({ sessionId: "local-resend-fail", stream });
+    const { engine, activeSession, deps, sending, input, activeTurnRuntime, turnRuntimeRegistry } = createHarness({ sessionId: "local-resend-fail", stream });
     const first = { id: "m1", role: RoleEnum.USER, content: "first", turnScopeId: "turn-resend-fail" };
     const target = {
       id: "m2",
@@ -396,6 +394,7 @@ describe("useChatEngine.delete", () => {
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-resend-fail", turnScopeId: "turn-resend-fail" });
+    deps.chatWebSocketClient.requestStop.mockReturnValue(true);
     const actionPromise = engine.resendMonotonicMessage(target, "edited", { timeoutMs: 20, pollIntervalMs: 5 });
     const rejectionExpectation = expect(actionPromise).rejects.toThrow("chat.monotonicActionStopTimeout");
     await vi.advanceTimersByTimeAsync(25);

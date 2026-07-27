@@ -6,7 +6,7 @@
 import { buildChatPayload } from "./payload.js";
 import {
   applySendErrorState,
-  applyStopRequestedState,
+  applyBackendStoppedState,
   applyStreamCompletedFallback,
   finalizeSendCleanup,
 } from "./sendFinalize.js";
@@ -126,8 +126,6 @@ export function createChatEngineSender({
       ...runtimeView(),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
     });
-    chatWebSocketClient?.clearStopRequested?.();
-    logResendDebug("send.clearStopRequested", { turnScopeId });
     const turnStartedAtMs = Date.now();
     const thinkingStartedAt = new Date(turnStartedAtMs).toISOString();
     applyRunStateEvent?.({
@@ -317,9 +315,9 @@ export function createChatEngineSender({
       });
 
       const userStoppedByFinalEvent = Boolean(finalUserStopEventData);
-      const userStoppedByUserStopRequest = !finalDoneEventData && applyStopRequestedState({
-        chatWebSocketClient,
+      const userStoppedByUserStopRequest = !finalDoneEventData && applyBackendStoppedState({
         activeSession,
+        turnRuntimeRegistry,
         botMessage: botMsg,
         applyConversationState,
         backendStopEventData: finalUserStopEventData,
@@ -334,9 +332,9 @@ export function createChatEngineSender({
       });
       if (userStoppedByFinalEvent || userStoppedByUserStopRequest) {
         if (userStoppedByFinalEvent && !userStoppedByUserStopRequest) {
-          applyStopRequestedState({
-            chatWebSocketClient: { isStopRequested: () => true },
+          applyBackendStoppedState({
             activeSession,
+            turnRuntimeRegistry,
             botMessage: botMsg,
             applyConversationState,
             backendStopEventData: finalUserStopEventData,
@@ -376,9 +374,9 @@ export function createChatEngineSender({
       return true;
     } catch (error) {
       if (
-        applyStopRequestedState({
-          chatWebSocketClient,
+        applyBackendStoppedState({
           activeSession,
+          turnRuntimeRegistry,
           botMessage: botMsg,
           applyConversationState,
         })
@@ -448,7 +446,6 @@ export function createChatEngineSender({
         data: runtimeView(),
       });
       finalizeSendCleanup({
-        chatWebSocketClient,
         pendingInteractionRequest,
         interactionSubmitting,
       });

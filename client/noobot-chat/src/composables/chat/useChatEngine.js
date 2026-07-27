@@ -8,10 +8,7 @@ import { useLocale } from "../../shared/i18n/useLocale.js";
 import { applyRunStateMessageRuntimePatch } from "./chatEngine/messageRuntimePatch.js";
 import { createAssistantMessageHelpers } from "./chatEngine/assistantMessage.js";
 import { createChatEngineConversationState } from "./chatEngine/conversationState.js";
-import {
-  handleStopConfirmationTimeout,
-  stopSending as requestStopSending,
-} from "./chatEngine/stop.js";
+import { stopSending as requestStopSending } from "./chatEngine/stop.js";
 import { createMonotonicMessageActions } from "./chatEngine/monotonicMessageActions.js";
 import { createChatEngineSender } from "./chatEngine/sendFlow.js";
 import { createPendingMessageOperationStore } from "./chatEngine/messageOperationStore.js";
@@ -264,7 +261,6 @@ export function useChatEngine({
     applyConversationStateFromEvent,
     clearMissingInteractionPayloadTimer,
     disposeConversationState,
-    findTargetAssistantMessage,
     tryAutoResolveInteraction,
   } = createChatEngineConversationState({
     activeSession,
@@ -286,24 +282,12 @@ export function useChatEngine({
     applyAssistantFailureState,
   });
 
-  function onStopConfirmationTimeout(stopScope = {}) {
-    return handleStopConfirmationTimeout({
-      applyRunStateEvent,
-      activeSession,
-      findTargetAssistantMessage,
-      applyConversationState,
-      chatWebSocketClient,
-      stopScope,
-    });
-  }
-
   function stopSending(executionId = "") {
     return requestStopSending({
       userId,
       activeSession,
       turnRuntimeRegistry,
       chatWebSocketClient,
-      onStopConfirmationTimeout,
       applyRunStateEvent,
       executionId,
     });

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { applyStopRequestedState } from "../../../../src/composables/chat/chatEngine/sendFinalize.js";
+import { applyBackendStoppedState } from "../../../../src/composables/chat/chatEngine/sendFinalize.js";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
 
 describe("sendFinalize", () => {
@@ -25,8 +25,7 @@ describe("sendFinalize", () => {
     };
     const applyConversationState = vi.fn();
 
-    const applied = applyStopRequestedState({
-      chatWebSocketClient: { isStopRequested: () => true },
+    const applied = applyBackendStoppedState({
       activeSession,
       botMessage: assistantMessage,
       applyConversationState,
@@ -74,14 +73,14 @@ describe("sendFinalize", () => {
     };
     const applyConversationState = vi.fn();
 
-    const applied = applyStopRequestedState({
-      chatWebSocketClient: {
-        isStopRequested: () => true,
-        getStopRequestedTurnScopeId: () => "turn-old",
-      },
+    const applied = applyBackendStoppedState({
       activeSession,
       botMessage: assistantMessage,
       applyConversationState,
+      backendStopEventData: {
+        sessionId: "backend-stop",
+        turnScopeId: "turn-old",
+      },
     });
 
     expect(applied).toBe(false);

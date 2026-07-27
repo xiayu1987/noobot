@@ -9,8 +9,8 @@ import { useChatSession } from "../../../../src/composables/chat/useChatSession.
 
 export const wsClientMock = {
   connect: vi.fn(), dispose: vi.fn(), sendJson: vi.fn(), requestJson: vi.fn(), stream: vi.fn(),
-  requestStop: vi.fn(), clearLastReceivedSeqMap: vi.fn(), clearStopRequested: vi.fn(),
-  isStopRequested: vi.fn(() => false), reconnect: vi.fn(async () => {}),
+  requestStop: vi.fn(), clearLastReceivedSeqMap: vi.fn(),
+  reconnect: vi.fn(async () => {}),
 };
 
 export const sessionLogClientMock = {

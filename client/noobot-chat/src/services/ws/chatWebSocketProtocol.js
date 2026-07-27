@@ -66,18 +66,3 @@ export function createStreamEventError(data = {}, translateText = (key = "") => 
   error.data = data || {};
   return error;
 }
-
-export function createStopConfirmationTimeoutError(
-  data = {},
-  translateText = (key = "") => key,
-) {
-  const error = new Error(
-    translateText("chat.stopRequestTimeout") ||
-      translateText("infra.websocketStreamError") ||
-      "Stop request timed out before backend confirmation",
-  );
-  error.event = "stop_confirmation_timeout";
-  error.code = "STOP_CONFIRMATION_TIMEOUT";
-  error.data = { error: error.message, ...(data || {}) };
-  return error;
-}

@@ -161,8 +161,9 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     },
   ];
   const ctx = {
-    userId: "u-attach",
-    sessionId: "s-attach",
+    // Untrusted hook context must not override the runtime-owned identity.
+    userId: "u-spoofed",
+    sessionId: "s-spoofed",
     result: {
       output: "done",
       turnMessages: [{ role: "assistant", content: "done", type: "message" }],
@@ -182,6 +183,8 @@ test("acceptance checklist attachments are bound to final assistant turn output"
           runtime: {
             attachmentService: {
               ingestGeneratedArtifacts: async (payload = {}) => {
+                assert.equal(payload.userId, "u-attach");
+                assert.equal(payload.sessionId, "s-attach");
                 assert.equal(payload.owner?.type, "plugin");
                 assert.equal(payload.owner?.id, "harness-plugin");
                 return records.map((record) => ({

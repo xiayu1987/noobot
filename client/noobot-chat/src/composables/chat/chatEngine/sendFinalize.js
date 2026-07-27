@@ -11,7 +11,8 @@ import {
   normalizeTurnMeta,
 } from "../../infra/messageIdentity.js";
 import { logResendDebug, summarizeDebugMessage } from "../debug/resendDebugLogger.js";
-import { BackendChannelState } from "../sessionRunStateMachine.js";
+import { BackendChannelState, FrontendRunState } from "../sessionRunStateMachine.js";
+import { resolveSessionTurnRuntime } from "../sessionRunStateMachine/turnRuntimeRegistry.js";
 
 function normalizeTrimmedString(value = "") {
   return String(value || "").trim();
@@ -45,9 +46,9 @@ export function applyStreamCompletedFallback({
   return true;
 }
 
-export function applyStopRequestedState({
-  chatWebSocketClient,
+export function applyBackendStoppedState({
   activeSession,
+  turnRuntimeRegistry,
   botMessage,
   applyConversationState,
   backendStopEventData = null,
@@ -59,34 +60,44 @@ export function applyStopRequestedState({
     logResendDebug("sendFinalize.stopRequested.skip", { reason: "missingBackendStopConfirmation", botMessage: summarizeDebugMessage(botMessage) });
     return false;
   }
-  if (!chatWebSocketClient?.isStopRequested?.()) {
-    logResendDebug("sendFinalize.stopRequested.skip", { reason: "notRequested", botMessage: summarizeDebugMessage(botMessage) });
-    return false;
-  }
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
   const stopTurnScopeId = normalizeTrimmedString(stopEvent?.turnScopeId);
-  const stopRequestedTurnScopeId = normalizeTrimmedString(
-    chatWebSocketClient?.getStopRequestedTurnScopeId?.(),
-  );
   const comparableBotTurnScopeId = botTurnScopeId || stopTurnScopeId;
-  if (stopRequestedTurnScopeId && comparableBotTurnScopeId && stopRequestedTurnScopeId !== comparableBotTurnScopeId) {
+  if (botTurnScopeId && stopTurnScopeId && botTurnScopeId !== stopTurnScopeId) {
     logResendDebug("sendFinalize.stopRequested.skip", {
       reason: "turnScopeMismatch",
-      stopRequestedTurnScopeId,
+      stopTurnScopeId,
       botTurnScopeId: comparableBotTurnScopeId,
       botMessage: summarizeDebugMessage(botMessage),
     });
     return false;
   }
+  const sessionId = String(
+    stopEvent?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
+  );
+  const turnRuntime = resolveSessionTurnRuntime(
+    turnRuntimeRegistry?.value || turnRuntimeRegistry,
+    sessionId,
+    comparableBotTurnScopeId,
+  );
+  const runtimeConfirmsStop = !turnRuntime || turnRuntime.action === "stop" ||
+    turnRuntime.state === FrontendRunState.USER_STOPPING || turnRuntime.terminal === "user_stopped";
+  if (!runtimeConfirmsStop) {
+    logResendDebug("sendFinalize.stopRequested.skip", {
+      reason: "registryDoesNotConfirmStop",
+      turnScopeId: comparableBotTurnScopeId,
+      botMessage: summarizeDebugMessage(botMessage),
+    });
+    return false;
+  }
   logResendDebug("sendFinalize.stopRequested.hit", {
-    stopRequestedTurnScopeId,
     botTurnScopeId: comparableBotTurnScopeId,
     botMessage: summarizeDebugMessage(botMessage),
   });
   applyConversationState(
     {
       state: BackendChannelState.USER_STOPPED,
-      sessionId: String(stopEvent?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
+      sessionId,
       dialogProcessId: String(stopEvent?.dialogProcessId || getMessageDialogProcessId(botMessage) || ""),
       ...(comparableBotTurnScopeId ? { turnScopeId: String(comparableBotTurnScopeId || "") } : {}),
       sourceEvent: "backend_stopped",
@@ -130,11 +141,9 @@ export function applySendErrorState({
 }
 
 export function finalizeSendCleanup({
-  chatWebSocketClient,
   pendingInteractionRequest,
   interactionSubmitting,
 } = {}) {
-  chatWebSocketClient?.clearStopRequested?.();
   if (!pendingInteractionRequest?.value && interactionSubmitting) {
     interactionSubmitting.value = false;
   }

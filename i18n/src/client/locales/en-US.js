@@ -215,7 +215,6 @@ export const enUSMessages = {
     "unknownError": "Unknown error",
     "occurredError": "Error: {error}",
     "sendFailed": "Send failed",
-    "stopRequestTimeout": "Stop request timed out. Please try again.",
     "expiredRefreshFailed": "Session expired. Please create a new conversation.",
     "sessionStateOutOfSync": "Session state is out of sync. Refresh and try again."
   },
