@@ -219,7 +219,6 @@ export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {},
             : conversationSeed;
           return [...normalizedSystem, ...normalizedConversation];
         } catch {
-          // fall through to raw message blocks.
         }
       }
       return [...system, ...conversationSeed];
@@ -247,7 +246,6 @@ export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {},
           .filter((item) => item && String(item.content || "").trim());
       }
     } catch {
-      // Fall through to local ctx.messages compatibility fallback.
     }
   }
   return fallbackMessages

@@ -18,9 +18,6 @@ function legacyLogStream(realtimeLogs, completedLogs) {
   const realtime = array(realtimeLogs);
   return {
     logs: [...realtime, ...array(completedLogs)],
-    // Persisted completedToolLogs are already classified by their storage
-    // boundary. Older rows often have no event/type field, so retain that
-    // classification without treating unrelated realtime activity as a tool.
     assumeTool: (_log, index) => index >= realtime.length,
     assumeCompleted: (_log, index) => index >= realtime.length,
   };
@@ -33,11 +30,6 @@ function buildLegacyToolTimeline(stream) {
   });
 }
 
-/**
- * The only boundary allowed to understand persisted pre-timeline log fields.
- * It produces canonical, mutually exclusive timelines and deliberately omits
- * the legacy arrays so they cannot become mutable runtime facts again.
- */
 export function adaptLegacyMessageTimelines(message = {}) {
   const processStream = legacyLogStream(
     message.processRealtimeLogs,
@@ -51,9 +43,6 @@ export function adaptLegacyMessageTimelines(message = {}) {
   const messageLogs = messageStream.logs;
   const processToolTimeline = buildLegacyToolTimeline(processStream);
   const messageToolTimeline = buildLegacyToolTimeline(messageStream);
-  // A populated Process projection supersedes message-level tool mirrors only
-  // when it actually contains tool facts. Activity-only Process rows must not
-  // hide replayed message tool events.
   const selectedToolTimeline = processToolTimeline.length
     ? processToolTimeline
     : messageToolTimeline;
@@ -63,8 +52,6 @@ export function adaptLegacyMessageTimelines(message = {}) {
   const canonicalActivityTimeline = array(message.activityTimeline);
   const toolTimeline = canonicalToolTimeline.length
     ? canonicalToolTimeline
-    // Build the selected realtime+completed stream once. Splitting the arrays
-    // resets the index-based legacy identity and can collapse unrelated rows.
     : buildLegacyToolTimeline(selectedStream);
   const activityTimeline = canonicalActivityTimeline.length
     ? canonicalActivityTimeline

@@ -101,7 +101,6 @@ export function createDesktopWindowManager({
       appendDesktopLog(`[main:frontend] packaged frontend not found: ${packagedFrontendIndex}`);
     }
 
-    // Development keeps loading the Vite dev server so frontend hot reload remains usable.
     return defaultClientUrl;
   }
 

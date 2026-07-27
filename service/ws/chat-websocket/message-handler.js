@@ -38,20 +38,6 @@ import {
   validateExecutionIdentity,
 } from "@noobot/shared/execution-lifecycle-protocol";
 
-/**
- * Build the WebSocket `message` handler for a single connection.
- *
- * The handler owns three protocol actions:
- *  - `interaction_response`: resolve a pending user-interaction request.
- *  - `stop` / `resume`-stop: abort the active run or stage a pending stop.
- *  - run / `continue`: orchestrate a full session execution turn.
- *
- * All per-connection mutable run state lives on the shared `state` object so it
- * stays consistent across the message handler, event listener, terminal
- * finalizers and the socket close handler.
- *
- * @returns {(rawMessage: unknown) => Promise<void>}
- */
 export function createMessageHandler({
   state,
   authInfo,
@@ -75,13 +61,7 @@ export function createMessageHandler({
   commitTurnLifecycle,
   recoverTurnFinalize,
 }) {
-  // Active-run ownership is derived exclusively from the authenticated
-  // connection. Payload userId identifies the requested workspace and is
-  // authorization-checked separately; it must never partition the in-process
-  // run registry because reconnect/stop payloads are not required to repeat it.
   const canonicalRunOwnerId = String(authInfo?.userId || "").trim();
-  // Detached sub-session facts have already been committed inside Agent. This
-  // publisher projects them onto the wire without re-entering the state machine.
   const publishCommittedTurnLifecycle = createCommittedTurnLifecyclePublisher({ sendEvent });
   const recoverOrphanedTurnConflict = async ({ accepted = null, userId = "", sessionId = "", parentSessionId = "" } = {}) => {
     if (accepted?.reason !== "session_action_conflict") return false;
@@ -404,8 +384,6 @@ export function createMessageHandler({
         });
         return;
       }
-      // A pre-existing terminal status (for example completed) wins. Only keep
-      // a pending stop when no authoritative terminal fact could be persisted.
       if (!turnStatus) {
         rememberPendingStop(stopPayload, stopPayload);
       }
@@ -486,10 +464,6 @@ export function createMessageHandler({
       expectedVersion,
     };
 
-    // A browser refresh creates a new Service WebSocket while the accepted run
-    // continues in this process. Rebind that run's transport instead of starting
-    // another execution (or leaving its listener writing to the closed socket).
-    // The turn identity is authoritative; never attach by session alone.
     const runningTurn = findActiveRun({
       userId: canonicalRunOwnerId,
       sessionId,
@@ -774,11 +748,6 @@ export function createMessageHandler({
           });
           return started;
         });
-        // Agent event listeners are synchronous and are not required to await
-        // callback results. Observe this rejection immediately so a lifecycle
-        // persistence failure cannot become a process-level unhandled rejection
-        // while runSession is still active; handleRun awaits the same promise at
-        // the authoritative completion boundary below.
         void processingStartedPromise.catch((error) => {
           void recordServiceWebSocketLifecycle({
             sessionLogConfig,
@@ -808,8 +777,6 @@ export function createMessageHandler({
       runConfig: normalizedRunConfig,
     });
 
-    // The Agent lifecycle RUNNING fact is the only authoritative processing
-    // boundary. Ensure its persistence finishes before any completion fact.
     if (processingStartedPromise) await processingStartedPromise;
 
     if (state.currentRunTimedOut && state.currentAbortSignal?.aborted) {
@@ -872,14 +839,10 @@ export function createMessageHandler({
         sendEvent("error", { error: translateText("ws.sessionAlreadyRunning", state.currentLocale) });
         return;
       }
-      // The run lifecycle owns a persisted terminal status only after this point.
       runMessageStarted = true;
       const runResult = await handleRun(payload, { isContinueAction });
       if (runResult?.rebound === true) runMessageStarted = false;
     } catch (error) {
-      // Request/auth/resume validation errors are protocol failures, not turn
-      // execution outcomes. A turn only owns a persisted terminal status after
-      // the execution lifecycle has actually started.
       if (!runMessageStarted || !state.currentRunMeta) {
         void recordServiceWebSocketLifecycle({
           sessionLogConfig,
@@ -908,9 +871,6 @@ export function createMessageHandler({
         ) {
           await finalizeUserStopped(buildRunStateSnapshot());
         } else if (isSocketCloseRunAbort(state.currentAbortSignal)) {
-          // A closed transport aborts this Service-owned execution. It is not
-          // a user stop, but the authoritative Turn must still reach a terminal
-          // state so the Session action mutex cannot remain locked forever.
           await commitCurrentFailure(error, state.currentLifecyclePhase || TURN_PHASE.ACTION);
           return;
         } else {

@@ -63,9 +63,6 @@ function getScopedMessages(messageItem, allMessages, sessionDocs, variant) {
     }
     return !dialogProcessId || getMessageDialogProcessId(item) === dialogProcessId;
   });
-  // The detail response's allMessages is authoritative when it contains this
-  // turn. sessionDocs remains a workflow/history fallback and may include
-  // child-process messages that are not present in the flattened response.
   const responseMessages = Array.isArray(allMessages) ? allMessages : [];
   const scopedResponseMessages = filterScoped(responseMessages);
   if (scopedResponseMessages.length > 0) return scopedResponseMessages;
@@ -138,7 +135,6 @@ function buildLogsFromMessages(messageItem, messages, toolResultFallback) {
 import { selectToolTimelineLogs } from "../chat/chatEngine/toolTimeline";
 import { adaptLegacyMessageTimelines } from "../chat/chatEngine/legacyTimelineAdapter";
 
-/** Single adapter from thinking-detail/raw message shapes to display-ready tool logs. */
 export function normalizeThinkingToolLogs({
   messageItem = {}, allMessages = [], sessionDocs = [], variant = "panel",
   toolResultFallback = "tool_result",

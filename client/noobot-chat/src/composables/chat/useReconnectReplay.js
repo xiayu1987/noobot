@@ -152,7 +152,6 @@ export function useReconnectReplay({
   const applyTurnLifecycleEnvelope = (envelope = {}) => {
     const eventType = String(envelope?.eventType || envelope?.event || "").trim().toLowerCase();
     if (terminalLifecycleEvents.has(eventType)) {
-      // Replayed terminal envelopes are notifications, never terminal facts.
       return requestTerminalResolution(envelope);
     }
     return applyTurnRuntimeEvents?.([{
@@ -400,9 +399,6 @@ export function useReconnectReplay({
   function applyChannelState(stateData = {}) {
     const channelState = String(stateData?.state || stateData?.channelState || "").trim().toLowerCase();
     if (channelState === BackendChannelState.EXPIRED) {
-      // Cache expiry is a transport/cache recovery signal, not an authoritative
-      // Turn terminal fact. Preserve its refresh side effect without allowing it
-      // to settle lifecycle or unlock capabilities.
       const turnScopeId = String(stateData?.turnScopeId || "").trim();
       scheduleCacheExpiredSessionRefresh({
         sessionId: String(stateData?.sessionId || "").trim(),
@@ -414,17 +410,11 @@ export function useReconnectReplay({
       return Promise.resolve({ applied: false, reason: "cache_refresh_scheduled" });
     }
     if (channelState === BackendChannelState.NO_CONVERSATION) {
-      // No-conversation only invalidates transient interaction transport state.
-      // A business Turn terminal state still requires Terminal Resolution.
       interactionSubmitting.value = false;
       clearPendingInteraction();
       return Promise.resolve({ applied: false, reason: "transient_interaction_cleared" });
     }
     if (terminalChannelStates.has(channelState)) {
-      // Terminal channel state is notification evidence only. In particular it
-      // must not patch message terminal presentation, release the business lock,
-      // fetch session detail, or dispatch a terminal runtime transition. The
-      // authoritative terminal response owns all of those changes atomically.
       return requestTerminalResolution(stateData);
     }
     return applyReconnectChannelState({

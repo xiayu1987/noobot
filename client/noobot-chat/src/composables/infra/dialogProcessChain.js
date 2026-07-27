@@ -13,10 +13,6 @@ export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) 
   const incoming = incomingItem && typeof incomingItem === "object" ? incomingItem : {};
   const merged = { ...existing, ...incoming };
 
-  // Keep preview/download addressing fields from the richer side.  Some replayed
-  // or plugin-owned metas only carry display fields (name/size/owner); replacing
-  // the original object with those would make canPreviewAttachment true while
-  // openAttachmentPreview cannot resolve a target URL.
   for (const field of [
     "attachmentId",
     "url",
@@ -61,10 +57,6 @@ export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) 
 }
 
 export function mergeAttachments(existing = [], incoming = []) {
-  // Frontend message attachments are a UI view over session-message attachment
-  // refs.  Resend/session-detail payloads can be raw transport refs, so all local
-  // write-backs go through this rich-first merge instead of replacing the message
-  // attachment array and losing parsedResult/preview/download fields.
   const existingList = Array.isArray(existing) ? existing : [];
   const incomingList = Array.isArray(incoming) ? incoming : [];
   if (!incomingList.length) return existingList;
@@ -123,10 +115,6 @@ export function mergeAttachments(existing = [], incoming = []) {
   return merged;
 }
 
-/**
- * Hydrate an authoritative attachment list while retaining richer local access
- * metadata for attachments that still exist in the snapshot.
- */
 export function mergeAttachmentSnapshot(existing = [], snapshot = []) {
   const existingList = Array.isArray(existing) ? existing : [];
   const snapshotList = Array.isArray(snapshot) ? snapshot : [];

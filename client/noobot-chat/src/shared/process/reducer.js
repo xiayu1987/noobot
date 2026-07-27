@@ -110,9 +110,6 @@ export function applyProcessEvent(state, eventItem = {}) {
       ...node,
       id: nodeId,
       processId,
-      // The compatibility projection exposes node logs to legacy consumers.
-      // Keep the authoritative event order on the node so that projection does
-      // not turn an unsequenced tool error into a permanently oldest row.
       sequence: sequence || toProcessSequence(node.sequence ?? node?.meta?.sequence, 0),
       status: nextStatus,
       updatedAt: normalizeProcessString(eventItem.timestamp) || previousNode.updatedAt || "",

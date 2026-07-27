@@ -38,9 +38,6 @@ function stripDiffPath(rawPath = "", strip = 1) {
   if (!withoutTimestamp || withoutTimestamp === "/dev/null") return withoutTimestamp;
   const parts = withoutTimestamp.split("/").filter(Boolean);
   if (/^[A-Za-z]:$/.test(parts[0] || "")) return withoutTimestamp;
-  // Absolute paths (sandbox-absolute like /project or /workspace, or host-absolute)
-  // are preserved verbatim and handed to the shared resolver; the numeric strip
-  // only applies to relative diff prefixes such as git a/ and b/.
   if (withoutTimestamp.startsWith("/")) return withoutTimestamp;
   const stripCount = toPositiveInt(strip, 1, 0, 10);
   return parts.slice(stripCount).join("/") || withoutTimestamp;

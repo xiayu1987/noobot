@@ -6,7 +6,6 @@
 
 import { LOCALE } from "./locale.js";
 
-// Defaults (non-UI runtime fallback values)
 export const DEFAULT_TASK_OWNER = Object.freeze({
   [LOCALE.ZH_CN]: "primary_task_owner",
   [LOCALE.EN_US]: "primary_task_owner",
@@ -32,7 +31,6 @@ export const DEFAULT_TASK_TEMPLATE = Object.freeze({
   }),
 });
 
-// Prompt JSON schema examples
 export const PROMPT_JSON_FORMAT_EXAMPLES = Object.freeze({
   planning_main:
     '{"totalGoal":"...","taskOwner":"...","nextPhase":{"objective":"...","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"...","owner":"...","subOwners":[],"input":"...","output":"...","files":{"create":[],"modify":[],"delete":[]}}]}',

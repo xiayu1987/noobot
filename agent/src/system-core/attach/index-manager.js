@@ -7,13 +7,6 @@
 import { filePath as path } from "../utils/path-resolver.js";
 import { fsMkdir, fsReadFile, fsWriteFile } from "../store/fs-adapter.js";
 
-/**
- * 读取附件索引文件。
- *
- * @param {string} basePath - 用户根路径。
- * @param {{sessionId: string, attachmentSource: string}} scope - 附件 scope。
- * @returns {Promise<{updatedAt: string, sessionId: string, attachmentSource: string, attachments: Record<string, any>}>}
- */
 export async function readAttachIndex(basePath, scope) {
   const indexFile = resolveIndexFile(basePath, scope);
   await fsMkdir(path.dirname(indexFile), { recursive: true });
@@ -37,14 +30,6 @@ export async function readAttachIndex(basePath, scope) {
   }
 }
 
-/**
- * 写入附件索引文件。
- *
- * @param {string} basePath - 用户根路径。
- * @param {{attachments?: Record<string, any>}} indexData - 附件索引对象。
- * @param {{sessionId: string, attachmentSource: string}} scope - 附件 scope。
- * @returns {Promise<void>}
- */
 export async function writeAttachIndex(basePath, indexData, scope) {
   const indexFile = resolveIndexFile(basePath, scope);
   await fsMkdir(path.dirname(indexFile), { recursive: true });

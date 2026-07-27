@@ -10,11 +10,6 @@ import {
 } from "./stop-lifecycle.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
 
-/**
- * Build a read-only snapshot of the connection-level run state that the
- * terminal outcome handlers need. Handlers never mutate connection state; the
- * message handler owns state lifecycle and resets it in its finally block.
- */
 export function snapshotRunState({
   runMeta = null,
   turnScopeId = "",
@@ -25,13 +20,6 @@ export function snapshotRunState({
   return { runMeta, turnScopeId, stopPayload, abortSignal, locale };
 }
 
-/**
- * Create the terminal outcome handlers bound to a single connection's I/O and
- * persistence dependencies. Each handler owns the full "persist terminal turn
- * status -> emit event -> close socket" lifecycle for one outcome and always
- * terminates the turn (either by rejecting an unpersisted status or closing the
- * socket), so callers simply return afterwards.
- */
 export function createTurnFinalizer({
   sendEvent,
   persistTurnStatus,

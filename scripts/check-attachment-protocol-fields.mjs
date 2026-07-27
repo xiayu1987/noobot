@@ -4,17 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * Attachment protocol field guard.
- *
- * Canonical attachment metadata should be emitted as camelCase fields:
- * attachmentId, clientAttachmentId, contentSha256, attachmentSource,
- * generationSource, relativePath, sandboxPath, isSandbox, updatedAt, etc.
- *
- * Legacy/snake_case aliases may be consumed only in explicit normalizer or
- * compatibility bridge files. If a new bridge is intentional, add it here with
- * a short reason.
- */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 

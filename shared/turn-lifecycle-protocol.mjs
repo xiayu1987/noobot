@@ -59,7 +59,6 @@ const EVENT_VALUES = new Set(Object.values(TURN_EVENT));
 
 const clean = (value) => String(value || "").trim();
 
-/** Validate the internal mutation intent used to atomically create a Session with its first Turn. */
 export function validateSessionProvisionIntent(input = {}) {
   if (input.createSessionIfAbsent === undefined || input.createSessionIfAbsent === false) {
     return { valid: true, requested: false, errors: [] };
@@ -122,7 +121,6 @@ function snapshotTurn(turn = {}) {
   };
 }
 
-/** Build a Session-scoped authoritative snapshot; unlike event envelopes it may contain no active Turn. */
 export function createTurnLifecycleSnapshot({
   commandId = "", userId = "", sessionId, sequence = 0, activeTurnScopeId = "",
   activeTurn = null, recentTerminalTurns = [], unchanged = false,
@@ -254,7 +252,6 @@ const TERMINAL_STATE_VALUES = new Set([
   TURN_STATE.PROCESSING_FAILED, TURN_STATE.COMPLETION_FAILED, TURN_STATE.STOP_FAILED,
 ]);
 
-/** A single, self-contained read model from which a client may settle a Turn. */
 export function createTurnTerminalResolution({
   commandId = "", sessionId = "", turnScopeId = "", resolved = false,
   retryable = false, reason = "", retryAfterMs = 0, turn = null,

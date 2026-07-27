@@ -96,7 +96,6 @@ export function createModelTool({
           });
         }
       } catch {
-        // ignore persistence failures; runtime switch still applies to current turn
       }
       return toToolJsonResult(TOOL_NAME.SWITCH_MODEL, {
         ok: true,

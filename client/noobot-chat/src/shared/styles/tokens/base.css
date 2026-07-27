@@ -5,10 +5,8 @@
  */
 
 :root {
-  /* ========== Base Tokens（基础层） ========== */
   --noobot-base-white: #ffffff;
   --noobot-base-black: #000000;
-  /* 主色系收敛：统一为 blue 系，保留旧 token 名称做兼容别名 */
   --noobot-base-cyan: var(--noobot-base-blue-400);
   --noobot-base-pink: var(--noobot-base-blue-500);
   --noobot-base-blue-500: #3b82f6;
@@ -39,7 +37,6 @@
   --noobot-base-blue-700: var(--noobot-base-blue-500);
   --noobot-base-amber-500: var(--noobot-base-emerald-400);
 
-  /* 字号语义收敛：仅保留 4 个实际字号值，其余旧 token 作为兼容别名 */
   --noobot-font-size-xs: 12px;
   --noobot-font-size-sm: 13px;
   --noobot-font-size-md: 14px;

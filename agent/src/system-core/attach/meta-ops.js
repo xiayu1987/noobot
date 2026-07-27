@@ -77,10 +77,6 @@ function firstValue(...values) {
   return "";
 }
 
-/**
- * 归一化附件 owner 元数据。
- * owner 是唯一承载入口，结构为 { type, id, ... }。
- */
 export function normalizeAttachmentOwnerMeta(attachmentItem = {}) {
   const explicitOwner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : null;
   const baseOwner = cleanPlainObject(explicitOwner) || {};
@@ -94,10 +90,6 @@ export function normalizeAttachmentOwnerMeta(attachmentItem = {}) {
   return cleanPlainObject(normalized);
 }
 
-/**
- * 归一化附件 turn scope 元数据。
- * turnScope 是唯一承载入口。
- */
 export function normalizeAttachmentTurnScopeMeta(attachmentItem = {}, normalizedOwner = null) {
   const owner = isPlainObject(normalizedOwner) ? normalizedOwner : normalizeAttachmentOwnerMeta(attachmentItem);
   const explicitTurnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : null;
@@ -112,10 +104,6 @@ export function normalizeAttachmentTurnScopeMeta(attachmentItem = {}, normalized
   return cleanPlainObject(normalized);
 }
 
-/**
- * 归一化附件解析结果元数据。
- * parsedResult 是唯一承载入口。
- */
 export function normalizeAttachmentParsedResultMeta(attachmentItem = {}) {
   const explicitParsedResult = isPlainObject(attachmentItem?.parsedResult)
     ? attachmentItem.parsedResult
@@ -165,9 +153,6 @@ export function normalizeAttachmentParsedResultMeta(attachmentItem = {}) {
   return cleanPlainObject(normalized);
 }
 
-/**
- * 合并附件元数据（去重）
- */
 export function mergeAttachmentMetas(existing = [], incoming = []) {
   const existingList = Array.isArray(existing) ? existing : [];
   const incomingList = Array.isArray(incoming) ? incoming : [];
@@ -238,11 +223,6 @@ export function mergeAttachmentListsPreferRich(existing = [], incoming = []) {
   });
 }
 
-/**
- * 规范化附件元数据（用于系统提示格式化显示）
- * - 将字符串路径转为 { path } 对象
- * - 清理对象字段，移除空值
- */
 export function normalizeAttachmentMetas(attachmentMetas = []) {
   const source = Array.isArray(attachmentMetas) ? attachmentMetas : [];
   return source
@@ -317,9 +297,6 @@ export function normalizeAttachmentMetas(attachmentMetas = []) {
     .filter(Boolean);
 }
 
-/**
- * 将附件记录映射为元数据
- */
 export function mapAttachmentRecordsToMetas(
   records = [],
   { fallbackMimeType = DEFAULT_MIME_TYPE, fallbackGenerationSource = "" } = {},
@@ -358,11 +335,6 @@ export function mapAttachmentRecordsToMetas(
   });
 }
 
-/**
- * 将附件元数据转换为标准 semantic-transfer payload。
- * 仅用于把 legacy attachmentMetas 适配进标准 transferEnvelopes(s) 流转；
- * 调用方不应再把 attachmentMetas 作为新的标准输出 mirror。
- */
 export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
   const metas = mapAttachmentRecordsToMetas(
     (Array.isArray(attachmentMetas) ? attachmentMetas : [])

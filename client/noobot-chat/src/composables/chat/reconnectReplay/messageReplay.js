@@ -53,8 +53,6 @@ export {
 
 export function applyAssistantFailureState({ targetAssistantMessage, errorMessage = "", translate } = {}) {
   if (!targetAssistantMessage) return;
-  // Runtime status is projected exclusively by sessionRunStateMachine.  This
-  // helper owns only the error payload/content associated with that state.
   targetAssistantMessage.error = _trimStr(errorMessage);
   if (!_trimStr(targetAssistantMessage.content)) {
     targetAssistantMessage.content = `> ${translate("chat.occurredError", {

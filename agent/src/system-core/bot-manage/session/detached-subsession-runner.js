@@ -193,8 +193,6 @@ export function createDetachedSubSessionRunner({
 }
 
 function clearParentTurnTransactionIdentity(runConfig = {}) {
-  // A detached child owns a new session and turn. Parent command coordinates,
-  // optimistic locks, dedupe keys, and timing must never cross this boundary.
   delete runConfig.resumeFromStoppedSnapshot;
   delete runConfig.resumeDialogProcessId;
   delete runConfig.resumeTurnScopeId;

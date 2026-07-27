@@ -2,24 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Central turn/count-related thresholds.
- *
- * Keep character/byte/string-size thresholds in length-thresholds.mjs. Keep
- * timeouts, file counts, pixel limits, and pagination limits out of this file.
- * This module is for loop turns, message windows, workflow trigger turns,
- * hook-turn TTLs, and retry/attempt counts that shape turn progression.
- *
- * Value tiers:
- * - 1-3: single-shot retry/failure/history-round guards.
- * - 4-8: short workflow trigger and pending TTL windows.
- * - 9-15: normal workflow phase, guidance, and summary cadence.
- * - 20-24: programming-mode long-task cadence.
- * - 50: subtask/help-prompt loop ceilings.
- * - 300: main-agent hard tool-loop ceiling.
- *
- * Retry/attempt counts live here because they shape turn progression. Plain
- * item/file/display counts live in quantity-thresholds.mjs.
  */
 
 function deepFreeze(value) {
@@ -33,68 +15,50 @@ function deepFreeze(value) {
 
 export const TURN_THRESHOLDS = deepFreeze({
   agent: {
-    // Main tool-call loop maximum before loop-limit handling starts.
     maxToolLoopTurns: 1000,
 
-    // Extra turns allowed after maxToolLoopTurns for finalization/self-correction.
     toolLoopLimitBufferTurns: 5,
 
-    // Tool-loop turns before the main agent asks for a phase summary.
     phaseSummaryLoopTurns: 15,
 
-    // Summary rounds after char-triggered summary before pruning is allowed.
     phaseSummaryPruneAfterCharSummaryRounds: 1,
 
-    // Tool-loop turns before the main agent injects a help prompt.
     helpPromptLoopTurns: 50,
 
-    // Consecutive tool failures before help prompt guidance is injected.
     toolFailureHelpCount: 3,
 
-    // Initial LLM invocation plus up to two retries for transient errors.
     transientLlmMaxAttempts: 3,
 
-    // Streaming retry fallback starts after this many repeated tool-call mismatches.
     streamingToolCallMismatchThreshold: 2,
   },
 
   session: {
-    // Main-model history keeps this many previous dialog rounds.
     mainModelHistoryRoundLimit: 5,
   },
 
   subTasks: {
-    // Detached content-processing tool loop ceiling.
     processContentTaskMaxToolLoopTurns: 50,
 
-    // Detached connector-processing tool loop ceiling.
     processConnectorToolMaxToolLoopTurns: 50,
 
-    // MCP task sub-loop ceiling.
     callMcpTaskMaxToolLoopTurns: 6,
 
-    // Direct MCP tool runner max LLM/tool turns.
     mcpTaskMaxTurns: 12,
   },
 
   capability: {
-    // Plugin capability mini-runner tool-call turns.
     miniRunnerMaxToolTurns: 5,
   },
 
   web: {
-    // Browser simulation retries for web_to_data before falling back.
     browserRetryCount: 2,
   },
 
   harness: {
-    // Default Harness capability mini-runner turns.
     miniRunnerMaxTurns: 5,
 
-    // Hook-turn TTL for stale pending workflow/capture flags.
     pendingTtlHookTurns: 8,
 
-    // Hook-turn cooldown between stale-pending warnings.
     pendingWarnCooldownTurns: 3,
 
     modeThresholds: {
@@ -142,18 +106,14 @@ export const TURN_THRESHOLDS = deepFreeze({
   },
 
   workflow: {
-    // Workflow semantic mini-runner default turns.
     miniRunnerMaxTurns: 3,
 
-    // Workflow semantic retry policy is intentionally single-shot by default.
     retryMaxAttempts: 1,
   },
 
   web2img: {
-    // Rounds used to wait for extracted page text to stabilize.
     textStableRounds: 10,
 
-    // Consecutive stable samples needed before text is considered stable.
     textStableThreshold: 3,
   },
 });

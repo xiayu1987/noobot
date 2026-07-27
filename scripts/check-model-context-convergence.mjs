@@ -4,17 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * Model context convergence guard.
- *
- * Required invariant for messages sent to the main model:
- *   system -> history -> incremental
- *
- * The invariant must be resolved in the agent message-store pipeline, not by
- * scattered harness-side compatibility composition. This script is intentionally
- * static and conservative: if it fails, remove the extra context handling path
- * instead of adding a compatibility exception.
- */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 

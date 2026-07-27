@@ -56,9 +56,6 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
     updatedAt: item.updatedAt || "",
     caller: item.caller || "",
     depth: Number(item.depth || 0),
-    // Preserve terminal discovery metadata from the list summary. Refresh
-    // hydration consumes these fields to trigger the authoritative terminal
-    // read; dropping them here loses the only completion discovery signal.
     turnLifecycleSnapshot: item.turnLifecycleSnapshot && typeof item.turnLifecycleSnapshot === "object"
       ? item.turnLifecycleSnapshot
       : null,
@@ -77,8 +74,6 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
     : [];
   return {
     ...mappedSession,
-    // Prefer fresh summary discovery metadata, while retaining an existing
-    // snapshot when an older/partial list response omits it.
     turnLifecycleSnapshot: mappedSession.turnLifecycleSnapshot || existingSession.turnLifecycleSnapshot || null,
     turnStatuses: mappedSession.turnStatuses?.length
       ? mappedSession.turnStatuses
@@ -87,9 +82,6 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
       ? mappedSession.turnTimings
       : (Array.isArray(existingSession.turnTimings) ? existingSession.turnTimings : []),
     loaded: existingSession.loaded === true || mappedSession.loaded === true,
-    // A server summary means this is no longer a purely local draft. Do not
-    // keep isLocal=true from the optimistic object, otherwise later refreshes
-    // treat the backend session as local and skip detail/replay reconciliation.
     isLocal: mappedSession.isLocal === false ? false : existingSession.isLocal === true,
     backendSessionId: mappedSession.backendSessionId || existingSession.backendSessionId,
     currentTaskId: mappedSession.currentTaskId || existingSession.currentTaskId || "",
@@ -111,9 +103,6 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
 export function reconcileSessionObject(mappedSession = {}, existingSession = null, options = {}) {
   const mergedSession = mergeExistingSessionState(mappedSession, existingSession, options);
   if (!existingSession) return mergedSession;
-  // Keep the same object reference for activeSession and child props.
-  // Replacing the object during replay/background refresh remounts large parts
-  // of the chat UI and looks like the whole page refreshed.
   Object.assign(existingSession, mergedSession);
   return existingSession;
 }

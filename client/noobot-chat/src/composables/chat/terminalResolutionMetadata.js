@@ -14,7 +14,6 @@ function versionNumber(input) {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-/** Normalize lifecycle, channel, snapshot and replay payloads to one query identity. */
 export function terminalResolutionMetadata(payload = {}) {
   const raw = payload?.raw && typeof payload.raw === "object" ? payload.raw : {};
   const turn = payload?.turn && typeof payload.turn === "object"
@@ -26,9 +25,6 @@ export function terminalResolutionMetadata(payload = {}) {
   const summaryVersion = versionNumber(source.summaryVersion);
   const revision = versionNumber(source.revision);
   const sequence = versionNumber(source.sequence ?? source.seq);
-  // Keep absent metadata absent. Besides preserving the caller's shape, this
-  // prevents an unversioned replay from masquerading as an explicit null
-  // watermark while still forwarding every version field that was supplied.
   if (completionCommitId) metadata.completionCommitId = completionCommitId;
   if (summaryVersion != null) metadata.summaryVersion = summaryVersion;
   if (revision != null) metadata.revision = revision;

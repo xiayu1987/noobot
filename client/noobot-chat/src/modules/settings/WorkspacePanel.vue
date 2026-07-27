@@ -443,7 +443,6 @@ async function confirmResetDialog() {
     }
     await doResetWorkspace(sections);
   } catch {
-    // errors are handled in doResetWorkspace/doResetAllWorkspace
   }
 }
 
@@ -577,24 +576,20 @@ watch(
 </template>
 
 <style scoped>
-/* 整体布局 */
 .workspace-layout {
   overflow: hidden;
 }
 
-/* 面板通用样式 */
 .workspace-panel {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* 空状态/二进制文件提示 */
 .empty-tip :deep(.el-empty__description p) {
   color: var(--noobot-text-muted);
 }
 
-/* 响应式适配 */
 @media (max-width: 768px) {
   .workspace-layout {
     overflow: visible;

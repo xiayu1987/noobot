@@ -1,5 +1,4 @@
 :root[data-theme="light"] {
-  /* Component · Message */
   --noobot-msg-assistant-bg: var(--noobot-base-white);
   --noobot-msg-assistant-text: var(--noobot-base-slate-900);
   --noobot-msg-user-bg: color-mix(in srgb, var(--noobot-base-blue-500) 6%, var(--noobot-base-slate-50));

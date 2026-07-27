@@ -9,10 +9,6 @@ import { MIME_TYPE } from "../../constants/index.js";
 import { loadStoppedModelMessageSnapshot } from "../../agent/core/resume/model-message-snapshot-store.js";
 import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
 
-/**
- * Turn 输入/执行准备族。以 engine 为入参回调其 contextBuilder 构建、
- * agentRuntimeFacade、附件补齐等方法，保持主类薄委托与测试桩兼容。
- */
 
 export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}) {
   const payload = buildContextPayload && typeof buildContextPayload === "object"
@@ -123,11 +119,6 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
     identity,
     allowMissing: true,
   });
-  // Non-model orchestration roots can reach the same stopped lifecycle as a
-  // regular Agent without ever entering the model loop that produces a
-  // stopped-message snapshot. A later "continue" command must degrade to a normal
-  // turn instead of treating an absent optional recovery artifact as a fatal
-  // lifecycle error. Identity/corruption errors remain strict in the loader.
   if (!snapshot) {
     return engine.agentRuntimeFacade.prepareTurnExecution({
       buildContextPayload: {
@@ -146,8 +137,6 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
     contextBuilder,
     payload,
   });
-  // Keep the persisted block boundary: history retains its landed identity,
-  // while system/incremental belong to the current resumed execution.
   const systemMessages = Array.isArray(snapshot?.messageBlocks?.system) ? snapshot.messageBlocks.system : [];
   const historyMessages = Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : [];
   const incrementalMessages = Array.isArray(snapshot?.messageBlocks?.incremental)
@@ -178,8 +167,6 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
     {
       dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
       attachments: userMessageAttachments,
-      // Preserve the persisted block boundary. Incremental messages are
-      // append-only and must not pass through history's dialog grouping.
       incrementalMessages: resumedIncrementalMessages,
     },
   );
@@ -198,12 +185,6 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
   };
 }
 
-/**
- * Rebind recovered messages to the current session without destroying their
- * historical turn identity. dialogProcessId and turnScopeId are also used as
- * round/deduplication keys, so replacing them with the current turn would make
- * the restored history look like duplicate incremental input.
- */
 export function projectRecoveredMessagesToDialog(messages = [], dialogProcessId = "") {
   return projectRecoveredMessagesToIdentity(messages, { dialogProcessId });
 }
@@ -221,10 +202,6 @@ export function projectRecoveredMessagesToIdentity(messages = [], identity = {},
     for (const field of ["userName", "sessionId", "parentSessionId", "parentDialogProcessId"]) {
       if (currentIdentity[field]) message[field] = currentIdentity[field];
     }
-    // Preserve existing historical round keys. For restored snapshot history,
-    // absence of dialogProcessId/turnScopeId is meaningful in v2 blocks: adding
-    // the current turn identity would make the entire recovered history look
-    // like duplicate incremental input and the message builder would drop it.
     const shouldFillMissingRoundIdentity = !preserveHistoricalRoundIdentity || fillMissingHistoricalRoundIdentity;
     if ((!preserveHistoricalRoundIdentity || (shouldFillMissingRoundIdentity && !String(message.dialogProcessId || "").trim())) && currentIdentity.dialogProcessId) {
       message.dialogProcessId = currentIdentity.dialogProcessId;

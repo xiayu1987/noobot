@@ -1,5 +1,4 @@
 :root {
-  /* ========== Semantic Tokens · Cyber Accent ========== */
   --noobot-cyber-cyan: var(--noobot-base-blue-500);
   --noobot-cyber-pink: var(--noobot-base-blue-500);
   --noobot-cyber-cyan-soft: color-mix(in srgb, var(--noobot-base-blue-400) 18%, transparent);

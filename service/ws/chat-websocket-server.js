@@ -135,9 +135,6 @@ export function registerChatWebSocketServer(
       eventSequence += 1;
       const enrichedData = {
         ...(data && typeof data === "object" ? data : {}),
-        // These are transport routing aliases, not Message Event identity.
-        // Canonical child packets keep their own per-message sequence inside
-        // `event`; the outer `seq` remains connection-local transport order.
         seq: eventSequence,
         dialogProcessId: String(
           authoritativeEvent?.dialogProcessId || data?.dialogProcessId || "",
@@ -250,10 +247,6 @@ export function registerChatWebSocketServer(
       recoverTurnFinalize: recoverPersistedTurnFinalize,
     });
     webSocket.on("message", (rawMessage) => {
-      // EventEmitter does not consume promises returned by async listeners.
-      // Keep one process-level rejection boundary even when error finalization
-      // itself fails, so a malformed or concurrently deleted Session can only
-      // terminate this connection, never the Service process.
       void messageHandler(rawMessage).catch((error) => {
         void recordServiceWebSocketLifecycle({
           sessionLogConfig,
@@ -271,8 +264,6 @@ export function registerChatWebSocketServer(
     });
 
     webSocket.on("close", (code, reasonBuffer) => {
-      // After a refresh, the active run may have rebound its output to a newer
-      // socket. Closing the superseded transport must not abort that run.
       const transportStillOwned =
         !state.currentRunHandle ||
         isRunTransportAttached(state.currentRunHandle, state.currentRunTransportBinding);

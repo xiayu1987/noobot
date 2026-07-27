@@ -200,7 +200,6 @@ function compactParsedToolResultForOverflow(parsed = null) {
   }
   delete compact.stdout;
   delete compact.transferEnvelopes;
-  // Drop legacy top-level transfer compatibility fields in overflow payloads.
   delete compact.attachmentMeta;
   delete compact.attachmentMetas;
   delete compact.filePath;

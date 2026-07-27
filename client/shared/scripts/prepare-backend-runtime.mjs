@@ -158,8 +158,6 @@ async function main() {
     cwd: backendRoot,
   });
 
-  // npm filters optional dependencies by CPU. electron-builder also targets the
-  // current architecture by default, so bundle the matching binary only.
   const ripgrepVersion = agentPkg.dependencies?.['@vscode/ripgrep'];
   if (!ripgrepVersion) fail('agent dependency @vscode/ripgrep is missing');
   const ripgrepPackages = getDesktopRipgrepPackages(desktopPkg.name, ripgrepVersion, desktopTargetArch);

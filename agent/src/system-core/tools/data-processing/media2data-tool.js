@@ -232,7 +232,6 @@ function terminateMediaProcess(childProcess, {
 } = {}) {
   if (!childProcess) return;
   try {
-    // cross-platform-allow: Node maps child process signals per platform; this is best-effort cleanup.
     childProcess.kill("SIGTERM");
   } catch {
     return;
@@ -240,10 +239,8 @@ function terminateMediaProcess(childProcess, {
   if (Number(forceAfterMs || 0) <= 0) return;
   const forceTimer = setTimeout(() => {
     try {
-      // cross-platform-allow: Node maps child process signals per platform; this is best-effort cleanup.
       childProcess.kill("SIGKILL");
     } catch {
-      // ignore force-kill errors
     }
   }, Number(forceAfterMs || 0));
   forceTimer.unref?.();

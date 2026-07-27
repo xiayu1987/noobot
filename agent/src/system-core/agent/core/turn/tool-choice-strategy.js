@@ -63,11 +63,6 @@ export function applyBoundToolModelRequestOverridesToLlm(llm, overrides = {}) {
     };
   };
 
-  // LangChain ChatOpenAI builds the provider request body from the model instance
-  // modelKwargs. Unknown snake_case fields passed only as invoke options are not
-  // merged into the final request params, so bind-time overrides must be applied
-  // to the bound model instance itself. bindTools returns a new model instance,
-  // so this does not affect the unbound/no-tools model request path.
   const currentModelKwargs =
     llm.modelKwargs && typeof llm.modelKwargs === "object" && !Array.isArray(llm.modelKwargs)
       ? llm.modelKwargs
@@ -77,10 +72,6 @@ export function applyBoundToolModelRequestOverridesToLlm(llm, overrides = {}) {
     ...overrides,
   };
 
-  // ChatOpenAI.bindTools creates the bound model from lc_kwargs and its
-  // invocationParams implementation may still read modelKwargs from lc_kwargs
-  // instead of the mutable top-level property. Keep both in sync so provider
-  // request params are actually overridden, not just invoke options.
   if (llm.lc_kwargs && typeof llm.lc_kwargs === "object" && !Array.isArray(llm.lc_kwargs)) {
     const currentLcModelKwargs =
       llm.lc_kwargs.modelKwargs &&
@@ -97,9 +88,6 @@ export function applyBoundToolModelRequestOverridesToLlm(llm, overrides = {}) {
     };
   }
 
-  // Reasoning models in @langchain/openai may map call option reasoningEffort to
-  // reasoning_effort after modelKwargs. Keep the instance reasoning config in
-  // sync so provider-level high/medium settings cannot override bound-tool low.
   if (Object.prototype.hasOwnProperty.call(overrides, "reasoning_effort")) {
     llm.reasoning = {
       ...(llm.reasoning && typeof llm.reasoning === "object" ? llm.reasoning : {}),
@@ -118,10 +106,6 @@ export function applyBoundToolModelRequestOverridesToLlm(llm, overrides = {}) {
     }
   }
 
-  // bindTools uses withConfig/defaultOptions and the actual request params are
-  // assembled by invocationParams on ChatOpenAI/completions/responses. Patch the
-  // bound runnable (and its internal delegates) so provider defaults are forced
-  // at the final request-param boundary for bound-tool calls only.
   applyInvocationParamsPatch(llm);
   applyInvocationParamsPatch(llm.completions);
   applyInvocationParamsPatch(llm.responses);

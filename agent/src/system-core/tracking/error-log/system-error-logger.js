@@ -2,9 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * SystemErrorLogger - high-level facade for system error logging.
- * Auto-resolves basePath via workspaceService.
  */
 import { appendSystemErrorLog } from "./system-error-log.js";
 import { filePath as path } from "../../utils/path-resolver.js";

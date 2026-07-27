@@ -1,4 +1,3 @@
-// Tests split by responsibility from harness-optimization.test.js.
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com

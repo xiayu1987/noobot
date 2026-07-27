@@ -14,10 +14,8 @@ import {
   persistHarnessMessageToCurrentTurn,
 } from "../capabilities/handlers/shared/message/injected-message-utils.js";
 import { replaceMessages, writeMessageBlocks } from "../core/message-store.js";
-const HARNESS_MARKERS = new Map(); // legacy registry for backward compatibility only
+const HARNESS_MARKERS = new Map();
 
-// P2#5: Injected prompt ID cache per messages array reference for O(1) lookup
-// WeakMap so it doesn't prevent GC of message arrays
 const injectedPromptCache = new WeakMap();
 const HARNESS_MARKER_PATTERN = /<!--\s*([^<>]*?)\s*-->/g;
 
@@ -103,10 +101,6 @@ export function isHarnessPromptAlreadyInjected(messages = [], id = "") {
   return found;
 }
 
-/**
- * P2#5: Mark a prompt as injected without scanning messages.
- * Call this after successful injection to update the O(1) cache.
- */
 export function markPromptAsInjected(messages, id) {
   if (!messages || !id || messages.length === 0 || !Array.isArray(messages)) return;
   const cache = getOrCreateInjectedPromptCache(messages);
@@ -264,10 +258,6 @@ function persistPromptMessagesToCurrentTurn(ctx = {}, promptMessages = []) {
   return count;
 }
 
-/**
- * Inject system-role harness messages based on registered prompts.
- * Respects priority and mode. Returns true if any injection occurred.
- */
 export function injectSystemMessages(ctx = {}, options = {}) {
   const messages = Array.isArray(ctx.messages) ? ctx.messages : null;
   if (!messages) return false;
@@ -289,7 +279,6 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   const cache = getOrCreateInjectedPromptCache(messages);
   const existingIds = cache.ids;
 
-  // Sort by priority (descending)
   const sorted = promptEntries
     .filter((item) => item.mode === "replace" || !existingIds.has(item.id))
     .sort((a, b) => b.priority - a.priority);
@@ -303,7 +292,6 @@ export function injectSystemMessages(ctx = {}, options = {}) {
 
     const promptContent = content;
     if (mode === "replace") {
-      // Replace: remove existing harness prompts and add this one
       nextMessages = nextMessages.filter((message) => !isAnyPromptInjectionMessage(message));
       prependItems.push(
         buildHarnessInjectedMessage(promptContent, {
@@ -329,7 +317,6 @@ export function injectSystemMessages(ctx = {}, options = {}) {
         }),
       );
     } else {
-      // prepend (default)
       prependItems.push(
         buildHarnessInjectedMessage(promptContent, {
           injectedMessageType: `harness_prompt:${id}`,
@@ -341,7 +328,6 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     injected = true;
   }
 
-  // Apply prepend items (highest priority first)
   for (const item of prependItems.reverse()) {
     nextMessages.unshift(item);
   }
@@ -350,7 +336,6 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     nextMessages.splice(findAfterLeadingSystemIndex(nextMessages), 0, item);
   }
 
-  // Apply append items
   for (const item of appendItems) {
     nextMessages.push(item);
   }
@@ -362,7 +347,6 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     if (options.persistToCurrentTurn !== false) {
       persistPromptMessagesToCurrentTurn(ctx, promptMessages);
     }
-    // P2#5: refresh cache once to keep replace/remove semantics consistent
     rebuildInjectedPromptCache(updatedMessages);
   }
 
@@ -379,9 +363,6 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   return injected;
 }
 
-/**
- * Simple single-prompt injection (backward compatible).
- */
 export function injectSystemMessage(ctx = {}, content = "", id = "noobot-harness", priority = 50, mode = "prepend") {
   if (!content) return false;
   return injectSystemMessages(ctx, {

@@ -49,7 +49,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       deps: { terminalResolutionFetcher },
     });
 
-    // Production hydration schedules the read before applying the snapshot.
     const first = engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
     await vi.waitFor(() => expect(releaseResponse).toBeTypeOf("function"));
     expect(applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, {
@@ -352,8 +351,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(deps.terminalResolutionFetcher).toHaveBeenCalledTimes(1);
     expect(sending.value).toBe(false);
     const assistant = assistantMessage(activeSession);
-    // Session identity is reconciled by the list/detail layer. The terminal
-    // committer must not guess that backend-x owns local-x or mutate its message.
     expect(assistant?.pending).toBe(true);
     expect(assistant?.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(assistant?.statusLabelKey || assistant?.statusLabel).not.toBe("chat.generated");
@@ -399,8 +396,6 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(false);
     expect(assistant?.content).toBe("detail answer");
-    // The authoritative detail lifecycle event owns completion even when this
-    // focused mock only replaces content.
     expect(assistant?.pending).toBe(false);
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only", expect.objectContaining({
       source: "realtimeDoneFinalStatus",

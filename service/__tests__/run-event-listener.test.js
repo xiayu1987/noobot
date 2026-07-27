@@ -185,7 +185,6 @@ test("run-event-listener rejects malformed authoritative envelopes instead of le
         sessionId: "sub-session",
         messageId: "msg-1",
         sequence: 1,
-        // timestamp is deliberately absent.
         workflowRunId: "workflow-1",
         nodeExecutionId: "node-1",
       },

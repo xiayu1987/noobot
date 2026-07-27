@@ -325,8 +325,6 @@ describe("useChatEngine.delete", () => {
     await expect(engine.deleteMonotonicMessage(target, { timeoutMs: 20, pollIntervalMs: 5 })).resolves.toBe(true);
 
     expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
-    // The registry is the sole runtime source. Deleting the stopped turn
-    // removes its runtime entry, so the session projection becomes idle.
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
     expect(resolveSessionTurnRuntime(turnRuntimeRegistry.value, "local-delete-stopped-sending"))

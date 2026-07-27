@@ -75,8 +75,6 @@ export function detectPathPlatform(value = "", platformHint = "") {
   if (/^(?:[a-z]:[\\/]|\\\\|\/\/[^/\\]+[/\\][^/\\]+)/i.test(source)) {
     return PATH_PLATFORMS.WINDOWS;
   }
-  // A leading slash identifies POSIX syntax, not a specific source OS.
-  // Callers that need macOS/Linux provenance must provide platformHint.
   return "";
 }
 

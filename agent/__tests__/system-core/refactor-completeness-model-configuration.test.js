@@ -64,7 +64,6 @@ function createBaseUserConfig(overrides = {}) {
   };
 }
 
-// ========== 5. 配置优先级测试 ==========
 describe('5. 配置优先级测试', () => {
   describe('pickAlias 优先级链：skill > user > global', () => {
     it('skill.provider 应最高优先级', () => {
@@ -182,7 +181,6 @@ describe('5. 配置优先级测试', () => {
   });
 });
 
-// ========== 6. 配置获取完整性测试 ==========
 describe('6. 配置获取完整性测试', () => {
   describe('resolveDefaultModelSpec', () => {
     it('应能从 globalConfig 解析默认模型 spec（通过 defaultProvider）', () => {
@@ -369,7 +367,6 @@ describe('6. 配置获取完整性测试', () => {
   });
 });
 
-// ========== 7. 模型切换测试 ==========
 describe('7. 模型切换测试', () => {
   describe('通过 provider alias 切换模型', () => {
     it('应能从 openai 切换到 anthropic', () => {

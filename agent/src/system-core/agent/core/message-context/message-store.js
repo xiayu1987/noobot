@@ -242,16 +242,10 @@ export function pruneSummarizedIncrementalMessages(holder = {}) {
 
   messages.splice(0, messages.length, ...retainedMessages);
   if (blocks) {
-    // Stopped snapshots intentionally keep the original system/history fact
-    // blocks. Only the current incremental block participates in checkpoint
-    // memory release.
     blocks.incremental.splice(0, blocks.incremental.length, ...retainedIncremental);
     syncBlockIds(blocks);
   }
 
-  // Old indexes strongly reference every canonical message. Rebuild them from
-  // the retained flat view plus the unchanged system/history blocks and the
-  // reduced incremental block so removed incremental bodies can be collected.
   holder.messageStore = {
     messages: [],
     byKey: new Map(),

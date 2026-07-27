@@ -168,8 +168,6 @@ describe("useChatSession summary and reconnect state", () => {
         }],
       },
     })];
-    // Mirrors refresh startup: the summary exists before router/store
-    // selection has restored the active Session identity.
     store.activeSessionId = "";
     const authFetch = routeAwareFetcher({
       detail: { ok: true, exists: true, sessionId: "s-late-identity", sessions: [] },
@@ -363,9 +361,6 @@ describe("useChatSession summary and reconnect state", () => {
     const authFetch = routeAwareFetcher({ detail, terminal });
     const session = createChatSession({ authFetch });
 
-    // The backend identity is not loaded yet. The authoritative response must
-    // still settle the registry; UI Session materialization is only a projection
-    // and must never veto the lifecycle source of truth.
     await session.handleReconnect();
     expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race")).toMatchObject({
@@ -374,9 +369,6 @@ describe("useChatSession summary and reconnect state", () => {
       terminal: "completed",
     });
 
-    // Loading the real Session exercises selectSession -> applySessionDetail ->
-    // onSessionDetailApplied. Hydration must preserve that settled registry and
-    // must not issue another authoritative request.
     store.sessions.push(createSessionFixture({
       id: "s-detail-race",
       backendSessionId: "s-detail-race",
@@ -404,8 +396,6 @@ describe("useChatSession summary and reconnect state", () => {
     const turnScopeId = "turn-processing-race";
     const dialogProcessId = "dp-processing-race";
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
-      // This is the race: completion arrives before detail hydration has rebuilt
-      // the processing Turn and its activeTurnScopeId.
       onReconnectData({ event: StreamEventEnum.CHANNEL_STATE, data: {
         sessionId: "s-processing-race", turnScopeId, dialogProcessId,
         state: "completed", revision: 2, sequence: 2,
@@ -460,8 +450,6 @@ describe("useChatSession summary and reconnect state", () => {
     await session.handleReconnect();
 
     expect(session.conversationStateSnapshot.value["s-state::dialogProcess:same-id"].state).toBe("sending");
-    // A terminal channel notification is discovery only. It must not create a
-    // second conversation-state terminal fact keyed by turnScopeId.
     expect(session.conversationStateSnapshot.value["s-state::turnScope:same-id"]).toBeUndefined();
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-state").sending).toBe(false);
   });

@@ -137,8 +137,6 @@ describe("useReconnectReplay", () => {
       dialogProcessId: "dp-terminal-order",
       turnScopeId: "turn-terminal-order",
       seq: 93,
-      // The production DONE can precede assistant materialization in its
-      // embedded snapshot. Final detail is the canonical presentation source.
       messages: [refs.activeSession.value.messages[0]],
     });
 

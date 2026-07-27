@@ -65,9 +65,6 @@ export function finalizeTurnMessagesBeforeReturn({
   });
 }
 
-/**
- * Centralized loop result builder.
- */
 export function buildLoopResult({
   output,
   traces,

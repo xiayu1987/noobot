@@ -103,9 +103,6 @@ export function hydrateWorkflowRegistryFromSessionDetail({
     workflowCandidates: summarizeWorkflowMessages(sources),
     workflowRuntimeEventCount: runtimeEvents.length,
   });
-  // Planning owns the root Session + Turn. Establish rejected workflow runs
-  // before reducing any event so a node event cannot revive a deleted Turn,
-  // even if a malformed replay batch is not in causal order.
   for (const runtimeEvent of runtimeEvents) {
     const eventName = text(runtimeEvent?.event || runtimeEvent?.type);
     const data = runtimeEvent?.data && typeof runtimeEvent.data === "object"
@@ -115,8 +112,6 @@ export function hydrateWorkflowRegistryFromSessionDetail({
     const workflowRunId = text(data?.workflowRunId);
     if (workflowRunId) rejectedWorkflowRunIds.add(workflowRunId);
   }
-  // execution.jsonl order is the causal order. Preserve it exactly; sequence
-  // values are only comparable inside each event's declared domain.
   for (const runtimeEvent of runtimeEvents) {
     const eventName = text(runtimeEvent?.event || runtimeEvent?.type);
     const data = runtimeEvent?.data && typeof runtimeEvent.data === "object"

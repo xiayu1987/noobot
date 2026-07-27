@@ -94,7 +94,6 @@ function resolveSharedToolHostPath({ inputPath = "", runtime = {}, agentContext 
       const resolved = String(resolver(payload) || "").trim();
       if (resolved) return filePath.resolve(resolved);
     } catch {
-      // Ignore resolver errors; path validation remains deterministic.
     }
   }
   return "";

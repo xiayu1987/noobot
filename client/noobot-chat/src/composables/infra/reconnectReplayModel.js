@@ -46,9 +46,6 @@ function isSessionEntryRunning(sessionEntry = {}) {
   const currentRunSessionId = String(sessionEntry?.currentRun?.sessionId || "").trim();
   const currentRunTurnScopeId = String(sessionEntry?.currentRun?.turnScopeId || "").trim();
   const currentRunState = String(sessionEntry?.currentRun?.state || "").trim();
-  // currentRun is the authoritative run snapshot. A channel can briefly remain
-  // RUNNING/CONNECTING after the run has persisted a terminal state; in that
-  // window hasRunningTask must not resurrect the terminal turn as recoverable.
   if (!currentRunState || BackendTerminalStates.includes(currentRunState)) return false;
   return Boolean(
     sessionId &&
@@ -65,8 +62,6 @@ function hasPendingInteractionReplayEvents(messages = []) {
 
 function isDialogProcessRecoverable(sessionEntry = {}, messages = []) {
   if (isSessionEntryRunning(sessionEntry)) return true;
-  // agent-proxy owns replay/running state. Cached replay can contain thinking
-  // or delta events from a finished run; those must not imply pending UI.
   return hasPendingInteractionReplayEvents(messages);
 }
 
@@ -133,7 +128,6 @@ function splitReconnectMessagesByTurnIdentity(
   return Array.from(groups.values());
 }
 
-// Compatibility export for consumers not yet migrated to the canonical name.
 const splitReconnectMessagesByDialogProcessId = splitReconnectMessagesByTurnIdentity;
 
 function resolveDialogProcessIdFromReplay(messages = [], fallbackDialogProcessId = "") {
@@ -314,10 +308,6 @@ function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
   );
 }
 
-// Unscoped history records are not Turn snapshots.  They may refresh stable
-// message facts, but must never acquire write access to projection, runtime or
-// UI state.  Keep this allow-list deliberately small; new domain fields must be
-// hydrated through hydrateTurnSnapshot instead of being added here.
 const NON_TURN_MESSAGE_PATCH_FIELDS = Object.freeze([
   "id",
   "messageId",
@@ -350,9 +340,6 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   const sourceCanUseTurnScopedAssets = canUseTurnScopedAssets(sourceMessage);
   const sourceAssistantWithoutTurnScope = sourceRole === RoleEnum.ASSISTANT && !sourceTurnScopeId;
   const existingTurnScopeId = getMessageTurnScopeId(targetMessage);
-  // An unscoped snapshot cannot prove ownership of an already scoped turn.
-  // Reject it instead of guessing by dialogProcessId or clearing authoritative
-  // live projection state. Legacy unscoped history is materialized separately.
   if (sourceAssistantWithoutTurnScope && existingTurnScopeId) return targetMessage;
   const existingContent = String(targetMessage?.content || "");
   const existingAttachments = getMessageAttachments(targetMessage);
@@ -372,10 +359,6 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     });
   } else {
     patchNonTurnMessageMetadata(targetMessage, sourceMessage);
-    // Non-turn records are identity/metadata patches rather than projection
-    // snapshots. Preserve non-empty immutable display facts when a sparse
-    // transport record omits them; domain timelines and runtime state are not
-    // merged here.
     if (existingContent.trim() && !String(sourceMessage?.content || "").trim()) {
       targetMessage.content = existingContent;
     }

@@ -55,14 +55,9 @@ function conflicts(message, event) {
   ) return true;
   const messageTurn = text(message.turnScopeId || message.turn_scope_id);
   const eventTurn = text(event.turnScopeId);
-  // Authoritative turn-scoped events must never be reduced into an
-  // unscoped/other-turn message. In particular, stop -> continue can reuse the
-  // dialogProcessId, so dialog identity is not sufficient to establish event
-  // ownership.
   return Boolean(eventTurn && messageTurn !== eventTurn);
 }
 
-/** The only authoritative main-session event state transition. */
 export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog } = {}) {
   const validation = validateMessageEventEnvelope(event);
   if (!validation.valid) return { result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: validation.errors };
@@ -87,8 +82,6 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.APPEND) {
     targetMessage.content = String(targetMessage.content || "") + contentProjection.content;
   } else if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.REPLACE) {
-    // In streaming mode this calibrates accumulated deltas. In non-streaming
-    // mode the same event materializes the complete answer in one step.
     targetMessage.content = contentProjection.content;
     state.finalContentSequence = sequence;
   } else {
@@ -104,9 +97,6 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       });
     }
     targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event, log);
-    // Tool and non-tool activities are separate projections. The activity
-    // normalizer rejects tool logs, so a transport fact can never be owned by
-    // both timelines.
     targetMessage.activityTimeline = reduceActivityTimeline(
       targetMessage.activityTimeline,
       log

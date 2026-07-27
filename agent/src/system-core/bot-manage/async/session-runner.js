@@ -25,9 +25,6 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const POLL_INTERVAL_MS = TIME_THRESHOLDS.async.sessionRunnerPollIntervalMs;
 
-/**
- * Session-specific async wrappers (legacy API compatibility).
- */
 export class AsyncSessionRunner {
   constructor({
     jobs = new Map(),
@@ -125,9 +122,6 @@ export class AsyncSessionRunner {
     return `${normalizeParentSessionId(parentSessionId)}::${String(sessionId || "").trim()}`;
   }
 
-  /**
-   * @deprecated prefer generic createJob + waitForJob.
-   */
   runAsyncSession(payload = {}) {
     if (typeof this.runSession !== "function") {
       throw new TypeError("this.asyncJobManager.runAsyncSession is not a function");
@@ -277,9 +271,6 @@ export class AsyncSessionRunner {
     };
   }
 
-  /**
-   * @deprecated prefer generic waitForJob.
-   */
   async waitAsyncSession(payload = {}) {
     const {
       userId = "",

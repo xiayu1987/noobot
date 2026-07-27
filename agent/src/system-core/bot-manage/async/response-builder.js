@@ -6,16 +6,7 @@
 
 import { ASYNC_JOB_STATUS } from "./constants.js";
 
-/**
- * Build standardized async job responses.
- */
 export class AsyncJobResponseBuilder {
-  /**
-   * Build async job response.
-   * @param {Object} job - Async job object
-   * @param {Object} options - Response options
-   * @returns {Object} Formatted response
-   */
   build(job, options = {}) {
     const { includeResult = false, includeError = false } = options;
 
@@ -37,12 +28,6 @@ export class AsyncJobResponseBuilder {
     return response;
   }
 
-  /**
-   * Build response for waiting async job (running state).
-   * @param {Object} job - Async job object
-   * @param {Object} options - Wait options
-   * @returns {Object} Wait response
-   */
   buildWaitResponse(job, options = {}) {
     const { pollInterval = 1000, maxWaitTime = 30000 } = options;
 
@@ -56,12 +41,6 @@ export class AsyncJobResponseBuilder {
     };
   }
 
-  /**
-   * Build error response for async job.
-   * @param {string} jobId - Job identifier
-   * @param {Error|string} error - Error object or message
-   * @returns {Object} Error response
-   */
   buildErrorResponse(jobId, error) {
     return {
       jobId,

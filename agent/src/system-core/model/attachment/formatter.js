@@ -2,15 +2,8 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Attachment content block builder for different provider formats.
  */
 
-/**
- * Build a content block from an attachment payload.
- * @param {object} params
- * @returns {object}
- */
 export function buildAttachmentContentBlock({
   attachment,
   providerFormat = "openai",
@@ -107,11 +100,6 @@ function normalizeAudioFormat(mimeType) {
   return "mp3";
 }
 
-/**
- * Normalize model output content to a string.
- * @param {string|Array<object>|object} content
- * @returns {string}
- */
 export function normalizeModelOutputContent(content) {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {

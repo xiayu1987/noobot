@@ -77,8 +77,6 @@ describe("sessionRunStateMachine scope separation", () => {
 
   it("rejects a differently scoped event instead of clearing another Turn lock", () => {
     const started = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
-    // The pure reducer owns lifecycle semantics; the Registry owns identity
-    // routing and must not call it when this identity differs.
     expect(identity.sessionId).not.toBe("another-session");
     expect(reduceTurnRuntimeEvent(started, {
       ...identity,

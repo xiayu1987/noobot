@@ -158,7 +158,6 @@ export async function* iterateExecutionLogs(filePath = "", { limit = Infinity, s
     }
     return;
   } catch (error) {
-    // During migration the legacy file is the only fallback. Never combine both stores.
     if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
   }
   try {
@@ -270,7 +269,6 @@ async function appendRollingJsonlArtifactLogUnlocked({
       failure.cause = error;
       throw failure;
     }
-    // Reconcile the index after an append succeeded but its index rename did not.
     active.bytes = Buffer.byteLength(raw, "utf8");
     active.records = records.length;
   }
@@ -295,7 +293,6 @@ async function appendRollingJsonlArtifactLogUnlocked({
   index.maxSegmentBytes = limit;
   index.activeSequence = active.sequence;
   await writeArtifactIndex(directory, index);
-  // A successful segmented commit makes the legacy file stale. Keep only one fact source.
   await rm(path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.executionEvents), { force: true });
   return index;
 }
@@ -394,7 +391,6 @@ export async function readSessionArtifact({
   return { ...session, messages };
 }
 
-/** Migrate legacy inline session messages and execution.jsonl into the v2 layout. */
 export async function migrateSessionArtifacts({
   sessionDir = "",
   sessionId = "",

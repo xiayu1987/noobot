@@ -176,26 +176,21 @@ test('complex flow: two-action chain supports submit/back/submit and reaches end
   const bizinst = startResult.getBizinst();
   const treeRecord = startResult.getBizinstTreeRecord();
 
-  // 启动后在审核A
   let currentStep = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
   assert.equal(currentStep.getActionNodeState().getNode().getName(), '审核A');
 
-  // 提交到审核B
   controlCenter.execAction(new SubmitAction(), bizinst, currentStep, treeRecord);
   currentStep = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
   assert.equal(currentStep.getActionNodeState().getNode().getName(), '审核B');
 
-  // 从审核B退回到审核A
   controlCenter.execAction(new BackAction(), bizinst, currentStep, treeRecord);
   currentStep = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
   assert.equal(currentStep.getActionNodeState().getNode().getName(), '审核A');
 
-  // 再次提交到审核B
   controlCenter.execAction(new SubmitAction(), bizinst, currentStep, treeRecord);
   currentStep = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
   assert.equal(currentStep.getActionNodeState().getNode().getName(), '审核B');
 
-  // 最后提交到结束节点
   controlCenter.execAction(new SubmitAction(), bizinst, currentStep, treeRecord);
   const finalSteps = bizinst.getState().getCurrentState().getCurrentStepStates();
   assert.equal(finalSteps.length, 0);
@@ -211,23 +206,19 @@ test('complex flow: add-step in first action then submit to second action and st
   const bizinst = startResult.getBizinst();
   const treeRecord = startResult.getBizinstTreeRecord();
 
-  // 初始在审核A
   const stepA1 = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
   assert.equal(stepA1.getActionNodeState().getNode().getName(), '审核A');
 
-  // 在审核A后加步骤，当前步骤应被替换
   controlCenter.execAction(new NextAddStepAction(), bizinst, stepA1, treeRecord);
   const currentAfterAdd = bizinst.getState().getCurrentState().getCurrentStepStates();
   assert.equal(currentAfterAdd.length, 1);
   assert.notEqual(currentAfterAdd[0], stepA1);
   assert.equal(currentAfterAdd[0].getActionNodeState().getStepStates().length, 2);
 
-  // 提交后到审核B
   controlCenter.execAction(new SubmitAction(), bizinst, currentAfterAdd[0], treeRecord);
   const stepB = bizinst.getState().getCurrentState().getCurrentStepStates()[0];
   assert.equal(stepB.getActionNodeState().getNode().getName(), '审核B');
 
-  // 在审核B终止，检查sourceInfo
   controlCenter.execAction(new StopAction(), bizinst, stepB, treeRecord);
   const currentState = bizinst.getState().getCurrentState();
   const sourceInfo = currentState.getSourceInfo();
@@ -252,38 +243,31 @@ test('very complex flow: three-action chain with add-step and back cycles reache
     return steps[0];
   };
 
-  // 初始在A的第一个步骤
   const stepA0 = getOnlyStep();
   assert.equal(stepA0.getActionNodeState().getNode().getName(), '审核A');
 
-  // A后加步骤 -> 当前为A新增步骤
   controlCenter.execAction(new NextAddStepAction(), bizinst, stepA0, treeRecord);
   const stepA1 = getOnlyStep();
   assert.equal(stepA1.getActionNodeState().getNode().getName(), '审核A');
   assert.notEqual(stepA1, stepA0);
 
-  // 从A新增步骤退回到A原步骤
   controlCenter.execAction(new BackAction(), bizinst, stepA1, treeRecord);
   const stepA0Again = getOnlyStep();
   assert.equal(stepA0Again, stepA0);
 
-  // 提交A原步骤 -> 到A新增步骤
   controlCenter.execAction(new SubmitAction(), bizinst, stepA0Again, treeRecord);
   const stepA1Again = getOnlyStep();
   assert.equal(stepA1Again, stepA1);
 
-  // 再提交A新增步骤 -> 到B
   controlCenter.execAction(new SubmitAction(), bizinst, stepA1Again, treeRecord);
   const stepB0 = getOnlyStep();
   assert.equal(stepB0.getActionNodeState().getNode().getName(), '审核B');
 
-  // B后加步骤
   controlCenter.execAction(new NextAddStepAction(), bizinst, stepB0, treeRecord);
   const stepB1 = getOnlyStep();
   assert.equal(stepB1.getActionNodeState().getNode().getName(), '审核B');
   assert.notEqual(stepB1, stepB0);
 
-  // 退回到B原步骤，再提交回B新增步骤
   controlCenter.execAction(new BackAction(), bizinst, stepB1, treeRecord);
   const stepB0Again = getOnlyStep();
   assert.equal(stepB0Again, stepB0);
@@ -291,17 +275,14 @@ test('very complex flow: three-action chain with add-step and back cycles reache
   const stepB1Again = getOnlyStep();
   assert.equal(stepB1Again, stepB1);
 
-  // 提交到C
   controlCenter.execAction(new SubmitAction(), bizinst, stepB1Again, treeRecord);
   const stepC0 = getOnlyStep();
   assert.equal(stepC0.getActionNodeState().getNode().getName(), '审核C');
 
-  // 从C退回到B新增步骤
   controlCenter.execAction(new BackAction(), bizinst, stepC0, treeRecord);
   const stepB1FromC = getOnlyStep();
   assert.equal(stepB1FromC, stepB1);
 
-  // 再次提交到C，再提交到结束
   controlCenter.execAction(new SubmitAction(), bizinst, stepB1FromC, treeRecord);
   const stepC0Again = getOnlyStep();
   assert.equal(stepC0Again.getActionNodeState().getNode().getName(), '审核C');

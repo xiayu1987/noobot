@@ -1,4 +1,3 @@
-/* 移动端触摸反馈统一由按钮自身状态绘制，避免系统高亮以方形覆盖圆角。 */
 button,
 .el-button {
   -webkit-tap-highlight-color: transparent;
@@ -6,7 +5,6 @@ button,
   isolation: isolate;
 }
 
-/* 统一功能性按钮基类 */
 .noobot-action-btn {
   border-radius: var(--noobot-btn-radius);
   font-weight: var(--noobot-btn-font-weight);
@@ -24,7 +22,6 @@ button,
   box-shadow: none;
 }
 
-/* 聊天气泡相关通用语义类（统一收敛） */
 .noobot-flat-card {
   background: var(--noobot-msg-file-card-bg);
   border: 1px solid var(--noobot-panel-border);
@@ -38,7 +35,6 @@ button,
   box-shadow: none;
 }
 
-/* 通用轻量卡片：用于表单分组、选择区域、面板内信息块 */
 .noobot-soft-card {
   box-sizing: border-box;
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
@@ -63,7 +59,6 @@ button,
   box-shadow: var(--noobot-shadow-panel);
 }
 
-/* 具有独立层级的浮层面板：统一实底、描边与投影。 */
 .noobot-overlay-card {
   box-sizing: border-box;
   background: var(--noobot-overlay-solid-bg);
@@ -528,7 +523,6 @@ button,
   color: var(--noobot-text-strong);
 }
 
-/* 关键操作位（附件/展开/工作区/用户设置/参数管理/左侧收折）边框弱化 */
 .noobot-action-btn.noobot-flat-soft-btn,
 .noobot-action-btn.noobot-flat-icon-btn,
 .noobot-action-btn.noobot-flat-inline-icon-btn,

@@ -12,9 +12,6 @@ import { safeStr } from "../../utils/shared-utils.js";
 import { DEFAULT_ATTACHMENT_SESSION_ID } from "../constants.js";
 import { attachScopedRoot, resolveBasePath } from "./attachment-scope-resolver.js";
 
-/**
- * 批量删除指定会话的 scoped 附件目录。
- */
 export async function deleteScopedAttachmentsBySessionIds(service, { userId, sessionIds = [] } = {}) {
   const basePath = resolveBasePath(service.globalConfig, userId);
   const scopedRoot = attachScopedRoot(basePath);
@@ -27,15 +24,11 @@ export async function deleteScopedAttachmentsBySessionIds(service, { userId, ses
       await fsRm(path.join(scopedRoot, sid), { recursive: true, force: true });
       deleted.push(sid);
     } catch {
-      // ignore per-session delete error
     }
   }
   return { deletedSessionIds: deleted, deletedCount: deleted.length };
 }
 
-/**
- * 清理已不存在会话的 scoped 附件目录（孤儿目录）。
- */
 export async function pruneOrphanScopedAttachments(
   service,
   {
@@ -88,7 +81,6 @@ export async function pruneOrphanScopedAttachments(
         deletedSessionIds.push(sessionId);
       }
     } catch {
-      // ignore per-session prune failures
     }
   }
 

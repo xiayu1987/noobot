@@ -116,7 +116,6 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   const pendingData = resolvePendingPlanUpdate(state);
   if (!pendingData?.active) return false;
 
-  // Consume pending revision/refinement once dispatched to avoid repeated replay.
   if (pendingData.stage === GUIDANCE_DECISION.stage.revision) {
     setPendingStateWithMeta(state, "planRevision", false);
   } else {
@@ -351,9 +350,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   if (allowSummary && state.pending.summary === true) {
     purpose = "summary";
     workflowPurpose = "summary";
-    // Snapshot current message boundary for summary marking. In separate_model
-    // mode, marking happens later (after external model returns), so without
-    // this checkpoint newly appended turns may be summarized by mistake.
     captureGuidanceSummaryCheckpoint(ctx, state);
     prompt = buildGuidanceSummaryPromptText({
       locale,

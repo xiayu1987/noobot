@@ -4,14 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * Shared threshold guard.
- *
- * Length, quantity, turn/count, and time thresholds must live in @noobot/shared
- * so agent, service, plugins, and client do not drift apart. This guard is
- * intentionally conservative: it only flags numeric literals whose
- * identifier/property names clearly look like one of those threshold categories.
- */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 

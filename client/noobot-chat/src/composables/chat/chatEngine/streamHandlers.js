@@ -350,9 +350,6 @@ export function handleDoneStreamEvent({
           sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
         }),
       );
-      // Tool facts belong exclusively to toolTimeline. Duplicating them into
-      // activityTimeline lets legacy tool errors survive as a second row with
-      // different fallback ordering.
       botMessage.activityTimeline = doneRealtimeLogs
         .filter((logItem) => !isToolActivityLog(logItem))
         .reduce(
@@ -379,9 +376,6 @@ export function handleDoneStreamEvent({
       notifyFirstResponse();
     }
   }
-  // Stream/DONE payloads are transport observations, not Session identity
-  // reconciliation. List/detail reconciliation owns the one-time promotion
-  // from an optimistic local Session id to the canonical backend id.
   activeSession.value.loaded = true;
   applyDoneMessagesPatch({
     data,

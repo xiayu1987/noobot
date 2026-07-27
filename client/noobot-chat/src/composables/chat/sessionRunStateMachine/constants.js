@@ -38,10 +38,6 @@ export const BackendTerminalStates = Object.freeze([
   BackendChannelState.NO_CONVERSATION,
 ]);
 
-// Terminal-state vocabularies are deliberately split by authority. Only values
-// in AUTHORITATIVE_TERMINAL_STATES may be accepted from the terminal-resolution
-// service and dispatched as TERMINAL_RESOLVED. Legacy values are discovery or
-// display metadata only; they must never settle runtime capabilities.
 export const AUTHORITATIVE_TERMINAL_STATES = Object.freeze([
   "completed",
   "stop_completed",

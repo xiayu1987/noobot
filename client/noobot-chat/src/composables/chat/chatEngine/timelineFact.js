@@ -33,8 +33,6 @@ const timestampOf = (value = {}) => {
 const sequenceScopeOf = (value = {}) =>
   text(value.sequenceScopeId || value.sequenceScope || value.messageId || value.message_id);
 
-/** Select between observations of the same fact. Cross-domain sequence values
- * are incomparable, so equal-authority caller order is the explicit tiebreak. */
 export function preferTimelineFact(left, right) {
   if (!left) return right;
   if (!right) return left;
@@ -58,8 +56,6 @@ export function preferTimelineFact(left, right) {
   return right;
 }
 
-/** Sort independent facts without ever comparing sequence values from
- * different domains. Returning zero preserves the caller's stable order. */
 export function compareTimelineFacts(left = {}, right = {}) {
   const leftDomain = text(left.sequenceDomain);
   const rightDomain = text(right.sequenceDomain);

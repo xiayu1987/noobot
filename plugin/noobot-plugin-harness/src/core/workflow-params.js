@@ -15,16 +15,9 @@ function deepFreeze(value) {
   return value;
 }
 
-// Unified parameter center for workflow orchestration knobs.
-// Keep shape stable by domain -> concern -> knobs.
 export const WORKFLOW_PARAMS = deepFreeze({
   workflow: {
     scheduler: {
-      // Priority principle:
-      // hard guard > planning structure > failure recovery > main-flow acceptance
-      // > auxiliary diagnosis > context compression > validation.
-      // Keep this list in semantic priority order; lower index wins when actions
-      // are simultaneously pending.
       order: [
         { flow: "final_acceptance", subflow: "forced", action: "forced_acceptance", executor: "acceptance", kind: "guard", hardOverride: true },
         { flow: "planning", subflow: "bootstrap", action: "planning_bootstrap", executor: "planning", kind: "workflow" },
@@ -256,7 +249,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
   },
   guidance: {
     summary: {
-      // Fallback defaults. Mode-specific summary thresholds live in top-level modeThresholds.<mode>.guidance.summary.
       turnsThreshold: TURN_THRESHOLDS.harness.guidance.summaryTurns,
       messageCharsThreshold: LENGTH_THRESHOLDS.context.harnessSummaryMessageChars,
       overflowPolicy: {
@@ -327,8 +319,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
       enabled: true,
     },
     phase: {
-      // Fallback default. Mode-specific phase acceptance thresholds live in
-      // top-level modeThresholds.<mode>.acceptance.phase.
       triggerTurnsThreshold: TURN_THRESHOLDS.harness.acceptance.phaseTriggerTurns,
       blockerKeys: ["guidance", "planUpdate", "planningCaptured"],
     },

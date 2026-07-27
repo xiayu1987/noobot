@@ -34,6 +34,5 @@ export async function appendParseErrorLog({
     ].join("\n");
     await storage.appendText(logPath, block);
   } catch {
-    // 调试日志写入失败不影响主流程
   }
 }

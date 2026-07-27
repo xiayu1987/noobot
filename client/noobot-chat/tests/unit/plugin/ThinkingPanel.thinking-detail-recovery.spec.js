@@ -181,11 +181,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     ]));
     expect(wrapper.vm.loadedThinkingDetail?.messageItem?.completedToolLogs).toHaveLength(1);
     expect(wrapper.vm.hasThinking).toBe(true);
-    // Accessing the lazy computed above observes the settled detail; flush the
-    // component update it schedules before asserting the rendered projection.
     await nextTick();
-    // Keep this assertion diagnostic local: if mounting fails, report the
-    // actual rendered branch rather than inferring it from component lookup.
     expect(wrapper.findComponent(ThinkingPanelRealtime).exists()).toBe(true);
     expect(wrapper.html()).toContain("thinking-realtime-shell");
     expect(wrapper.findAllComponents(ThinkingPanelRealtime)).toHaveLength(1);

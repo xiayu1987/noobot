@@ -10,7 +10,7 @@ function createDefaultEventAdapter() {
       try {
         eventListener?.onEvent?.({ event, data, ts });
       } catch {
-        // Listener errors should not interrupt the main execution flow.
+
       }
     },
   };
@@ -50,4 +50,3 @@ export function getEventAdapter() {
 export function emitByAdapter(payload = {}) {
   return activeEventAdapter.emit(payload);
 }
-

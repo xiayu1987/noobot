@@ -39,10 +39,6 @@ function parseSseEventBlock(rawBlock = "") {
   };
 }
 
-/**
- * SSE MCP client.
- * Expects pre-resolved headers from caller.
- */
 export class SseMcpClient extends BaseMcpClient {
   constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
     super({ baseUrl, headers, signal, fetchImpl });

@@ -197,9 +197,6 @@ export function createChatEngineSender({
         action: continueFromUserStopped ? "continue" : "",
         resumeDialogProcessId: continueFromUserStopped ? resumeDialogProcessId : "",
         resumeTurnScopeId: continueFromUserStopped ? resumeTurnScopeId : "",
-        // The send event, optimistic message and transport payload must share
-        // one start instant. In particular, continue creates a fresh Turn scope,
-        // so looking it up in the pre-existing timing index can return empty.
         thinkingStartedAt,
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
@@ -277,11 +274,6 @@ export function createChatEngineSender({
         const errorData = streamError?.data || lastStreamErrorEventData || {};
         const versionConflict = normalizeTrimmedString(errorData?.errorCode) === "SESSION_VERSION_CONFLICT";
         if (versionConflict) {
-          // ACTION_ACCEPTED already owns this Turn before Agent commits the
-          // message. Reusing its turnScopeId after a version conflict enters a
-          // terminal lifecycle and causes an illegal_transition. Refresh the
-          // concurrency token for the next user action, but never replay this
-          // failed Turn implicitly.
           const detail = await fetchSessionDetail(sessionId, {
             source: "sendVersionConflict",
             force: true,
@@ -317,15 +309,7 @@ export function createChatEngineSender({
         await startFinalDoneSessionDetailOnce("stream_resolved");
       }
 
-      // Safety net: if terminal channel_state is delayed/lost, avoid sticky "stop" UI.
-      // Primary source of truth remains the frontend completion detail chain once a
-      // final DONE/channel_state has been detected. Run fallback only when no final
-      // completion detail chain exists; otherwise a failed detail request must remain
-      // an error and must not be overwritten by a late completed fallback.
       applyStreamCompletedFallback({
-        // The detail chain is the primary completion path. This fallback is
-        // intentionally used only when a terminal completion was observed but
-        // no detail request could be started (for example a missing session id).
         finalDoneEventData: finalDoneEventData && !doneTurnFinalizer.promise ? finalDoneEventData : null,
         activeSession,
         botMessage: botMsg,
@@ -358,9 +342,6 @@ export function createChatEngineSender({
             backendStopEventData: finalUserStopEventData,
           });
         }
-        // The websocket event is only a change notification. Re-read Session
-        // detail for the historical message projection; runtime terminal state
-        // is resolved separately by the authoritative terminal service.
         const stoppedSessionId = normalizeTrimmedString(
           finalUserStopEventData?.sessionId ||
           activeSession?.value?.backendSessionId ||
@@ -386,12 +367,6 @@ export function createChatEngineSender({
           ...runtimeView(),
           messages: summarizeDebugMessages(activeSession?.value?.messages),
         });
-        // A persisted USER_STOPPED event is a successful terminal outcome for
-        // the request. In particular, resendTransaction must not interpret it
-        // as a transport failure and restore the snapshot from before
-        // replace-turn; doing so resurrects the previous stopped turn and
-        // prevents the next stop -> edit -> resend cycle from finding the
-        // freshly persisted replacement turn.
         return true;
       }
       logResendDebug("send.doneReturn", {

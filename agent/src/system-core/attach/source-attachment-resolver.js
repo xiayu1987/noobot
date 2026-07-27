@@ -20,11 +20,6 @@ function normalizeComparablePath(filePath = "", basePath = "") {
     : path.join(String(basePath || "").trim(), normalizedPath));
 }
 
-/**
- * Resolve one canonical user attachment in the root conversation scope.
- * A canonical ID is preferred; an exact scoped path is an equally valid proof
- * when a model omits or corrupts the optional ID argument.
- */
 export async function resolveCanonicalUserSourceAttachment({
   filePath = "",
   attachmentId = "",

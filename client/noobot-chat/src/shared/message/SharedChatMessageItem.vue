@@ -196,9 +196,6 @@ function resolveRendererContext() {
   const selectSessionMessages = (sessionId = "") => {
     const id = String(sessionId || "").trim();
     if (!id) return null;
-    // Workflow node drawers must resolve their isolated child session before
-    // looking at the main session. A node id can legitimately equal a parent
-    // session id while the child registry is still receiving live events.
     const workflowPayload = props.messageItem?.pluginMeta?.payload || {};
     const subSession = chatStore.selectSubSessionMessages?.(id);
     if (subSession) {
@@ -208,13 +205,6 @@ function resolveRendererContext() {
         messages: Array.isArray(subSession?.messages) ? subSession.messages : [],
       };
     }
-    // This selector is exposed specifically to the Workflow node drawer.
-    // Never fall back to the main-session collection: a planned/running node
-    // may temporarily carry its parent id before its child Session identity
-    // arrives. REST/Execution hydration will populate the isolated registry.
-    // This callback is only provided to the Workflow renderer. Main-session
-    // messages are already supplied by the host view and are never a valid
-    // fallback for a node drawer, regardless of payload protocol/version.
     return null;
   };
   return {

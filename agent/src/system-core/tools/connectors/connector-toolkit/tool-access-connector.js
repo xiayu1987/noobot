@@ -630,14 +630,10 @@ function buildAccessConnectorTool(context = {}) {
                   reason: executionFailedMessage,
                 }),
             connector: result?.connector || {},
-            // Keep raw connector output; avoid sanitizer/truncation here.
-            // Tool-runner overflow guard + semantic-transfer handles long payloads uniformly.
             output:
               result?.output && typeof result.output === "object" && !Array.isArray(result.output)
                 ? result.output
                 : {},
-            // Email connector attachments are ordinary connector artifacts; do not
-            // promote connector stdout transfer-like fields as semantic-transfer output here.
           },
           true,
         );

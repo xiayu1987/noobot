@@ -22,8 +22,6 @@ export const TURN_PROJECTION_SOURCE = Object.freeze({
   SNAPSHOT: "snapshot",
 });
 
-// Ephemeral panel state belongs exclusively to turnUiStore and must never be
-// persisted into, or restored from, a domain snapshot.
 const TURN_UI_SNAPSHOT_FIELDS = new Set([
   "thinkingOpenNames",
   "expandedDetailLogKeys",
@@ -32,10 +30,6 @@ const TURN_UI_SNAPSHOT_FIELDS = new Set([
   "animationKeys",
 ]);
 
-/**
- * Canonical write boundary for a turn projection. Transport sources are
- * observational only: they cannot alter ownership or reduction semantics.
- */
 export function dispatchTurnEnvelope({
   targetMessage,
   envelope,
@@ -103,10 +97,6 @@ export function dispatchTurnEnvelope({
   });
 }
 
-/**
- * Versioned snapshot boundary. A snapshot older than the current event cursor
- * is observational and must never overwrite newer live facts.
- */
 export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence = 0 } = {}) {
   const identity = resolveTurnIdentity(snapshot);
   const targetIdentity = resolveTurnIdentity(targetMessage);
@@ -116,9 +106,6 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
     !identity.sessionId &&
     !targetIdentity.sessionId,
   );
-  // Old persisted messages may predate sessionId on each message. This is an
-  // isolated hydration compatibility boundary: ownership is still proven by
-  // an exact Turn match and is never inferred from dialogProcessId.
   const turnKey = createTurnKey(identity) || (legacyUnscopedSession ? `legacy::${identity.turnScopeId}` : "");
   const observe = (values = {}) => createTurnObservation({
     requestedSessionId: identity.sessionId,
@@ -176,8 +163,6 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
     ])].slice(-1000),
     ...(Object.keys(pendingEnvelopes).length ? { pendingEnvelopes } : {}),
   };
-  // A newer snapshot may close a previously observed sequence gap. Replay all
-  // now-contiguous buffered envelopes through the same canonical reducer.
   let nextSequence = Number(targetMessage.messageEventState.lastSequence || 0) + 1;
   while (targetMessage.messageEventState.pendingEnvelopes?.[nextSequence]) {
     const pendingEnvelope = targetMessage.messageEventState.pendingEnvelopes[nextSequence];

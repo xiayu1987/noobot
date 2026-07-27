@@ -95,7 +95,6 @@ export function createChatWebSocketClient({
   let activeStopLease = null;
   let protocolRequestSerial = 0;
 
-  // Reconnect state
   let lastReceivedSeqMap = {};
   let lastReceivedTurnScopeIdMap = {};
   let reconnecting = false;
@@ -559,7 +558,6 @@ export function createChatWebSocketClient({
             const data = parsed?.data || {};
             if (event === "transport_ready") return;
             trackIncomingEvent(data);
-            // Clear seq on done/stopped
             if (event === StreamEventEnum.DONE || event === StreamEventEnum.USER_STOPPED) {
               if (data?.dialogProcessId) {
                 removeLastReceivedSeq(data.dialogProcessId);
@@ -592,7 +590,6 @@ export function createChatWebSocketClient({
             finalize(() => resolve());
             return;
           }
-          // 未收到 done/stopped 就断开，按异常处理，避免 UI 一直显示“等待实时日志”
           cleanupSocketRef(streamSocket);
           if (!settled) {
             finalize(() =>
@@ -623,9 +620,6 @@ export function createChatWebSocketClient({
       reconnectReject = reject;
       const requestId = nextRequestId("reconnect");
 
-      // Reconnect is a logical command on the existing business transport.
-      // Stream and replay subscribers are multiplexed by the dispatcher, so an
-      // active stream no longer requires a second physical socket.
       const currentSocket = getActiveSocket();
       const reusableSocket = currentSocket &&
         [WebSocket.OPEN, WebSocket.CONNECTING].includes(currentSocket.readyState)
@@ -722,10 +716,6 @@ export function createChatWebSocketClient({
             }
             reconnecting = false;
             clearTimers();
-            // A reconnect during an active stream necessarily created a
-            // replacement transport. Retire the old socket after replay has
-            // completed so repeated online/focus signals cannot accumulate
-            // live sockets on the server.
             retirePreviousSocket();
             const resolveFn = reconnectResolve;
             reconnectResolve = null;

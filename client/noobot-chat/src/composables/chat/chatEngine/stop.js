@@ -246,14 +246,10 @@ export function stopSending({
     createdAtMs: stopPayload.createdAtMs,
     source: "stop_sending",
   });
-  // Runtime display state is projected by the turn runtime registry.  The
-  // placeholder is an identity input only and must not become a second writer.
   if (applyRunStateEvent) {
     applyRunStateEvent(stopEvent);
   }
   const applyStopRequestFailure = (error) => {
-    // The stop command was not accepted, so release only the optimistic local
-    // stop mutex. This is not evidence that the backend Turn failed.
     if (applyRunStateEvent) {
       applyRunStateEvent({
         type: SESSION_RUN_EVENT.LOCAL_RESET,

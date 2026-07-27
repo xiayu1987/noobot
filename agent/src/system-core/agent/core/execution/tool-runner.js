@@ -443,9 +443,6 @@ function emitToolCallEndEvent(eventListener, runtime, messageId, data = {}) {
       messageId: authoritativeMessageId,
     });
   }
-  // executeToolCall is also a public low-level executor used outside an Agent
-  // message turn. Such invocations have no Assistant message to project into;
-  // keep their lifecycle observable without inventing a message identity.
   emitEvent(eventListener, "tool_call_end", data);
   return data;
 }

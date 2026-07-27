@@ -221,9 +221,6 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
     action,
     state,
     phase,
-    // Lifecycle and execution projections must agree once the Turn is terminal.
-    // Retaining the processing value (usually `sending`) makes refresh clients
-    // resurrect an already-completed Turn as active work.
     executionState: nextExecutionState(
       eventType,
       input.executionState || current?.executionState,
@@ -258,7 +255,6 @@ export function isTerminalTurnLifecycleState(state) {
   return TERMINAL_STATES.has(clean(state));
 }
 
-/** Join persisted timing to a lifecycle Turn by its canonical Session Turn key. */
 export function projectTurnLifecycleTiming(turn = {}, turnTimings = []) {
   const turnScopeId = clean(turn?.turnScopeId);
   const timing = turnScopeId

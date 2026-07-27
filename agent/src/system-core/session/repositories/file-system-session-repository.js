@@ -45,7 +45,7 @@ export class FileSystemSessionRepository {
     this.mutationLockStaleMs = Math.max(1, Number(mutationLockStaleMs) || 60000);
     this.mutationLockPollMs = Math.max(1, Number(mutationLockPollMs) || 10);
     this.mutationCoordinator = sessionMutationCoordinator;
-    this._deletedSessionCache = new Map(); // userId -> { sessions, updatedAt }
+    this._deletedSessionCache = new Map();
     this._heldMutationLocks = new Map();
   }
 
@@ -507,7 +507,6 @@ export class FileSystemSessionRepository {
         await fsRm(await this._sessionDisplaySummaryFile(userId, sessionId, ""), { force: true });
         removed += 1;
       } catch {
-        // Best-effort cleanup. Nested session directories are removed by delete().
       }
     }
     return removed;

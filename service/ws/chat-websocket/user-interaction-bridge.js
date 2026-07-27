@@ -13,11 +13,6 @@ import {
 
 const USER_INTERACTION_TIMEOUT_MS = TIME_THRESHOLDS.service.userInteractionTimeoutMs;
 
-/**
- * Builds the user-interaction bridge plus a helper to reject all pending
- * requests. Shared connection state is read through the provided accessors so
- * the extracted logic keeps observing live locale/run metadata updates.
- */
 export function createUserInteractionBridge({
   sendEvent,
   translateText,

@@ -70,11 +70,6 @@ const FINALIZED_ASSISTANT_STATES = new Set([
   "no_conversation",
 ]);
 
-/**
- * Project authoritative session turn timings onto the turn identity consumed by
- * message renderers. Both the primary chat and secondary Agent viewers must use
- * this projection so refresh-time thinking state cannot diverge by channel.
- */
 export function buildTurnTimingsByTurnScopeId({
   turnTimings = [],
   messages = [],
@@ -105,9 +100,6 @@ export function buildTurnTimingsByTurnScopeId({
       })
     .filter(([turnScopeId]) => Boolean(turnScopeId));
   const projectedTurnScopeIds = new Set(projectedEntries.map(([turnScopeId]) => turnScopeId));
-  // A sparse realtime update may omit persisted turnTimings while still
-  // carrying the in-flight message. Preserve only timings whose owning turn is
-  // present; never leak an orphan timing into another/session-empty projection.
   for (const [turnScopeId, timing] of Object.entries(currentTimings)) {
     const turnScopeKey = normalizeTurnScopeIdKey(turnScopeId);
     if (projectedTurnScopeIds.has(turnScopeKey)) continue;
@@ -215,9 +207,6 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
       keys.forEach((key) => placeholdersByKey.set(key, messageItem));
       continue;
     }
-    // Only an authoritative, finalized assistant response suppresses the
-    // terminal-status placeholder. Keep the placeholder beside partial
-    // streamed content so the terminal reason remains visible.
     if (
       getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
       messageItem?.pending === false
@@ -227,8 +216,6 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
   }
   const injectedKeys = new Set();
   for (const messageItem of sourceMessages) {
-    // Reinsert persisted/synthetic placeholders beside their owning user
-    // message. Their timestamps may otherwise place them above that message.
     if (messageItem?.turnStatusPlaceholder === true) continue;
     output.push(messageItem);
     if (getMessageRole(messageItem) !== RoleEnum.USER) continue;
@@ -360,11 +347,6 @@ function preserveRunningThinkingState(
         existingMessage.channelState = existingChannelState;
       }
     } else if (registryObservedTurn || runtimeView.source === "persisted") {
-      // Once the runtime registry has observed this Turn, its running flag owns
-      // the message projection. In particular, an authoritative terminal
-      // resolution must clear stale optimistic sending state regardless of the
-      // registry event source label. Message appearance is only a bootstrap
-      // fallback for Turns absent from the registry.
       delete existingMessage.channelState;
       existingMessage.pending = false;
     }
@@ -437,11 +419,6 @@ export function findExistingMessageIndexForDetailMessage(existingMessages = [], 
       .map(({ index }) => index);
     if (matchingTurnIndexes.length === 1) return matchingTurnIndexes[0];
   }
-  // Session-detail hydration is the isolated migration boundary for legacy
-  // optimistic messages created before a turnScopeId was available. Reuse a
-  // unique same-role message from the same execution chain only when at least
-  // one side has no Turn identity. Never use dialogProcessId to join two
-  // explicitly identified (and potentially different) Turns.
   const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
   if (detailDialogProcessId) {
     const matchingLegacyDialogIndexes = existingMessages
@@ -648,9 +625,6 @@ export function applyStatusTurnScopeIds({ messages = [], sessionDocs = [], turnS
     const statusTurnScopeId = normalizeText(turnStatus?.turnScopeId);
     if (statusTurnScopeId) {
       messageItem.statusTurnScopeId = statusTurnScopeId;
-      // Persisted turnStatuses is the refresh-time source of truth. Project the
-      // display state with the identity so rendering does not depend on Registry
-      // hydration order after a reload.
       messageItem.persistedStatusStepState = normalizeText(turnStatus?.status);
     }
   }
@@ -745,9 +719,6 @@ export function applySummaryToolLogs(sessionItem, sessionDocs = []) {
   for (const sessionDoc of sessionDocs) {
     for (const logItem of Array.isArray(sessionDoc?.toolLogSummaries) ? sessionDoc.toolLogSummaries : []) {
       const turnScopeId = getMessageTurnScopeId(logItem);
-      // Summary documents are an isolated legacy input boundary. Unscoped
-      // records cannot be assigned to a UI turn and must never fall back to a
-      // reusable dialog execution-chain id.
       if (!turnScopeId) continue;
       logsByTurnScopeId.set(turnScopeId, [
         ...(logsByTurnScopeId.get(turnScopeId) || []),

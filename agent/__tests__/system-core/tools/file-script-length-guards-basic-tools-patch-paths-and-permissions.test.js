@@ -418,8 +418,8 @@ test("patch_file: 沙箱视角下路径不存在时诊断脱敏为沙箱路径",
     async () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
-      // Sandbox view (docker global scope): the host tmp base path must never
-      // leak; it is mapped to the sandbox user root instead.
+
+
       assert.equal(error.details?.basePath, "/workspace/u-test");
       assert.doesNotMatch(error.details?.basePath || "", /^\/tmp\//);
       assert.equal(error.details?.filePath, "service/ws/chat-websocket-server.js");
@@ -462,7 +462,7 @@ test("patch_file: host 视角下路径不存在时诊断保留真实工作区根
     async () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
-      // Host view: no sandbox mapping, so diagnostics keep the real workspace root.
+
       assert.equal(error.details?.basePath, workspacePath);
       assert.equal(error.details?.filePath, "service/ws/chat-websocket-server.js");
       assert.equal(error.details?.attemptedPaths?.[0]?.path, "service/ws/chat-websocket-server.js");
@@ -648,4 +648,3 @@ test("patch_file: 超级管理员虚拟路径命中多个项目根时返回歧�
     /ambiguous patch path/i,
   );
 });
-

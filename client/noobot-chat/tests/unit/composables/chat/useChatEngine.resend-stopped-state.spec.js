@@ -87,9 +87,9 @@ describe("useChatEngine.resend stopped state", () => {
     });
     activeSession.value.messages = [staleStoppedUser, staleStoppedAssistant];
     activeSession.value.rawMessages = [staleStoppedUser, staleStoppedAssistant];
-  
+
     await expect(engine.resendMonotonicMessage(staleStoppedAssistant, "edited again")).resolves.toBe(false);
-  
+
     expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value.messages).toEqual([staleStoppedUser, staleStoppedAssistant]);
   });
@@ -136,9 +136,9 @@ describe("useChatEngine.resend stopped state", () => {
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-  
+
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "second resend")).resolves.toBe(true);
-  
+
     const [replacementUser, placeholder] = activeSession.value.messages;
     expect(replacementUser).toEqual(expect.objectContaining({
       role: RoleEnum.USER,
@@ -317,12 +317,12 @@ describe("useChatEngine.resend stopped state", () => {
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
-  
+
     await expect(engine.resendMonotonicMessage(activeSession.value.messages[1], "second")).resolves.toBe(true);
     const firstReplacementUser = activeSession.value.messages[0];
     const firstReplacementAssistant = activeSession.value.messages[1];
     const firstTurnScopeId = firstReplacementUser.turnScopeId;
-  
+
     firstReplacementUser.stopState = "stopped";
     firstReplacementUser.monotonicState = "monotonic";
     firstReplacementAssistant.pending = false;
@@ -335,7 +335,7 @@ describe("useChatEngine.resend stopped state", () => {
       messages: activeSession.value.messages,
     });
     await expect(engine.resendMonotonicMessage(firstReplacementAssistant, "third")).resolves.toBe(true);
-  
+
     const [secondReplacementUser, secondPlaceholder] = activeSession.value.messages;
     expect(secondReplacementUser.turnScopeId).toMatch(/^client-turn:/);
     expect(secondReplacementUser.turnScopeId).not.toBe(firstTurnScopeId);
@@ -421,7 +421,7 @@ describe("useChatEngine.resend stopped state", () => {
       },
     ];
     activeSession.value.rawMessages = [...activeSession.value.messages];
-  
+
     await expect(engine.resendMonotonicMessage(activeSession.value.messages[1], "second")).resolves.toBe(true);
     const firstAssistant = activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT && message.pending === true);
     firstAssistant.pending = false;
@@ -434,16 +434,11 @@ describe("useChatEngine.resend stopped state", () => {
     });
 
     await expect(engine.resendMonotonicMessage(firstAssistant, "third")).resolves.toBe(true);
-  
+
     const freshPlaceholder = [...activeSession.value.messages]
       .reverse()
       .find((message) => message.role === RoleEnum.ASSISTANT && message.pending === true);
-    // The mocked stream resolves immediately, so the transient pending assistant
-    // has already been finalized by the time resendMonotonicMessage resolves.
     expect(freshPlaceholder).toBeUndefined();
-    // The replacement Turn was settled by a complete authoritative terminal
-    // response, so its interaction lock is released. Stale message-level stop
-    // decoration cannot reintroduce a sending lock.
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
   });
@@ -479,7 +474,7 @@ describe("useChatEngine.resend stopped state", () => {
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "retry")).resolves.toBe(true);
-  
+
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
     expect(stream).toHaveBeenCalledTimes(1);
     expect(deps.notify).not.toHaveBeenCalledWith(expect.objectContaining({
@@ -527,9 +522,9 @@ describe("useChatEngine.resend stopped state", () => {
     };
     activeSession.value.messages = [oldUser, staleStoppedAssistant];
     activeSession.value.rawMessages = [oldUser, staleStoppedAssistant];
-  
+
     await expect(engine.resendMonotonicMessage(staleStoppedAssistant, "new attempt")).resolves.toBe(true);
-  
+
     const replacementUser = activeSession.value.messages.find((message) => message.role === RoleEnum.USER);
     const latestAssistant = activeSession.value.messages[activeSession.value.messages.length - 1];
     expect(latestAssistant).toEqual(expect.objectContaining({

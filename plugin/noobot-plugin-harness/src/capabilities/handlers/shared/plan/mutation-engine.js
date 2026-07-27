@@ -79,7 +79,6 @@ function classifyPlanMutation(stage = "", parsed = {}) {
     return { stage: normalizedStage, type: "invalid" };
   }
 
-  // revision
   if (hasMainPatchCommands || hasSubPatchCommands) return { stage: normalizedStage, type: "patch" };
   if (hasMainPlans) return { stage: normalizedStage, type: "full_main_plan" };
   return { stage: normalizedStage, type: "invalid" };
@@ -172,7 +171,6 @@ export function runPlanMutationEngine({
     };
   }
 
-  // revision
   if (classification.type === "patch") {
     const revisionPatchApplied = applyPatchCommandsToPlanDocument(nextDocument, parsedMutation.text, { stage: "revision" });
     let refinementPatchApplied = { changed: false };

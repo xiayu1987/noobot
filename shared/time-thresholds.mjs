@@ -2,27 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Central time-related thresholds.
- *
- * Keep character/byte/string-size thresholds in length-thresholds.mjs. Keep
- * loop/message/attempt count thresholds in turn-thresholds.mjs. This module is
- * for durations: timeouts, intervals, delays, debounce windows, TTLs, cache
- * ages, retention, and cleanup grace periods.
- *
- * Value tiers:
- * - 50-300 ms: UI/socket polling, grace, and throttle intervals.
- * - 450-800 ms: browser interaction waits and retry base windows.
- * - 1000 ms: fast hook, poll, and cleanup boundaries.
- * - 1200-3000 ms: missing-payload, flush, hook, and stop-action guards.
- * - 4500-8000 ms: network-idle and connector quick/toolkit probes.
- * - 15000-60000 ms: reconnect, command, browser, startup, and idle probes.
- * - 180000-300000 ms: separate-model and heavy async/tool work.
- * - 1-5 hours: docker lock, IDE idle, agent, and workflow run ceilings.
- * - 24-48 hours / 30 days: token, tmp-file, UI timing, and run retention.
- *
- * Most values use milliseconds. Seconds/days are kept only where the caller's
- * native business unit is seconds or days, and the property name must say so.
  */
 
 function deepFreeze(value) {

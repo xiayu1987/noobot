@@ -265,8 +265,6 @@ import {
       failure: { phase: failedPhase, message: "retryable" }, finalizeIntent: { retryable: true },
     });
     expect(failed.turn).toMatchObject({ state: failedState, terminal: "error", finalizeIntent: { retryable: true } });
-    // A resolved terminal is monotonic. Recovery must create a newer committed
-    // server view rather than letting a lifecycle notification overwrite it.
     const authoritativeSuccess = applyTurnRuntimeEvent(registry, {
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: successEvent,
       sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", sequence: 7,

@@ -160,9 +160,6 @@ export function createSessionDetailApplicator({
         turnTimings: mainSessionDoc.turnTimings,
       },
       {
-        // A detail response may be a sparse projection. REPLACE is only
-        // authoritative for fields it actually carries; replacing a missing
-        // turnTimings array with [] resets refresh-time thinking to now.
         replaceFields: isAuthoritativeSessionDetailApplyMode(applyMode)
           ? [
             ...(Array.isArray(mainSessionDoc.messages) ? ["messages"] : []),
@@ -186,9 +183,6 @@ export function createSessionDetailApplicator({
     ));
     canonicalDetail.turnTimings = turnTimings;
     canonicalDetail.turnStatuses = turnStatuses;
-    // Keep the authoritative session-level facts on the session model. View
-    // messages below are a disposable projection and must not become the
-    // source used by hydration, continue, or resend flows.
     sessionItem.turnStatuses = turnStatuses.map((item) => ({ ...item }));
     sessionItem.turnTimings = turnTimings.map((item) => ({ ...item }));
     sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
@@ -314,9 +308,6 @@ export function createSessionDetailApplicator({
         }
       }
     } else {
-      // The backend detail endpoint can be briefly stale right after a DONE event.
-      // Do not replace a non-empty active chat with an empty snapshot; otherwise
-      // the whole visible conversation disappears for one completed turn.
       sessionItem.messages = currentRenderedMessages;
     }
 

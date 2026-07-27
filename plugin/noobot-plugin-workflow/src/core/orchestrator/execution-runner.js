@@ -57,9 +57,6 @@ export function resolveCommittedChildTerminal(subSession = {}, expectedExecution
     const error = new Error(`invalid child execution terminal receipt: ${reason}`);
     error.code = "WORKFLOW_CHILD_TERMINAL_RECEIPT_INVALID";
     error.receiptReason = reason;
-    // A malformed or stale receipt is not a child failure fact.  Mark it so the
-    // orchestration catch path cannot manufacture a FAILED node terminal from
-    // a protocol-validation error.
     error.nodeTerminalReceiptRejected = true;
     throw error;
   };
@@ -385,8 +382,6 @@ export async function runWorkflowExecution({
           completedStepResults,
         });
         const planningNodeIdentity = resolvePlanningNodeIdentity({ planningNodeSessions, pendingStep: step });
-        // Preallocate the detached child Session so the authoritative RUNNING
-        // node fact and the spawned child lifecycle share one identity.
         const nodeIdentity = planningNodeIdentity
           ? {
               ...planningNodeIdentity,
@@ -501,15 +496,10 @@ export async function runWorkflowExecution({
         };
       }),
     );
-    // Promise.all rejects when the first node finishes aborting, which leaves
-    // slower parallel node sessions running after the workflow has stopped.
-    // All node runners must reach their terminal lifecycle before propagating
-    // either the stop or a regular node failure to the planner.
     const rejectedWaveResult = settledWaveResults.find((item) => item.status === "rejected");
     if (rejectedWaveResult) throw rejectedWaveResult.reason;
     const waveResults = settledWaveResults.map((item) => item.value);
     throwIfWorkflowAborted(ctx);
-    // Execute higher index first to keep original stepIndex semantics in the same parallel batch.
     const actionQueue = waveResults
       .slice()
       .sort((a, b) => Number(b?.step?.index || 0) - Number(a?.step?.index || 0));

@@ -56,9 +56,6 @@ describe("useChatEngine.send-stream", () => {
     let capturedPayload = null;
     const stream = vi.fn(async (payload, onEvent) => {
       capturedPayload = payload;
-      // A stream return is not terminal authority. Emit the backend terminal
-      // notification so production code queries and atomically applies the
-      // authoritative Terminal Resolution response.
       emitChannelState(onEvent, "s-thinking-start", "dp-thinking-start", "completed", {
         turnScopeId: payload.turnScopeId,
       });
@@ -320,15 +317,11 @@ describe("useChatEngine.send-stream", () => {
     const assistant = assistantMessage(activeSession);
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).not.toBe("chat.generated");
-    // DONE starts the frontend completion request. The mutex remains held
-    // until that request either applies the authoritative summary or fails.
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
 
     releaseStream();
     await sendPromise;
-    // Legacy detail failure is irrelevant to settlement. Only the independent
-    // authoritative Terminal Resolution response may release the mutex.
     await vi.waitFor(() => expect(sending.value).toBe(false));
   });
 
@@ -385,8 +378,6 @@ describe("useChatEngine.send-stream", () => {
     expect(botMessage.dialogProcessId).toBe("dp-new");
     expect(botMessage.modelAlias).toBe("alias-a");
     expect(botMessage.tool_calls).toEqual([{ id: "tc1" }]);
-    // The backend Turn cannot settle the unreconciled local Session message.
-    // List/detail reconciliation owns that identity transition.
     expect(botMessage.pending).toBe(true);
     expect(botMessage.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(sending.value).toBe(false);
@@ -448,8 +439,6 @@ describe("useChatEngine.send-stream", () => {
 
     await vi.waitFor(() => expect(sending.value).toBe(false));
     const assistant = assistantMessage(activeSession);
-    // The backend observation triggers detail hydration; once that authoritative
-    // detail is applied the message exposes the committed frontend terminal.
     expect(assistant?.channelState).toMatchObject({ state: FrontendRunState.FRONTEND_COMPLETED });
     expect(assistant?.channelState?.createdAt).toBeUndefined();
     expect(assistant?.channelState?.createdAtMs).toBeUndefined();

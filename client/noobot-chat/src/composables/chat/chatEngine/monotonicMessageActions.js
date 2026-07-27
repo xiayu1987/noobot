@@ -104,9 +104,6 @@ function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
     sessions: [
       {
         ...session,
-        // Mutation responses expose the authoritative revision at the top
-        // level. Carry it into the document consumed by applySessionDetail so
-        // a subsequent continue does not reuse the pre-delete revision.
         ...(source.version !== undefined ? { version: source.version } : {}),
         ...(source.revision !== undefined ? { revision: source.revision } : {}),
         ...(source.sessionVersion !== undefined
@@ -210,18 +207,12 @@ export function createMonotonicMessageActions({
           )
         : null);
     if (stoppedTurnMessage) return true;
-    // A stop transaction is already in progress for this Session. Do not issue
-    // a second stop request or mutate messages until its authoritative result
-    // arrives.
     const runtime = activeTurnRuntime();
     const runtimeDisplayState = turnRuntimeDisplayState(runtime);
     if (
       runtimeDisplayState === "stopping" ||
       (runtimeDisplayState === "requesting" && runtime?.action === "stop")
     ) return false;
-    // This helper is the internal stop-and-settle gate used by delete/resend.
-    // The public action mutex must reject a second action, but it must not
-    // prevent this helper from stopping the currently active run first.
     if (!isActiveTurnInFlight()) return true;
     stopSending();
     const settled = await waitForSendingSettled({ timeoutMs, pollIntervalMs });
@@ -388,9 +379,6 @@ export function createMonotonicMessageActions({
         ? protocolDeletedTurnScopeIds
         : locallyDeletedTurnScopeIds;
       confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, confirmedDeletedTurnScopeIds, { sessionId });
-      // Remove the live tail first so its runtime/UI state is released before
-      // applying the server response. The response can still be stale during
-      // stop finalization, so the same anchor is enforced again below.
       cascadeDeleteMessagesFrom(userTargetMessage);
       logWorkflowDiagnostics("frontend.messageDelete.localCascadeApplied", {
         sessionId,
@@ -404,10 +392,6 @@ export function createMonotonicMessageActions({
         preserveCurrentMessages: false,
         deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
       });
-      // A successful delete response may contain a stale detail snapshot while
-      // the backend mutation is being materialized. Apply that snapshot first
-      // for identity/version convergence, then enforce the confirmed delete
-      // anchor locally so the old tail cannot reappear until refresh.
       cascadeDeleteMessagesFrom(userTargetMessage);
       logWorkflowDiagnostics("frontend.messageDelete.completed", {
         sessionId,

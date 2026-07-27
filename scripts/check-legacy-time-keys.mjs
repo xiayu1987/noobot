@@ -4,12 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * Legacy time-key guard:
- * - Disallow direct legacy key reads like source.run_timeout_ms / source["run_timeout_ms"].
- * - Allow compatibility declarations via resolveTimeMs({ legacyKeys / legacyKey }) and
- *   explicit presence checks via hasOwnProperty.call(source, "run_timeout_ms").
- */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 

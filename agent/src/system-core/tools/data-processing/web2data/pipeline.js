@@ -86,12 +86,10 @@ export async function runWebToDataPipeline({
       try {
         usefulText = await readFile(String(item?.useful_text_path || ""), "utf8");
       } catch {
-        // Text sidecar may be missing for partial web2img results; keep record with empty text.
       }
       try {
         fullText = await readFile(String(item?.full_text_path || ""), "utf8");
       } catch {
-        // Text sidecar may be missing for partial web2img results; keep record with empty text.
       }
       records.push({
         url: String(item?.url || ""),

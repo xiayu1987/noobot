@@ -31,12 +31,6 @@ async function assertRequiredBackendRuntimeFiles(rootDir, label) {
 }
 
 function getBackendCopyOptions(context) {
-  // The prepared backend runtime contains workspace package links such as
-  // node_modules/noobot-agent -> ../agent. Packaged apps must be self-contained:
-  // preserving those symlinks can leave Node unable to resolve workspace
-  // packages from Resources/backend/service after signing, zipping, or moving
-  // the app bundle. Dereference them while copying so node_modules contains
-  // real package directories on every desktop platform.
   return { recursive: true, dereference: true };
 }
 

@@ -37,8 +37,6 @@ export function scheduleCacheExpiredSessionRefresh({
       targetAssistantMessage: failedTargetAssistantMessage = null,
     } = {}) {
       const normalizedFailedSessionId = _trimStr(failedSessionId || activeSession.value?.id);
-      // A failed cache refresh is diagnostic/recovery evidence only. It cannot
-      // manufacture a business terminal state or release the Turn lock.
       interactionSubmitting.value = false;
       clearPendingInteraction?.();
       const expiredErrorMessage = translate("chat.expiredRefreshFailed");

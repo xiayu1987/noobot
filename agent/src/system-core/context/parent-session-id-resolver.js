@@ -41,10 +41,6 @@ export function resolveParentSessionIdWithMeta(options = {}) {
   return { value: "", source: "", legacy: false };
 }
 
-/**
- * Resolve parentSessionId from mixed runtime/context shapes.
- * Phase-1 goal: keep existing behavior while centralizing fallback chain.
- */
 export function resolveParentSessionId(options = {}) {
   const resolved = resolveParentSessionIdWithMeta(options);
   return resolved.value;

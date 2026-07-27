@@ -1,9 +1,9 @@
-import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "./i18n.js";
 import { injectMessageWithPolicy } from "./message/injection-utils.js";

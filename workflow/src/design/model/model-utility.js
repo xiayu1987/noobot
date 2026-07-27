@@ -13,10 +13,8 @@ class ModelUtility {
   constructor() {
   }
   static getStartNode(model) {
-    // TODO: manual translation from Java required.
   }
   static getEndNode(model) {
-    // TODO: manual translation from Java required.
   }
   static getNodeStartFlowtos(node) {
     var result = [];

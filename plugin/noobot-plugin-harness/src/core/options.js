@@ -54,8 +54,6 @@ export const DEFAULT_OPTIONS = Object.freeze({
     semanticValidation: WORKFLOW_PARAMS.acceptance.semanticValidation.enabled,
   }),
   review: Object.freeze({
-    // Review reports are runtime diagnostics. They must not become user-visible
-    // message content unless a deployment explicitly opts into that behavior.
     attachToFinalOutput: false,
   }),
   pendingTtlHookTurns: TURN_THRESHOLDS.harness.pendingTtlHookTurns,

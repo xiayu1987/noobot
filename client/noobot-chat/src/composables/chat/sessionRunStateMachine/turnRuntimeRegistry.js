@@ -107,7 +107,6 @@ function promoteTurnSession(registry, turn, nextSessionId) {
   return turn;
 }
 
-/** Promote every runtime Turn for one reconciled Session identity exactly once. */
 export function promoteSessionRuntimeIdentity(registry, previousSessionId, nextSessionId) {
   const previousId = canonicalSessionId(registry, previousSessionId);
   const nextId = canonicalSessionId(registry, nextSessionId) || text(nextSessionId);
@@ -241,12 +240,6 @@ export function applyExecutionTree(registry, payload = {}) {
   if (validations.some(({ identity }) => identity.executionId !== rootExecutionId && identity.rootExecutionId !== rootExecutionId)) {
     return { applied: false, reason: "execution_tree_root_conflict", results: [], rootExecutionId };
   }
-  // A plain tree snapshot has no tree-wide revision/tombstone coordinate. It
-  // is therefore an authoritative view of the entries it contains, but NOT
-  // proof that a locally newer lifecycle projection was deleted. Destructive
-  // removal is only accepted through explicit, versioned tombstones. This
-  // prevents a delayed reconnect tree from deleting a child introduced by a
-  // newer lifecycle envelope while the request was in flight.
   const tombstones = Array.isArray(payload?.removedExecutions) ? payload.removedExecutions : [];
   const removedExecutionIds = [];
   const acceptedTombstones = new Map();
@@ -326,9 +319,6 @@ function canPromoteOptimisticTurnSession(event = {}) {
 }
 
 function isOptimisticLocalTurn(turn) {
-  // sourceEvent is caller-defined observability metadata (for example
-  // `send_flow_start`) and is not a reliable identity discriminator. The
-  // explicit creation-time capability is the single source of truth.
   return turn?.sessionIdentityPending === true;
 }
 
@@ -351,10 +341,6 @@ export function turnRuntimeDisplayState(turn = null) {
 
 export function resolveSessionTurnRuntime(registry, sessionId, turnScopeId = "") {
   const bucket = registry?.sessions?.[canonicalSessionId(registry, sessionId)];
-  // Callers should pass the canonical Turn identity when they have it. The
-  // bucket pointer is the authoritative current-Turn identity maintained by the
-  // reducer/reconcile layer, not a scan or a "latest terminal" guess. It keeps
-  // Session-level UI projections stable after TERMINAL_RESOLVED.
   const scope = turnKey(turnScopeId) || turnKey(bucket?.activeTurnScopeId);
   return scope ? bucket?.turns?.[scope] || null : null;
 }
@@ -411,18 +397,12 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
     ? resolveTurnRuntimeByScope(registry, normalizedTurnScopeId, { sessionId: normalizedSessionId || routeSessionId })
     : null;
   if (!turn) {
-    // Distinguish an unknown Turn (safe empty projection) from a known Turn
-    // owned by another Session (identity mismatch). This prevents cross-session
-    // leakage without forcing callers to null-check genuinely absent runtime.
     const turnInAnotherSession = normalizedSessionId && normalizedTurnScopeId
       ? resolveTurnRuntimeByScope(registry, normalizedTurnScopeId)
       : null;
     return turnInAnotherSession ? null : defaultRuntimeView;
   }
   if (normalizedSessionId && turn.sessionId !== normalizedSessionId) return null;
-  // sessionId + canonical turnScopeId is the authoritative Turn identity.
-  // dialogProcessId is only a routing aid when the scope is absent; workflow
-  // projections may legitimately carry a parent/graph dialog id here.
   const state = turn.state === BackendChannelState.SENDING
     ? FrontendRunState.PROCESSING
     : turn.state || "";
@@ -477,7 +457,6 @@ export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}
   return true;
 }
 
-/** Commit a business deletion. Unlike runtime pruning, this rejects all later projections. */
 export function confirmTurnRuntimeDeletion(registry, turnScopeIds = [], { sessionId = "" } = {}) {
   if (!registry) return { applied: false, confirmedTurnScopeIds: [], removedTurnScopeIds: [] };
   const id = canonicalSessionId(registry, sessionId) || text(sessionId);
@@ -575,18 +554,10 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   let aliasPromoted = false;
   if (!current && requestedSessionId && canPromoteOptimisticTurnSession(event)) {
     const matchingTurns = findTurnsByScope(next, turnScopeId);
-    // A Turn scope may be promoted from its optimistic local Session to the
-    // backend canonical Session exactly once.  Scope uniqueness is mandatory:
-    // dialogProcessId is deliberately not used to guess ownership.
     if (matchingTurns.length > 1) {
       return observation({ turn: null, canonicalSessionId: requestedSessionId, applied: false, reason: "turn_scope_session_conflict" });
     }
     const existingTurn = matchingTurns[0];
-    // Final-detail events are local authority events, but they run after DONE
-    // may have promoted the visible Session to its backend id. They are allowed
-    // to consume the optimistic Turn's one-shot identity capability exactly as
-    // backend events do. Scope uniqueness and route/session conflict checks
-    // below still prevent cross-Session or cross-Turn promotion.
     if (existingTurn && canPromoteOptimisticTurnSession(event) && isOptimisticLocalTurn(existingTurn)) {
       if (route && (turnKey(route.turnScopeId) !== turnScopeId || text(route.sessionId) !== text(existingTurn.sessionId))) {
         return observation({ turn: existingTurn, canonicalSessionId: requestedSessionId, applied: false, reason: "dialog_process_identity_conflict" });
@@ -597,9 +568,6 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     }
   }
   const sessionId = text(requestedSessionId || current?.sessionId);
-  // Terminal Resolution is authoritative for a Session + TurnKey. A dialog id
-  // is only a transport route and may legitimately differ after reconnect or
-  // when the materialized message was produced on another route.
   const ignoresDialogRoute = event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED;
   const result = (values = {}) => observation({ canonicalSessionId: sessionId, aliasPromoted, ...values });
   if (!sessionId) return result({ turn: current, applied: false, reason: "missing_session_identity" });
@@ -637,17 +605,10 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     source: text(event.source || current?.source),
     sourceEvent: text(event.sourceEvent || event.type || current?.sourceEvent),
     authority: text(event.authority || current?.authority || "none"),
-    // Only a Turn created by a local optimistic command may later move to the
-    // backend Session returned for that command. Backend identity binding
-    // consumes this capability; independent Sessions may reuse the same scope.
     sessionIdentityPending: current
       ? (aliasPromoted ? false : current.sessionIdentityPending === true)
       : text(event.type).startsWith("local_"),
     finishedAtMs: terminal ? Number(current?.finishedAtMs || nowMs) : 0,
-    // An existing Turn owns its start time. Only the event that creates a Turn
-    // may derive a provisional start from its event time; later events must not
-    // move the timer forward. Hydration below can still replace this provisional
-    // value with the persisted canonical turnTimings value.
     startedAt: text(
       event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
         ? (rawEvent?.thinkingStartedAt || rawEvent?.startedAt || current?.startedAt)
@@ -670,7 +631,6 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   return result({ turn, applied: true, reason: transition.reason });
 }
 
-/** Apply a validated Service lifecycle envelope through the only Turn reducer. */
 export function applyTurnLifecycleEnvelope(registry, envelope = {}) {
   const validation = validateTurnLifecycleEnvelope(envelope);
   if (!validation.valid) {
@@ -697,7 +657,6 @@ export function applyTurnLifecycleEnvelope(registry, envelope = {}) {
   return result;
 }
 
-/** The only operation allowed to settle a protocol Turn into a frontend terminal state. */
 export function applyTurnTerminalResolution(registry, response = {}) {
   const validation = validateTurnTerminalResolution(response);
   if (!validation.valid || response.resolved !== true) {
@@ -717,9 +676,6 @@ export function applyTurnTerminalResolution(registry, response = {}) {
     finalizeIntent: turn.finalizeIntent,
     failure: turn.failure,
     materialization: response.materialization,
-    // Preserve the authoritative wire Turn separately from the normalized
-    // frontend state. normalizeSessionRunEvent maps `state` to a UI state, so
-    // the reducer must read the protocol terminal state from raw.turn.
     raw: { turn },
     source: "authoritative_terminal_service",
   });
@@ -738,7 +694,6 @@ const SNAPSHOT_STATE_EVENT = Object.freeze({
   stop_failed: "turn.failed",
 });
 
-/** Merge a Session-scoped authoritative snapshot without replaying synthetic history. */
 export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   const validation = validateTurnLifecycleSnapshot(snapshot);
   if (!validation.valid) return { applied: false, reason: "invalid_authoritative_snapshot", errors: validation.errors };
@@ -768,9 +723,6 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
     const eventType = SNAPSHOT_STATE_EVENT[text(source.state)];
     if (!eventType) return { applied: false, reason: "invalid_snapshot_state" };
     const sourceIsTerminal = isAuthoritativeTerminalState(source.state);
-    // A terminal snapshot is discovery metadata only. Preserve its identity so
-    // Terminal Resolution and persisted timing can reconcile it, but keep the
-    // placeholder neutral and never make it the Session's active sending Turn.
     if (sourceIsTerminal) continue;
     const phase = text(source.phase || source.failure?.phase);
     const stateMap = {
@@ -781,9 +733,6 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
       completion_failed: FrontendRunState.COMPLETION_ERROR, stop_failed: FrontendRunState.STOP_ERROR,
     };
     const state = stateMap[text(source.state)];
-    // Terminal lifecycle is monotonic. A reconnect snapshot may have a newer
-    // transport revision while still carrying an older non-terminal phase;
-    // it must not reopen a Turn already completed by the protocol reducer.
     if (current && isFinalTurnState(current.state, current) && !isFinalTurnState(state, source)) continue;
     const terminal = null;
     const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, authoritativeCompletionCommit: current?.authoritativeCompletionCommit || null, startedAt: text(source.startedAt || source.thinkingStartedAt || current?.startedAt), finishedAt: text(current?.finishedAt), source: "turn_snapshot", lifecycleSnapshotObserved: true, lifecycleObserved: true };
@@ -801,10 +750,6 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   }) ? "" : candidateSnapshotActiveScope;
   const snapshotActiveState = text(snapshot.activeTurn?.state);
   const snapshotActiveIsTerminal = isAuthoritativeTerminalState(snapshotActiveState);
-  // A terminal snapshot is discovery-only and cannot erase the canonical Turn
-  // selected by TERMINAL_RESOLVED. This is especially important when a refresh
-  // snapshot races a completed terminal GET: clearing the pointer here makes the
-  // UI lose the exact Turn identity immediately after the authoritative commit.
   bucket.activeTurnScopeId = previousActiveTurn?.terminal
     ? previousActiveTurnScopeId
     : snapshotActiveIsTerminal
@@ -820,7 +765,6 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   return { applied: true, bucket };
 }
 
-/** Hydrate persisted timing facts without inferring or mutating lifecycle. */
 export function applyTurnTimingSnapshot(registry, snapshot = {}) {
   const sessionId = text(snapshot?.sessionId);
   const sourceTimings = Array.isArray(snapshot?.turnTimings) ? snapshot.turnTimings : [];
@@ -882,7 +826,5 @@ export function applyTurnTimingSnapshot(registry, snapshot = {}) {
 export function hydrateSessionTurnRuntime(registry, session, turnStatuses = session?.turnStatuses || []) {
   const sessionId = sessionRuntimeId(session);
   if (!sessionId) return { registry, applied: false, reason: "missing_session_identity" };
-  // Legacy summary rows are history/discovery data only. They cannot create a
-  // canonical runtime Turn or control sending/stop capabilities.
   return { registry, applied: false, reason: "legacy_runtime_projection_disabled" };
 }

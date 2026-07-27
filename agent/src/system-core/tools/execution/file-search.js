@@ -214,9 +214,6 @@ export async function searchFilesWithRipgrep({
   if (String(glob || "").trim()) {
     args.push("--glob", String(glob || "").trim());
   }
-  // Always terminate rg option parsing before the user-controlled pattern.
-  // Without this delimiter, a pattern such as "--" is consumed as rg's own
-  // option terminator and rg waits on stdin because no search path remains.
   args.push("--", String(query || "").trim(), ".");
 
   let stdout = "";
@@ -228,7 +225,6 @@ export async function searchFilesWithRipgrep({
     });
     stdout = String(result?.stdout || "");
   } catch (error) {
-    // rg exits with code=1 when there are no matches. This is not an error for search.
     if (Number(error?.code) !== 1) throw error;
     stdout = String(error?.stdout || "");
   }

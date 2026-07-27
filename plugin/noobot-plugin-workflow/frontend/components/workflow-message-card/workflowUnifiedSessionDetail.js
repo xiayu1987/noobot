@@ -1,8 +1,8 @@
 /*
-  Copyright (c) 2026 xiayu
-  Contact: 126240622+xiayu1987@users.noreply.github.com
-  SPDX-License-Identifier: MIT
-*/
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 import { mergeCanonicalSessionDetail } from "../../../../../client/noobot-chat/src/composables/infra/sessionDetailMerge.js";
 
@@ -44,9 +44,6 @@ function statusStepStateFromProjection(state = "") {
   return "";
 }
 
-/** Attach authoritative child Turn state to its assistant display message.
- * Session + Turn is the primary identity; dialog is legacy-only when neither
- * side has a Turn identity. */
 export function projectTurnStatusOntoAssistant(messages = [], {
   sessionId = "",
   turnScopeId = "",
@@ -132,16 +129,10 @@ function withoutSupersededRunningPlaceholders(messages = [], { terminal = false 
   return source.filter((item = {}) => {
     if (item?.workflowNodeRunningPlaceholder !== true) return true;
     const identityKeys = [text(item?.turnScopeId), text(item?.dialogProcessId)].filter(Boolean);
-    // Terminal node state can arrive before the final Session snapshot or
-    // authoritative assistant message. Keep the existing thinking surface
-    // until a real assistant with the same identity materializes; otherwise
-    // the drawer briefly collapses to the user message only.
     return !identityKeys.some((key) => realAssistantKeys.has(key));
   });
 }
 
-/** Merge persisted full detail with the realtime projection without allowing a
- * partial realtime document to erase messages or persisted turn facts. */
 export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
   const merged = mergeCanonicalSessionDetail(contentOnly(base), contentOnly(incoming));
   const mergedState = resolveProjectionState(
@@ -233,10 +224,6 @@ export function buildUnifiedSessionDetail({
       const executionOwnsIsolatedSession = Boolean(
         !isolatedNodeSessionId || !executionSessionId || executionSessionId === isolatedNodeSessionId,
       );
-      // A child Execution can temporarily inherit the root Session identity.
-      // The committed workflow node state owns the isolated child Session; use
-      // its projection whenever available so a root snapshot cannot overwrite
-      // the node drawer after REST hydration.
       const sessionId = text(isolatedNodeSessionId || executionSessionId);
       const sessionDoc = hasIsolatedSessionProjection
         ? isolatedSessionDoc
@@ -299,9 +286,6 @@ export function buildUnifiedSessionDetail({
       };
     }
   }
-  // Child Execution identity remains authoritative, but its projection can
-  // arrive after sub-session events. Use only the node's preallocated session
-  // identity as the realtime fallback; never infer another child by dialog.
   const sessionId = isolatedNodeSessionId;
   if (!sessionId || typeof selectSessionMessages !== "function") return null;
   const sessionDoc = contentOnly(selectSessionMessages(sessionId));

@@ -69,7 +69,6 @@ function latestLifecycleEntry(channels = [], sessionId = "") {
 }
 
 class ChannelStoreMethods {
-// ---- Channel CRUD ----
 
 ensureChannel(channelKey = "", startPayload = {}) {
   const normalizedChannelKey = String(channelKey || "").trim();
@@ -182,7 +181,6 @@ get channelCount() {
   return this.channelStore.size;
 }
 
-// ---- Event Log ----
 
 pushChannelEvent(channel, eventName = "", data = {}) {
   if (!channel) return null;
@@ -419,7 +417,6 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
   });
 }
 
-// ---- Request ID Mapping ----
 
 getChannelByRequestId(requestId) {
   const rid = String(requestId || "").trim();
@@ -429,7 +426,6 @@ getChannelByRequestId(requestId) {
   return this.channelStore.get(mappedChannelKey) || null;
 }
 
-// ---- API Key Identity ----
 
 saveApiKeyIdentity({ apiKey = "", userId = "", role = "" } = {}) {
   const normalizedApiKey = normalizeApiKey(apiKey);
@@ -449,7 +445,6 @@ resolveApiKeyIdentity(apiKey = "") {
   return this.apiKeyIdentityStore.get(normalizedApiKey) || null;
 }
 
-// ---- Permissions ----
 
 hasChannelPermission(channel, apiKey = "", requesterUserId = "") {
   if (!channel) return false;

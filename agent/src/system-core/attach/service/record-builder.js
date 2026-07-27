@@ -14,24 +14,10 @@ import {
 } from "../meta-ops.js";
 import { safeNum, safeStr } from "../../utils/shared-utils.js";
 
-/**
- * 归一化相对路径（统一 posix 分隔符）。
- *
- * @param {string} basePath - 基准路径。
- * @param {string} absolutePath - 绝对路径。
- * @returns {string}
- */
 export function normalizeRelativePath(basePath, absolutePath) {
   return path.relative(basePath, absolutePath).split(path.sep).join("/");
 }
 
-/**
- * 构建公共附件记录。
- *
- * @param {string} basePath - 用户根路径。
- * @param {object} record - 原始记录。
- * @returns {object}
- */
 export function buildPublicRecord(basePath, record) {
   const owner = normalizeAttachmentOwnerMeta(record);
   const turnScope = normalizeAttachmentTurnScopeMeta(record, owner);
@@ -57,13 +43,6 @@ export function buildPublicRecord(basePath, record) {
   };
 }
 
-/**
- * 根据文件名或 MIME 推导扩展名。
- *
- * @param {string} fileName - 文件名。
- * @param {string} mimeType - MIME 类型。
- * @returns {string}
- */
 export function normalizeExtension(fileName, mimeType) {
   const fromName = path.extname(safeStr(fileName)).slice(0, MAX_EXTENSION_LENGTH);
   if (fromName) return fromName;

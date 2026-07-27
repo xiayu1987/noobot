@@ -4,15 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * Cross-platform compatibility guard.
- *
- * This catches high-risk production-code patterns that commonly break on one
- * of Windows, macOS, or Linux. If a match is intentionally platform-specific,
- * add a nearby comment containing:
- *
- *   cross-platform-allow: <short reason>
- */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -87,6 +78,34 @@ const PACKAGE_SCRIPT_RULES = [
     pattern: /\$\{[A-Za-z_][A-Za-z0-9_]*:-[^}]+}/,
   },
 ];
+const SOURCE_ALLOWLIST = new Map([
+  ["agent/src/system-core/sandbox/bubblewrap-sandbox.js", new Map([
+    ["unix-temp-path", [/^"\/(?:var\/)?tmp",$/]],
+    ["bash-shell", [/^"(?:bash|-lc)",$/]],
+  ])],
+  ["agent/src/system-core/sandbox/firejail-sandbox.js", new Map([
+    ["bash-shell", [/^"(?:bash|-lc)",$/]],
+  ])],
+  ["agent/src/system-core/tools/data-processing/doc2data/libreoffice.js", new Map([
+    ["unix-temp-path", [/^"\/tmp",$/]],
+    ["signal-kill", [/^process\.kill\(processId, "SIG(?:TERM|KILL)"\);$/]],
+  ])],
+  ["agent/src/system-core/tools/data-processing/media2data-tool.js", new Map([
+    ["signal-kill", [/^childProcess\.kill\("SIG(?:TERM|KILL)"\);$/]],
+  ])],
+  ["agent/src/system-core/tools/execution/script-tool/process-exec.js", new Map([
+    ["shell-spawn", [/^shell: true,$/]],
+  ])],
+  ["service/services/openvscode/process.js", new Map([
+    ["signal-kill", [/process\.kill\(pid, "SIG(?:TERM|KILL)"\)/]],
+  ])],
+  ["client/noobot-chat/src/composables/message/useMessagePreview/constants.js", new Map([
+    ["bash-shell", [/^"bash",$/]],
+  ])],
+  ["client/shared/electron/desktop-services.js", new Map([
+    ["signal-kill", [/^child\.kill\("SIGTERM"\);$/]],
+  ])],
+]);
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
@@ -122,28 +141,25 @@ function stripBlockComments(line = "") {
   return line.replace(/\/\*.*?\*\//g, " ");
 }
 
-function hasAllowComment(lines, index) {
-  const start = Math.max(0, index - 3);
-  const end = Math.min(lines.length - 1, index + 1);
-  for (let current = start; current <= end; current += 1) {
-    if (/cross-platform-allow:\s+\S/i.test(lines[current] || "")) return true;
-  }
-  return false;
+function isAllowlisted(file, rule, source) {
+  const patterns = SOURCE_ALLOWLIST.get(file)?.get(rule) || [];
+  return patterns.some((pattern) => pattern.test(source));
 }
 
 function scanFile(filePath) {
   const text = readFileSync(filePath, "utf8");
   const lines = text.split(/\r?\n/);
   const violations = [];
+  const relativePath = rel(filePath);
   for (let index = 0; index < lines.length; index += 1) {
     const rawLine = lines[index];
     const line = stripBlockComments(rawLine);
     if (/^\s*\/\//.test(line)) continue;
-    if (hasAllowComment(lines, index)) continue;
     for (const rule of RULES) {
       if (!rule.pattern.test(line)) continue;
+      if (isAllowlisted(relativePath, rule.id, rawLine.trim())) continue;
       violations.push({
-        file: rel(filePath),
+        file: relativePath,
         line: index + 1,
         rule: rule.id,
         message: rule.message,
@@ -202,7 +218,7 @@ if (violations.length) {
     console.error(`- ${item.file}:${item.line} [${item.rule}] ${item.message}`);
     console.error(`  ${item.source}`);
   }
-  console.error("\nFix the code or add a nearby `cross-platform-allow: <reason>` comment for intentional platform-specific code.");
+  console.error("\nFix the code or add a narrowly matched entry to SOURCE_ALLOWLIST for intentional platform-specific code.");
   process.exit(1);
 }
 

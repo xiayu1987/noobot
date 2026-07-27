@@ -257,11 +257,6 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
     }
   }
 
-  // Robustness for LLM generated DSL: the workflow engine only allows multiple
-  // simultaneously valid outgoing edges from a branch state (stateType=2), and
-  // multi-branch joins should be represented as merge states (stateType=3).
-  // Normalize common valid-intent DSL such as `start -> taskA` and `start -> taskB`
-  // where the model forgot to mark `start` as branch.
   const outgoingCount = new Map();
   const incomingCount = new Map();
   for (const edge of semantic.flowtos) {

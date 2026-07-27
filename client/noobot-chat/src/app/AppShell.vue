@@ -45,14 +45,11 @@ import {
   isImageMime,
 } from "./state/sessionMessageState";
 
-// --- Markdown rendering (module-level singleton) ---
 const { renderMarkdown } = useMarkdownRenderer();
 
-// --- UI feedback & locale ---
 const { notify: notifyUi, confirmDeleteSession } = useUiFeedback();
 const { translate } = useLocale();
 
-// --- Panel state (viewport, sidebar, drawers) ---
 const {
   isMobile,
   sidebarCollapsed,
@@ -119,7 +116,6 @@ const {
   onUserIdUpdate,
 } = useAppShellPreferences();
 
-// --- API connection ---
 const {
   connectCode,
   apiKey,
@@ -159,7 +155,6 @@ function refreshSessionsFromSidebar() {
   });
 }
 
-// --- Chat session ---
 const {
   input,
   uploadFiles,
@@ -255,7 +250,6 @@ const {
   unbindChatMessageScrollSync,
 } = chatMessageNavigatorPanel;
 
-// --- Reconnect ---
 function hasActiveSessionForReconnect() {
   return hasActiveSessionForReconnectState({
     activeSession: activeSession.value,
@@ -343,7 +337,6 @@ const {
   selectSession,
 });
 
-// --- Panel, interaction & session handlers ---
 appShellPanelActions = useAppShellPanelActions({
   activeSessionId,
   userId,

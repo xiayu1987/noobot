@@ -196,9 +196,6 @@ export function buildExecutionLogDisplayText(logItem = {}) {
   }
   if (isToolResult) {
     const commandText = pickExecutionCommandText(logItem) || stripExecutionCommandPrefix(pickExecutionToolResult(logItem));
-    // Canonical thinking-detail payloads legitimately contain persisted tool
-    // results with only event/type/text. Preserve that already-normalized text
-    // when live command/output fields are unavailable.
     return commandText ? buildToolResultDisplayText(logItem, commandText, text) : text;
   }
   return text;
@@ -325,9 +322,6 @@ export function patchAssistantFromWorkflowMessage(targetMessage = null, workflow
   if (previousToolTimeline !== undefined) targetMessage.toolTimeline = previousToolTimeline;
   if (previousActivityTimeline !== undefined) targetMessage.activityTimeline = previousActivityTimeline;
   targetMessage.hasFirstStreamEvent = previousHasFirstStreamEvent || workflowMessageItem?.hasFirstStreamEvent === true;
-  // Workflow DONE snapshots only patch the current pending/streaming overlay.
-  // Do not turn that overlay into a standalone workflow completed message; the
-  // completed display source is rebuilt from normalized session detail.
   delete targetMessage.workflowMessage;
   delete targetMessage.workflowMeta;
   return true;

@@ -18,11 +18,6 @@ function createOperationId(type = "op") {
   return `${type}-${nowMs().toString(36)}-${randomPart}`;
 }
 
-/**
- * Keeps transient message operations outside the persisted session object.
- * Session data can now be replaced by backend snapshots without losing the
- * resend transaction state that must be reconciled after send finalization.
- */
 export function createPendingMessageOperationStore() {
   const operationsById = new Map();
   const activeOperationIdsBySessionId = new Map();

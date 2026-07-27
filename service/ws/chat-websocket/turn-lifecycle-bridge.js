@@ -12,7 +12,6 @@ import {
 
 const clean = (value) => String(value || "").trim();
 
-/** Publish an already committed lifecycle fact without mutating Agent state. */
 export function createCommittedTurnLifecyclePublisher({ sendEvent } = {}) {
   return function publishCommittedTurnLifecycle({ event = {}, turn } = {}) {
     if (!turn || typeof sendEvent !== "function") return null;
@@ -54,16 +53,11 @@ export function createCommittedTurnLifecyclePublisher({ sendEvent } = {}) {
   };
 }
 
-/** Persist one authoritative lifecycle fact and emit exactly that committed fact. */
 export function createTurnLifecycleBridge({ resolveBot, sendEvent } = {}) {
   const publishCommittedTurnLifecycle = createCommittedTurnLifecyclePublisher({ sendEvent });
   return async function commitTurnLifecycle(event = {}) {
     const bot = resolveBot();
     const applyLifecycle = bot?.applyTurnLifecycleEvent;
-    // Rolling-upgrade compatibility: an older Agent does not understand the
-    // v1 lifecycle protocol. Keep the legacy wire path alive without claiming
-    // that an authoritative event was committed. Once capability negotiation
-    // says v1 is available, callers receive a real applied/rejected result.
     if (typeof applyLifecycle !== "function") {
       return {
         applied: true,
@@ -80,8 +74,6 @@ export function createTurnLifecycleBridge({ resolveBot, sendEvent } = {}) {
       commandId: clean(event.commandId),
     });
     if (!result?.applied && !result?.deduplicated) return result || { applied: false, reason: "lifecycle_unavailable" };
-    // A duplicate is an idempotent acknowledgement, not a newly committed
-    // domain event. Never mint a new eventId/sequence for it.
     if (result?.deduplicated) return result;
     const turn = result.turn;
     if (!turn) return { ...result, applied: false, reason: "lifecycle_turn_missing" };

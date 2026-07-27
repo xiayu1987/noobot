@@ -450,7 +450,6 @@ function resolveComposerExtensionProps(renderer = {}) {
 }
 
 .composer-option-button {
-  /* keep component hook; visual style comes from .noobot-pill-option */
 }
 
 .composer-select {

@@ -4,21 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * semantic-transfer compatibility guard
- *
- * Goal:
- * - Keep legacy transfer/attachment compatibility fields from spreading to new files.
- * - Existing compatibility/migration files are explicitly allowlisted.
- * - Overflow legacy fields must be generated only by semantic-transfer legacy adapter.
- *
- * Path fields such as filePath/filePaths are intentionally out of scope here:
- * path handling is owned by utils/path-resolver.js and the bare-file-path guard.
- *
- * This is intentionally a source-level guard, not a semantic JS parser. If a
- * legitimate new compatibility site is added, add the file to the allowlist
- * with a short reason in this script.
- */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -51,9 +36,6 @@ const OVERFLOW_ALLOWED_FILES = new Set([
   "agent/src/system-core/semantic-transfer/legacy-adapter.js",
 ]);
 
-// Out-of-scope attachment-save paths that have already been moved back to
-// attachmentService. Keep them closed so semantic-transfer does not regress
-// into a generic attachment persistence layer.
 const SETTLED_ATTACHMENT_SERVICE_ONLY_FILES = new Map(Object.entries({
   "agent/src/system-core/bot-manage/session/scoped-artifact-persistence-helpers.js":
     "generic generated artifacts must use attachmentService.ingestGeneratedArtifacts",
@@ -110,9 +92,6 @@ const REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS = [
   },
 ];
 
-// Files that intentionally bridge semantic-transfer with legacy attachment/file
-// fields, or define existing public message/runtime contracts that still carry
-// attachmentMetas as a compatibility field.
 const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/system-core/agent/core/context/message-builder.js": "model context compatibility consumes runtime attachmentMetas",
   "agent/src/system-core/agent/core/execution/tool-runner.js": "tool overflow builds TransferEnvelope then legacy overflow via adapter",

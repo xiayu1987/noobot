@@ -6,7 +6,6 @@
 
 import { resolveMessageEventSequenceIdentity } from "@noobot/shared/message-event-protocol";
 
-/** Initialize event-consumer state without interpreting any event facts. */
 export function initializeMessageEventState(message = {}) {
   if (!Array.isArray(message.toolTimeline)) message.toolTimeline = [];
   if (!Array.isArray(message.activityTimeline)) message.activityTimeline = [];
@@ -29,12 +28,6 @@ function createLaneState() {
   return { lastSequence: 0, consumedEventIds: [] };
 }
 
-/**
- * A rendered assistant turn is an aggregate projection. One model turn can
- * contain several persisted assistant messages (tool calls, then final text),
- * and each message owns a sequence that starts at 1. Keep those cursors in
- * separate lanes while projecting their facts into the same turn message.
- */
 export function resolveMessageEventLaneState(message = {}, envelope = {}) {
   const root = initializeMessageEventState(message).messageEventState;
   const sequenceIdentity = resolveMessageEventSequenceIdentity(envelope);
@@ -59,7 +52,6 @@ export function resolveMessageEventLaneState(message = {}, envelope = {}) {
   return lane;
 }
 
-/** Keep legacy diagnostics readable without using the aggregate cursor for reduction. */
 export function syncMessageEventAggregateState(message = {}) {
   const root = initializeMessageEventState(message).messageEventState;
   const lanes = Object.values(

@@ -10,10 +10,6 @@ import {
 } from "../../attach/index.js";
 import { filePath as path } from "../../utils/path-resolver.js";
 
-/**
- * Turn 附件补齐族。以 engine 为入参回调其字段/方法（session、workspaceService、
- * globalConfig），保持主类方法的薄委托契约与测试可注入桩兼容。
- */
 
 export async function resolveExistingUserMessageAttachments(engine, {
   userId = "",
@@ -85,7 +81,6 @@ export async function resolveAttachmentIndexBasePath(engine, userId = "") {
       const basePath = await engine.workspaceService.ensureUserWorkspace(normalizedUserId);
       if (basePath) return String(basePath || "").trim();
     } catch {
-      // fall through to globalConfig workspaceRoot
     }
   }
   const workspaceRoot = String(engine.globalConfig?.workspaceRoot || "").trim();

@@ -1,8 +1,8 @@
 /*
-  Copyright (c) 2026 xiayu
-  Contact: 126240622+xiayu1987@users.noreply.github.com
-  SPDX-License-Identifier: MIT
-*/
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { computed, ref, watch } from "vue";
 
 function text(value) {
@@ -31,20 +31,12 @@ export function useWorkflowViewerState(workflowPayload, workflowNodeStateRegistr
     ? registry.viewerStates[workflowRunId.value]
     : {};
 
-  // Visibility belongs to the mounted drawer instance. Replaying `true` when
-  // the live card is replaced by its persisted card re-opens the drawer and
-  // runs its enter transition a second time. Keep only selection context in
-  // the registry; opening is always an explicit user action on this instance.
   const viewerVisible = ref(false);
   const selectedNode = ref(initialState.selectedNode || null);
   const selectedRuntimeNode = ref(initialState.selectedRuntimeNode || null);
   const selectedRuntimeStep = ref(initialState.selectedRuntimeStep || null);
   const selectedGraphDialogProcessId = ref(text(initialState.selectedGraphDialogProcessId));
 
-  // A workflow card intentionally moves from the live projection list to the
-  // persisted message list when execution finishes. Store user-owned viewer
-  // state by workflow identity so that this required remount is not interpreted
-  // as the user closing the drawer.
   watch(
     [workflowRunId, viewerVisible, selectedNode, selectedRuntimeNode, selectedRuntimeStep, selectedGraphDialogProcessId],
     ([key, visible, node, runtimeNode, runtimeStep, dialogProcessId]) => {

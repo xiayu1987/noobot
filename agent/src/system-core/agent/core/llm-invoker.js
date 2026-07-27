@@ -20,7 +20,6 @@ import {
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 
-// ── Helpers ──
 
 function sleep(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -179,13 +178,7 @@ function resolveRuntimeErrorContext(modelState = {}) {
   };
 }
 
-// ── Public API ──
 
-/**
- * Invokes the LLM with transient retry logic.
- * Attempts up to TRANSIENT_LLM_MAX_ATTEMPTS times for transient errors
- * when no tokens have been streamed yet.
- */
 export async function invokeLlmWithTransientRetry({
   modelState,
   turn,
@@ -265,10 +258,6 @@ export async function invokeLlmWithTransientRetry({
   throw lastError;
 }
 
-/**
- * Normalizes AI model response content to plain text.
- * Handles string content, array of content parts, and edge cases.
- */
 function normalizeReasoningContent(reasoningContent = null) {
   if (typeof reasoningContent === "string") return String(reasoningContent || "");
   if (Array.isArray(reasoningContent)) {

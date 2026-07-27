@@ -6,7 +6,6 @@
 
 const text = (value) => String(value || "").trim();
 
-/** Stable cross-layer observation shape. It contains no mutable domain state. */
 export function createTurnObservation({
   requestedSessionId = "",
   canonicalSessionId = "",

@@ -8,13 +8,7 @@ import { AsyncJobLifecycleManager } from "./async/manager.js";
 import { AsyncSessionRunner } from "./async/session-runner.js";
 import { AsyncJobResponseBuilder } from "./async/response-builder.js";
 
-/**
- * Async Job Manager - aggregates generic lifecycle + session async wrappers.
- */
 export class AsyncJobManager {
-  /**
-   * @param {Object} jobStore - Job storage service or legacy deps object
-   */
   constructor(jobStore = null) {
     const input = jobStore && typeof jobStore === "object" ? jobStore : {};
     const looksLikeLegacyDeps =
@@ -92,9 +86,6 @@ export class AsyncJobManager {
     return this.lifecycle.hasRunningJobs(sessionId);
   }
 
-  // ========================
-  // Legacy / Test Methods
-  // ========================
 
   _normalizeWaitAsyncTimeout(timeout) {
     if (this.sessionRunner) {
@@ -130,9 +121,6 @@ export class AsyncJobManager {
     return runner._asyncJobKey(payload);
   }
 
-  // ========================
-  // Legacy Public API
-  // ========================
 
   runAsyncSession(payload = {}) {
     if (!this.sessionRunner) {

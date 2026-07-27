@@ -13,12 +13,6 @@ import { resolvePatchTargetsWithOptions } from "../../../src/system-core/tools/e
 import { classifyToolInputPath, TOOL_PATH_VIEWS } from "../../../src/system-core/utils/path-resolver.js";
 import { ERROR_CODE } from "../../../src/system-core/error/constants.js";
 
-// Dedicated coverage for the `root` parameter of patch resolution
-// (resolvePatchTargetsWithOptions -> resolvePatchRoot). Pins the three
-// documented writes: empty root (workspace default), workspace-relative child
-// directory (allowed), and out-of-scope roots (absolute / sandbox-absolute /
-// virtual-relative / parent traversal) which must be rejected so the diff
-// header stays the single legal entry for absolute paths.
 
 function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   const runtimeOverrides =
@@ -100,7 +94,6 @@ test("resolvePatchRoot: 非工作区相对子目录 root 一律拒绝", async ()
     await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\n", "utf8");
     const agentContext = buildAgentContext(basePath);
 
-    // Precondition: classifier splits these into the views resolvePatchRoot rejects.
     assert.equal(classifyToolInputPath("/etc", { agentContext }).view, TOOL_PATH_VIEWS.HOST_ABSOLUTE);
     assert.equal(classifyToolInputPath("/project", { agentContext }).view, TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE);
     assert.equal(classifyToolInputPath("project", { agentContext }).view, TOOL_PATH_VIEWS.VIRTUAL_RELATIVE);

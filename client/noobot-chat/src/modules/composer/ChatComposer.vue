@@ -278,7 +278,6 @@ defineExpose({
     @dragleave="onComposerDragLeave"
     @drop="onComposerDrop"
   >
-    <!-- 顶部选中标签 -->
     <ComposerSelectedTags
       :selected-connector-names="selectedConnectorNames"
       :selected-scenario-label="selectedScenarioLabel"
@@ -288,7 +287,6 @@ defineExpose({
     />
 
     <div class="composer noobot-composer-surface">
-      <!-- 连接器面板 -->
       <el-collapse-transition>
         <div v-show="effectiveMorePanelVisible" class="more-panel-overlay">
           <div class="more-panel noobot-overlay-card">
@@ -302,7 +300,7 @@ defineExpose({
                 <el-icon><ArrowDown /></el-icon>
               </el-button>
             </div>
-            
+
             <div class="more-panel-content">
               <ConnectorSelectorPanel
                 embedded
@@ -392,14 +390,13 @@ defineExpose({
 </template>
 
 <style scoped>
-/* ================= 扁平化全局变量与容器 ================= */
 .composer-wrapper {
   --composer-row-gap: 8px;
   --composer-icon-size: 36px;
-  --composer-icon-radius: 10px; /* 稍微圆润一点的图标按钮 */
+  --composer-icon-radius: 10px;
   --composer-send-height: 36px;
   --composer-send-padding-x: 20px;
-  
+
   padding: 0 24px 24px;
   background: var(--noobot-panel-bg);
   position: relative;
@@ -443,7 +440,6 @@ defineExpose({
   width: 100%;
 }
 
-/* ================= 更多面板 (扁平化) ================= */
 .more-panel-overlay {
   position: absolute;
   left: 16px;
@@ -457,7 +453,7 @@ defineExpose({
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden; overflow-y: auto; /* 确保内部元素不溢出圆角，同时允许垂直滚动 */
+  overflow-x: hidden; overflow-y: auto;
 }
 
 .more-actions-row {
@@ -503,7 +499,6 @@ defineExpose({
   gap: 12px;
 }
 
-/* ================= 响应式调整 ================= */
 @media (max-width: 768px) {
   .composer-wrapper {
     --composer-row-gap: 6px;
@@ -520,9 +515,9 @@ defineExpose({
     min-height: 76px;
     border-radius: var(--noobot-radius-md);
   }
-  .composer { 
-    padding: 10px 12px; 
-    border-radius: var(--noobot-radius-md); 
+  .composer {
+    padding: 10px 12px;
+    border-radius: var(--noobot-radius-md);
   }
   .more-panel-overlay {
     position: fixed;

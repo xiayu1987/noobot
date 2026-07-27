@@ -134,9 +134,6 @@ export function buildRuntimeContext({
     userMessageAttachments: Array.isArray(userMessageAttachments)
       ? userMessageAttachments
       : [],
-    // Runtime-generated attachments are tracked separately from user input attachments.
-    // User input attachments live in userMessageAttachments; attachments remains
-    // a mutable runtime bucket for generated ordinary attachments only.
     attachments: [],
   };
 }

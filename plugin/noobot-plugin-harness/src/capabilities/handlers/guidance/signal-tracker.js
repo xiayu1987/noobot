@@ -128,7 +128,6 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
         const normalized = Number(result);
         if (Number.isFinite(normalized)) return normalized;
       } catch {
-        // fallback to local implementation
       }
     }
     return markMessagesSummarized(scopedMessages);

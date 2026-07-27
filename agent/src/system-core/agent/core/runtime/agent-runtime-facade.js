@@ -6,11 +6,6 @@
 
 import { runAgentTurn } from "../engine.js";
 
-/**
- * Agent runtime facade:
- * - Bot decides when to call
- * - Facade encapsulates how agent context/turn is executed
- */
 export class AgentRuntimeFacade {
   constructor({
     contextFactory = null,

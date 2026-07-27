@@ -14,7 +14,7 @@ export function useMermaidRender() {
       try {
         await renderMermaidInElement(mermaidHostRef.value);
       } catch {
-        // ignore render errors
+
       }
     });
   }
@@ -32,4 +32,3 @@ export function useMermaidRender() {
     scheduleMermaidRender,
   };
 }
-

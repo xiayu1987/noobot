@@ -8,10 +8,6 @@ import { tSystem } from "noobot-i18n/agent/system-text";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
 import { ERROR_CODE } from "../../error/constants.js";
 
-/**
- * Streamable HTTP MCP client.
- * Expects pre-resolved headers from caller.
- */
 export class StreamableHttpMcpClient extends BaseMcpClient {
   constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
     super({ baseUrl, headers, signal, fetchImpl });

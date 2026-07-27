@@ -8,7 +8,6 @@ import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS, UPSTREAM_CLOSE_REASON } from "
 import { nowMs } from "../utils.js";
 
 class CleanupMethods {
-// ---- Cleanup ----
 
 cleanupExpiredChannels() {
   const currentMs = nowMs();

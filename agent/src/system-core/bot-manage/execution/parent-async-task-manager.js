@@ -12,9 +12,6 @@ import {
   SESSION_ASYNC_STATUS,
 } from "../config/constants.js";
 
-/**
- * Parent async result container and task state manager.
- */
 export class ParentAsyncTaskManager {
   constructor({ now = () => new Date().toISOString() } = {}) {
     this.now = now;

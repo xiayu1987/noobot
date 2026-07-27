@@ -9,7 +9,7 @@ import { renderMermaidInElement } from "../utils/mermaid-renderer";
 import { useLocale } from "../i18n/useLocale";
 
 const props = defineProps({
-  contentType: { type: String, default: "file" }, // file | attachment
+  contentType: { type: String, default: "file" },
   active: { type: Boolean, default: false },
   attachmentPreviewType: { type: String, default: "" },
   attachmentPreviewUrl: { type: String, default: "" },

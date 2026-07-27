@@ -2,8 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Model default parameter profiles by provider format.
  */
 import { PROVIDER_FORMAT, normalizeProviderFormat } from "../../config/core/enums.js";
 
@@ -88,10 +86,6 @@ export const MODEL_DEFAULT_FIELDS_BY_FORMAT = Object.freeze({
   }),
 });
 
-/**
- * Rule-table for model profile resolution (replaces sequential includes).
- * Order matters: more specific rules first.
- */
 const PROFILE_RULES = [
   { match: /gemini.*flash/, profile: "gemini_flash" },
   { match: /gemini.*pro/, profile: "gemini_pro" },
@@ -106,11 +100,6 @@ const PROFILE_RULES = [
   { match: /qwen/, profile: "qwen" },
 ];
 
-/**
- * Resolve model profiles from spec using rule-table matching.
- * @param {object} modelSpec
- * @returns {string[]}
- */
 function resolveModelProfiles(modelSpec = {}) {
   const modelName = String(modelSpec?.model || "").trim().toLowerCase();
   const aliasName = String(modelSpec?.alias || "").trim().toLowerCase();
@@ -125,11 +114,6 @@ function resolveModelProfiles(modelSpec = {}) {
   return profiles;
 }
 
-/**
- * Get merged default fields for a model spec based on format and profiles.
- * @param {object} modelSpec
- * @returns {object}
- */
 export function getModelDefaultFields(modelSpec = {}) {
   const format = modelSpec?.format || "";
   const normalizedFormat = normalizeProviderFormat(format);

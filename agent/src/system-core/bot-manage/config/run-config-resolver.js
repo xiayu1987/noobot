@@ -10,9 +10,6 @@ import { isPlainObject } from "../../utils/shared-utils.js";
 const CODING_SCENARIO_KEYS = new Set(["coding", "programming"]);
 const CODING_REQUIRED_TOOL_NAMES = PROGRAMMING_REQUIRED_TOOL_NAMES;
 
-/**
- * Resolve scenario-based runtime config and apply tool policy scopes.
- */
 export class RunConfigResolver {
   constructor({ globalConfig = {} } = {}) {
     this.globalConfig = globalConfig;
@@ -108,8 +105,6 @@ export class RunConfigResolver {
         allowSet.has(String(toolItem?.name || "")),
       );
     }
-    // Canonical field: toolPolicy.denyToolNames
-    // Legacy aliases remain for backward compatibility during migration.
     const denyToolNames = Array.from(
       new Set([
         ...this.normalizeStringArray(toolPolicy?.denyToolNames),

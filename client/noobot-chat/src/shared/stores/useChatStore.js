@@ -171,9 +171,6 @@ function hasSubSessionMessagePayload(eventName = "", eventData = {}, currentMess
   if (eventData?.message && typeof eventData.message === "object") return true;
   if (eventData?.thinking || eventData?.toolCall || eventData?.tool_call || eventData?.toolResult || eventData?.tool_result) return true;
   if (isSubSessionToolEvent(eventName, eventData) && hasMessageEventToolPayload(eventData)) return true;
-  // Lifecycle/status-only events update the sub-session status.  They may enrich
-  // an already materialized runtime message, but must not create an empty
-  // placeholder that later survives alongside the persisted snapshot.
   if (currentMessage && text(eventData?.status || eventData?.state) && (String(eventName).includes("lifecycle") || String(eventName).includes("status"))) return true;
   return false;
 }
@@ -181,17 +178,11 @@ function hasSubSessionMessagePayload(eventName = "", eventData = {}, currentMess
 function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessage = null) {
   const content = eventContent(eventData);
   const toolEvent = isSubSessionToolEvent(eventName, eventData);
-  // Tool lifecycle is a facet of the addressed Assistant entity. The explicit
-  // eventType defines that projection; a producer-side tool role must not
-  // mutate the owning message entity into a separate Tool message.
   const role = toolEvent
     ? (text(currentMessage?.role) || "assistant")
     : (text(eventData?.role || currentMessage?.role) || "assistant");
   const eventId = text(eventData?.eventId);
   const canonicalContent = projectMessageEventContent(eventData);
-  // Compatibility adapter for persisted/replayed child envelopes produced
-  // before `llm_delta.text` became mandatory. Keep this at the workflow input
-  // boundary; the shared canonical protocol remains strict.
   const incrementalContent = canonicalContent.effect === MESSAGE_CONTENT_EFFECT.APPEND &&
     canonicalContent.content === ""
     ? content
@@ -215,9 +206,6 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     id: authoritativeSubSessionMessageId(eventData) || text(currentMessage?.id),
     messageId: authoritativeSubSessionMessageId(eventData) || text(currentMessage?.messageId),
     role,
-    // Tool payload text belongs in the thinking/tool-log projection. Replacing
-    // assistant content with it makes the assistant thinking card (including a
-    // rendered workflow graph) disappear as soon as the first tool completes.
     content: toolEvent && currentMessage
       ? previousContent
       : nextContent,
@@ -247,10 +235,6 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
 }
 
 function mergePersistedMessageValue(realtimeValue, persistedValue) {
-  // A completion snapshot is authoritative for values it actually contains,
-  // but it is not a full replacement for the richer realtime projection.
-  // Session persistence intentionally omits transport-only facets and older
-  // documents may serialize omitted facets as null/empty containers.
   if (persistedValue == null) return realtimeValue;
   if (Array.isArray(persistedValue)) {
     return persistedValue.length || !Array.isArray(realtimeValue) || !realtimeValue.length
@@ -280,7 +264,6 @@ function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId
   return {
     ...merged,
     ...(canonicalMessageId ? { id: canonicalMessageId, messageId: canonicalMessageId } : {}),
-    // Event history is a realtime projection and is not part of session.json.
     rawEvents: Array.isArray(realtime.rawEvents) ? realtime.rawEvents : merged.rawEvents,
     eventId: realtime.eventId,
     sequence: realtime.sequence,
@@ -349,10 +332,6 @@ export const useChatStore = defineStore("chat", () => {
     sessions.value.find((sessionItem) => sessionItem.id === activeSessionId.value),
   );
 
-  // Runtime reducers deliberately mutate one registry instance so a complete
-  // event batch is atomic.  Pinia consumers, however, subscribe at the store
-  // boundary.  Publish a new root after every effective reduction; otherwise
-  // renderers which selected a previously missing Turn are not invalidated.
   function commitTurnRuntime(reducer, ...args) {
     const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
     const result = reducer(registry, ...args);
@@ -380,10 +359,6 @@ export const useChatStore = defineStore("chat", () => {
   function hydrateSessionTurnRuntimeAction(session, turnStatuses) {
     const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
     const result = hydrateSessionTurnRuntime(registry, session, turnStatuses);
-    // Session hydration runs on a deep watch over `sessions`; only publish a new
-    // registry root when an authoritative turn was actually reconciled, otherwise
-    // every unrelated session mutation re-roots the registry and can feed the
-    // watch back into itself.
     if (result?.applied) turnRuntimeRegistry.value = { ...registry };
     return result;
   }
@@ -574,10 +549,6 @@ export const useChatStore = defineStore("chat", () => {
     registry.workflows[workflowRunId] = {
       ...currentWorkflow,
       workflowRunId,
-      // The first planning event establishes the parent conversation anchor.
-      // Nested workflow agents may reuse the same workflowRunId while carrying
-      // their child Session/process/turn identity. Do not let that child scope
-      // move the top-level live projection away from its parent thinking card.
       sessionId: text(currentWorkflow.sessionId || eventData?.sessionId),
       dialogProcessId: text(currentWorkflow.dialogProcessId || eventData?.dialogProcessId),
       turnScopeId: text(currentWorkflow.turnScopeId || eventData?.turnScopeId),
@@ -587,9 +558,6 @@ export const useChatStore = defineStore("chat", () => {
     workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
     const results = nodeSessions.map((nodeSession = {}, index) => upsertWorkflowNodeStateEvent({
       ...(nodeSession || {}),
-      // A planned node does not own the workflow's parent Session.  Keep the
-      // child identity empty until the backend allocates it; otherwise the
-      // node drawer can subscribe to and render the main conversation.
       sessionId: text(nodeSession?.sessionId || nodeSession?.nodeSessionId),
       parentSessionId: text(nodeSession?.parentSessionId || eventData?.sessionId),
       workflowRunId: text(nodeSession?.workflowRunId) || workflowRunId,
@@ -619,8 +587,6 @@ export const useChatStore = defineStore("chat", () => {
   }
 
   function upsertSubSessionEvent(eventName = "", eventData = {}) {
-    // A standard envelope carries semantic type in data. The WebSocket event
-    // name is transport routing only and must not influence projection.
     if (!isMessageEventEnvelope(eventData)) {
       return { applied: false, reason: "not_authoritative_message_event" };
     }
@@ -658,15 +624,10 @@ export const useChatStore = defineStore("chat", () => {
     let existingIndex = messageKey
       ? messages.findIndex((message = {}) => text(message?.messageId || message?.id) === messageKey)
       : -1;
-    // A refresh may hydrate an Assistant shell before its canonical message
-    // event is replayed. Resolve that shell through the stable Turn identity,
-    // then let the canonical messageId take ownership of the same entity.
     if (existingIndex < 0 && messageKey) {
       const incomingRole = text(incoming.role) || "assistant";
       const incomingTurnScopeId = text(incoming.turnScopeId || incoming.metadata?.turnScopeId);
       const incomingDialogProcessId = text(incoming.dialogProcessId || incoming.metadata?.dialogProcessId);
-      // Turn is the stronger ownership boundary. Dialog is only a legacy
-      // fallback when the producer cannot identify a Turn at all.
       const fallbackIdentity = incomingTurnScopeId
         ? `turn:${incomingTurnScopeId}:${incomingRole}`
         : (incomingDialogProcessId ? `dialog:${incomingDialogProcessId}:${incomingRole}` : "");
@@ -707,8 +668,6 @@ export const useChatStore = defineStore("chat", () => {
       turnStatuses: turnState.turnStatuses,
       turnTimings: turnState.turnTimings,
       eventsById: { ...(currentSession.eventsById || {}), ...(eventId ? { [eventId]: { ...eventData, eventId } } : {}) },
-      // Compatibility summary only. It is not an ordering cursor because
-      // message-event sequences restart independently for every scope key.
       sequence: Math.max(Number(currentSession.sequence || 0), Number(eventData?.sequence || 0)),
       sequenceDomain,
       sequenceByScopeKey: {

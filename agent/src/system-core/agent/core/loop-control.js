@@ -21,7 +21,6 @@ import {
   requestMainFlowFinalNoToolsTurn,
 } from "./main-flow-control.js";
 
-// ── Helpers ──
 
 function getSystemRuntime(runtime = {}) {
   return runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
@@ -35,7 +34,6 @@ function hasTool(tools = [], toolName) {
   );
 }
 
-// ── Phase Summary ──
 
 function hasTaskSummaryTool(tools = []) {
   return hasTool(tools, TASK_SUMMARY_TOOL_NAME);
@@ -187,8 +185,6 @@ export function removePhaseSummaryPromptMessages(messages = [], runtime = {}) {
       removedCount += 1;
       continue;
     }
-    // Backward compatibility for phase-summary prompts created before the
-    // internal marker existed.
     const content = String(message?.content || "").trim();
     if (content !== phaseSummaryPrompt) continue;
     messages.splice(index, 1);
@@ -349,7 +345,6 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   return true;
 }
 
-// ── Help Tool Prompts ──
 
 export function maybePromptHelpToolByLoop({ modelState, loopState }) {
   const runtime = modelState?.runtime || {};

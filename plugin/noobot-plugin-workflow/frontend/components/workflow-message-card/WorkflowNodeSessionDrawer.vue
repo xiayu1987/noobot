@@ -77,8 +77,6 @@ const executionTreeRows = computed(() => {
     if (expandedExecutionIds.value.has(id)) childIds.forEach((childId) => visit(childId, depth + 1));
   };
   roots.forEach((id) => visit(id, 0));
-  // Malformed cycles/orphans remain visible without making relationship data
-  // authoritative in this component.
   [...byId.keys()].filter((id) => !visited.has(id)).forEach((id) => visit(id, 0));
   return rows;
 });

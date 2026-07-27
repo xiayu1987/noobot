@@ -17,11 +17,6 @@ export function resolveWorkflowRunId(ctx = {}) {
   ).trim();
   if (provided) return provided;
   const dialog = safeId(ctx?.dialogProcessId || ctx?.turnScopeId || ctx?.sessionId || "session");
-  // dialogProcessId/sessionId identify a conversation, not one workflow run.
-  // Reusing them as the run id lets a later turn attach to a terminal node
-  // repository snapshot from an earlier turn. Keep a generated id on the
-  // dispatch context so every call in this run observes the same identity,
-  // while separate turns remain isolated even when they share a dialog.
   const generated = `wf_run_${dialog}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   if (ctx && typeof ctx === "object") ctx.workflowRunId = generated;
   return generated;

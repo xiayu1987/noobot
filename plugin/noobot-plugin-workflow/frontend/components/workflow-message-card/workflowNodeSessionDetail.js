@@ -1,8 +1,8 @@
 /*
-  Copyright (c) 2026 xiayu
-  Contact: 126240622+xiayu1987@users.noreply.github.com
-  SPDX-License-Identifier: MIT
-*/
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import {
   getWorkflowSessionDetailApi,
   getWorkflowSessionThinkingDetailApi,
@@ -27,8 +27,6 @@ export function hydrateExecutionSessionDetail(detail = {}, {
     rawMessages: Array.isArray(detail?.rawMessages) ? detail.rawMessages : messages,
     sessionSummary: {
       ...sessionSummaryWithoutMutableRuntime(detail?.sessionSummary),
-      // The display projection consumes summary.messages first. Always bind
-      // the normalized response so an empty/stale REST summary cannot mask it.
       messages,
       executionId: String(executionId || "").trim(),
     },

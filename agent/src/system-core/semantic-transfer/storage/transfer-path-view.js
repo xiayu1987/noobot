@@ -12,10 +12,6 @@ import {
 } from "../../utils/path-resolver.js";
 import { firstNormalizedString } from "../core/compact.js";
 
-// Transfer path views keep multiple path roles explicit:
-// - path follows targetView and is the canonical path for that view.
-// - hostPath, sandboxPath, and relativePath preserve their named meanings.
-// - displayPath is the model/user-facing fallback and may differ from path.
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -90,7 +86,6 @@ export function resolveTransferFilePath({
       const resolved = normalizeString(runtimeResolver(payload));
       if (resolved) return resolved;
     } catch {
-      // Preserve fallback behavior when an optional runtime resolver fails.
     }
   }
   return resolveAttachmentDisplayPath(payload);

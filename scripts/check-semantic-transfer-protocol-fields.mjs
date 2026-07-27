@@ -4,12 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/*
- * semantic-transfer protocol field guard.
- *
- * The runtime protocol field for semantic-transfer payloads is transferEnvelopes.
- * Legacy compatibility fields must not re-enter frontend/backend source chains.
- */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -66,12 +60,7 @@ const ATTACHMENT_LEGACY_ALLOWED_PREFIXES = [
   "agent/src/system-core/attach/",
   "agent/src/system-core/semantic-transfer/",
 ];
-// Runtime context compatibility boundary. This facade only forwards the
-// attachment-layer input; it does not produce or consume semantic-transfer
-// protocol payloads.
 const ATTACHMENT_LEGACY_ALLOWED_FILES = new Set([
-  // Media artifact extraction consumes attachment metadata from tool results;
-  // it is not a semantic-transfer protocol boundary.
   "agent/src/system-core/agent/core/media/artifact-service.js",
   "agent/src/system-core/agent/core/runtime/agent-runtime-facade.js",
 ]);

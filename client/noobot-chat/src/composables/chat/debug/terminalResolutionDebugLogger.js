@@ -23,6 +23,5 @@ export function logTerminalResolutionDebug(event, payload = {}) {
       data: { event, at: new Date().toISOString(), ...payload },
     });
   } catch {
-    // Diagnostics must never affect terminal state consumption.
   }
 }

@@ -7,7 +7,6 @@
 import path from "node:path";
 import { runCjkLiteralCheck } from "./lib/i18n-scan.mjs";
 
-// Transitional allowlist: parser/regex compatibility and centralized dictionary.
 const CJK_ALLOWED_FILES = new Set([
   "plugin/noobot-plugin-harness/src/i18n.js",
 ]);

@@ -270,8 +270,6 @@ export class ModelMessageRuntimeHelpers {
             shouldMark: (messageItem) => shouldMark(messageItem, normalizedTaskSummaryToolName),
           });
         } catch {
-          // In-memory marking above is enough for the active turn; persistence
-          // failures should not break the model loop.
         }
       }
       return changedCount;

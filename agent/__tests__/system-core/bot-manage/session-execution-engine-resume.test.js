@@ -179,8 +179,6 @@ test("stopped snapshot resume preserves history and incremental block boundaries
       return { execution: { controllers: { runtime: {} } }, payload: { messages: {} } };
     },
   };
-  // Avoid coupling this regression to the snapshot filesystem loader by using
-  // the public projection contract at the context-builder boundary.
   const history = [{ type: "human", content: "history", dialogProcessId: "old" }];
   const incremental = [{ type: "human", content: "injected", injectedMessage: true }];
   await contextBuilder._buildAgentContext([], history, { incrementalMessages: incremental });

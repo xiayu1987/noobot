@@ -17,7 +17,6 @@ import { ensureConnectionId, nowMs } from "../utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
 
 class ReconnectMethods {
-// ---- Reconnect ----
 
 handleReconnect(socket, payload = {}) {
   const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
@@ -163,14 +162,12 @@ handleReconnect(socket, payload = {}) {
       (left, right) => Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
     );
 
-    // Collect all dialogProcessIds from eventLog
     const dialogProcessIdsInLog = new Set();
     for (const envelope of channel.eventLog) {
       const dpId = String(envelope?.data?.dialogProcessId || "").trim();
       if (dpId) dialogProcessIdsInLog.add(dpId);
     }
 
-    // Also add the channel key's dialogProcessId if available
     const parts = channelKey.split("::");
     if (parts.length >= 4 && parts[3]) {
       dialogProcessIdsInLog.add(parts[3]);
@@ -217,7 +214,6 @@ handleReconnect(socket, payload = {}) {
         continue;
       }
 
-      // Find events for this dialogProcessId with seq > lastSeq
       const filteredCounts = {
         dialogProcessMismatch: 0,
         turnScopeMismatch: 0,
@@ -232,10 +228,6 @@ handleReconnect(socket, payload = {}) {
           return false;
         }
 
-        // Sequence numbers are only meaningful inside one run. A channel is reused
-        // across turns, so never replay an envelope from another turn into the run
-        // the client is resuming. Keep the legacy behaviour only for clients/events
-        // that predate turnScopeId.
         const envelopeTurnScopeId = String(envelope?.data?.turnScopeId || "").trim();
         if (
           reconnectTurnScopeId &&
@@ -246,11 +238,6 @@ handleReconnect(socket, payload = {}) {
           return false;
         }
 
-        // A terminal error is already represented by the conversation/current-run
-        // snapshot. Replaying the error envelope makes reconnect itself fail and can
-        // leak the previous failed attempt into a later retry of the same session.
-        // Keep non-terminal/live errors unchanged; only suppress historical terminal
-        // error envelopes during replay.
         if (
           channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED &&
           String(envelope?.event || "").trim() === CHANNEL_EVENT.ERROR
@@ -259,8 +246,6 @@ handleReconnect(socket, payload = {}) {
           return false;
         }
 
-        // Reconnect replay should only include unresolved interaction requests.
-        // Resolved requests are historical records and would reopen stale UI prompts.
         if (
           String(envelope?.event || "").trim() ===
           CHANNEL_EVENT.INTERACTION_REQUEST
@@ -350,7 +335,6 @@ handleReconnect(socket, payload = {}) {
           messages: replayMessages,
         });
       } else if (lastSeq > 0) {
-        // DialogProcessId was known but no events found - may be expired
         expiredDialogProcessIds.push(dpId);
         sessionEntry.conversationStates.push({
           sessionId: channelSessionId,

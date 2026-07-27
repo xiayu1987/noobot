@@ -12,11 +12,6 @@ const RECOVERABLE_FINALIZE_STATES = new Set([
   "stop_failed",
 ]);
 
-/**
- * Recover one Agent-persisted finalize intent. This service never infers state
- * from a socket: the authoritative snapshot and stable intent commandId are
- * the only inputs. Repeated calls are safe through Agent command idempotency.
- */
 export async function recoverTurnFinalize({
   bot,
   commitTurnLifecycle,

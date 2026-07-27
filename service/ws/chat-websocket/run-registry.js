@@ -35,8 +35,6 @@ export function registerActiveRun(handle = {}) {
   return handle;
 }
 
-// A run publishes to its logical turn transport. WebSocket connections only
-// attach/detach a delivery function; the execution never owns a socket closure.
 export function attachRunTransport(handle = {}, send = null) {
   if (!handle || typeof send !== "function") return null;
   const binding = Object.freeze({ id: ++nextTransportBindingId, send });

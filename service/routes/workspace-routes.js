@@ -46,7 +46,6 @@ async function listWorkspaceUserDirs(root = "", globalConfig = {}) {
         data: { rootPathLength: String(root || "").length, userIdLength: userId.length },
         error,
       });
-      // A user workspace must have config.json. Skip stray directories.
     }
   }
   const superAdminUserId = resolveConfiguredSuperUserId(globalConfig);
@@ -128,7 +127,6 @@ export function registerWorkspaceRoutes(
     return { hostPath, fileStats };
   };
 
-  // ── User-level workspace routes (unchanged) ──
 
   app.get(
     "/internal/host-file/file",
@@ -237,7 +235,6 @@ export function registerWorkspaceRoutes(
     },
   });
 
-  // ── Admin-level workspace-all routes (sync, reset, file CRUD) ──
 
   app.post(
     "/internal/admin/workspace-all/sync",
@@ -262,7 +259,6 @@ export function registerWorkspaceRoutes(
             data: { userIdLength: String(userId || "").length },
             error,
           });
-          // ignore single-user sync error, continue syncing others
         }
       }
       res.json({
@@ -303,7 +299,6 @@ export function registerWorkspaceRoutes(
             },
             error,
           });
-          // ignore single-user failure and continue
         }
       }
       res.json({
@@ -318,7 +313,6 @@ export function registerWorkspaceRoutes(
     ),
   );
 
-  // ── Admin file CRUD routes via factory ──
 
   registerFileCrudRoutes(app, {
     routePrefix: "/internal/admin/workspace-all",

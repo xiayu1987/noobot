@@ -41,8 +41,6 @@ function mergeEntity(previous = {}, incoming = {}, kind = "entity") {
   if (kind !== "turnStatus") return { ...previous, ...incoming };
   const previousState = normalizeState(previous?.status || previous?.state);
   const incomingState = normalizeState(incoming?.status || incoming?.state);
-  // A delayed realtime event must not roll an authoritative terminal turn back
-  // into a running state. A newer terminal state may still enrich/replace it.
   if (TERMINAL_TURN_STATES.has(previousState) && incomingState && !TERMINAL_TURN_STATES.has(incomingState)) {
     const { status, state, ...rest } = incoming;
     return { ...previous, ...rest };
@@ -63,13 +61,6 @@ export function mergeSessionDetailEntities(baseItems = [], incomingItems = [], {
   return [...merged.values()];
 }
 
-/**
- * Canonical, source-agnostic Session Detail reducer.
- *
- * Missing/empty partial fields mean "no new facts". Deletion or authoritative
- * replacement must be explicit through replaceFields; this prevents a sparse
- * realtime projection from erasing a persisted REST snapshot.
- */
 export function mergeCanonicalSessionDetail(base = {}, incoming = {}, { replaceFields = [] } = {}) {
   const previous = object(base);
   const next = object(incoming);

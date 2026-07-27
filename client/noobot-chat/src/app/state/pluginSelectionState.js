@@ -78,7 +78,6 @@ export function syncSelectedPluginsWithConfig({
 } = {}) {
   const normalizedPluginOptions = Array.isArray(pluginOptions) ? pluginOptions : [];
   if (!normalizedPluginOptions.length) {
-    // 连接前 scenarioConfig 为空，避免把本地已选插件误清空并持久化。
     return;
   }
   const availablePluginKeySet = new Set(normalizedPluginOptions.map((item) => item.key));
@@ -99,8 +98,6 @@ export function syncSelectedPluginsWithConfig({
       availablePluginKeySet.has(pluginKey) && enabledPluginKeySet.has(pluginKey),
     ),
   );
-  // 配置从“非工作流/插件 off”切回“插件 mode=on”时，本地已持久化的 []
-  // 不应永久压过新的后端默认开启配置；只补齐“本次配置新增为默认开启”的插件。
   for (const pluginKey of defaultOnPluginKeys) {
     if (!previousDefaultOnPluginKeySet.has(pluginKey)) {
       selectedPluginKeySet.add(pluginKey);

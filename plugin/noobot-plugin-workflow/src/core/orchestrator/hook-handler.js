@@ -57,9 +57,6 @@ export async function handleBeforeAgentDispatch({
   });
   if (skipped) return createBotDispatchPass({ owner: "workflow" });
 
-  // A non-empty request routed to the workflow plugin is exclusively owned by
-  // workflow orchestration. Planning, node execution, and failure reporting
-  // must never fall through and execute the same user task in the root Agent.
   const workflowRunId = resolveWorkflowRunId(ctx);
   const workflowExecutionId = String(
     ctx?.executionId || ctx?.runConfig?.executionId || `workflow:${workflowRunId}`,

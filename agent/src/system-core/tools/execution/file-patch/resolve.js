@@ -78,12 +78,6 @@ function buildPatchPathVariants(filePath = "", agentContext = {}, { patchRoot = 
   }
   if (virtualRoots.has(parts[0]) && parts.length > 1) {
     variants.push(parts.slice(1).join("/"));
-    // A virtual-root prefix (project/, workspace/, ...) is ambiguous: it can mean
-    // either a workspace-relative path (prefix stripped, above) or a sandbox-absolute
-    // path under that mount. Emit the sandbox-absolute form so the shared resolver
-    // (resolveToolInputPath -> SANDBOX_ABSOLUTE) can map it through the mount, the
-    // same single source of truth read_file/write_file use. Non-mount roots simply
-    // fail to resolve and get filtered out downstream.
     variants.push(`/${parts.join("/")}`);
   }
   if (["a", "b"].includes(parts[0]) && virtualRoots.has(parts[1]) && parts.length > 2) {
@@ -200,11 +194,6 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
     };
   }
   const classifiedRoot = classifyToolInputPath(normalizedRoot, { agentContext });
-  // The root parameter only accepts workspace-relative child directories.
-  // Absolute paths (host or sandbox-absolute like /project) and virtual-relative
-  // roots must be written in the diff header instead, where stripDiffPath
-  // preserves them verbatim. Rejecting them here keeps user isolation intact:
-  // a non-super user must never map a host-absolute root through this parameter.
   if (
     normalizedRoot === ".." ||
     normalizedRoot.startsWith("../") ||
@@ -367,11 +356,6 @@ function throwAmbiguousPatchPath({ filePath = "", fieldName = "filePath", matche
   });
 }
 
-// Diagnostics must never leak host-absolute paths back to the model in sandbox
-// view (hostPathHidden). The single source of truth for the active view is
-// resolveAgentPathContext; when the sandbox is enabled we map host paths to
-// their sandbox equivalent via resolveSandboxPath. In host view we return the
-// path unchanged so host-scenario diagnostics keep their real base path.
 function buildDiagnosticPathMapper(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const context = resolveAgentPathContext({
@@ -416,10 +400,6 @@ function buildPathAttemptDetails({
   const suggestedRoots = uniqueStrings(candidates
     .filter((item) => item.reason && String(item.reason).includes("discovered-project-root"))
     .map((item) => toWorkspaceRelativePath(workspacePath, item.rootPath || ""))
-    // resolvePatchRoot only accepts workspace-relative child directories, so a
-    // discovered root that resolves to a parent ("..") or an absolute path is
-    // not a legal root value. Drop it instead of suggesting a root the tool
-    // would immediately reject.
     .filter((relativeRoot) => relativeRoot &&
       relativeRoot !== ".." && !relativeRoot.startsWith("../") && !isAbsolutePathAnyPlatform(relativeRoot)));
   return {

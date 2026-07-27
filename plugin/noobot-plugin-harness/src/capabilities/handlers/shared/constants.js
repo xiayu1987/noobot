@@ -70,10 +70,6 @@ export const PROMPT_ENVELOPE = Object.freeze({
   TYPE: "structured_v1",
 });
 
-// Harness-to-main-flow injections default to system role and are tagged so the
-// agent can persist/display them separately from real turns. Summary request
-// injections are the only user-role exception because they intentionally ask
-// the main agent to produce the summary response.
 export const HARNESS_INJECTION_MESSAGE_ROLE = "system";
 export const HARNESS_INJECTED_MESSAGE_FLAG_FIELD = "injectedMessage";
 export const HARNESS_INJECTED_MESSAGE_FLAG_VALUE = true;

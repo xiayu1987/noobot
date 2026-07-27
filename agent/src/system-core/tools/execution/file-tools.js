@@ -419,9 +419,6 @@ export function createFileTool({ agentContext }) {
       await confirmCriticalToolOperation({ runtime, riskLevel, toolName: TOOL_NAME.PATCH_FILE, operation: dryRun ? "validate file patch" : "apply file patch", target: "the requested file scope", reason: "The patch may add, modify, move, or delete files." });
       const prepared = await preparePatchExecution({ format, patch, strip, root, agentContext });
       const normalizedFormat = prepared.format;
-      // strip only affects relative diff prefixes (git a/, b/, etc). When every
-      // target path is absolute, strip is never applied, so the retry-loop value
-      // in prepared.strip is meaningless; report null to avoid a misleading echo.
       const stripAppliesToTargets = prepared.targets.some((item) => {
         const oldPath = String(item.oldPath || "");
         const newPath = String(item.newPath || "");

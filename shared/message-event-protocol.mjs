@@ -27,12 +27,6 @@ export const MESSAGE_CONTENT_EFFECT = Object.freeze({
 
 const text = (value) => String(value || "").trim();
 
-/**
- * Message-event ordering is never global to a Session or Turn. The complete
- * cursor identity is (domain, scopeId, sequence), where scopeId is messageId.
- * `sequenceScopeId` is explicit on new envelopes; messageId is the v1 replay
- * fallback for persisted envelopes produced before that field existed.
- */
 export function resolveMessageEventSequenceIdentity(value = {}) {
   const sequenceDomain = text(value?.sequenceDomain) || MESSAGE_EVENT_SEQUENCE_DOMAIN;
   const sequenceScopeId = text(value?.sequenceScopeId || value?.messageId);
@@ -115,11 +109,6 @@ export function assertMessageEventEnvelope(value = {}) {
   return value;
 }
 
-/**
- * Project only the content effect of a canonical message event. Main-session
- * and workflow child projections share this contract, so streaming changes
- * delivery timing but never the final message semantics.
- */
 export function projectMessageEventContent(event = {}) {
   const eventType = text(event?.eventType);
   if (eventType === MESSAGE_EVENT_TYPE.LLM_DELTA) {

@@ -180,7 +180,6 @@ export function emitHarnessHookProgress(ctx = {}, event = "", data = {}) {
       ...(data && typeof data === "object" ? data : {}),
     });
   } catch {
-    // client emitter failures should not interrupt main flow
   }
 }
 

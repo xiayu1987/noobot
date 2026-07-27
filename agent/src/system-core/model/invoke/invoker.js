@@ -2,8 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Model invocation with text and multimodal attachments.
  */
 import { HumanMessage } from "@langchain/core/messages";
 import { fatalSystemError } from "../../error/index.js";
@@ -15,17 +13,6 @@ import { createChatModelFromSpec } from "../factory/chat-model.js";
 import { buildAttachmentContentBlock, normalizeModelOutputContent } from "../attachment/formatter.js";
 import { ERROR_CODE } from "../../error/constants.js";
 
-/**
- * Invoke a model with text and optional attachments.
- * @param {object} params
- * @param {string} params.modelName
- * @param {string} params.text
- * @param {Array} params.attachments
- * @param {object} params.globalConfig
- * @param {object} params.userConfig
- * @param {boolean} params.streaming
- * @returns {Promise<{response: object, text: string, modelSpec: object}>}
- */
 export async function invokeModelWithTextAndAttachments({
   modelName = "",
   text = "",

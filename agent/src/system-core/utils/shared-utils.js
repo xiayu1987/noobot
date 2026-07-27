@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Shared utility functions used across system-core modules.
- * Centralizes common helpers that were previously duplicated.
- */
+
+
+
+
 
 export function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -33,25 +33,25 @@ export function isString(value) {
   return typeof value === "string";
 }
 
-/**
- * 安全字符串化并清理
- */
+
+
+
 export function safeStr(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
-/**
- * 安全数值转换
- */
+
+
+
 export function safeNum(value, fallback = 0) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 }
 
-/**
- * Normalize selected connectors: trim keys/values, filter empty keys.
- * Returns an object with the same shape but sanitized entries.
- */
+
+
+
+
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =
     selectedConnectors && typeof selectedConnectors === "object"
@@ -67,10 +67,9 @@ export function normalizeSelectedConnectors(selectedConnectors = {}) {
   );
 }
 
-/**
- * Normalize whitespace: collapse consecutive whitespace to single space, trim.
- */
+
+
+
 export function normalizeText(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
 }
-

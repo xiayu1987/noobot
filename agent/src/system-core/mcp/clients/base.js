@@ -54,10 +54,6 @@ export function throwRpcError(method, payloadError, baseUrl = "") {
   );
 }
 
-/**
- * Base MCP client with common JSON-RPC lifecycle.
- * Subclasses implement transport-specific _doRequest / _doNotify.
- */
 export class BaseMcpClient {
   constructor({ baseUrl, headers = {}, signal = null, fetchImpl = null }) {
     this.baseUrl = String(baseUrl || "").trim();
@@ -67,17 +63,10 @@ export class BaseMcpClient {
     this.id = 1;
   }
 
-  /**
-   * Transport-specific request implementation.
-   * Must resolve with the parsed JSON-RPC result object, or throw on error.
-   */
   async _doRequest({ method, params = {} }) {
     throw new Error("_doRequest must be implemented by subclass");
   }
 
-  /**
-   * Transport-specific notification implementation.
-   */
   async _doNotify({ method, params = {} }) {
     throw new Error("_doNotify must be implemented by subclass");
   }

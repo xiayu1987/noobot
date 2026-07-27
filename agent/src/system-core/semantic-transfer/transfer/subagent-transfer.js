@@ -76,8 +76,6 @@ export async function transferBotPluginSubagentResult({
     defaultGenerationSource: TRANSFER_REASON.BOT_PLUGIN_SUBAGENT_RESULT,
     allowCustom: true,
   });
-  // Note: downstream message injection belongs to bot plugin orchestration.
-  // Keep `nextSteps` normalization for lightweight validation only.
   normalizeNextSteps(nextSteps);
   const persistedItems = [];
 

@@ -4,13 +4,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-/**
- * parentSessionId unification guard
- *
- * Goal:
- * - Prevent new scattered parentSessionId fallback/normalization patterns
- *   outside explicitly allowed compatibility zones.
- */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -23,7 +16,6 @@ const ALLOW_PATH_PREFIXES = [
 
 const ALLOW_EXACT_FILES = new Set([
   "agent/src/system-core/context/parent-session-id-resolver.js",
-  // business semantic fallback: child parent falls back to source session
   "agent/src/system-core/bot-manage/session/session-execution-engine.js",
 ]);
 

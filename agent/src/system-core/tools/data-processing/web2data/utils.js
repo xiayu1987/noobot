@@ -68,7 +68,6 @@ export function looksBlockedPage({ status = 0, title = "", html = "", text = "" 
     return true;
   }
 
-  // “captcha” 在很多正常页面的脚本配置里会出现，不应单独作为拦截信号
   const hasCaptchaSignal = /captcha|hcaptcha|recaptcha/i.test(
     `${normalizedTitle}\n${leadingTextSample}`,
   );
@@ -77,7 +76,6 @@ export function looksBlockedPage({ status = 0, title = "", html = "", text = "" 
   );
   if (hasCaptchaSignal && hasChallengeSignal) return true;
 
-  // 仅在正文很短且包含拦截特征时，才用 html 兜底判定
   if (leadingTextSample.length < 500) {
     const normalizedHtml = String(html || "")
       .toLowerCase()

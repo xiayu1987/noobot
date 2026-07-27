@@ -472,8 +472,6 @@ test("rejected stop has no abort or interaction side effects", async () => {
     rejectAllPendingInteractions: () => { rejectCount += 1; },
     commitTurnLifecycle: async () => ({ applied: false, reason: "stop_not_allowed", currentRevision: 2 }),
   });
-  // A registered execution handle would be aborted later in the accepted path;
-  // rejection must return before either local side effect.
   const originalAbort = AbortController.prototype.abort;
   AbortController.prototype.abort = function (...args) { abortCount += 1; return originalAbort.apply(this, args); };
   try {

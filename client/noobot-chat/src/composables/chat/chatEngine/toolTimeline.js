@@ -74,11 +74,6 @@ function normalizeFacetMetadata(value = {}) {
   };
 }
 
-/**
- * Adds an authoritative tool envelope to the canonical per-turn timeline.
- * A call and its result occupy one entry, keyed by toolCallId. Event identity is
- * retained on each facet so duplicate transports cannot create duplicate UI facts.
- */
 export function reduceToolTimeline(timeline = [], envelope = {}, displayLog = null) {
   if (![MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(envelope?.eventType)) {
     return Array.isArray(timeline) ? timeline : [];
@@ -120,8 +115,6 @@ export function reduceToolTimeline(timeline = [], envelope = {}, displayLog = nu
   ));
 }
 
-/** Compatibility selector. New UI code reads the timeline; old components may
- * consume the same display-log shape without owning another mutable array. */
 export function selectToolTimelineLogs(message = {}, { completedOnly = false } = {}) {
   const timeline = selectToolTimeline(message);
   const logs = [];
@@ -152,7 +145,6 @@ export function selectToolTimelineLogs(message = {}, { completedOnly = false } =
   return logs;
 }
 
-/** Canonical projection for assets produced by completed tool executions. */
 export function selectCompletedToolArtifacts(message = {}) {
   const completedEntries = selectToolTimeline(message).filter((item) => item?.resultEvent);
   const logs = completedEntries
@@ -188,7 +180,6 @@ export function hasToolTimeline(message = {}) {
   return Array.isArray(message?.toolTimeline) && message.toolTimeline.length > 0;
 }
 
-/** Normalize legacy history/done logs once at the projection boundary. */
 export function buildToolTimelineFromLegacyLogs(
   logs = [],
   {
@@ -270,18 +261,10 @@ export function buildToolTimelineFromLegacyLogs(
   ));
 }
 
-/**
- * Projection selector with the only supported legacy-document boundary.
- * Process fields represent an older complete projection when populated; an
- * empty Process projection must not hide replayed message logs. Runtime code
- * never writes the converted value back to either legacy array.
- */
 export function selectToolTimeline(message = {}) {
   return Array.isArray(message?.toolTimeline) ? message.toolTimeline : [];
 }
 
-/** Deterministic snapshot/live merge. Newer facets win independently so an old
- * snapshot can fill a missing call without erasing a live result. */
 export function mergeToolTimelines(...timelines) {
   const merged = new Map();
   for (const candidate of timelines.flat()) {
@@ -332,8 +315,6 @@ function fillMissingFacet(current = null, legacy = null) {
   };
 }
 
-/** Compatibility observations may fill missing facts and artifact metadata,
- * but never replace an existing call/result facet or its ordering identity. */
 export function fillMissingToolTimelineFacets(timeline = [], legacyTimeline = []) {
   const merged = new Map(
     (Array.isArray(timeline) ? timeline : []).map((item) => [

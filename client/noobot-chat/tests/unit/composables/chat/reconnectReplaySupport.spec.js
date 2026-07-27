@@ -149,8 +149,6 @@ describe("reconnectReplay support modules", () => {
 
     await vi.advanceTimersByTimeAsync(1200);
 
-    // Refresh failure is recovery/diagnostic evidence only. It must not
-    // manufacture an authoritative Turn terminal state.
     expect(applyRunStateEvent).not.toHaveBeenCalled();
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);

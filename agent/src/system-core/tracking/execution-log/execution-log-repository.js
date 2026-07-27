@@ -2,8 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Execution log repository - persists execution logs.
  */
 import { normalizeExecutionLogEntity } from "./execution-log-entities.js";
 import { fatalSystemError } from "../../error/index.js";
@@ -72,7 +70,6 @@ export class ExecutionLogRepository {
     const previous = this.appendQueues.get(queueKey) || Promise.resolve();
     const current = previous
       .catch(() => {
-        // Keep the queue moving even if a previous append failed.
       })
       .then(operation);
     this.appendQueues.set(queueKey, current);

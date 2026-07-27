@@ -113,7 +113,6 @@ export function createMacDependencyInstallerTools({
     const stableVersions = await fetchLibreOfficeStableVersions();
     for (const version of stableVersions) candidates.push(getMacLibreOfficeDmgUrlForVersion(version));
 
-    // Last-resort fallbacks for offline directory parsing or transient index failures.
     for (const version of ["26.2.4", "26.2.3", "26.2.2", "25.8.7", "25.8.6"]) {
       candidates.push(getMacLibreOfficeDmgUrlForVersion(version));
     }

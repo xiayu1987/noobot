@@ -72,9 +72,6 @@ export function createProcessEventFromLog(rawLog = {}, options = {}) {
     logItem.sequence ?? logItem.seq ?? options.sequence,
     options.fallbackSequence,
   );
-  // normalizeProcessLog fills a missing ts with nowMs() for display.
-  // Do not use that generated timestamp as part of eventId, otherwise two
-  // equivalent logs created in different milliseconds dedupe as different events.
   const explicitTimestamp = resolveRawLogExplicitTimestamp(rawLog);
   const timestamp = resolveProcessTimestamp(logItem);
   const nodeId = normalizeProcessString(options.nodeId) || stableNodeId({

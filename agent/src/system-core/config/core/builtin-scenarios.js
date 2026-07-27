@@ -11,10 +11,6 @@ export const BUILTIN_SCENARIO_KEYS = Object.freeze(["full", "programming", "text
 export const PROGRAMMING_SCENARIO_KEY = "programming";
 export const TEXT_SCENARIO_KEY = "text";
 
-// 编程场景工具分两层维护，但对运行时输出为一个最终白名单：
-// - required：代码任务安全推进的硬依赖，不能被 deny 策略移除。
-// - auxiliary：编程任务常用辅助能力，仍受全局工具启用状态/服务配置约束。
-// 用户配置不允许改这两组工具，只允许改 programming.model。
 export const PROGRAMMING_REQUIRED_TOOL_NAMES = Object.freeze([
   "read_file",
   "write_file",

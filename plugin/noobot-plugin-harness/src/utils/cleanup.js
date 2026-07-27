@@ -88,7 +88,6 @@ export async function cleanupOldRuns(basePath, options = {}) {
         const stat = await fs.stat(manifestPath);
         mtime = stat.mtimeMs;
       } catch {
-        // Fallback to run directory mtime when manifest is not ready yet.
         try {
           const dirStat = await fs.stat(runDirPath);
           mtime = dirStat.mtimeMs;
@@ -99,10 +98,8 @@ export async function cleanupOldRuns(basePath, options = {}) {
       runInfo.push({ dir, mtime, age: now - mtime });
     }
 
-    // Sort by age (oldest first)
     runInfo.sort((a, b) => a.mtime - b.mtime);
 
-    // Determine which to delete: age-based + count-based
     const toDelete = new Set();
     for (const info of runInfo) {
       if (info.mtime > 0 && info.age < cleanupGraceMs) continue;
@@ -111,7 +108,6 @@ export async function cleanupOldRuns(basePath, options = {}) {
       }
     }
 
-    // If still over maxRuns, delete oldest until within limit
     const remaining = dirs.length - toDelete.size;
     if (remaining > maxRuns) {
       let count = 0;
@@ -125,7 +121,6 @@ export async function cleanupOldRuns(basePath, options = {}) {
       }
     }
 
-    // Execute deletions
     for (const dir of toDelete) {
       const target = path.join(harnessRunsDir, dir);
       if (await isRunWriteLocked(target, options)) {
@@ -140,7 +135,6 @@ export async function cleanupOldRuns(basePath, options = {}) {
       }
     }
   } catch {
-    // Runs dir doesn't exist yet
   }
 
   return { deleted, errors, skippedLocked };
@@ -189,7 +183,6 @@ export async function cleanupRunsBySessionIds(basePath, sessionIds = [], options
       }
     }
   } catch {
-    // Runs dir doesn't exist yet
   }
 
   return { deleted, errors, matchedRuns, skippedLocked };

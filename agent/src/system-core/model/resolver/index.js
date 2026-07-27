@@ -2,8 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * High-level model spec resolution: default, by alias, by name, by skill.
  */
 import {
   pickAlias,
@@ -13,11 +11,6 @@ import {
 } from "../provider/resolver.js";
 import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
 
-/**
- * Resolve the default model spec from config chain.
- * @param {object} params
- * @returns {object|null}
- */
 export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
   const alias = pickAlias({ globalConfig, userConfig, skillConfig: {} });
   const fromAlias = byAliasWithUser(alias, globalConfig, userConfig);
@@ -27,11 +20,6 @@ export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
   return byAliasWithUser(fallbackAlias, globalConfig, userConfig);
 }
 
-/**
- * Resolve a model spec by alias from config chain.
- * @param {object} params
- * @returns {object|null}
- */
 export function resolveModelSpecByAlias({
   alias,
   globalConfig,
@@ -44,11 +32,6 @@ export function resolveModelSpecByAlias({
   return resolveDefaultModelSpec({ globalConfig, userConfig });
 }
 
-/**
- * Resolve a model spec by model name (searches all enabled providers).
- * @param {object} params
- * @returns {object|null}
- */
 export function resolveModelSpecByName({
   name,
   modelName,
@@ -84,11 +67,6 @@ export function resolveModelSpecByName({
   return resolveDefaultModelSpec({ globalConfig, userConfig });
 }
 
-/**
- * Resolve model spec with skill config override.
- * @param {object} params
- * @returns {object|null}
- */
 export function resolveSkillModelSpec({
   skillConfig,
   globalConfig,
@@ -100,7 +78,6 @@ export function resolveSkillModelSpec({
   const spec = byAliasWithUser(alias, globalConfig, userConfig);
   if (!spec) return null;
 
-  // skill-level overrides
   if (skillConfig.model) spec.model = skillConfig.model;
   if (skillConfig.temperature != null)
     spec.temperature = skillConfig.temperature;

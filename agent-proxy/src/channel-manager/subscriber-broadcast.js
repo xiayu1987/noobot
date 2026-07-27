@@ -13,7 +13,6 @@ import { ensureConnectionId, nowMs, resolveMessageEventTrace } from "../utils.js
 import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 
 class SubscriberBroadcastMethods {
-// ---- Subscriber Management ----
 
 attachSubscriber(channel, socket) {
   if (!channel || !socket) return;
@@ -41,7 +40,6 @@ detachSocketFromAllChannels(socket) {
   socket.__agentProxyLastSequenceByChannel = {};
 }
 
-// ---- Replay & Broadcast ----
 
 _withChannelSessionScope(channel, envelope = {}) {
   if (!channel || !envelope?.data || typeof envelope.data !== "object") {

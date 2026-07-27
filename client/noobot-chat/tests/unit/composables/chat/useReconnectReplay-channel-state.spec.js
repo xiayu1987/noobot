@@ -80,9 +80,6 @@ describe("useReconnectReplay", () => {
     });
 
     const assistant = refs.activeSession.value.messages[1];
-    // A channel fact without turnScopeId updates the session runtime only. It
-    // must not guess an assistant by position/dialog and create a second state
-    // mirror on the message.
     expect(assistant.pending).toBe(false);
     expect(assistant.channelState).toBeUndefined();
     expect(assistant.thinkingStartedAt).toBeUndefined();

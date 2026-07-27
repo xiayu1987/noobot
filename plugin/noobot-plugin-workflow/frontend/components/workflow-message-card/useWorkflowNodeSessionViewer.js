@@ -1,8 +1,8 @@
 /*
-  Copyright (c) 2026 xiayu
-  Contact: 126240622+xiayu1987@users.noreply.github.com
-  SPDX-License-Identifier: MIT
-*/
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useWorkflowNodeSessionLabels } from "./workflowNodeSessionLabels";
@@ -443,8 +443,6 @@ export function useWorkflowNodeSessionViewer({
       messages: mergedDetail.messages,
       rawMessages: mergedDetail.rawMessages,
     };
-    // Repeated Session/Execution snapshots are common at terminal convergence.
-    // Do not replace the message tree when the content projection is unchanged.
     if (JSON.stringify(currentComparable) === JSON.stringify(nextComparable)) return false;
     selectedNodeSessionSummary.value = mergedDetail.sessionSummary || null;
     selectedNodeSessionId.value = mergedDetail.sessionId || "";
@@ -496,7 +494,6 @@ export function useWorkflowNodeSessionViewer({
       const id = text(item?.executionId);
       return id && values.findIndex((candidate) => text(candidate?.executionId) === id) === index;
     });
-    // Realtime sub-session events can arrive before the Execution projection.
     const hasMessages = Array.isArray(detail.messages) && detail.messages.length > 0;
     if (hasMessages || detail.execution) viewerState.value = "streaming";
     return true;
@@ -550,9 +547,6 @@ export function useWorkflowNodeSessionViewer({
     const viewTicket = nodeViewTransaction.begin(viewKey);
     viewerState.value = "loading";
     if (isNewProtocolNode) {
-      // The node's committed Child Execution reference is authoritative. Do
-      // not wait for its Execution/message projection to already exist in the
-      // local registry: that is precisely when the drawer needs to hydrate it.
       const childExecutionIds = resolveNodeChildExecutionIds(canonicalNodeItem, runtimeNodeSessions);
       const executionId = text(selectedExecutionId.value || childExecutionIds[0]);
       const runtimeNode = resolveRuntimeNodeSession(canonicalNodeItem, runtimeNodeSessions);
@@ -560,10 +554,6 @@ export function useWorkflowNodeSessionViewer({
       selectedExecutionId.value = executionId;
       attemptExecutionIds.value = childExecutionIds;
       try {
-        // A local Execution projection is intentionally treated as a live,
-        // sparse projection. Always hydrate its isolated Session through the
-        // full-detail endpoint as well, so user prompts, turn status/timing and
-        // persisted thinking facts are present before realtime deltas merge.
         if (sessionIdHint) {
           const detail = await fetchExecutionSessionDetail({
             props,
@@ -664,7 +654,6 @@ export function useWorkflowNodeSessionViewer({
             viewerError.value = translate("workflow.readNodeSessionFailed");
           }
         } else if (nodeViewTransaction.accepts(viewTicket)) {
-          // Neither authoritative identity has reached the client yet.
           viewerState.value = "pending";
         }
       } catch (error) {
@@ -770,12 +759,6 @@ export function useWorkflowNodeSessionViewer({
       const selectedRoute = selectedNode.value
         ? buildWorkflowDrawerRoute(selectedNode.value)
         : null;
-      // A workflow card moves from the live projection to the persisted
-      // message list at completion. The replacement card inherits selection
-      // context from the registry, while history still contains the old open
-      // drawer route. Treat that route as consumed UI state, not as a second
-      // open command. A real page refresh has no in-memory selection and still
-      // restores the deep link normally.
       if (selectedRoute && isSameWorkflowDrawerRoute(initialRoute, selectedRoute)) {
         props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.initialRouteConsumed", {
           sessionId: text(initialRoute.rootSessionId),
@@ -808,9 +791,6 @@ export function useWorkflowNodeSessionViewer({
     { flush: "sync" },
   );
 
-  // Track content sources in the watch getter and commit in the callback.
-  // A watchEffect used to read selected refs while merging and then write the
-  // same refs, creating a self-triggering projection loop at workflow finish.
   watch(
     () => {
       const viewKey = nodeViewTransaction.state.ownerKey;

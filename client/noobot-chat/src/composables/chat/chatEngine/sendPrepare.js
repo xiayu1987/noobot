@@ -60,10 +60,6 @@ export function prepareChatSend({
     userMessage.turnScopeId = normalizedTurnScopeId;
   }
   if (userMessage && Array.isArray(userAttachments)) {
-    // userAttachments may be a raw transport/edit payload. Session user-message
-    // attachments are the UI/edit-backfill carrier, so preserve richer fields
-    // from the existing message unless the user explicitly provided [] to
-    // delete all attachments.
     userMessage.attachments = resolvedUserAttachments.length === 0
       ? []
       : mergeAttachments(userMessage.attachments || [], resolvedUserAttachments)

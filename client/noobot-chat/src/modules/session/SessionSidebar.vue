@@ -88,7 +88,7 @@ const { translate } = useLocale();
           <el-icon class="input-icon"><User /></el-icon>
         </template>
       </el-input>
-      
+
       <div class="connect-row">
         <el-input
           :model-value="connectCode"
@@ -103,7 +103,7 @@ const { translate } = useLocale();
           </template>
         </el-input>
       </div>
-      
+
       <div class="action-row">
         <el-button
           :type="connected ? 'success' : 'primary'"
@@ -137,7 +137,7 @@ const { translate } = useLocale();
         >
           {{ translate("common.newSession") }}
         </el-button>
-        
+
         <el-button
           class="refresh-btn noobot-action-btn tail-btn"
           :icon="Refresh"
@@ -164,7 +164,6 @@ const { translate } = useLocale();
 </template>
 
 <style scoped>
-/* 定义内部美化变量，提供开箱即用的高级深色主题 */
 .sidebar {
   width: 260px;
   min-width: 260px;
@@ -184,7 +183,6 @@ const { translate } = useLocale();
   min-width: 68px;
 }
 
-/* 品牌 Logo 区域 */
 .brand {
   padding: 16px 16px 12px;
   display: flex;
@@ -262,7 +260,6 @@ const { translate } = useLocale();
   transform: none;
 }
 
-/* 顶部操作区 */
 .sidebar-header {
   padding: 0 12px 12px;
   display: flex;
@@ -271,7 +268,6 @@ const { translate } = useLocale();
   border-bottom: 1px solid var(--noobot-border-weak);
 }
 
-/* 自定义输入框样式覆盖 */
 .custom-input :deep(.el-input__wrapper) {
   border-radius: var(--noobot-radius-xs);
   background-color: transparent;
@@ -345,7 +341,6 @@ const { translate } = useLocale();
   transform: none;
 }
 
-/* 方形尾部按钮通用样式 */
 .tail-btn {
   flex: 0 0 36px;
   width: 36px;
@@ -390,7 +385,6 @@ const { translate } = useLocale();
   font-size: var(--noobot-font-size-xl);
 }
 
-/* 折叠状态处理 */
 .sidebar.collapsed .brand {
   justify-content: center;
   padding: 16px 0;
@@ -403,7 +397,6 @@ const { translate } = useLocale();
   opacity: 0;
 }
 
-/* 移动端处理 */
 .sidebar.mobile {
   position: fixed;
   top: 0;

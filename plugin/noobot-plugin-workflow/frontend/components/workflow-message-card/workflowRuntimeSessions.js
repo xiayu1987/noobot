@@ -1,8 +1,8 @@
 /*
-  Copyright (c) 2026 xiayu
-  Contact: 126240622+xiayu1987@users.noreply.github.com
-  SPDX-License-Identifier: MIT
-*/
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
 import { computed } from "vue";
 import { collectWorkflowDialogProcessIds, resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 
@@ -70,9 +70,6 @@ function normalizeCommittedNodeFact(item = {}) {
   return {
     workflowRunId: String(item?.workflowRunId || "").trim(),
     nodeExecutionId: String(item?.nodeExecutionId || "").trim(),
-    // A registry-only running fact must retain its semantic identity so the
-    // runtime mapper can synthesize the state/step boxes before the final
-    // workflow payload (nodeSessions/nodeAgentRuns) exists.
     nodeId: String(item?.nodeId || "").trim(),
     nodeName: String(item?.nodeName || item?.nodeId || "").trim(),
     actionNodeStateId: String(item?.actionNodeStateId || item?.nodeStateId || "").trim(),

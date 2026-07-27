@@ -35,7 +35,6 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
   const stderrFinished = waitForWritableFinished(stderrStream);
 
   return new Promise((resolve) => {
-    // cross-platform-allow: preserve previous exec(command) shell semantics for this tool
     const child = spawn(cmd, {
       cwd,
       shell: true,
@@ -161,10 +160,8 @@ function terminateChild(child, signal = "SIGTERM") {
       process.kill(-Number(child.pid), signal);
       return;
     } catch {
-      // Fall back to killing the direct shell process.
     }
   }
-  // cross-platform-allow: fallback direct-child termination uses Node's cross-platform kill shim
   child.kill(signal);
 }
 
@@ -179,7 +176,6 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
   const stderrFinished = waitForWritableFinished(stderrStream);
 
   return await new Promise((resolve) => {
-    // cross-platform-allow: background mode also preserves shell command semantics
     const child = spawn(cmd, {
       cwd,
       shell: true,
@@ -224,7 +220,6 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
       try {
         await Promise.all([stdoutFinished, stderrFinished]);
       } catch {
-        // Keep script results recoverable; stderr fallback below carries process-level failures.
       }
       if (spawnError || timedOut || aborted) {
         const fallbackMessage = spawnError?.message || (timedOut

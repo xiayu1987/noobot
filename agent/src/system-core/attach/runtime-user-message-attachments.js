@@ -4,16 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Runtime attachment field adapter.
- *
- * Canonical rule:
- * - runtime.userMessageAttachments is the current user turn's authoritative
- *   attachment collection for model user-meta and session user-message writes.
- * - runtime.attachments is the ordinary runtime/tool-generated attachment
- *   bucket and must not be used as a user-message fact source when the
- *   canonical field is present.
- */
 
 function cloneAttachmentList(value) {
   return Array.isArray(value) ? value : [];

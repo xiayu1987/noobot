@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * 本轮消息操作组件的本地兜底文案与翻译器工厂。
- * 组件传入的 translate 命中时优先使用，否则回退到内置中文文案。
- */
 
 export const LOCAL_TRANSLATIONS = {
   "common.cancel": "取消",

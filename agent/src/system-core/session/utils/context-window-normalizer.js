@@ -148,9 +148,6 @@ export function resolveMainModelHistoryMessages({
       return;
     }
 
-    // Model messages from legacy snapshots (notably AI/tool messages) did not
-    // always carry turn identity. They still belong to the surrounding dialog
-    // and must not disappear merely because grouping metadata is absent.
     if (activeDialogKey) {
       appendDialogGroupMessage(groupsByDialog, activeDialogKey, messageItem, index);
       return;
@@ -182,8 +179,6 @@ export function resolveMainModelHistoryMessages({
 export function resolveMainModelIncrementalMessages({
   sourceMessages = [],
 } = {}) {
-  // Main incremental context must stay append-only until summary marks older
-  // messages. Do not apply latest-injected compaction here.
   return filterForModelContext(sourceMessages);
 }
 

@@ -476,11 +476,6 @@ export function createChatEngineConversationState({
             }
           }
         } else {
-          // Some backends emit `interaction_pending` without embedding
-          // `pendingInteraction` in channel_state, while the actual
-          // `interaction_request` event arrives separately.
-          // If we already have a pending request for this turn, keep waiting
-          // instead of marking the assistant turn as failed.
           const existingPendingRequest =
             pendingInteractionRequest.value &&
             typeof pendingInteractionRequest.value === "object"
@@ -500,8 +495,6 @@ export function createChatEngineConversationState({
           return;
         }
       }
-      // Runtime display state is projected exclusively from the turn runtime
-      // registry after applyRunStateEvent. Do not mirror it on the message here.
       return;
     }
     if (!isTerminalConversationState(state)) return;
@@ -534,10 +527,6 @@ export function createChatEngineConversationState({
       clearPendingInteraction();
       return;
     }
-    // Terminal message runtime (pending/channel state/status label/timing) is
-    // projected exclusively by sessionRunStateMachine -> turnRuntimeRegistry ->
-    // messageRuntimePatch.  Keeping a second mutation path here allowed late
-    // backend terminal events to overwrite a newer continuation turn.
     logResendDebug("conversationState.terminal.dispatched", {
       state, sessionId, dialogProcessId, turnScopeId,
       target: summarizeDebugMessage(targetAssistantMessage),

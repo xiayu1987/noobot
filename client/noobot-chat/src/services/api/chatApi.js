@@ -168,8 +168,6 @@ export async function resolveTurnTerminalStateApi(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnScopeId)}/terminal${query}`,
   );
   const payload = await decodeJsonResponse(response, "terminal_resolution");
-  // The HTTP route wraps the domain response with { ok: true }. Returning the
-  // domain object here keeps fetch/JSON concerns out of the coordinator.
   return payload && typeof payload === "object" ? payload : {};
 }
 

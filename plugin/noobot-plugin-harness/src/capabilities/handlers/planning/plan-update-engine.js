@@ -55,7 +55,6 @@ function syncPlanUpdateAttempts(state = {}, { stage = "revision", next = 0 } = {
   const refinementAttempts = Number.isFinite(Number(state.counters.planRefinementAttempts))
     ? Number(state.counters.planRefinementAttempts)
     : 0;
-  // Keep unified field for compatibility/observability.
   state.counters.planUpdateAttempts = revisionAttempts + refinementAttempts;
 }
 

@@ -35,16 +35,10 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
     stopRequesting: state === FrontendRunState.USER_STOPPING,
     stopPendingUntilBackendReady: false,
   };
-  // Keep legacy evaluation consumers on the same domain capability rule as
-  // the registry. A broad PROCESSING projection is not sufficient: only an
-  // explicit backend SENDING fact is stoppable.
   const backendCanStop = deriveTurnCapabilities(state, {
     backendState: stateSnapshot?.backendState,
   }).canStop;
   const awaitingBackendStop = state === FrontendRunState.USER_STOPPING;
-  // The state machine is the final action mutex.  Do not let a local composer
-  // flag reopen send/resend/continue while the current run is still in flight
-  // (including completion and stop-summary convergence).
   const actionLocked = state !== FrontendRunState.IDLE;
   const canStartNewSend = !actionLocked;
   return {

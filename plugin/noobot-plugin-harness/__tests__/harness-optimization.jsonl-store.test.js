@@ -1,4 +1,3 @@
-// Tests split by responsibility from harness-optimization.test.js.
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -97,40 +96,3 @@ test("appendJsonlBuffered rotates active JSONL and prunes old archives", async (
   const active = await fs.readFile(filePath, "utf8");
   assert.match(active, /"id":4/);
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

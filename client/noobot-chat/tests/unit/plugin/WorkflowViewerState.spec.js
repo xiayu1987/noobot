@@ -22,8 +22,6 @@ describe("workflow viewer state ownership", () => {
     live.viewerVisible.value = true;
     await nextTick();
 
-    // Completion creates a new card instance in another list, but both phases
-    // carry the same authoritative workflowRunId.
     const persistedPayload = ref({ workflowRunId: "workflow-a", execution: { workflowRunId: "workflow-a" } });
     const persisted = useWorkflowViewerState(persistedPayload, registry);
 

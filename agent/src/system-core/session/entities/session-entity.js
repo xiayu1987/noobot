@@ -272,9 +272,6 @@ export function normalizeSessionEntity(
     createdAt: String(session?.createdAt || "").trim() || nowValue,
     updatedAt: String(session?.updatedAt || "").trim() || nowValue,
   };
-  // Legacy terminal commits embedded complete message snapshots. Their status
-  // is migrated into the matching lifecycle Turn above; never persist the
-  // heavyweight session-level map again.
   delete normalizedSession.turnTerminalCommits;
   if (normalizedCustomTitle) normalizedSession.customTitle = normalizedCustomTitle;
   else delete normalizedSession.customTitle;

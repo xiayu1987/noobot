@@ -1,10 +1,4 @@
 :root {
-  /* Semantic · Preview */
-  /*
-   * 默认主题是 dark。预览区背景必须跟随暗色语义色，否则会出现
-   * “白底 + 暗色主题标题/表格文字仍为浅色”的低对比度问题。
-   * light 主题在 theme/light/preview.css 中单独覆盖为白底深字。
-   */
   --noobot-preview-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 92%, var(--noobot-base-black));
   --noobot-preview-text: var(--noobot-text-main);
   --noobot-preview-border: var(--noobot-panel-border);

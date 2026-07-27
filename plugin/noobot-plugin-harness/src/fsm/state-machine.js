@@ -15,8 +15,8 @@ import {
 } from "./transitions.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-const fsmStateCache = new Map(); // runId -> state
-const fsmStateLastAccessed = new Map(); // runId -> timestamp
+const fsmStateCache = new Map();
+const fsmStateLastAccessed = new Map();
 const FSM_CACHE_MAX_AGE_MS = TIME_THRESHOLDS.harness.fsmCacheMaxAgeMs;
 const FSM_CACHE_CLEANUP_INTERVAL_MS = TIME_THRESHOLDS.harness.fsmCacheCleanupIntervalMs;
 

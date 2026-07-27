@@ -1,5 +1,4 @@
 :root {
-  /* Semantic · App / Panel / Overlay */
   --noobot-app-bg: var(--noobot-surface-sidebar);
   --noobot-glass-bg: var(--noobot-panel-bg);
   --noobot-glass-border: var(--noobot-panel-border);

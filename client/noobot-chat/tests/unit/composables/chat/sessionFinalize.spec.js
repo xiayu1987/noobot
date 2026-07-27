@@ -192,8 +192,6 @@ describe("sessionFinalize", () => {
     });
     await vi.waitFor(() => expect(fetchSessionDetail).toHaveBeenCalledTimes(1));
 
-    // cancelStreamForTurn rejects sendFlow; deletion has already removed the
-    // whole Turn by the time the error-path detail request resolves.
     activeSession.value.messages = [];
     resolveDetail({
       sessionId: "backend-session",

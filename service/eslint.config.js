@@ -26,7 +26,6 @@ export default [
       sourceType: "module",
     },
     rules: {
-      // Constants declaration names must use UPPER_SNAKE_CASE.
       "id-match": [
         "error",
         "^[A-Z][A-Z0-9_]*$",

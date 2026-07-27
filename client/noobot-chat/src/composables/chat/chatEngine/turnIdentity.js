@@ -7,7 +7,6 @@
 const text = (value) => String(value || "").trim();
 const TURN_KEY_PREFIX = "__turn__";
 
-/** Canonical UI ownership identity. dialogProcessId is deliberately excluded. */
 export function createTurnIdentity({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
   const identity = Object.freeze({
     sessionId: text(sessionId),

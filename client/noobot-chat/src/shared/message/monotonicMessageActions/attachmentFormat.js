@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * 附件展示与键值工具：纯函数，无 Vue / 运行态依赖。
- * 负责 MIME 判定、名称/大小/类型/图标推断，以及去重键与历史附件克隆。
- */
 
 export function isImageMime(mimeType = "") {
   return String(mimeType || "").toLowerCase().startsWith("image/");

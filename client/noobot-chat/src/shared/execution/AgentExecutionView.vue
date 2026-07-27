@@ -48,8 +48,6 @@ function messageRenderKey(messageItem = {}, messageIndex = 0) {
   if (explicitId) return `${props.executionId}-message-${explicitId}`;
   const turnScopeKey = normalizeTurnScopeIdKey(getMessageTurnScopeId(messageItem));
   const role = String(messageItem?.role || "message").trim();
-  // The index only disambiguates multiple blocks in one Turn. Tool/log/content
-  // updates do not change this identity, unlike mutable timestamps.
   return `${props.executionId}-${turnScopeKey || "unscoped"}-${role}-${messageIndex}`;
 }
 </script>

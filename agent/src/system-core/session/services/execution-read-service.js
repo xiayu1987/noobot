@@ -66,13 +66,10 @@ function executionOwnershipFingerprint(execution = {}) {
   }));
 }
 
-/** Read-only projection over the authoritative Turn Lifecycle facts. */
 export class ExecutionReadService {
   constructor({ sessionCrudService, now = () => new Date().toISOString() } = {}) {
     this.sessionCrudService = sessionCrudService;
     this.now = now;
-    // Disposable, per-user read acceleration only. Authoritative facts remain
-    // in Session Turn Lifecycle and every rebuild reads those facts again.
     this.readIndexByUser = new Map();
   }
 
@@ -145,7 +142,6 @@ export class ExecutionReadService {
       const indexed = this.readIndexByUser.get(normalizedUserId);
       if (fingerprint !== null && indexed?.fingerprint === fingerprint) return indexed.readModel;
     } catch {
-      // Summary/index failures must never make lifecycle facts unavailable.
       fingerprint = null;
     }
     const readModel = await this._scanAuthoritative(normalizedUserId);

@@ -140,8 +140,6 @@ describe("applyReconnectDataReplay", () => {
             state: "completed",
           },
           dialogProcesses: [{
-            // Matches the agent-proxy reconnect shape: identity is carried by
-            // each envelope, not repeated on the dialog-process container.
             dialogProcessId: "dp-shared",
             messages: [...deletedMessages, ...currentMessages],
           }],

@@ -67,8 +67,6 @@ export function maybeInjectGuidanceOrSummaryPrompt(ctx = {}, { action = "auto", 
   const allowGuidance = requestedAction === "auto" || requestedAction === "guidance";
 
   if (allowSummary && state.pending.summary === true) {
-    // Freeze the summary scope at injection time so later tool calls in the same
-    // loop are never treated as "already summarized".
     captureGuidanceSummaryCheckpoint(ctx, state);
     const checklistContent = buildPlanChecklistSystemContent({
       locale,

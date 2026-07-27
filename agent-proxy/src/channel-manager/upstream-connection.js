@@ -15,7 +15,6 @@ import { nowMs, buildUpstreamUrl, resolveMessageEventTrace } from "../utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
 
 class UpstreamConnectionMethods {
-// ---- Upstream Connection ----
 
 closeUpstreamChannel(
   channel,
@@ -88,8 +87,6 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLOSED);
       return;
     }
-    // OPEN is a transport fact only. Service lifecycle events are the sole
-    // source of authoritative Turn processing state.
     channel.updatedAtMs = nowMs();
     this.logSessionEvent(channel, {
       category: "transport",
@@ -156,8 +153,6 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         },
       });
       this.broadcastChannelEvent(channel, eventEnvelope);
-      // Upstream events are forwarded facts. Transport state must not be
-      // promoted to, or terminated by, a business lifecycle projection.
     } catch (error) {
       this.logSessionEvent(channel, {
         category: "transport",
@@ -197,9 +192,6 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       event: "agentProxy.upstream.closed",
       data: { channelKey: channel.key, closeCode: normalizedCloseCode, closeReason },
     });
-    // Socket closure is transport metadata. It must never synthesize a Turn
-    // stopped/error terminal fact; reconnect or authoritative snapshot decides
-    // the business lifecycle.
   },
 
   error: ({ error }) => {

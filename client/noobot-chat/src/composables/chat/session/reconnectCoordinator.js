@@ -35,10 +35,6 @@ export function createReconnectCoordinator({
     const messages = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
       : [];
-    // A stopped turn and its continuation may deliberately share a
-    // dialogProcessId while owning different turnScopeIds. The turn is the
-    // authoritative message projection identity; using the dialog first can
-    // project continuation events into the stopped assistant message.
     const reversedAssistantMessages = [...messages].reverse().filter(
       (message) => getMessageRole(message) === RoleEnum.ASSISTANT,
     );
@@ -114,9 +110,6 @@ export function createReconnectCoordinator({
             await reconnectReplay.applyReconnectData(reconnectPayload);
           }
           if (!(reconnectPayload?.event && reconnectPayload?.data)) return;
-          // After reconnect_complete this socket remains the live transport.
-          // Authoritative main-session events must update the restored message
-          // just like events received by the original send stream.
           if (projectReconnectedMainSessionEvent(reconnectPayload.event, reconnectPayload.data)) {
             return;
           }
@@ -125,10 +118,6 @@ export function createReconnectCoordinator({
           }
           await reconnectReplay.applyReconnectEvent(reconnectPayload.event, reconnectPayload.data);
         };
-        // WebSocket callbacks are synchronous but replay/hydration is not. Keep
-        // protocol arrival order across separate callback invocations so a
-        // trailing channel_state cannot race the DONE snapshot that owns its
-        // Session+Turn identity.
         reconnectReplayQueue = reconnectReplayQueue.then(replayPayload, replayPayload);
         trackReconnectReplay(reconnectReplayQueue);
       },

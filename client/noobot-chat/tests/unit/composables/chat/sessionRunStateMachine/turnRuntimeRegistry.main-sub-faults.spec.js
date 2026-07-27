@@ -125,7 +125,6 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
       seq: 2,
     });
 
-    // Alias lookup resolves the optimistic identity to the canonical Turn.
     expect(turn(registry, "child-local", "child-turn")?.sessionId).toBe("child-canonical");
     expect(turn(registry, "child-canonical", "child-turn")).toBeTruthy();
     expect(settle(registry, "child-canonical", "child-turn").applied).toBe(true);

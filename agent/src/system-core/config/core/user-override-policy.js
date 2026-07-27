@@ -8,9 +8,6 @@ import { normalizeTimeMs } from "./time-config-normalizer.js";
 import { sanitizeScenarioConfig } from "./builtin-scenarios.js";
 import { isPlainObject } from "../../utils/shared-utils.js";
 
-// 用户可覆盖策略（只允许这些键被 user config 覆盖）
-// - replace：整项替换（当前仅支持字符串值）
-// - deep：对象深度合并（用户配置覆盖同名子键，未提供的子键保留全局默认）
 const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
   providers: "deep",

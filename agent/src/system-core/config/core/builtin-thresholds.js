@@ -4,13 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-/**
- * Built-in operational thresholds.
- *
- * These values intentionally do not come from global/user configuration. Model
- * parameters (for example max_tokens, temperature, top_p, thinking_budget) are
- * still configured in provider specs.
- */
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";

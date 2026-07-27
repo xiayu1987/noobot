@@ -38,11 +38,11 @@ function statusStepDisplayStateFromPersisted(value = "") {
     : "";
 }
 
-/**
- * Resolve status-step presentation without mutating Turn Runtime authority.
- * Runtime terminals win, an active Runtime wins over a stale child projection,
- * and persisted status is fallback-only when no Runtime has been hydrated.
- */
+
+
+
+
+
 export function resolveStatusStepPresentation({
   turnRuntime = null,
   runtimeDisplayState = "",
@@ -89,7 +89,7 @@ function mergeProjectedStatusStepState(previousState = "", currentState = "") {
   return current;
 }
 
-/** Reduce the status-step facet of two already identity-compatible messages. */
+
 export function mergeMessagePresentationFacets(previousMessage = {}, currentMessage = {}) {
   const previousScopeId = text(previousMessage?.statusTurnScopeId);
   const currentScopeId = text(currentMessage?.statusTurnScopeId);
@@ -109,4 +109,3 @@ export function mergeMessagePresentationFacets(previousMessage = {}, currentMess
     ),
   };
 }
-

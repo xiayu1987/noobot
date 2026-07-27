@@ -2,8 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * ChatOpenAI factory: API key resolution, kwargs building, model creation.
  */
 import { ChatOpenAI } from "@langchain/openai";
 import { fatalSystemError } from "../../error/index.js";
@@ -223,11 +221,6 @@ function resolvePromptCacheSettings(modelSpec = {}, options = {}) {
   };
 }
 
-/**
- * Resolve API key for a model spec from env or explicit config.
- * @param {object} modelSpec
- * @returns {string}
- */
 export function resolveApiKey(modelSpec = {}) {
   if (modelSpec.api_key) return modelSpec.api_key;
   if (modelSpec.format === "dashscope") {
@@ -239,11 +232,6 @@ export function resolveApiKey(modelSpec = {}) {
   return process.env.OPENAI_API_KEY || "";
 }
 
-/**
- * Build modelKwargs object from normalized spec.
- * @param {object} modelSpec
- * @returns {object}
- */
 export function buildModelKwargs(modelSpec = {}) {
   const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
   const out = { ...(normalizedSpec.extra_body || {}) };
@@ -335,11 +323,6 @@ export function buildModelKwargs(modelSpec = {}) {
   return out;
 }
 
-/**
- * Determine whether to use the OpenAI Responses API.
- * @param {object} modelSpec
- * @returns {boolean}
- */
 export function resolveUseResponsesApi(modelSpec = {}) {
   if (typeof modelSpec?.useResponsesApi === "boolean") {
     return modelSpec.useResponsesApi;
@@ -437,12 +420,6 @@ function resolvePromptCacheFlowFromConfiguration(configuration = {}) {
   return String(headers[PLUGIN_MODEL_HEADER_KEY.FLOW] || DEFAULT_MAIN_FLOW).trim();
 }
 
-/**
- * Create a ChatOpenAI instance from a model spec.
- * @param {object} modelSpec
- * @param {object} options
- * @returns {ChatOpenAI}
- */
 export function createChatModelFromSpec(modelSpec, options = {}) {
   const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
   if (!normalizedSpec?.model) {
@@ -488,13 +465,6 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
   return chat;
 }
 
-/**
- * Create a ChatOpenAI instance from a spec with optional streaming flag.
- * Alias of createChatModelFromSpec for backward compatibility.
- * @param {object} modelSpec
- * @param {object} options
- * @returns {ChatOpenAI}
- */
 export function createChatModel(specOrOptions = {}, maybeOptions = {}) {
   const looksLikeOptions =
     specOrOptions &&
@@ -515,15 +485,6 @@ export function createChatModel(specOrOptions = {}, maybeOptions = {}) {
   return createChatModelFromSpec(specOrOptions, maybeOptions);
 }
 
-/**
- * Create a ChatOpenAI instance by looking up model name in config.
- * @param {string} modelName
- * @param {object} config
- * @param {object} [config.globalConfig]
- * @param {object} [config.userConfig]
- * @param {boolean} [config.streaming]
- * @returns {ChatOpenAI}
- */
 export function createChatModelByName(modelName, config = {}) {
   const options = config && typeof config === "object" ? config : {};
   const globalConfig = options?.globalConfig || {};

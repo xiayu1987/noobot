@@ -87,10 +87,6 @@ export function injectMessageWithPolicy(
   } = {},
 ) {
   const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
-  // Plugin-to-main-flow injections are tagged so they can be persisted/rendered
-  // separately from real user turns. The message role determines the message
-  // block: system injections must stay in system, current-turn requests stay in
-  // incremental.
   const normalizedContent = String(content || "").trim();
   if (!messages || !normalizedContent) return { injected: false, target: "none" };
   if (isHarnessAgentTurnEnded(ctx)) {
@@ -125,8 +121,6 @@ export function injectMessageWithPolicy(
       if (dedupe && dedupeExists(systemContextMessages, message)) {
         return { injected: false, target: "agent_system", deduped: true };
       }
-      // System context is a string-only channel; persist the tagged roleful
-      // copy for session display while keeping the model context protocol-safe.
       systemContextMessages.push(normalizedContent);
       persistHarnessMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
       return { injected: true, target: "agent_system" };

@@ -38,11 +38,9 @@ test("getExtensionFromMime case insensitive", () => {
 
 test("getMimeExtensionMap returns a copy of built-in map", () => {
   const map = getMimeExtensionMap();
-  // Verify built-in entries
   assert.equal(map["image/png"], ".png");
   assert.equal(map["video/mp4"], ".mp4");
   assert.equal(map["application/pdf"], ".pdf");
-  // Verify it's a copy (mutation doesn't affect original)
   map["application/zip"] = ".zip";
   assert.equal(getExtensionFromMime("application/zip"), "");
 });

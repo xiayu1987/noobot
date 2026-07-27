@@ -65,7 +65,6 @@ export async function upsertConfigParams({
     if (!hasOwnProperty(values, normalizedKey)) {
       values[normalizedKey] = incomingValue;
     } else if (overwriteKeySet.has(normalizedKey)) {
-      // 仅允许用户本次录入变量覆盖已有值
       values[normalizedKey] = incomingValue;
     }
     if (!hasOwnProperty(descriptions, normalizedKey)) {
@@ -113,10 +112,8 @@ export async function collectWorkspaceUserIds({ workspaceRootAbsolutePath, super
       workspaceDirUserIds.add(userId);
     }
   } catch {
-    // ignore
   }
 
-  // 仅同步已经初始化（目录已存在）的用户，不主动创建新用户目录
   for (const userId of workspaceDirUserIds) {
     userIds.add(userId);
   }

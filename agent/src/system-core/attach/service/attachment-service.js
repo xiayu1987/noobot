@@ -30,13 +30,7 @@ import {
   resolveSourceAttachment,
 } from "./attachment-service-query.js";
 
-/**
- * 附件服务：对外暴露附件写入、读取、查询、删除 API。
- */
 export class AttachmentService {
-  /**
-   * @param {object} globalConfig - 系统全局配置。
-   */
   constructor(globalConfig) {
     this.globalConfig = globalConfig;
   }
@@ -85,16 +79,10 @@ export class AttachmentService {
     return walkSessionJsonFilesFromRoot(payload);
   }
 
-  /**
-   * 按附件 ID 查询附件元数据与绝对路径。
-   */
   async getAttachmentById({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {
     return getAttachmentById(this, { userId, attachmentId, sessionId, attachmentSource });
   }
 
-  /**
-   * 读取某个 scope 下的附件元数据列表。
-   */
   async readAttachmentMetas({ userId, sessionId = "", attachmentSource = "" } = {}) {
     return readAttachmentMetas(this, { userId, sessionId, attachmentSource });
   }
@@ -103,23 +91,14 @@ export class AttachmentService {
     return resolveSourceAttachment(this, payload);
   }
 
-  /**
-   * 读取附件内容。
-   */
   async readAttachmentContent({ userId, attachmentId }) {
     return readAttachmentContent(this, { userId, attachmentId });
   }
 
-  /**
-   * 批量删除指定会话的 scoped 附件目录。
-   */
   async deleteScopedAttachmentsBySessionIds({ userId, sessionIds = [] } = {}) {
     return deleteScopedAttachmentsBySessionIds(this, { userId, sessionIds });
   }
 
-  /**
-   * 清理已不存在会话的 scoped 附件目录（孤儿目录）。
-   */
   async pruneOrphanScopedAttachments({
     userId,
     keepSessionIds = [],

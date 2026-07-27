@@ -6,9 +6,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// The default facade is the only Node-filesystem path API exposed to client
-// code. Keeping it here makes local filesystem operations auditable while the
-// explicit helpers below handle paths originating on another platform.
 export const clientFilePath = Object.freeze({
   basename: (...args) => path.basename(...args),
   dirname: (...args) => path.dirname(...args),

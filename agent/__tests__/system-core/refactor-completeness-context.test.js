@@ -12,7 +12,6 @@ const mockWorkspaceService = {
 
 const { ContextBuilder } = await import('../../src/system-core/bot-manage/session/context-builder.js');
 
-// ========== 1. Context 透传测试 ==========
 describe('1. Context 透传测试', () => {
   describe('ContextBuilder.build()', () => {
     it('应正确透传 sessionId', async () => {

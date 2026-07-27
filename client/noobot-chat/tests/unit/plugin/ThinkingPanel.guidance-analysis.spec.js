@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-// Tests split by responsibility from ThinkingPanel.spec.js.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
@@ -16,19 +15,19 @@ describe("ThinkingPanel", () => {
     vi.useRealTimers();
   });
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
+
+
+
+
+
+
+
 
   it("renders latest guidance analysis above execution logs without mixing it into rolling tool logs", () => {
     const wrapper = mountThinkingPanel({
@@ -94,37 +93,37 @@ describe("ThinkingPanel", () => {
     ]);
   });
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   it("does not render plugin capability responses as guidance analysis", () => {
     const wrapper = mountThinkingPanel({

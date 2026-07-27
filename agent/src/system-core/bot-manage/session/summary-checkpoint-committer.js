@@ -183,9 +183,6 @@ export async function commitSummaryCheckpoint({
       eventListener,
       persistenceContext,
     });
-    // Turns persistence is already durable at this point. Keep the cursor even
-    // if the following archive mutation fails so the finalizer cannot duplicate
-    // this prefix; memory is only released after the archive mutation succeeds.
     runtime.summaryCheckpointPersistedCount = markedTurnMessages.length;
     runtime.summaryCheckpointPersistedTotal =
       Math.max(0, Number(runtime?.summaryCheckpointPersistedTotal) || 0) + pendingMessages.length;
@@ -201,8 +198,6 @@ export async function commitSummaryCheckpoint({
   });
   const committed = pendingMessages.length > 0 || Number(markedCount) > 0;
   if (!committed) {
-    // The messages were appended successfully and must not be appended again
-    // by a later checkpoint or the final tail flush.
     runtime.summaryCheckpointPersistedCount = markedTurnMessages.length;
     return { committed: false, persistedCount: pendingMessages.length, markedCount: 0 };
   }

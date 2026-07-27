@@ -15,7 +15,6 @@ export function findCanonicalTurnTiming(session = null, turnScopeId = "") {
     .find((item) => text(item?.turnScopeId) === scope) || null;
 }
 
-/** Merge canonical Session timing over disposable projection/fallback values. */
 export function mergeCanonicalTurnTiming(session = null, turnScopeId = "", fallback = {}) {
   const canonical = findCanonicalTurnTiming(session, turnScopeId) || {};
   const projected = session?.turnTimingsByTurnScopeId?.[text(turnScopeId)] || {};

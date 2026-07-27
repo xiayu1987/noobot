@@ -1,5 +1,4 @@
 :root[data-theme="light"] {
-  /* Semantic · Surface / Text */
   --noobot-surface-sidebar: color-mix(in srgb, var(--noobot-base-slate-50) 84%, var(--noobot-base-white));
   --noobot-surface-soft: color-mix(in srgb, var(--noobot-base-slate-900) 4%, transparent);
   --noobot-surface-soft-hover: color-mix(in srgb, var(--noobot-base-slate-900) 8%, transparent);

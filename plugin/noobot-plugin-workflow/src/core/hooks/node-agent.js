@@ -148,7 +148,6 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
       ).trim();
       if (customMessage) customUpstreamMessage = customMessage;
     } catch {
-      // Fall back to the built-in message.
     }
   }
 
@@ -535,10 +534,6 @@ export async function runNodeAgent({
           { signal: resolveWorkflowAbortSignal(ctx) },
         );
       } catch (error) {
-        // withTimeout rejects as soon as the parent signal fires.  The detached
-        // session receives that same signal, but still needs time to unwind its
-        // agent turn and commit the complete stopped lifecycle.  Do not let the
-        // workflow planner finish before that cleanup has settled.
         if (isWorkflowAbortError(error, ctx)) {
           await Promise.allSettled([subSessionRunPromise]);
         }

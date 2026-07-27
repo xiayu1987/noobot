@@ -2,8 +2,6 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- *
- * Execution log entity normalization.
  */
 
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";

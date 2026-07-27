@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-// Tests split by responsibility from ThinkingPanel.spec.js.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
@@ -16,7 +15,7 @@ describe("ThinkingPanel", () => {
     vi.useRealTimers();
   });
 
-  
+
 
   it("does not reuse a persisted turn start from another session", () => {
     vi.useFakeTimers();
@@ -36,13 +35,13 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).not.toContain("00:12");
   });
 
-  
 
-  
 
-  
 
-  
+
+
+
+
 
   it("migrates the isolated process projection without mixing legacy fields", () => {
     const wrapper = mountThinkingPanel({
@@ -128,11 +127,11 @@ describe("ThinkingPanel", () => {
     expect(wrapper.find(".empty-hint").exists()).toBe(false);
   });
 
-  
 
-  
 
-  
+
+
+
 
   it("shows only latest ten completed tool logs in execution process after reload", () => {
     const completedToolLogs = Array.from({ length: 12 }, (_, index) => ({
@@ -156,17 +155,17 @@ describe("ThinkingPanel", () => {
     expect(wrapper.find("button").text()).toContain("12");
   });
 
-  
 
-  
 
-  
 
-  
 
-  
 
-  
+
+
+
+
+
+
 
   it("shows cumulative execution count while rendering only latest ten realtime logs", () => {
     const realtimeLogs = Array.from({ length: 12 }, (_, index) => ({
@@ -242,7 +241,7 @@ describe("ThinkingPanel", () => {
     expect(lines[1].text()).toContain("later message tool");
   });
 
-  
+
 
   it("does not backfill previous tool logs while current assistant is pending", () => {
     const wrapper = mountThinkingPanel(
@@ -308,7 +307,7 @@ describe("ThinkingPanel", () => {
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(1);
   });
 
-  
+
 
   it("shows tool logs for the same dialogProcessId after current dialog starts streaming", () => {
     const wrapper = mountThinkingPanel(
@@ -350,13 +349,13 @@ describe("ThinkingPanel", () => {
     expect(wrapper.text()).toContain("current_tool");
   });
 
-  
 
-  
 
-  
 
-  
 
-  
+
+
+
+
+
 });

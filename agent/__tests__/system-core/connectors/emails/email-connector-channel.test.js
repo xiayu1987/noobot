@@ -32,12 +32,10 @@ test("executeEmailCommand send action rejects missing to", async () => {
 });
 
 test("executeEmailCommand list action returns structure", async () => {
-  // Without connection info this will fail to connect, but should return error structure
   const result = await executeEmailCommand({
     command: '{"action":"list","folder":"INBOX","limit":1}',
     connectionInfo: {},
   });
-  // Will fail due to no connection, but structure should be consistent
   assert.equal(typeof result.ok, "boolean");
   assert.equal(typeof result.code, "number");
 });
@@ -47,7 +45,6 @@ test("executeEmailCommand read action rejects missing uid gracefully", async () 
     command: '{"action":"read"}',
     connectionInfo: {},
   });
-  // Without connection it will fail, but should not crash
   assert.equal(typeof result.ok, "boolean");
 });
 

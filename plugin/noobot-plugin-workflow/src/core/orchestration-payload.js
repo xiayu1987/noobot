@@ -91,7 +91,6 @@ export function buildWorkflowOrchestrationPayload({
       retried: Number(retryMeta?.attempts || WORKFLOW_RETRY.MAX_ATTEMPTS) > 1,
       history: Array.isArray(retryMeta?.history) ? retryMeta.history : [],
     },
-    // backward-compatible shortcut fields
     semantic: semantic || null,
     execution: execution || null,
     artifacts: success

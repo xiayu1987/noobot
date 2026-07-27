@@ -8,7 +8,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { filePath as path } from "../utils/path-resolver.js";
 import { fsMkdir, fsReadFile, fsRm, fsStat, fsWriteFile } from "../store/fs-adapter.js";
 
-/** Cross-process, re-entrant coordinator for every mutation of one session directory. */
 export class SessionMutationCoordinator {
   constructor({ timeoutMs = 30000, staleMs = 60000, pollMs = 10 } = {}) {
     this.timeoutMs = Math.max(1, Number(timeoutMs) || 30000);

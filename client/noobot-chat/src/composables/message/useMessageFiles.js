@@ -359,9 +359,9 @@ function trimPathByFileExtension(pathValue = "") {
 function isLikelyFilePath(pathValue = "") {
   const baseName = resolveBaseName(pathValue);
   if (!baseName || baseName === "." || baseName === "..") return false;
-  if (baseName.startsWith(".") && baseName.length > 1) return true; // .env / .gitignore
+  if (baseName.startsWith(".") && baseName.length > 1) return true;
   const dotIndex = baseName.lastIndexOf(".");
-  if (dotIndex <= 0) return false; // no extension or hidden-only token
+  if (dotIndex <= 0) return false;
   if (dotIndex === baseName.length - 1) return false;
   return true;
 }
@@ -478,12 +478,6 @@ export function useMessageFiles({
       normalizedPath.slice(genericMarkerIndex + genericWorkspaceMarker.length),
     );
     if (!genericRelativePath) return "";
-    // Backend tool summaries can arrive before the desktop client has a stable
-    // userId prop, especially in packaged Electron replay/hydration.  Absolute
-    // paths are still rooted as /workspace/<userId>/..., while workspace
-    // download APIs expect the path below that user directory.  If we cannot
-    // match the explicit user marker above, treat the first segment after
-    // /workspace/ as the user workspace directory and keep the remainder.
     const slashIndex = genericRelativePath.indexOf("/");
     if (slashIndex > 0) {
       const relativePath = sanitizeWorkspaceRelativePath(genericRelativePath.slice(slashIndex + 1));

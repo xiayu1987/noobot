@@ -709,7 +709,6 @@ test("SessionExecutionRunner emits compat field hit stats event", async () => {
       runtimeAgentContext,
     }),
     agentRunner: async () => {
-      // Simulate compatibility field access hit.
       warnAgentContextCompatFieldOnce({
         field: "test.compat.field",
         replacement: "execution.controllers.runtime.test",

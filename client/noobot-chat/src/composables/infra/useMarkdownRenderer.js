@@ -57,9 +57,6 @@ function normalizeMermaidMarkdown(inputText = "") {
   return outputLines.join("\n");
 }
 
-// Module-level singleton to avoid re-creating MarkdownIt per component instance.
-// Keep raw HTML disabled so user input such as "<!-- test -->" is rendered as
-// visible text instead of being injected into the DOM as hidden HTML comments.
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 const defaultFenceRenderer =
   md.renderer.rules.fence ||
