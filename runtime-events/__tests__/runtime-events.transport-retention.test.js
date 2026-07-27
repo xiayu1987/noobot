@@ -105,6 +105,26 @@ test('runtime event max file bytes can be disabled with zero', async () => {
   assert.equal((await readJsonl(second.file)).length, 2);
 });
 
+test('runtime event jsonl transport serializes concurrent writes to the same file', async () => {
+  const workspaceRoot = await tempRoot();
+  await persistSession(workspaceRoot, 'admin', 'concurrent-writes');
+  const writes = await Promise.all(Array.from({ length: 100 }, (_, id) => writeRuntimeEvent({
+    source: 'agent',
+    scope: 'session',
+    category: 'system',
+    level: 'info',
+    event: 'agent.runtime.concurrentWrite',
+    userId: 'admin',
+    sessionId: 'concurrent-writes',
+    workspaceRoot,
+    data: { id },
+  })));
+  assert.equal(writes.every((result) => result.ok), true);
+  const records = await readJsonl(writes[0].file);
+  assert.equal(records.length, 100);
+  assert.deepEqual(new Set(records.map((record) => record.data.id)).size, 100);
+});
+
 test('runtime event max file bytes falls back when environment value is invalid', async () => {
   const maxFileBytesEnv = RUNTIME_EVENTS_CONFIG_ENVS.runtimeEvents.maxFileBytes;
   const previousMaxFileBytes = process.env[maxFileBytesEnv];
@@ -171,6 +191,7 @@ test('runtime event archive cleanup deletes archives older than retention days',
     maxFileBytes: 0,
     retentionDays: 1,
     maxArchives: 0,
+    cleanupIntervalMs: 0,
   });
 
   assert.equal(result.ok, true);
@@ -206,6 +227,7 @@ test('runtime event archive cleanup keeps only newest max archives', async () =>
     maxFileBytes: 0,
     retentionDays: 0,
     maxArchives: 2,
+    cleanupIntervalMs: 0,
   });
 
   assert.equal(result.ok, true);
@@ -269,6 +291,7 @@ test('runtime event archive cleanup ignores active and unrelated jsonl files', a
     maxFileBytes: 0,
     retentionDays: 1,
     maxArchives: 0,
+    cleanupIntervalMs: 0,
   });
 
   assert.equal(result.ok, true);

@@ -129,7 +129,12 @@ export async function persistSessionArtifactSnapshot({
   return lockDir && mutationCoordinator?.run ? mutationCoordinator.run(lockDir, run) : run();
 }
 
-export async function readSessionArtifactSnapshot({ outputDir = "", allowLegacy = true } = {}) {
+export async function readSessionArtifactSnapshot({
+  outputDir = "",
+  allowLegacy = true,
+  includeExecutionLogs = true,
+  executionLogOptions = {},
+} = {}) {
   const committedPath = path.join(outputDir, "COMMITTED");
   const snapshotManifestPath = path.join(outputDir, "snapshot-manifest.json");
   const snapshotManifest = await readJsonArtifactFile(snapshotManifestPath, null);
@@ -152,7 +157,7 @@ export async function readSessionArtifactSnapshot({ outputDir = "", allowLegacy 
     readJsonArtifactFile(files.sessionSummary, null),
     readJsonArtifactFile(files.task, null),
     readJsonArtifactFile(files.execution, null),
-    readJsonlArtifactFile(files.executionEvents),
+    includeExecutionLogs ? readJsonlArtifactFile(files.executionEvents, executionLogOptions) : Promise.resolve([]),
     readJsonArtifactFile(files.meta, null),
   ]);
   const sessionSummary = isSessionDisplaySummaryPayload(
