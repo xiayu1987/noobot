@@ -7,6 +7,7 @@
 export const MESSAGE_EVENT_ENVELOPE_KIND = "noobot.message_event";
 export const MESSAGE_EVENT_ENVELOPE_VERSION = 1;
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
+export const MESSAGE_EVENT_SEQUENCE_SCOPE_KIND = "message";
 
 export const MESSAGE_EVENT_TYPE = Object.freeze({
   LLM_DELTA: "llm_delta",
@@ -25,6 +26,27 @@ export const MESSAGE_CONTENT_EFFECT = Object.freeze({
 });
 
 const text = (value) => String(value || "").trim();
+
+/**
+ * Message-event ordering is never global to a Session or Turn. The complete
+ * cursor identity is (domain, scopeId, sequence), where scopeId is messageId.
+ * `sequenceScopeId` is explicit on new envelopes; messageId is the v1 replay
+ * fallback for persisted envelopes produced before that field existed.
+ */
+export function resolveMessageEventSequenceIdentity(value = {}) {
+  const sequenceDomain = text(value?.sequenceDomain) || MESSAGE_EVENT_SEQUENCE_DOMAIN;
+  const sequenceScopeId = text(value?.sequenceScopeId || value?.messageId);
+  const sequence = Number(value?.sequence || 0);
+  return Object.freeze({
+    sequenceDomain,
+    sequenceScopeKind: MESSAGE_EVENT_SEQUENCE_SCOPE_KIND,
+    sequenceScopeId,
+    sequence,
+    sequenceKey: sequenceDomain && sequenceScopeId
+      ? `${sequenceDomain}:${sequenceScopeId}`
+      : "",
+  });
+}
 
 export function isMessageEventEnvelope(value = {}) {
   return Boolean(
@@ -46,6 +68,16 @@ export function isMessageEventEnvelope(value = {}) {
 export function validateMessageEventEnvelope(value = {}) {
   const errors = [];
   if (!isMessageEventEnvelope(value)) errors.push("invalid_envelope_identity");
+  const sequenceIdentity = resolveMessageEventSequenceIdentity(value);
+  const declaredSequenceDomain = text(value?.sequenceDomain);
+  const declaredSequenceScopeId = text(value?.sequenceScopeId);
+  if (declaredSequenceDomain && declaredSequenceDomain !== MESSAGE_EVENT_SEQUENCE_DOMAIN) {
+    errors.push("sequence_domain_mismatch");
+  }
+  if (declaredSequenceScopeId && declaredSequenceScopeId !== text(value?.messageId)) {
+    errors.push("sequence_scope_mismatch");
+  }
+  if (!sequenceIdentity.sequenceKey) errors.push("missing_sequence_scope");
   const eventType = text(value?.eventType);
   if (!MESSAGE_EVENT_TYPES.has(eventType)) errors.push("unsupported_event_type");
   if (eventType === MESSAGE_EVENT_TYPE.LLM_DELTA && typeof value?.text !== "string") {

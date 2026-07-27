@@ -28,7 +28,9 @@ test("authoritative message events declare the message-event sequence domain", (
   }, runtime, "llm_delta", { text: "token" });
 
   assert.equal(envelope.sequenceDomain, "message-event");
+  assert.equal(envelope.sequenceScopeId, envelope.messageId);
   assert.equal(emitted[0]?.data?.sequenceDomain, "message-event");
+  assert.equal(emitted[0]?.data?.sequenceScopeId, envelope.messageId);
 });
 
 test("each assistant message owns an independent contiguous event sequence", () => {
@@ -47,7 +49,9 @@ test("each assistant message owns an independent contiguous event sequence", () 
     [1, 2, 1],
   );
   assert.equal(first.messageId, firstMessageId);
+  assert.equal(first.sequenceScopeId, firstMessageId);
   assert.equal(next.messageId, nextMessageId);
+  assert.equal(next.sequenceScopeId, nextMessageId);
 });
 
 test("authoritative message envelope validation rejects partial events", () => {

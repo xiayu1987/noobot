@@ -70,6 +70,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     frames.forEach((frame, index) => {
       expect(frame.event).toBe("subagent_message_event");
       expect(frame.data.event).toEqual(produced[index]);
+      expect(frame.data.event.sequenceScopeId).toBe(messageId);
       expect(frame.data.route).not.toHaveProperty("messageId");
       expect(deliverPacketToStore(store, frame).applied).toBe(true);
     });

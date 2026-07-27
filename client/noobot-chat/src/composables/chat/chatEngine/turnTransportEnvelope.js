@@ -6,6 +6,7 @@
 import {
   isMessageEventEnvelope,
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  resolveMessageEventSequenceIdentity,
 } from "@noobot/shared/message-event-protocol";
 
 export const TURN_TRANSPORT_SEQUENCE_DOMAIN = "transport";
@@ -41,8 +42,8 @@ export function normalizeTurnTransportEnvelope({
     },
     messageEventCursor: messageEvent
       ? {
+          ...resolveMessageEventSequenceIdentity(messageEvent),
           sequenceDomain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-          sequence: Number(messageEvent.sequence || 0),
           eventId: text(messageEvent.eventId),
           messageId: text(messageEvent.messageId),
         }

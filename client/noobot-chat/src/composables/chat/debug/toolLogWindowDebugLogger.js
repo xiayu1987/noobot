@@ -19,6 +19,7 @@ export function summarizeToolLogWindowItem(item = {}, index = 0) {
     eventType: text(item?.eventType),
     sequence: item?.sequence ?? item?.seq ?? null,
     sequenceDomain: text(item?.sequenceDomain),
+    sequenceScopeId: text(item?.sequenceScopeId || item?.sequenceScope || item?.messageId),
     authority: text(item?.authority),
     eventId: text(item?.eventId || item?.id),
     toolCallId: text(item?.toolCallId || item?.tool_call_id),

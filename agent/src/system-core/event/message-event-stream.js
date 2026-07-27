@@ -88,6 +88,7 @@ export function emitMessageEvent(eventListener, runtime = {}, eventType = "", da
     dialogProcessId: text(data?.dialogProcessId || state?.dialogProcessId || state?.currentDialogProcessId),
     turnScopeId: text(data?.turnScopeId || state?.turnScopeId || state?.config?.turnScopeId || runtime?.runConfig?.turnScopeId),
     messageId,
+    sequenceScopeId: messageId,
     ...(toolCallId ? { toolCallId } : {}),
     sequence,
     timestamp: new Date().toISOString(),

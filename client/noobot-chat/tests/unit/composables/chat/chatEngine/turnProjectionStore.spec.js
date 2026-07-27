@@ -124,6 +124,80 @@ describe("turnProjectionStore convergence", () => {
     expect(target.toolTimeline[0]).toMatchObject({ status: "completed" });
   });
 
+  it("aggregates independently sequenced assistant messages into one live turn", () => {
+    const target = {
+      ...identity,
+      id: "optimistic-turn-message",
+      turnPlaceholder: true,
+      content: "",
+    };
+    const multiMessageEvents = [
+      envelope({
+        messageId: "assistant-tools-1", eventId: "tools-1-start-a",
+        eventType: "tool_call_start", sequence: 1,
+        timestamp: "2026-01-01T00:00:01.000Z",
+        tool: "read_file", toolCallId: "call-a", args: {},
+      }),
+      envelope({
+        messageId: "assistant-tools-1", eventId: "tools-1-start-b",
+        eventType: "tool_call_start", sequence: 2,
+        timestamp: "2026-01-01T00:00:02.000Z",
+        tool: "read_file", toolCallId: "call-b", args: {},
+      }),
+      envelope({
+        messageId: "assistant-tools-1", eventId: "tools-1-end-a",
+        eventType: "tool_call_end", sequence: 3,
+        timestamp: "2026-01-01T00:00:03.000Z",
+        tool: "read_file", toolCallId: "call-a", result: { ok: true },
+      }),
+      envelope({
+        messageId: "assistant-tools-1", eventId: "tools-1-end-b",
+        eventType: "tool_call_end", sequence: 4,
+        timestamp: "2026-01-01T00:00:04.000Z",
+        tool: "read_file", toolCallId: "call-b", result: { ok: true },
+      }),
+      envelope({
+        messageId: "assistant-tools-2", eventId: "tools-2-start",
+        eventType: "tool_call_start", sequence: 1,
+        timestamp: "2026-01-01T00:00:05.000Z",
+        tool: "write_file", toolCallId: "call-c", args: {},
+      }),
+      envelope({
+        messageId: "assistant-tools-2", eventId: "tools-2-end",
+        eventType: "tool_call_end", sequence: 2,
+        timestamp: "2026-01-01T00:00:06.000Z",
+        tool: "write_file", toolCallId: "call-c", result: { ok: true },
+      }),
+      envelope({
+        messageId: "assistant-final", eventId: "final-content",
+        eventType: "main_model_content", sequence: 1,
+        timestamp: "2026-01-01T00:00:07.000Z",
+        text: "finished", output: "finished",
+      }),
+    ];
+
+    for (const eventItem of multiMessageEvents) {
+      expect(dispatchTurnEnvelope({
+        targetMessage: target,
+        envelope: eventItem,
+        classifyRealtimeLog,
+        source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
+      })).toMatchObject({ applied: true, result: "applied" });
+    }
+
+    expect(target.content).toBe("finished");
+    expect(target.toolTimeline).toHaveLength(3);
+    expect(target.toolTimeline.map((item) => item.status)).toEqual([
+      "completed", "completed", "completed",
+    ]);
+    expect(target.messageEventState.sequenceLanesByScopeId).toMatchObject({
+      "assistant-tools-1": { lastSequence: 4 },
+      "assistant-tools-2": { lastSequence: 2 },
+      "assistant-final": { lastSequence: 1, finalContentSequence: 1 },
+    });
+    expect(target.messageEventState.consumedEventIds).toHaveLength(7);
+  });
+
   it("hydrates idempotently, replays buffered increments, and excludes Turn UI state", () => {
     const target = message();
     replay(target, events.slice(0, 1), TURN_PROJECTION_SOURCE.RECONNECT_LIVE);

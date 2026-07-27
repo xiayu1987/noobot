@@ -264,4 +264,5 @@ test("non-streaming delivery suppresses only deltas and preserves root and workf
   ]);
   assert.equal(routed[0].suppressionReason, "non_streaming_delta");
   assert.equal(routed[1].textStreamingEnabled, false);
+  assert.equal(routed[1].sequenceScopeId, "msg-1");
 });

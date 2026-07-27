@@ -7,9 +7,14 @@ import {
   MESSAGE_CONTENT_EFFECT,
   MESSAGE_EVENT_TYPE,
   projectMessageEventContent,
+  resolveMessageEventSequenceIdentity,
   validateMessageEventEnvelope,
 } from "@noobot/shared/message-event-protocol";
-import { initializeMessageEventState } from "../../infra/messageEventState";
+import {
+  initializeMessageEventState,
+  resolveMessageEventLaneState,
+  syncMessageEventAggregateState,
+} from "../../infra/messageEventState";
 import {
   reduceToolTimeline,
   selectToolTimelineLogs,
@@ -37,13 +42,17 @@ export const MESSAGE_EVENT_REDUCE_RESULT = Object.freeze({
   MESSAGE_IDENTITY_CONFLICT: "message_identity_conflict",
 });
 
-function stateFor(message) {
-  return initializeMessageEventState(message).messageEventState;
+function stateFor(message, event) {
+  return resolveMessageEventLaneState(message, event);
 }
 
 function conflicts(message, event) {
   const messageId = text(message.messageId || message.id);
-  if (messageId && messageId !== text(event.messageId)) return true;
+  if (
+    messageId &&
+    messageId !== text(event.messageId) &&
+    message?.turnPlaceholder !== true
+  ) return true;
   const messageTurn = text(message.turnScopeId || message.turn_scope_id);
   const eventTurn = text(event.turnScopeId);
   // Authoritative turn-scoped events must never be reduced into an
@@ -60,9 +69,16 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   if (!targetMessage) return { result: MESSAGE_EVENT_REDUCE_RESULT.TARGET_MISSING };
   if (conflicts(targetMessage, event)) return { result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT };
 
-  const state = stateFor(targetMessage);
-  if (state.consumedEventIds.includes(event.eventId)) return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
+  const aggregateState = initializeMessageEventState(targetMessage).messageEventState;
+  if (aggregateState.consumedEventIds.includes(event.eventId)) {
+    return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
+  }
+  const state = stateFor(targetMessage, event);
+  if (state.consumedEventIds.includes(event.eventId)) {
+    return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
+  }
   const sequence = Number(event.sequence);
+  const sequenceScopeId = resolveMessageEventSequenceIdentity(event).sequenceScopeId;
   const lastSequence = Number(state.lastSequence || 0);
   if (lastSequence && sequence <= lastSequence) return { result: MESSAGE_EVENT_REDUCE_RESULT.STALE };
   const gap = Boolean(lastSequence && sequence > lastSequence + 1);
@@ -98,11 +114,13 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
             ...log,
             eventId: event.eventId,
             sequence: event.sequence,
+            sequenceScopeId,
             authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
             sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
           }
         : {
             ...event,
+            sequenceScopeId,
             authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
             sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
           },
@@ -121,5 +139,6 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   if (event.dialogProcessId && !targetMessage.dialogProcessId) targetMessage.dialogProcessId = event.dialogProcessId;
   state.lastSequence = sequence;
   state.consumedEventIds = [...state.consumedEventIds, event.eventId].slice(-1000);
+  syncMessageEventAggregateState(targetMessage);
   return { result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
 }

@@ -27,6 +27,8 @@ import {
   MESSAGE_CONTENT_EFFECT,
   projectMessageEventContent,
   projectMessageEventToolFacets,
+  resolveMessageEventSequenceIdentity,
+  validateMessageEventEnvelope,
 } from "@noobot/shared/message-event-protocol";
 import {
   compareWorkflowRuntimeFacts,
@@ -60,6 +62,22 @@ function isSubSessionTerminalStatus(value) {
 
 function eventTime(eventData = {}) {
   return eventData?.timestamp || eventData?.updatedAt || eventData?.createdAt || new Date().toISOString();
+}
+
+function compareMessageEventOrder(left = {}, right = {}) {
+  const leftIdentity = resolveMessageEventSequenceIdentity(left);
+  const rightIdentity = resolveMessageEventSequenceIdentity(right);
+  if (
+    leftIdentity.sequenceKey &&
+    leftIdentity.sequenceKey === rightIdentity.sequenceKey &&
+    leftIdentity.sequence !== rightIdentity.sequence
+  ) return leftIdentity.sequence - rightIdentity.sequence;
+  const leftTime = Date.parse(text(left?.timestamp || left?.updatedAt || left?.createdAt));
+  const rightTime = Date.parse(text(right?.timestamp || right?.updatedAt || right?.createdAt));
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  return 0;
 }
 
 function projectSubSessionTurnState(currentSession = {}, eventData = {}) {
@@ -190,6 +208,7 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
   const { toolCall: canonicalToolCall, toolResult: canonicalToolResult } =
     projectMessageEventToolFacets(eventData);
   const status = text(eventData?.status || eventData?.state || currentMessage?.status);
+  const sequenceIdentity = resolveMessageEventSequenceIdentity(eventData);
   return {
     ...(currentMessage || {}),
     ...(eventData?.message && typeof eventData.message === "object" ? eventData.message : {}),
@@ -213,6 +232,7 @@ function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessa
     revision: Number(eventData?.revision ?? currentMessage?.revision ?? 0),
     sequence: Number(eventData?.sequence ?? eventData?.seq ?? currentMessage?.sequence ?? 0),
     sequenceDomain: text(eventData?.sequenceDomain || currentMessage?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+    sequenceScopeId: sequenceIdentity.sequenceScopeId || text(currentMessage?.sequenceScopeId),
     ...(replaceContent ? { finalContentSequence: Number(eventData?.sequence || 0) } : {}),
     firstSequence: Number(currentMessage?.firstSequence ?? eventData?.sequence ?? eventData?.seq ?? 0),
     status,
@@ -267,6 +287,7 @@ function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId
     firstSequence: realtime.firstSequence,
     revision: realtime.revision,
     sequenceDomain: text(realtime.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+    sequenceScopeId: text(realtime.sequenceScopeId || merged.sequenceScopeId || canonicalMessageId),
   };
 }
 
@@ -278,6 +299,7 @@ function normalizeSubSessionSnapshotMessage(snapshot = {}) {
     firstSequence: _firstSequence,
     revision: _revision,
     sequenceDomain: _sequenceDomain,
+    sequenceScopeId: _sequenceScopeId,
     ...content
   } = snapshot && typeof snapshot === "object" ? snapshot : {};
   return content;
@@ -602,6 +624,17 @@ export const useChatStore = defineStore("chat", () => {
     if (!isMessageEventEnvelope(eventData)) {
       return { applied: false, reason: "not_authoritative_message_event" };
     }
+    const envelopeValidation = validateMessageEventEnvelope(eventData);
+    const sequenceIdentityErrors = envelopeValidation.errors.filter((error) =>
+      String(error).startsWith("sequence_") || error === "missing_sequence_scope",
+    );
+    if (sequenceIdentityErrors.length) {
+      return {
+        applied: false,
+        reason: "invalid_authoritative_message_event",
+        errors: sequenceIdentityErrors,
+      };
+    }
     const sequenceDomain = text(eventData?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE;
     if (sequenceDomain !== WORKFLOW_SEQUENCE_DOMAIN.MESSAGE) {
       return { applied: false, reason: "sequence_domain_mismatch" };
@@ -657,8 +690,9 @@ export const useChatStore = defineStore("chat", () => {
       if (existingIndex >= 0) messages[existingIndex] = nextMessage;
       else messages.push(nextMessage);
     }
-    messages.sort((a = {}, b = {}) => Number(a.firstSequence || a.sequence || 0) - Number(b.firstSequence || b.sequence || 0));
+    messages.sort(compareMessageEventOrder);
     const turnState = projectSubSessionTurnState(currentSession, eventData);
+    const incomingSequenceIdentity = resolveMessageEventSequenceIdentity(incoming);
     const nextSession = {
       ...currentSession,
       sessionId,
@@ -673,8 +707,19 @@ export const useChatStore = defineStore("chat", () => {
       turnStatuses: turnState.turnStatuses,
       turnTimings: turnState.turnTimings,
       eventsById: { ...(currentSession.eventsById || {}), ...(eventId ? { [eventId]: { ...eventData, eventId } } : {}) },
+      // Compatibility summary only. It is not an ordering cursor because
+      // message-event sequences restart independently for every scope key.
       sequence: Math.max(Number(currentSession.sequence || 0), Number(eventData?.sequence || 0)),
       sequenceDomain,
+      sequenceByScopeKey: {
+        ...(currentSession.sequenceByScopeKey || {}),
+        [incomingSequenceIdentity.sequenceKey]: Math.max(
+          Number(currentSession.sequenceByScopeKey?.[
+            incomingSequenceIdentity.sequenceKey
+          ] || 0),
+          Number(eventData?.sequence || 0),
+        ),
+      },
       sequenceByDomain: {
         ...(currentSession.sequenceByDomain || {}),
         [WORKFLOW_SEQUENCE_DOMAIN.MESSAGE]: Math.max(
@@ -808,6 +853,7 @@ export const useChatStore = defineStore("chat", () => {
       sequence: Number(current.sequence || 0),
       sequenceDomain: text(current.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
       sequenceByDomain: { ...(current.sequenceByDomain || {}) },
+      sequenceByScopeKey: { ...(current.sequenceByScopeKey || {}) },
       revision: Number(current.revision || 0),
       revisionByDomain: { ...(current.revisionByDomain || {}) },
       turnStatuses: isSubSessionTerminalStatus(currentStatus) && !isSubSessionTerminalStatus(snapshotStatus)
