@@ -11,8 +11,8 @@ import {
   resolveCanonicalWorkflowNodeItem,
   shouldRejectRootSessionProjection,
   useWorkflowNodeSessionViewer,
-} from "../components/workflow-message-card/useWorkflowNodeSessionViewer.js";
-import { writeWorkflowDrawerHistory } from "../components/workflow-message-card/workflowDrawerHistory.js";
+} from "../composables/useWorkflowNodeSessionViewer.js";
+import { writeWorkflowDrawerHistory } from "../services/workflowDrawerHistory.js";
 
 vi.mock("element-plus", () => ({
   ElMessage: { warning: vi.fn() },

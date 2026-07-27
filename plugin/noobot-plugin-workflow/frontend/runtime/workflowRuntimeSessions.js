@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { collectWorkflowDialogProcessIds, resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+import { collectWorkflowDialogProcessIds, resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
 
 function makeNodeSessionFromRun(item = {}, workflowPayload) {
   const step = item?.step && typeof item.step === "object" ? item.step : {};

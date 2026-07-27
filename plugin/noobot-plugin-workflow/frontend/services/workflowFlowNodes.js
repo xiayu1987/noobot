@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { resolveActionRuntimeStatus } from "./workflowRuntimeStatus.js";
-import { firstRuntimeStep, stripRuntimeInternal } from "./workflowRuntimeSteps.js";
+import { resolveActionRuntimeStatus } from "../runtime/workflowRuntimeStatus.js";
+import { firstRuntimeStep, stripRuntimeInternal } from "../runtime/workflowRuntimeSteps.js";
 
 function buildFlowNodeFromRuntime({ runtime = {}, index = 0, semanticNodeMap, resolveStepStatus }) {
   const cleanRuntime = stripRuntimeInternal(runtime);

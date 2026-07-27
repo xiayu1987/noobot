@@ -5,10 +5,10 @@
 -->
 <script setup>
 import { onMounted, watch } from "vue";
-import { useWorkflowLocale } from "../i18n.js";
+import { useWorkflowLocale } from "../i18n/index.js";
 import WorkflowCardPreview from "./workflow-message-card/WorkflowCardPreview.vue";
 import WorkflowNodeSessionDrawer from "./workflow-message-card/WorkflowNodeSessionDrawer.vue";
-import { useWorkflowMessageCardState } from "./workflow-message-card/useWorkflowMessageCardState.js";
+import { useWorkflowMessageCardState } from "../composables/useWorkflowMessageCardState.js";
 
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },

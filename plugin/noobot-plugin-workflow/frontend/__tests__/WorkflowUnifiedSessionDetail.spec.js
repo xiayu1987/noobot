@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildUnifiedSessionDetail,
   projectTurnStatusOntoAssistant,
-} from "../components/workflow-message-card/workflowUnifiedSessionDetail.js";
+} from "../runtime/workflowUnifiedSessionDetail.js";
 
 const childIdentity = {
   sessionId: "child-session",

@@ -7,27 +7,13 @@ import { ThinkingPanel } from "noobot-chat/plugin-api/chat-ui";
 import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
 import MessageAttachments from "./components/MessageAttachments.vue";
 import HarnessModelExtension from "./components/HarnessModelExtension.vue";
+import { createThinkingDetailService } from "./services/thinkingDetailService.js";
 
 export function matchesThinkingPanel(messageItem = {}) {
   return messageItem?.role === "assistant";
 }
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
-
-function createThinkingDetailService(authenticatedGet) {
-  if (typeof authenticatedGet !== "function") return null;
-  return Object.freeze({
-    getDetail({ userId = "", sessionId = "", dialogProcessId = "", turnScopeId = "" } = {}) {
-      const query = new URLSearchParams();
-      if (String(dialogProcessId).trim()) query.set("dialogProcessId", String(dialogProcessId).trim());
-      if (String(turnScopeId).trim()) query.set("turnScopeId", String(turnScopeId).trim());
-      const suffix = query.size ? `?${query.toString()}` : "";
-      return authenticatedGet(
-        `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/thinking-detail${suffix}`,
-      );
-    },
-  });
-}
 
 export function registerFrontendPlugin(ctx = {}) {
   const contribute = ctx?.contributeExtension;

@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { computed } from "vue";
-import { useHarnessLocale } from "../i18n.js";
+import { useHarnessLocale } from "../i18n/index.js";
 
 const props = defineProps({
   modelOptions: { type: Array, default: () => [] },

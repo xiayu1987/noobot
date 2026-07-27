@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { ref } from "vue";
-import { projectWorkflowMessageIdentity } from "../components/workflow-message-card/useWorkflowMeta.js";
-import { createRuntimeNodeSessions } from "../components/workflow-message-card/workflowRuntimeSessions.js";
+import { projectWorkflowMessageIdentity } from "../composables/useWorkflowMeta.js";
+import { createRuntimeNodeSessions } from "../runtime/workflowRuntimeSessions.js";
 
 describe("workflow runtime identity projection", () => {
   it("restores a missing persisted workflowRunId from the outer Turn envelope", () => {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
 
 const PSEUDO_ROUTE_PANEL_KEY = "panel";
 const PSEUDO_ROUTE_WORKFLOW_PANEL = "workflow-node-session";

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createWorkflowNodeViewTransaction } from "../components/workflow-message-card/workflowNodeViewTransaction.js";
+import { createWorkflowNodeViewTransaction } from "../runtime/workflowNodeViewTransaction.js";
 
 describe("workflow node view transaction", () => {
   it("rejects an older generation even when the same step owner is reloaded", () => {

@@ -5,14 +5,14 @@
 -->
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { useWorkflowLocale } from "../../i18n.js";
+import { useWorkflowLocale } from "../../i18n/index.js";
 import {
   BaseEmptyHint,
   BaseZoomControls,
 } from "noobot-chat/plugin-api/ui";
 import WorkflowGraphNode from "./WorkflowGraphNode.vue";
 import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
-import { resolveWorkflowDialogProcessId } from "../workflow-message-card/workflowDialogProcessIdCompat.js";
+import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessIdCompat.js";
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
