@@ -6,6 +6,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { HTTP_STATUS } from "noobot-agent/constants";
+import { RUNTIME_EVENT_CATEGORIES, RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEvent } from "@noobot/runtime-events";
 import { readSessionArtifactSnapshot } from "noobot-agent/session";
 import {
   buildThinkingDetailPayload,
@@ -79,6 +80,14 @@ export function registerServiceRoutes(app, context = {}) {
     return { registered: false, routes: [] };
   }
   const { bot = null, translateText = null } = context;
+  const logDetail = ({ userId = "", sessionId = "", dialogProcessId = "", traceId = "", event = "", level = "debug", data = {} } = {}) =>
+    writeRoutedRuntimeEvent({
+      scope: "session", source: "service", channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.DEBUG, level, debugType: "workflow-diagnostics",
+      event, userId: String(userId || "").trim(), sessionId: String(sessionId || "").trim(),
+      dialogProcessId: String(dialogProcessId || "").trim(),
+      data: { traceId: String(traceId || "").trim(), ...(data && typeof data === "object" ? data : {}) },
+    });
 
   const sessionDetailPaths = [
     "/internal/workflow/session/:userId/:sessionId/:dialogProcessId",
@@ -86,6 +95,7 @@ export function registerServiceRoutes(app, context = {}) {
   ];
   registerGet(app, sessionDetailPaths, jsonRoute(async (req, res) => {
     const { userId, sessionId, dialogProcessId } = req.params;
+    const traceId = normalizeRouteText(req.query?.traceId);
     const workflowDir = resolveWorkflowSessionDir({
       bot,
       userId,
@@ -94,8 +104,26 @@ export function registerServiceRoutes(app, context = {}) {
       translateText,
       locale: req.locale,
     });
-    const { session, sessionSummary, task, execution, executionLogs, meta } =
-      await readSessionArtifactSnapshot({ outputDir: workflowDir });
+    let directoryEntries = [];
+    try { directoryEntries = await fs.readdir(workflowDir); } catch {}
+    void logDetail({ userId, sessionId, dialogProcessId, traceId,
+      event: "service.workflowNodeDetail.requestResolved", data: {
+        workflowDir, directoryExists: directoryEntries.length > 0, directoryEntries,
+        hasExecution: directoryEntries.includes("execution.json"), hasMeta: directoryEntries.includes("meta.json"),
+        hasSessionSummary: directoryEntries.includes("session-summary.json"),
+      } });
+    let snapshot;
+    try {
+      snapshot = await readSessionArtifactSnapshot({ outputDir: workflowDir });
+    } catch (error) {
+      void logDetail({ userId, sessionId, dialogProcessId, traceId,
+        event: "service.workflowNodeDetail.snapshotFailed", level: "error", data: {
+          workflowDir, directoryEntries, errorName: String(error?.name || "Error"),
+          errorMessage: String(error?.message || error || ""), errorCode: String(error?.code || ""),
+        } });
+      throw error;
+    }
+    const { session, sessionSummary, task, execution, executionLogs, meta } = snapshot;
     const childSessionId = String(sessionSummary?.sessionId || session?.sessionId || "").trim();
     const scopedExecutionLogs = Array.isArray(executionLogs) ? executionLogs : [];
     const restoredExecutionLogs = scopedExecutionLogs.length
@@ -105,6 +133,15 @@ export function registerServiceRoutes(app, context = {}) {
           rootSessionId: sessionId,
           childSessionId,
         });
+    void logDetail({ userId, sessionId, dialogProcessId, traceId,
+      event: "service.workflowNodeDetail.snapshotLoaded", data: {
+        workflowDir, childSessionId,
+        snapshotSessionId: String(session?.sessionId || ""),
+        summarySessionId: String(sessionSummary?.sessionId || ""),
+        executionSessionId: String(execution?.sessionId || ""),
+        messageCount: Array.isArray(sessionSummary?.messages) ? sessionSummary.messages.length : Array.isArray(session?.messages) ? session.messages.length : 0,
+        executionLogCount: restoredExecutionLogs.length,
+      } });
     res.json({
       ok: true,
       userId: String(userId || "").trim(),

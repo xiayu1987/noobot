@@ -73,11 +73,14 @@ test("workflow node state repository commits running and terminal with monotonic
     status: WORKFLOW_NODE_STATUS.SUCCEEDED,
     expectedRevision: 2,
     sessionId: "child-a",
+    agentDialogProcessId: "actual-dialog-a",
   });
   assert.equal(succeeded.node.status, WORKFLOW_NODE_STATUS.SUCCEEDED);
   assert.equal(succeeded.node.revision, 3);
   assert.equal(succeeded.node.sequence, 4);
   assert.equal(succeeded.node.sessionId, "child-a");
+  assert.equal(succeeded.node.dialogProcessId, nodes[0].dialogProcessId);
+  assert.equal(succeeded.node.agentDialogProcessId, "actual-dialog-a");
   assert.ok(succeeded.node.completedAt);
 });
 

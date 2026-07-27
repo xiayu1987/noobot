@@ -22,7 +22,10 @@
   "entry": "src/index.js",
   "frontend": {
     "apiVersion": "1",
-    "entry": "frontend/index.js"
+    "entry": "frontend/index.js",
+    "authenticatedRoutePatterns": [
+      "/api/internal/session/:userId/:sessionId/thinking-detail"
+    ]
   },
   "enabledByDefault": true
 }

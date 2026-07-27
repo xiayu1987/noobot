@@ -26,7 +26,11 @@
   "entry": "src/index.js",
   "frontend": {
     "apiVersion": "1",
-    "entry": "frontend/index.js"
+    "entry": "frontend/index.js",
+    "authenticatedRoutePatterns": [
+      "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId",
+      "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId/thinking-detail"
+    ]
   },
   "enabledByDefault": true
 }

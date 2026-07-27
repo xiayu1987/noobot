@@ -14,11 +14,26 @@ export function matchesThinkingPanel(messageItem = {}) {
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
+function createThinkingDetailService(authenticatedGet) {
+  if (typeof authenticatedGet !== "function") return null;
+  return Object.freeze({
+    getDetail({ userId = "", sessionId = "", dialogProcessId = "", turnScopeId = "" } = {}) {
+      const query = new URLSearchParams();
+      if (String(dialogProcessId).trim()) query.set("dialogProcessId", String(dialogProcessId).trim());
+      if (String(turnScopeId).trim()) query.set("turnScopeId", String(turnScopeId).trim());
+      const suffix = query.size ? `?${query.toString()}` : "";
+      return authenticatedGet(
+        `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/thinking-detail${suffix}`,
+      );
+    },
+  });
+}
+
 export function registerFrontendPlugin(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
   const attachmentService = ctx?.services?.attachments || null;
-  const thinkingDetailService = ctx?.services?.thinkingDetails || null;
+  const thinkingDetailService = createThinkingDetailService(ctx?.services?.authenticatedRequest?.get);
   if (typeof contribute !== "function" || !points) {
     throw new Error("frontend contribution API is required");
   }

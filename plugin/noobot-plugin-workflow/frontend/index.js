@@ -12,6 +12,39 @@ export const FRONTEND_PLUGIN_API_VERSION = "1";
 const WORKFLOW_NODE_STATE_EVENT = "workflow_node_state_committed";
 const WORKFLOW_PLANNING_EVENT = "workflow_planning_message_prepared";
 
+function requireAuthenticatedGet(get) {
+  if (typeof get !== "function") {
+    throw new Error("authenticated HTTP capability is required");
+  }
+  return get;
+}
+
+function createWorkflowSessionService(authenticatedGet) {
+  const request = requireAuthenticatedGet(authenticatedGet);
+  return Object.freeze({
+    getDetail({ userId = "", sessionId = "", dialogProcessId = "", traceId = "" } = {}) {
+      const query = String(traceId || "").trim()
+        ? `?traceId=${encodeURIComponent(String(traceId).trim())}`
+        : "";
+      return request(
+        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(dialogProcessId)}${query}`,
+      );
+    },
+    getThinkingDetail({
+      userId = "", sessionId = "", dialogProcessId = "", routeDialogProcessId = "", turnScopeId = "",
+    } = {}) {
+      const routeId = String(routeDialogProcessId || dialogProcessId).trim();
+      const query = new URLSearchParams();
+      if (String(dialogProcessId).trim()) query.set("dialogProcessId", String(dialogProcessId).trim());
+      if (String(turnScopeId).trim()) query.set("turnScopeId", String(turnScopeId).trim());
+      const suffix = query.size ? `?${query.toString()}` : "";
+      return request(
+        `/api/internal/workflow/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/${encodeURIComponent(routeId)}/thinking-detail${suffix}`,
+      );
+    },
+  });
+}
+
 function routeWorkflowRuntimeEvent({ event, data = {}, context = {} } = {}) {
   if (![WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT].includes(event)) return false;
   const {
@@ -64,7 +97,7 @@ function isWorkflowMessageLike(messageItem = {}) {
 export function registerFrontendPlugin(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
-  const workflowSessionService = ctx?.services?.workflowSessions;
+  const authenticatedGet = ctx?.services?.authenticatedRequest?.get;
   if (typeof contribute !== "function" || !points) {
     throw new Error("frontend contribution API is required");
   }
@@ -85,7 +118,7 @@ export function registerFrontendPlugin(ctx = {}) {
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},
           userId: String(context?.userId || ""),
-          workflowSessionService,
+          workflowSessionService: createWorkflowSessionService(authenticatedGet),
           renderMarkdown: context?.renderMarkdown,
           formatTime: context?.formatTime,
           formatFileSize: context?.formatFileSize,

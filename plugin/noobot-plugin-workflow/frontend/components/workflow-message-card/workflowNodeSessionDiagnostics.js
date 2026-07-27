@@ -3,12 +3,34 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
+import {
+  resolveWorkflowDialogProcessId,
+  summarizeWorkflowDialogProcessIdFields,
+} from "./workflowDialogProcessIdCompat.js";
 import {
   resolveIsolatedNodeSessionId,
   resolveRuntimeNodeSession,
 } from "./workflowUnifiedSessionDetail.js";
 import { workflowSessionText as text } from "./workflowNodeSessionProjection.js";
+
+let workflowNodeDetailTraceSequence = 0;
+
+export function createWorkflowNodeDetailTraceId() {
+  workflowNodeDetailTraceSequence += 1;
+  return `workflow-node-detail-${Date.now().toString(36)}-${workflowNodeDetailTraceSequence.toString(36)}`;
+}
+
+export function summarizeWorkflowNodeIdentity(node = {}) {
+  return {
+    sessionId: text(node?.sessionId),
+    nodeSessionId: text(node?.nodeSessionId),
+    ...summarizeWorkflowDialogProcessIdFields(node),
+    turnScopeId: text(node?.turnScopeId),
+    workflowRunId: text(node?.workflowRunId),
+    nodeExecutionId: text(node?.nodeExecutionId),
+    activeChildExecutionId: text(node?.activeChildExecutionId || node?.childExecutionId),
+  };
+}
 
 export function logWorkflowNodeDetailProjection({ props, runtimeNodeSessions }, stage = "", nodeItem = {}, detail = {}) {
   const runtimeNode = resolveRuntimeNodeSession(nodeItem, runtimeNodeSessions);
