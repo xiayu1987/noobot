@@ -13,7 +13,7 @@ import { useWorkflowMessageCardState } from "./workflow-message-card/useWorkflow
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
   userId: { type: String, default: "" },
-  authFetch: { type: Function, default: null },
+  workflowSessionService: { type: Object, required: true },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, default: (value = 0) => `${Number(value || 0)} B` },
@@ -116,7 +116,6 @@ const {
     :node-session-all-messages="nodeSessionAllMessages"
     :selected-node-session-docs="selectedNodeSessionDocs"
     :user-id="userId"
-    :auth-fetch="authFetch"
     :render-markdown="renderMarkdown"
     :format-time="formatTime"
     :format-file-size="formatFileSize"

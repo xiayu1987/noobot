@@ -8,31 +8,32 @@ import { describe, expect, it, vi } from "vitest";
 import HarnessModelExtension from "../../../../../../plugin/noobot-plugin-harness/frontend/components/HarnessModelExtension.vue";
 
 function mountHarnessModelExtension(props = {}) {
+  const { pluginConfig = {}, patch = vi.fn(), ...componentProps } = props;
   return mount(HarnessModelExtension, {
     props: {
       modelOptions: [
         { label: "Main", value: "main-model" },
         { label: "Planning", value: "planning-model" },
       ],
-      pluginModelConfig: {},
       hasModelOptions: true,
-      updatePluginModelConfig: vi.fn(),
-      ...props,
+      pluginContext: {
+        config: {
+          get: () => pluginConfig,
+          patch,
+        },
+      },
+      ...componentProps,
     },
   });
 }
 
 describe("HarnessModelExtension", () => {
   it("uses a guidance analysis intensity slider instead of a fixed guidance toggle", async () => {
-    const updatePluginModelConfig = vi.fn();
     const wrapper = mountHarnessModelExtension({
-      pluginModelConfig: {
-        harness: {
+      pluginConfig: {
           stepModels: { planning: "planning-model" },
           guidance: { analysis: { turnsThreshold: 3 } },
-        },
       },
-      updatePluginModelConfig,
     });
 
     expect(wrapper.text()).toMatch(/分析强度|Analysis intensity/);
@@ -46,10 +47,8 @@ describe("HarnessModelExtension", () => {
 
   it("normalizes guidance analysis intensity to an integer from one to ten", async () => {
     const wrapper = mountHarnessModelExtension({
-      pluginModelConfig: {
-        harness: {
+      pluginConfig: {
           guidance: { analysis: { turnsThreshold: 11 } },
-        },
       },
     });
 

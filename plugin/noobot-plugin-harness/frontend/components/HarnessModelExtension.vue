@@ -9,10 +9,14 @@ import { useHarnessLocale } from "../i18n";
 
 const props = defineProps({
   modelOptions: { type: Array, default: () => [] },
-  pluginModelConfig: { type: Object, default: () => ({}) },
   hasModelOptions: { type: Boolean, default: false },
-  updatePluginModelConfig: { type: Function, default: null },
+  pluginContext: { type: Object, required: true },
 });
+
+const pluginConfig = computed(() => props.pluginContext.config.get());
+function patchPluginConfig(value = {}) {
+  props.pluginContext.config.patch(value);
+}
 
 const HARNESS_MODEL_STEPS = [
   { key: "planning", label: "Planning" },
@@ -24,7 +28,7 @@ const HARNESS_MODEL_STEPS = [
 const { translate } = useHarnessLocale();
 
 function getHarnessStepModel(stepKey = "") {
-  return String(props.pluginModelConfig?.harness?.stepModels?.[stepKey] || "").trim();
+  return String(pluginConfig.value?.stepModels?.[stepKey] || "").trim();
 }
 
 function normalizeGuidanceAnalysisIntensity(value = 10) {
@@ -50,7 +54,7 @@ function getGuidanceAnalysisTurnsThreshold() {
 
 function getGuidanceAnalysisIntensity() {
   return mapGuidanceAnalysisTurnsThresholdToIntensity(
-    props.pluginModelConfig?.harness?.guidance?.analysis?.turnsThreshold,
+    pluginConfig.value?.guidance?.analysis?.turnsThreshold,
   );
 }
 
@@ -72,44 +76,31 @@ function getModelMetaText(modelItem = {}) {
 
 function onHarnessStepModelChange(stepKey = "", value = "") {
   const key = String(stepKey || "").trim();
-  if (!key || typeof props.updatePluginModelConfig !== "function") return;
+  if (!key) return;
   if (isHarnessStepModelDisabled(key)) return;
   const nextValue = String(value || "").trim();
-  const currentConfig = props.pluginModelConfig && typeof props.pluginModelConfig === "object"
-    ? props.pluginModelConfig
-    : {};
-  const currentStepModels = currentConfig?.harness?.stepModels && typeof currentConfig.harness.stepModels === "object"
-    ? currentConfig.harness.stepModels
+  const currentConfig = pluginConfig.value;
+  const currentStepModels = currentConfig?.stepModels && typeof currentConfig.stepModels === "object"
+    ? currentConfig.stepModels
     : {};
   const nextStepModels = { ...currentStepModels };
   if (nextValue) nextStepModels[key] = nextValue;
   else delete nextStepModels[key];
-  props.updatePluginModelConfig({
-    ...currentConfig,
-    harness: {
-      ...(currentConfig.harness && typeof currentConfig.harness === "object" ? currentConfig.harness : {}),
-      stepModels: nextStepModels,
-    },
-  });
+  patchPluginConfig({ ...currentConfig, stepModels: nextStepModels });
 }
 
 function isHarnessCapabilityEnabled(capabilityKey = "") {
   const key = String(capabilityKey || "").trim();
   if (!key) return true;
-  return props.pluginModelConfig?.harness?.capabilityProfile?.[key]?.enabled !== false;
+  return pluginConfig.value?.capabilityProfile?.[key]?.enabled !== false;
 }
 
 function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
   const key = String(capabilityKey || "").trim();
-  if (!key || typeof props.updatePluginModelConfig !== "function") return;
+  if (!key) return;
   if (key === "guidance") return;
   const enabled = value !== false;
-  const currentConfig = props.pluginModelConfig && typeof props.pluginModelConfig === "object"
-    ? props.pluginModelConfig
-    : {};
-  const currentHarness = currentConfig.harness && typeof currentConfig.harness === "object"
-    ? currentConfig.harness
-    : {};
+  const currentHarness = pluginConfig.value;
   const currentProfile = currentHarness.capabilityProfile && typeof currentHarness.capabilityProfile === "object"
     ? currentHarness.capabilityProfile
     : {};
@@ -124,41 +115,26 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
   }
   if (Object.keys(nextCapability).length) nextProfile[key] = nextCapability;
   else delete nextProfile[key];
-  props.updatePluginModelConfig({
-    ...currentConfig,
-    harness: {
-      ...currentHarness,
-      capabilityProfile: nextProfile,
-    },
-  });
+  patchPluginConfig({ ...currentHarness, capabilityProfile: nextProfile });
 }
 
 function onGuidanceAnalysisIntensityChange(value = 10) {
-  if (typeof props.updatePluginModelConfig !== "function") return;
   const turnsThreshold = mapGuidanceAnalysisIntensityToTurnsThreshold(value);
-  const currentConfig = props.pluginModelConfig && typeof props.pluginModelConfig === "object"
-    ? props.pluginModelConfig
-    : {};
-  const currentHarness = currentConfig.harness && typeof currentConfig.harness === "object"
-    ? currentConfig.harness
-    : {};
+  const currentHarness = pluginConfig.value;
   const currentGuidance = currentHarness.guidance && typeof currentHarness.guidance === "object"
     ? currentHarness.guidance
     : {};
   const currentAnalysis = currentGuidance.analysis && typeof currentGuidance.analysis === "object"
     ? currentGuidance.analysis
     : {};
-  props.updatePluginModelConfig({
-    ...currentConfig,
-    harness: {
-      ...currentHarness,
-      guidance: {
+  patchPluginConfig({
+    ...currentHarness,
+    guidance: {
         ...currentGuidance,
         analysis: {
           ...currentAnalysis,
           turnsThreshold,
         },
-      },
     },
   });
 }

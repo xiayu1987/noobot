@@ -21,14 +21,6 @@ async function flushAsync() {
   }
 }
 
-function jsonResponse(data) {
-  return {
-    ok: true,
-    status: 200,
-    json: async () => data,
-  };
-}
-
 function thinkingDetailPayload(messageItem) {
   return {
     ok: true,
@@ -46,17 +38,21 @@ describe("ThinkingPanel thinking-detail recovery", () => {
   });
 
   it("loads summary-only thinking details by turnScopeId and reuses the cache across message replacement", async () => {
-    const authFetch = vi.fn(async (url) => {
-      expect(String(url)).toContain("turnScopeId=client-turn%3Arestore");
-      expect(String(url)).not.toContain("dialogProcessId=");
-      return jsonResponse(thinkingDetailPayload({
+    const getDetail = vi.fn(async (params) => {
+      expect(params).toEqual({
+        userId: "user-1",
+        sessionId: "session-restore",
+        turnScopeId: "client-turn:restore",
+        dialogProcessId: "",
+      });
+      return thinkingDetailPayload({
         role: "assistant",
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
         completedToolLogs: [
           { event: "tool_result", type: "tool_result", toolCallId: "call-1", text: "persisted-tool" },
         ],
-      }));
+      });
     });
 
     const wrapper = mountThinkingPanel({
@@ -67,12 +63,12 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       thinkingDetailCount: 1,
     }, {
       userId: "user-1",
-      authFetch,
+      thinkingDetailService: { getDetail },
       runtime: { running: false, terminal: true, startedAt: "2026-07-21T10:00:00.000Z", finishedAt: "2026-07-21T10:00:01.000Z" },
     });
 
     await flushAsync();
-    expect(authFetch).toHaveBeenCalledTimes(1);
+    expect(getDetail).toHaveBeenCalledTimes(1);
     const identity = resolveThinkingDetailIdentity({
       role: "assistant",
       sessionId: "session-restore",
@@ -101,13 +97,13 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     });
     await flushAsync();
 
-    expect(authFetch).toHaveBeenCalledTimes(1);
+    expect(getDetail).toHaveBeenCalledTimes(1);
     expect(getCachedThinkingDetail(identity)?.messageItem?.completedToolLogs?.[0]?.text)
       .toBe("persisted-tool");
   });
 
   it("does not fetch canonical details while a message is pending or local logs exist", async () => {
-    const authFetch = vi.fn(async () => jsonResponse(thinkingDetailPayload({ role: "assistant" })));
+    const getDetail = vi.fn(async () => thinkingDetailPayload({ role: "assistant" }));
 
     mountThinkingPanel({
       role: "assistant",
@@ -118,7 +114,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       thinkingDetailCount: 1,
     }, {
       userId: "user-1",
-      authFetch,
+      thinkingDetailService: { getDetail },
       runtime: { running: true, terminal: false, startedAt: "2026-07-21T10:00:00.000Z", finishedAt: "" },
     });
     await flushAsync();
@@ -132,23 +128,23 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       realtimeLogs: [{ event: "tool_result", type: "tool_result", text: "live-tool" }],
     }, {
       userId: "user-1",
-      authFetch,
+      thinkingDetailService: { getDetail },
       runtime: { running: false, terminal: true, startedAt: "2026-07-21T10:00:00.000Z", finishedAt: "2026-07-21T10:00:01.000Z" },
     });
     await flushAsync();
 
-    expect(authFetch).not.toHaveBeenCalled();
+    expect(getDetail).not.toHaveBeenCalled();
   });
 
   it("recovers scoped details when refresh omitted summary flags and runtime is stale", async () => {
-    const authFetch = vi.fn(async () => jsonResponse(thinkingDetailPayload({
+    const getDetail = vi.fn(async () => thinkingDetailPayload({
       role: "assistant",
       sessionId: "session-stale",
       turnScopeId: "client-turn:stale",
       completedToolLogs: [
         { event: "tool_result", type: "tool_result", toolCallId: "call-stale", text: "restored-after-refresh" },
       ],
-    })));
+    }));
 
     const wrapper = mountThinkingPanel({
       role: "assistant",
@@ -157,12 +153,12 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       pending: false,
     }, {
       userId: "user-1",
-      authFetch,
+      thinkingDetailService: { getDetail },
       runtime: { running: false, terminal: true, startedAt: "2026-07-21T10:00:00.000Z", finishedAt: "2026-07-21T10:00:01.000Z" },
     });
     await flushAsync();
 
-    expect(authFetch).toHaveBeenCalledTimes(1);
+    expect(getDetail).toHaveBeenCalledTimes(1);
     const staleIdentity = resolveThinkingDetailIdentity({
       role: "assistant",
       sessionId: "session-stale",

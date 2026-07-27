@@ -4,9 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 import { externalFrontendPluginEntries } from "./generated/external-entries";
-import { registerFrontendPlugin } from "./frontend-plugin-registry";
+import { contributeExtension, removePluginExtensions } from "../extensions/extension-registry";
+import { EXTENSION_POINTS } from "../extensions/extension-point-ids";
+import {
+  getWorkflowSessionDetailApi,
+  getWorkflowSessionThinkingDetailApi,
+} from "../services/api/chatApi";
+import { attachmentService } from "../services/attachmentService";
+import { thinkingDetailService } from "../services/thinkingDetailService";
 
 const REQUIRED_FRONTEND_PLUGIN_API_VERSION = "1";
+const pluginAttachmentService = Object.freeze({
+  getThumbnailBlob: (url = "") => attachmentService.getThumbnailBlob(url),
+});
+const pluginThinkingDetailService = Object.freeze({
+  getDetail: (params = {}) => thinkingDetailService.getDetail(params),
+});
 
 function normalizeApiVersion(input = "") {
   return String(input || "").trim() || REQUIRED_FRONTEND_PLUGIN_API_VERSION;
@@ -43,8 +56,20 @@ export async function registerExternalFrontendPlugins() {
       continue;
     }
     try {
+      removePluginExtensions(pluginId);
       registerFn({
-        registerFrontendPlugin,
+        contributeExtension(point, contribution = {}) {
+          return contributeExtension(point, { ...contribution, pluginId });
+        },
+        extensionPoints: EXTENSION_POINTS,
+        services: Object.freeze({
+          attachments: pluginAttachmentService,
+          thinkingDetails: pluginThinkingDetailService,
+          workflowSessions: Object.freeze({
+            getDetail: getWorkflowSessionDetailApi,
+            getThinkingDetail: getWorkflowSessionThinkingDetailApi,
+          }),
+        }),
         pluginMeta: {
           pluginId,
           pluginKey: String(item?.pluginKey || "").trim(),

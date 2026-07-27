@@ -12,9 +12,8 @@ const repoRoot = path.resolve(projectRoot, "../..");
 const pluginRoot = path.resolve(repoRoot, "plugin");
 
 const TARGET_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".vue", ".ts"]);
-const FORBIDDEN_PATTERNS = [
-  "client/noobot-chat/src/modules/",
-];
+const CLIENT_SOURCE_MARKER = "client/noobot-chat/src/";
+const PUBLIC_SOURCE_MARKER = `${CLIENT_SOURCE_MARKER}public/`;
 
 async function walkFiles(rootDir = "") {
   const output = [];
@@ -40,10 +39,13 @@ async function walkFiles(rootDir = "") {
 
 function findForbiddenHits(content = "") {
   const hits = [];
-  for (const pattern of FORBIDDEN_PATTERNS) {
-    if (content.includes(pattern)) hits.push(pattern);
+  let offset = 0;
+  while ((offset = content.indexOf(CLIENT_SOURCE_MARKER, offset)) >= 0) {
+    const candidate = content.slice(offset, offset + PUBLIC_SOURCE_MARKER.length);
+    if (candidate !== PUBLIC_SOURCE_MARKER) hits.push(CLIENT_SOURCE_MARKER);
+    offset += CLIENT_SOURCE_MARKER.length;
   }
-  return hits;
+  return [...new Set(hits)];
 }
 
 async function main() {

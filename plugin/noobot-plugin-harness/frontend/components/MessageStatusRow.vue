@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { useLocale } from "../../../../client/noobot-chat/src/shared/i18n/useLocale";
+import { useLocale } from "../../../../client/noobot-chat/src/public/locale.js";
 import { computed } from "vue";
 
 const props = defineProps({

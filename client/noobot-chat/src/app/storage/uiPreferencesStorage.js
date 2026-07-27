@@ -306,25 +306,6 @@ export function normalizeAvailableBotScenarios(definitions = {}) {
     }));
 }
 
-function collectPluginModelValues(pluginModelConfig = {}) {
-  const values = [];
-  const visit = (node) => {
-    if (typeof node === "string" || typeof node === "number") {
-      const value = normalizePreferenceString(node);
-      if (value) values.push(value);
-      return;
-    }
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    if (!node || typeof node !== "object") return;
-    Object.values(node).forEach(visit);
-  };
-  visit(normalizePluginModelConfig(pluginModelConfig));
-  return values;
-}
-
 export function normalizeModelOptionsFromEnabledModels(enabledModels = [], selectedModel = "", pluginModelConfig = {}, memoryModel = "") {
   const optionMap = new Map();
   const addOption = (rawOption = {}) => {
@@ -352,7 +333,6 @@ export function normalizeModelOptionsFromEnabledModels(enabledModels = [], selec
   (Array.isArray(enabledModels) ? enabledModels : []).forEach(addOption);
   addOption(selectedModel);
   addOption(memoryModel);
-  collectPluginModelValues(pluginModelConfig).forEach(addOption);
   return Array.from(optionMap.values());
 }
 

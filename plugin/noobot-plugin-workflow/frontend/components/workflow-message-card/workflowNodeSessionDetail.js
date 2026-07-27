@@ -3,10 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  getWorkflowSessionDetailApi,
-  getWorkflowSessionThinkingDetailApi,
-} from "../../../../../client/noobot-chat/src/services/api/chatApi.js";
+function requireSessionService(props = {}) {
+  const service = props?.workflowSessionService;
+  if (
+    typeof service?.getDetail !== "function" ||
+    typeof service?.getThinkingDetail !== "function"
+  ) {
+    throw new Error("workflow session service is unavailable");
+  }
+  return service;
+}
 
 function sessionSummaryWithoutMutableRuntime(summary = {}) {
   const {
@@ -46,14 +52,11 @@ export async function fetchExecutionSessionDetail({
   if (!props.userId || !normalizedSessionId || !normalizedRootSessionId || !normalizedDialogProcessId) {
     throw new Error(translate("workflow.nodeSessionMissing"));
   }
-  const response = await getWorkflowSessionDetailApi(
-    {
-      userId: props.userId,
-      sessionId: normalizedRootSessionId,
-      dialogProcessId: normalizedDialogProcessId,
-    },
-    { fetcher: props.authFetch || fetch },
-  );
+  const response = await requireSessionService(props).getDetail({
+    userId: props.userId,
+    sessionId: normalizedRootSessionId,
+    dialogProcessId: normalizedDialogProcessId,
+  });
   if (!response.ok) {
     throw new Error(translate("workflow.readNodeSessionFailed"));
   }
@@ -98,14 +101,11 @@ export async function fetchWorkflowNodeSessionDetail({
   dialogProcessId = "",
 }) {
   const routeDialogProcessId = String(dialogProcessId || "").trim();
-  const response = await getWorkflowSessionDetailApi(
-    {
-      userId: props.userId,
-      sessionId: rootSessionId,
-      dialogProcessId: routeDialogProcessId,
-    },
-    { fetcher: props.authFetch || fetch },
-  );
+  const response = await requireSessionService(props).getDetail({
+    userId: props.userId,
+    sessionId: rootSessionId,
+    dialogProcessId: routeDialogProcessId,
+  });
   const payload = await response.json();
   if (!payload?.ok) {
     throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
@@ -152,16 +152,13 @@ export async function fetchWorkflowNodeThinkingDetail({
   if (!props.userId || !rootSessionId || !normalizedRouteDialogProcessId) {
     throw new Error(translate("workflow.nodeSessionMissing"));
   }
-  const response = await getWorkflowSessionThinkingDetailApi(
-    {
-      userId: props.userId,
-      sessionId: rootSessionId,
-      routeDialogProcessId: normalizedRouteDialogProcessId,
-      dialogProcessId,
-      turnScopeId,
-    },
-    { fetcher: props.authFetch || fetch },
-  );
+  const response = await requireSessionService(props).getThinkingDetail({
+    userId: props.userId,
+    sessionId: rootSessionId,
+    routeDialogProcessId: normalizedRouteDialogProcessId,
+    dialogProcessId,
+    turnScopeId,
+  });
   if (!response.ok) {
     throw new Error(translate("workflow.readNodeSessionFailed"));
   }

@@ -459,8 +459,10 @@ for (const state of ["processing", "completed"]) {
     const detail = await fetchExecutionSessionDetail({
       props: {
         userId: "user-1",
-        authFetch: async (url) => {
-          calls.push(url);
+        workflowSessionService: {
+          getThinkingDetail: async () => null,
+          getDetail: async ({ userId, sessionId, dialogProcessId }) => {
+          calls.push(`/api/internal/workflow/session/${userId}/${sessionId}/${dialogProcessId}`);
           return {
             ok: true,
             async json() {
@@ -482,6 +484,7 @@ for (const state of ["processing", "completed"]) {
               };
             },
           };
+          },
         },
       },
       translate: (key) => key,
@@ -504,10 +507,13 @@ test("classifies an unmaterialized Execution session as pending", async () => {
   const detail = await fetchExecutionSessionDetail({
     props: {
       userId: "user-1",
-      authFetch: async () => ({
-        ok: true,
-        async json() { return { ok: true, workflowSession: {} }; },
-      }),
+      workflowSessionService: {
+        getThinkingDetail: async () => null,
+        getDetail: async () => ({
+          ok: true,
+          async json() { return { ok: true, workflowSession: {} }; },
+        }),
+      },
     },
     translate: (key) => key,
     sessionId: "child-session-pending",
@@ -525,10 +531,13 @@ test("classifies a materialized Execution session without messages as empty", as
   const detail = await fetchExecutionSessionDetail({
     props: {
       userId: "user-1",
-      authFetch: async () => ({
-        ok: true,
-        async json() { return { ok: true, workflowSession: { session: { sessionId: "child-session-empty", messages: [] } } }; },
-      }),
+      workflowSessionService: {
+        getThinkingDetail: async () => null,
+        getDetail: async () => ({
+          ok: true,
+          async json() { return { ok: true, workflowSession: { session: { sessionId: "child-session-empty", messages: [] } } }; },
+        }),
+      },
     },
     translate: (key) => key,
     sessionId: "child-session-empty",
@@ -543,10 +552,13 @@ test("keeps a Session service failure distinct from pending", async () => {
   await assert.rejects(() => fetchExecutionSessionDetail({
     props: {
       userId: "user-1",
-      authFetch: async () => ({
-        ok: true,
-        async json() { return { ok: false, exists: false, error: "permission denied" }; },
-      }),
+      workflowSessionService: {
+        getThinkingDetail: async () => null,
+        getDetail: async () => ({
+          ok: true,
+          async json() { return { ok: false, exists: false, error: "permission denied" }; },
+        }),
+      },
     },
     translate: (key) => key,
     sessionId: "child-session-failed",

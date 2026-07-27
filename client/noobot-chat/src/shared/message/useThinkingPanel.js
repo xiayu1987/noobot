@@ -464,7 +464,7 @@ export function useThinkingPanel(props, emit) {
           messageItem,
           dialogProcessId: identity.dialogProcessId,
           turnScopeId: identity.turnScopeId,
-          authFetch: props.authFetch,
+          thinkingDetailService: props.thinkingDetailService,
         });
         if (!detail) {
           logThinkingReplayDebug("frontend.thinkingReplay.detailRequestEmpty", {

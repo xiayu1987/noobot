@@ -5,8 +5,8 @@
 -->
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { BaseEmptyHint, BaseMessageErrorAlert } from "../../../../../client/noobot-chat/src/shared/ui";
-import AgentExecutionView from "../../../../../client/noobot-chat/src/shared/execution/AgentExecutionView.vue";
+import { BaseEmptyHint, BaseMessageErrorAlert } from "../../../../../client/noobot-chat/src/public/ui.js";
+import { AgentExecutionView } from "../../../../../client/noobot-chat/src/public/chat-ui.js";
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 
 function resolveDialogProcessId(item = {}) {
@@ -31,7 +31,6 @@ const props = defineProps({
   nodeSessionAllMessages: { type: Array, default: () => [] },
   selectedNodeSessionDocs: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
-  authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
@@ -308,7 +307,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
           :all-messages="nodeSessionAllMessages"
           :session-docs="selectedNodeSessionDocs"
           :user-id="userId"
-          :auth-fetch="authFetch"
           :render-markdown="renderMarkdown"
           :format-time="formatTime"
           :format-file-size="formatFileSize"

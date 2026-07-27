@@ -35,7 +35,6 @@ defineProps({
   canUseIDE: { type: Boolean, default: false },
   loadingSessionDetail: { type: Boolean, default: false },
   shouldRenderMessageInChat: { type: Function, required: true },
-  authFetch: { type: Function, required: true },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
@@ -180,7 +179,6 @@ defineExpose({
           :active-session="activeSession || {}"
           :should-render-message-in-chat="shouldRenderMessageInChat"
           :user-id="userId"
-          :auth-fetch="authFetch"
           :render-markdown="renderMarkdown"
           :format-time="formatTime"
           :format-file-size="formatFileSize"

@@ -5,13 +5,13 @@
 -->
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { useLocale } from "../../../../client/noobot-chat/src/shared/i18n/useLocale";
+import { useLocale } from "../../../../client/noobot-chat/src/public/locale.js";
 import {
   resolveAttachmentAccessMeta,
   resolveBaseName,
   resolveParsedResultAccessMeta,
-} from "../../../../client/noobot-chat/src/services/api/attachmentAccess";
-import { BaseAttachmentFileCard, BaseFileCardList } from "../../../../client/noobot-chat/src/shared/ui";
+} from "../../../../client/noobot-chat/src/public/attachment-domain.js";
+import { BaseAttachmentFileCard, BaseFileCardList } from "../../../../client/noobot-chat/src/public/ui.js";
 
 const props = defineProps({
   attachments: { type: Array, default: () => [] },
@@ -20,7 +20,7 @@ const props = defineProps({
   canPreviewParsedResult: { type: Function, default: null },
   formatFileSize: { type: Function, required: true },
   userId: { type: String, default: "" },
-  authFetch: { type: Function, default: null },
+  attachmentService: { type: Object, default: null },
 });
 
 const emit = defineEmits(["preview", "preview-resolved", "download"]);
@@ -211,10 +211,8 @@ async function ensureThumbnailUrl(attachmentItem = {}, attachmentIndex = 0) {
   }
 
   try {
-    const runFetch = props.authFetch || fetch;
-    const response = await runFetch(sourceUrl);
-    if (!response?.ok) return;
-    const blob = await response.blob();
+    const blob = await props.attachmentService?.getThumbnailBlob?.(sourceUrl);
+    if (!blob) return;
     setThumbnailUrl(key, URL.createObjectURL(blob));
   } catch {
   }
