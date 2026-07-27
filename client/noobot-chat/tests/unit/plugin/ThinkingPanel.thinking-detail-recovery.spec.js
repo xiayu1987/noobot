@@ -12,7 +12,7 @@ import {
   resolveThinkingDetailIdentity,
 } from "../../../src/shared/message/thinkingDetailCache.js";
 import { normalizeThinkingToolLogs } from "../../../src/composables/infra/thinkingDetailModel.js";
-import ThinkingPanelRealtime from "../../../src/shared/message/ThinkingPanelRealtime.vue";
+import ThinkingPanelRealtime from "../../../src/shared/message/components/ThinkingPanelRealtime.vue";
 
 async function flushAsync() {
   for (let index = 0; index < 20; index += 1) {

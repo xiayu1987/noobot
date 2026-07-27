@@ -1,0 +1,185 @@
+<!--
+  Copyright (c) 2026 xiayu
+  Contact: 126240622+xiayu1987@users.noreply.github.com
+  SPDX-License-Identifier: MIT
+-->
+<script setup>
+import { computed, ref } from "vue";
+import { Close, Paperclip } from "@element-plus/icons-vue";
+import { useLocale } from "../../../shared/i18n/useLocale.js";
+
+const props = defineProps({
+  uploadFiles: { type: Array, default: () => [] },
+});
+
+const emit = defineEmits(["append-uploads", "clear-uploads", "remove-upload"]);
+
+const fileInputRef = ref();
+const { translate } = useLocale();
+const attachmentCount = computed(() => (props.uploadFiles || []).length);
+
+function openFilePicker() {
+  const input = fileInputRef.value;
+  if (!input) return;
+  input.value = "";
+  input.click();
+}
+
+function onFileSelected(event) {
+  const input = event?.target;
+  const files = Array.from(input?.files || []).filter(Boolean);
+  if (files.length) emit("append-uploads", files);
+  if (input) input.value = "";
+}
+
+function clearUploadSelection() {
+  if (fileInputRef.value) fileInputRef.value.value = "";
+}
+
+function onClearUploads() {
+  emit("clear-uploads");
+}
+
+function onRemoveUpload(draftAttachmentId) {
+  emit("remove-upload", draftAttachmentId);
+}
+
+defineExpose({
+  clearUploadSelection,
+});
+</script>
+
+<template>
+  <div class="toolbar">
+    <input
+      ref="fileInputRef"
+      class="native-file-input"
+      type="file"
+      multiple
+      @change="onFileSelected"
+    />
+    <el-button
+      size="small"
+      class="poe-upload-btn noobot-action-btn noobot-flat-soft-btn"
+      @click="openFilePicker"
+    >
+      <el-icon class="btn-icon"><Paperclip /></el-icon>
+      {{ translate("composer.attachments") }}
+    </el-button>
+    <div class="attachment-tags" v-if="attachmentCount">
+      <div
+        class="attachment-pill noobot-flat-chip"
+        v-for="uploadFile in uploadFiles"
+        :key="uploadFile.draftAttachmentId"
+      >
+        <span class="attachment-name" :title="uploadFile.name">{{ uploadFile.name }}</span>
+        <button
+          type="button"
+          class="attachment-remove-btn noobot-flat-icon-btn"
+          :title="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
+          :aria-label="translate('composer.removeAttachment', { name: uploadFile.name || '' })"
+          @click.stop="onRemoveUpload(uploadFile.draftAttachmentId)"
+        >
+          <el-icon><Close /></el-icon>
+        </button>
+      </div>
+      <el-button size="small" text class="clear-files-btn noobot-action-btn" @click="onClearUploads">
+        {{ translate("composer.clear") }}
+      </el-button>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.native-file-input {
+  display: none;
+}
+
+.poe-upload-btn {
+  border-radius: var(--noobot-radius-pill);
+  padding: 0 12px;
+  flex-shrink: 0;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.poe-upload-btn:hover {
+  border-color: var(--noobot-panel-border);
+}
+
+.btn-icon {
+  margin-right: 4px;
+}
+
+.attachment-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment-pill {
+  max-width: 200px;
+  padding: 4px 6px 4px 10px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.attachment-name {
+  font-size: var(--noobot-font-size-sm);
+  color: var(--noobot-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  min-width: 0;
+}
+
+.attachment-remove-btn {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--noobot-radius-pill);
+  color: var(--noobot-text-secondary);
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.attachment-remove-btn:hover,
+.attachment-remove-btn:focus-visible {
+  color: var(--el-color-danger);
+  background: color-mix(in srgb, var(--el-color-danger) 10%, transparent);
+  outline: none;
+}
+
+.clear-files-btn {
+  color: var(--noobot-text-secondary);
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .attachment-pill {
+    max-width: 140px;
+  }
+
+  .attachment-remove-btn {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+  }
+}
+</style>

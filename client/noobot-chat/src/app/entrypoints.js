@@ -85,11 +85,11 @@ const ELEMENT_PLUS_COMPONENTS = [
 let mermaidModulePromise = null;
 
 export const ChatComposer = defineAsyncComponent(() =>
-  import("../modules/composer/ChatComposer.vue")
+  import("../modules/composer/components/ChatComposer.vue")
 );
 
 export const ChatMessageListPanel = defineAsyncComponent(() =>
-  import("./ChatMessageListPanel.vue")
+  import("./components/ChatMessageListPanel.vue")
 );
 
 export const SessionSidebar = defineAsyncComponent(() =>
@@ -97,19 +97,19 @@ export const SessionSidebar = defineAsyncComponent(() =>
 );
 
 export const WorkspacePanel = defineAsyncComponent(() =>
-  import("../modules/settings/WorkspacePanel.vue")
+  import("../modules/settings/views/WorkspacePanel.vue")
 );
 
 export const UserSettingsPanel = defineAsyncComponent(() =>
-  import("../modules/settings/UserSettingsPanel.vue")
+  import("../modules/settings/views/UserSettingsPanel.vue")
 );
 
 export const ConfigParamsPanel = defineAsyncComponent(() =>
-  import("../modules/settings/ConfigParamsPanel.vue")
+  import("../modules/settings/views/ConfigParamsPanel.vue")
 );
 
 export const UserInteractionForm = defineAsyncComponent(() =>
-  import("../modules/composer/UserInteractionForm.vue")
+  import("../modules/composer/components/UserInteractionForm.vue")
 );
 
 export const ConversationStateDebugPanel = defineAsyncComponent(() =>

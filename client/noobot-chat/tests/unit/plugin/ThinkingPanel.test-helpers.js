@@ -5,7 +5,7 @@
  */
 import { mount } from "@vue/test-utils";
 import { vi } from "vitest";
-import ThinkingPanel from "../../../src/shared/message/ThinkingPanel.vue";
+import ThinkingPanel from "../../../src/shared/message/components/ThinkingPanel.vue";
 import { contributeExtension } from "../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../../../src/extensions/extension-point-ids.js";
 import { registerFrontendPlugin as registerHarnessFrontendPlugin } from "../../../../../plugin/noobot-plugin-harness/frontend/index.js";

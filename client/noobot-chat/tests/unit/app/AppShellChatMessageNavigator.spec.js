@@ -9,21 +9,21 @@ import { fileURLToPath } from "node:url";
 import { mount } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
-import AppShellLayout from "../../../src/app/AppShellLayout.vue";
-import AppShellDrawers from "../../../src/app/AppShellDrawers.vue";
+import AppShellLayout from "../../../src/app/components/AppShellLayout.vue";
+import AppShellDrawers from "../../../src/app/components/AppShellDrawers.vue";
 import { openChatMessageNavigator } from "../../../src/app/state/chatMessageNavigatorState.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appShellSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/AppShell.vue"),
+  path.resolve(__dirname, "../../../src/app/components/AppShell.vue"),
   "utf8",
 );
 const appShellLayoutSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/AppShellLayout.vue"),
+  path.resolve(__dirname, "../../../src/app/components/AppShellLayout.vue"),
   "utf8",
 );
 const appShellDrawersSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/AppShellDrawers.vue"),
+  path.resolve(__dirname, "../../../src/app/components/AppShellDrawers.vue"),
   "utf8",
 );
 const chatMessageNavigatorPanelSource = readFileSync(
@@ -39,7 +39,7 @@ const chatMessageNavigatorStateSource = readFileSync(
   "utf8",
 );
 const chatMessageNavigatorComponentSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/ChatMessageNavigator.vue"),
+  path.resolve(__dirname, "../../../src/app/components/ChatMessageNavigator.vue"),
   "utf8",
 );
 const chatMessageNavItemsStateSource = readFileSync(

@@ -6,10 +6,10 @@
 import { defineComponent, nextTick } from "vue";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
-import ComposerInputActions from "../../../../src/modules/composer/ComposerInputActions.vue";
-import ComposerMoreOptions from "../../../../src/modules/composer/ComposerMoreOptions.vue";
-import ComposerCameraDialog from "../../../../src/modules/composer/ComposerCameraDialog.vue";
-import ComposerSelectedTags from "../../../../src/modules/composer/ComposerSelectedTags.vue";
+import ComposerInputActions from "../../../../src/modules/composer/components/ComposerInputActions.vue";
+import ComposerMoreOptions from "../../../../src/modules/composer/components/ComposerMoreOptions.vue";
+import ComposerCameraDialog from "../../../../src/modules/composer/components/ComposerCameraDialog.vue";
+import ComposerSelectedTags from "../../../../src/modules/composer/components/ComposerSelectedTags.vue";
 
 vi.mock("../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
