@@ -6,13 +6,9 @@
 import { externalFrontendPluginEntries } from "./generated/external-entries.js";
 import { contributeExtension, removePluginExtensions } from "../extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../extensions/extension-point-ids.js";
-import { attachmentService } from "../services/attachmentService.js";
 import { createScopedAuthenticatedHttpService } from "../services/authenticatedHttpService.js";
 
 const REQUIRED_FRONTEND_PLUGIN_API_VERSION = "1";
-const pluginAttachmentService = Object.freeze({
-  getThumbnailBlob: (url = "") => attachmentService.getThumbnailBlob(url),
-});
 function normalizeApiVersion(input = "") {
   return String(input || "").trim() || REQUIRED_FRONTEND_PLUGIN_API_VERSION;
 }
@@ -55,7 +51,6 @@ export async function registerExternalFrontendPlugins() {
         },
         extensionPoints: EXTENSION_POINTS,
         services: Object.freeze({
-          attachments: pluginAttachmentService,
           authenticatedRequest: createScopedAuthenticatedHttpService({
             routePatterns: item?.authenticatedRoutePatterns,
           }),

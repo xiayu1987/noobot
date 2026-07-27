@@ -245,6 +245,21 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
     : STOP_REQUEST_EVENTS.has(event.type)
     ? "stop"
     : String(event.action || current?.action || "send").trim();
+  const lifecycleEventType = event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE
+    ? String(event.eventType || "").trim()
+    : String(current?.lifecycleEventType || "").trim();
+  const beginsAction = ACTION_START_EVENTS.has(event.type) || STOP_REQUEST_EVENTS.has(event.type) || (
+    event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
+    [TURN_EVENT.ACTION_ACCEPTED, TURN_EVENT.STOP_ACCEPTED].includes(event.eventType)
+  );
+  const commandId = event.type === SESSION_RUN_EVENT.LOCAL_RESET
+    ? ""
+    : String(event.commandId || current?.commandId || "").trim();
+  const actionCommandId = event.type === SESSION_RUN_EVENT.LOCAL_RESET
+    ? ""
+    : beginsAction && event.commandId
+      ? String(event.commandId).trim()
+      : String(current?.actionCommandId || "").trim();
   const candidate = {
     ...(current || {}),
     action,
@@ -280,6 +295,9 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
       ...(current || {}),
       state,
       action,
+      commandId,
+      actionCommandId,
+      lifecycleEventType,
       terminal,
       canStop: capabilities.canStop,
       backendState,

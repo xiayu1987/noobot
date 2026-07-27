@@ -37,9 +37,4 @@ export const attachmentService = Object.freeze({
   downloadHostFile(params = {}) {
     return downloadHostFileApi(params, fetcherOptions());
   },
-  async getThumbnailBlob(url = "") {
-    const response = await this.fetchUrl(url);
-    if (!response?.ok) return null;
-    return response.blob();
-  },
 });

@@ -36,7 +36,6 @@ describe("useChatSession reconnect replay", () => {
     Object.values(wsClientMock).forEach((mockFn) => {
       if (typeof mockFn?.mockReset === "function") mockFn.mockReset();
     });
-    wsClientMock.isStopRequested.mockReturnValue(false);
     wsClientMock.reconnect.mockResolvedValue(undefined);
     sessionLogClientMock.log.mockClear();
     sessionLogClientMock.debug.mockClear();

@@ -13,7 +13,6 @@ import { createWebSocketCommandRequests } from "./chatWebSocketCommandRequests.j
 import { createSocketHandlerRegistry } from "./chatWebSocketSocketHandlers.js";
 import {
   canSettleStreamForEvent,
-  createStopConfirmationTimeoutError,
   createStreamEventError,
   isEventForStreamScope,
   isTerminalChannelStateEvent,
@@ -24,30 +23,17 @@ import {
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
   refreshAuthentication = null,
-  stopConfirmationTimeoutMs,
-  forceStopFinalizeMs,
   terminalChannelStateGraceMs = TIME_THRESHOLDS.client.wsTerminalChannelStateGraceMs,
   translateText = (key = "") => String(key || ""),
 } = {}) {
-  const resolvedStopConfirmationTimeoutMs =
-    Number.isFinite(Number(stopConfirmationTimeoutMs))
-      ? Number(stopConfirmationTimeoutMs)
-      : Number.isFinite(Number(forceStopFinalizeMs))
-        ? Number(forceStopFinalizeMs)
-        : TIME_THRESHOLDS.client.wsForceStopFinalizeMs;
   const transport = createWebSocketTransportSupervisor({
     channelId: "chat",
     resolveWebSocketUrl,
     refreshAuthentication,
   });
-  let stopRequested = false;
-  let stopRequestedTurnScopeId = "";
-  let stopConfirmationTimer = null;
   let resolveCurrentStream = null;
   let streamSerial = 0;
   let activeStreamContext = null;
-  let stopLeaseSerial = 0;
-  let activeStopLease = null;
   let protocolRequestSerial = 0;
 
   const reconnectCursor = createReconnectCursorStore();
@@ -89,15 +75,7 @@ export function createChatWebSocketClient({
     };
   }
 
-  function clearStopConfirmationTimer() {
-    if (stopConfirmationTimer) {
-      clearTimeout(stopConfirmationTimer);
-      stopConfirmationTimer = null;
-    }
-  }
-
   function clearTimers() {
-    clearStopConfirmationTimer();
     if (reconnectTimeout) {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
@@ -173,17 +151,6 @@ export function createChatWebSocketClient({
     return ws;
   }
 
-  function isStopRequested() {
-    return stopRequested;
-  }
-
-  function clearStopRequested() {
-    stopRequested = false;
-    stopRequestedTurnScopeId = "";
-    activeStopLease = null;
-    clearStopConfirmationTimer();
-  }
-
   function cancelStreamForTurn({ sessionId = "", turnScopeId = "", dialogProcessId = "" } = {}) {
     const context = activeStreamContext;
     if (!context) return false;
@@ -200,12 +167,6 @@ export function createChatWebSocketClient({
     activeStreamContext = null;
     return true;
   }
-
-  function getStopRequestedTurnScopeId() {
-    return stopRequestedTurnScopeId;
-  }
-
-
 
   function connect() {
     const attempt = transport.acquire();
@@ -227,9 +188,6 @@ export function createChatWebSocketClient({
         scope: streamScope,
         socket: null,
       };
-      activeStopLease = null;
-      clearStopConfirmationTimer();
-      stopRequested = false;
       let settled = false;
       let doneReceived = false;
       let terminalChannelStateTimer = null;
@@ -247,10 +205,6 @@ export function createChatWebSocketClient({
         if (handshakeTimeout) {
           clearTimeout(handshakeTimeout);
           handshakeTimeout = null;
-        }
-        clearStopConfirmationTimer();
-        if (activeStopLease?.streamSerial === currentStreamSerial) {
-          activeStopLease = null;
         }
         if (activeStreamContext?.serial === currentStreamSerial) {
           activeStreamContext = null;
@@ -595,84 +549,19 @@ export function createChatWebSocketClient({
     });
   }
 
-  function requestStop(stopPayloadOrTimeout = {}, onStopConfirmationTimeout = () => {}) {
+  function requestStop(stopPayload = {}) {
     const ws = getActiveSocket();
-    const firstArgIsTimeoutCallback = typeof stopPayloadOrTimeout === "function";
-    const normalizedStopPayload =
-      !firstArgIsTimeoutCallback &&
-      stopPayloadOrTimeout &&
-      typeof stopPayloadOrTimeout === "object"
-        ? stopPayloadOrTimeout
-        : {};
-    const notifyStopConfirmationTimeout =
-      firstArgIsTimeoutCallback
-        ? stopPayloadOrTimeout
-        : typeof onStopConfirmationTimeout === "function"
-        ? onStopConfirmationTimeout
-        : () => {};
-    const requestedTurnScopeId = normalizeTrimmedString(normalizedStopPayload?.turnScopeId);
-    stopRequested = true;
-    stopRequestedTurnScopeId = requestedTurnScopeId;
-    const stopScope = normalizeScopeFromPayload(normalizedStopPayload);
-    const stoppedStreamContext = activeStreamContext;
-    const stopLease = {
-      serial: ++stopLeaseSerial,
-      streamSerial: stoppedStreamContext?.serial || 0,
-      socket: ws || null,
-      scope: stopScope,
-      cancelled: false,
-    };
-    activeStopLease = stopLease;
-
-    const notifyStopConfirmationTimeoutIfLeaseStillCurrent = () => {
-      if (activeStopLease !== stopLease || stopLease.cancelled) return;
-      const streamContext = activeStreamContext;
-      const streamStillMatches =
-        streamContext &&
-        streamContext.serial === stopLease.streamSerial &&
-        (!stopLease.socket || streamContext.socket === stopLease.socket);
-      if (!streamStillMatches) return;
-      notifyStopConfirmationTimeout({
-        sessionId: stopScope.sessionId,
-        dialogProcessId: stopScope.dialogProcessId,
-        turnScopeId: stopScope.turnScopeId,
-        stopLeaseSerial: stopLease.serial,
-        streamSerial: stopLease.streamSerial,
-      });
-      const rejectStream = resolveCurrentStream;
-      if (
-        rejectStream &&
-        rejectStream.serial === stopLease.streamSerial &&
-        typeof rejectStream.reject === "function"
-      ) {
-        rejectStream.reject(createStopConfirmationTimeoutError({
-          sessionId: stopScope.sessionId,
-          dialogProcessId: stopScope.dialogProcessId,
-          turnScopeId: stopScope.turnScopeId,
-        }, translateText));
-      }
-    };
-
     if (ws && ws.readyState === WebSocket.OPEN) {
       try {
-        ws.send(JSON.stringify({ action: "stop", ...normalizedStopPayload }));
-      } catch {}
-      clearStopConfirmationTimer();
-      stopConfirmationTimer = setTimeout(() => {
-        stopConfirmationTimer = null;
-        notifyStopConfirmationTimeoutIfLeaseStillCurrent();
-      }, resolvedStopConfirmationTimeoutMs);
+        ws.send(JSON.stringify({ action: "stop", ...stopPayload }));
+      } catch {
+        return false;
+      }
       return true;
     }
 
     if (ws && ws.readyState === WebSocket.CONNECTING) {
       ws.close(1000, "stop_requested");
-      clearStopConfirmationTimer();
-      stopConfirmationTimer = setTimeout(() => {
-        stopConfirmationTimer = null;
-        notifyStopConfirmationTimeoutIfLeaseStillCurrent();
-      }, resolvedStopConfirmationTimeoutMs);
-      return true;
     }
 
     return false;
@@ -687,9 +576,6 @@ export function createChatWebSocketClient({
     transport.dispose();
     resolveCurrentStream = null;
     activeStreamContext = null;
-    activeStopLease = null;
-    stopRequested = false;
-    stopRequestedTurnScopeId = "";
     reconnecting = false;
     reconnectResolve = null;
     reconnectReject = null;
@@ -706,9 +592,6 @@ export function createChatWebSocketClient({
     requestJson,
     getActiveSocket,
     getTransportStatus: transport.status,
-    isStopRequested,
-    clearStopRequested,
-    getStopRequestedTurnScopeId,
     getLastReceivedSeqMap,
     clearLastReceivedSeqMap,
     hasReconnectState,

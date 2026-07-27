@@ -322,10 +322,10 @@ export async function saveCapabilityOutputAsTransferArtifacts(
   const text = String(content || "").trim();
   if (!text) return [];
   const userId = String(
-    ctx?.userId || runtime?.systemRuntime?.userId || runtime?.userId || "",
+    runtime?.systemRuntime?.userId || runtime?.userId || "",
   ).trim();
   const sessionId = String(
-    ctx?.sessionId || runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
+    runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
   ).trim();
   if (!userId || !sessionId) return [];
   try {
@@ -362,6 +362,10 @@ export async function saveCapabilityOutputAsTransferArtifacts(
       sessionId,
       attachmentSource: "model",
       generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
+      owner: {
+        type: "plugin",
+        id: "harness-plugin",
+      },
       artifacts: [artifact],
     });
     return mapAttachmentRecordsToMetas(records);

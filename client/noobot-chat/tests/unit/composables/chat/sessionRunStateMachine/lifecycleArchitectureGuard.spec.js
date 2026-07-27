@@ -16,6 +16,8 @@ const files = {
   registry: "src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js",
   interaction: "src/composables/chat/useAgentInteraction.js",
   messageList: "src/app/ChatMessageListPanel.vue",
+  sendFinalize: "src/composables/chat/chatEngine/sendFinalize.js",
+  webSocketClient: "src/services/ws/chatWebSocketClient.js",
 };
 
 const agentRoot = clientFilePath.resolve(projectRoot, "../../agent");
@@ -183,5 +185,22 @@ describe("lifecycle architecture guard", () => {
     expect(serviceEntity).toMatch(/finalizeIntent\?\.retryable\s*===\s*true/);
     expect(reducer).toMatch(/isFinalTurnState\(currentState, current\)/);
     expect(registry).toMatch(/reduceTurnRuntimeEvent\(current, rawEvent\)/);
+  });
+
+  it("keeps stop lifecycle ownership out of the websocket transport", () => {
+    const transport = source(files.webSocketClient);
+    const finalize = source(files.sendFinalize);
+    for (const legacyOwner of [
+      "activeStopLease",
+      "stopConfirmationTimer",
+      "isStopRequested",
+      "getStopRequestedTurnScopeId",
+      "clearStopRequested",
+    ]) {
+      expect(transport).not.toContain(legacyOwner);
+      expect(finalize).not.toContain(legacyOwner);
+    }
+    expect(source(files.reducer)).toContain("actionCommandId");
+    expect(source(files.reducer)).toContain("lifecycleEventType");
   });
 });

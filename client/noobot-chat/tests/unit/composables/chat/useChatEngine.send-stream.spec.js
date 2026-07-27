@@ -624,7 +624,6 @@ describe("useChatEngine.send-stream", () => {
       reuseRecentlyLoaded: false,
     });
     expect(applySessionDetail).toHaveBeenCalledTimes(1);
-    expect(deps.chatWebSocketClient.isStopRequested).toHaveBeenCalled();
   });
 
   it("stopped final detail preserves a fresh replacement turn instead of replacing it with a stale stopped snapshot", async () => {

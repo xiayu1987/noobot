@@ -90,7 +90,7 @@ function createActions({
 }
 
 describe("monotonicMessageActions stop-window gates", () => {
-  it("does not delete messages when the session run state machine blocks delete during stop confirmation", async () => {
+  it("does not delete messages while the session run state machine is waiting for stop completion", async () => {
     const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,

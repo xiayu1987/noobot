@@ -6,12 +6,9 @@
 import { RoleEnum } from "../../../shared/constants/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
 import {
-  BackendChannelState,
-  FrontendRunState,
   SESSION_RUN_EVENT,
   rememberStopRequestedEvent,
 } from "../sessionRunStateMachine.js";
-import { isInFlightAssistantMessage } from "./messageStateGuards.js";
 import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
@@ -74,76 +71,6 @@ function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "
   };
 }
 
-export function handleStopConfirmationTimeout({
-  turnRuntimeRegistry,
-  applyRunStateEvent,
-  activeSession,
-  findTargetAssistantMessage,
-  applyConversationState,
-  chatWebSocketClient,
-  stopScope = {},
-} = {}) {
-  const timeoutSessionId = sessionRuntimeId(activeSession?.value);
-  const timeoutTurnScopeId = resolveStopTurnScopeId({
-    session: activeSession?.value,
-    turnRuntimeRegistry,
-    preferredTurnScopeId: stopScope?.turnScopeId,
-  });
-  const timeoutTurn = resolveSessionTurnRuntime(
-    turnRuntimeRegistry?.value,
-    timeoutSessionId,
-    timeoutTurnScopeId,
-  );
-  if (!timeoutTurn || timeoutTurn.terminal) return;
-  const pendingAssistantMessage = findTargetAssistantMessage?.() ||
-    [...(activeSession?.value?.messages || [])]
-      .reverse()
-      .find(
-        (messageItem) => isInFlightAssistantMessage(messageItem, {
-          registry: turnRuntimeRegistry?.value,
-          sessionId: timeoutSessionId,
-        }),
-      );
-  const expectedDialogProcessId = normalizeTrimmedString(stopScope?.dialogProcessId);
-  const expectedTurnScopeId = normalizeTrimmedString(stopScope?.turnScopeId);
-  const pendingDialogProcessIdForScope = getMessageDialogProcessId(pendingAssistantMessage);
-  const pendingTurnScopeIdForScope = getMessageTurnScopeId(pendingAssistantMessage);
-  const staleStopScope = expectedTurnScopeId
-    ? pendingTurnScopeIdForScope !== expectedTurnScopeId
-    : expectedDialogProcessId
-      ? pendingDialogProcessIdForScope !== expectedDialogProcessId
-      : false;
-  if (staleStopScope) {
-    logStopDebug("stop.timeout.staleIgnored", {
-      stopScope,
-      pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
-      messages: summarizeDebugMessages(activeSession?.value?.messages),
-    });
-    return;
-  }
-  logStopDebug("stop.timeout.noBackendConfirmation", {
-    stopScope,
-    pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
-    messages: summarizeDebugMessages(activeSession?.value?.messages),
-  });
-  const fallbackDialogProcessId =
-    expectedDialogProcessId || getMessageDialogProcessId(pendingAssistantMessage);
-  const fallbackTurnScopeId =
-    expectedTurnScopeId || getMessageTurnScopeId(pendingAssistantMessage);
-  const finalizedAtMs = nowMs();
-  applyRunStateEvent?.({
-      type: SESSION_RUN_EVENT.LOCAL_RESET,
-      sessionId: String(activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
-      dialogProcessId: fallbackDialogProcessId,
-      turnScopeId: fallbackTurnScopeId,
-      createdAtMs: finalizedAtMs,
-      updatedAtMs: finalizedAtMs,
-      source: "stop_request_timeout",
-      sourceEvent: "stop_request_timeout",
-      reason: "stop request timed out before backend confirmation",
-  });
-}
-
 function buildStopPayload({ userId, activeSession, session: targetSession, pendingAssistantMessage, turnRuntime, execution } = {}) {
   const session = targetSession || activeSession?.value || {};
   const dialogProcessId = normalizeTrimmedString(turnRuntime?.dialogProcessId);
@@ -154,6 +81,7 @@ function buildStopPayload({ userId, activeSession, session: targetSession, pendi
     sessionId: String(session.backendSessionId || session.sessionId || session.id || ""),
     dialogProcessId,
     turnScopeId,
+    commandId: `stop:${turnScopeId}`,
     executionId: normalizeTrimmedString(execution?.executionId),
     expectedRevision: Number.isFinite(Number(execution?.revision))
       ? Number(execution.revision)
@@ -185,7 +113,6 @@ export function stopSending({
   turnRuntimeRegistry,
   userId,
   chatWebSocketClient,
-  onStopConfirmationTimeout,
   applyRunStateEvent,
   executionId = "",
 } = {}) {
@@ -231,6 +158,7 @@ export function stopSending({
     sessionId: stopPayload.sessionId,
     dialogProcessId: stopPayload.dialogProcessId,
     turnScopeId: stopPayload.turnScopeId,
+    commandId: stopPayload.commandId,
     stopPayload,
     pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
     messages: summarizeDebugMessages(activeSession?.value?.messages),
@@ -243,6 +171,7 @@ export function stopSending({
     sessionId: stopPayload.sessionId,
     dialogProcessId: stopPayload.dialogProcessId,
     turnScopeId: stopPayload.turnScopeId,
+    commandId: stopPayload.commandId,
     createdAtMs: stopPayload.createdAtMs,
     source: "stop_sending",
   });
@@ -263,14 +192,13 @@ export function stopSending({
     return false;
   };
   try {
-    const requestResult = chatWebSocketClient?.requestStop?.(
-      stopPayload,
-      onStopConfirmationTimeout,
-    );
+    const requestResult = chatWebSocketClient?.requestStop?.(stopPayload);
     if (requestResult && typeof requestResult.catch === "function") {
       return requestResult.catch(applyStopRequestFailure);
     }
-    return requestResult;
+    return requestResult === true
+      ? true
+      : applyStopRequestFailure(new Error("stop_request_not_sent"));
   } catch (error) {
     return applyStopRequestFailure(error);
   }

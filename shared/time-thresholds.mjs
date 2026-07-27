@@ -159,7 +159,6 @@ export const TIME_THRESHOLDS = deepFreeze({
   client: {
     chatMessageNavigatorScrollLockMs: 1400,
     wsStopCloseDelayMs: TIME_TIERS.shortDelayMs,
-    wsForceStopFinalizeMs: TIME_TIERS.fiveSecondsMs,
     wsTerminalChannelStateGraceMs: 250,
     wsReconnectTimeoutMs: 15000,
     wsOpenPollIntervalMs: 100,

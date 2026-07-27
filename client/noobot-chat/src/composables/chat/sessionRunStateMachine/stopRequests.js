@@ -49,6 +49,7 @@ export function rememberStopRequestedEvent(rawEvent = {}) {
     sessionId: event.sessionId,
     dialogProcessId: event.dialogProcessId,
     turnScopeId: event.turnScopeId,
+    commandId: event.commandId,
     seq: event.seq,
     timestamp: event.timestamp,
   });
@@ -78,6 +79,7 @@ export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProc
     sessionId: normalizedSessionId,
     dialogProcessId: normalizedDialogProcessId || trim(match.dialogProcessId),
     turnScopeId: trim(match.turnScopeId),
+    commandId: trim(match.commandId),
     seq: Number(match.seq || 0),
     timestamp: Number(match.timestamp || timestamp),
     source: "remembered_stop_request",

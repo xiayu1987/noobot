@@ -7,7 +7,10 @@ import { describe, expect, it, vi } from "vitest";
 import { createHarness, activateRuntimeTurn } from "./helpers/useChatEngineHarness.js";
 import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine.js";
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
-import { applyExecutionSnapshot } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import {
+  applyExecutionSnapshot,
+  resolveSessionTurnRuntime,
+} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
 
 describe("useChatEngine.interaction-stop: stop-request", () => {
   it("send enables stop while stream is active", async () => {
@@ -58,6 +61,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       sessionId: "backend-stop-payload",
       dialogProcessId: "dp-stop-payload",
       turnScopeId: "turn-stop-payload",
+      commandId: "stop:turn-stop-payload",
       parentSessionId: "parent-session",
       parentDialogProcessId: "parent-dp",
       partialAssistant: {
@@ -67,6 +71,15 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         modelAlias: "alias-a",
         modelName: "model-a",
       },
+    });
+    expect(resolveSessionTurnRuntime(
+      turnRuntimeRegistry.value,
+      "backend-stop-payload",
+      "turn-stop-payload",
+    )).toMatchObject({
+      action: "stop",
+      commandId: "stop:turn-stop-payload",
+      actionCommandId: "stop:turn-stop-payload",
     });
   });
 
@@ -92,6 +105,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(engine.stopSending()).toBe(true);
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
+        commandId: "stop:turn-refreshed",
         sessionId: "backend-stop-refreshed",
         dialogProcessId: "dp-refreshed",
         turnScopeId: "turn-refreshed",
@@ -101,7 +115,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
           turnScopeId: "turn-refreshed",
         }),
       }),
-      expect.any(Function),
     );
   });
 
@@ -129,6 +142,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(engine.stopSending()).toBe(true);
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
+        commandId: "stop:turn-channel-identity",
         sessionId: "backend-stop-channel-identity",
         dialogProcessId: "dp-channel-identity",
         turnScopeId: "turn-channel-identity",
@@ -138,7 +152,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
           turnScopeId: "turn-channel-identity",
         }),
       }),
-      expect.any(Function),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({
       stopState: "user_stopped",
@@ -172,6 +185,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(engine.stopSending()).toBe(true);
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
+        commandId: "stop:turn-user-fallback",
         sessionId: "backend-stop-user-turn-fallback",
         dialogProcessId: "dp-user-turn-fallback",
         turnScopeId: "turn-user-fallback",
@@ -180,7 +194,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
           turnScopeId: "turn-user-fallback",
         }),
       }),
-      expect.any(Function),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({
       stopState: "user_stopped",
@@ -210,6 +223,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(engine.stopSending("child-execution")).toBe(true);
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
+        commandId: "stop:child-turn",
         executionId: "child-execution",
         expectedRevision: 7,
         sessionId: "child-session",
@@ -217,7 +231,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         dialogProcessId: "child-dialog",
         turnScopeId: "child-turn",
       }),
-      expect.any(Function),
     );
   });
 

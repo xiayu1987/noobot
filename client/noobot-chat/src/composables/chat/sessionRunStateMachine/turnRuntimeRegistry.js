@@ -360,6 +360,11 @@ export function selectSessionTurnRuntime(registry, sessionId, turnScopeId = "") 
     sessionId: normalizedSessionId,
     turnScopeId: text(turn?.turnScopeId),
     dialogProcessId: text(turn?.dialogProcessId),
+    action: text(turn?.action),
+    commandId: text(turn?.commandId),
+    actionCommandId: text(turn?.actionCommandId),
+    lifecycleEventType: text(turn?.lifecycleEventType),
+    lifecycleObserved: turn?.lifecycleObserved === true,
     displayState,
     sending: ["requesting", "sending", "completing", "stopping"].includes(displayState),
     canStop: displayState === "sending" && turn?.canStop === true,
@@ -735,7 +740,7 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
     const state = stateMap[text(source.state)];
     if (current && isFinalTurnState(current.state, current) && !isFinalTurnState(state, source)) continue;
     const terminal = null;
-    const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, authoritativeCompletionCommit: current?.authoritativeCompletionCommit || null, startedAt: text(source.startedAt || source.thinkingStartedAt || current?.startedAt), finishedAt: text(current?.finishedAt), source: "turn_snapshot", lifecycleSnapshotObserved: true, lifecycleObserved: true };
+    const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, actionCommandId: text(current?.actionCommandId || (text(source.action) === "stop" && text(source.state) === "action_requesting" ? source.commandId : "")), lifecycleEventType: SNAPSHOT_STATE_EVENT[text(source.state)] || text(current?.lifecycleEventType), authoritativeCompletionCommit: current?.authoritativeCompletionCommit || null, startedAt: text(source.startedAt || source.thinkingStartedAt || current?.startedAt), finishedAt: text(current?.finishedAt), source: "turn_snapshot", lifecycleSnapshotObserved: true, lifecycleObserved: true };
     bucket.turns[turnScopeId] = turn;
     if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
   }

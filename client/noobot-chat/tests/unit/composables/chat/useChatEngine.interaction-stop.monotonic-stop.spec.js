@@ -9,7 +9,7 @@ import { BackendChannelState, createInitialSessionRunState } from "../../../../s
 import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
 
 describe("useChatEngine.interaction-stop: monotonic-stop", () => {
-  it("prepareMonotonicMessageAction treats stop confirmation timeout as stop precondition failure", async () => {
+  it("prepareMonotonicMessageAction treats stop completion timeout as a precondition failure", async () => {
     vi.useFakeTimers();
     const { engine, deps, sending, canStop, activeSession, activeTurnRuntime, turnRuntimeRegistry } = createHarness({
       sessionId: "local-monotonic-stop",
@@ -49,7 +49,7 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
     vi.useRealTimers();
   });
 
-  it("ignores stale stop confirmation timeout for a previous turn", () => {
+  it("keeps stop command acknowledgement out of the websocket transport API", () => {
     const { engine, deps, activeSession, sending, canStop, turnRuntimeRegistry } = createHarness({
       sessionId: "local-stale-stop-timeout",
     });
@@ -69,12 +69,8 @@ describe("useChatEngine.interaction-stop: monotonic-stop", () => {
       },
     ];
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "local-stale-stop-timeout", turnScopeId: "turn-new", dialogProcessId: "dp-new" });
-    deps.chatWebSocketClient.requestStop.mockImplementation((_payload, onStopConfirmationTimeout) => {
-      onStopConfirmationTimeout({
-        sessionId: "local-stale-stop-timeout",
-        dialogProcessId: "dp-old",
-        turnScopeId: "turn-old",
-      });
+    deps.chatWebSocketClient.requestStop.mockImplementation((...args) => {
+      expect(args).toHaveLength(1);
       return true;
     });
 

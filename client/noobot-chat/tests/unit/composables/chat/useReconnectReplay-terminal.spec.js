@@ -46,7 +46,6 @@ describe("useReconnectReplay", () => {
     expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith("s-1", "turn-e", { commandId: "", sequence: 3, source: "reconnect_replay" });
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
     expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
-    expect(mocks.chatWebSocketClient.clearStopRequested).not.toHaveBeenCalled();
   });
 
   it("EV-04a: DONE without channel_state reconciles final detail and requests authoritative terminal resolution", async () => {

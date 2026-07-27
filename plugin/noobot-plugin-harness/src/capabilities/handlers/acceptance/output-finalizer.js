@@ -56,10 +56,10 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
     return false;
   }
   const userId = String(
-    ctx?.userId || runtime?.systemRuntime?.userId || runtime?.userId || "",
+    runtime?.systemRuntime?.userId || runtime?.userId || "",
   ).trim();
   const sessionId = String(
-    ctx?.sessionId || runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
+    runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
   ).trim();
   if (!userId || !sessionId) return false;
 

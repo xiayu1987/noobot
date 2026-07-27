@@ -209,8 +209,6 @@ export const createHarness = ({
       requestStop: vi.fn(),
       clearLastReceivedSeqMap: vi.fn(),
       dispose: vi.fn(),
-      clearStopRequested: vi.fn(),
-      isStopRequested: vi.fn(() => false),
     },
     ensureConnected: vi.fn(() => true),
     notify: vi.fn(),
