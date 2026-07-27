@@ -9,7 +9,8 @@ import { defineComponent, h, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import SharedChatMessageItem from "../../../src/shared/message/SharedChatMessageItem.vue";
 import { useChatStore } from "../../../src/shared/stores/useChatStore";
-import { registerFrontendPlugin } from "../../../src/plugins/frontend-plugin-registry";
+import { contributeExtension } from "../../../src/extensions/extension-registry";
+import { EXTENSION_POINTS } from "../../../src/extensions/extension-point-ids";
 
 vi.mock("../../../src/shared/ui", async () => {
   const { defineComponent, h } = await import("vue");
@@ -251,14 +252,12 @@ describe("SharedChatMessageItem", () => {
   });
 
   it("passes displayed attachments to message card renderers with the legacy alias", () => {
-    registerFrontendPlugin({
-      id: "shared-message-context-probe",
-      messageCards: [
-        {
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, {
+          pluginId: "shared-message-context-probe",
           id: "shared-message-context-probe:card",
           slot: "pre",
           component: TestRenderer,
-          match: (messageItem = {}) => messageItem?.id === "msg-1",
+          when: (context = {}) => context?.messageItem?.id === "msg-1",
           resolveProps: (context = {}) => ({
             attachmentCount: Array.isArray(context.displayedAttachments)
               ? context.displayedAttachments.length
@@ -267,8 +266,6 @@ describe("SharedChatMessageItem", () => {
               ? context.displayedAttachmentMetas.length
               : -1,
           }),
-        },
-      ],
     });
 
     const wrapper = mountItem();
@@ -280,14 +277,12 @@ describe("SharedChatMessageItem", () => {
   });
 
   it("passes refreshed transfer envelope attachments through displayed attachments", () => {
-    registerFrontendPlugin({
-      id: "shared-message-transfer-context-probe",
-      messageCards: [
-        {
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, {
+          pluginId: "shared-message-transfer-context-probe",
           id: "shared-message-transfer-context-probe:card",
           slot: "pre",
           component: TestRenderer,
-          match: (messageItem = {}) => messageItem?.id === "msg-transfer",
+          when: (context = {}) => context?.messageItem?.id === "msg-transfer",
           resolveProps: (context = {}) => ({
             attachmentCount: Array.isArray(context.displayedAttachments)
               ? context.displayedAttachments.length
@@ -296,8 +291,6 @@ describe("SharedChatMessageItem", () => {
               ? context.displayedAttachmentMetas.length
               : -1,
           }),
-        },
-      ],
     });
 
     const wrapper = mountItem({
@@ -334,15 +327,13 @@ describe("SharedChatMessageItem", () => {
   });
 
   it("does not render the default asset list when a post renderer suppresses default assets", () => {
-    registerFrontendPlugin({
-      id: "shared-message-assets-suppress-probe",
-      messageCards: [
-        {
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_POST, {
+          pluginId: "shared-message-assets-suppress-probe",
           id: "shared-message-assets-suppress-probe:card",
           slot: "post",
           suppressDefaultAssets: true,
           component: AssetRenderer,
-          match: (messageItem = {}) => messageItem?.id === "msg-assets-suppress",
+          when: (context = {}) => context?.messageItem?.id === "msg-assets-suppress",
           resolveProps: (context = {}) => ({
             attachmentCount: Array.isArray(context.displayedAttachments)
               ? context.displayedAttachments.length
@@ -351,8 +342,6 @@ describe("SharedChatMessageItem", () => {
               ? context.writtenFiles.length
               : -1,
           }),
-        },
-      ],
     });
 
     const wrapper = mountItem({

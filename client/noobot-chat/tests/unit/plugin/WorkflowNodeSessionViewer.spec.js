@@ -79,7 +79,10 @@ function mountViewer({
       viewer = useWorkflowNodeSessionViewer({
         props: {
           userId: "user-1",
-          authFetch: fetcher,
+          workflowSessionService: {
+            getDetail: (...args) => fetcher(...args),
+            getThinkingDetail: (...args) => fetcher(...args),
+          },
           selectExecutionDetail: vi.fn(() => null),
           selectSessionMessages: vi.fn((sessionId) => sessionDocs[sessionId] || null),
           logWorkflowDiagnostics,
@@ -379,7 +382,9 @@ describe("workflow node session view ownership", () => {
       "session-a": { sessionId: "session-a", messages: [] },
       "session-b": { sessionId: "session-b", messages: [] },
     });
-    const fetcher = vi.fn((url) => url.includes("dialog-a") ? requests.a.promise : requests.b.promise);
+    const fetcher = vi.fn(({ dialogProcessId }) => (
+      dialogProcessId === "dialog-a" ? requests.a.promise : requests.b.promise
+    ));
     const { wrapper, state, viewer } = mountViewer({ fetcher, sessionDocs });
     const stepA = step("a");
     const stepB = step("b");

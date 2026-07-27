@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { BaseEmptyHint } from "../../../../../client/noobot-chat/src/shared/ui";
+import { BaseEmptyHint } from "../../../../../client/noobot-chat/src/public/ui.js";
 import { WorkflowCanvasGraph } from "../workflow-graph";
 
 defineProps({

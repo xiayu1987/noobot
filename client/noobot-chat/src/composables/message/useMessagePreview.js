@@ -4,12 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { onBeforeUnmount, ref } from "vue";
-import {
-  downloadHostFileApi,
-  downloadWorkspaceFileApi,
-  getHostFileApi,
-  getWorkspaceFileApi,
-} from "../../services/api/chatApi";
+import { attachmentService as defaultAttachmentService } from "../../services/attachmentService";
 import {
   buildParsedResultPreviewItem,
   resolveAttachmentAccessMeta,
@@ -49,7 +44,7 @@ import {
 
 export function useMessagePreview({
   userId = "",
-  authFetch = null,
+  attachmentService = defaultAttachmentService,
   isImageMime = () => false,
   renderMarkdown = () => "",
   notify = () => {},
@@ -127,8 +122,7 @@ export function useMessagePreview({
   } = {}) {
     if (!url) return;
     try {
-      const runFetch = authFetch || fetch;
-      const response = await runFetch(url);
+      const response = await attachmentService.fetchUrl(url);
       if (!response?.ok) {
         throw new Error(
           translate("message.downloadFailedHttp", { status: response?.status || 500 }),
@@ -195,7 +189,7 @@ export function useMessagePreview({
           logFileAccess("download.response", { traceId, channel: "desktop-host-ipc", ok: true, hasSavedPath: Boolean(res?.savedPath) });
           return;
         }
-        res = await downloadHostFileApi({ path: hostPath, traceId, isSandbox }, { fetcher: authFetch || undefined });
+        res = await attachmentService.downloadHostFile({ path: hostPath, traceId, isSandbox });
         logFileAccess("download.response", { traceId, channel: "backend-host-api", ok: Boolean(res?.ok), status: Number(res?.status || 0) });
         if (!res.ok) throw new Error(translate("message.downloadFailedHttp", { status: res.status }));
         const blob = await res.blob();
@@ -228,10 +222,7 @@ export function useMessagePreview({
     }
     try {
       logFileAccess("download.request", { traceId, channel: "workspace-api", isSandbox, relativePath: maskWorkspacePath(relativePath) });
-      const res = await downloadWorkspaceFileApi(
-        { userId: normalizedUserId, path: relativePath, traceId },
-        { fetcher: authFetch || undefined },
-      );
+      const res = await attachmentService.downloadWorkspaceFile({ userId: normalizedUserId, path: relativePath, traceId });
       logFileAccess("download.response", {
         traceId,
         ok: Boolean(res?.ok),
@@ -333,7 +324,7 @@ export function useMessagePreview({
             if (!result?.ok) throw new Error(result?.error || translate("message.previewFailed"));
             filePreview.imageUrl.value = result.url;
           } else {
-            const res = await downloadHostFileApi({ path: hostPath, traceId, isSandbox }, { fetcher: authFetch || undefined });
+            const res = await attachmentService.downloadHostFile({ path: hostPath, traceId, isSandbox });
             if (!res.ok) throw new Error(translate("message.previewFailedHttp", { status: res.status }));
             filePreview.imageUrl.value = URL.createObjectURL(await res.blob());
           }
@@ -346,7 +337,7 @@ export function useMessagePreview({
         if (window?.noobotDesktop?.readHostFile) {
           data = await window.noobotDesktop.readHostFile({ path: hostPath, traceId });
         } else {
-          const res = await getHostFileApi({ path: hostPath, traceId, isSandbox }, { fetcher: authFetch || undefined });
+          const res = await attachmentService.getHostFile({ path: hostPath, traceId, isSandbox });
           data = await res.json();
           if (!res.ok) data = { ok: false, error: data?.error || translate("message.previewFailedHttp", { status: res.status }) };
         }
@@ -389,10 +380,7 @@ export function useMessagePreview({
     try {
       if (isImageFile(fileName)) {
         logFileAccess("preview.imageRequest", { traceId, channel: "workspace-api", isSandbox, relativePath: maskWorkspacePath(relativePath) });
-        const downloadRes = await downloadWorkspaceFileApi(
-          { userId: normalizedUserId, path: relativePath, traceId },
-          { fetcher: authFetch || undefined },
-        );
+        const downloadRes = await attachmentService.downloadWorkspaceFile({ userId: normalizedUserId, path: relativePath, traceId });
         logFileAccess("preview.imageResponse", {
           traceId,
           ok: Boolean(downloadRes?.ok),
@@ -413,10 +401,7 @@ export function useMessagePreview({
         return;
       }
 
-      const res = await getWorkspaceFileApi(
-        { userId: normalizedUserId, path: relativePath, traceId },
-        { fetcher: authFetch || undefined },
-      );
+      const res = await attachmentService.getWorkspaceFile({ userId: normalizedUserId, path: relativePath, traceId });
       logFileAccess("preview.textResponse", {
         traceId,
         ok: Boolean(res?.ok),
@@ -535,8 +520,7 @@ export function useMessagePreview({
       attachmentPreview.type.value = isImage ? "image" : isVideo ? "video" : "audio";
       attachmentPreview.name.value = name;
       try {
-        const runFetch = authFetch || fetch;
-        const response = await runFetch(targetUrl);
+        const response = await attachmentService.fetchUrl(targetUrl);
         if (!response?.ok) {
           throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
         }
@@ -565,8 +549,7 @@ export function useMessagePreview({
       : name;
     attachmentPreview.type.value = markdownMode ? "markdown" : "text";
     try {
-      const runFetch = authFetch || fetch;
-      const response = await runFetch(targetUrl);
+      const response = await attachmentService.fetchUrl(targetUrl);
       if (!response?.ok) {
         throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
       }

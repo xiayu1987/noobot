@@ -15,8 +15,8 @@ import {
 } from "./workflowNodeSessionDetail";
 import { resolveWorkflowDialogProcessId } from "./workflowDialogProcessIdCompat.js";
 import { createWorkflowNodeViewTransaction } from "./workflowNodeViewTransaction.js";
-import { buildActivityTimelineFromLegacyLogs } from "../../../../../client/noobot-chat/src/composables/chat/chatEngine/activityTimeline.js";
-import { buildToolTimelineFromLegacyLogs } from "../../../../../client/noobot-chat/src/composables/chat/chatEngine/toolTimeline.js";
+import { buildActivityTimelineFromLegacyLogs } from "../../../../../client/noobot-chat/src/public/session-domain.js";
+import { buildToolTimelineFromLegacyLogs } from "../../../../../client/noobot-chat/src/public/session-domain.js";
 import {
   buildUnifiedSessionDetail,
   hasNewProtocolNodeIdentity,

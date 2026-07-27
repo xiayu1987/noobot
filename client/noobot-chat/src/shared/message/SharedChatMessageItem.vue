@@ -29,13 +29,9 @@ import {
   BaseMessageTypeTag,
   BasePreviewContent,
 } from "../ui";
-import {
-  resolveMessageCardRenderers,
-  resolveMessageCardListeners,
-  resolveMessageCardProps,
-  resolveMessageActionProps,
-  resolveMessageActionRenderers,
-} from "../../plugins/frontend-plugin-registry";
+import { EXTENSION_POINTS } from "../../extensions/extension-point-ids";
+import ExtensionOutlet from "../../extensions/ExtensionOutlet.vue";
+import { resolveExtensionPoint } from "../../extensions/extension-registry";
 import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessage,
@@ -48,7 +44,6 @@ const props = defineProps({
   allMessages: { type: Array, default: () => [] },
   sessionDocs: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
-  authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },
@@ -103,7 +98,6 @@ const {
   onCopyMessageMarkdownText,
 } = useMessagePreview({
   userId: props.userId,
-  authFetch: props.authFetch,
   isImageMime: props.isImageMime,
   renderMarkdown: props.renderMarkdown,
   notify: ({ type = "info", message = "" } = {}) => {
@@ -135,10 +129,10 @@ const messageRuntime = computed(() => selectTurnMessageRuntime(chatStore.turnRun
 }));
 
 const preMessageCardRenderers = computed(() =>
-  resolveMessageCardRenderers(props.messageItem, { slot: "pre" }),
+  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE, { messageItem: props.messageItem }),
 );
 const postMessageCardRenderers = computed(() =>
-  resolveMessageCardRenderers(props.messageItem, { slot: "post" }),
+  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST, { messageItem: props.messageItem }),
 );
 const showMessageTypeTag = computed(() => !(
   getMessageRole(props.messageItem) === "assistant" &&
@@ -176,10 +170,10 @@ const suppressDefaultAssets = computed(() =>
   ),
 );
 const preContentMessageActionRenderers = computed(() =>
-  resolveMessageActionRenderers(props.messageItem, { placement: "after-pre-cards" }),
+  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS, { messageItem: props.messageItem }),
 );
 const postContentMessageActionRenderers = computed(() =>
-  resolveMessageActionRenderers(props.messageItem, { placement: "post-content" }),
+  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_ACTION_POST_CONTENT, { messageItem: props.messageItem }),
 );
 const hideMessageMarkdownForInlineEditor = computed(() =>
   getMessageRole(props.messageItem) === "user" && props.messageItem?.__monotonicEditing === true,
@@ -187,10 +181,6 @@ const hideMessageMarkdownForInlineEditor = computed(() =>
 const defaultMonotonicMessageActionProps = computed(() =>
   resolveMonotonicMessageActionProps(resolveRendererContext()),
 );
-
-function resolveRendererProps(renderer = {}) {
-  return resolveMessageCardProps(renderer, resolveRendererContext());
-}
 
 function resolveRendererContext() {
   const selectSessionMessages = (sessionId = "") => {
@@ -219,7 +209,6 @@ function resolveRendererContext() {
     mergeSubSessionSnapshot: chatStore.mergeSubSessionSnapshot,
     logWorkflowDiagnostics,
     userId: props.userId,
-    authFetch: props.authFetch,
     renderMarkdown: props.renderMarkdown,
     formatTime: props.formatTime,
     formatFileSize: props.formatFileSize,
@@ -246,14 +235,6 @@ function resolveRendererContext() {
     onDownloadAttachment,
     onOpenThinkingDetails: handleOpenThinkingDetails,
   };
-}
-
-function resolveRendererListeners(renderer = {}) {
-  return resolveMessageCardListeners(renderer, resolveRendererContext());
-}
-
-function resolveActionRendererProps(renderer = {}) {
-  return resolveMessageActionProps(renderer, resolveRendererContext());
 }
 
 function handleOpenThinkingDetails(payload = {}) {
@@ -286,22 +267,17 @@ async function handleCopyAssistantMessageText() {
     :hide-header="hideHeader"
   >
     <BaseMessageTypeTag v-if="showMessageTypeTag" :type="messageItem.type" />
-    <component
-      :is="renderer.component"
-      v-for="renderer in preMessageCardRenderers"
-      :key="renderer.id"
-      v-bind="resolveRendererProps(renderer)"
-      v-on="resolveRendererListeners(renderer)"
-      @open-thinking-details="handleOpenThinkingDetails"
+    <ExtensionOutlet
+      :point="EXTENSION_POINTS.MESSAGE_CARD_PRE"
+      :context="resolveRendererContext()"
+      :extra-listeners="{ openThinkingDetails: handleOpenThinkingDetails }"
     />
 
     <BaseMessageErrorAlert :error="messageItem.error" />
 
-    <component
-      :is="renderer.component"
-      v-for="renderer in preContentMessageActionRenderers"
-      :key="renderer.id"
-      v-bind="resolveActionRendererProps(renderer)"
+    <ExtensionOutlet
+      :point="EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS"
+      :context="resolveRendererContext()"
     />
 
     <BaseMarkdownContent
@@ -311,11 +287,9 @@ async function handleCopyAssistantMessageText() {
       :render-markdown="renderMarkdown"
     />
 
-    <component
-      :is="renderer.component"
-      v-for="renderer in postContentMessageActionRenderers"
-      :key="renderer.id"
-      v-bind="resolveActionRendererProps(renderer)"
+    <ExtensionOutlet
+      :point="EXTENSION_POINTS.MESSAGE_ACTION_POST_CONTENT"
+      :context="resolveRendererContext()"
     />
 
     <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
@@ -357,13 +331,10 @@ async function handleCopyAssistantMessageText() {
       />
     </BaseFileCardList>
 
-    <component
-      :is="renderer.component"
-      v-for="renderer in postMessageCardRenderers"
-      :key="renderer.id"
-      v-bind="resolveRendererProps(renderer)"
-      v-on="resolveRendererListeners(renderer)"
-      @open-thinking-details="handleOpenThinkingDetails"
+    <ExtensionOutlet
+      :point="EXTENSION_POINTS.MESSAGE_CARD_POST"
+      :context="resolveRendererContext()"
+      :extra-listeners="{ openThinkingDetails: handleOpenThinkingDetails }"
     />
   </BaseMessageShell>
 

@@ -4,19 +4,20 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { computed } from "vue";
 import { useWorkflowLocale } from "../i18n";
 
 const props = defineProps({
   modelOptions: { type: Array, default: () => [] },
-  pluginModelConfig: { type: Object, default: () => ({}) },
   hasModelOptions: { type: Boolean, default: false },
-  updatePluginModelConfig: { type: Function, default: null },
+  pluginContext: { type: Object, required: true },
 });
+const pluginConfig = computed(() => props.pluginContext.config.get());
 
 const { translate } = useWorkflowLocale();
 
 function getWorkflowSemanticModel() {
-  return String(props.pluginModelConfig?.workflow?.semanticModel || "").trim();
+  return String(pluginConfig.value?.semanticModel || "").trim();
 }
 
 function getModelMetaText(modelItem = {}) {
@@ -27,18 +28,8 @@ function getModelMetaText(modelItem = {}) {
 }
 
 function onWorkflowSemanticModelChange(value = "") {
-  if (typeof props.updatePluginModelConfig !== "function") return;
   const nextValue = String(value || "").trim();
-  const currentConfig = props.pluginModelConfig && typeof props.pluginModelConfig === "object"
-    ? props.pluginModelConfig
-    : {};
-  props.updatePluginModelConfig({
-    ...currentConfig,
-    workflow: {
-      ...(currentConfig.workflow && typeof currentConfig.workflow === "object" ? currentConfig.workflow : {}),
-      semanticModel: nextValue,
-    },
-  });
+  props.pluginContext.config.patch({ semanticModel: nextValue });
 }
 </script>
 

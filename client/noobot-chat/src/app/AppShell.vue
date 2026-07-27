@@ -37,6 +37,8 @@ import {
   getMessageTurnScopeId,
 } from "../composables/infra/messageIdentity";
 import { selectTurnMessageRuntime } from "../composables/chat/sessionRunStateMachine/turnRuntimeRegistry";
+import { attachmentService } from "../services/attachmentService";
+import { thinkingDetailService } from "../services/thinkingDetailService";
 import {
   classifyRealtimeLog,
   formatFileSize,
@@ -142,6 +144,8 @@ const {
     reconnectActiveSession({ force: true });
   },
 });
+attachmentService.configure({ fetcher: authFetch });
+thinkingDetailService.configure({ fetcher: authFetch });
 bindScenarioConfig(scenarioConfig);
 
 function navigateToLastMessage() {
@@ -477,7 +481,6 @@ const drawerPanels = computed(() =>
       :can-use-ide="canUseIDE"
       :loading-session-detail="loadingSessionDetail"
       :should-render-message-in-chat="shouldRenderMessageInChat"
-      :auth-fetch="authFetch"
       :render-markdown="renderMarkdown"
       :format-time="formatTime"
       :format-file-size="formatFileSize"

@@ -6,10 +6,10 @@
 <script setup>
 import { computed } from "vue";
 import { useLocale } from "../../shared/i18n/useLocale";
-import {
-  resolveComposerModelExtensionProps,
-  resolveComposerModelExtensionRenderers,
-} from "../../plugins/frontend-plugin-registry";
+import ExtensionOutlet from "../../extensions/ExtensionOutlet.vue";
+import { EXTENSION_POINTS } from "../../extensions/extension-point-ids";
+import { provideExtensionValues, resolveExtensionPoint } from "../../extensions/extension-registry";
+import { createPluginContext } from "../../extensions/create-plugin-context";
 
 const props = defineProps({
   allowUserInteraction: { type: Boolean, default: true },
@@ -76,33 +76,24 @@ const normalizedModelOptions = computed(() => {
   };
   (Array.isArray(props.modelOptions) ? props.modelOptions : []).forEach(addOption);
   addOption(props.selectedModel);
-  collectPluginModelValues(props.pluginModelConfig).forEach(addOption);
+  provideExtensionValues(EXTENSION_POINTS.COMPOSER_MODEL_OPTIONS, {
+    selectedPluginKeySet: props.selectedPluginKeySet,
+  }).forEach(addOption);
   return Array.from(optionMap.values());
 });
 
 const hasModelOptions = computed(() => normalizedModelOptions.value.length > 0);
 
-function collectPluginModelValues(pluginModelConfig = {}) {
-  const values = [];
-  const visit = (node) => {
-    if (typeof node === "string" || typeof node === "number") {
-      const value = String(node || "").trim();
-      if (value) values.push(value);
-      return;
-    }
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    if (!node || typeof node !== "object") return;
-    Object.values(node).forEach(visit);
-  };
-  visit(pluginModelConfig && typeof pluginModelConfig === "object" ? pluginModelConfig : {});
-  return values;
-}
-
 function updatePluginModelConfig(nextConfig = {}) {
   emit("update:pluginModelConfig", nextConfig && typeof nextConfig === "object" ? nextConfig : {});
+}
+
+function pluginContext(pluginId = "") {
+  return createPluginContext({
+    pluginId,
+    getConfig: () => props.pluginModelConfig,
+    updateConfig: updatePluginModelConfig,
+  });
 }
 
 function getModelMetaText(modelItem = {}) {
@@ -125,22 +116,21 @@ const composerModelExtensionContext = computed(() => ({
   selectedPluginKeySet: props.selectedPluginKeySet,
   updatePluginModelConfig,
   hasModelOptions: hasModelOptions.value,
+  pluginContext,
 }));
 
 const composerModelExtensionRenderers = computed(() =>
-  resolveComposerModelExtensionRenderers(composerModelExtensionContext.value),
+  resolveExtensionPoint(EXTENSION_POINTS.COMPOSER_OPTIONS_MODEL, composerModelExtensionContext.value),
 );
 
-function resolveComposerExtensionProps(renderer = {}) {
-  return {
-    modelOptions: normalizedModelOptions.value,
-    pluginModelConfig: props.pluginModelConfig && typeof props.pluginModelConfig === "object" ? props.pluginModelConfig : {},
-    selectedPluginKeySet: props.selectedPluginKeySet,
-    hasModelOptions: hasModelOptions.value,
-    updatePluginModelConfig,
-    ...resolveComposerModelExtensionProps(renderer, composerModelExtensionContext.value),
-  };
-}
+const composerExtensionBaseProps = computed(() => ({
+  modelOptions: normalizedModelOptions.value,
+  pluginModelConfig: props.pluginModelConfig && typeof props.pluginModelConfig === "object" ? props.pluginModelConfig : {},
+  selectedPluginKeySet: props.selectedPluginKeySet,
+  hasModelOptions: hasModelOptions.value,
+  updatePluginModelConfig,
+  pluginContext,
+}));
 </script>
 
 <template>
@@ -318,11 +308,10 @@ function resolveComposerExtensionProps(renderer = {}) {
           <div class="model-config-subtitle">{{ translate("composer.pluginModelExtensions") }}</div>
           <p class="model-config-description">{{ translate("composer.pluginModelExtensionsDescription") }}</p>
         </div>
-        <component
-          :is="extensionRenderer.component"
-          v-for="extensionRenderer in composerModelExtensionRenderers"
-          :key="extensionRenderer.id"
-          v-bind="resolveComposerExtensionProps(extensionRenderer)"
+        <ExtensionOutlet
+          :point="EXTENSION_POINTS.COMPOSER_OPTIONS_MODEL"
+          :context="composerModelExtensionContext"
+          :extra-props="composerExtensionBaseProps"
         />
         <span v-if="!composerModelExtensionRenderers.length" class="plugin-empty-text">
           {{ translate("composer.noPluginModelExtensions") }}

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import ThinkingPanel from "../../../client/noobot-chat/src/shared/message/ThinkingPanel.vue";
+import { ThinkingPanel } from "../../../client/noobot-chat/src/public/chat-ui.js";
 import AssistantCopyActions from "./components/AssistantCopyActions.vue";
 import MessageStatusRow from "./components/MessageStatusRow.vue";
 import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
@@ -27,35 +27,27 @@ export function matchesThinkingPanel(messageItem = {}) {
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
 export function registerFrontendPlugin(ctx = {}) {
-  const register = ctx?.registerFrontendPlugin;
-  if (typeof register !== "function") {
-    throw new Error("frontend register API is required");
+  const contribute = ctx?.contributeExtension;
+  const points = ctx?.extensionPoints;
+  const attachmentService = ctx?.services?.attachments || null;
+  const thinkingDetailService = ctx?.services?.thinkingDetails || null;
+  if (typeof contribute !== "function" || !points) {
+    throw new Error("frontend contribution API is required");
   }
-  register({
-    id: "harness",
-    name: "harness-model-extension",
-    capabilities: ["composer.model-extension"],
-    composerModelExtensions: [
-      {
+  contribute(points.COMPOSER_OPTIONS_MODEL, {
         id: "harness-model-extension",
         capability: "composer.model-extension",
         priority: 10,
         component: HarnessModelExtension,
-      },
-    ],
+        resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("harness") }),
   });
-  register({
-    id: "message-status",
-    name: "message-status-row",
-    capabilities: ["message.panel.status"],
-    messageCards: [
-      {
+  contribute(points.MESSAGE_CARD_PRE, {
         id: "message-status-row",
         capability: "message.panel.status",
         slot: "pre",
         priority: 5,
         component: MessageStatusRow,
-        match: matchesMessageStatusRow,
+        when: (context = {}) => matchesMessageStatusRow(context?.messageItem),
         resolveProps: (context = {}) => ({
           pending: context?.messageItem?.pending,
           statusLabel: context?.messageItem?.statusLabel,
@@ -63,27 +55,21 @@ export function registerFrontendPlugin(ctx = {}) {
           subTaskStatusText: context?.subTaskStatusText,
           statusStepState: context?.statusStepState,
         }),
-      },
-    ],
   });
-  register({
-    id: "message-thinking",
-    name: "thinking-panel",
-    capabilities: ["message.panel.thinking"],
-    messageCards: [
-      {
+  contribute(points.MESSAGE_CARD_PRE, {
         id: "thinking-panel",
         capability: "message.panel.thinking",
+        exclusiveGroup: "message.panel.thinking",
         slot: "pre",
         priority: 10,
         component: ThinkingPanel,
-        match: matchesThinkingPanel,
+        when: (context = {}) => matchesThinkingPanel(context?.messageItem),
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},
           allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
           runtime: context?.messageRuntime || null,
           userId: String(context?.userId || ""),
-          authFetch: context?.authFetch,
+          thinkingDetailService,
           renderMarkdown: context?.renderMarkdown,
           formatTime: context?.formatTime,
           formatFileSize: context?.formatFileSize,
@@ -96,21 +82,14 @@ export function registerFrontendPlugin(ctx = {}) {
             }
           },
         }),
-      },
-    ],
   });
-  register({
-    id: "message-actions",
-    name: "assistant-copy-actions",
-    capabilities: ["message.action.assistant.copy"],
-    messageActions: [
-      {
+  contribute(points.MESSAGE_ACTION_AFTER_PRE_CARDS, {
         id: "assistant-copy-actions",
         capability: "message.action.assistant.copy",
         placement: "after-pre-cards",
         priority: 100,
         component: AssistantCopyActions,
-        match: (messageItem = {}) => messageItem?.role === "assistant",
+        when: (context = {}) => context?.messageItem?.role === "assistant",
         resolveProps: (context = {}) => {
           const messageItem =
             context?.messageItem && typeof context.messageItem === "object"
@@ -131,22 +110,15 @@ export function registerFrontendPlugin(ctx = {}) {
               typeof context?.translate === "function" ? context.translate : (key = "") => key,
           };
         },
-      },
-    ],
   });
-  register({
-    id: "message-assets",
-    name: "message-assets",
-    capabilities: ["message.panel.assets"],
-    messageCards: [
-      {
+  contribute(points.MESSAGE_CARD_POST, {
         id: "message-written-files",
         capability: "message.panel.assets",
         slot: "post",
         priority: 10,
         suppressDefaultAssets: true,
         component: MessageWrittenFiles,
-        match: (messageItem = {}) => messageItem?.role === "assistant",
+        when: (context = {}) => context?.messageItem?.role === "assistant",
         resolveProps: (context = {}) => ({
           writtenFiles: Array.isArray(context?.writtenFiles) ? context.writtenFiles : [],
         }),
@@ -156,15 +128,15 @@ export function registerFrontendPlugin(ctx = {}) {
           download:
             typeof context?.onDownloadFile === "function" ? context.onDownloadFile : null,
         }),
-      },
-      {
+  });
+  contribute(points.MESSAGE_CARD_POST, {
         id: "message-attachments",
         capability: "message.panel.assets",
         slot: "post",
         priority: 20,
         suppressDefaultAssets: true,
         component: MessageAttachments,
-        match: () => true,
+        when: () => true,
         resolveProps: (context = {}) => ({
           attachments: Array.isArray(context?.displayedAttachments)
             ? context.displayedAttachments
@@ -174,8 +146,7 @@ export function registerFrontendPlugin(ctx = {}) {
           canPreviewParsedResult: context?.canPreviewParsedResult,
           formatFileSize: context?.formatFileSize,
           userId: String(context?.userId || ""),
-          authFetch:
-            typeof context?.authFetch === "function" ? context.authFetch : null,
+          attachmentService,
         }),
         resolveListeners: (context = {}) => ({
           preview:
@@ -191,7 +162,5 @@ export function registerFrontendPlugin(ctx = {}) {
               ? context.onDownloadAttachment
               : null,
         }),
-      },
-    ],
   });
 }

@@ -9,7 +9,7 @@ import { useWorkflowLocale } from "../../i18n";
 import {
   BaseEmptyHint,
   BaseZoomControls,
-} from "../../../../../client/noobot-chat/src/shared/ui";
+} from "../../../../../client/noobot-chat/src/public/ui.js";
 import WorkflowGraphNode from "./WorkflowGraphNode.vue";
 import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
 import { resolveWorkflowDialogProcessId } from "../workflow-message-card/workflowDialogProcessIdCompat.js";

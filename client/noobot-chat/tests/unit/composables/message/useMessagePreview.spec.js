@@ -23,6 +23,10 @@ function createTextResponse(text = "content") {
 }
 
 describe("useMessagePreview attachment downloads", () => {
+  function createAttachmentService(responseFactory) {
+    return { fetchUrl: vi.fn(async () => responseFactory()) };
+  }
+
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:attachment");
@@ -31,8 +35,8 @@ describe("useMessagePreview attachment downloads", () => {
   });
 
   it("downloads attachment using compatible file/session/source fields", async () => {
-    const authFetch = vi.fn(async () => createBlobResponse());
-    const { onDownloadAttachment } = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(createBlobResponse);
+    const { onDownloadAttachment } = useMessagePreview({ userId: "admin", attachmentService });
 
     await onDownloadAttachment({
       fileId: "file-123",
@@ -41,27 +45,27 @@ describe("useMessagePreview attachment downloads", () => {
       name: "report.txt",
     });
 
-    expect(authFetch).toHaveBeenCalledTimes(1);
-    expect(authFetch).toHaveBeenCalledWith(
+    expect(attachmentService.fetchUrl).toHaveBeenCalledTimes(1);
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/file-123?sessionId=session-456&attachmentSource=upload",
     );
   });
 
   it("does not request an empty attachment url when attachment id is missing", async () => {
-    const authFetch = vi.fn(async () => createBlobResponse());
-    const { onDownloadAttachment } = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(createBlobResponse);
+    const { onDownloadAttachment } = useMessagePreview({ userId: "admin", attachmentService });
 
     await onDownloadAttachment({
       name: "missing-id.txt",
       mimeType: "text/plain",
     });
 
-    expect(authFetch).not.toHaveBeenCalled();
+    expect(attachmentService.fetchUrl).not.toHaveBeenCalled();
   });
 
   it("keeps multimodal generated attachment download parameters", async () => {
-    const authFetch = vi.fn(async () => createBlobResponse());
-    const { onDownloadAttachment } = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(createBlobResponse);
+    const { onDownloadAttachment } = useMessagePreview({ userId: "admin", attachmentService });
 
     await onDownloadAttachment({
       attachmentId: "ae2d2a3b-8d28-4cc5-b4d8-a819bfd26563",
@@ -70,15 +74,15 @@ describe("useMessagePreview attachment downloads", () => {
       name: "generated.png",
     });
 
-    expect(authFetch).toHaveBeenCalledTimes(1);
-    expect(authFetch).toHaveBeenCalledWith(
+    expect(attachmentService.fetchUrl).toHaveBeenCalledTimes(1);
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/ae2d2a3b-8d28-4cc5-b4d8-a819bfd26563?sessionId=8d83a95d-5ab9-413b-b73b-39b90e1ad558&attachmentSource=model",
     );
   });
 
   it("previews image attachments by extension when mime type is missing", async () => {
-    const authFetch = vi.fn(async () => createBlobResponse());
-    const preview = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(createBlobResponse);
+    const preview = useMessagePreview({ userId: "admin", attachmentService });
     const attachment = {
       previewUrl: "/api/internal/attachment/admin/generated-image",
       name: "generated.jfif",
@@ -89,15 +93,15 @@ describe("useMessagePreview attachment downloads", () => {
 
     await preview.openAttachmentPreview(attachment);
 
-    expect(authFetch).toHaveBeenCalledWith("/api/internal/attachment/admin/generated-image");
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith("/api/internal/attachment/admin/generated-image");
     expect(preview.attachmentPreviewVisible.value).toBe(true);
     expect(preview.attachmentPreviewType.value).toBe("image");
     expect(preview.attachmentPreviewUrl.value).toBe("blob:attachment");
   });
 
   it("previews text attachments by extension when mime type is octet-stream", async () => {
-    const authFetch = vi.fn(async () => createTextResponse("hello\nworld"));
-    const preview = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(() => createTextResponse("hello\nworld"));
+    const preview = useMessagePreview({ userId: "admin", attachmentService });
     const attachment = {
       previewUrl: "/api/internal/attachment/admin/report-log",
       name: "report.log",
@@ -108,15 +112,15 @@ describe("useMessagePreview attachment downloads", () => {
 
     await preview.openAttachmentPreview(attachment);
 
-    expect(authFetch).toHaveBeenCalledWith("/api/internal/attachment/admin/report-log");
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith("/api/internal/attachment/admin/report-log");
     expect(preview.attachmentPreviewVisible.value).toBe(true);
     expect(preview.attachmentPreviewType.value).toBe("text");
     expect(preview.attachmentPreviewTextContent.value).toBe("hello\nworld");
   });
 
   it("previews parsed result from nested attachment metadata when parsedResultUrl is missing", async () => {
-    const authFetch = vi.fn(async () => createTextResponse("# parsed"));
-    const preview = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(() => createTextResponse("# parsed"));
+    const preview = useMessagePreview({ userId: "admin", attachmentService });
     const attachment = {
       attachmentId: "source-1",
       sessionId: "session-1",
@@ -139,7 +143,7 @@ describe("useMessagePreview attachment downloads", () => {
 
     await preview.openParsedResultPreview(attachment);
 
-    expect(authFetch).toHaveBeenCalledWith(
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
     );
     expect(preview.attachmentPreviewVisible.value).toBe(true);
@@ -149,8 +153,8 @@ describe("useMessagePreview attachment downloads", () => {
   });
 
   it("source attachment preview delegates office attachments to parsed result preview", async () => {
-    const authFetch = vi.fn(async () => createTextResponse("# parsed from office"));
-    const preview = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(() => createTextResponse("# parsed from office"));
+    const preview = useMessagePreview({ userId: "admin", attachmentService });
 
     await preview.openAttachmentPreview({
       attachmentId: "source-1",
@@ -166,7 +170,7 @@ describe("useMessagePreview attachment downloads", () => {
       },
     });
 
-    expect(authFetch).toHaveBeenCalledWith(
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
     );
     expect(preview.attachmentPreviewType.value).toBe("markdown");
@@ -174,8 +178,8 @@ describe("useMessagePreview attachment downloads", () => {
   });
 
   it("downloads parsed result from nested attachment metadata", async () => {
-    const authFetch = vi.fn(async () => createBlobResponse());
-    const { onDownloadParsedResult } = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(createBlobResponse);
+    const { onDownloadParsedResult } = useMessagePreview({ userId: "admin", attachmentService });
 
     await onDownloadParsedResult({
       sessionId: "session-1",
@@ -187,14 +191,14 @@ describe("useMessagePreview attachment downloads", () => {
       },
     });
 
-    expect(authFetch).toHaveBeenCalledWith(
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
       "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
     );
   });
 
   it("previews an already-resolved attachment payload through the resolved preview entrypoint", async () => {
-    const authFetch = vi.fn(async () => createTextResponse("# parsed payload"));
-    const preview = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(() => createTextResponse("# parsed payload"));
+    const preview = useMessagePreview({ userId: "admin", attachmentService });
 
     await preview.openResolvedAttachmentPreview({
       attachmentId: "parsed-1",
@@ -203,15 +207,15 @@ describe("useMessagePreview attachment downloads", () => {
       previewUrl: "/api/attachments/parsed-1",
     });
 
-    expect(authFetch).toHaveBeenCalledWith("/api/attachments/parsed-1");
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith("/api/attachments/parsed-1");
     expect(preview.attachmentPreviewVisible.value).toBe(true);
     expect(preview.attachmentPreviewType.value).toBe("markdown");
     expect(preview.attachmentPreviewTextContent.value).toBe("# parsed payload");
   });
 
   it("keeps legacy parsedResult option compatible for resolved attachment payloads", async () => {
-    const authFetch = vi.fn(async () => createTextResponse("# compat payload"));
-    const preview = useMessagePreview({ userId: "admin", authFetch });
+    const attachmentService = createAttachmentService(() => createTextResponse("# compat payload"));
+    const preview = useMessagePreview({ userId: "admin", attachmentService });
 
     await preview.openAttachmentPreview(
       {
@@ -223,7 +227,7 @@ describe("useMessagePreview attachment downloads", () => {
       { parsedResult: true },
     );
 
-    expect(authFetch).toHaveBeenCalledWith("/api/attachments/parsed-1");
+    expect(attachmentService.fetchUrl).toHaveBeenCalledWith("/api/attachments/parsed-1");
     expect(preview.attachmentPreviewType.value).toBe("markdown");
     expect(preview.attachmentPreviewTextContent.value).toBe("# compat payload");
   });

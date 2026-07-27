@@ -13,7 +13,6 @@ const props = defineProps({
   allMessages: { type: Array, default: () => [] },
   sessionDocs: { type: Array, default: () => [] },
   userId: { type: String, default: "" },
-  authFetch: { type: Function, default: null },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, required: true },

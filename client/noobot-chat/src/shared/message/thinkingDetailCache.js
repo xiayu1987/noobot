@@ -5,7 +5,7 @@
  */
 import { reactive } from "vue";
 import { normalizeTurnScopeIdKey, getMessageDialogProcessId, getMessageSessionId, getMessageTurnScopeId } from "../../composables/infra/messageIdentity";
-import { getSessionThinkingDetailApi } from "../../services/api/chatApi";
+import { thinkingDetailService as defaultThinkingDetailService } from "../../services/thinkingDetailService";
 
 const cache = reactive({ entries: {} });
 const inflight = new Map();
@@ -44,8 +44,9 @@ export async function loadThinkingDetail({
   dialogProcessId = "",
   turnScopeId = "",
   fetchThinkingDetail = null,
-  authFetch = null,
+  thinkingDetailService = defaultThinkingDetailService,
 } = {}) {
+  const detailService = thinkingDetailService || defaultThinkingDetailService;
   const identity = resolveThinkingDetailIdentity({ ...messageItem, dialogProcessId: dialogProcessId || messageItem?.dialogProcessId, turnScopeId: turnScopeId || messageItem?.turnScopeId }, sessionId);
   if (!identity.key) return null;
   const cached = cache.entries[identity.key];
@@ -54,18 +55,12 @@ export async function loadThinkingDetail({
   const request = (async () => {
     const runFetch = typeof fetchThinkingDetail === "function"
       ? fetchThinkingDetail
-      : async (sid, params) => {
-        const res = await getSessionThinkingDetailApi({
+      : async (sid, params) => detailService.getDetail({
           userId,
           sessionId: sid,
           dialogProcessId: params.dialogProcessId,
           turnScopeId: params.turnScopeId,
-        }, { fetcher: authFetch });
-        if (!res.ok) throw new Error(`failed to load thinking detail: ${res.status}`);
-        const data = await res.json();
-        if (!data.ok || !data.exists) throw new Error(data.error || "thinking detail not found");
-        return data;
-      };
+        });
     const data = await runFetch(identity.sessionId, {
       dialogProcessId: identity.dialogProcessId,
       turnScopeId: identity.turnScopeId,

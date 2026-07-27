@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { useLocale } from "../../../client/noobot-chat/src/shared/i18n/useLocale";
+import { useLocale } from "../../../client/noobot-chat/src/public/locale.js";
 
 const FALLBACK_LOCALE = "zh-CN";
 

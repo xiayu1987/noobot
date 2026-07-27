@@ -23,34 +23,30 @@ function isWorkflowMessageLike(messageItem = {}) {
 }
 
 export function registerFrontendPlugin(ctx = {}) {
-  const register = ctx?.registerFrontendPlugin;
-  if (typeof register !== "function") {
-    throw new Error("frontend register API is required");
+  const contribute = ctx?.contributeExtension;
+  const points = ctx?.extensionPoints;
+  const workflowSessionService = ctx?.services?.workflowSessions;
+  if (typeof contribute !== "function" || !points) {
+    throw new Error("frontend contribution API is required");
   }
-  register({
-    id: "workflow",
-    name: "workflow-frontend",
-    capabilities: ["message.card.workflow"],
-    composerModelExtensions: [
-      {
+  contribute(points.COMPOSER_OPTIONS_MODEL, {
         id: "workflow-model-extension",
-        capability: "composer.model-extension",
         priority: 20,
         component: WorkflowModelExtension,
-      },
-    ],
-    messageCards: [
-      {
+        when: (context = {}) => context?.selectedPluginKeySet?.has?.("workflow") === true,
+        resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("workflow") }),
+  });
+  contribute(points.MESSAGE_CARD_PRE, {
         id: "workflow-card",
-        capability: "message.card.workflow",
-        slot: "pre",
+        capability: "message.panel.workflow",
+        exclusiveGroup: "message.panel.workflow",
         priority: 100,
         component: WorkflowMessageCard,
-        match: (messageItem = {}) => isWorkflowMessageLike(messageItem),
+        when: (context = {}) => isWorkflowMessageLike(context?.messageItem),
         resolveProps: (context = {}) => ({
           messageItem: context?.messageItem || {},
           userId: String(context?.userId || ""),
-          authFetch: typeof context?.authFetch === "function" ? context.authFetch : null,
+          workflowSessionService,
           renderMarkdown: context?.renderMarkdown,
           formatTime: context?.formatTime,
           formatFileSize: context?.formatFileSize,
@@ -72,7 +68,5 @@ export function registerFrontendPlugin(ctx = {}) {
             ? context.logWorkflowDiagnostics
             : null,
         }),
-      },
-    ],
   });
 }
