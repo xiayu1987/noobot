@@ -89,6 +89,10 @@ test("separate_model analysis uses aligned agent context then user request and u
     String(analysisRequest?.content || ""),
     /不要自己执行|do not execute/i,
   );
+  assert.match(
+    String(analysisRequest?.content || ""),
+    /如无变化，请回复“分析中”|if nothing has changed, reply with "Analyzing"/i,
+  );
   const responsibilityMessage = capturedPayload.messages.at(-1);
   assert.equal(responsibilityMessage?.role, "user");
   assert.match(String(responsibilityMessage?.content || ""), /分析|analysis/i);
