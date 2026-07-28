@@ -4,7 +4,5 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const PLUGIN_CAPABILITY = Object.freeze({
-  AGENT_REGISTER: "agent.register",
-  BOT_REGISTER: "bot.register",
-});
+// Compatibility facade: capability names are owned by the host-neutral runtime.
+export { PLUGIN_CAPABILITY, PLUGIN_CAPABILITIES } from "@noobot/plugin-runtime";

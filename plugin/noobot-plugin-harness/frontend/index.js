@@ -27,9 +27,6 @@ export function registerFrontendPlugin(ctx = {}) {
     provide: ({ kind, value } = {}) => {
       if (kind === "flow") return [value?.harnessFlow ?? value?.data?.harnessFlow].filter((item) => item != null);
       if (kind === "capability-response-event") return [value === "harness_capability_response"];
-      if (kind === "model-response-text") {
-        return [String(value || "").replace(/^Harness\s+模型返回\s*\/\s*[^\n]+\n?/i, "").trim()];
-      }
       return [];
     },
   });

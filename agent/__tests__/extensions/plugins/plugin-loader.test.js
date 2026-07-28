@@ -44,7 +44,7 @@ test("plugin loader discovers manifest and loads register function", async () =>
         version: "1.0.0",
         apiVersion: "1",
         capabilities: ["test.demo"],
-        entry: "src/index.js",
+        entries: { agent: "src/index.js", service: "src/service.js" },
       },
       null,
       2,
@@ -69,6 +69,9 @@ test("plugin loader discovers manifest and loads register function", async () =>
     });
     assert.equal(loaded.loadedCount, 1);
     assert.equal(typeof loaded.registry.get("demo")?.registerNoobotPlugin, "function");
+    const serviceLoaded = await loadNoobotPlugins({ pluginRootDir: tempRoot, runtimeSurface: "service" });
+    assert.equal(serviceLoaded.loadedCount, 0);
+    assert.ok(serviceLoaded.errors.some((item) => item.stage === "validate_entry_exists"));
     const resolved = resolvePluginRegisterFromLoaded(loaded, "demo", null);
     assert.equal(typeof resolved, "function");
     const resolvedByKey = resolvePluginRegisterByPluginKey(loaded, "demo", null);
@@ -119,12 +122,12 @@ test("plugin loader detects duplicate id and entry escape path", async () => {
   await mkdir(path.join(pluginC, "src"), { recursive: true });
   await writeFile(
     path.join(pluginA, "manifest.json"),
-    JSON.stringify({ id: "dup", name: "A", version: "1.0.0", apiVersion: "1", entry: "src/index.js" }),
+    JSON.stringify({ id: "dup", name: "A", version: "1.0.0", apiVersion: "1", entries: { agent: "src/index.js" } }),
     "utf8",
   );
   await writeFile(
     path.join(pluginB, "manifest.json"),
-    JSON.stringify({ id: "dup", name: "B", version: "1.0.0", apiVersion: "1", entry: "src/index.js" }),
+    JSON.stringify({ id: "dup", name: "B", version: "1.0.0", apiVersion: "1", entries: { agent: "src/index.js" } }),
     "utf8",
   );
   await writeFile(
@@ -134,7 +137,7 @@ test("plugin loader detects duplicate id and entry escape path", async () => {
       name: "escape",
       version: "1.0.0",
       apiVersion: "1",
-      entry: "../outside.js",
+      entries: { agent: "../outside.js" },
     }),
     "utf8",
   );
@@ -161,7 +164,7 @@ test("plugin runtime cache supports get/refresh and diagnostics", async () => {
       name: "cache-plugin",
       version: "1.0.0",
       apiVersion: "1",
-      entry: "src/index.js",
+      entries: { agent: "src/index.js" },
       enabledByDefault: false,
     }),
     "utf8",
@@ -181,6 +184,52 @@ test("plugin runtime cache supports get/refresh and diagnostics", async () => {
     assert.notEqual(refreshed.loadedAt, "");
   } finally {
     clearNoobotPluginRuntimeCache();
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("plugin runtime selects surfaces, skips absent entries, and isolates cache", async () => {
+  const tempRoot = createTempRoot("noobot-plugin-loader-surfaces-");
+  const pluginDir = path.join(tempRoot, "surface-plugin");
+  await mkdir(path.join(pluginDir, "src"), { recursive: true });
+  await writeFile(path.join(pluginDir, "manifest.json"), JSON.stringify({
+    id: "surface", name: "surface", version: "1.0.0", apiVersion: "1",
+    entries: { agent: "src/agent.js", service: "src/service.js" },
+  }), "utf8");
+  await writeFile(path.join(pluginDir, "src/agent.js"), "export function registerNoobotPlugin() {}; export const surface = 'agent';\n", "utf8");
+  await writeFile(path.join(pluginDir, "src/service.js"), "export const surface = 'service';\n", "utf8");
+  try {
+    clearNoobotPluginRuntimeCache();
+    const agent = await getNoobotPluginRuntime({ pluginRootDir: tempRoot, runtimeSurface: "agent" });
+    const service = await getNoobotPluginRuntime({ pluginRootDir: tempRoot, runtimeSurface: "service" });
+    const frontend = await getNoobotPluginRuntime({ pluginRootDir: tempRoot, runtimeSurface: "frontend" });
+    assert.notEqual(agent, service);
+    assert.equal(agent.registry.get("surface")?.moduleNamespace?.surface, "agent");
+    assert.equal(service.registry.get("surface")?.moduleNamespace?.surface, "service");
+    assert.equal(frontend.loadedCount, 0);
+    assert.equal(frontend.skipped[0]?.reason, "no_frontend_entry");
+  } finally {
+    clearNoobotPluginRuntimeCache();
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("agent-only plugin loads without service or frontend entries", async () => {
+  const tempRoot = createTempRoot("noobot-agent-only-plugin-");
+  const pluginDir = path.join(tempRoot, "agent-only");
+  await mkdir(path.join(pluginDir, "src"), { recursive: true });
+  await writeFile(path.join(pluginDir, "manifest.json"), JSON.stringify({
+    id: "agent-only", name: "agent-only", version: "1.0.0", apiVersion: "1",
+    capabilities: ["agent.register"], entries: { agent: "src/agent.js" },
+  }), "utf8");
+  await writeFile(path.join(pluginDir, "src/agent.js"), "export function registerNoobotPlugin() {}\n", "utf8");
+  try {
+    const agent = await loadNoobotPlugins({ pluginRootDir: tempRoot, runtimeSurface: "agent" });
+    const service = await loadNoobotPlugins({ pluginRootDir: tempRoot, runtimeSurface: "service" });
+    assert.equal(agent.loadedCount, 1);
+    assert.equal(service.loadedCount, 0);
+    assert.equal(service.skipped[0]?.reason, "no_service_entry");
+  } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
 });

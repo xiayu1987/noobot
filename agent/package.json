@@ -28,6 +28,7 @@
     "./context": "./src/context/index.js",
     "./config": "./src/config/index.js",
     "./plugin": "./src/extensions/plugins/session-plugin-runtime-provider.js",
+    "./application": "./src/application/index.js",
     "./hook": "./src/extensions/hooks/index.js",
     "./package.json": "./package.json"
   },
@@ -59,7 +60,8 @@
     "openai": "^6.49.0",
     "pino": "^10.3.1",
     "uuid": "^14.0.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@noobot/plugin-runtime": "file:../plugin-runtime"
   },
   "optionalDependencies": {
     "@mozilla/readability": "^0.6.0",

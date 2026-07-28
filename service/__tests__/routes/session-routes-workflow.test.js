@@ -9,10 +9,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createJsonRouteWrapper } from "../../routes/route-wrapper.js";
-import {
-  readSegmentedChildExecutionLogs,
-  registerServiceRoutes as registerWorkflowServiceRoutes,
-} from "../../../plugin/noobot-plugin-workflow/src/service/routes.js";
+import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
+import { registerServiceRoutes as registerWorkflowServiceRoutes } from "../../../plugin/noobot-plugin-workflow/src/service/routes.js";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 
 test("workflow service reads persisted segmented child execution events after refresh", async () => {
@@ -32,10 +30,12 @@ test("workflow service reads persisted segmented child execution events after re
     ),
   ]);
 
-  const logs = await readSegmentedChildExecutionLogs({
-    workspacePath: workspaceRoot,
-    rootSessionId: "root-s",
-    childSessionId: "child-s",
+  const workflowDir = path.join(workspaceRoot, "runtime/workflow/session/root-s/wf_node_1");
+  await fs.mkdir(workflowDir, { recursive: true });
+  await fs.writeFile(path.join(workflowDir, "session.json"), JSON.stringify({ sessionId: "child-s" }), "utf8");
+  const ports = createPluginServicePorts({ bot: { getWorkspacePath: () => workspaceRoot } });
+  const { executionLogs: logs } = await ports.sessions.readWorkflowSnapshot({
+    userId: "u1", sessionId: "root-s", dialogProcessId: "wf_node_1",
   });
 
   assert.deepEqual(logs.map((item) => item.event), ["tool_call_start", "tool_call_end"]);
@@ -95,7 +95,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     translateText,
   });
   registerWorkflowServiceRoutes(app, {
-    bot,
+    ports: createPluginServicePorts({ bot, translateText }),
     translateText,
     jsonRoute: createJsonRouteWrapper({ translateText }),
   });
@@ -108,6 +108,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     assert.equal(payload.workflowSession.session.sessionId, "node-s");
     assert.equal(payload.workflowSession.sessionSummary.sessionId, "node-s");
     assert.deepEqual(payload.workflowSession.executionLogs, [{ event: "x" }]);
+    assert.equal("dir" in payload.workflowSession, false);
   });
 });
 test("session-routes: workflow thinking-detail reads scoped session artifact by turnScopeId", async () => {
@@ -150,7 +151,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     translateText,
   });
   registerWorkflowServiceRoutes(app, {
-    bot,
+    ports: createPluginServicePorts({ bot, translateText }),
     translateText,
     jsonRoute: createJsonRouteWrapper({ translateText }),
   });

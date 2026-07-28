@@ -9,6 +9,7 @@
     "model-proxy",
     "i18n",
     "shared",
+    "plugin-runtime",
     "workflow",
     "plugin/noobot-plugin-harness",
     "plugin/noobot-plugin-workflow",

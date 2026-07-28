@@ -19,10 +19,13 @@
     }
   },
   "apiVersion": "1",
-  "entry": "src/index.js",
+  "entries": {
+    "agent": "src/entries/agent.js",
+    "service": "src/entries/service.js",
+    "frontend": "frontend/index.js"
+  },
   "frontend": {
     "apiVersion": "1",
-    "entry": "frontend/index.js",
     "authenticatedRoutePatterns": [
       "/api/internal/session/:userId/:sessionId/thinking-detail"
     ]

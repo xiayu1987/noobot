@@ -12,6 +12,7 @@ import { createRunEventListener } from "./run-event-listener.js";
 import { createCommittedTurnLifecyclePublisher } from "./turn-lifecycle-bridge.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { createAgentApplication } from "#agent/application";
 
 export function createMessageRunHandler({
   state, authInfo, sendEvent, translateText, normalizeLocale, normalizeRunConfig, isForbiddenUserScope,
@@ -431,7 +432,8 @@ export function createMessageRunHandler({
       },
     });
 
-    const result = await activeBot.runSession({
+    const agentApplication = createAgentApplication({ runtime: activeBot });
+    const result = await agentApplication.run({
       userId,
       sessionId,
       parentSessionId,

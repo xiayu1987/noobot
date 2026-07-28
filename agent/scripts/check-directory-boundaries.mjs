@@ -14,6 +14,7 @@ const TEST_ROOT = path.join(AGENT_ROOT, "__tests__");
 const SYSTEM_CORE_ROOT = path.join(SRC_ROOT, "system-core");
 
 const EXPECTED_SOURCE_DIRECTORIES = new Set([
+  "application",
   "artifacts",
   "bot",
   "config",
