@@ -3,17 +3,21 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../agent/src/extensions/hooks/index.js";
+import { createAgentHookManager, AGENT_HOOK_POINTS } from "noobot-agent/hook";
 import { createJsonRouteWrapper } from "../routes/route-wrapper.js";
 import {
   buildNoobotPluginDiagnostics,
   getNoobotPluginRuntime,
   listLoadedNoobotPluginEntries,
+  manifestSupportsCapability,
+  PLUGIN_CAPABILITY,
   refreshNoobotPluginRuntime,
-} from "../../agent/src/extensions/plugins/plugin-loader.js";
+  resolveManifestRuntimeOptionsByCapability,
+} from "@noobot/plugin-runtime";
 
 const dynamicPluginRuntimeOptions = {
   requiredApiVersion: "1",
+  runtimeSurface: "service",
 };
 
 const EMPTY_DYNAMIC_PLUGIN_RUNTIME = Object.freeze({
@@ -32,35 +36,7 @@ const SERVICE_EVENT = Object.freeze({
   AFTER_SESSION_DELETE: "after_session_delete",
 });
 
-const SERVICE_ROUTE_CAPABILITY = "service.http_routes";
-
-
-function supportsServiceRoutes(manifest = {}) {
-  const capabilities = Array.isArray(manifest?.capabilities)
-    ? manifest.capabilities.map((item) => String(item || "").trim()).filter(Boolean)
-    : [];
-  if (capabilities.includes(SERVICE_ROUTE_CAPABILITY)) return true;
-  const runtimeOptions =
-    manifest?.runtimeOptions &&
-    typeof manifest.runtimeOptions === "object" &&
-    !Array.isArray(manifest.runtimeOptions)
-      ? manifest.runtimeOptions
-      : {};
-  return Boolean(runtimeOptions[SERVICE_ROUTE_CAPABILITY]);
-}
-
-function resolveManifestRuntimeOptionsByCapability(manifest = {}, capability = "") {
-  const normalizedCapability = String(capability || "").trim();
-  if (!normalizedCapability) return {};
-  const runtimeOptions =
-    manifest?.runtimeOptions &&
-    typeof manifest.runtimeOptions === "object" &&
-    !Array.isArray(manifest.runtimeOptions)
-      ? manifest.runtimeOptions
-      : {};
-  const item = runtimeOptions[normalizedCapability];
-  return item && typeof item === "object" && !Array.isArray(item) ? { ...item } : {};
-}
+const SERVICE_ROUTE_CAPABILITY = PLUGIN_CAPABILITY.SERVICE_HTTP_ROUTES;
 
 function resolveServiceEventCapability(eventName = "") {
   const normalized = String(eventName || "").trim().toLowerCase();
@@ -81,22 +57,11 @@ function resolveManifestRuntimeOptionsByServiceEvent(manifest = {}, eventName = 
 
 function supportsServiceEvent(manifest = {}, eventName = "") {
   const serviceCapability = resolveServiceEventCapability(eventName);
-  if (!serviceCapability) return false;
-  const capabilities = Array.isArray(manifest?.capabilities)
-    ? manifest.capabilities.map((item) => String(item || "").trim()).filter(Boolean)
-    : [];
-  if (capabilities.includes(serviceCapability)) return true;
-  const runtimeOptions =
-    manifest?.runtimeOptions &&
-    typeof manifest.runtimeOptions === "object" &&
-    !Array.isArray(manifest.runtimeOptions)
-      ? manifest.runtimeOptions
-      : {};
-  return Boolean(runtimeOptions[serviceCapability]);
+  return manifestSupportsCapability(manifest, serviceCapability);
 }
 
-export function createServicePluginHost() {
-  const loadedDynamicPluginsPromise = getNoobotPluginRuntime(dynamicPluginRuntimeOptions).catch(
+export function createServicePluginHost({ loadPluginRuntime = getNoobotPluginRuntime } = {}) {
+  const loadedDynamicPluginsPromise = loadPluginRuntime(dynamicPluginRuntimeOptions).catch(
     () => EMPTY_DYNAMIC_PLUGIN_RUNTIME,
   );
 
@@ -140,7 +105,7 @@ export function createServicePluginHost() {
     if (!app || typeof app?.get !== "function") return [];
     const loadedPlugins = await resolveLoadedPlugins();
     const candidates = listLoadedNoobotPluginEntries(loadedPlugins).filter((item = {}) =>
-      supportsServiceRoutes(item?.manifest),
+      manifestSupportsCapability(item?.manifest, SERVICE_ROUTE_CAPABILITY),
     );
     const registered = [];
     for (const candidate of candidates) {
@@ -156,7 +121,8 @@ export function createServicePluginHost() {
         SERVICE_ROUTE_CAPABILITY,
       );
       const result = await registerRoutes(app, {
-        ...context,
+        ports: context?.ports,
+        translateText: context?.translateText,
         plugin: {
           id: String(candidate?.pluginId || candidate?.manifest?.id || "").trim(),
           manifest: candidate?.manifest || {},

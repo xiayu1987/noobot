@@ -85,7 +85,7 @@ async function discoverFrontendPluginEntries() {
     const frontend =
       manifest.frontend && typeof manifest.frontend === "object" ? manifest.frontend : null;
     if (!frontend) continue;
-    const frontendEntry = String(frontend.entry || "").trim();
+    const frontendEntry = String(manifest?.entries?.frontend || "").trim();
     if (!frontendEntry) continue;
     const apiVersion = String(frontend.apiVersion || "").trim() || "1";
     const entryPath = path.resolve(pluginDir, frontendEntry);

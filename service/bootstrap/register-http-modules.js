@@ -10,6 +10,7 @@ import { registerSessionRoutes } from "../routes/session-routes.js";
 import { registerWorkspaceRoutes } from "../routes/workspace-routes.js";
 import { registerIdeRoutes } from "../routes/ide-routes.js";
 import { createServicePluginHost } from "../services/service-plugin-host.js";
+import { createPluginServicePorts } from "../services/plugin-service-ports.js";
 
 export async function registerHttpModules(
   app,
@@ -134,7 +135,7 @@ export async function registerHttpModules(
   });
 
   await createServicePluginHost().registerServiceRoutes(app, {
-    bot,
     translateText,
+    ports: createPluginServicePorts({ bot, translateText }),
   });
 }

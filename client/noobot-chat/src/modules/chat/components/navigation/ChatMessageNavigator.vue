@@ -108,9 +108,8 @@ watch(
   box-sizing: border-box;
 }
 
-.chat-message-navigator :deep(.el-anchor__list) {
+.chat-message-navigator.el-anchor > :deep(.el-anchor__list) {
   padding: 0;
-  padding-inline-start: 0;
   margin: 0;
 }
 

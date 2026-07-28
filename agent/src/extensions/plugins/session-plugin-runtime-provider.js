@@ -26,6 +26,7 @@ import {
 
 const loadedDynamicPlugins = await getNoobotPluginRuntime({
   requiredApiVersion: "1",
+  runtimeSurface: "agent",
 }).catch(() => ({
   pluginRootDir: "",
   requiredApiVersion: "1",
@@ -101,6 +102,7 @@ export async function createSessionPluginRuntimeBundle({
   const loadedPlugins = await getNoobotPluginRuntime({
     pluginRootDir,
     requiredApiVersion,
+    runtimeSurface: "agent",
   }).catch(() => ({
     pluginRootDir: String(pluginRootDir || ""),
     requiredApiVersion,
