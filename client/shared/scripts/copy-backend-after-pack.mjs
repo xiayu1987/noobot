@@ -9,6 +9,7 @@ import { clientFilePath as path } from "../path-resolver.js";
 const requiredBackendRuntimeFiles = [
   'service/app.js',
   'node_modules/noobot-agent/package.json',
+  'node_modules/@noobot/plugin-runtime/package.json',
   'node_modules/@noobot/sanitize/package.json',
   'node_modules/noobot-agent/src/prompts/base.md',
   'node_modules/noobot-agent/src/prompts/base.zh-CN.md',

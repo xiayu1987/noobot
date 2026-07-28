@@ -25,6 +25,7 @@ async function createFixture() {
 
   await writeRuntimeFile(backendSource, "service/app.js");
   await writeRuntimeFile(backendSource, "node_modules/noobot-agent/package.json", "{}");
+  await writeRuntimeFile(backendSource, "node_modules/@noobot/plugin-runtime/package.json", "{}");
   await writeRuntimeFile(backendSource, "node_modules/@noobot/sanitize/package.json", "{}");
   await writeRuntimeFile(
     backendSource,
@@ -108,6 +109,38 @@ test("copyBackendAfterPack copies the sanitize workspace into packaged resources
     assert.equal(
       await readFile(path.join(backendDestination, "node_modules", "@noobot", "sanitize", "package.json"), "utf8"),
       "{}",
+    );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack copies plugin-runtime into packaged resources", async () => {
+  const fixture = await createFixture();
+  try {
+    await copyBackendAfterPack(fixture.context);
+
+    const backendDestination = path.join(fixture.appOutDir, "resources", "backend");
+    assert.equal(
+      await readFile(path.join(backendDestination, "node_modules", "@noobot", "plugin-runtime", "package.json"), "utf8"),
+      "{}",
+    );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack fails when the prepared runtime is missing plugin-runtime", async () => {
+  const fixture = await createFixture();
+  try {
+    await rm(path.join(fixture.backendSource, "node_modules", "@noobot", "plugin-runtime"), {
+      recursive: true,
+      force: true,
+    });
+
+    await assert.rejects(
+      () => copyBackendAfterPack(fixture.context),
+      /Missing required backend runtime file after prepare: node_modules\/@noobot\/plugin-runtime\/package\.json/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
