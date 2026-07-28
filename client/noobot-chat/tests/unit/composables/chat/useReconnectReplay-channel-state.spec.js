@@ -5,17 +5,17 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper.js";
-import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { RoleEnum, StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine.js";
-import { selectSessionTurnRuntime } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
-import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline.js";
-import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline.js";
+} from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { selectSessionTurnRuntime } from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { selectToolTimelineLogs } from "../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import { selectActivityTimelineLogs } from "../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import {
   scheduleMissingInteractionPayloadFailure,
-} from "../../../../src/composables/chat/reconnectReplay/channelStateReplay.js";
+} from "../../../../src/modules/chat/runtime/reconnect/channelStateReplay.js";
 
 afterEach(() => {
   vi.useRealTimers();

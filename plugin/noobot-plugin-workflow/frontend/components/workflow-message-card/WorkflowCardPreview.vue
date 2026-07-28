@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { BaseEmptyHint } from "noobot-chat/plugin-api/ui";
-import { WorkflowCanvasGraph } from "../../component-exports/workflow-graph.js";
+import WorkflowCanvasGraph from "../workflow-graph/WorkflowCanvasGraph.vue";
 
 defineProps({
   translate: { type: Function, required: true },

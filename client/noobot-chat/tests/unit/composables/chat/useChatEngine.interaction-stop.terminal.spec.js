@@ -5,15 +5,15 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { createHarness, assistantMessage, emitChannelState } from "./helpers/useChatEngineHarness.js";
-import { StreamEventEnum, RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
-import { FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine.js";
-import { createSessionListActions } from "../../../../src/composables/chat/chatList/sessionListActions.js";
+import { StreamEventEnum, RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { FrontendRunState } from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { createSessionListActions } from "../../../../src/modules/session/model/list/sessionListActions.js";
 import {
   applyTurnRuntimeEvent,
   applyTurnLifecycleSnapshot,
   selectSessionTurnRuntime,
-} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
-import { SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine/constants.js";
+} from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT } from "../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 
 describe("useChatEngine.interaction-stop: terminal", () => {
   it("applies the real refresh terminal payload atomically when discovery races snapshot hydration", async () => {

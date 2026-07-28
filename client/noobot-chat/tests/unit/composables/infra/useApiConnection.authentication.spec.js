@@ -5,10 +5,10 @@
  */
 import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { connectApi } from "../../../../src/services/api/chatApi.js";
-import { useApiConnection } from "../../../../src/composables/infra/useApiConnection.js";
+import { connectApi } from "../../../../src/infrastructure/api/chat/chatApi.js";
+import { useApiConnection } from "../../../../src/modules/chat/composables/connectivity/useApiConnection.js";
 
-vi.mock("../../../../src/services/api/chatApi", () => ({ connectApi: vi.fn() }));
+vi.mock("../../../../src/infrastructure/api/chat/chatApi", () => ({ connectApi: vi.fn() }));
 vi.mock("../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({ translate: (key) => key, locale: ref("zh-CN") }),
 }));

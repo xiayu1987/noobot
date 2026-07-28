@@ -5,12 +5,12 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { createSessionListActions } from "../../../../../src/composables/chat/chatList/sessionListActions.js";
+import { createSessionListActions } from "../../../../../src/modules/session/model/list/sessionListActions.js";
 import {
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
-} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
-import { SESSION_RUN_EVENT } from "../../../../../src/composables/chat/sessionRunStateMachine/constants.js";
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 
 function ref(value) {
   return { value };

@@ -5,8 +5,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { useChatStore } from "../../../../src/shared/stores/useChatStore.js";
-import { useChatInput } from "../../../../src/composables/chat/useChatInput.js";
+import { useChatStore } from "../../../../src/modules/chat/stores/useChatStore.js";
+import { useChatInput } from "../../../../src/modules/chat/composables/useChatInput.js";
 
 describe("useChatInput", () => {
   beforeEach(() => {

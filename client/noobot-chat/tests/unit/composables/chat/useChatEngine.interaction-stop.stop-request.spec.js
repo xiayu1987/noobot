@@ -5,12 +5,12 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { createHarness, activateRuntimeTurn } from "./helpers/useChatEngineHarness.js";
-import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine.js";
-import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { BackendChannelState, FrontendRunState } from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import {
   applyExecutionSnapshot,
   resolveSessionTurnRuntime,
-} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+} from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 describe("useChatEngine.interaction-stop: stop-request", () => {
   it("send enables stop while stream is active", async () => {

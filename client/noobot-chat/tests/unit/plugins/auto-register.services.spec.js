@@ -28,7 +28,7 @@ vi.mock("../../../src/extensions/extension-registry.js", () => ({
   removePluginExtensions: vi.fn(),
 }));
 
-vi.mock("../../../src/services/authenticatedHttpService.js", () => ({
+vi.mock("../../../src/infrastructure/http/authenticatedHttpService.js", () => ({
   createScopedAuthenticatedHttpService: vi.fn(() => Object.freeze({ get: vi.fn() })),
 }));
 

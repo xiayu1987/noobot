@@ -9,8 +9,8 @@ import {
   buildViewMessage,
   findVisibleLastMessage,
   foldConversationMessages,
-} from "../../../../src/composables/infra/messageModel.js";
-import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline.js";
+} from "../../../../src/modules/chat/model/messageModel.js";
+import { selectActivityTimelineLogs } from "../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 
 const envelope = {
   protocol: "noobot.semantic-transfer",

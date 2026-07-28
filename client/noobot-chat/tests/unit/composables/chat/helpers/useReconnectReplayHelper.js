@@ -5,16 +5,16 @@
  */
 import { computed, ref } from "vue";
 import { vi } from "vitest";
-import { useReconnectReplay } from "../../../../../src/composables/chat/useReconnectReplay.js";
-import { RoleEnum } from "../../../../../src/shared/constants/chatConstants.js";
+import { useReconnectReplay } from "../../../../../src/modules/chat/composables/useReconnectReplay.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   applyTurnTerminalResolution,
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
-} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
-import { applyRunStateMessageRuntimePatch } from "../../../../../src/composables/chat/chatEngine/messageRuntimePatch.js";
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { applyRunStateMessageRuntimePatch } from "../../../../../src/modules/chat/runtime/engine/messageRuntimePatch.js";
 import { contributeExtension } from "../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../../../../../src/extensions/extension-point-ids.js";
 import { registerFrontendPlugin as registerWorkflowFrontendPlugin } from "../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";

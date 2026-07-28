@@ -1,0 +1,446 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { normalizeTrimmedString } from "./utils.js";
+import { createResendMessageTransaction } from "./resendTransaction.js";
+import { syncSessionMessageSummary } from "./resendReconciler.js";
+import { createSessionVersionManager } from "./sessionVersionManager.js";
+import {
+  buildMessageAnchor,
+  getMessageDialogProcessId,
+  findMessageIdentityIndex,
+  getMessageRole,
+  getMessageTurnScopeId,
+} from "../../model/messageIdentity.js";
+import { nowMs } from "../../model/timeFields.js";
+import {
+  SESSION_RUN_EVENT,
+  FrontendRunState,
+  getMessageRuntimeChannelState,
+} from "../sessionRunStateMachine.js";
+import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
+import {
+  confirmTurnRuntimeDeletion,
+  resolveSessionTurnRuntime,
+  removeTurnRuntime,
+  sessionRuntimeId,
+  turnRuntimeDisplayState,
+} from "../run-state-machine/turnRuntimeRegistry.js";
+import { clearTurnUiState } from "./turnUiStore.js";
+import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+
+const delay = (ms) => new Promise((resolve) => {
+  setTimeout(resolve, ms);
+});
+
+function summarizeDeleteMessages(messages = []) {
+  return (Array.isArray(messages) ? messages : []).map((message = {}, index) => ({
+    index,
+    id: normalizeTrimmedString(message?.id || message?.messageId),
+    role: normalizeTrimmedString(getMessageRole(message)),
+    type: normalizeTrimmedString(message?.type),
+    sessionId: normalizeTrimmedString(message?.sessionId || message?.session_id),
+    dialogProcessId: getMessageDialogProcessId(message),
+    turnScopeId: getMessageTurnScopeId(message),
+    contentLength: String(message?.content || "").length,
+    turnStatusPlaceholder: message?.turnStatusPlaceholder === true,
+    workflowMessage: message?.workflowMessage === true,
+    pluginSource: normalizeTrimmedString(message?.pluginMeta?.source),
+    pluginKind: normalizeTrimmedString(message?.pluginMeta?.kind),
+  }));
+}
+
+function isUserMessage(message = {}) {
+  return getMessageRole(message).toLowerCase() === "user";
+}
+
+function isStoppedTurnStatusPlaceholder(message = {}) {
+  return message?.turnStatusPlaceholder === true &&
+    normalizeTrimmedString(message?.turnStatus?.status || message?.status) === "user_stopped";
+}
+
+function isStoppingAssistantMessage(message = {}) {
+  if (getMessageRole(message) !== "assistant") return false;
+  const channelState = getMessageRuntimeChannelState(message);
+  return ["frontend_user_stopping", "stopping", "user_stopped"].includes(
+    normalizeTrimmedString(channelState?.state || message?.state || message?.status),
+  );
+}
+
+function isUserStopConfirmedRunState(state = "") {
+  return [
+    FrontendRunState.USER_STOPPING,
+    FrontendRunState.USER_STOP_COMPLETED,
+    "user_stopped",
+  ].includes(normalizeTrimmedString(state));
+}
+
+function getStoppedTurnMessage({ targetMessage = null, originalTargetMessage = null } = {}) {
+  if (isStoppedTurnStatusPlaceholder(targetMessage)) return targetMessage;
+  if (isStoppedTurnStatusPlaceholder(originalTargetMessage)) return originalTargetMessage;
+  if (isStoppingAssistantMessage(originalTargetMessage)) return originalTargetMessage;
+  if (isStoppingAssistantMessage(targetMessage)) return targetMessage;
+  return null;
+}
+
+function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
+  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  if (Array.isArray(source.sessions) && String(source.sessionId || "").trim()) {
+    return source;
+  }
+  const session = source.session && typeof source.session === "object" && !Array.isArray(source.session)
+    ? source.session
+    : source.messages && Array.isArray(source.messages)
+      ? source
+      : null;
+  if (!session) return null;
+  const sessionId = normalizeTrimmedString(session.sessionId || source.sessionId || fallbackSessionId);
+  if (!sessionId) return null;
+  return {
+    ...source,
+    sessionId,
+    sessions: [
+      {
+        ...session,
+        ...(source.version !== undefined ? { version: source.version } : {}),
+        ...(source.revision !== undefined ? { revision: source.revision } : {}),
+        ...(source.sessionVersion !== undefined
+          ? { version: source.sessionVersion, revision: source.sessionVersion }
+          : {}),
+        sessionId: normalizeTrimmedString(session.sessionId || sessionId),
+      },
+    ],
+  };
+}
+
+export function createMonotonicMessageActions({
+  activeSession,
+  activeSessionId,
+  authFetch,
+  clearPendingInteraction,
+  chatWebSocketClient,
+  deleteSessionMessagesFromApi,
+  replaceSessionTurnApi,
+  input,
+  notify,
+  send,
+  stopSending,
+  translate,
+  userId,
+  applySessionDetail,
+  fetchSessionDetail,
+  turnRuntimeRegistry,
+  messageOperationStore,
+  monotonicActionStopTimeoutMs,
+  monotonicActionStopPollIntervalMs,
+  applyRunStateEvent,
+  appendMessage,
+}) {
+  function notifyStateMismatch() {
+    notify({
+      type: "warning",
+      message: translate("chat.sessionStateOutOfSync") || "Session state is out of sync. Refresh and try again.",
+    });
+  }
+
+  function activeTurnRuntime() {
+    const sessionId = sessionRuntimeId(activeSession?.value || activeSessionId?.value);
+    const canonicalSessionId = normalizeTrimmedString(
+      turnRuntimeRegistry?.value?.sessionAliases?.[sessionId] || sessionId,
+    );
+    let turnScopeId = normalizeTrimmedString(
+      turnRuntimeRegistry?.value?.sessions?.[canonicalSessionId]?.activeTurnScopeId,
+    );
+    if (!turnScopeId) {
+      const messages = Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : [];
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        turnScopeId = getMessageTurnScopeId(messages[index]);
+        if (turnScopeId) break;
+      }
+    }
+    return resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
+  }
+
+  function isActiveTurnInFlight() {
+    return ["requesting", "sending", "completing", "stopping"].includes(
+      turnRuntimeDisplayState(activeTurnRuntime()),
+    );
+  }
+
+  async function waitForSendingSettled({
+    timeoutMs = monotonicActionStopTimeoutMs,
+    pollIntervalMs = monotonicActionStopPollIntervalMs,
+  } = {}) {
+    if (!isActiveTurnInFlight()) return true;
+    const startedAt = nowMs();
+    const normalizedTimeoutMs = Math.max(0, Number(timeoutMs) || 0);
+    const normalizedPollIntervalMs = Math.max(1, Number(pollIntervalMs) || 1);
+    while (isActiveTurnInFlight()) {
+      if (nowMs() - startedAt >= normalizedTimeoutMs) {
+        return false;
+      }
+      await delay(normalizedPollIntervalMs);
+    }
+    return true;
+  }
+
+  async function prepareMonotonicMessageAction({
+    timeoutMs,
+    pollIntervalMs,
+    targetMessage = null,
+    originalTargetMessage = null,
+  } = {}) {
+    const rejectStopPrecondition = () => {
+      const message = translate("chat.monotonicActionStopTimeout");
+      notify({ type: "warning", message });
+      throw new Error(message);
+    };
+    const targetTurnScopeId = getMessageTurnScopeId(targetMessage) || getMessageTurnScopeId(originalTargetMessage);
+    const stoppedTurnMessage = getStoppedTurnMessage({ targetMessage, originalTargetMessage }) ||
+      (targetTurnScopeId
+        ? (Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : []).find(
+            (message) =>
+              getMessageTurnScopeId(message) === targetTurnScopeId &&
+              (isStoppedTurnStatusPlaceholder(message) || isStoppingAssistantMessage(message)),
+          )
+        : null);
+    if (stoppedTurnMessage) return true;
+    const runtime = activeTurnRuntime();
+    const runtimeDisplayState = turnRuntimeDisplayState(runtime);
+    if (
+      runtimeDisplayState === "stopping" ||
+      (runtimeDisplayState === "requesting" && runtime?.action === "stop")
+    ) return false;
+    if (!isActiveTurnInFlight()) return true;
+    stopSending();
+    const settled = await waitForSendingSettled({ timeoutMs, pollIntervalMs });
+    if (!settled) {
+      rejectStopPrecondition();
+    }
+    if (activeTurnRuntime()?.terminal === "error") return false;
+    return true;
+  }
+
+  function resolveMonotonicUserTarget(targetMessage = {}) {
+    const messages = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    if (!targetMessage || typeof targetMessage !== "object") return null;
+    if (isUserMessage(targetMessage)) return targetMessage;
+
+    const directIndex = findMessageIdentityIndex(targetMessage, messages);
+    if (directIndex >= 0 && isUserMessage(messages[directIndex])) {
+      return messages[directIndex];
+    }
+
+    const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
+    if (!targetTurnScopeId) return null;
+    return messages.find(
+      (message) => isUserMessage(message) && getMessageTurnScopeId(message) === targetTurnScopeId,
+    ) || null;
+  }
+
+  function findMessageCascadeStartIndex(targetMessage = {}) {
+    const messages = Array.isArray(activeSession.value?.messages)
+      ? activeSession.value.messages
+      : [];
+    if (!isUserMessage(targetMessage)) return -1;
+    return findMessageIdentityIndex(targetMessage, messages);
+  }
+
+  function collectMessageCascadeTurnScopeIds(targetMessage = {}) {
+    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
+    const startIndex = userTargetMessage ? findMessageCascadeStartIndex(userTargetMessage) : -1;
+    if (startIndex < 0) return [];
+    return [...new Set(
+      (activeSession.value?.messages || []).slice(startIndex).map(getMessageTurnScopeId).filter(Boolean),
+    )];
+  }
+
+  function cascadeDeleteMessagesFrom(targetMessage = {}) {
+    const session = activeSession.value;
+    if (!session) return false;
+    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
+    if (!userTargetMessage) return false;
+    const startIndex = findMessageCascadeStartIndex(userTargetMessage);
+    if (startIndex < 0) return false;
+    const messages = Array.isArray(session.messages) ? session.messages : [];
+    const removedMessages = messages.slice(startIndex);
+    const sessionId = sessionRuntimeId(session || activeSessionId?.value);
+    for (const removedMessage of removedMessages) {
+      chatWebSocketClient?.cancelStreamForTurn?.({
+        sessionId,
+        turnScopeId: getMessageTurnScopeId(removedMessage),
+        dialogProcessId: getMessageDialogProcessId(removedMessage),
+      });
+    }
+    session.messages = messages.slice(0, startIndex);
+    const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
+    removedTurnScopeIds.forEach((turnScopeId) => {
+      removeTurnRuntime(turnRuntimeRegistry?.value, turnScopeId, { sessionId });
+      clearTurnUiState({ sessionId, turnScopeId });
+    });
+    syncSessionMessageSummary(session);
+    clearPendingInteraction?.();
+    return true;
+  }
+
+  async function deleteMonotonicMessage(targetMessage = {}, options = {}) {
+    const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
+    if (!userTargetMessage) return false;
+    const initialSessionId = normalizeTrimmedString(
+      activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
+    );
+    const initialTurnScopeId = getMessageTurnScopeId(userTargetMessage);
+    logWorkflowDiagnostics("frontend.messageDelete.started", {
+      sessionId: initialSessionId,
+      dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+      turnScopeId: initialTurnScopeId,
+      target: summarizeDeleteMessages([targetMessage])[0] || null,
+      resolvedUserTarget: summarizeDeleteMessages([userTargetMessage])[0] || null,
+      messagesBefore: summarizeDeleteMessages(activeSession.value?.messages),
+    });
+    const prepared = await prepareMonotonicMessageAction({
+      ...options,
+      targetMessage: userTargetMessage,
+      originalTargetMessage: targetMessage,
+    });
+    if (prepared === false) return false;
+    if (typeof deleteSessionMessagesFromApi === "function") {
+      const sessionId = normalizeTrimmedString(
+        activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
+      );
+      const anchor = buildMessageAnchor(userTargetMessage);
+      if (!Object.keys(anchor).length) return false;
+      const locallyDeletedTurnScopeIds = collectMessageCascadeTurnScopeIds(userTargetMessage);
+      const deleteIdempotencyKey = `delete:${sessionId}:${anchor.turnScopeId || anchor.dialogProcessId || anchor.id || "anchor"}`;
+      logWorkflowDiagnostics("frontend.messageDelete.requestPrepared", {
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        anchor,
+        locallyDeletedTurnScopeIds,
+        idempotencyKey: deleteIdempotencyKey,
+      });
+      const sessionVersionManager = createSessionVersionManager({
+        activeSession,
+        fetchSessionDetail,
+        applySessionDetail,
+      });
+      const mutationResult = await sessionVersionManager.runVersionedMutation({
+        mutate: async ({ expectedVersion }) => {
+          const result = await deleteSessionMessagesFromApi({
+            userId: userId?.value || userId,
+            sessionId,
+            parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
+            anchor,
+            expectedVersion,
+            idempotencyKey: deleteIdempotencyKey,
+          }, { fetcher: authFetch });
+          const payload = typeof result?.json === "function" ? await result.json() : result;
+          return { result, payload };
+        },
+        refreshOptions: {
+          sessionId,
+          detailOptions: { source: "deleteVersionConflict" },
+          logContext: { turnScopeId: anchor.turnScopeId || "" },
+        },
+      });
+      const result = mutationResult?.result;
+      const payload = mutationResult?.payload;
+      logWorkflowDiagnostics("frontend.messageDelete.responseReceived", {
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        responseOk: result?.ok !== false && payload?.ok !== false,
+        deletedCount: Number(payload?.deletedCount || 0),
+        anchorIndex: Number(payload?.anchorIndex ?? -1),
+        deletedTurnScopeIds: Array.isArray(payload?.deletedTurnScopeIds)
+          ? payload.deletedTurnScopeIds.map(normalizeTrimmedString).filter(Boolean)
+          : [],
+        responseMessages: summarizeDeleteMessages(payload?.session?.messages),
+        responseTurnStatuses: (Array.isArray(payload?.session?.turnStatuses)
+          ? payload.session.turnStatuses
+          : []).map((status = {}) => ({
+            turnScopeId: normalizeTrimmedString(status?.turnScopeId),
+            dialogProcessId: normalizeTrimmedString(status?.dialogProcessId),
+            status: normalizeTrimmedString(status?.status),
+          })),
+      });
+      if (result?.ok === false || payload?.ok === false) return false;
+      const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
+      if (!sessionDetail) return false;
+      const protocolDeletedTurnScopeIds = Array.isArray(payload?.deletedTurnScopeIds)
+        ? payload.deletedTurnScopeIds.map(normalizeTrimmedString).filter(Boolean)
+        : [];
+      const confirmedDeletedTurnScopeIds = protocolDeletedTurnScopeIds.length
+        ? protocolDeletedTurnScopeIds
+        : locallyDeletedTurnScopeIds;
+      confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, confirmedDeletedTurnScopeIds, { sessionId });
+      cascadeDeleteMessagesFrom(userTargetMessage);
+      logWorkflowDiagnostics("frontend.messageDelete.localCascadeApplied", {
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        stage: "before-detail-apply",
+        messages: summarizeDeleteMessages(activeSession.value?.messages),
+      });
+      applySessionDetail?.(sessionDetail, {
+        mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+        preserveCurrentMessages: false,
+        deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
+      });
+      cascadeDeleteMessagesFrom(userTargetMessage);
+      logWorkflowDiagnostics("frontend.messageDelete.completed", {
+        sessionId,
+        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+        turnScopeId: getMessageTurnScopeId(userTargetMessage),
+        confirmedDeletedTurnScopeIds,
+        messagesAfter: summarizeDeleteMessages(activeSession.value?.messages),
+      });
+      clearPendingInteraction?.();
+      return true;
+    }
+    const sessionId = sessionRuntimeId(activeSession.value || activeSessionId?.value);
+    confirmTurnRuntimeDeletion(
+      turnRuntimeRegistry?.value,
+      collectMessageCascadeTurnScopeIds(userTargetMessage),
+      { sessionId },
+    );
+    const cascaded = cascadeDeleteMessagesFrom(userTargetMessage);
+    return cascaded;
+  }
+
+  const resendTransaction = createResendMessageTransaction({
+    activeSession,
+    activeSessionId,
+    applyRunStateEvent,
+    applySessionDetail,
+    authFetch,
+    buildMonotonicMessageAnchor: buildMessageAnchor,
+    clearPendingInteraction,
+    findMessageCascadeStartIndex,
+    input,
+    messageOperationStore,
+    prepareMonotonicMessageAction,
+    replaceSessionTurnApi,
+    fetchSessionDetail,
+    resolveMonotonicUserTarget,
+    send,
+    userId,
+    appendMessage,
+    turnRuntimeRegistry,
+  });
+
+  return {
+    prepareMonotonicMessageAction,
+    resolveMonotonicUserTarget,
+    cascadeDeleteMessagesFrom,
+    deleteMonotonicMessage,
+    resendMonotonicMessage: resendTransaction.resendMonotonicMessage,
+    pruneStaleMessagesAfterResend: resendTransaction.pruneStaleMessagesAfterResend,
+    finalizePendingResendOperation: resendTransaction.finalizePendingResendOperation,
+  };
+}

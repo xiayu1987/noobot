@@ -13,8 +13,8 @@ import {
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../src/shared/constants/chatConstants.js";
-import { isTurnRuntimeDeleted } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+} from "../../../../src/modules/chat/model/chatConstants.js";
+import { isTurnRuntimeDeleted } from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 describe("useChatEngine.resend scoped pruning", () => {
   it("resendMonotonicMessage keeps edited content when reusing a stale user message object", async () => {

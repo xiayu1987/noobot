@@ -6,7 +6,7 @@
 import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it } from "vitest";
 import { normalizeWorkflowRuntimeEvent } from "@noobot/shared/workflow-runtime-event-protocol";
-import { useChatStore } from "../../../../src/shared/stores/useChatStore.js";
+import { useChatStore } from "../../../../src/modules/chat/stores/useChatStore.js";
 import { hydrateWorkflowRegistryFromSessionDetail } from "../../../../../../plugin/noobot-plugin-workflow/frontend/runtime/sessionHydration.js";
 
 function runtimeEvents() {

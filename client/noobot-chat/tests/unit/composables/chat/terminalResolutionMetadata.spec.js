@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { terminalResolutionMetadata } from "../../../../src/composables/chat/terminalResolutionMetadata.js";
+import { terminalResolutionMetadata } from "../../../../src/modules/chat/runtime/terminalResolutionMetadata.js";
 
 describe("terminalResolutionMetadata", () => {
   it("normalizes nested raw.turn metadata and the seq alias", () => {

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyReconnectEventReplay } from "../../../../src/composables/chat/reconnectReplay/reconnectEventReplay.js";
-import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { applyReconnectEventReplay } from "../../../../src/modules/chat/runtime/reconnect/reconnectEventReplay.js";
+import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import { clearExtensionRegistry, contributeExtension } from "../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../../../../src/extensions/extension-point-ids.js";
 import { registerFrontendPlugin as registerWorkflowFrontendPlugin } from "../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";

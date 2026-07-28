@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { buildViewMessage } from "../../../../src/composables/infra/messageModel.js";
+import { buildViewMessage } from "../../../../src/modules/chat/model/messageModel.js";
 
 describe("messageModel attachment normalization", () => {
   it("expands nested parsedResult into preview/download fields for office attachments", () => {

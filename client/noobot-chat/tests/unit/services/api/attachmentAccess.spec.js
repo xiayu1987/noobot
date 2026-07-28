@@ -9,7 +9,7 @@ import {
   buildParsedResultPreviewItem,
   resolveAttachmentAccessMeta,
   resolveParsedResultAccessMeta,
-} from "../../../../src/services/api/attachmentAccess.js";
+} from "../../../../src/infrastructure/api/attachments/attachmentAccess.js";
 
 describe("attachmentAccess", () => {
   it("ignores explicit source urls and builds access from attachment identity", () => {

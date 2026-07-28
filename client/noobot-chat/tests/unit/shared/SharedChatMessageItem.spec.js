@@ -7,12 +7,12 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import SharedChatMessageItem from "../../../src/shared/message/components/SharedChatMessageItem.vue";
-import { useChatStore } from "../../../src/shared/stores/useChatStore.js";
+import SharedChatMessageItem from "../../../src/modules/chat/components/message/SharedChatMessageItem.vue";
+import { useChatStore } from "../../../src/modules/chat/stores/useChatStore.js";
 import { contributeExtension } from "../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../../../src/extensions/extension-point-ids.js";
 
-vi.mock("../../../src/shared/ui", async () => {
+vi.mock("../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
   const passthrough = (name) => defineComponent({
     name,

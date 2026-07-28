@@ -10,7 +10,7 @@ import {
   buildPanelVisibilityPseudoRoute,
   buildSessionPseudoRoute,
   resolveActivePseudoPanel,
-} from "../../../src/app/payload/appShellRoutePayload.js";
+} from "../../../src/app/routing/appShellRoutePayload.js";
 
 describe("appShellRoutePayload", () => {
   const panels = {

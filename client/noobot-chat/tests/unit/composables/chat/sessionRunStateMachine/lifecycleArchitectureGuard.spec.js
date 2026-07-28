@@ -11,13 +11,13 @@ const projectRoot = clientFilePath.resolve(import.meta.dirname, "../../../../../
 const source = (relativePath) => readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8");
 
 const files = {
-  messageMeta: "src/composables/message/useMessageMeta.js",
-  reducer: "src/composables/chat/sessionRunStateMachine/turnReducer.js",
-  registry: "src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js",
-  interaction: "src/composables/chat/useAgentInteraction.js",
-  messageList: "src/app/components/ChatMessageListPanel.vue",
-  sendFinalize: "src/composables/chat/chatEngine/sendFinalize.js",
-  webSocketClient: "src/services/ws/chatWebSocketClient.js",
+  messageMeta: "src/modules/chat/composables/message/useMessageMeta.js",
+  reducer: "src/modules/chat/runtime/run-state-machine/turnReducer.js",
+  registry: "src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js",
+  interaction: "src/modules/chat/composables/useAgentInteraction.js",
+  messageList: "src/modules/chat/components/navigation/ChatMessageListPanel.vue",
+  sendFinalize: "src/modules/chat/runtime/engine/sendFinalize.js",
+  webSocketClient: "src/infrastructure/websocket/chatWebSocketClient.js",
 };
 
 const agentRoot = clientFilePath.resolve(projectRoot, "../../agent");
@@ -97,8 +97,8 @@ describe("lifecycle architecture guard", () => {
   it("does not permit UI/message fields to write Turn terminal authority", () => {
     const nonProtocolSources = [
       source(files.messageMeta),
-      source("src/composables/chat/chatList/detailMessages.js"),
-      source("src/composables/chat/sessionRunStateMachine/messageRuntime.js"),
+      source("src/modules/session/model/list/detailMessages.js"),
+      source("src/modules/chat/runtime/run-state-machine/messageRuntime.js"),
     ];
     for (const code of nonProtocolSources) {
       expect(code).not.toMatch(/(?:terminal|authority)\s*[:=]\s*["']completed["']/);
@@ -142,22 +142,22 @@ describe("lifecycle architecture guard", () => {
 
   it("keeps legacy completed tool logs behind the timeline adapter", () => {
     const renderConsumers = [
-      "src/app/useThinkingDetailsPanel.js",
-      "src/composables/chat/chatEngine/sessionFinalize.js",
-      "src/composables/infra/thinkingDetailModel.js",
-      "src/composables/message/useMessageFiles.js",
-      "src/composables/message/useMessageMeta.js",
-      "src/shared/message/useThinkingPanel.js",
-      "src/shared/message/components/SharedChatMessageItem.vue",
-      "src/modules/message/ChatMessageItem.vue",
-      "src/shared/message/components/ThinkingPanel.vue",
+      "src/app/composables/useThinkingDetailsPanel.js",
+      "src/modules/chat/runtime/engine/sessionFinalize.js",
+      "src/modules/chat/model/thinkingDetailModel.js",
+      "src/modules/chat/composables/message/useMessageFiles.js",
+      "src/modules/chat/composables/message/useMessageMeta.js",
+      "src/modules/chat/composables/useThinkingPanel.js",
+      "src/modules/chat/components/message/SharedChatMessageItem.vue",
+      "src/modules/chat/components/message/ChatMessageItem.vue",
+      "src/modules/chat/components/thinking/ThinkingPanel.vue",
     ];
     for (const relativePath of renderConsumers) {
       expect(source(relativePath)).not.toMatch(/messageItem\?*\.completedToolLogs/);
       expect(source(relativePath)).not.toContain("turnStatuses");
       expect(source(relativePath)).not.toContain("turnTimingsByTurnScopeId");
     }
-    expect(source("src/composables/chat/chatEngine/legacyTimelineAdapter.js"))
+    expect(source("src/modules/chat/runtime/engine/legacyTimelineAdapter.js"))
       .toContain("message.completedToolLogs");
   });
 

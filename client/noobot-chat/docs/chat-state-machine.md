@@ -247,8 +247,8 @@ reconnect
 
 ## 7. 相关代码
 
-- 前端实时状态处理：`src/composables/chat/useChatEngine.js`
-- 前端回放状态处理：`src/composables/chat/useReconnectReplay.js`
+- 前端实时状态处理：`src/modules/chat/composables/useChatEngine.js`
+- 前端回放状态处理：`src/modules/chat/composables/useReconnectReplay.js`
 - Interaction 契约：`docs/interaction-contract.md`
 - 状态来源与广播：`agent-proxy/src/channel-manager.js`
 - 状态测试：

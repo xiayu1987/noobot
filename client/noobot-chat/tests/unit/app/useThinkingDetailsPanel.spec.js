@@ -5,7 +5,7 @@
  */
 import { ref, nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
-import { useThinkingDetailsPanel } from "../../../src/app/useThinkingDetailsPanel.js";
+import { useThinkingDetailsPanel } from "../../../src/app/composables/useThinkingDetailsPanel.js";
 
 function deferred() {
   let resolve;

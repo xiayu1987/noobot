@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   authenticatedHttpService,
   createScopedAuthenticatedHttpService,
-} from "../../../src/services/authenticatedHttpService.js";
+} from "../../../src/infrastructure/http/authenticatedHttpService.js";
 
 describe("scoped authenticated HTTP service", () => {
   const fetcher = vi.fn();

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { useMarkdownRenderer } from "../../../../src/composables/infra/useMarkdownRenderer.js";
+import { useMarkdownRenderer } from "../../../../src/modules/chat/composables/message/useMarkdownRenderer.js";
 
 describe("useMarkdownRenderer", () => {
   it("renders HTML comments as visible text", () => {

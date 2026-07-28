@@ -5,7 +5,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { useAgentInteraction } from "../../../../src/composables/chat/useAgentInteraction.js";
+import { useAgentInteraction } from "../../../../src/modules/chat/composables/useAgentInteraction.js";
 
 vi.mock("../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({

@@ -11,14 +11,14 @@ import {
   assistantMessage,
   emitChannelState,
 } from "./helpers/useChatEngineHarness.js";
-import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine.js";
-import { SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine.js";
-import { applyTurnTerminalResolution } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+import { BackendChannelState, FrontendRunState } from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { SESSION_RUN_EVENT } from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { applyTurnTerminalResolution } from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../src/shared/constants/chatConstants.js";
+} from "../../../../src/modules/chat/model/chatConstants.js";
 
 function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messages = [] }) {
   const revision = 100;

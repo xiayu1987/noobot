@@ -5,15 +5,15 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
-import { createMonotonicMessageActions } from "../../../../src/composables/chat/chatEngine/monotonicMessageActions.js";
+import { createMonotonicMessageActions } from "../../../../src/modules/chat/runtime/engine/monotonicMessageActions.js";
 import {
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine.js";
-import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
+} from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import {
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
-} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+} from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 function createActions({
   turnRuntimeRegistry = ref(createTurnRuntimeRegistryState()),

@@ -8,7 +8,7 @@ import {
   logToolLogWindowDebug,
   setToolLogWindowDebugLogSink,
   summarizeToolLogWindowItem,
-} from "../../../../../src/composables/chat/debug/toolLogWindowDebugLogger.js";
+} from "../../../../../src/modules/debug/loggers/toolLogWindowDebugLogger.js";
 
 describe("toolLogWindowDebugLogger", () => {
   afterEach(() => setToolLogWindowDebugLogSink(null));

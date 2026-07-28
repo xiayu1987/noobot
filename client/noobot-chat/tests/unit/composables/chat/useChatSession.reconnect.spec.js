@@ -9,22 +9,22 @@ import {
   sessionLogClientMock,
   wsClientMock,
 } from "./useChatSession.test-helpers.js";
-import { useChatSession } from "../../../../src/composables/chat/useChatSession.js";
+import { useChatSession } from "../../../../src/modules/chat/composables/useChatSession.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref, toRef } from "vue";
-import { useChatStore } from "../../../../src/shared/stores/useChatStore.js";
+import { useChatStore } from "../../../../src/modules/chat/stores/useChatStore.js";
 import { classifyRealtimeLog } from "../../../../src/app/state/sessionMessageState.js";
-import { logResendDebug, setResendDebugLogSink } from "../../../../src/composables/chat/debug/resendDebugLogger.js";
-import { RoleEnum, StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
-import { selectToolTimeline, selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline.js";
-import { selectActivityTimelineLogs } from "../../../../src/composables/chat/chatEngine/activityTimeline.js";
+import { logResendDebug, setResendDebugLogSink } from "../../../../src/modules/debug/loggers/resendDebugLogger.js";
+import { RoleEnum, StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { selectToolTimeline, selectToolTimelineLogs } from "../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import { selectActivityTimelineLogs } from "../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import {
   BackendChannelState,
   FrontendRunState,
   SESSION_RUN_EVENT,
-} from "../../../../src/composables/chat/sessionRunStateMachine.js";
-import { confirmTurnRuntimeDeletion } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+} from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { confirmTurnRuntimeDeletion } from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
     setActivePinia(createPinia());

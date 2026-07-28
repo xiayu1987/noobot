@@ -26,8 +26,8 @@ import {
   applyExecutionTree,
   executionTurnKey,
   isTurnRuntimeDeleted,
-} from "../../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
-import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../src/composables/chat/sessionRunStateMachine/constants.js";
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import {
   backendState,
   sendStart,

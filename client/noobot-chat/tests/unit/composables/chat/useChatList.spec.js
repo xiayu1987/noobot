@@ -5,8 +5,8 @@
  */
 import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
-import { useChatList } from "../../../../src/composables/chat/useChatList.js";
-import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { useChatList } from "../../../../src/modules/chat/composables/useChatList.js";
+import { RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 
 vi.mock("../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({

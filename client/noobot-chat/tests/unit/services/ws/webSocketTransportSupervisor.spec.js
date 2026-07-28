@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createWebSocketTransportSupervisor,
   WEB_SOCKET_TRANSPORT_PHASE,
-} from "../../../../src/services/ws/webSocketTransportSupervisor.js";
+} from "../../../../src/infrastructure/websocket/webSocketTransportSupervisor.js";
 
 class MockWebSocket {
   static CONNECTING = 0;
