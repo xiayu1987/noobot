@@ -39,7 +39,7 @@ describe("chatWebSocketClient stop transport", () => {
       turnScopeId: "main-turn",
     });
 
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(10000);
     expect(resolved).toBe(false);
 
     socket.emit(StreamEventEnum.USER_STOPPED, {

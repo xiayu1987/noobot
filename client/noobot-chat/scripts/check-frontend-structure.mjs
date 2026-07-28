@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { clientFilePath as path } from "../../shared/path-resolver.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = path.join(projectRoot, "src");
