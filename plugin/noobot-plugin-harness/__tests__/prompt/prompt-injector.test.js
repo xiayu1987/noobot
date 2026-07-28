@@ -10,8 +10,8 @@ import {
   injectSystemMessages,
   isHarnessPromptAlreadyInjected,
   markPromptAsInjected,
-} from "../src/prompt/prompt-injector.js";
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../src/capabilities/handlers/shared/constants.js";
+} from "../../src/prompt/prompt-injector.js";
+import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
 
 test("injectSystemMessages skips already injected prompt IDs and injects missing ones", () => {
   const messages = [

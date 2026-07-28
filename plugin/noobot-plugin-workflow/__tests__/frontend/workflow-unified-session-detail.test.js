@@ -13,11 +13,11 @@ import {
   resolveIsolatedNodeSessionId,
   resolveRuntimeNodeSession,
   withRunningAssistantPlaceholder,
-} from "../frontend/components/workflow-message-card/workflowUnifiedSessionDetail.js";
+} from "../../frontend/runtime/workflowUnifiedSessionDetail.js";
 import {
   fetchExecutionSessionDetail,
   hydrateExecutionSessionDetail,
-} from "../frontend/components/workflow-message-card/workflowNodeSessionDetail.js";
+} from "../../frontend/runtime/workflowNodeSessionDetail.js";
 
 const runtimeNode = {
   workflowRunId: "run-1",

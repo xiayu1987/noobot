@@ -29,7 +29,7 @@ import {
   createAgentContext,
   createPlanningAgentContext,
   WORKFLOW_PARAMS,
-} from "./helpers/guidance-plan-update-threshold-helper.js";
+} from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("guidance summary threshold by turns is independent from plan update attempts", async () => {
   const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -228,4 +228,3 @@ test("planning does not schedule tool-burst summary when summary is already pend
     false,
   );
 });
-

@@ -8,11 +8,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
-} from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { disposeReconnectReplayTimers } from "../../../../src/modules/chat/runtime/reconnect/cleanup.js";
-import { scheduleCacheExpiredSessionRefresh } from "../../../../src/modules/chat/runtime/reconnect/cacheExpiredRefresh.js";
-import { renderActiveSessionBeforeReplay } from "../../../../src/modules/chat/runtime/reconnect/hydrationReplay.js";
-import { createReconnectReplayPublicApi } from "../../../../src/modules/chat/runtime/reconnect/publicApi.js";
+} from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { disposeReconnectReplayTimers } from "../../../../../../src/modules/chat/runtime/reconnect/cleanup.js";
+import { scheduleCacheExpiredSessionRefresh } from "../../../../../../src/modules/chat/runtime/reconnect/cacheExpiredRefresh.js";
+import { renderActiveSessionBeforeReplay } from "../../../../../../src/modules/chat/runtime/reconnect/hydrationReplay.js";
+import { createReconnectReplayPublicApi } from "../../../../../../src/modules/chat/runtime/reconnect/publicApi.js";
 
 describe("reconnectReplay support modules", () => {
   it("exposes test internals only in test mode", () => {

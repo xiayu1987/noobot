@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildNormalizedDetailMessages } from "../../../../../src/modules/session/model/list/detailMessages.js";
+import { buildNormalizedDetailMessages } from "../../../../../../src/modules/session/model/list/detailMessages.js";
 
 describe("buildNormalizedDetailMessages turnTimings", () => {
   it("does not copy authoritative turnTimings into disposable view messages", () => {

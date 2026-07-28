@@ -28,7 +28,7 @@ import {
   TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createAgentContext,
   createPlanningAgentContext,
-} from "./helpers/guidance-plan-update-threshold-helper.js";
+} from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("separate_model mode: when turn-summary and revision are both pending, planning_revision runs before summary", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -178,4 +178,3 @@ test("workflow_execution_result captures errorCode when separate_model guidance 
   assert.equal(executionLog?.detail?.chosenAction, "guidance");
   assert.equal(executionLog?.detail?.errorCode, "GUIDANCE_SEPARATE_MODEL_CALL_FAILED");
 });
-

@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
-import { clearExtensionRegistry } from "../../../src/extensions/extension-registry.js";
+import { clearExtensionRegistry } from "../../../../../../src/extensions/extension-registry.js";
 
 describe("ThinkingPanel", () => {
   beforeEach(() => {

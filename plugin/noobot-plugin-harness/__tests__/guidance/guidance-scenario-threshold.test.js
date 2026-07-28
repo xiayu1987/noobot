@@ -29,7 +29,7 @@ import {
   createAgentContext,
   createPlanningAgentContext,
   WORKFLOW_PARAMS,
-} from "./helpers/guidance-plan-update-threshold-helper.js";
+} from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("guidance summary and planning plan-update thresholds use full-mode defaults", async () => {
   assert.equal(WORKFLOW_PARAMS.planning.summary, undefined);
@@ -259,4 +259,3 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
   assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
-

@@ -5,8 +5,8 @@
  */
 import { effectScope } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper.js";
-import { RoleEnum, StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
+import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 afterEach(() => {
   vi.useRealTimers();

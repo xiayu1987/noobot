@@ -9,7 +9,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
-import { createDesktopConfigManager } from "../../electron/desktop-config.js";
+import { createDesktopConfigManager } from "../../electron/runtime/config.js";
 
 async function createFixture() {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-desktop-config-"));

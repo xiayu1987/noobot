@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { dependencySpecs, desktopDependencyTimeouts } from "./dependency-specs.js";
-import { createDependencyError, getDependencyErrorMeta, withTimeout } from "./dependency-process.js";
-import { getDependencyProxyEnv, maskDependencyProxyUrl } from "./dependency-proxy.js";
+import { dependencySpecs, desktopDependencyTimeouts } from "./specs.js";
+import { createDependencyError, getDependencyErrorMeta, withTimeout } from "./process.js";
+import { getDependencyProxyEnv, maskDependencyProxyUrl } from "./proxy.js";
 
 export function createDependencyInstaller({
   appendEarlyLog = () => {},

@@ -27,7 +27,7 @@ import {
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
-} from "./helpers/workflow-hook-session-strategy-helper.js";
+} from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook marks failed sub-agent step and continues downstream", async () => {
   const hookManager = createMockBotHookManager();

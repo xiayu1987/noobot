@@ -9,12 +9,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { DEFAULT_WORKFLOW_DENY_TOOL_NAMES, normalizeOptions } from "../src/core/options.js";
-import { createRegisterNoobotPlugin } from "../src/core/plugin.js";
-import { createRegisterWorkflowHooks } from "../src/core/hooks.js";
-import { PLUGIN_NAME, WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../src/core/constants.js";
-import { getWorkflowDefaultSemanticPrompt } from "../src/core/i18n.js";
-import { parseWorkflowDslText } from "../src/protocol/text-protocol.js";
+import { DEFAULT_WORKFLOW_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
+import { createRegisterNoobotPlugin } from "../../src/core/plugin.js";
+import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
+import { PLUGIN_NAME, WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
+import { getWorkflowDefaultSemanticPrompt } from "../../src/core/i18n.js";
+import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 
 
 test("default semantic prompt documents closed state-node constructs", () => {

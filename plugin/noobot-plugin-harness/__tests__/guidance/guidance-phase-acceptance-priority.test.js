@@ -29,7 +29,7 @@ import {
   createAgentContext,
   createPlanningAgentContext,
   WORKFLOW_PARAMS,
-} from "./helpers/guidance-plan-update-threshold-helper.js";
+} from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("phase acceptance is deferred (not lost) when same-turn plan update has higher priority", async () => {
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -61,5 +61,4 @@ test("phase acceptance is deferred (not lost) when same-turn plan update has hig
   assert.equal(agentContext.payload.harness.state.pending.phaseAcceptance, true);
   assert.equal(agentContext.payload.harness.state.counters.phaseAcceptanceTurns, 0);
 });
-
 

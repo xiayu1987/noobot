@@ -5,7 +5,7 @@
  */
 import { app, dialog, ipcMain } from "electron";
 import fs from "node:fs";
-import { clientPathBasename, clientPathDirname, isAbsoluteClientPath, joinClientPath, normalizeClientPath } from "../path-resolver.js";
+import { clientPathBasename, clientPathDirname, isAbsoluteClientPath, joinClientPath, normalizeClientPath } from "../../path-resolver.js";
 
 export function registerFileIpcHandlers({ appendDesktopLog = () => {}, getMainWindow = () => null } = {}) {
   function sanitizeDownloadFileName(fileName = "") {

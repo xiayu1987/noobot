@@ -5,7 +5,7 @@
  */
 import { ref } from "vue";
 import { vi } from "vitest";
-import { useChatSession } from "../../../../src/modules/chat/composables/useChatSession.js";
+import { useChatSession } from "../../../../../src/modules/chat/composables/useChatSession.js";
 
 export const wsClientMock = {
   connect: vi.fn(), dispose: vi.fn(), sendJson: vi.fn(), requestJson: vi.fn(), stream: vi.fn(),
@@ -37,6 +37,6 @@ export function createChatSession(options = {}) {
   });
 }
 
-vi.mock("../../../../src/shared/i18n/useLocale", () => ({ useLocale: () => ({ translate: (key) => key }) }));
-vi.mock("../../../../src/infrastructure/websocket/chatWebSocketClient", () => ({ createChatWebSocketClient: () => wsClientMock }));
-vi.mock("../../../../src/infrastructure/websocket/sessionLogWebSocketClient", () => ({ createSessionLogWebSocketClient: () => sessionLogClientMock }));
+vi.mock("../../../../../src/shared/i18n/useLocale", () => ({ useLocale: () => ({ translate: (key) => key }) }));
+vi.mock("../../../../../src/infrastructure/websocket/chatWebSocketClient", () => ({ createChatWebSocketClient: () => wsClientMock }));
+vi.mock("../../../../../src/infrastructure/websocket/sessionLogWebSocketClient", () => ({ createSessionLogWebSocketClient: () => sessionLogClientMock }));

@@ -14,8 +14,8 @@ import {
   resolvePlanUpdateAttempts,
   setPendingPlanUpdate,
   writePlanUpdateCaptureContext,
-} from "../src/capabilities/handlers/planning/plan-update-engine.js";
-import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
+} from "../../src/capabilities/handlers/planning/plan-update-engine.js";
+import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
 
 const PLAN_UPDATE_POLICY = Object.freeze({
   MAX_ATTEMPTS_REVISION: WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts,

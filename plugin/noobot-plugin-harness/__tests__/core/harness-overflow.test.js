@@ -6,9 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { WORKFLOW_PARAMS } from "../src/core/workflow-params.js";
-import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
+import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
+import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
+import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
 
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 

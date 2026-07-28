@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createRuntimeNodeSessions } from "../frontend/components/workflow-message-card/workflowRuntimeSessions.js";
+import { createRuntimeNodeSessions } from "../../frontend/runtime/workflowRuntimeSessions.js";
 
 function ref(value) {
   return { value };

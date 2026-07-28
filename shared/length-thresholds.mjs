@@ -64,6 +64,7 @@ const LENGTH_TIERS = deepFreeze({
     jsonlBuffer: 5 * MiB,
     directText: 8 * MiB,
     attachmentFile: 10 * MiB,
+    desktopLogFile: 10 * MiB,
     searchBuffer: 16 * MiB,
     attachmentTotal: 30 * MiB,
     libreOfficeTempBaseline: 512 * MiB,
@@ -101,6 +102,10 @@ export const LENGTH_THRESHOLDS = deepFreeze({
 
   clientPreview: {
     nonImageMaxBytes: LENGTH_TIERS.bytes.clientNonImagePreview,
+  },
+
+  desktopLogging: {
+    maxFileBytes: LENGTH_TIERS.bytes.desktopLogFile,
   },
 
   toolIO: {

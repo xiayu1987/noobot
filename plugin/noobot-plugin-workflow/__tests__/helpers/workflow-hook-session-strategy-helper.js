@@ -11,7 +11,7 @@ import { resolveWorkflowNodeDialogProcessId } from "../../src/core/dialog-proces
 import {
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
-} from "../../frontend/components/workflow-message-card/workflowDialogProcessIdCompat.js";
+} from "../../frontend/utils/workflowDialogProcessIdCompat.js";
 
 export function createMockBotHookManager() {
   const listeners = new Map();

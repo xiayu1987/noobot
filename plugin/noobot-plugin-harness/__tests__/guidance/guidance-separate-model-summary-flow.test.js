@@ -28,7 +28,7 @@ import {
   TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createAgentContext,
   createPlanningAgentContext,
-} from "./helpers/guidance-plan-update-threshold-helper.js";
+} from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("separate_model summary uses checkpointed summary scope when marking messages", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });

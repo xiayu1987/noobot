@@ -6,23 +6,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveCapabilityModelMessages } from "../src/capabilities/handlers/shared/model/utils.js";
-import { invokeWithReasoningRetry } from "../src/capabilities/handlers/shared/model/invocation-utils.js";
+import { resolveCapabilityModelMessages } from "../../src/capabilities/handlers/shared/model/utils.js";
+import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
   clearIncrementalCapabilityMessageCacheForContext,
   resolveIncrementalCapabilityMessages,
-} from "../src/capabilities/handlers/shared/model/incremental-message-cache.js";
-import { buildCapabilityModelMessages } from "../src/capabilities/handlers/shared/model/message-factory.js";
+} from "../../src/capabilities/handlers/shared/model/incremental-message-cache.js";
+import { buildCapabilityModelMessages } from "../../src/capabilities/handlers/shared/model/message-factory.js";
 import {
   HARNESS_MESSAGE_ORIGIN_FIELD,
   markMessageAsContext,
   markMessageAsProtocol,
   resolveMessageOrigin,
-} from "../src/capabilities/handlers/shared/model/message-metadata.js";
-import { buildModelMessagesWithStructuredEnvelope } from "../src/capabilities/handlers/shared/message/utils.js";
-import { buildHarnessInjectedMessage } from "../src/capabilities/handlers/shared/message/injected-message-utils.js";
-import { resolveDialogProcessIdFromContext } from "../src/capabilities/handlers/shared/runtime/dialog-process-id.js";
-import { markHarnessTurnLifecycle } from "../src/capabilities/handlers/shared/runtime/lifecycle-utils.js";
+} from "../../src/capabilities/handlers/shared/model/message-metadata.js";
+import { buildModelMessagesWithStructuredEnvelope } from "../../src/capabilities/handlers/shared/message/utils.js";
+import { buildHarnessInjectedMessage } from "../../src/capabilities/handlers/shared/message/injected-message-utils.js";
+import { resolveDialogProcessIdFromContext } from "../../src/capabilities/handlers/shared/runtime/dialog-process-id.js";
+import { markHarnessTurnLifecycle } from "../../src/capabilities/handlers/shared/runtime/lifecycle-utils.js";
 
 function contextMessage(message = {}, key = "") {
   return markMessageAsContext(message, key);

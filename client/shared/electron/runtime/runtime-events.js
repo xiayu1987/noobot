@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { writeRoutedRuntimeEvent } from "@noobot/runtime-events";
-import { joinClientPath } from "../path-resolver.js";
+import { joinClientPath } from "../../path-resolver.js";
 
 const DESKTOP_RUNTIME_EVENTS_ROOT_ENV = "NOOBOT_RUNTIME_EVENTS_ROOT";
 const SENSITIVE_KEY_PATTERN = /(token|cookie|authorization|secret|apikey|apiKey|headers|body|url|href|password|path|file)/i;

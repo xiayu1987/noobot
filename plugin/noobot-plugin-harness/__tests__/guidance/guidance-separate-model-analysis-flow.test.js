@@ -28,7 +28,7 @@ import {
   TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createAgentContext,
   createPlanningAgentContext,
-} from "./helpers/guidance-plan-update-threshold-helper.js";
+} from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("separate_model analysis uses aligned agent context then user request and user responsibility", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { shouldProjectSubSessionEvent } from "../../../src/modules/chat/runtime/engine/sendFlow.js";
+import { shouldProjectSubSessionEvent } from "../../../../../../src/modules/chat/runtime/engine/sendFlow.js";
 
 describe("sendFlow sub-session message routing", () => {
   it("projects an authoritative child tool event without workflow node metadata", () => {

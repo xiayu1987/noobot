@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createWorkflowExtensionRuntime } from "../src/extensions/workflow/runtime.js";
+import { createWorkflowExtensionRuntime } from "../../src/extensions/workflow/runtime.js";
 
 test("workflow extension runtime mounts default extension once", () => {
   const calls = [];

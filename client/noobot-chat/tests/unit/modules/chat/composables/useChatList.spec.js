@@ -5,10 +5,10 @@
  */
 import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
-import { useChatList } from "../../../../src/modules/chat/composables/useChatList.js";
-import { RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { useChatList } from "../../../../../src/modules/chat/composables/useChatList.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
-vi.mock("../../../../src/shared/i18n/useLocale", () => ({
+vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
   useLocale: () => ({
     translate: (key) => key,
   }),

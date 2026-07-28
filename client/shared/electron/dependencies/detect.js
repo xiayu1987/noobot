@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { joinClientPath } from "../path-resolver.js";
+import { joinClientPath } from "../../path-resolver.js";
 import fs from "node:fs";
-import { desktopDependencyTimeouts } from "./dependency-specs.js";
-import { sleep } from "./dependency-process.js";
+import { desktopDependencyTimeouts } from "./specs.js";
+import { sleep } from "./process.js";
 
 export function createDependencyDetector({
   appendEarlyLog = () => {},

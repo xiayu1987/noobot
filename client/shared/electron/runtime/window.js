@@ -5,7 +5,7 @@
  */
 import { BrowserWindow, Menu, shell } from "electron";
 import fs from "node:fs";
-import { clientFilePath as path } from "../path-resolver.js";
+import { clientFilePath as path } from "../../path-resolver.js";
 
 export function createDesktopWindowManager({
   app,

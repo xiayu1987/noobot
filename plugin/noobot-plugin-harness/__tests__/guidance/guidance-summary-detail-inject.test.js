@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
+import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
 
 test("inject-mode summary defaults to injecting full summary to main agent without attachment", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });

@@ -82,8 +82,6 @@ const ELEMENT_PLUS_COMPONENTS = [
   ElUpload,
 ];
 
-let mermaidModulePromise = null;
-
 export const ChatComposer = defineAsyncComponent(() =>
   import("../modules/composer/components/ChatComposer.vue")
 );
@@ -124,11 +122,4 @@ export function installElementPlusComponents(app) {
 
 export async function installFrontendPlugins() {
   await registerExternalFrontendPlugins();
-}
-
-export async function loadMermaid() {
-  if (!mermaidModulePromise) {
-    mermaidModulePromise = import("mermaid").then((module) => module.default || module);
-  }
-  return mermaidModulePromise;
 }

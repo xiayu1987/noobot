@@ -15,7 +15,7 @@ import {
   registerNoobotPlugin,
   test,
   waitForFile,
-} from "./helpers/harness-planning-helper.js";
+} from "../helpers/harness-planning-helper.js";
 
 test("harness planning prompt includes current tool names and descriptions", async () => {
   const hookManager = createAgentHookManager();

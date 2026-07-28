@@ -6,8 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ChannelManager } from "../src/channel/channel-manager.js";
-import { createChannelKey, ensureConnectionId, resolveMessageEventTrace } from "../src/shared/utils.js";
+import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { createChannelKey, ensureConnectionId, resolveMessageEventTrace } from "../../src/shared/utils.js";
 import { createMockSocket } from "./channel-manager.state-consistency.test-helpers.js";
 
 test("live business event broadcast should include channel sessionId without overriding upstream sessionId", () => {

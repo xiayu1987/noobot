@@ -22,7 +22,7 @@ import { useLocale } from "../../shared/i18n/useLocale.js";
 import { useMarkdownRenderer } from "../../modules/chat/composables/message/useMarkdownRenderer.js";
 import { useReconnect } from "../../modules/chat/composables/connectivity/useReconnect.js";
 import { usePanelState } from "../../shared/composables/usePanelState.js";
-import { frontendConfig } from "../config/frontendConfig.js";
+import { frontendConfig } from "../../infrastructure/config/frontendConfig.js";
 import { PSEUDO_PANEL, useAppShellPseudoRoute } from "../composables/useAppShellPseudoRoute.js";
 import { useAppShellPreferences } from "../composables/useAppShellPreferences.js";
 import { useThinkingDetailsPanel } from "../composables/useThinkingDetailsPanel.js";

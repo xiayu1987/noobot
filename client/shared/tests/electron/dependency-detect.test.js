@@ -11,11 +11,11 @@ import { pipeline } from "node:stream/promises";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
-import { createDependencyDetector } from "../../electron/dependency-detect.js";
-import { createDependencyInstaller } from "../../electron/dependency-installer.js";
-import { createMacDependencyInstallerTools } from "../../electron/dependency-managed-mac.js";
-import { buildDependencyRuntimeEnv, summarizeDependencySources } from "../../electron/dependency-runtime-env.js";
-import { getDependencyProxyEnv, getCurlProxyArgs, maskDependencyProxyUrl, normalizeDependencyProxyUrl, validateDependencyProxy } from "../../electron/dependency-proxy.js";
+import { createDependencyDetector } from "../../electron/dependencies/detect.js";
+import { createDependencyInstaller } from "../../electron/dependencies/installer.js";
+import { createMacDependencyInstallerTools } from "../../electron/dependencies/managed-mac.js";
+import { buildDependencyRuntimeEnv, summarizeDependencySources } from "../../electron/dependencies/runtime-env.js";
+import { getDependencyProxyEnv, getCurlProxyArgs, maskDependencyProxyUrl, normalizeDependencyProxyUrl, validateDependencyProxy } from "../../electron/dependencies/proxy.js";
 
 function withPlatform(platform, fn) {
   const original = Object.getOwnPropertyDescriptor(process, "platform");

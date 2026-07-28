@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildToolNameByCallId,
   buildToolResultSummary,
-} from "../../../src/modules/chat/model/toolLogFormatting.js";
+} from "../../../../../src/modules/chat/model/toolLogFormatting.js";
 
 describe("tool log formatting", () => {
   it("uses the tool_call_id association for fallback result summaries", () => {

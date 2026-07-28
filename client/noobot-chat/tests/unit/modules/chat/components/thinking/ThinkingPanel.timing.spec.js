@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
-import { buildViewMessage } from "../../../src/modules/chat/model/messageModel.js";
+import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
 
 function runtime(overrides = {}) {
   return {

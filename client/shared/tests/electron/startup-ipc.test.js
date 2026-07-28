@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
-import { registerStartupIpcHandlers } from "../../electron/startup-ipc.js";
+import { registerStartupIpcHandlers } from "../../electron/ipc/startup.js";
 
 function createIpcMainMock() {
   const handlers = new Map();

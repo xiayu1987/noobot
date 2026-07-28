@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { injectTurnStatusPlaceholders } from "../../../../src/modules/session/model/list/detailMessages.js";
+import { injectTurnStatusPlaceholders } from "../../../../../../src/modules/session/model/list/detailMessages.js";
 
 const user = { role: "user", content: "hello", turnScopeId: "t1", dialogProcessId: "d1" };
 

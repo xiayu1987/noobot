@@ -5,12 +5,12 @@
  */
 import fs from "node:fs";
 import os from "node:os";
-import { clientPathDelimiter, clientPathDirname, joinClientPath } from "../path-resolver.js";
+import { clientPathDelimiter, clientPathDirname, joinClientPath } from "../../path-resolver.js";
 import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
-import { dependencySpecs, desktopDependencyTimeouts } from "./dependency-specs.js";
-import { createDependencyError } from "./dependency-process.js";
-import { getCurlProxyArgs, getDependencyProxyEnv, maskDependencyProxyUrl } from "./dependency-proxy.js";
+import { dependencySpecs, desktopDependencyTimeouts } from "./specs.js";
+import { createDependencyError } from "./process.js";
+import { getCurlProxyArgs, getDependencyProxyEnv, maskDependencyProxyUrl } from "./proxy.js";
 
 export function createMacDependencyInstallerTools({
   app,

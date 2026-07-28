@@ -6,8 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
-import { HARNESS_BUCKET_VERSION } from "../src/capabilities/handlers/shared/constants.js";
+import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
+import { HARNESS_BUCKET_VERSION } from "../../src/capabilities/handlers/shared/constants.js";
 
 test("ensureHarnessBucket normalizes plan-update counters and pending fields", () => {
   const ctx = {

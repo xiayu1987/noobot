@@ -99,10 +99,10 @@ const SOURCE_ALLOWLIST = new Map([
   ["service/services/openvscode/process.js", new Map([
     ["signal-kill", [/process\.kill\(pid, "SIG(?:TERM|KILL)"\)/]],
   ])],
-  ["client/noobot-chat/src/composables/message/useMessagePreview/constants.js", new Map([
+  ["client/noobot-chat/src/modules/chat/composables/message/useMessagePreview/constants.js", new Map([
     ["bash-shell", [/^"bash",$/]],
   ])],
-  ["client/shared/electron/desktop-services.js", new Map([
+  ["client/shared/electron/runtime/services.js", new Map([
     ["signal-kill", [/^child\.kill\("SIGTERM"\);$/]],
   ])],
 ]);

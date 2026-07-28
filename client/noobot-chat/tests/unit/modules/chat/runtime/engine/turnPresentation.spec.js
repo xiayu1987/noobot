@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { selectTurnPresentations } from "../../../../src/modules/chat/runtime/engine/turnPresentation.js";
+import { selectTurnPresentations } from "../../../../../../src/modules/chat/runtime/engine/turnPresentation.js";
 import {
   confirmTurnRuntimeDeletion,
   createTurnRuntimeRegistryState,
-} from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+} from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 function workflow({
   workflowRunId = "workflow-a",

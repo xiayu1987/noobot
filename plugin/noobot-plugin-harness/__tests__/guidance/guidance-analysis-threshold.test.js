@@ -28,7 +28,7 @@ import {
   TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createAgentContext,
   createPlanningAgentContext,
-} from "./helpers/guidance-plan-update-threshold-helper.js";
+} from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("guidance schedules analysis by full-mode turn threshold", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });

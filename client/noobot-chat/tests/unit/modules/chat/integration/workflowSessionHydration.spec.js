@@ -7,12 +7,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   hydrateWorkflowRegistryFromSessionDetail,
   workflowPlanningEventFromMessage,
-} from "../../../../../../plugin/noobot-plugin-workflow/frontend/runtime/sessionHydration.js";
+} from "../../../../../../../plugin/noobot-plugin-workflow/frontend/runtime/sessionHydration.js";
 import {
   confirmTurnRuntimeDeletion,
   createTurnRuntimeRegistryState,
   isTurnRuntimeDeleted,
-} from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 function workflowMessage() {
   return {

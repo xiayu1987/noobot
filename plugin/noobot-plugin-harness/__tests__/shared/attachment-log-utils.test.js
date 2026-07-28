@@ -7,8 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   mergeAttachments,
-} from "../src/capabilities/handlers/shared/attachment-log-utils.js";
-import { containsExecutableScriptText } from "../src/capabilities/handlers/shared/script-content-risk.js";
+} from "../../src/capabilities/handlers/shared/attachment-log-utils.js";
+import { containsExecutableScriptText } from "../../src/capabilities/handlers/shared/script-content-risk.js";
 
 test("containsExecutableScriptText recognizes executable script signals only", () => {
   assert.equal(containsExecutableScriptText("```bash\nrm -rf /tmp/demo\n```"), true);

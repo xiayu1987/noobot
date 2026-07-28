@@ -9,11 +9,11 @@ import {
   makeSession,
   assistantMessage,
   emitChannelState,
-} from "./helpers/useChatEngineHarness.js";
+} from "../helpers/useChatEngineHarness.js";
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../src/modules/chat/model/chatConstants.js";
+} from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.resend failure rollback", () => {
   it("resendMonotonicMessage fails without delete/send fallback when replace-turn is unsupported", async () => {

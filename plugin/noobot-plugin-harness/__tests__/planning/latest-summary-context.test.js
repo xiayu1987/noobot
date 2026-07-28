@@ -10,7 +10,7 @@ import {
   resolveLatestCompleteSummaryText,
   resolveLatestSummaryOutputFullText,
   resolveLatestSummaryRelayText,
-} from "../src/capabilities/handlers/shared/plan/latest-summary-context.js";
+} from "../../src/capabilities/handlers/shared/plan/latest-summary-context.js";
 
 test("resolveLatestCompleteSummaryText returns summaryFullText as the latest complete summary first", () => {
   const bucket = {

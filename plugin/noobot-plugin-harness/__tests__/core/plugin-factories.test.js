@@ -9,11 +9,11 @@ import assert from "node:assert/strict";
 import {
   createPluginRuntimeContextFactory,
   assertHookManager,
-} from "../src/core/context.js";
-import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "../src/core/error-messages.js";
-import { createRegisterNoobotPlugin } from "../src/core/plugin.js";
-import { createHarnessPluginFactory } from "../src/core/plugin.js";
-import { PLUGIN_NAME, PLUGIN_VERSION } from "../src/core/constants.js";
+} from "../../src/core/context.js";
+import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "../../src/core/error-messages.js";
+import { createRegisterNoobotPlugin } from "../../src/core/plugin.js";
+import { createHarnessPluginFactory } from "../../src/core/plugin.js";
+import { PLUGIN_NAME, PLUGIN_VERSION } from "../../src/core/constants.js";
 
 test("createPluginRuntimeContextFactory wires injected deps and normalizes planning guidance", () => {
   const calls = [];

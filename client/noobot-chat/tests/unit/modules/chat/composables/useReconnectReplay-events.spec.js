@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "./helpers/useReconnectReplayHelper.js";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { applyTurnRuntimeEvent } from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { RoleEnum, StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
-import { selectActivityTimelineLogs } from "../../../../src/modules/chat/runtime/engine/activityTimeline.js";
-import { clearExtensionRegistry } from "../../../../src/extensions/extension-registry.js";
+import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
+import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { applyTurnRuntimeEvent } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
+import { clearExtensionRegistry } from "../../../../../src/extensions/extension-registry.js";
 
 afterEach(() => {
   vi.useRealTimers();

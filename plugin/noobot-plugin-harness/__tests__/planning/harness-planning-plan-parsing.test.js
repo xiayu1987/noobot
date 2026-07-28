@@ -15,7 +15,7 @@ import {
   registerNoobotPlugin,
   test,
   waitForFile,
-} from "./helpers/harness-planning-helper.js";
+} from "../helpers/harness-planning-helper.js";
 
 test("harness planning accepts numbered plain-text plan output", async () => {
   const hookManager = createAgentHookManager();

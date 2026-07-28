@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { clientFilePath as path } from "../../shared/path-resolver.js";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import {
   allowedPluginApiSpecifiers,
   inspectFrontendSource,

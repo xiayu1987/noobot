@@ -6,7 +6,7 @@
  */
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { clientFilePath as path } from "../../shared/path-resolver.js";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");

@@ -7,23 +7,23 @@ import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   createHarness,
-} from "./helpers/useChatEngineHarness.js";
-import { createSessionDetailApplicator } from "../../../../src/modules/session/model/list/sessionDetailApply.js";
-import { SESSION_DETAIL_APPLY_MODE } from "../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
+} from "../helpers/useChatEngineHarness.js";
+import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
+import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 import {
   RoleEnum,
-} from "../../../../src/modules/chat/model/chatConstants.js";
+} from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   applyTurnRuntimeEvent,
   applyTurnTerminalResolution,
   createTurnRuntimeRegistryState,
   selectTurnMessageRuntime,
-} from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
-} from "../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
+} from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { createTurnTerminalResolution } from "../../../../../../../shared/turn-lifecycle-protocol.mjs";
 
 function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages = [] } = {}) {
   const activeSession = {

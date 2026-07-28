@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createRequire } from "node:module";
-import { maskDependencyProxyUrl, validateDependencyProxy } from "./dependency-proxy.js";
+import { maskDependencyProxyUrl, validateDependencyProxy } from "../dependencies/proxy.js";
 
 const require = createRequire(import.meta.url);
 

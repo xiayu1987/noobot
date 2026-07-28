@@ -5,9 +5,9 @@
  */
 import { describe, expect, it } from "vitest";
 import { ref } from "vue";
-import { applyRunStateMessageRuntimePatch } from "../../../../src/modules/chat/runtime/engine/messageRuntimePatch.js";
-import { applyTurnRuntimeEvent, createTurnRuntimeRegistryState } from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { applyRunStateMessageRuntimePatch } from "../../../../../../src/modules/chat/runtime/engine/messageRuntimePatch.js";
+import { applyTurnRuntimeEvent, createTurnRuntimeRegistryState } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 
 describe("chatEngine message runtime patch isolation", () => {
   it("patches the event's background session and matching turn only", () => {

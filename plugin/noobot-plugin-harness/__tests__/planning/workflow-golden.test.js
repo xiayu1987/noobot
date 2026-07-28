@@ -6,12 +6,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveGuidancePriorityDecision } from "../src/capabilities/handlers/planning/plan-update-scheduler.js";
-import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance.js";
+import { resolveGuidancePriorityDecision } from "../../src/capabilities/handlers/planning/plan-update-scheduler.js";
+import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
 import {
   WORKFLOW_SCHEDULER_ORDER,
   resolveWorkflowActionDecision,
-} from "../src/capabilities/handlers/shared/workflow/scheduler.js";
+} from "../../src/capabilities/handlers/shared/workflow/scheduler.js";
 
 function createAgentContext({
   pending = {},
