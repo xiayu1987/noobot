@@ -9,7 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/system-core/hook/index.js";
+import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
 import { registerNoobotPlugin } from "../../src/index.js";
 import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";

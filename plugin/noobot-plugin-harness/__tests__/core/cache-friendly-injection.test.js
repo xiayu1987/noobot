@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { injectMessageWithPolicy } from "../../src/capabilities/handlers/shared/message/injection-utils.js";
-import { resolveMainModelFinalMessages } from "../../../../agent/src/system-core/session/utils/context-window-normalizer.js";
+import { resolveMainModelFinalMessages } from "../../../../agent/src/session/utils/context-window-normalizer.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
   const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};

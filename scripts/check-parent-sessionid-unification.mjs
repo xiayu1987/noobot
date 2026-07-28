@@ -8,15 +8,15 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const ROOT = process.cwd();
-const TARGET_ROOT = path.join(ROOT, "agent", "src", "system-core");
+const TARGET_ROOT = path.join(ROOT, "agent", "src");
 
 const ALLOW_PATH_PREFIXES = [
-  "agent/src/system-core/session/",
+  "agent/src/session/",
 ];
 
 const ALLOW_EXACT_FILES = new Set([
-  "agent/src/system-core/context/parent-session-id-resolver.js",
-  "agent/src/system-core/bot-manage/session/session-execution-engine.js",
+  "agent/src/context/parent-session-id-resolver.js",
+  "agent/src/bot/session/session-execution-engine.js",
 ]);
 
 const RULES = [

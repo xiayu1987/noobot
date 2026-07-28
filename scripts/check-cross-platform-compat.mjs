@@ -79,21 +79,21 @@ const PACKAGE_SCRIPT_RULES = [
   },
 ];
 const SOURCE_ALLOWLIST = new Map([
-  ["agent/src/system-core/sandbox/bubblewrap-sandbox.js", new Map([
+  ["agent/src/sandbox/bubblewrap-sandbox.js", new Map([
     ["unix-temp-path", [/^"\/(?:var\/)?tmp",$/]],
     ["bash-shell", [/^"(?:bash|-lc)",$/]],
   ])],
-  ["agent/src/system-core/sandbox/firejail-sandbox.js", new Map([
+  ["agent/src/sandbox/firejail-sandbox.js", new Map([
     ["bash-shell", [/^"(?:bash|-lc)",$/]],
   ])],
-  ["agent/src/system-core/tools/data-processing/doc2data/libreoffice.js", new Map([
+  ["agent/src/tools/data-processing/doc2data/libreoffice.js", new Map([
     ["unix-temp-path", [/^"\/tmp",$/]],
     ["signal-kill", [/^process\.kill\(processId, "SIG(?:TERM|KILL)"\);$/]],
   ])],
-  ["agent/src/system-core/tools/data-processing/media2data-tool.js", new Map([
+  ["agent/src/tools/data-processing/media2data-tool.js", new Map([
     ["signal-kill", [/^childProcess\.kill\("SIG(?:TERM|KILL)"\);$/]],
   ])],
-  ["agent/src/system-core/tools/execution/script-tool/process-exec.js", new Map([
+  ["agent/src/tools/execution/script-tool/process-exec.js", new Map([
     ["shell-spawn", [/^shell: true,$/]],
   ])],
   ["service/services/openvscode/process.js", new Map([

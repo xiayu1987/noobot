@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { replaceMessages } from "./message-store.js";
-import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../../../../agent/src/system-core/agent/core/message-context/context-diagnostics.js";
+import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../../../../agent/src/context/runtime-state/context-diagnostics.js";
 
 
 function emitHarnessModelContextTrace(ctx = {}, stage = "", payload = {}) {

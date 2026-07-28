@@ -28,8 +28,8 @@ const ALLOWED_LEGACY_FIELD_FILES = new Set([
 ]);
 
 const AGENT_COMPAT_FILES = [
-  path.join(projectRoot, "agent/src/system-core/session/session-summary-builders.js"),
-  path.join(projectRoot, "agent/src/system-core/session/services/session-message-service.js"),
+  path.join(projectRoot, "agent/src/session/session-summary-builders.js"),
+  path.join(projectRoot, "agent/src/session/services/session-message-service.js"),
 ];
 
 const AGENT_COMPAT_ALLOWED_LINES = [

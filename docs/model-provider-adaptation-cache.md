@@ -4,9 +4,9 @@
 
 相关代码：
 
-- `agent/src/system-core/model/factory/chat-model.js`
-- `agent/src/system-core/model/spec/defaults.js`
-- `agent/src/system-core/model/tool/binding-adapter.js`
+- `agent/src/models/factory/chat-model.js`
+- `agent/src/models/spec/defaults.js`
+- `agent/src/models/tool/binding-adapter.js`
 - `model-proxy/src/cache-diagnostics.js`
 
 ## 1. 目标
@@ -257,20 +257,20 @@ LangChain 能把这些转换为 Responses API input，但强制切换 transport 
    - 服务端自动缓存；
    - 专用 header。
 
-3. 在 `agent/src/system-core/model/spec/defaults.js` 增加 profile 规则：
+3. 在 `agent/src/models/spec/defaults.js` 增加 profile 规则：
    - 默认 temperature；
    - top_p；
    - penalty；
    - thinking budget。
 
-4. 在 `agent/src/system-core/model/factory/chat-model.js` 增加请求参数规则：
+4. 在 `agent/src/models/factory/chat-model.js` 增加请求参数规则：
    - 是否支持 `top_p`；
    - 是否支持 `reasoning_effort`；
    - 是否支持 Prompt Cache；
    - 是否需要 Responses API；
    - 是否需要 provider 专用 header。
 
-5. 在 `agent/src/system-core/model/tool/binding-adapter.js` 增加工具绑定规则：
+5. 在 `agent/src/models/tool/binding-adapter.js` 增加工具绑定规则：
    - 是否默认 strict；
    - 是否有 strict 不兼容工具；
    - tools 顺序必须稳定。

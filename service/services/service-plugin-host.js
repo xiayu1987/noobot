@@ -3,14 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../agent/src/system-core/hook/index.js";
+import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../agent/src/extensions/hooks/index.js";
 import { createJsonRouteWrapper } from "../routes/route-wrapper.js";
 import {
   buildNoobotPluginDiagnostics,
   getNoobotPluginRuntime,
   listLoadedNoobotPluginEntries,
   refreshNoobotPluginRuntime,
-} from "../../agent/src/system-core/plugin/plugin-loader.js";
+} from "../../agent/src/extensions/plugins/plugin-loader.js";
 
 const dynamicPluginRuntimeOptions = {
   requiredApiVersion: "1",

@@ -4,5 +4,5 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "./system-core/index.js";
-export { runAgentTurn } from "./system-core/agent/index.js";
+export { runAgentTurn } from "./runtime/index.js";
 

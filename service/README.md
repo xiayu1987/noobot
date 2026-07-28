@@ -48,7 +48,7 @@ Tool-layer tests only:
 npm run test:tools
 ```
 
-`test:tools` includes `__tests__/system-core/tools/*.test.js`, including agent-collab split tests such as:
+`test:tools` includes `__tests__/tools/*.test.js`, including agent-collab split tests such as:
 
 - `agent-collab-passthrough.test.js`
 - `agent-collab-wait.test.js`
