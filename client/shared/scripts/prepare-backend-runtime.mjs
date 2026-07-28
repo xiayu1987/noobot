@@ -25,6 +25,7 @@ const runtimeWorkspaces = [
   'runtime-events',
   'sanitize',
   'i18n',
+  'plugin-runtime',
   'workflow',
   'plugin/noobot-plugin-harness',
   'plugin/noobot-plugin-workflow',
@@ -154,7 +155,7 @@ async function main() {
 
   const npmCommand = getNpmCommand();
   log(`npm runner: ${npmCommand.label}`);
-  run(npmCommand.command, [...npmCommand.argsPrefix, 'install', '--omit=dev', '--ignore-scripts', '--no-audit', '--fund=false'], {
+  run(npmCommand.command, [...npmCommand.argsPrefix, 'install', '--omit=dev', '--omit=peer', '--ignore-scripts', '--no-audit', '--fund=false'], {
     cwd: backendRoot,
   });
 
@@ -183,6 +184,7 @@ async function main() {
   await assertExists(path.join(backendRoot, 'agent/src/prompts/base.zh-CN.md'), 'Prepared backend Chinese system prompt');
   await assertExists(path.join(backendRoot, 'agent/src/prompts/base.en-US.md'), 'Prepared backend English system prompt');
   await assertExists(path.join(backendRoot, 'node_modules/noobot-agent/package.json'), 'Prepared backend dependency noobot-agent');
+  await assertExists(path.join(backendRoot, 'node_modules/@noobot/plugin-runtime/package.json'), 'Prepared backend dependency @noobot/plugin-runtime');
   await assertExists(path.join(backendRoot, 'node_modules/@noobot/sanitize/package.json'), 'Prepared backend dependency @noobot/sanitize');
   await assertExists(path.join(backendRoot, 'node_modules/express/package.json'), 'Prepared backend dependency express');
   log(`Prepared backend runtime: ${backendRoot}`);
