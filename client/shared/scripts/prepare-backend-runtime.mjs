@@ -36,7 +36,7 @@ const privateConfigFileNames = new Set(['global.config.json', 'config.json', 'ag
 function shouldCopyRuntimeFile(fromRoot, src) {
   const relativePath = path.relative(fromRoot, src);
   const normalizedRelativePath = relativePath.split(path.sep).join('/');
-  if (normalizedRelativePath.startsWith('src/system-core/system-prompt/')) return true;
+  if (normalizedRelativePath.startsWith('src/prompts/')) return true;
   if (ignore.test(relativePath)) return false;
   if (privateConfigFileNames.has(path.basename(src))) return false;
   return true;
@@ -179,9 +179,9 @@ async function main() {
   }
 
   await assertExists(path.join(backendRoot, 'service/app.js'), 'Prepared backend entry');
-  await assertExists(path.join(backendRoot, 'agent/src/system-core/system-prompt/base.md'), 'Prepared backend system prompt');
-  await assertExists(path.join(backendRoot, 'agent/src/system-core/system-prompt/base.zh-CN.md'), 'Prepared backend Chinese system prompt');
-  await assertExists(path.join(backendRoot, 'agent/src/system-core/system-prompt/base.en-US.md'), 'Prepared backend English system prompt');
+  await assertExists(path.join(backendRoot, 'agent/src/prompts/base.md'), 'Prepared backend system prompt');
+  await assertExists(path.join(backendRoot, 'agent/src/prompts/base.zh-CN.md'), 'Prepared backend Chinese system prompt');
+  await assertExists(path.join(backendRoot, 'agent/src/prompts/base.en-US.md'), 'Prepared backend English system prompt');
   await assertExists(path.join(backendRoot, 'node_modules/noobot-agent/package.json'), 'Prepared backend dependency noobot-agent');
   await assertExists(path.join(backendRoot, 'node_modules/@noobot/sanitize/package.json'), 'Prepared backend dependency @noobot/sanitize');
   await assertExists(path.join(backendRoot, 'node_modules/express/package.json'), 'Prepared backend dependency express');

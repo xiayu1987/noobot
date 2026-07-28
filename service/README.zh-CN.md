@@ -48,7 +48,7 @@ npm test
 npm run test:tools
 ```
 
-`test:tools` 会覆盖 `__tests__/system-core/tools/*.test.js`，包含 agent-collab 拆分后的测试，例如：
+`test:tools` 会覆盖 `__tests__/tools/*.test.js`，包含 agent-collab 拆分后的测试，例如：
 
 - `agent-collab-passthrough.test.js`
 - `agent-collab-wait.test.js`

@@ -33,19 +33,19 @@ const OVERFLOW_FIELD_REGEXES = [
 ];
 
 const OVERFLOW_ALLOWED_FILES = new Set([
-  "agent/src/system-core/semantic-transfer/legacy-adapter.js",
+  "agent/src/transfer/legacy-adapter.js",
 ]);
 
 const SETTLED_ATTACHMENT_SERVICE_ONLY_FILES = new Map(Object.entries({
-  "agent/src/system-core/bot-manage/session/scoped-artifact-persistence-helpers.js":
+  "agent/src/bot/session/scoped-artifact-persistence-helpers.js":
     "generic generated artifacts must use attachmentService.ingestGeneratedArtifacts",
-  "agent/src/system-core/agent/core/media/artifact-service.js":
+  "agent/src/artifacts/runtime/artifact-service.js":
     "LLM output media attachment persistence must use attachmentService.ingestGeneratedArtifacts",
-  "agent/src/system-core/tools/ai-models/multimodal-generate-tool.js":
+  "agent/src/tools/ai-models/multimodal-generate-tool.js":
     "multimodal image generation attachment persistence must use attachmentService.ingestGeneratedArtifacts",
-  "agent/src/system-core/tools/connectors/connector-toolkit/tool-access-connector.js":
+  "agent/src/tools/connectors/connector-toolkit/tool-access-connector.js":
     "email connector attachment persistence must use attachmentService.ingestGeneratedArtifacts",
-  "agent/src/system-core/tools/collaboration/agent-collab/collab-artifact-persist.js":
+  "agent/src/tools/collaboration/agent-collab/collab-artifact-persist.js":
     "ordinary agent-collab async result attachment persistence must use attachmentService.ingestGeneratedArtifacts",
 }));
 
@@ -76,7 +76,7 @@ const HARNESS_FINAL_MESSAGE_COMPOSITION_REGEXES = [
   { field: "NOOBOT_HARNESS_COLLAPSE", regex: /\bNOOBOT_HARNESS_COLLAPSE\b/ },
 ];
 
-const REQUIRED_TASK_SUMMARY_TRANSFER_FILE = "agent/src/system-core/agent/core/execution/tool-runner.js";
+const REQUIRED_TASK_SUMMARY_TRANSFER_FILE = "agent/src/runtime/tool-execution/tool-runner.js";
 const REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS = [
   {
     snippet: "\"task_summary\"",
@@ -93,37 +93,37 @@ const REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS = [
 ];
 
 const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
-  "agent/src/system-core/agent/core/context/message-builder.js": "model context compatibility consumes runtime attachmentMetas",
-  "agent/src/system-core/agent/core/execution/tool-runner.js": "tool overflow builds TransferEnvelope then legacy overflow via adapter",
-  "agent/src/system-core/agent/core/execution/state-committer.js": "runtime/turn event stream still emits attachmentMetas for existing consumers",
-  "agent/src/system-core/agent/core/media/artifact-service.js": "artifact extraction compatibility reads legacy + transfer",
-  "agent/src/system-core/attach/meta-ops.js": "legacy attachment meta normalization utility",
-  "agent/src/system-core/attach/runtime-attachment.js": "runtime attachment legacy store",
-  "agent/src/system-core/attach/service/attachment-service.js": "attachment service rewrites persisted message metas",
-  "agent/src/system-core/bot-manage/execution/runner.js": "session runner attachment compatibility",
-  "agent/src/system-core/bot-manage/execution/finalizer.js": "final assistant aggregation keeps attachmentMetas compatibility for persisted turn schema",
-  "agent/src/system-core/bot-manage/execution/turn-persister.js": "turn persistence legacy schema",
-  "agent/src/system-core/bot-manage/session/session-execution-engine.js": "session execution legacy bridge",
-  "agent/src/system-core/bot-manage/session/detached-subsession-runner.js": "detached sub-session runner still accepts/publishes attachmentMetas in session snapshot compatibility contract",
-  "agent/src/system-core/session/services/session-message-service.js": "session message service keeps attachmentMetas compatibility for persisted/runtime message contracts",
-  "agent/src/system-core/connectors/emails/read-email.js": "email connector legacy bridge",
-  "agent/src/system-core/context/builders/runtime-environment-builder.js": "runtime environment exposes semantic-transfer helpers and legacy metas",
-  "agent/src/system-core/context/index.js": "context builder public attachment contract",
-  "agent/src/system-core/context/session/message-converter.js": "replay compatibility preserves legacy fields",
-  "agent/src/system-core/semantic-transfer/storage/attachment-adapter.js": "semantic-transfer adapter derives legacy fields centrally (semantic dir layout)",
-  "agent/src/system-core/semantic-transfer/storage/consumer.js": "semantic-transfer consumer accepts legacy fallback (semantic dir layout)",
-  "agent/src/system-core/semantic-transfer/core/compact.js": "semantic-transfer compact model view reads envelope attachmentMeta/filePath fields",
-  "agent/src/system-core/semantic-transfer/transfer/tool-result-overflow.js": "semantic-transfer overflow compacts TransferEnvelope file fields and emits original-file envelope references",
-  "agent/src/system-core/semantic-transfer/legacy-adapter.js": "central legacy compatibility adapter",
-  "agent/src/system-core/semantic-transfer/envelope/normalizer.js": "semantic-transfer normalizes legacy fallback (semantic dir layout)",
-  "agent/src/system-core/semantic-transfer/storage/transfer-path-view.js": "semantic-transfer path-view compatibility (semantic dir layout)",
-  "agent/src/system-core/tools/ai-models/multimodal-generate-tool.js": "multimodal tool returns attachmentMetas from attachmentService for existing consumers",
-  "agent/src/system-core/tools/connectors/connector-toolkit/tool-access-connector.js": "connector output keeps attachmentMetas compatibility; ordinary email attachment save stays on attachmentService",
-  "agent/src/system-core/tools/data-processing/doc2data-tool.js": "tool input/output compatibility",
-  "agent/src/system-core/tools/data-processing/media2data-tool.js": "tool input/output compatibility",
-  "agent/src/system-core/tools/collaboration/agent-collab/collab-artifact-persist.js": "agent-collab async result output keeps attachmentMetas compatibility; ordinary save stays on attachmentService",
-  "agent/src/system-core/tools/collaboration/agent-collab/collab-task-utils.js": "agent-collab payload compatibility",
-  "agent/src/system-core/tools/collaboration/agent-collab/tool-wait-async-result.js": "agent-collab wait result compatibility",
+  "agent/src/context/assembly/message-builder.js": "model context compatibility consumes runtime attachmentMetas",
+  "agent/src/runtime/tool-execution/tool-runner.js": "tool overflow builds TransferEnvelope then legacy overflow via adapter",
+  "agent/src/runtime/tool-execution/state-committer.js": "runtime/turn event stream still emits attachmentMetas for existing consumers",
+  "agent/src/artifacts/runtime/artifact-service.js": "artifact extraction compatibility reads legacy + transfer",
+  "agent/src/artifacts/meta-ops.js": "legacy attachment meta normalization utility",
+  "agent/src/artifacts/runtime-attachment.js": "runtime attachment legacy store",
+  "agent/src/artifacts/service/attachment-service.js": "attachment service rewrites persisted message metas",
+  "agent/src/bot/execution/runner.js": "session runner attachment compatibility",
+  "agent/src/bot/execution/finalizer.js": "final assistant aggregation keeps attachmentMetas compatibility for persisted turn schema",
+  "agent/src/bot/execution/turn-persister.js": "turn persistence legacy schema",
+  "agent/src/bot/session/session-execution-engine.js": "session execution legacy bridge",
+  "agent/src/bot/session/detached-subsession-runner.js": "detached sub-session runner still accepts/publishes attachmentMetas in session snapshot compatibility contract",
+  "agent/src/session/services/session-message-service.js": "session message service keeps attachmentMetas compatibility for persisted/runtime message contracts",
+  "agent/src/integrations/connectors/emails/read-email.js": "email connector legacy bridge",
+  "agent/src/context/builders/runtime-environment-builder.js": "runtime environment exposes semantic-transfer helpers and legacy metas",
+  "agent/src/context/index.js": "context builder public attachment contract",
+  "agent/src/context/session/message-converter.js": "replay compatibility preserves legacy fields",
+  "agent/src/transfer/storage/attachment-adapter.js": "semantic-transfer adapter derives legacy fields centrally (semantic dir layout)",
+  "agent/src/transfer/storage/consumer.js": "semantic-transfer consumer accepts legacy fallback (semantic dir layout)",
+  "agent/src/transfer/core/compact.js": "semantic-transfer compact model view reads envelope attachmentMeta/filePath fields",
+  "agent/src/transfer/transfer/tool-result-overflow.js": "semantic-transfer overflow compacts TransferEnvelope file fields and emits original-file envelope references",
+  "agent/src/transfer/legacy-adapter.js": "central legacy compatibility adapter",
+  "agent/src/transfer/envelope/normalizer.js": "semantic-transfer normalizes legacy fallback (semantic dir layout)",
+  "agent/src/transfer/storage/transfer-path-view.js": "semantic-transfer path-view compatibility (semantic dir layout)",
+  "agent/src/tools/ai-models/multimodal-generate-tool.js": "multimodal tool returns attachmentMetas from attachmentService for existing consumers",
+  "agent/src/tools/connectors/connector-toolkit/tool-access-connector.js": "connector output keeps attachmentMetas compatibility; ordinary email attachment save stays on attachmentService",
+  "agent/src/tools/data-processing/doc2data-tool.js": "tool input/output compatibility",
+  "agent/src/tools/data-processing/media2data-tool.js": "tool input/output compatibility",
+  "agent/src/tools/collaboration/agent-collab/collab-artifact-persist.js": "agent-collab async result output keeps attachmentMetas compatibility; ordinary save stays on attachmentService",
+  "agent/src/tools/collaboration/agent-collab/collab-task-utils.js": "agent-collab payload compatibility",
+  "agent/src/tools/collaboration/agent-collab/tool-wait-async-result.js": "agent-collab wait result compatibility",
 
   "client/noobot-chat/src/modules/chat/model/messageModel.js": "frontend message model keeps legacy fallback but consumes transfer first",
   "client/noobot-chat/src/modules/chat/model/transferEnvelopes.js": "frontend semantic-transfer adapter maps envelope files to legacy display metas",

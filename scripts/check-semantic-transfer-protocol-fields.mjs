@@ -57,12 +57,12 @@ const ATTACHMENT_LEGACY_FIELDS = [
   { field: "AttachmentMetas", regex: /\bAttachmentMetas\b/ },
 ];
 const ATTACHMENT_LEGACY_ALLOWED_PREFIXES = [
-  "agent/src/system-core/attach/",
-  "agent/src/system-core/semantic-transfer/",
+  "agent/src/artifacts/",
+  "agent/src/transfer/",
 ];
 const ATTACHMENT_LEGACY_ALLOWED_FILES = new Set([
-  "agent/src/system-core/agent/core/media/artifact-service.js",
-  "agent/src/system-core/agent/core/runtime/agent-runtime-facade.js",
+  "agent/src/artifacts/runtime/artifact-service.js",
+  "agent/src/runtime/facade/agent-runtime-facade.js",
 ]);
 
 function isAttachmentLegacyAllowed(relPath = "") {

@@ -9,12 +9,12 @@ import path from "node:path";
 
 function resolveRepoRoot() {
   const cwd = process.cwd();
-  if (statExists(path.join(cwd, "agent", "src", "system-core"))) return cwd;
-  if (path.basename(cwd) === "agent" && statExists(path.join(cwd, "src", "system-core"))) {
+  if (statExists(path.join(cwd, "agent", "src"))) return cwd;
+  if (path.basename(cwd) === "agent" && statExists(path.join(cwd, "src"))) {
     return path.dirname(cwd);
   }
   const parent = path.dirname(cwd);
-  if (statExists(path.join(parent, "agent", "src", "system-core"))) return parent;
+  if (statExists(path.join(parent, "agent", "src"))) return parent;
   return cwd;
 }
 
@@ -28,7 +28,7 @@ function statExists(filePath) {
 }
 
 const ROOT = resolveRepoRoot();
-const TARGET_ROOT = path.join(ROOT, "agent", "src", "system-core");
+const TARGET_ROOT = path.join(ROOT, "agent", "src");
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx"]);
 const IGNORE_PATH_PARTS = [
   `${path.sep}node_modules${path.sep}`,

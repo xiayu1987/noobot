@@ -14,7 +14,7 @@
 
 ## 测试记录
 
-- 2026-06-13：`npm -w agent test -- --test __tests__/system-core/session/context-window-normalizer.test.js __tests__/system-core/session/harness-resolve-model-messages.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
+- 2026-06-13：`npm -w agent test -- --test __tests__/session/context-window-normalizer.test.js __tests__/session/harness-resolve-model-messages.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
 - 2026-06-13：`npm -w plugin/noobot-plugin-harness test` 通过（30 tests，0 failed）。
 
 
@@ -36,8 +36,8 @@
 ## 配置面测试记录
 
 - 2026-06-13：`npm -w plugin/noobot-plugin-harness test` 通过（30 tests，0 failed）。
-- 2026-06-13：`node src/system-core/bot-manage/session/__tests__/session-execution-engine-plugin.test.js` 通过（22 tests，0 failed）。
-- 2026-06-13：`npm -w agent test -- --test __tests__/system-core/session/context-window-normalizer.test.js __tests__/system-core/session/harness-resolve-model-messages.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
+- 2026-06-13：`node src/bot/session/__tests__/session-execution-engine-plugin.test.js` 通过（22 tests，0 failed）。
+- 2026-06-13：`npm -w agent test -- --test __tests__/session/context-window-normalizer.test.js __tests__/session/harness-resolve-model-messages.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
 
 ## harness 阈值模式化
 
@@ -74,7 +74,7 @@
 
 ## 上下文源数据不可变性测试记录
 
-- 2026-06-13：`npm -w agent test -- --test __tests__/system-core/session/context-window-normalizer.test.js __tests__/system-core/session/harness-resolve-model-messages.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
+- 2026-06-13：`npm -w agent test -- --test __tests__/session/context-window-normalizer.test.js __tests__/session/harness-resolve-model-messages.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
 
 ## 增量消息顺序测试
 
@@ -82,7 +82,7 @@
 
 ## 增量消息顺序测试记录
 
-- 2026-06-13：`npm -w agent test -- --test __tests__/system-core/session/context-window-normalizer.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
+- 2026-06-13：`npm -w agent test -- --test __tests__/session/context-window-normalizer.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
 
 ## history / incremental 边界收敛
 

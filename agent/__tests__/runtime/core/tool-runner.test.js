@@ -1,0 +1,601 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { executeToolCall } from "../../../src/runtime/tool-execution/tool-runner.js";
+import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../../src/extensions/hooks/index.js";
+
+function getPrimaryTransferFile(envelope = {}) {
+  return Array.isArray(envelope?.files) ? envelope.files[0] || {} : {};
+}
+
+function findTransferEnvelopeByFilePath(envelopes = [], pattern = "") {
+  return (Array.isArray(envelopes) ? envelopes : []).find((item = {}) =>
+    String(getPrimaryTransferFile(item)?.filePath || "").includes(pattern),
+  );
+}
+
+test("executeToolCall extracts attachments from multimodal tool result", async () => {
+  const call = {
+    id: "call_1",
+    name: "multimodal_generate",
+    args: {},
+  };
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "multimodal_generate",
+        ok: true,
+        attachments: [
+          {
+            attachmentId: "att_1",
+            name: "generated_image_1.png",
+            mimeType: "image/png",
+            size: 123,
+            sessionId: "s1",
+            attachmentSource: "model",
+            path: "/tmp/a.png",
+            relativePath: "runtime/attach/scoped/s1/model/a.png",
+            generatedByModel: true,
+            generationSource: "multimodal_generate_tool",
+          },
+        ],
+      }),
+  };
+
+  const result = await executeToolCall({
+    call,
+    tool,
+    turn: 1,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(Array.isArray(result.extractedAttachments), true);
+  assert.equal(result.extractedAttachments.length, 1);
+  assert.equal(
+    result.extractedAttachments[0]?.relativePath,
+    "runtime/attach/scoped/s1/model/a.png",
+  );
+});
+
+test("executeToolCall extracts attachmentMetas from transferEnvelopes", async () => {
+  const call = {
+    id: "call_transfer_result",
+    name: "multimodal_generate",
+    args: {},
+  };
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "multimodal_generate",
+        ok: true,
+        transferEnvelopes: [
+          {
+            protocol: "noobot.semantic-transfer",
+            version: 1,
+            direction: "output",
+            transport: "file",
+            files: [
+              {
+                filePath: "/workspace/generated_image_1.png",
+                attachmentMeta: {
+                  attachmentId: "att_t1",
+                  name: "generated_image_1.png",
+                  mimeType: "image/png",
+                  size: 256,
+                  sessionId: "s1",
+                  attachmentSource: "model",
+                  path: "/tmp/generated_image_1.png",
+                  relativePath: "runtime/attach/scoped/s1/model/generated_image_1.png",
+                  generatedByModel: true,
+                  generationSource: "multimodal_generate_tool",
+                },
+              },
+            ],
+          },
+        ],
+      }),
+  };
+
+  const result = await executeToolCall({
+    call,
+    tool,
+    turn: 1,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(Array.isArray(result.extractedAttachments), true);
+  assert.equal(result.extractedAttachments.length, 1);
+  assert.equal(result.extractedAttachments[0]?.attachmentId, "att_t1");
+});
+
+test("executeToolCall returns toToolJsonResult when tool is missing", async () => {
+  const result = await executeToolCall({
+    call: { id: "call_missing", name: "unknown_tool", args: {} },
+    tool: null,
+    turn: 1,
+  });
+
+  assert.equal(result.success, false);
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.code, "RECOVERABLE_TOOL_NOT_FOUND");
+  assert.equal(payload.toolName, "unknown_tool");
+});
+
+test("executeToolCall returns toToolJsonResult when tool invoke throws recoverable error", async () => {
+  const tool = {
+    invoke: async () => {
+      const error = new Error("invalid tool args");
+      error.code = "RECOVERABLE_INVALID_TOOL_ARGS";
+      throw error;
+    },
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_bad", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+  });
+
+  assert.equal(result.success, false);
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.code, "RECOVERABLE_INVALID_TOOL_ARGS");
+  assert.equal(payload.error, "invalid tool args");
+  assert.equal(payload.toolName, "demo_tool");
+});
+
+test("executeToolCall includes error details from recoverable error", async () => {
+  const tool = {
+    invoke: async () => {
+      const error = new Error("service unavailable");
+      error.code = "RECOVERABLE_SERVICE_UNAVAILABLE";
+      error.details = { serviceName: "weather", endpointName: "forecast" };
+      throw error;
+    },
+  };
+  const result = await executeToolCall({
+    call: { id: "call_detail", name: "call_service", args: {} },
+    tool,
+    turn: 1,
+  });
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.code, "RECOVERABLE_SERVICE_UNAVAILABLE");
+  assert.deepEqual(payload.details, {
+    serviceName: "weather",
+    endpointName: "forecast",
+  });
+});
+
+test("executeToolCall redacts sensitive fields from tool results before returning them", async () => {
+  const tool = {
+    invoke: async () => ({
+      ok: true,
+      token: "top-secret-token",
+      nested: {
+        Authorization: "Bearer top-secret-token",
+        cookie: "session=top-secret-cookie",
+        ordinary: "preserved",
+      },
+      items: [{ apiKey: "top-secret-api-key" }, { credential: "top-secret-credential" }],
+    }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_sensitive_result", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.token, "[Redacted]");
+  assert.equal(payload.nested.Authorization, "[Redacted]");
+  assert.equal(payload.nested.cookie, "[Redacted]");
+  assert.equal(payload.nested.ordinary, "preserved");
+  assert.equal(payload.items[0].apiKey, "[Redacted]");
+  assert.equal(payload.items[1].credential, "[Redacted]");
+  assert.doesNotMatch(result.toolResultText, /top-secret/);
+});
+
+test("executeToolCall redacts sensitive fields from recoverable error details", async () => {
+  const tool = {
+    invoke: async () => {
+      const error = new Error("service unavailable");
+      error.details = { endpoint: "weather", accessToken: "top-secret-token" };
+      throw error;
+    },
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_sensitive_error", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.details.endpoint, "weather");
+  assert.equal(payload.details.accessToken, "[Redacted]");
+  assert.doesNotMatch(result.toolResultText, /top-secret/);
+});
+
+test("executeToolCall hook payload includes normalized runtime meta", async () => {
+  const hookManager = createAgentHookManager();
+  const starts = [];
+  const ends = [];
+  hookManager.on(AGENT_HOOK_POINTS.BEFORE_TOOL_CALL, async (ctx = {}) => {
+    starts.push(ctx);
+  });
+  hookManager.on(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, async (ctx = {}) => {
+    ends.push(ctx);
+  });
+
+  const tool = {
+    invoke: async () => ({ ok: true }),
+  };
+  const runtime = {
+    userId: "runtime_user",
+    systemRuntime: {
+      sessionId: "session_1",
+      parentSessionId: "parent_1",
+      dialogProcessId: "dp_1",
+      caller: "user",
+    },
+    hookManager,
+  };
+
+  await executeToolCall({
+    call: { id: "call_meta", name: "meta_tool", args: { q: 1 } },
+    tool,
+    turn: 2,
+    runtime,
+  });
+
+  assert.equal(starts.length, 1);
+  assert.equal(ends.length, 1);
+  assert.equal(starts[0].phase, "tool_call");
+  assert.equal(starts[0].status, "start");
+  assert.equal(starts[0].userId, "runtime_user");
+  assert.equal(starts[0].sessionId, "session_1");
+  assert.equal(starts[0].parentSessionId, "parent_1");
+  assert.equal(starts[0].dialogProcessId, "dp_1");
+  assert.equal(starts[0].caller, "user");
+  assert.equal(typeof starts[0].startedAt, "string");
+  assert.equal(ends[0].status, "success");
+  assert.equal(Number.isFinite(ends[0].durationMs), true);
+});
+
+test("executeToolCall: tool result too long should be persisted and return overflow file path", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-"));
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "demo_tool",
+        ok: true,
+        text: "x".repeat(500),
+      }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_overflow", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+    sessionId: "session-overflow-1",
+    runtime: {
+      basePath,
+      globalConfig: {
+        tools: {
+          maxToolResultChars: 120,
+          execute_script: {
+            sandboxMode: true,
+            sandboxProvider: {
+              default: "docker",
+              docker: {
+                dockerContainerScope: "global",
+              },
+            },
+          },
+        },
+      },
+      userConfig: {},
+    },
+    agentContext: {
+      environment: {
+        workspace: { basePath },
+      },
+    },
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.overflowed, true);
+  const overflowEnvelope = findTransferEnvelopeByFilePath(payload.transferEnvelopes, ".tool-result-overflow/");
+  const overflowFile = getPrimaryTransferFile(overflowEnvelope);
+  assert.equal("filePath" in overflowEnvelope, false);
+  assert.equal(typeof overflowFile?.filePath, "string");
+  assert.equal(overflowFile.filePath.includes(".tool-result-overflow"), true);
+  assert.equal(overflowFile.filePath.includes(".tool-result-overflow/session-overflow-1/"), true);
+
+  const overflowHostPath = String(
+    overflowFile?.pathView?.hostPath ||
+      overflowFile?.filePath ||
+      "",
+  );
+  const overflowFileContent = await fs.readFile(overflowHostPath, "utf8");
+  const overflowPayload = JSON.parse(overflowFileContent);
+  assert.equal(overflowPayload.toolName, "demo_tool");
+  assert.equal(overflowPayload.overflowFormat, "compact-v1");
+  assert.equal(typeof overflowPayload.result, "object");
+  assert.equal(typeof overflowPayload.result.text, "string");
+});
+
+test("executeToolCall: overflow length is measured after compacting transfer wrappers", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-compact-"));
+  const attachmentMeta = {
+    attachmentId: "att_compact_1",
+    name: "result.md",
+    mimeType: "text/markdown",
+    size: 12,
+    sessionId: "s1",
+    attachmentSource: "model",
+    path: "/host/result.md",
+    relativePath: "runtime/attach/scoped/s1/model/result.md",
+    generatedByModel: true,
+    generationSource: "unit_test",
+  };
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/result.md",
+    attachmentMeta,
+    files: [{ filePath: "/workspace/result.md", attachmentMeta }],
+  };
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "demo_tool",
+        ok: true,
+        status: "completed",
+        text: "短结果",
+        attachmentMetas: [attachmentMeta],
+        transferEnvelopes: [envelope],
+      }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_compact_not_overflow", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+    runtime: {
+      basePath,
+      globalConfig: { tools: { maxToolResultChars: 1000 } },
+      userConfig: {},
+    },
+    agentContext: {
+      environment: {
+        workspace: { basePath },
+      },
+    },
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.overflowed, undefined);
+  assert.equal(payload.transferEnvelopes, undefined);
+  assert.equal("transferResult" in payload, false);
+  assert.equal("transferEnvelopes" in payload, false);
+  assert.equal("attachmentMetas" in payload, false);
+  assert.equal(Array.isArray(payload.transferFiles), true);
+  assert.equal(payload.transferFiles[0].attachmentId, "att_compact_1");
+});
+
+test("executeToolCall: overflow keeps original semantic-transfer artifact and compacts duplicates", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-transfer-"));
+  const attachmentMeta = {
+    attachmentId: "att_real_1",
+    name: "generated.png",
+    mimeType: "image/png",
+    size: 128,
+    sessionId: "s1",
+    attachmentSource: "model",
+    path: "/tmp/generated.png",
+    relativePath: "runtime/attach/scoped/s1/model/generated.png",
+    generatedByModel: true,
+    generationSource: "multimodal_generate_tool",
+  };
+  const envelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "/workspace/generated.png",
+    attachmentMeta,
+    files: [{ filePath: "/workspace/generated.png", attachmentMeta }],
+  };
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "multimodal_generate",
+        ok: true,
+        status: "completed",
+        text: "x".repeat(500),
+        attachmentMetas: [attachmentMeta],
+        transferEnvelopes: [envelope],
+      }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_overflow_transfer", name: "multimodal_generate", args: {} },
+    tool,
+    turn: 1,
+    runtime: {
+      basePath,
+      globalConfig: { tools: { maxToolResultChars: 120 } },
+      userConfig: {},
+    },
+    agentContext: {
+      environment: {
+        workspace: { basePath },
+      },
+    },
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.overflowed, true);
+  assert.equal(Array.isArray(payload.transferEnvelopes), true);
+  assert.equal(payload.transferEnvelopes.length >= 1, true);
+  assert.equal(
+    result.extractedAttachments.some((item) => item?.attachmentId === "att_real_1"),
+    true,
+  );
+
+  const overflowEnvelope = findTransferEnvelopeByFilePath(payload.transferEnvelopes, ".tool-result-overflow/");
+  const overflowFile = getPrimaryTransferFile(overflowEnvelope);
+  assert.equal("filePath" in overflowEnvelope, false);
+  const overflowHostPath = String(overflowFile?.pathView?.hostPath || overflowFile?.filePath || "");
+  const overflowPayload = JSON.parse(await fs.readFile(overflowHostPath, "utf8"));
+  assert.equal(Array.isArray(overflowPayload.result.transferEnvelopes), true);
+  assert.equal(overflowPayload.result.transferEnvelopes.length >= 1, true);
+  assert.equal("transferResult" in overflowPayload.result, false);
+  assert.equal("transferEnvelopes" in overflowPayload.result, true);
+  assert.equal("attachmentMetas" in overflowPayload.result, false);
+  const compactEnvelope = overflowPayload.result.transferEnvelopes.find(
+    (item = {}) => Array.isArray(item?.files) && item.files.some((f = {}) => f?.attachmentMeta?.attachmentId === "att_real_1"),
+  ) || overflowPayload.result.transferEnvelopes[0];
+  assert.equal("filePath" in compactEnvelope, false);
+  assert.equal("attachmentMeta" in compactEnvelope, false);
+  assert.equal("pathView" in compactEnvelope, false);
+  assert.equal(compactEnvelope.files[0].attachmentMeta.attachmentId, "att_real_1");
+  assert.equal("name" in compactEnvelope.files[0], false);
+  assert.equal("mimeType" in compactEnvelope.files[0], false);
+  assert.equal("size" in compactEnvelope.files[0], false);
+});
+
+test("executeToolCall task_summary returns transfer metadata without phase summary content", async () => {
+  const summaryContent = "阶段小结：敏感小结文本不应出现在工具返回中。";
+  const call = {
+    id: "call_task_summary_transfer",
+    name: "task_summary",
+    args: { summaryContent },
+  };
+  const tool = {
+    invoke: async () => JSON.stringify({
+      toolName: "task_summary",
+      ok: true,
+      status: "completed",
+      message: "小结完毕，请继续当前任务",
+      phaseSummary: summaryContent,
+      summarizedMessages: { currentTurn: 3 },
+      extraField: "should be omitted for task_summary",
+    }),
+  };
+  const runtime = {
+    attachmentService: {
+      async ingestGeneratedArtifacts(payload) {
+        return payload.artifacts.map((artifact, index) => ({
+          attachmentId: `task-summary-runner-${index + 1}`,
+          sessionId: payload.sessionId,
+          attachmentSource: payload.attachmentSource,
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: summaryContent.length,
+          path: `/host/${artifact.name}`,
+          relativePath: `attachments/${artifact.name}`,
+          generatedByModel: true,
+          generationSource: payload.generationSource,
+        }));
+      },
+    },
+    systemRuntime: { userId: "u1", sessionId: "s1" },
+  };
+
+  const result = await executeToolCall({
+    call,
+    tool,
+    runtime,
+    sessionId: "s1",
+    turn: 1,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(result.toolResultText.includes(summaryContent), false);
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.toolName, "task_summary");
+  assert.equal(payload.ok, true);
+  assert.equal(payload.status, "completed");
+  assert.equal(payload.phaseSummary, undefined);
+  assert.equal(payload.extraField, undefined);
+  assert.equal(payload.toolInputOverflow, undefined);
+  assert.equal(payload.transferFiles, undefined);
+  assert.equal(payload.transferEnvelopes?.[0]?.files?.[0]?.name, "task-summary-content.tool-input.md");
+});
+
+test("executeToolCall: overflow result should include sandbox path when resolver is provided", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-sandbox-"));
+  const tool = {
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "demo_tool",
+        ok: true,
+        text: "x".repeat(500),
+      }),
+  };
+
+  const result = await executeToolCall({
+    call: { id: "call_overflow_sandbox", name: "demo_tool", args: {} },
+    tool,
+    turn: 1,
+    runtime: {
+      basePath,
+      globalConfig: {
+        tools: {
+          maxToolResultChars: 120,
+          execute_script: {
+            sandboxMode: true,
+          },
+        },
+      },
+      userConfig: {},
+      sharedTools: {
+        resolveAttachmentDisplayPath({ meta = {} } = {}) {
+          return String(meta?.path || "").replace(basePath, "/injected/primary-user");
+        },
+        resolveSandboxPath({ hostPath }) {
+          return String(hostPath || "").replace(basePath, "/workspace/primary-user");
+        },
+      },
+    },
+    agentContext: {
+      environment: {
+        workspace: { basePath },
+      },
+    },
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.overflowed, true);
+  const overflowEnvelope = findTransferEnvelopeByFilePath(payload.transferEnvelopes, ".tool-result-overflow/");
+  const overflowFile = getPrimaryTransferFile(overflowEnvelope);
+  assert.equal("filePath" in overflowEnvelope, false);
+  assert.equal("pathView" in overflowEnvelope, false);
+  assert.equal(typeof overflowFile?.pathView?.sandboxPath, "string");
+  assert.equal(
+    overflowFile.pathView.sandboxPath.startsWith("/workspace/"),
+    true,
+  );
+  assert.equal(
+    overflowFile.pathView.sandboxPath.includes(
+      "/runtime/ops_workdir/.tool-result-overflow/",
+    ),
+    true,
+  );
+});

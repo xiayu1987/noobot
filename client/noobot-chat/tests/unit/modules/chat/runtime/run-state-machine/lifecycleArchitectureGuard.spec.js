@@ -175,7 +175,7 @@ describe("lifecycle architecture guard", () => {
 
   it("keeps the shared protocol, service entity, reducer and registry as the cross-layer lifecycle boundary", () => {
     const sharedProtocol = readFileSync(clientFilePath.resolve(projectRoot, "../../shared/turn-lifecycle-protocol.mjs"), "utf8");
-    const serviceEntity = readFileSync(clientFilePath.resolve(agentRoot, "src/system-core/session/entities/turn-lifecycle-entity.js"), "utf8");
+    const serviceEntity = readFileSync(clientFilePath.resolve(agentRoot, "src/session/entities/turn-lifecycle-entity.js"), "utf8");
     const reducer = source(files.reducer);
     const registry = source(files.registry);
     for (const symbol of ["ACTION_ACCEPTED", "PROCESSING_STARTED", "PROCESSING_COMPLETED", "STOP_ACCEPTED", "STOP_PROCESSING_COMPLETED", "COMPLETED", "STOP_COMPLETED", "FAILED"]) {

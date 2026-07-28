@@ -10,7 +10,7 @@ import {
   replaceMessages,
   resolveMessagesByIds,
   writeMessageBlocks,
-} from "../../../../agent/src/system-core/agent/core/message-context/message-store.js";
+} from "../../../../agent/src/context/runtime-state/message-store.js";
 
 function isSummarized(message = {}) {
   return message?.summarized === true ||

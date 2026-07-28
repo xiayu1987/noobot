@@ -1,0 +1,96 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { appendAttachmentMetasToRuntimeAndTurn } from "../../src/artifacts/runtime-attachment.js";
+import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
+
+test("appendAttachmentMetasToRuntimeAndTurn keeps ordinary attachments out of semantic-transfer envelopes", () => {
+  const runtime = { attachments: [] };
+  const turnStore = createCurrentTurnMessagesStore([
+    { role: "assistant", type: "tool_call", dialogProcessId: "dp1" },
+    { role: "tool", type: "tool_result", dialogProcessId: "dp1", attachments: [] },
+  ]);
+
+  appendAttachmentMetasToRuntimeAndTurn({
+    runtime,
+    turnMessageStore: turnStore,
+    attachments: [
+      {
+        attachmentId: "att_1",
+        sessionId: "s1",
+        attachmentSource: "model",
+        name: "img.png",
+        mimeType: "image/png",
+        size: 10,
+        path: "/tmp/img.png",
+      },
+    ],
+  });
+
+  const runtimeMetas = Array.isArray(runtime.attachments)
+    ? runtime.attachments
+    : [];
+  assert.equal(runtimeMetas.length, 1);
+  const messages = turnStore.toArray();
+  assert.equal(Array.isArray(messages[1]?.attachments), true);
+  assert.equal(messages[1].attachments.length, 1);
+  assert.equal(messages[1].attachments[0]?.attachmentId, "att_1");
+  assert.equal("transferEnvelopes" in messages[1], false);
+  assert.equal("attachments" in messages[0], false);
+});
+
+test("appendAttachmentMetasToRuntimeAndTurn merges with existing transfer envelopes on last turn store message", () => {
+  const runtime = { attachments: [] };
+  const existingEnvelope = {
+    protocol: "noobot.semantic-transfer",
+    version: 1,
+    direction: "output",
+    transport: "file",
+    filePath: "existing.md",
+    files: [
+      {
+        filePath: "existing.md",
+        attachmentMeta: { attachmentId: "att_existing", path: "/tmp/existing.md" },
+        role: "primary",
+      },
+    ],
+  };
+  const turnStore = createCurrentTurnMessagesStore([
+    {
+      role: "assistant",
+      content: "done",
+      transferEnvelopes: [existingEnvelope],
+      attachments: [{ attachmentId: "legacy_should_be_removed" }],
+    },
+  ]);
+
+  appendAttachmentMetasToRuntimeAndTurn({
+    runtime,
+    turnMessageStore: turnStore,
+    attachments: [
+      {
+        attachmentId: "att_new",
+        sessionId: "s1",
+        attachmentSource: "model",
+        name: "new.md",
+        mimeType: "text/markdown",
+        path: "/tmp/new.md",
+        generationSource: "semantic_transfer_tool_output",
+      },
+    ],
+  });
+
+  const [message] = turnStore.toArray();
+  assert.equal(message.attachmentMetas, undefined);
+  assert.equal("transferEnvelopes" in message, true);
+  assert.equal(message.transferEnvelopes.length, 2);
+  assert.equal(message.transferEnvelopes[0]?.files?.[0]?.attachmentMeta?.attachmentId, "att_existing");
+  assert.equal(message.transferEnvelopes[1]?.files?.[0]?.attachmentMeta?.attachmentId, "att_new");
+  assert.equal(runtime.attachments.length, 1);
+  assert.equal(runtime.attachments[0]?.attachmentId, "att_new");
+});

@@ -8,7 +8,7 @@ import { createPinia, setActivePinia } from "pinia";
 import {
   beginAssistantMessageEventStream,
   emitMessageEvent,
-} from "../../../../../../../../agent/src/system-core/event/message-event-stream.js";
+} from "../../../../../../../../agent/src/events/message-event-stream.js";
 import { createRunEventListener } from "../../../../../../../../service/ws/chat-websocket/run-event-listener.js";
 import { shouldProjectSubSessionEvent } from "../../../../../../src/modules/chat/runtime/engine/sendFlow.js";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";

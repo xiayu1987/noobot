@@ -18,23 +18,23 @@ function exists(filePath) {
 
 function resolveRepoRoot() {
   const cwd = process.cwd();
-  if (exists(path.join(cwd, "agent", "src", "system-core")) && exists(path.join(cwd, "plugin", "noobot-plugin-harness", "src"))) {
+  if (exists(path.join(cwd, "agent", "src")) && exists(path.join(cwd, "plugin", "noobot-plugin-harness", "src"))) {
     return cwd;
   }
-  if (path.basename(cwd) === "agent" && exists(path.join(cwd, "src", "system-core"))) {
+  if (path.basename(cwd) === "agent" && exists(path.join(cwd, "src"))) {
     return path.dirname(cwd);
   }
   if (path.basename(cwd) === "noobot-plugin-harness" && exists(path.join(cwd, "src"))) {
     return path.dirname(path.dirname(cwd));
   }
   const parent = path.dirname(cwd);
-  if (exists(path.join(parent, "agent", "src", "system-core"))) return parent;
+  if (exists(path.join(parent, "agent", "src"))) return parent;
   return cwd;
 }
 
 const ROOT = resolveRepoRoot();
 const SOURCE_ROOTS = [
-  path.join(ROOT, "agent", "src", "system-core"),
+  path.join(ROOT, "agent", "src"),
   path.join(ROOT, "plugin", "noobot-plugin-harness", "src"),
 ];
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx"]);
@@ -172,7 +172,7 @@ if (legacyWindowHits.length) {
 }
 
 const sessionContextServiceText = readFileSync(
-  path.join(ROOT, "agent", "src", "system-core", "session", "services", "session-context-service.js"),
+  path.join(ROOT, "agent", "src", "session", "services", "session-context-service.js"),
   "utf8",
 );
 const getContextRecordsMatch = sessionContextServiceText.match(
@@ -259,7 +259,7 @@ if (!failures.some((item) => item.title.includes("system message written to incr
   pass("no known system-to-incremental append pattern in source");
 }
 
-const normalizerText = assertFileContains("agent/src/system-core/session/utils/context-window-normalizer.js", [
+const normalizerText = assertFileContains("agent/src/session/utils/context-window-normalizer.js", [
   { name: "resolveMainModelSystemMessages", pattern: /export\s+function\s+resolveMainModelSystemMessages\b/ },
   { name: "resolveMainModelHistoryMessages", pattern: /export\s+function\s+resolveMainModelHistoryMessages\b/ },
   { name: "resolveMainModelIncrementalMessages", pattern: /export\s+function\s+resolveMainModelIncrementalMessages\b/ },
@@ -322,7 +322,7 @@ if (!mainIncrementalResolverText) {
   pass("main incremental keeps unsummarized injected messages append-only");
 }
 
-const helpersText = assertFileContains("agent/src/system-core/bot-manage/session/model-message-runtime-helpers.js", [
+const helpersText = assertFileContains("agent/src/bot/session/model-message-runtime-helpers.js", [
   { name: "uses central final resolver", pattern: /resolveMainModelFinalMessages/ },
   { name: "reads messageBlocks", pattern: /ctx\?\.messageBlocks/ },
   { name: "resolves system block", pattern: /resolveBlockMessages\(ctx,\s*blocks,\s*["']system["']\)/ },
@@ -338,28 +338,28 @@ if (helpersText && /ctx\?\.agentContext\?\.payload\?\.messages/.test(helpersText
   }
 }
 
-assertFileContains("agent/src/system-core/agent/core/turn/turn-executor.js", [
+assertFileContains("agent/src/runtime/turn/turn-executor.js", [
   { name: "main turn uses central final resolver", pattern: /resolveMainModelFinalMessages/ },
 ]);
 
-assertFileContains("agent/src/system-core/context/index.js", [
+assertFileContains("agent/src/context/index.js", [
   { name: "new-session context resolves session history", pattern: /async\s+buildNewSessionContext[\s\S]*?_resolveSessionRecords/ },
   { name: "existing-session context resolves session history", pattern: /async\s+buildExistingSessionContext[\s\S]*?_resolveSessionRecords/ },
   { name: "context passes current turnScopeId to session history", pattern: /currentTurnScopeId:\s*String\(this\.runConfig\?\.turnScopeId/ },
 ]);
 
-assertFileContains("agent/src/system-core/session/index.js", [
+assertFileContains("agent/src/session/index.js", [
   { name: "session facade uses context payload normalizer", pattern: /function\s+normalizeContextServicePayload[\s\S]*?currentDialogProcessId[\s\S]*?currentTurnScopeId/ },
   { name: "session facade passes normalized payload to getContextRecords", pattern: /async\s+getContextRecords\(payload\s*=\s*\{\}\)[\s\S]*?sessionContextService\.getContextRecords\(\s*normalizeContextServicePayload\(payload\)/ },
 ]);
 
-assertFileContains("agent/src/system-core/session/services/session-context-service.js", [
+assertFileContains("agent/src/session/services/session-context-service.js", [
   { name: "session history excludes current turn before recent dialogs", pattern: /_filterCurrentRunMessages[\s\S]*?_filterCurrentDialogMessages[\s\S]*?_filterCurrentTurnMessages/ },
   { name: "recent history uses current dialog exclusion", pattern: /async\s+getRecentSessionMessages[\s\S]*?currentDialogProcessId[\s\S]*?_filterCurrentRunMessages[\s\S]*?currentTurnScopeId,\s*currentDialogProcessId/ },
 ]);
 
 const messageBuilderText = readFileSync(
-  path.join(ROOT, "agent", "src", "system-core", "agent", "core", "context", "message-builder.js"),
+  path.join(ROOT, "agent", "src", "context", "assembly", "message-builder.js"),
   "utf8",
 );
 if (
@@ -380,7 +380,7 @@ assertFileContains("plugin/noobot-plugin-harness/src/core/model-message-context.
   { name: "updates through message-store replaceMessages", pattern: /replaceMessages\(ctx,\s*resolved\)/ },
 ]);
 
-const messageStoreText = assertFileContains("agent/src/system-core/agent/core/message-context/message-store.js", [
+const messageStoreText = assertFileContains("agent/src/context/runtime-state/message-store.js", [
   { name: "message-store owns noobot ids", pattern: /function\s+resolveMessageId[\s\S]*?readField\(message,\s*["']noobotMessageId["']\)[\s\S]*?readField\(message,\s*["']messageId["']\)/ },
   { name: "message-store bumps next id for hydrated ids", pattern: /function\s+bumpNextMessageId[\s\S]*?match\(\s*\/\^am_\(\[0-9a-z\]\+\)\$\/i\s*\)[\s\S]*?store\.nextId\s*=\s*numeric\s*\+\s*1/ },
   { name: "replaceMessages only replaces flat view", pattern: /export\s+function\s+replaceMessages[\s\S]*?holder\.messages\.splice\(0,\s*holder\.messages\.length,\s*\.\.\.canonicalMessages\)[\s\S]*?return\s+holder\.messages/ },
@@ -401,11 +401,11 @@ if (messageStoreText) {
   }
 }
 
-assertFileContains("agent/src/system-core/agent/core/hook/hook-context-builder.js", [
+assertFileContains("agent/src/runtime/hooks/hook-context-builder.js", [
   { name: "hook context carries messageStore", pattern: /messageStore:\s*safeRaw\?\.messageStore\s*\?\?\s*safeRaw\?\.loopState\?\.messageStore\s*\?\?\s*null/ },
 ]);
 
-assertFileContains("agent/src/system-core/agent/core/turn/turn-executor.js", [
+assertFileContains("agent/src/runtime/turn/turn-executor.js", [
   { name: "before_llm hook passes messageStore", pattern: /buildHookContext\(AGENT_HOOK_POINTS\.BEFORE_LLM_CALL[\s\S]*?messageStore:\s*loopState\.messageStore/ },
 ]);
 
@@ -415,7 +415,7 @@ assertFileContains("plugin/noobot-plugin-harness/src/capabilities/handlers/share
   { name: "capability order system before conversation", pattern: /return\s+\[\s*\.\.\.systemMessages\s*,\s*\.\.\.conversationMessages\s*\]/ },
 ]);
 
-const loopControlText = assertFileContains("agent/src/system-core/agent/core/loop-control.js", [
+const loopControlText = assertFileContains("agent/src/runtime/loop-control.js", [
   { name: "help tool loop marker", pattern: /HELP_TOOL_LOOP_PROMPT_MARKER/ },
 ]);
 if (loopControlText) {

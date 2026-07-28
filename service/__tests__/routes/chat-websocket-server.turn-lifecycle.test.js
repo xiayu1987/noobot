@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { transitionTurnLifecycle } from "../../../agent/src/system-core/session/entities/turn-lifecycle-entity.js";
+import { transitionTurnLifecycle } from "../../../agent/src/session/entities/turn-lifecycle-entity.js";
 import { TURN_EVENT } from "@noobot/shared/turn-lifecycle-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";

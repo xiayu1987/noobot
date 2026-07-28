@@ -1,0 +1,501 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { ChatOpenAI } from "@langchain/openai";
+import { fatalSystemError } from "../../shared/errors/index.js";
+import { tSystem } from "noobot-i18n/agent/system-text";
+import { normalizeProviderFormat, PROVIDER_FORMAT } from "../../config/core/enums.js";
+import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
+import { getModelDefaultFields } from "../spec/defaults.js";
+import { resolveDefaultModelSpec, resolveModelSpecByName } from "../resolver/index.js";
+import { ERROR_CODE } from "../../shared/errors/constants.js";
+import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
+import {
+  buildPluginModelHeaders,
+  MODEL_NAME_HEADER_KEY,
+  PARENT_SESSION_HEADER_KEY,
+  PLUGIN_MODEL_HEADER_KEY,
+} from "../headers/plugin-headers.js";
+
+const DEFAULT_MAIN_FLOW = "agent.main";
+const DEFAULT_MAIN_PURPOSE = "main_agent";
+const DEFAULT_MAIN_DOMAIN = "primary";
+const DEFAULT_PROMPT_CACHE_RETENTION = "24h";
+const DEFAULT_PROMPT_CACHE_OPTIONS = Object.freeze({ ttl: "30m" });
+const DEFAULT_PROMPT_CACHE_KEY_PREFIX = "noobot-main";
+const DEFAULT_CLAUDE_PROMPT_CACHE_CONTROL = Object.freeze({ type: "ephemeral" });
+const DASHSCOPE_SESSION_CACHE_HEADER_KEY = "x-dashscope-session-cache";
+const CACHE_VENDOR = Object.freeze({
+  OPENAI: "openai",
+  ANTHROPIC: "anthropic",
+  GEMINI: "gemini",
+  DEEPSEEK: "deepseek",
+  DASHSCOPE: "dashscope",
+  UNKNOWN: "unknown",
+});
+const OPENAI_EXTENDED_PROMPT_CACHE_MODELS = [
+  /^gpt-4\.1(?:\b|[-_.])/,
+  /^gpt-5(?:\b|[-_.])/,
+];
+
+function parseOpenAiGptVersion(modelName = "") {
+  const normalized = String(modelName || "").trim().toLowerCase();
+  const match = normalized.match(/\bgpt[-_]?(\d+)(?:\.(\d+))?(?:\b|[-_])/);
+  if (!match) return null;
+  const major = Number(match[1]);
+  const minor = match[2] === undefined ? 0 : Number(match[2]);
+  return Number.isInteger(major) && Number.isInteger(minor) ? { major, minor } : null;
+}
+
+function resolveCacheVendor(modelSpec = {}) {
+  const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
+  const source = [
+    modelSpec?.provider,
+    modelSpec?.provider_name,
+    modelSpec?.providerName,
+    modelSpec?.alias,
+    modelSpec?.model,
+    modelSpec?.base_url,
+    modelSpec?.baseURL,
+  ]
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+  if (
+    providerFormat === PROVIDER_FORMAT.DASHSCOPE ||
+    /dashscope|aliyuncs|qwen|qianwen/.test(source)
+  ) {
+    return CACHE_VENDOR.DASHSCOPE;
+  }
+  if (/deepseek/.test(source)) return CACHE_VENDOR.DEEPSEEK;
+  if (/gemini|generativelanguage\.googleapis|googleapis/.test(source)) return CACHE_VENDOR.GEMINI;
+  if (/anthropic|claude/.test(source)) return CACHE_VENDOR.ANTHROPIC;
+  if (
+    /\b(gpt|o\d|codex|chatgpt)[-_\w.]*/.test(source) ||
+    /api\.openai\.com|openai/.test(source)
+  ) {
+    return CACHE_VENDOR.OPENAI;
+  }
+  return CACHE_VENDOR.UNKNOWN;
+}
+
+function isOpenAiPromptCacheCompatibleModel(modelSpec = {}) {
+  return resolveCacheVendor(modelSpec) === CACHE_VENDOR.OPENAI;
+}
+
+function supportsOpenAiExtendedPromptCache(modelSpec = {}) {
+  if (!isOpenAiPromptCacheCompatibleModel(modelSpec)) return false;
+  const modelName = String(modelSpec?.model || "").trim().toLowerCase();
+  const version = parseOpenAiGptVersion(modelName);
+  if (version && (version.major > 5 || (version.major === 5 && version.minor >= 6))) {
+    return false;
+  }
+  return OPENAI_EXTENDED_PROMPT_CACHE_MODELS.some((pattern) => pattern.test(modelName));
+}
+
+function supportsOpenAiPromptCacheOptions(modelSpec = {}) {
+  if (!isOpenAiPromptCacheCompatibleModel(modelSpec)) return false;
+  const version = parseOpenAiGptVersion(modelSpec?.model);
+  if (!version || (version.major < 5 || (version.major === 5 && version.minor < 6))) {
+    return false;
+  }
+  return true;
+}
+
+function normalizePromptCacheOptions(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return { ...value };
+}
+
+function supportsTopP(modelSpec = {}) {
+  const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
+  const modelName = String(modelSpec?.model || "").trim().toLowerCase();
+  if (providerFormat === PROVIDER_FORMAT.OPENAI_COMPATIBLE && modelName.includes("gpt-5")) {
+    return false;
+  }
+  return true;
+}
+
+function normalizePromptCacheKey(value) {
+  if (value === undefined || value === null) return "";
+  const normalized = String(value).trim();
+  if (!normalized) return "";
+  return normalized.slice(0, 200);
+}
+
+function normalizeClaudePromptCacheControl(value) {
+  if (value === false || value === null) return null;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const type = String(value.type || "ephemeral").trim() || "ephemeral";
+    const ttl = String(value.ttl || "").trim();
+    return {
+      type,
+      ...(ttl === "1h" ? { ttl } : {}),
+    };
+  }
+  return { ...DEFAULT_CLAUDE_PROMPT_CACHE_CONTROL };
+}
+
+function normalizeGeminiCachedContent(value) {
+  const normalized = String(value || "").trim();
+  return normalized || "";
+}
+
+function buildDefaultPromptCacheKey(modelSpec = {}) {
+  if (!isOpenAiPromptCacheCompatibleModel(modelSpec)) return "";
+  const modelSegment = String(modelSpec?.model || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!modelSegment) return "";
+  return normalizePromptCacheKey(`${DEFAULT_PROMPT_CACHE_KEY_PREFIX}-${modelSegment}`);
+}
+
+function normalizePromptCacheSegment(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildDefaultPromptCacheKeyForFlow(modelSpec = {}, flow = "") {
+  const flowSegment = normalizePromptCacheSegment(flow);
+  if (!flowSegment || flowSegment === normalizePromptCacheSegment(DEFAULT_MAIN_FLOW)) {
+    return buildDefaultPromptCacheKey(modelSpec);
+  }
+  const modelSegment = normalizePromptCacheSegment(modelSpec?.model);
+  if (!modelSegment) return "";
+  return normalizePromptCacheKey(`noobot-${flowSegment}-${modelSegment}`);
+}
+
+function resolvePromptCacheSettings(modelSpec = {}, options = {}) {
+  const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
+  if (!isOpenAiPromptCacheCompatibleModel(normalizedSpec)) {
+    return {
+      promptCacheKey: "",
+      promptCacheRetention: "",
+      promptCacheOptions: null,
+    };
+  }
+  const out = normalizedSpec.extra_body && typeof normalizedSpec.extra_body === "object"
+    ? { ...normalizedSpec.extra_body }
+    : {};
+  let promptCacheKey = normalizePromptCacheKey(
+    normalizedSpec.prompt_cache_key ?? normalizedSpec.promptCacheKey,
+  );
+  if (!promptCacheKey && "prompt_cache_key" in out) {
+    promptCacheKey = normalizePromptCacheKey(out.prompt_cache_key);
+  }
+  if (!promptCacheKey) {
+    promptCacheKey = buildDefaultPromptCacheKeyForFlow(normalizedSpec, options?.flow);
+  }
+  const usesPromptCacheOptions = supportsOpenAiPromptCacheOptions(normalizedSpec);
+  const promptCacheRetention = usesPromptCacheOptions
+    ? ""
+    : String(
+        normalizedSpec.prompt_cache_retention ??
+          normalizedSpec.promptCacheRetention ??
+          out.prompt_cache_retention ??
+          (supportsOpenAiExtendedPromptCache(normalizedSpec)
+            ? DEFAULT_PROMPT_CACHE_RETENTION
+            : "") ??
+          "",
+      ).trim();
+  const configuredPromptCacheOptions =
+    normalizedSpec.prompt_cache_options ??
+    normalizedSpec.promptCacheOptions ??
+    out.prompt_cache_options;
+  const promptCacheOptions = usesPromptCacheOptions
+    ? normalizePromptCacheOptions(configuredPromptCacheOptions) || {
+        ...DEFAULT_PROMPT_CACHE_OPTIONS,
+      }
+    : null;
+  return {
+    promptCacheKey,
+    promptCacheRetention,
+    promptCacheOptions,
+  };
+}
+
+export function resolveApiKey(modelSpec = {}) {
+  if (modelSpec.api_key) return modelSpec.api_key;
+  if (modelSpec.format === "dashscope") {
+    return process.env.DASHSCOPE_API_KEY || process.env.OPENAI_API_KEY || "";
+  }
+  if ((modelSpec.base_url || "").includes("poe.com")) {
+    return process.env.POE_API_KEY || process.env.OPENAI_API_KEY || "";
+  }
+  return process.env.OPENAI_API_KEY || "";
+}
+
+export function buildModelKwargs(modelSpec = {}) {
+  const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
+  const out = { ...(normalizedSpec.extra_body || {}) };
+  const providerFormat = normalizeProviderFormat(normalizedSpec?.format || "");
+  const cacheVendor = resolveCacheVendor(normalizedSpec);
+  const { promptCacheKey, promptCacheRetention, promptCacheOptions } =
+    resolvePromptCacheSettings(normalizedSpec);
+  if (cacheVendor === CACHE_VENDOR.OPENAI && promptCacheKey) {
+    out.prompt_cache_key = promptCacheKey;
+  } else if ("prompt_cache_key" in out) {
+    delete out.prompt_cache_key;
+  }
+  if (cacheVendor === CACHE_VENDOR.OPENAI && promptCacheRetention) {
+    out.prompt_cache_retention = promptCacheRetention;
+  } else if ("prompt_cache_retention" in out) {
+    delete out.prompt_cache_retention;
+  }
+  if (cacheVendor === CACHE_VENDOR.OPENAI && promptCacheOptions) {
+    out.prompt_cache_options = promptCacheOptions;
+  } else if ("prompt_cache_options" in out) {
+    delete out.prompt_cache_options;
+  }
+  if (cacheVendor === CACHE_VENDOR.ANTHROPIC) {
+    const cacheControl = normalizeClaudePromptCacheControl(
+      normalizedSpec.cache_control ??
+        normalizedSpec.prompt_cache_control ??
+        normalizedSpec.promptCacheControl ??
+        out.cache_control,
+    );
+    if (cacheControl) {
+      out.cache_control = cacheControl;
+    } else {
+      delete out.cache_control;
+    }
+  } else if ("cache_control" in out) {
+    delete out.cache_control;
+  }
+  if (cacheVendor === CACHE_VENDOR.GEMINI) {
+    const cachedContent = normalizeGeminiCachedContent(
+      normalizedSpec.cached_content ??
+        normalizedSpec.cachedContent ??
+        normalizedSpec.gemini_cached_content ??
+        normalizedSpec.geminiCachedContent ??
+        out.cached_content ??
+        out.cachedContent,
+    );
+    if (cachedContent) {
+      out.cached_content = cachedContent;
+    } else {
+      delete out.cached_content;
+    }
+    delete out.cachedContent;
+  } else {
+    delete out.cached_content;
+    delete out.cachedContent;
+  }
+  if (normalizedSpec.reasoning_effort !== undefined)
+    out.reasoning_effort = normalizedSpec.reasoning_effort;
+  if (
+    providerFormat === PROVIDER_FORMAT.DASHSCOPE &&
+    normalizedSpec.enable_thinking !== undefined
+  ) {
+    out.enable_thinking = normalizedSpec.enable_thinking === true;
+  }
+  if (
+    providerFormat === PROVIDER_FORMAT.DASHSCOPE &&
+    normalizedSpec.preserve_thinking !== undefined
+  ) {
+    out.preserve_thinking = normalizedSpec.preserve_thinking;
+  }
+  if (normalizedSpec.top_p !== undefined && supportsTopP(normalizedSpec)) {
+    out.top_p = normalizedSpec.top_p;
+  } else if (!supportsTopP(normalizedSpec) && "top_p" in out) {
+    delete out.top_p;
+  }
+  if (normalizedSpec.frequency_penalty !== undefined)
+    out.frequency_penalty = normalizedSpec.frequency_penalty;
+  if (normalizedSpec.presence_penalty !== undefined)
+    out.presence_penalty = normalizedSpec.presence_penalty;
+  if (
+    providerFormat === PROVIDER_FORMAT.DASHSCOPE &&
+    normalizedSpec.thinking_budget !== undefined
+  ) {
+    const thinkingBudget = Math.floor(Number(normalizedSpec.thinking_budget));
+    if (Number.isFinite(thinkingBudget) && thinkingBudget >= 0) {
+      out.thinking_budget = thinkingBudget;
+    }
+  }
+  return out;
+}
+
+export function resolveUseResponsesApi(modelSpec = {}) {
+  if (typeof modelSpec?.useResponsesApi === "boolean") {
+    return modelSpec.useResponsesApi;
+  }
+  if (typeof modelSpec?.use_responses_api === "boolean") {
+    return modelSpec.use_responses_api;
+  }
+  const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
+  const modelName = String(modelSpec?.model || "").trim().toLowerCase();
+  if (providerFormat !== "openai_compatible") return false;
+  return modelName.includes("codex") || modelName.includes("gpt-5.3-codex");
+}
+
+function normalizeAdditionalHeaders(input = null) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  return Object.fromEntries(
+    Object.entries(input)
+      .map(([key, value]) => [String(key || "").trim(), String(value ?? "").trim()])
+      .filter(([key, value]) => key && value),
+  );
+}
+
+function resolveContextObject(options = {}) {
+  const ctx = options?.context;
+  return ctx && typeof ctx === "object" && !Array.isArray(ctx) ? ctx : {};
+}
+
+function resolveHeaderSessionId(options = {}) {
+  const context = resolveContextObject(options);
+  const contextRuntime =
+    context?.runtime && typeof context.runtime === "object" ? context.runtime : {};
+  const contextAgentContext =
+    context?.agentContext && typeof context.agentContext === "object"
+      ? context.agentContext
+      : {};
+  const value = String(
+    context?.sessionId ||
+      options?.sessionId ||
+      contextRuntime?.systemRuntime?.sessionId ||
+      options?.runtime?.systemRuntime?.sessionId ||
+      contextRuntime?.sessionId ||
+      options?.runtime?.sessionId ||
+      contextAgentContext?.sessionId ||
+      options?.agentContext?.sessionId ||
+      contextAgentContext?.session?.current?.sessionId ||
+      options?.agentContext?.session?.current?.sessionId ||
+      contextAgentContext?.session?.id ||
+      options?.agentContext?.session?.id ||
+      "",
+  ).trim();
+  return value.slice(0, 200);
+}
+
+function resolveHeaderParentSessionId(options = {}) {
+  return resolveParentSessionId(options);
+}
+
+function buildChatModelConfiguration(normalizedSpec = {}, options = {}) {
+  const sessionId = resolveHeaderSessionId(options);
+  const parentSessionId = resolveHeaderParentSessionId(options);
+  const providerFormat = normalizeProviderFormat(normalizedSpec?.format || "");
+  const useResponsesApi = resolveUseResponsesApi(normalizedSpec);
+  const defaultHeaders = {
+    [MODEL_NAME_HEADER_KEY]: String(normalizedSpec?.model || "").trim(),
+    ...buildPluginModelHeaders({
+      flow: DEFAULT_MAIN_FLOW,
+      purpose: DEFAULT_MAIN_PURPOSE,
+      domain: DEFAULT_MAIN_DOMAIN,
+      sessionId,
+    }),
+    ...(parentSessionId ? { [PARENT_SESSION_HEADER_KEY]: parentSessionId } : {}),
+    ...(providerFormat === PROVIDER_FORMAT.DASHSCOPE && useResponsesApi
+      ? { [DASHSCOPE_SESSION_CACHE_HEADER_KEY]: "enable" }
+      : {}),
+    ...normalizeAdditionalHeaders(options?.additionalHeaders),
+  };
+  const config = {
+    defaultHeaders,
+  };
+
+  if (normalizedSpec.base_url) {
+    config.baseURL = normalizedSpec.base_url;
+  }
+
+  return config;
+}
+
+function resolvePromptCacheFlowFromConfiguration(configuration = {}) {
+  const headers =
+    configuration?.defaultHeaders &&
+    typeof configuration.defaultHeaders === "object" &&
+    !Array.isArray(configuration.defaultHeaders)
+      ? configuration.defaultHeaders
+      : {};
+  return String(headers[PLUGIN_MODEL_HEADER_KEY.FLOW] || DEFAULT_MAIN_FLOW).trim();
+}
+
+export function createChatModelFromSpec(modelSpec, options = {}) {
+  const normalizedSpec = normalizeModelSpecWithDefaults(modelSpec);
+  if (!normalizedSpec?.model) {
+    throw fatalSystemError(tSystem("model.nameRequired"), {
+      code: ERROR_CODE.FATAL_MODEL_NAME_REQUIRED,
+    });
+  }
+  const apiKey = resolveApiKey(normalizedSpec);
+  if (!apiKey)
+    throw fatalSystemError(
+      `${tSystem("model.apiKeyMissingForProviderAlias")}: ${normalizedSpec.alias || "unknown"}`,
+      {
+        code: ERROR_CODE.FATAL_PROVIDER_API_KEY_MISSING,
+        details: { alias: normalizedSpec.alias || "unknown" },
+      },
+    );
+
+  const configuration = buildChatModelConfiguration(normalizedSpec, options);
+  const promptCacheFlow = resolvePromptCacheFlowFromConfiguration(configuration);
+  const modelKwargs = buildModelKwargs(normalizedSpec);
+  const { promptCacheKey, promptCacheRetention } = resolvePromptCacheSettings(
+    normalizedSpec,
+    { flow: promptCacheFlow },
+  );
+  if (promptCacheKey && "prompt_cache_key" in modelKwargs) {
+    modelKwargs.prompt_cache_key = promptCacheKey;
+  }
+  const defaultsByFormat = getModelDefaultFields(normalizedSpec);
+  const chat = new ChatOpenAI({
+    model: normalizedSpec.model,
+    temperature: Number(normalizedSpec.temperature ?? defaultsByFormat.temperature ?? 0.7),
+    streaming: Boolean(options?.streaming),
+    maxTokens:
+      normalizedSpec.max_tokens !== undefined ? Number(normalizedSpec.max_tokens) : undefined,
+    apiKey,
+    configuration,
+    useResponsesApi: resolveUseResponsesApi(normalizedSpec),
+    ...(promptCacheKey ? { promptCacheKey } : {}),
+    ...(promptCacheRetention ? { promptCacheRetention } : {}),
+    ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
+  });
+
+  return chat;
+}
+
+export function createChatModel(specOrOptions = {}, maybeOptions = {}) {
+  const looksLikeOptions =
+    specOrOptions &&
+    typeof specOrOptions === "object" &&
+    (Object.prototype.hasOwnProperty.call(specOrOptions, "globalConfig") ||
+      Object.prototype.hasOwnProperty.call(specOrOptions, "userConfig") ||
+      Object.prototype.hasOwnProperty.call(specOrOptions, "streaming")) &&
+    !Object.prototype.hasOwnProperty.call(specOrOptions, "model");
+
+  if (looksLikeOptions) {
+    const options = specOrOptions || {};
+    const globalConfig = options?.globalConfig || {};
+    const userConfig = options?.userConfig || {};
+    const modelSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
+    return createChatModelFromSpec(modelSpec, options);
+  }
+
+  return createChatModelFromSpec(specOrOptions, maybeOptions);
+}
+
+export function createChatModelByName(modelName, config = {}) {
+  const options = config && typeof config === "object" ? config : {};
+  const globalConfig = options?.globalConfig || {};
+  const userConfig = options?.userConfig || {};
+
+  const spec = resolveModelSpecByName({ name: modelName, globalConfig, userConfig });
+  if (!spec) {
+    throw fatalSystemError(tSystem("model.notFoundByName"), {
+      code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
+      details: { name: modelName },
+    });
+  }
+  return createChatModelFromSpec(spec, options);
+}

@@ -59,21 +59,21 @@ const LEGACY_ATTACHMENT_FIELD_PATTERNS = [
 ];
 
 const LEGACY_ATTACHMENT_FIELD_ALLOWED_FILES = new Map(Object.entries({
-  "agent/src/system-core/attach/meta-ops.js":
+  "agent/src/artifacts/meta-ops.js":
     "central attachment metadata normalizer accepts legacy aliases and emits canonical fields",
-  "agent/src/system-core/context/providers/attachment-resolver.js":
+  "agent/src/context/providers/attachment-resolver.js":
     "context user attachment resolver accepts legacy aliases before delegating to attachment mapper",
-  "agent/src/system-core/session/transfer-attachment-refs.js":
+  "agent/src/session/transfer-attachment-refs.js":
     "session summary/detail compact bridge accepts legacy refs from historical messages",
-  "agent/src/system-core/session/services/session-message-service.js":
+  "agent/src/session/services/session-message-service.js":
     "session message compatibility strips/reads legacy snake_case fields from stored messages",
-  "agent/src/system-core/session/session-summary-builders.js":
+  "agent/src/session/session-summary-builders.js":
     "session summary compatibility reads historical parsed attachment refs",
-  "agent/src/system-core/semantic-transfer/core/compact.js":
+  "agent/src/transfer/core/compact.js":
     "semantic-transfer model compact view accepts legacy attachment refs from envelope files",
-  "agent/src/system-core/semantic-transfer/storage/transfer-path-view.js":
+  "agent/src/transfer/storage/transfer-path-view.js":
     "semantic-transfer path bridge consumes legacy attachment meta sandbox aliases",
-  "agent/src/system-core/semantic-transfer/storage/attachment-adapter.js":
+  "agent/src/transfer/storage/attachment-adapter.js":
     "semantic-transfer attachment persistence bridge consumes legacy sandbox flag aliases",
   "client/noobot-chat/src/infrastructure/api/chat/chatApi.js":
     "frontend upload API accepts backend/client legacy attachment field aliases",

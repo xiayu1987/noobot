@@ -7,7 +7,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { createCapabilityRuntime } from "../capabilities/runtime.js";
-import { resolveHookClientEmitter } from "../../../../agent/src/system-core/hook/client-channel.js";
+import { resolveHookClientEmitter } from "../../../../agent/src/extensions/hooks/client-channel.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { safeId } from "../data/record-builders.js";
 import { DEFAULT_OPTIONS, normalizeOptions } from "./options.js";

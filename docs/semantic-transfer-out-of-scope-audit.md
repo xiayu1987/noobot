@@ -17,7 +17,7 @@
 ### 1.1 通用 generated artifacts 保存
 
 - 状态：**已收口**
-- 文件：`agent/src/system-core/bot-manage/session/scoped-artifact-persistence-helpers.js`
+- 文件：`agent/src/bot/session/scoped-artifact-persistence-helpers.js`
 - 当前调用：`attachmentService.ingestGeneratedArtifacts(...)`
 - 当前用途：通用 generated artifact persister，把生成物保存为附件，再取 attachment metas。
 - 判断：**已从 semantic-transfer 回退到 attachment service**。
@@ -28,7 +28,7 @@
 ### 1.2 LLM 输出媒体附件保存
 
 - 状态：**已收口**
-- 文件：`agent/src/system-core/agent/core/media/artifact-service.js`
+- 文件：`agent/src/artifacts/runtime/artifact-service.js`
 - 当前调用：`attachmentService.ingestGeneratedArtifacts(...)`
 - 当前用途：把 assistant/model 输出里的远程图片、视频等媒体资源保存成附件。
 - 判断：**已从 semantic-transfer 回退到 attachment service**。
@@ -40,7 +40,7 @@
 ### 1.3 多模态生成工具的图片附件保存
 
 - 状态：**已收口**
-- 文件：`agent/src/system-core/tools/ai-models/multimodal-generate-tool.js`
+- 文件：`agent/src/tools/ai-models/multimodal-generate-tool.js`
 - 当前调用：`attachmentService.ingestGeneratedArtifacts(...)`
 - 当前用途：图片生成工具生成图片后保存附件。
 - 判断：**已从 semantic-transfer 回退到 attachment service**。
@@ -52,7 +52,7 @@
 ### 1.4 email connector 附件保存
 
 - 状态：**已收口**
-- 文件：`agent/src/system-core/tools/connectors/connector-toolkit/tool-access-connector.js`
+- 文件：`agent/src/tools/connectors/connector-toolkit/tool-access-connector.js`
 - 位置：`buildEmailAttachmentHandler()`
 - 当前调用：`attachmentService.ingestGeneratedArtifacts(...)`
 - 当前用途：email connector 读取邮件附件并保存为系统附件。
@@ -65,7 +65,7 @@
 ### 1.5 agent-collab 异步子任务结果附件保存
 
 - 状态：**已按普通异步任务结果附件保存收口**
-- 文件：`agent/src/system-core/tools/collaboration/agent-collab/collab-artifact-persist.js`
+- 文件：`agent/src/tools/collaboration/agent-collab/collab-artifact-persist.js`
 - 当前调用：`attachmentService.ingestGeneratedArtifacts(...)`
 - 当前用途：async subtask / agent-collab 的子任务结果保存成附件。
 - 判断：**普通 agent-collab / async task 附件保存不走 semantic-transfer**。
@@ -78,7 +78,7 @@
 ### 1.6 通用 final assistant transfer 聚合/提升
 
 - 状态：**已收口**
-- 文件：`agent/src/system-core/bot-manage/execution/finalizer.js`
+- 文件：`agent/src/bot/execution/finalizer.js`
 - 当前调用：`getTransferAttachmentMetas(...)`（仅消费已有 envelope）
 - 当前用途：从消息里的 transfer envelopes 中提取附件，并提升/合并到最终 assistant 消息。
 - 判断：**已加授权场景白名单**。
@@ -121,24 +121,24 @@ resolveTransferFilePath
 ### 3.1 工具输入超限
 
 - 文件：
-  - `agent/src/system-core/tools/execution/file-tool.js`
-  - `agent/src/system-core/tools/execution/script-tool.js`
+  - `agent/src/tools/execution/file-tool.js`
+  - `agent/src/tools/execution/script-tool.js`
 - 调用：`transferToolMessage({ direction: "input" })`
 - 判断：**对齐**。
 
 ### 3.2 工具输出超限 / 工具结果 compact
 
 - 文件：
-  - `agent/src/system-core/agent/core/execution/tool-runner.js`
-  - `agent/src/system-core/semantic-transfer/tool-result-text.js`
+  - `agent/src/runtime/tool-execution/tool-runner.js`
+  - `agent/src/transfer/tool-result-text.js`
 - 判断：**对齐**。
 
 ### 3.3 data-processing 工具文本结果处理
 
 - 文件：
-  - `agent/src/system-core/tools/data-processing/doc2data-tool.js`
-  - `agent/src/system-core/tools/data-processing/media2data-tool.js`
-  - `agent/src/system-core/tools/data-processing/web2data-tool.js`
+  - `agent/src/tools/data-processing/doc2data-tool.js`
+  - `agent/src/tools/data-processing/media2data-tool.js`
+  - `agent/src/tools/data-processing/web2data-tool.js`
 - 判断：**基本对齐**。
 - 原因：这些属于工具输出文本内容转换/超限处理。
 
@@ -219,7 +219,7 @@ finalizer 如需处理 transfer envelope，应按原始需求场景白名单判�
 
 ### 6.1 用户输入附件 ingest
 
-- 文件：`agent/src/system-core/context/providers/attachment-resolver.js`
+- 文件：`agent/src/context/providers/attachment-resolver.js`
 - 当前调用：`attachmentService.ingest(...)`
 - 当前用途：把本轮用户传入的附件元信息/原始附件解析为运行时可用 attachment metas。
 - 判断：**应直接走附件系统**。
@@ -229,7 +229,7 @@ finalizer 如需处理 transfer envelope，应按原始需求场景白名单判�
 
 ### 6.2 附件服务自身的生成物保存能力
 
-- 文件：`agent/src/system-core/attach/service/attachment-service.js`
+- 文件：`agent/src/artifacts/service/attachment-service.js`
 - 当前能力：
   - `ingestGeneratedArtifacts(...)`
   - `ingestModelGeneratedArtifacts(...)`
@@ -242,8 +242,8 @@ finalizer 如需处理 transfer envelope，应按原始需求场景白名单判�
 ### 6.3 data-processing 工具对源附件的 parsed-result 回写
 
 - 文件：
-  - `agent/src/system-core/tools/data-processing/doc2data-tool.js`
-  - `agent/src/system-core/tools/data-processing/media2data-tool.js`
+  - `agent/src/tools/data-processing/doc2data-tool.js`
+  - `agent/src/tools/data-processing/media2data-tool.js`
 - 当前调用：`attachmentService.linkParsedResultToAttachment(...)`
 - 当前用途：把解析后的结果附件信息回写到源附件记录上，例如记录 `parsedResultAttachmentId` / `parsedResultRelativePath`。
 - 判断：**应直接走附件系统**。
@@ -254,8 +254,8 @@ finalizer 如需处理 transfer envelope，应按原始需求场景白名单判�
 ### 6.4 runtime / turn 内 attachmentMetas 合并与传播
 
 - 文件：
-  - `agent/src/system-core/attach/runtime-attachment.js`
-  - `agent/src/system-core/agent/core/execution/state-committer.js`
+  - `agent/src/artifacts/runtime-attachment.js`
+  - `agent/src/runtime/tool-execution/state-committer.js`
 - 当前能力：`appendAttachmentMetasToRuntimeAndTurn(...)`
 - 当前用途：把附件 metas 合并进 runtime、当前 turn message store、事件流等。
 - 判断：**应直接保持附件元数据语义**。
@@ -267,10 +267,10 @@ finalizer 如需处理 transfer envelope，应按原始需求场景白名单判�
 ### 6.5 session message / turn 持久化里的 attachmentMetas
 
 - 文件：
-  - `agent/src/system-core/session/services/session-message-service.js`
-  - `agent/src/system-core/session/entities/session-entity.js`
-  - `agent/src/system-core/context/session/message-converter.js`
-  - `agent/src/system-core/bot-manage/execution/turn-persister.js`
+  - `agent/src/session/services/session-message-service.js`
+  - `agent/src/session/entities/session-entity.js`
+  - `agent/src/context/session/message-converter.js`
+  - `agent/src/bot/execution/turn-persister.js`
 - 当前用途：在会话消息、turn 记录、回放转换中保留/过滤 attachment metas。
 - 判断：**应直接属于会话附件元数据持久化**。
 - 原因：这是历史消息与 UI/回放层的附件字段，不是 semantic-transfer 信息转换。
@@ -280,7 +280,7 @@ finalizer 如需处理 transfer envelope，应按原始需求场景白名单判�
 
 ### 6.6 bot manager 附件查询与删除
 
-- 文件：`agent/src/system-core/bot-manage/index.js`
+- 文件：`agent/src/bot/index.js`
 - 当前调用：
   - `this.attach.getAttachmentById(...)`
   - `this.attach.deleteScopedAttachmentsBySessionIds(...)`
@@ -307,8 +307,8 @@ finalizer 如需处理 transfer envelope，应按原始需求场景白名单判�
 ### 6.8 纯附件展示、路径格式化、上下文注入
 
 - 文件：
-  - `agent/src/system-core/context/formatters/system-prompt-formatter.js`
-  - `agent/src/system-core/agent/core/context/message-builder.js`
+  - `agent/src/context/formatters/system-prompt-formatter.js`
+  - `agent/src/context/assembly/message-builder.js`
   - `plugin/noobot-plugin-workflow/src/core/hooks.js` 中的用户输入附件规划/注入相关逻辑
   - `plugin/noobot-plugin-harness/src/capabilities/handlers/shared/sandbox-path.js`
 - 当前用途：把已有 attachment metas 渲染成模型可读路径、系统提示或消息内容。
