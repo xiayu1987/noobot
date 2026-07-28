@@ -15,7 +15,7 @@ import {
   registerNoobotPlugin,
   test,
   waitForFile,
-} from "./helpers/harness-planning-helper.js";
+} from "../helpers/harness-planning-helper.js";
 
 test("harness planning disables blocked tools (except help) and injects request_task_acceptance tool", async () => {
   const hookManager = createAgentHookManager();

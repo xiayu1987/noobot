@@ -13,7 +13,7 @@ import {
   getDesktopRuntimeEventsRoot,
   initializeDesktopRuntimeEvents,
   sanitizeDesktopRuntimeEventData,
-} from "../../electron/desktop-runtime-events.js";
+} from "../../electron/runtime/runtime-events.js";
 
 function createApp(userDataPath) {
   return {

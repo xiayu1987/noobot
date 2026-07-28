@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { mergeCanonicalSessionDetail } from "../../../../src/modules/chat/model/sessionDetailMerge.js";
+import { mergeCanonicalSessionDetail } from "../../../../../src/modules/chat/model/sessionDetailMerge.js";
 
 describe("mergeCanonicalSessionDetail", () => {
   it("keeps persisted facts when a sparse realtime update arrives later", () => {

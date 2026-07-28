@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createHarness } from "./helpers/useChatEngineHarness.js";
-import { StreamEventEnum, RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { createHarness } from "../helpers/useChatEngineHarness.js";
+import { StreamEventEnum, RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.interaction-stop: connector", () => {
   it("connector_status is informational: updates connector panel without interaction pending", async () => {

@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyDoneMessagesPatch,
   reconcileDoneTurnSnapshot,
-} from "../../../../src/modules/chat/runtime/engine/messagePatch.js";
-import { applyDoneMessagesFromReconnect } from "../../../../src/modules/chat/runtime/reconnect/doneReplay.js";
+} from "../../../../../../src/modules/chat/runtime/engine/messagePatch.js";
+import { applyDoneMessagesFromReconnect } from "../../../../../../src/modules/chat/runtime/reconnect/doneReplay.js";
 
 describe("messagePatch", () => {
   it("applies done raw messages without adding legacy dialog identity", () => {

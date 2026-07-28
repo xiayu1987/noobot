@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import {
   emitPlanMutationRejected,
   emitPlanMutationStageMismatchAutocoerced,
-} from "../src/capabilities/handlers/shared/plan/mutation-observability.js";
+} from "../../src/capabilities/handlers/shared/plan/mutation-observability.js";
 
 test("emitPlanMutationRejected appends localized reason label", () => {
   const logs = [];

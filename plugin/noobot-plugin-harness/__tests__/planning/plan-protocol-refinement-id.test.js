@@ -10,8 +10,8 @@ import {
   applyPatchCommandsToPlanDocument,
   parseMainPlansFromPlanText,
   parsePatchCommands,
-} from "../src/capabilities/handlers/shared/plan/text-protocol.js";
-import { buildPlanningRefinementPromptText } from "../src/capabilities/handlers/shared/workflow/prompts.js";
+} from "../../src/capabilities/handlers/shared/plan/text-protocol.js";
+import { buildPlanningRefinementPromptText } from "../../src/capabilities/handlers/shared/workflow/prompts.js";
 
 test("refinement patch parser accepts deep ids like 1.1.1 for flatten fallback", () => {
   const patchText = [

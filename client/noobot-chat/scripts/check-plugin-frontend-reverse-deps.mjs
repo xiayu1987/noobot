@@ -7,7 +7,7 @@
 import fs from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { init, parse } from "es-module-lexer";
-import { clientFilePath as path } from "../../shared/path-resolver.js";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
@@ -137,4 +137,3 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     process.exitCode = 1;
   });
 }
-

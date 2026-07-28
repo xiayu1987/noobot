@@ -75,13 +75,13 @@ const LEGACY_ATTACHMENT_FIELD_ALLOWED_FILES = new Map(Object.entries({
     "semantic-transfer path bridge consumes legacy attachment meta sandbox aliases",
   "agent/src/system-core/semantic-transfer/storage/attachment-adapter.js":
     "semantic-transfer attachment persistence bridge consumes legacy sandbox flag aliases",
-  "client/noobot-chat/src/services/api/chatApi.js":
+  "client/noobot-chat/src/infrastructure/api/chat/chatApi.js":
     "frontend upload API accepts backend/client legacy attachment field aliases",
-  "client/noobot-chat/src/services/api/attachmentAccess.js":
+  "client/noobot-chat/src/infrastructure/api/attachments/attachmentAccess.js":
     "frontend attachment access normalizer accepts legacy aliases and emits canonical access metadata",
-  "client/noobot-chat/src/composables/infra/transferEnvelopes.js":
+  "client/noobot-chat/src/modules/chat/model/transferEnvelopes.js":
     "frontend semantic-transfer adapter consumes legacy envelope attachment meta aliases",
-  "client/noobot-chat/src/composables/message/useMessageFiles.js":
+  "client/noobot-chat/src/modules/chat/composables/message/useMessageFiles.js":
     "frontend message file list keeps legacy attachment fallback for historical sessions",
   "plugin/noobot-plugin-workflow/src/core/hooks/attachments.js":
     "workflow central attachment/transfer bridge consumes legacy attachment aliases",

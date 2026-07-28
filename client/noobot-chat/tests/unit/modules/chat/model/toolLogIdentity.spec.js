@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { deduplicateToolLogs } from "../../../src/modules/chat/model/toolLogIdentity.js";
+import { deduplicateToolLogs } from "../../../../../src/modules/chat/model/toolLogIdentity.js";
 
 const result = (overrides = {}) => ({ event: "tool_result", type: "tool_result", ...overrides });
 

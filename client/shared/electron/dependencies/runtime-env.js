@@ -5,7 +5,7 @@
  */
 import fs from "node:fs";
 import os from "node:os";
-import { clientPathDelimiter, clientPathDirname, joinClientPath, normalizeClientPath } from "../path-resolver.js";
+import { clientPathDelimiter, clientPathDirname, joinClientPath, normalizeClientPath } from "../../path-resolver.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();

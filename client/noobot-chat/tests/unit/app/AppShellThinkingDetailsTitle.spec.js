@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { clientFilePath as path } from "../../../../shared/path-resolver.js";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { describe, expect, it } from "vitest";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

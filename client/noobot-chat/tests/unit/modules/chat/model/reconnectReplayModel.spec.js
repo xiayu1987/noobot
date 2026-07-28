@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { RoleEnum, StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   findLatestPendingAssistantAfterLastUser,
   findReconnectDoneEnvelopeWithMessages,
@@ -14,7 +14,7 @@ import {
   mergeCurrentUserMessagesIntoFoldedMessages,
   patchMessageObjectPreservingUiState,
   splitReconnectMessagesByDialogProcessId,
-} from "../../../../src/modules/chat/model/reconnectReplayModel.js";
+} from "../../../../../src/modules/chat/model/reconnectReplayModel.js";
 
 describe("reconnectReplayModel", () => {
   it("isDialogProcessRecoverable respects running/pending interaction only", () => {

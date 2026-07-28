@@ -9,13 +9,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
-import { ModelMessageRuntimeHelpers } from "../../../agent/src/system-core/bot-manage/session/model-message-runtime-helpers.js";
-import { registerNoobotPlugin } from "../src/index.js";
-import { createAcceptanceHandler } from "../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
-import { markGuidanceSummarizedMessages } from "../src/capabilities/handlers/guidance/signal-tracker.js";
-import { exists, waitForFile, readJsonl } from "./test-helpers.js";
+import { createAgentHookManager } from "../../../../agent/src/system-core/hook/index.js";
+import { ModelMessageRuntimeHelpers } from "../../../../agent/src/system-core/bot-manage/session/model-message-runtime-helpers.js";
+import { registerNoobotPlugin } from "../../src/index.js";
+import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
+import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
+import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
 function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);

@@ -12,7 +12,7 @@ import {
   buildPlanningRefinementPatchProtocolText,
   buildPlanningRevisionPatchProtocolText,
   buildSummaryPatchProtocolText,
-} from "../src/capabilities/handlers/shared/workflow/protocols.js";
+} from "../../src/capabilities/handlers/shared/workflow/protocols.js";
 
 test("workflow protocols are split and reusable by flow", () => {
   assert.match(String(buildPlanningMainPatchProtocolText("zh-CN")), /ADD \[新主计划ID\]/);

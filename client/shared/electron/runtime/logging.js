@@ -5,11 +5,12 @@
  */
 import fs from "node:fs";
 import os from "node:os";
-import { clientFilePath as path } from "../path-resolver.js";
-import { createDesktopRuntimeEventWriter } from "./desktop-runtime-events.js";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { clientFilePath as path } from "../../path-resolver.js";
+import { createDesktopRuntimeEventWriter } from "./runtime-events.js";
 
 export const desktopAppName = "Noobot";
-export const DEFAULT_DESKTOP_LOG_MAX_BYTES = 10 * 1024 * 1024;
+export const DEFAULT_DESKTOP_LOG_MAX_BYTES = LENGTH_THRESHOLDS.desktopLogging.maxFileBytes;
 export const DEFAULT_DESKTOP_LOG_RETAIN = 5;
 
 const desktopLogQueues = new Map();

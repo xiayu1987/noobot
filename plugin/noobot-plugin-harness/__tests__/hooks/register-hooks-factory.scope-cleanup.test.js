@@ -6,9 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createRegisterHarnessHooks } from "../src/core/hooks.js";
-import { appendMessage } from "../src/core/message-store.js";
-import { resolveMainModelFinalMessages } from "../../../agent/src/system-core/session/utils/context-window-normalizer.js";
+import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
+import { appendMessage } from "../../src/core/message-store.js";
+import { resolveMainModelFinalMessages } from "../../../../agent/src/system-core/session/utils/context-window-normalizer.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
   const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};

@@ -6,8 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ChannelManager } from "../src/channel/channel-manager.js";
-import { createChannelKey } from "../src/shared/utils.js";
+import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, listEvents } from "./channel-manager.state-consistency.test-helpers.js";
 
 test("newly attached subscriber should receive no_conversation snapshot state", () => {

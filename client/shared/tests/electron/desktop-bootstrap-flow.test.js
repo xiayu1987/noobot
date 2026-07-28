@@ -9,8 +9,8 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
-import { createDesktopBootstrap } from "../../electron/desktop-bootstrap.js";
-import { createDesktopServiceManager } from "../../electron/desktop-services.js";
+import { createDesktopBootstrap } from "../../electron/runtime/bootstrap.js";
+import { createDesktopServiceManager } from "../../electron/runtime/services.js";
 
 function withPlatform(platform, fn) {
   const original = Object.getOwnPropertyDescriptor(process, "platform");

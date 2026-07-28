@@ -10,19 +10,19 @@ import {
   buildChildAttachmentsByParentDialogProcessId,
   mergeChildTurnAttachmentsIntoRootMessages,
   mergePreservedDetailMessages,
-} from "../../../../src/modules/session/model/list/detailMessages.js";
+} from "../../../../../src/modules/session/model/list/detailMessages.js";
 import {
   buildViewMessage,
   foldConversationMessages,
-} from "../../../../src/modules/chat/model/messageModel.js";
+} from "../../../../../src/modules/chat/model/messageModel.js";
 import {
   FrontendRunState,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
   resolveSessionRunMessageRuntimePatch,
-} from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
-import { selectToolTimelineLogs } from "../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 
 describe("detailMessages", () => {
   it("builds one normalized detail message list for replace and preserve inputs", () => {

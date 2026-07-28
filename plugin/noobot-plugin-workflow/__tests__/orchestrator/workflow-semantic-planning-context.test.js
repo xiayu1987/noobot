@@ -27,7 +27,7 @@ import {
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
-} from "./helpers/workflow-hook-session-strategy-helper.js";
+} from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow semantic planning passes conversation context before current user task", async () => {
   const hookManager = createMockBotHookManager();

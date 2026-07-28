@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildCapabilityProtocolModelMessages } from "../src/capabilities/handlers/shared/model/message-factory.js";
+import { buildCapabilityProtocolModelMessages } from "../../src/capabilities/handlers/shared/model/message-factory.js";
 
 test("capability protocol model messages keep system block before agent conversation", () => {
   const messages = buildCapabilityProtocolModelMessages({

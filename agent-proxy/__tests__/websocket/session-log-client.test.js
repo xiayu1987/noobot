@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createSessionLogClient } from "../src/websocket/session-log-client.js";
+import { createSessionLogClient } from "../../src/websocket/session-log-client.js";
 
 class MockWebSocket {
   static CONNECTING = 0;

@@ -10,7 +10,7 @@ import {
   resolveGuidancePriorityDecision,
   resolveNextGuidanceAction,
   resolvePendingPlanUpdate,
-} from "../src/capabilities/handlers/planning/plan-update-scheduler.js";
+} from "../../src/capabilities/handlers/planning/plan-update-scheduler.js";
 
 test("scheduler priority: guidance > revision > refinement > summary > analysis", () => {
   assert.deepEqual(

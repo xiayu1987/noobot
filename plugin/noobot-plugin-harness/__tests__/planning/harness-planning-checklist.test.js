@@ -15,7 +15,7 @@ import {
   registerNoobotPlugin,
   test,
   waitForFile,
-} from "./helpers/harness-planning-helper.js";
+} from "../helpers/harness-planning-helper.js";
 
 test("harness planning captures checklist and forces acceptance at final output", async () => {
   const hookManager = createAgentHookManager();

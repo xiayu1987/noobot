@@ -10,7 +10,7 @@ import {
   parseSummaryOverviewAndDetailFromText,
   parseSummaryPatchCommands,
   resolveSummaryDetailAttachmentText,
-} from "../src/capabilities/handlers/shared/plan/summary-text-protocol.js";
+} from "../../src/capabilities/handlers/shared/plan/summary-text-protocol.js";
 import {
   buildAcceptanceValidationRequestPromptText,
   buildPostPlanUserFollowupPrompt,
@@ -24,8 +24,8 @@ import {
     resolveScenarioPolicyFlagsFromContext,
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildDefaultScenarioPolicyText,
-} from "../src/capabilities/handlers/shared/workflow/prompts.js";
-import { buildSummaryPatchProtocolText } from "../src/capabilities/handlers/shared/workflow/protocols.js";
+} from "../../src/capabilities/handlers/shared/workflow/prompts.js";
+import { buildSummaryPatchProtocolText } from "../../src/capabilities/handlers/shared/workflow/protocols.js";
 
 test("summary_text_v2 parser extracts overview and detail blocks", () => {
   const text = [

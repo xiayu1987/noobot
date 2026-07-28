@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import {
   WORKFLOW_NODE_STATUS,
   createInMemoryWorkflowNodeStateRepository,
-} from "../src/core/orchestrator/node-state-repository.js";
+} from "../../src/core/orchestrator/node-state-repository.js";
 
 const nodes = [
   {

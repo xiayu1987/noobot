@@ -15,7 +15,7 @@ import {
   registerNoobotPlugin,
   test,
   waitForFile,
-} from "./helpers/harness-planning-helper.js";
+} from "../helpers/harness-planning-helper.js";
 
 test("harness writes capability model traces to dedicated jsonl artifact", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));

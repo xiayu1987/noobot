@@ -27,7 +27,7 @@ import {
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
-} from "./helpers/workflow-hook-session-strategy-helper.js";
+} from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow dialog process compat helpers keep old dialog fields read-only", () => {
   assert.equal(resolveWorkflowDialogProcessId({ dialogProcessId: "new-dialog" }), "new-dialog");

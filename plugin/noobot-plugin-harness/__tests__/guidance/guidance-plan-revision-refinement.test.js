@@ -28,7 +28,7 @@ import {
   TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createAgentContext,
   createPlanningAgentContext,
-} from "./helpers/guidance-plan-update-threshold-helper.js";
+} from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("revision and refinement have independent MAX_PLAN_UPDATE_ATTEMPTS budgets", () => {
   const state = {

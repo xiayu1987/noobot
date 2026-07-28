@@ -9,8 +9,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { WsRouter } from '../src/websocket/ws-router.js';
-import { AGENT_PROXY_ERROR, CHANNEL_EVENT } from '../src/shared/constants.js';
+import { WsRouter } from '../../src/websocket/ws-router.js';
+import { AGENT_PROXY_ERROR, CHANNEL_EVENT } from '../../src/shared/constants.js';
 
 async function waitForFile(filePath, timeoutMs = 5000) {
   const startedAt = Date.now();

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFileSync } from "node:fs";
-import { clientFilePath as path } from "../../../../../shared/path-resolver.js";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 

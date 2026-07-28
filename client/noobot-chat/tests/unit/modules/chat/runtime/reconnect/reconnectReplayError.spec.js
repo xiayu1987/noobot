@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { applyReconnectEnvelopeToTargetMessage } from "../../../../src/modules/chat/runtime/reconnect/batchReplay.js";
-import { normalizeReplayError } from "../../../../src/modules/chat/runtime/reconnect/utils.js";
-import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { applyReconnectEnvelopeToTargetMessage } from "../../../../../../src/modules/chat/runtime/reconnect/batchReplay.js";
+import { normalizeReplayError } from "../../../../../../src/modules/chat/runtime/reconnect/utils.js";
+import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("reconnect replay error normalization", () => {
   it("extracts readable error details from replay values", () => {

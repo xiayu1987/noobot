@@ -1,7 +1,7 @@
 # useReconnectReplay 测试用例矩阵（对照版）
 
 更新时间：2026-05-15  
-对应测试文件：`tests/unit/composables/chat/useReconnectReplay.spec.js`
+对应测试目录：`tests/unit/modules/chat/composables/useReconnectReplay-*.spec.js`
 
 ## 阶段 1：入口路由（applyReconnectData / applyReconnectEvent）
 

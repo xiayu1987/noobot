@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
-import MessageStatusRow from "../../../src/modules/chat/components/message/MessageStatusRow.vue";
+import MessageStatusRow from "../../../../../../src/modules/chat/components/message/MessageStatusRow.vue";
 
 const global = {
   stubs: {

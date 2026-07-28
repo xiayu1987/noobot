@@ -252,6 +252,6 @@ reconnect
 - Interaction 契约：`docs/interaction-contract.md`
 - 状态来源与广播：`agent-proxy/src/channel/channel-manager.js`
 - 状态测试：
-  - `tests/unit/composables/chat/useChatEngine.spec.js`
-  - `tests/unit/composables/chat/useReconnectReplay.spec.js`
-  - `agent-proxy/__tests__/channel-manager.state-consistency.test.js`
+  - `tests/unit/modules/chat/composables/useChatEngine.send-stream.spec.js`
+  - `tests/unit/modules/chat/composables/useReconnectReplay-events.spec.js`
+  - `agent-proxy/__tests__/channel/channel-manager.state-consistency.lifecycle.test.js`

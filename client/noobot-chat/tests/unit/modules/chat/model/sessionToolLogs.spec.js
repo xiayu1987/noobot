@@ -5,8 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { applyCompletedToolLogsToMessages } from "../../../src/modules/chat/model/sessionToolLogs.js";
-import { selectToolTimelineLogs } from "../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import { applyCompletedToolLogsToMessages } from "../../../../../src/modules/chat/model/sessionToolLogs.js";
+import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 
 describe("session tool logs", () => {
   it("attaches raw workflow node tool logs to a summary display message by turnScopeId", () => {

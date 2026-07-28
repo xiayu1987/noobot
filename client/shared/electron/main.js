@@ -6,15 +6,15 @@
 import { app } from "electron";
 import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from "node:url";
-import { appendEarlyLog, createStartupLogger, desktopAppName, installEarlyDiagnostics } from "./startup-logging.js";
-import { createDesktopConfigManager } from "./desktop-config.js";
-import { registerFileIpcHandlers } from "./file-ipc.js";
-import { createDesktopDependencyManager } from "./desktop-dependencies.js";
-import { createDesktopServiceManager } from "./desktop-services.js";
-import { createDesktopWindowManager } from "./desktop-window.js";
-import { createDesktopBootstrap } from "./desktop-bootstrap.js";
-import { createStartupConfigRequesters, registerStartupIpcHandlers } from "./startup-ipc.js";
-import { createDependencyProcessTools } from "./dependency-process.js";
+import { appendEarlyLog, createStartupLogger, desktopAppName, installEarlyDiagnostics } from "./runtime/logging.js";
+import { createDesktopConfigManager } from "./runtime/config.js";
+import { registerFileIpcHandlers } from "./ipc/files.js";
+import { createDesktopDependencyManager } from "./dependencies/manager.js";
+import { createDesktopServiceManager } from "./runtime/services.js";
+import { createDesktopWindowManager } from "./runtime/window.js";
+import { createDesktopBootstrap } from "./runtime/bootstrap.js";
+import { createStartupConfigRequesters, registerStartupIpcHandlers } from "./ipc/startup.js";
+import { createDependencyProcessTools } from "./dependencies/process.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

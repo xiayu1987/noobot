@@ -6,17 +6,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
-import { useChatStore } from "../../../../src/modules/chat/stores/useChatStore.js";
-import { RoleEnum, StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
+import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   FrontendRunState,
   SESSION_RUN_EVENT,
-} from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   applyTurnRuntimeEvent,
   selectSessionTurnRuntime,
-} from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { mapSummaryToSession } from "../../../../src/modules/session/model/list/sessionRecords.js";
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { mapSummaryToSession } from "../../../../../src/modules/session/model/list/sessionRecords.js";
 import {
   createChatSession,
   createSessionFixture,

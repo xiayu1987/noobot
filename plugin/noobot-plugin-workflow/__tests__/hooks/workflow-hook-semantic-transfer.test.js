@@ -27,7 +27,7 @@ import {
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
-} from "./helpers/workflow-hook-session-strategy-helper.js";
+} from "../helpers/workflow-hook-session-strategy-helper.js";
 
 test("workflow hook uses injected sub-session strategy and marks workflow message", async () => {
   const hookManager = createMockBotHookManager();

@@ -10,8 +10,8 @@ import {
   applySemanticAcceptanceToReport,
   buildAcceptanceReport,
   renderAcceptanceReportText,
-} from "../src/capabilities/handlers/acceptance/report-builder.js";
-import { maybeAppendAcceptanceReportAtFinalOutput } from "../src/capabilities/handlers/acceptance/output-finalizer.js";
+} from "../../src/capabilities/handlers/acceptance/report-builder.js";
+import { maybeAppendAcceptanceReportAtFinalOutput } from "../../src/capabilities/handlers/acceptance/output-finalizer.js";
 
 test("acceptance report includes summary detail paths", () => {
   const report = buildAcceptanceReport({

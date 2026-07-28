@@ -9,7 +9,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const pluginRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+const pluginRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const projectRoot = path.resolve(pluginRoot, "../..");
 
 const SCAN_ROOTS = [
@@ -24,7 +24,7 @@ const OLD_ENTRYPOINT_PATTERN = /\b(?:workflowDialogId|selectedDialogId|selectedG
 
 const ALLOWED_LEGACY_FIELD_FILES = new Set([
   path.normalize("src/core/dialog-process-compat.js"),
-  path.normalize("frontend/components/workflow-message-card/workflowDialogProcessIdCompat.js"),
+  path.normalize("frontend/utils/workflowDialogProcessIdCompat.js"),
 ]);
 
 const AGENT_COMPAT_FILES = [

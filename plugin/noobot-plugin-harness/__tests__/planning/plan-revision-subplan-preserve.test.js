@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createPlanRevisionHelpers } from "../src/capabilities/handlers/shared/plan/revision-helpers.js";
+import { createPlanRevisionHelpers } from "../../src/capabilities/handlers/shared/plan/revision-helpers.js";
 
 test("planning revision full-main replacement preserves existing first-level sub-plans for retained main steps", () => {
   const ctx = {

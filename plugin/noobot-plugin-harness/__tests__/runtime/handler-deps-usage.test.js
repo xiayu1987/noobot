@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const handlersRoot = path.resolve(__dirname, "../src/capabilities/handlers");
+const handlersRoot = path.resolve(__dirname, "../../src/capabilities/handlers");
 const ALLOWED_UNUSED_EXPORTS = Object.freeze({
   planning: new Set(["getTaskTemplate"]),
   guidance: new Set(["GUIDANCE_WEB_TOOL_NAMES"]),

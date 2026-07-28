@@ -9,14 +9,14 @@ import {
   handleDeltaStreamEvent,
   handleDoneStreamEvent,
   handleThinkingStreamEvent,
-} from "../../../../src/modules/chat/runtime/engine/streamHandlers.js";
-import { buildViewMessage } from "../../../../src/modules/chat/model/messageModel.js";
-import { classifyRealtimeLog } from "../../../../src/app/state/sessionMessageState.js";
+} from "../../../../../../src/modules/chat/runtime/engine/streamHandlers.js";
+import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
+import { classifyRealtimeLog } from "../../../../../../src/app/state/sessionMessageState.js";
 import {
   selectToolTimeline,
   selectToolTimelineLogs,
-} from "../../../../src/modules/chat/runtime/engine/toolTimeline.js";
-import { dispatchTurnEnvelope } from "../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
+} from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import { dispatchTurnEnvelope } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 
 describe("chatEngine streamHandlers", () => {
   const makeBotMessage = () => ({

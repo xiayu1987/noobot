@@ -6,12 +6,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseWorkflowDslText } from "../src/protocol/text-protocol.js";
+import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 import {
   resolveWorkflowRunId,
   createWorkflowNodeIdentity,
   buildWorkflowPlanningNodeSessions,
-} from "../src/core/workflow-run-identity.js";
+} from "../../src/core/workflow-run-identity.js";
 
 test("workflow run and node identities are stable and attempt-scoped", () => {
   const ctx = { sessionId: "s1", dialogProcessId: "d1", workflowRunId: "run-explicit" };

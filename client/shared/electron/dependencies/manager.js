@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createDependencyDetector } from "./dependency-detect.js";
-import { createDependencyInstaller } from "./dependency-installer.js";
-import { createMacDependencyInstallerTools } from "./dependency-managed-mac.js";
-import { createDependencyProcessTools } from "./dependency-process.js";
+import { createDependencyDetector } from "./detect.js";
+import { createDependencyInstaller } from "./installer.js";
+import { createMacDependencyInstallerTools } from "./managed-mac.js";
+import { createDependencyProcessTools } from "./process.js";
 
 export function createDesktopDependencyManager({
   app,

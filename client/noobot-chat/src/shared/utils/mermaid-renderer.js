@@ -3,9 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { loadMermaid } from "../../app/entrypoints.js";
-
 let mermaidInitialized = false;
+let mermaidModulePromise = null;
+
+function loadMermaid() {
+  if (!mermaidModulePromise) {
+    mermaidModulePromise = import("mermaid").then((module) => module.default || module);
+  }
+  return mermaidModulePromise;
+}
 
 async function ensureMermaidInitialized() {
   const mermaid = await loadMermaid();

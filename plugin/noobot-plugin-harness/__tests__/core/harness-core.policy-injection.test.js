@@ -9,18 +9,18 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../agent/src/system-core/hook/index.js";
-import { registerNoobotPlugin } from "../src/index.js";
-import { normalizeHookContextProtocol } from "../src/core/context.js";
-import { injectPrompt, resolvePolicyPromptSelection } from "../src/tracing/buffer-manager.js";
-import { buildDefaultPolicyPrompt } from "../src/tracing/policy-prompt-matrix.js";
+import { createAgentHookManager } from "../../../../agent/src/system-core/hook/index.js";
+import { registerNoobotPlugin } from "../../src/index.js";
+import { normalizeHookContextProtocol } from "../../src/core/context.js";
+import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
+import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
   applyDynamicPolicyPromptFromText,
   buildDynamicPolicyPromptProtocolInstruction,
-} from "../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
-import { ensureHarnessBucket } from "../src/capabilities/handlers/shared.js";
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../src/capabilities/handlers/shared/constants.js";
-import { exists, waitForFile, readJsonl } from "./test-helpers.js";
+} from "../../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
+import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
+import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
+import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
 test("harness policy prompt is promoted to system when stale policy exists in messageBlocks", async () => {
   const policyMessage = {
@@ -263,4 +263,3 @@ test("harness policy selection resolver maps scenario to i18n keys", () => {
     "harnessPolicyProgrammingPrompt",
   );
 });
-

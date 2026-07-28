@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { setCaptureFlagStateWithMeta } from "../src/capabilities/pending-cleanup.js";
+import { setCaptureFlagStateWithMeta } from "../../src/capabilities/pending-cleanup.js";
 
 test("setCaptureFlagStateWithMeta manages planUpdateCapturePending lifecycle", () => {
   const state = {

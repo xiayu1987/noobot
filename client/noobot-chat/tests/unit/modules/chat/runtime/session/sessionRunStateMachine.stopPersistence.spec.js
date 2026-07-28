@@ -30,7 +30,7 @@ import {
   resolveSessionRunMessageRuntimeView,
   resolveSessionRunMessageRuntimePatch,
   resolveSessionRunStateForMessage,
-} from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+} from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 
 function installStorage() {
   const map = new Map();

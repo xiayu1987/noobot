@@ -38,6 +38,7 @@
     "noobot-i18n": "file:../../i18n"
   },
   "devDependencies": {
+    "@noobot/client-shared": "file:../shared",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.11",
     "es-module-lexer": "^2.1.0",

@@ -9,21 +9,21 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../src/core/options.js";
-import { normalizeHookContextProtocol } from "../src/core/context.js";
-import { appendJsonlBuffered, flushAllJsonlBuffers } from "../src/store/store.js";
-import { createCapabilityRuntime } from "../src/capabilities/runtime.js";
-import { HARNESS_HOOK_POINTS } from "../src/core/constants.js";
-import { inferFsmTarget, HARNESS_FSM_STATES } from "../src/fsm/transitions.js";
-import { buildEvent } from "../src/data/record-builders.js";
-import { createGuidanceHandler } from "../src/capabilities/handlers/guidance.js";
-import { createPlanningHandler } from "../src/capabilities/handlers/planning.js";
-import { markGuidanceSummarizedMessages } from "../src/capabilities/handlers/guidance/signal-tracker.js";
-import { invokeWithReasoningRetry } from "../src/capabilities/handlers/shared/model/invocation-utils.js";
+import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
+import { normalizeHookContextProtocol } from "../../src/core/context.js";
+import { appendJsonlBuffered, flushAllJsonlBuffers } from "../../src/store/store.js";
+import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
+import { HARNESS_HOOK_POINTS } from "../../src/core/constants.js";
+import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
+import { buildEvent } from "../../src/data/record-builders.js";
+import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { createPlanningHandler } from "../../src/capabilities/handlers/planning.js";
+import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
+import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
   markMessagesSummarized,
   relaySeparateModelOutputAsUserMessage,
-} from "../src/capabilities/handlers/shared.js";
+} from "../../src/capabilities/handlers/shared.js";
 
 
 

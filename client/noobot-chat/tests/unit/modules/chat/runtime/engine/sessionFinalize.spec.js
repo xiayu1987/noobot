@@ -7,8 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   finalizeStoppedSessionDetail,
   refreshFinalSessionDetail,
-} from "../../../../src/modules/chat/runtime/engine/sessionFinalize.js";
-import { RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+} from "../../../../../../src/modules/chat/runtime/engine/sessionFinalize.js";
+import { RoleEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("sessionFinalize", () => {
   it("refreshes the current session after a stopped final event", async () => {

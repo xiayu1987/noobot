@@ -5,9 +5,9 @@
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
-import { clientFilePath } from "../../../../../../shared/path-resolver.js";
+import { clientFilePath } from "@noobot/client-shared/path-resolver";
 
-const projectRoot = clientFilePath.resolve(import.meta.dirname, "../../../../../");
+const projectRoot = clientFilePath.resolve(import.meta.dirname, "../../../../../../");
 const source = (relativePath) => readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8");
 
 const files = {

@@ -6,10 +6,10 @@
 import { describe, expect, it } from "vitest";
 import { computed, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import { useChatStore } from "../../../src/modules/chat/stores/useChatStore.js";
-import { applyTurnTerminalResolution, selectTurnMessageRuntime } from "../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { SESSION_RUN_EVENT } from "../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "../../../../../shared/turn-lifecycle-protocol.mjs";
+import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
+import { applyTurnTerminalResolution, selectTurnMessageRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { createTurnTerminalResolution } from "../../../../../../../shared/turn-lifecycle-protocol.mjs";
 
 function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
   const revision = 100;

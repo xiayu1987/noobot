@@ -6,13 +6,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildAcceptanceReport } from "../src/capabilities/handlers/acceptance/report-builder.js";
+import { buildAcceptanceReport } from "../../src/capabilities/handlers/acceptance/report-builder.js";
 import {
   buildPlanChecklistSystemContent,
   resolveCompletePlanChecklistText,
   resolvePlanChecklistText,
-} from "../src/capabilities/handlers/shared/plan/checklist-context.js";
-import { applyPhaseAcceptanceReportToPlanStatus } from "../src/capabilities/handlers/shared/plan/acceptance-status.js";
+} from "../../src/capabilities/handlers/shared/plan/checklist-context.js";
+import { applyPhaseAcceptanceReportToPlanStatus } from "../../src/capabilities/handlers/shared/plan/acceptance-status.js";
 
 test("acceptance report checklist includes first-level sub plans from planText", () => {
   const report = buildAcceptanceReport({

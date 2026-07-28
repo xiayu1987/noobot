@@ -5,12 +5,12 @@
  */
 import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
-import { clientFilePath as path } from "../path-resolver.js";
+import { clientFilePath as path } from "../../path-resolver.js";
 import {
   buildDependencyRuntimeEnv,
   summarizeDependencyRuntimeEnv,
   summarizeDependencySources,
-} from "./dependency-runtime-env.js";
+} from "../dependencies/runtime-env.js";
 
 export function createDesktopServiceManager({
   app,

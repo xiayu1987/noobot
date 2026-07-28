@@ -8,7 +8,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
-import { appendDesktopLogLine, DESKTOP_LOG_FILES, createStartupLogger } from "../../electron/startup-logging.js";
+import { appendDesktopLogLine, DESKTOP_LOG_FILES, createStartupLogger } from "../../electron/runtime/logging.js";
 
 function waitForLogWrites() {
   return new Promise((resolve) => setTimeout(resolve, 40));

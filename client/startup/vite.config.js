@@ -5,7 +5,7 @@
  */
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
-import { clientFilePath as path } from "../shared/path-resolver.js";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);

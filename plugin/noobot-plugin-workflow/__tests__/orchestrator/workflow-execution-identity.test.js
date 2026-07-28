@@ -6,9 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseWorkflowDslText } from "../src/protocol/text-protocol.js";
-import { runWorkflowExecution } from "../src/core/orchestrator/execution-runner.js";
-import { buildWorkflowPlanningNodeSessions } from "../src/core/workflow-run-identity.js";
+import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
+import { runWorkflowExecution } from "../../src/core/orchestrator/execution-runner.js";
+import { buildWorkflowPlanningNodeSessions } from "../../src/core/workflow-run-identity.js";
 
 function buildSemantic() {
   return parseWorkflowDslText([

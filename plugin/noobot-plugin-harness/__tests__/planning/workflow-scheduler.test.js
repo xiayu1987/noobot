@@ -11,7 +11,7 @@ import {
   WORKFLOW_SCHEDULER_ORDER,
   resolveWorkflowActionDecision,
   resolveWorkflowActionExecutor,
-} from "../src/capabilities/handlers/shared/workflow/scheduler.js";
+} from "../../src/capabilities/handlers/shared/workflow/scheduler.js";
 
 test("workflow scheduler order is described by one flow/subflow config item", () => {
   assert.deepEqual(

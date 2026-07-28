@@ -5,7 +5,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { useChatStore } from "../../../src/modules/chat/stores/useChatStore.js";
+import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 
 function messageEvent(eventType, data = {}) {
   return {

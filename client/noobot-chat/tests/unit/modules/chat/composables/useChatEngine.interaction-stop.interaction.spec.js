@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createHarness, assistantMessage, emitChannelState } from "./helpers/useChatEngineHarness.js";
-import { StreamEventEnum, RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { createHarness, assistantMessage, emitChannelState } from "../helpers/useChatEngineHarness.js";
+import { StreamEventEnum, RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.interaction-stop: interaction", () => {
   it("expired channel_state schedules session refresh", async () => {

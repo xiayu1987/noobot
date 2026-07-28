@@ -11,7 +11,7 @@ import {
   markSummarized,
   replaceMessages,
   writeMessageBlocks,
-} from "../src/core/message-store.js";
+} from "../../src/core/message-store.js";
 
 test("message store API appends messages and keeps block arrays synchronized", () => {
   const ctx = { messages: [], messageBlocks: { system: [], history: [], incremental: [] } };

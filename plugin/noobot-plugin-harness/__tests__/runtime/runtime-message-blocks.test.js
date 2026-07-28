@@ -6,8 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createCapabilityRuntime } from "../src/capabilities/runtime.js";
-import { resolveMainModelFinalMessages } from "../../../agent/src/system-core/session/utils/context-window-normalizer.js";
+import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
+import { resolveMainModelFinalMessages } from "../../../../agent/src/system-core/session/utils/context-window-normalizer.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
   const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};

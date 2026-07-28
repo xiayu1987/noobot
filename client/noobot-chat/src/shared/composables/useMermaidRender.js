@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { nextTick, onMounted, onUpdated, ref } from "vue";
-import { renderMermaidInElement } from "../../../../shared/utils/mermaid-renderer.js";
+import { renderMermaidInElement } from "../utils/mermaid-renderer.js";
 
 export function useMermaidRender() {
   const mermaidHostRef = ref(null);
@@ -14,21 +14,13 @@ export function useMermaidRender() {
       try {
         await renderMermaidInElement(mermaidHostRef.value);
       } catch {
-
+        // Rendering failures must not interrupt message display.
       }
     });
   }
 
-  onMounted(() => {
-    scheduleMermaidRender();
-  });
+  onMounted(scheduleMermaidRender);
+  onUpdated(scheduleMermaidRender);
 
-  onUpdated(() => {
-    scheduleMermaidRender();
-  });
-
-  return {
-    mermaidHostRef,
-    scheduleMermaidRender,
-  };
+  return { mermaidHostRef, scheduleMermaidRender };
 }
