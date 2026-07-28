@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "../config.js";
-import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS, UPSTREAM_CLOSE_REASON } from "../constants.js";
-import { nowMs } from "../utils.js";
+import { config } from "../../shared/config.js";
+import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS, UPSTREAM_CLOSE_REASON } from "../../shared/constants.js";
+import { nowMs } from "../../shared/utils.js";
 
 class CleanupMethods {
 

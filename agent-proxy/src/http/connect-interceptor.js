@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "./config.js";
-import { AGENT_PROXY_ERROR } from "./constants.js";
+import { config } from "../shared/config.js";
+import { AGENT_PROXY_ERROR } from "../shared/constants.js";
 import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
-import { buildClientPermissions } from "./utils.js";
+import { buildClientPermissions } from "../shared/utils.js";
 import {
   collectRequestBody,
   writeProxyError,

@@ -3,15 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { channelstoreMethods } from "./channel-manager/channel-store.js";
-import { subscriberbroadcastMethods } from "./channel-manager/subscriber-broadcast.js";
-import { upstreamconnectionMethods } from "./channel-manager/upstream-connection.js";
-import { channelflowMethods } from "./channel-manager/channel-flow.js";
-import { reconnectMethods } from "./channel-manager/reconnect.js";
-import { cleanupMethods } from "./channel-manager/cleanup.js";
-import { UpstreamTransportSupervisor } from "./upstream-transport-supervisor.js";
+import { channelstoreMethods } from "./manager/channel-store.js";
+import { subscriberbroadcastMethods } from "./manager/subscriber-broadcast.js";
+import { upstreamconnectionMethods } from "./manager/upstream-connection.js";
+import { channelflowMethods } from "./manager/channel-flow.js";
+import { reconnectMethods } from "./manager/reconnect.js";
+import { cleanupMethods } from "./manager/cleanup.js";
+import { UpstreamTransportSupervisor } from "../websocket/upstream-transport-supervisor.js";
 import { CommandRegistry } from "./command-registry.js";
-import { config } from "./config.js";
+import { config } from "../shared/config.js";
 import { ChannelEventJournal } from "./channel-event-journal.js";
 import { resolveOptionalSessionId } from "@noobot/runtime-events/session-id";
 

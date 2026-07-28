@@ -5,8 +5,8 @@
  */
 import http from "node:http";
 import https from "node:https";
-import { config } from "./config.js";
-import { AGENT_PROXY_ERROR } from "./constants.js";
+import { config } from "../shared/config.js";
+import { AGENT_PROXY_ERROR } from "../shared/constants.js";
 import {
   localizeAgentProxyMessage,
   resolveLocaleFromRequest,
@@ -17,7 +17,7 @@ import {
   writeAgentProxyUpstreamRequestFailedEvent,
   writeAgentProxyHttpTraceEvent,
   writeAgentProxyHttpLifecycleEvent,
-} from "./http-runtime-events.js";
+} from "../runtime-events/http-runtime-events.js";
 
 function resolveSafeErrorMessage(statusCode = 502, message = "Bad Gateway") {
   if (Number(statusCode || 500) < 500) {

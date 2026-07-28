@@ -6,8 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { DownstreamConnectionRegistry } from "../src/downstream-connection-registry.js";
-import { UpstreamTransportSupervisor } from "../src/upstream-transport-supervisor.js";
+import { DownstreamConnectionRegistry } from "../src/websocket/downstream-connection-registry.js";
+import { UpstreamTransportSupervisor } from "../src/websocket/upstream-transport-supervisor.js";
 
 class FakeWebSocket extends EventEmitter {
   static OPEN = 1;

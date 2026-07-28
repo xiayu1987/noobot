@@ -5,10 +5,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ChannelEventJournal } from "../src/channel-event-journal.js";
-import { CommandRegistry } from "../src/command-registry.js";
-import { ChannelManager } from "../src/channel-manager.js";
-import { config } from "../src/config.js";
+import { ChannelEventJournal } from "../src/channel/channel-event-journal.js";
+import { CommandRegistry } from "../src/channel/command-registry.js";
+import { ChannelManager } from "../src/channel/channel-manager.js";
+import { config } from "../src/shared/config.js";
 
 test("channel event journal is the bounded ordered replay source", () => {
   const journal = new ChannelEventJournal({ maxEvents: 2 });

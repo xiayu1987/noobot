@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "./config.js";
+import { config } from "../shared/config.js";
 import {
   AGENT_PROXY_ERROR,
   CHANNEL_EVENT,
@@ -13,14 +13,14 @@ import {
   CONVERSATION_SOURCE_EVENT,
   UPSTREAM_CLOSE_REASON,
   WS_ACTION,
-} from "./constants.js";
+} from "../shared/constants.js";
 import {
   writeAgentProxyInvalidJsonPayloadEvent,
   writeAgentProxyWebSocketLifecycleEvent,
   writeAgentProxyRouteLifecycleEvent,
-} from "./ws-runtime-events.js";
-import { writeAgentProxyRouteDebugEvent } from "./route-debug-runtime-events.js";
-import { ensureConnectionId } from "./utils.js";
+} from "../runtime-events/ws-runtime-events.js";
+import { writeAgentProxyRouteDebugEvent } from "../runtime-events/route-debug-runtime-events.js";
+import { ensureConnectionId } from "../shared/utils.js";
 
 function resolveRawMessageInfo(rawData) {
   const text = String(rawData || "");

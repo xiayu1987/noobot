@@ -7,9 +7,9 @@ import {
   AGENT_PROXY_ERROR,
   CHANNEL_EVENT,
   CONVERSATION_STATE,
-} from "../constants.js";
-import { config } from "../config.js";
-import { ensureConnectionId, nowMs, resolveMessageEventTrace } from "../utils.js";
+} from "../../shared/constants.js";
+import { config } from "../../shared/config.js";
+import { ensureConnectionId, nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
 import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 
 class SubscriberBroadcastMethods {

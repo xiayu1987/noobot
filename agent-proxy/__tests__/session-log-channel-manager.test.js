@@ -6,9 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ChannelManager } from "../src/channel-manager.js";
-import { createChannelKey } from "../src/utils.js";
-import { CONVERSATION_SOURCE_EVENT, CONVERSATION_STATE } from "../src/constants.js";
+import { ChannelManager } from "../src/channel/channel-manager.js";
+import { createChannelKey } from "../src/shared/utils.js";
+import { CONVERSATION_SOURCE_EVENT, CONVERSATION_STATE } from "../src/shared/constants.js";
 
 test("ChannelManager writes message and state logs to business session", () => {
   const records = [];
