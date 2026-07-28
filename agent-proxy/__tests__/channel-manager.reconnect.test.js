@@ -6,8 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ChannelManager } from "../src/channel-manager.js";
-import { createChannelKey } from "../src/utils.js";
+import { ChannelManager } from "../src/channel/channel-manager.js";
+import { createChannelKey } from "../src/shared/utils.js";
 
 function createMockSocket() {
   return {

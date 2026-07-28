@@ -9,7 +9,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { writeAgentProxyHttpServerListenStartedEvent } from '../src/startup-events.js';
+import { writeAgentProxyHttpServerListenStartedEvent } from '../src/runtime-events/startup-events.js';
 
 async function waitForFile(filePath, timeoutMs = 5000) {
   const startedAt = Date.now();

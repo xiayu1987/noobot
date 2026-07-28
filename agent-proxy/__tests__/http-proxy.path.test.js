@@ -12,8 +12,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { config } from "../src/config.js";
-import { normalizeProxyPathname, proxyHttpRequest } from "../src/http-proxy.js";
+import { config } from "../src/shared/config.js";
+import { normalizeProxyPathname, proxyHttpRequest } from "../src/http/http-proxy.js";
 
 function createMockRequest({ method = "POST", url = "/", headers = {}, body = "" } = {}) {
   const request = new PassThrough();

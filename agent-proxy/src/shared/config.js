@@ -12,7 +12,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 function loadFileConfig() {
   try {
     const currentDir = path.dirname(fileURLToPath(import.meta.url));
-    const configPath = path.resolve(currentDir, "../agent-proxy.config.json");
+    const configPath = path.resolve(currentDir, "../../agent-proxy.config.json");
     if (!existsSync(configPath)) return {};
     const raw = readFileSync(configPath, "utf8");
     const parsed = JSON.parse(String(raw || "{}"));

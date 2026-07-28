@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "../config.js";
+import { config } from "../../shared/config.js";
 import {
   CHANNEL_EVENT,
   CHANNEL_RETENTION_PHASE,
@@ -12,9 +12,9 @@ import {
   CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
   RECONNECT_SUGGESTION,
-} from "../constants.js";
-import { ensureConnectionId, nowMs } from "../utils.js";
-import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
+} from "../../shared/constants.js";
+import { ensureConnectionId, nowMs } from "../../shared/utils.js";
+import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 
 class ReconnectMethods {
 

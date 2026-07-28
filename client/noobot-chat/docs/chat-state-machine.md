@@ -250,7 +250,7 @@ reconnect
 - 前端实时状态处理：`src/modules/chat/composables/useChatEngine.js`
 - 前端回放状态处理：`src/modules/chat/composables/useReconnectReplay.js`
 - Interaction 契约：`docs/interaction-contract.md`
-- 状态来源与广播：`agent-proxy/src/channel-manager.js`
+- 状态来源与广播：`agent-proxy/src/channel/channel-manager.js`
 - 状态测试：
   - `tests/unit/composables/chat/useChatEngine.spec.js`
   - `tests/unit/composables/chat/useReconnectReplay.spec.js`

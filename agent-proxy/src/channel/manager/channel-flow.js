@@ -12,9 +12,9 @@ import {
   CONVERSATION_SOURCE_EVENT,
   UPSTREAM_CLOSE_REASON,
   WS_ACTION,
-} from "../constants.js";
-import { normalizeApiKey, createChannelKey, buildFingerprint } from "../utils.js";
-import { writeAgentProxyRouteDebugEvent } from "../route-debug-runtime-events.js";
+} from "../../shared/constants.js";
+import { normalizeApiKey, createChannelKey, buildFingerprint } from "../../shared/utils.js";
+import { writeAgentProxyRouteDebugEvent } from "../../runtime-events/route-debug-runtime-events.js";
 
 class ChannelFlowMethods {
 

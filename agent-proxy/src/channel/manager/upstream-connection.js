@@ -3,16 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "../config.js";
+import { config } from "../../shared/config.js";
 import {
   AGENT_PROXY_ERROR,
   CHANNEL_EVENT,
   CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   UPSTREAM_CLOSE_REASON,
-} from "../constants.js";
-import { nowMs, buildUpstreamUrl, resolveMessageEventTrace } from "../utils.js";
-import { writeAgentProxyRouteLifecycleEvent } from "../ws-runtime-events.js";
+} from "../../shared/constants.js";
+import { nowMs, buildUpstreamUrl, resolveMessageEventTrace } from "../../shared/utils.js";
+import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 
 class UpstreamConnectionMethods {
 

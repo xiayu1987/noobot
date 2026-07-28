@@ -42,7 +42,7 @@ test('connect interceptor writes sanitized system event for invalid upstream bas
   process.env.AGENT_PROXY_UPSTREAM_HTTP_BASE = 'http://[?apikey=secret-token';
 
   try {
-    const moduleUrl = `../src/connect-interceptor.js?case=${Date.now()}`;
+    const moduleUrl = `../src/http/connect-interceptor.js?case=${Date.now()}`;
     const { interceptConnectRequest } = await import(moduleUrl);
     const response = createMockResponse();
     await interceptConnectRequest(

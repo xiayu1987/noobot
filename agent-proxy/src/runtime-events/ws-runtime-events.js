@@ -8,7 +8,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
-import { ensureConnectionId } from "./utils.js";
+import { ensureConnectionId } from "../shared/utils.js";
 
 function resolveRawDataInfo(rawData) {
   const rawDataType = Buffer.isBuffer(rawData) ? "buffer" : typeof rawData;

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "../config.js";
+import { config } from "../../shared/config.js";
 import {
   CHANNEL_EVENT,
   CHANNEL_RETENTION_PHASE,
@@ -12,8 +12,8 @@ import {
   CONVERSATION_SCOPE_KEY,
   CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
-} from "../constants.js";
-import { normalizeApiKey, nowMs, resolveMessageEventTrace } from "../utils.js";
+} from "../../shared/constants.js";
+import { normalizeApiKey, nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
 import {
   TURN_EVENT,
   TURN_STATE,
