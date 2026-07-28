@@ -11,12 +11,12 @@ import {
   reduceToolTimeline,
   TOOL_SEQUENCE_DOMAIN,
   TOOL_TIMELINE_AUTHORITY,
-} from "../../../../../src/composables/chat/chatEngine/toolTimeline.js";
+} from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import {
   isToolActivityLog,
   mergeActivityTimelines,
   reduceActivityTimeline,
-} from "../../../../../src/composables/chat/chatEngine/activityTimeline.js";
+} from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 
 const authoritativeEnvelope = (overrides = {}) => ({
   eventId: "evt-end",

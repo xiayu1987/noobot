@@ -7,4 +7,4 @@ export {
   resolveAttachmentAccessMeta,
   resolveBaseName,
   resolveParsedResultAccessMeta,
-} from "../services/api/attachmentAccess.js";
+} from "../infrastructure/api/attachments/attachmentAccess.js";

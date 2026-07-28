@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { lockChatMessageScrollSyncToAnchor } from "../chatMessageScrollSync.js";
+import { lockChatMessageScrollSyncToAnchor } from "../runtime/chatMessageScrollSync.js";
 
 export function normalizeChatMessageNavigatorAnchor(item = {}) {
   return String(item?.id || "").trim();

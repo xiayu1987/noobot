@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createChatWebSocketClient } from "../../../../src/services/ws/chatWebSocketClient.js";
-import { StreamEventEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
+import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import { MockWebSocket, setupWebSocketTestHooks } from "./chatWebSocketClientTestFixtures.js";
 
 setupWebSocketTestHooks();

@@ -10,8 +10,8 @@ import {
   emitMessageEvent,
 } from "../../../../../agent/src/system-core/event/message-event-stream.js";
 import { createRunEventListener } from "../../../../../service/ws/chat-websocket/run-event-listener.js";
-import { shouldProjectSubSessionEvent } from "../../../src/composables/chat/chatEngine/sendFlow.js";
-import { useChatStore } from "../../../src/shared/stores/useChatStore.js";
+import { shouldProjectSubSessionEvent } from "../../../src/modules/chat/runtime/engine/sendFlow.js";
+import { useChatStore } from "../../../src/modules/chat/stores/useChatStore.js";
 
 function deliverPacketToStore(store, frame) {
   const wireFrame = JSON.parse(JSON.stringify(frame));

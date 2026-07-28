@@ -89,23 +89,23 @@ export const ChatComposer = defineAsyncComponent(() =>
 );
 
 export const ChatMessageListPanel = defineAsyncComponent(() =>
-  import("./components/ChatMessageListPanel.vue")
+  import("../modules/chat/components/navigation/ChatMessageListPanel.vue")
 );
 
 export const SessionSidebar = defineAsyncComponent(() =>
-  import("../modules/session/SessionSidebar.vue")
+  import("../modules/session/components/SessionSidebar.vue")
 );
 
 export const WorkspacePanel = defineAsyncComponent(() =>
-  import("../modules/settings/views/WorkspacePanel.vue")
+  import("../modules/settings/panels/WorkspacePanel.vue")
 );
 
 export const UserSettingsPanel = defineAsyncComponent(() =>
-  import("../modules/settings/views/UserSettingsPanel.vue")
+  import("../modules/settings/panels/UserSettingsPanel.vue")
 );
 
 export const ConfigParamsPanel = defineAsyncComponent(() =>
-  import("../modules/settings/views/ConfigParamsPanel.vue")
+  import("../modules/settings/panels/ConfigParamsPanel.vue")
 );
 
 export const UserInteractionForm = defineAsyncComponent(() =>
@@ -113,7 +113,7 @@ export const UserInteractionForm = defineAsyncComponent(() =>
 );
 
 export const ConversationStateDebugPanel = defineAsyncComponent(() =>
-  import("../modules/debug/ConversationStateDebugPanel.vue")
+  import("../modules/debug/components/ConversationStateDebugPanel.vue")
 );
 
 export function installElementPlusComponents(app) {

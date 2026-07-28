@@ -10,9 +10,9 @@ import {
   __resetThinkingDetailCacheForTests,
   getCachedThinkingDetail,
   resolveThinkingDetailIdentity,
-} from "../../../src/shared/message/thinkingDetailCache.js";
-import { normalizeThinkingToolLogs } from "../../../src/composables/infra/thinkingDetailModel.js";
-import ThinkingPanelRealtime from "../../../src/shared/message/components/ThinkingPanelRealtime.vue";
+} from "../../../src/modules/chat/model/thinkingDetailCache.js";
+import { normalizeThinkingToolLogs } from "../../../src/modules/chat/model/thinkingDetailModel.js";
+import ThinkingPanelRealtime from "../../../src/modules/chat/components/thinking/ThinkingPanelRealtime.vue";
 
 async function flushAsync() {
   for (let index = 0; index < 20; index += 1) {

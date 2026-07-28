@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildSessionDetailProjection } from "../../../../../src/composables/chat/chatList/sessionDetailProjection.js";
+import { buildSessionDetailProjection } from "../../../../../src/modules/session/model/list/sessionDetailProjection.js";
 
 const identity = (item) => ({ ...item });
 

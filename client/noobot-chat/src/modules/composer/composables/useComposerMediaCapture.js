@@ -5,7 +5,7 @@
  */
 import { computed, onBeforeUnmount, onUpdated, ref, watchEffect } from "vue";
 import { ElMessage } from "element-plus";
-import { nowMs } from "../../../composables/infra/timeFields.js";
+import { nowMs } from "../../chat/model/timeFields.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const MIC_MAX_DURATION_SECONDS = TIME_THRESHOLDS.client.micMaxDurationSeconds;

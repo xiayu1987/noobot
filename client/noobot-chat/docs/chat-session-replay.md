@@ -5,8 +5,8 @@
 > 原因：本文与当前实现存在重复/分叉（尤其是状态机与重连收敛逻辑），不再作为变更依据。  
 > 请以以下文档/代码为准：  
 > 1. `docs/chat-state-machine.md`（状态机与状态收敛）  
-> 2. `src/composables/chat/useChatEngine.js`  
-> 3. `src/composables/chat/useReconnectReplay.js`
+> 2. `src/modules/chat/composables/useChatEngine.js`
+> 3. `src/modules/chat/composables/useReconnectReplay.js`
 
 > 状态机总览已拆分到：`docs/chat-state-machine.md`
 
@@ -34,9 +34,9 @@ activeSessionId
 
 相关位置：
 
-- `src/composables/chat/useChatEngine.js`：正常发送完成时同步 id。
-- `src/composables/chat/useChatSession.js`：reconnect DONE 快照时同步 id。
-- `src/composables/chat/useChatList.js`：查找 session 时同时按 `id` 和 `backendSessionId` 匹配。
+- `src/modules/chat/composables/useChatEngine.js`：正常发送完成时同步 id。
+- `src/modules/chat/composables/useChatSession.js`：reconnect DONE 快照时同步 id。
+- `src/modules/chat/composables/useChatList.js`：查找 session 时同时按 `id` 和 `backendSessionId` 匹配。
 
 ### 1.2 agent-proxy 是回放/running 状态来源
 
@@ -280,7 +280,7 @@ role + (dialogProcessId || taskId || tool_call_id || index) + index
 
 相关位置：
 
-- `src/app/components/ChatMessageListPanel.vue#getMessageRenderKey()`
+- `src/modules/chat/components/navigation/ChatMessageListPanel.vue#getMessageRenderKey()`
 
 ## 8. 用户交互弹窗去重
 
@@ -379,7 +379,7 @@ agent-proxy 在 `interaction_pending` 的 `channel_state` / `conversationStates`
 
 相关位置：
 
-- `src/composables/chat/useAgentInteraction.js`
+- `src/modules/chat/composables/useAgentInteraction.js`
 
 ## 9. 常见坑 checklist
 
@@ -432,10 +432,10 @@ applyDoneMessagesFromReconnect:
 
 | 文件 | 职责 | 注意 |
 | --- | --- | --- |
-| `src/composables/infra/sessionIdentity.js` | session id 归一、按 `id/backendSessionId` 匹配、把本地临时会话提升为后端 sessionId | 任何新增 session 刷新/详情逻辑都应复用这里的身份判断 |
-| `src/composables/infra/reconnectReplayModel.js` | agent-proxy replay envelope 解析、terminal 判断、dialogProcess 拆分、消息复用/patch 规则 | 这里尽量保持为无 Vue 依赖的纯逻辑，方便测试和复用 |
-| `src/composables/chat/useChatList.js` | 会话列表、详情加载、对象引用稳定 | 不要重新实现 session id 匹配规则 |
-| `src/composables/chat/useChatSession.js` | reconnect 编排与状态写入 | 只保留需要访问 `activeSession/sending/ws` 的副作用代码 |
-| `src/composables/chat/useChatEngine.js` | 正常发送流式过程 | DONE 后统一调用 session identity 提升逻辑 |
+| `src/modules/chat/model/sessionIdentity.js` | session id 归一、按 `id/backendSessionId` 匹配、把本地临时会话提升为后端 sessionId | 任何新增 session 刷新/详情逻辑都应复用这里的身份判断 |
+| `src/modules/chat/model/reconnectReplayModel.js` | agent-proxy replay envelope 解析、terminal 判断、dialogProcess 拆分、消息复用/patch 规则 | 这里尽量保持为无 Vue 依赖的纯逻辑，方便测试和复用 |
+| `src/modules/chat/composables/useChatList.js` | 会话列表、详情加载、对象引用稳定 | 不要重新实现 session id 匹配规则 |
+| `src/modules/chat/composables/useChatSession.js` | reconnect 编排与状态写入 | 只保留需要访问 `activeSession/sending/ws` 的副作用代码 |
+| `src/modules/chat/composables/useChatEngine.js` | 正常发送流式过程 | DONE 后统一调用 session identity 提升逻辑 |
 
 后续如果要继续拆，可以优先把 `useChatSession.js` 中的 reconnect 编排再单独提为 `useReconnectReplay()`，但要保持一个原则：**真正写 `activeSession.messages` 的入口必须少且明确**，不要为了拆文件反而增加隐式写入入口。

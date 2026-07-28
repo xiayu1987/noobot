@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export { buildViewMessage, foldConversationMessages } from "../composables/infra/messageModel.js";
-export { buildSessionDetailProjection } from "../composables/chat/chatList/sessionDetailProjection.js";
-export { mergeCanonicalSessionDetail } from "../composables/infra/sessionDetailMerge.js";
-export { buildActivityTimelineFromLegacyLogs } from "../composables/chat/chatEngine/activityTimeline.js";
-export { buildToolTimelineFromLegacyLogs } from "../composables/chat/chatEngine/toolTimeline.js";
+export { buildViewMessage, foldConversationMessages } from "../modules/chat/model/messageModel.js";
+export { buildSessionDetailProjection } from "../modules/session/model/list/sessionDetailProjection.js";
+export { mergeCanonicalSessionDetail } from "../modules/chat/model/sessionDetailMerge.js";
+export { buildActivityTimelineFromLegacyLogs } from "../modules/chat/runtime/engine/activityTimeline.js";
+export { buildToolTimelineFromLegacyLogs } from "../modules/chat/runtime/engine/toolTimeline.js";

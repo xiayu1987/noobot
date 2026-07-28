@@ -9,7 +9,7 @@ import {
   isResendDebugEnabled,
   logResendDebug,
   setResendDebugLogSink,
-} from "../../../../../src/composables/chat/debug/resendDebugLogger.js";
+} from "../../../../../src/modules/debug/loggers/resendDebugLogger.js";
 
 describe("resendDebugLogger", () => {
   beforeEach(() => {

@@ -10,7 +10,7 @@ import {
   submitInteractionCancel,
   submitInteractionConfirm,
   updateDrawerModelVisibility,
-} from "../../../src/app/appShellEventHandlers.js";
+} from "../../../src/app/runtime/appShellEventHandlers.js";
 
 describe("appShellEventHandlers", () => {
   const translate = (key) => key;

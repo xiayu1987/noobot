@@ -5,7 +5,7 @@
  */
 import { effectScope, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
-import { useReconnect } from "../../../../src/composables/infra/useReconnect.js";
+import { useReconnect } from "../../../../src/modules/chat/composables/connectivity/useReconnect.js";
 
 describe("useReconnect", () => {
   it("deduplicates reconnect calls while promise is pending", async () => {

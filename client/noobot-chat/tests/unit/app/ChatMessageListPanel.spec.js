@@ -7,9 +7,9 @@ import { defineComponent, nextTick, onMounted, onUnmounted, reactive } from "vue
 import { mount } from "@vue/test-utils";
 import { createPinia, getActivePinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import ChatMessageListPanel from "../../../src/app/components/ChatMessageListPanel.vue";
-import { RoleEnum } from "../../../src/shared/constants/chatConstants.js";
-import { useChatStore } from "../../../src/shared/stores/useChatStore.js";
+import ChatMessageListPanel from "../../../src/modules/chat/components/navigation/ChatMessageListPanel.vue";
+import { RoleEnum } from "../../../src/modules/chat/model/chatConstants.js";
+import { useChatStore } from "../../../src/modules/chat/stores/useChatStore.js";
 
 const chatMessageItemMock = vi.hoisted(() => ({
   field: "content",
@@ -18,7 +18,7 @@ const chatMessageItemMock = vi.hoisted(() => ({
   render: null,
 }));
 
-vi.mock("../../../src/modules/message/ChatMessageItem.vue", async () => {
+vi.mock("../../../src/modules/chat/components/message/ChatMessageItem.vue", async () => {
   const { defineComponent: defineVueComponent, h, onMounted: onVueMounted, onUnmounted: onVueUnmounted } = await import("vue");
   return {
     default: defineVueComponent({

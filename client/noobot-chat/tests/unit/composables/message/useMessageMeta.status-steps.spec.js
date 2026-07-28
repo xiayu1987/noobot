@@ -6,10 +6,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref } from "vue";
-import { useMessageMeta } from "../../../../src/composables/message/useMessageMeta.js";
-import { useChatStore } from "../../../../src/shared/stores/useChatStore.js";
-import { applyTurnRuntimeEvent, applyTurnTerminalResolution } from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
-import { SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine/constants.js";
+import { useMessageMeta } from "../../../../src/modules/chat/composables/message/useMessageMeta.js";
+import { useChatStore } from "../../../../src/modules/chat/stores/useChatStore.js";
+import { applyTurnRuntimeEvent, applyTurnTerminalResolution } from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT } from "../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 
 function applyEvent(store, event) {

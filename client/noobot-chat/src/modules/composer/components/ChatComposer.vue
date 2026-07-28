@@ -15,7 +15,7 @@ import ComposerCameraDialog from "./ComposerCameraDialog.vue";
 import { useComposerMediaCapture } from "../composables/useComposerMediaCapture.js";
 import { useComposerOptions } from "../composables/useComposerOptions.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
-import { logResendDebug } from "../../../composables/chat/debug/resendDebugLogger.js";
+import { logResendDebug } from "../../debug/loggers/resendDebugLogger.js";
 
 const props = defineProps({
   modelValue: { type: String, default: "" },

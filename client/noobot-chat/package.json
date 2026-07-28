@@ -14,6 +14,7 @@
   "scripts": {
     "generate:frontend-plugin-entries": "node scripts/generate-frontend-plugin-entries.mjs",
     "check:plugin-frontend-reverse-deps": "node scripts/check-plugin-frontend-reverse-deps.mjs",
+    "check:frontend-structure": "node scripts/check-frontend-structure.mjs",
     "test:plugin-frontend-boundary-guard": "node --test scripts/check-plugin-frontend-reverse-deps.test.mjs",
     "prebuild": "npm run -s generate:frontend-plugin-entries",
     "dev": "vite",
@@ -24,7 +25,7 @@
     "serve:caddy": "bash ./deploy/run-caddy.sh",
     "serve:caddy:restart": "bash ./deploy/restart-caddy.sh",
     "check:i18n-imports": "node ../../scripts/check-i18n-imports.mjs --project=client",
-    "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
+    "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:frontend-structure && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
   },
   "dependencies": {
     "@noobot/shared": "file:../../shared",

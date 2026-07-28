@@ -13,11 +13,11 @@ import {
 import {
   BackendChannelState,
   FrontendRunState,
-} from "../../../../src/composables/chat/sessionRunStateMachine.js";
+} from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../src/shared/constants/chatConstants.js";
+} from "../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.resend replace turn", () => {
   it("resendMonotonicMessage continues generation after atomic replace-turn returns user-only snapshot", async () => {

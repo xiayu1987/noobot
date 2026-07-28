@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appShellSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/components/AppShell.vue"),
+  path.resolve(__dirname, "../../../src/app/shell/AppShell.vue"),
   "utf8",
 );
 const thinkingDetailsStateSource = readFileSync(
@@ -18,7 +18,7 @@ const thinkingDetailsStateSource = readFileSync(
   "utf8",
 );
 const useThinkingDetailsPanelSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/useThinkingDetailsPanel.js"),
+  path.resolve(__dirname, "../../../src/app/composables/useThinkingDetailsPanel.js"),
   "utf8",
 );
 const drawerPanelsStateSource = readFileSync(

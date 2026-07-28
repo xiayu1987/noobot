@@ -16,7 +16,7 @@ import {
   isSameMessageRound,
   normalizeTurnScopeIdKey,
   shouldCollectAttachmentsFromMessage,
-} from "../../../../src/composables/infra/messageIdentity.js";
+} from "../../../../src/modules/chat/model/messageIdentity.js";
 
 describe("messageIdentity", () => {
   it("normalizes compatible message identity fields", () => {

@@ -13,7 +13,7 @@ import {
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../src/shared/constants/chatConstants.js";
+} from "../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.resend final reconcile", () => {
   it("resendMonotonicMessage keeps final edited messages after backend delete fallback", async () => {

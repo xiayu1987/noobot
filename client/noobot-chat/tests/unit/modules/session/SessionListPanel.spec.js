@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessionListPanelSource = readFileSync(
-  path.resolve(__dirname, "../../../../src/modules/session/SessionListPanel.vue"),
+  path.resolve(__dirname, "../../../../src/modules/session/components/SessionListPanel.vue"),
   "utf8",
 );
 

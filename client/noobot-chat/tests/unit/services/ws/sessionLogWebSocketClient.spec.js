@@ -35,7 +35,7 @@ class MockWebSocket {
 
 async function importClient() {
   vi.resetModules();
-  return import("../../../../src/services/ws/sessionLogWebSocketClient.js");
+  return import("../../../../src/infrastructure/websocket/sessionLogWebSocketClient.js");
 }
 
 function sentRecords(socket) {

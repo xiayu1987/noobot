@@ -9,7 +9,7 @@ import {
   dispatchTurnEnvelope,
   hydrateTurnSnapshot,
   TURN_PROJECTION_SOURCE,
-} from "../../../../../src/composables/chat/chatEngine/turnProjectionStore.js";
+} from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 
 const identity = { sessionId: "session-1", turnScopeId: "turn-1" };
 const message = () => ({ ...identity, id: "message-1", messageId: "message-1", content: "" });

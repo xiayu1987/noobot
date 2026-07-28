@@ -11,13 +11,13 @@ import {
   activateRuntimeTurn,
   emitChannelState,
 } from "./helpers/useChatEngineHarness.js";
-import { createSessionDetailApplicator } from "../../../../src/composables/chat/chatList/sessionDetailApply.js";
-import { BackendChannelState, FrontendRunState } from "../../../../src/composables/chat/sessionRunStateMachine.js";
+import { createSessionDetailApplicator } from "../../../../src/modules/session/model/list/sessionDetailApply.js";
+import { BackendChannelState, FrontendRunState } from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   RoleEnum,
   StreamEventEnum,
-} from "../../../../src/shared/constants/chatConstants.js";
-import { selectToolTimelineLogs } from "../../../../src/composables/chat/chatEngine/toolTimeline.js";
+} from "../../../../src/modules/chat/model/chatConstants.js";
+import { selectToolTimelineLogs } from "../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 
 describe("useChatEngine.send-stream", () => {
   it("refreshes a stale session version without replaying the failed Turn", async () => {

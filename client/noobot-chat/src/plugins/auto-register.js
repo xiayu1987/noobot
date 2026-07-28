@@ -6,7 +6,7 @@
 import { externalFrontendPluginEntries } from "./generated/external-entries.js";
 import { contributeExtension, removePluginExtensions } from "../extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../extensions/extension-point-ids.js";
-import { createScopedAuthenticatedHttpService } from "../services/authenticatedHttpService.js";
+import { createScopedAuthenticatedHttpService } from "../infrastructure/http/authenticatedHttpService.js";
 
 const REQUIRED_FRONTEND_PLUGIN_API_VERSION = "1";
 function normalizeApiVersion(input = "") {

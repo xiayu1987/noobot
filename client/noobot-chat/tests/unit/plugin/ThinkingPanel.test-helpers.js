@@ -5,7 +5,7 @@
  */
 import { mount } from "@vue/test-utils";
 import { vi } from "vitest";
-import ThinkingPanel from "../../../src/shared/message/components/ThinkingPanel.vue";
+import ThinkingPanel from "../../../src/modules/chat/components/thinking/ThinkingPanel.vue";
 import { contributeExtension } from "../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../../../src/extensions/extension-point-ids.js";
 import { registerFrontendPlugin as registerHarnessFrontendPlugin } from "../../../../../plugin/noobot-plugin-harness/frontend/index.js";
@@ -23,7 +23,7 @@ if (!globalThis.localStorage?.getItem) {
   });
 }
 
-vi.mock("../../../src/shared/ui", async () => {
+vi.mock("../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
   return {
     BaseThinkingPanelShell: defineComponent({

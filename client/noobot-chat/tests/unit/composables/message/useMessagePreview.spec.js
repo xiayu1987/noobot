@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useMessagePreview } from "../../../../src/composables/message/useMessagePreview.js";
+import { useMessagePreview } from "../../../../src/modules/chat/composables/message/useMessagePreview.js";
 
 function createBlobResponse() {
   return {

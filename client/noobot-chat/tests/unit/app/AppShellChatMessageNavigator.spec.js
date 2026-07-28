@@ -9,29 +9,29 @@ import { fileURLToPath } from "node:url";
 import { mount } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
-import AppShellLayout from "../../../src/app/components/AppShellLayout.vue";
-import AppShellDrawers from "../../../src/app/components/AppShellDrawers.vue";
+import AppShellLayout from "../../../src/app/shell/AppShellLayout.vue";
+import AppShellDrawers from "../../../src/app/shell/AppShellDrawers.vue";
 import { openChatMessageNavigator } from "../../../src/app/state/chatMessageNavigatorState.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appShellSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/components/AppShell.vue"),
+  path.resolve(__dirname, "../../../src/app/shell/AppShell.vue"),
   "utf8",
 );
 const appShellLayoutSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/components/AppShellLayout.vue"),
+  path.resolve(__dirname, "../../../src/app/shell/AppShellLayout.vue"),
   "utf8",
 );
 const appShellDrawersSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/components/AppShellDrawers.vue"),
+  path.resolve(__dirname, "../../../src/app/shell/AppShellDrawers.vue"),
   "utf8",
 );
 const chatMessageNavigatorPanelSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/useChatMessageNavigatorPanel.js"),
+  path.resolve(__dirname, "../../../src/app/composables/useChatMessageNavigatorPanel.js"),
   "utf8",
 );
 const chatMessageScrollSyncSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/chatMessageScrollSync.js"),
+  path.resolve(__dirname, "../../../src/app/runtime/chatMessageScrollSync.js"),
   "utf8",
 );
 const chatMessageNavigatorStateSource = readFileSync(
@@ -39,7 +39,7 @@ const chatMessageNavigatorStateSource = readFileSync(
   "utf8",
 );
 const chatMessageNavigatorComponentSource = readFileSync(
-  path.resolve(__dirname, "../../../src/app/components/ChatMessageNavigator.vue"),
+  path.resolve(__dirname, "../../../src/modules/chat/components/navigation/ChatMessageNavigator.vue"),
   "utf8",
 );
 const chatMessageNavItemsStateSource = readFileSync(
@@ -180,7 +180,7 @@ describe("AppShell chat message navigator", () => {
   });
 
   it("syncs the highlighted navigator item from scroll position", () => {
-    expect(chatMessageNavigatorPanelSource).toContain('import { createChatMessageScrollSync } from "./chatMessageScrollSync.js";');
+    expect(chatMessageNavigatorPanelSource).toContain('import { createChatMessageScrollSync } from "../runtime/chatMessageScrollSync.js";');
     expect(chatMessageNavigatorPanelSource).toContain("} = createChatMessageScrollSync({");
     expect(chatMessageNavigatorPanelSource).toContain("currentMessageAnchorId,");
     expect(chatMessageNavigatorPanelSource).toContain("messageListPanelRef,");
@@ -241,7 +241,7 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain('import { Tickets } from "@element-plus/icons-vue"');
     expect(appShellLayoutSource).toContain("<el-icon><Tickets /></el-icon>");
     expect(appShellLayoutSource).toContain("<el-icon class=\"mobile-chat-message-nav-trigger-icon\"><Tickets /></el-icon>");
-    expect(chatMessageNavigatorPanelSource).toContain("} from \"./state/chatMessageNavigatorState.js\";");
+    expect(chatMessageNavigatorPanelSource).toContain("} from \"../state/chatMessageNavigatorState.js\";");
     expect(chatMessageNavigatorPanelSource).toContain("function openChatMessageNavigator()");
     expect(chatMessageNavigatorPanelSource).toContain("openChatMessageNavigatorState({");
     expect(appShellSource).toContain("chatNavigatorPanel: PSEUDO_PANEL.CHAT_NAVIGATOR");

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { prepareChatSend } from "../../../../src/composables/chat/chatEngine/sendPrepare.js";
-import { RoleEnum } from "../../../../src/shared/constants/chatConstants.js";
+import { prepareChatSend } from "../../../../src/modules/chat/runtime/engine/sendPrepare.js";
+import { RoleEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 
 function createPrepareHarness({ existingMessages = [] } = {}) {
   const activeSession = {

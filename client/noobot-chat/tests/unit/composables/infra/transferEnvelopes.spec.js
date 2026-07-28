@@ -9,7 +9,7 @@ import {
   getMessageTransferEnvelopes,
   getTransferDisplayPath,
   normalizeTransferEnvelope,
-} from "../../../../src/composables/infra/transferEnvelopes.js";
+} from "../../../../src/modules/chat/model/transferEnvelopes.js";
 
 const envelope = {
   protocol: "noobot.semantic-transfer",

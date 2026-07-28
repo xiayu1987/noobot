@@ -1,0 +1,105 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { FrontendRunState, SESSION_RUN_EVENT, USER_STOP_REQUEST_STORAGE_KEY, USER_STOP_REQUEST_TTL_MS } from "./constants.js";
+import { normalizeSessionRunEvent } from "./core.js";
+import { trim } from "./normalize.js";
+import { nowMs } from "../../model/timeFields.js";
+
+export function readStopRequests() {
+  try {
+    const storage = globalThis?.localStorage;
+    if (!storage) return [];
+    const rawValue = storage.getItem(USER_STOP_REQUEST_STORAGE_KEY);
+    const parsed = rawValue ? JSON.parse(rawValue) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeStopRequests(entries = []) {
+  try {
+    const storage = globalThis?.localStorage;
+    if (!storage) return;
+    storage.setItem(USER_STOP_REQUEST_STORAGE_KEY, JSON.stringify(entries));
+  } catch {}
+}
+
+export function isFreshStopRequest(entry = {}, timestamp = nowMs()) {
+  return Number(timestamp || 0) - Number(entry?.timestamp || 0) <= USER_STOP_REQUEST_TTL_MS;
+}
+
+export function rememberStopRequestedEvent(rawEvent = {}) {
+  const event = normalizeSessionRunEvent({
+    ...rawEvent,
+    type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
+    state: FrontendRunState.USER_STOPPING,
+  });
+  if (!event.sessionId) return event;
+  const entries = readStopRequests().filter((entry) => {
+    if (!isFreshStopRequest(entry, event.timestamp)) return false;
+    if (trim(entry.sessionId) !== event.sessionId) return true;
+    const entryDialogProcessId = trim(entry.dialogProcessId);
+    return Boolean(entryDialogProcessId && event.dialogProcessId && entryDialogProcessId !== event.dialogProcessId);
+  });
+  entries.push({
+    sessionId: event.sessionId,
+    dialogProcessId: event.dialogProcessId,
+    turnScopeId: event.turnScopeId,
+    commandId: event.commandId,
+    seq: event.seq,
+    timestamp: event.timestamp,
+  });
+  writeStopRequests(entries);
+  return event;
+}
+
+export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProcessId = "", turnScopeId = "" } = {}) {
+  const normalizedSessionId = trim(sessionId);
+  const normalizedDialogProcessId = trim(dialogProcessId);
+  const normalizedTurnScopeId = trim(turnScopeId);
+  if (!normalizedSessionId) return null;
+  const timestamp = nowMs();
+  const entries = readStopRequests();
+  const freshEntries = entries.filter((entry) => isFreshStopRequest(entry, timestamp));
+  if (freshEntries.length !== entries.length) writeStopRequests(freshEntries);
+  if (!normalizedTurnScopeId) return null;
+  const match = freshEntries.find((entry) => {
+    if (trim(entry.sessionId) !== normalizedSessionId) return false;
+    const entryTurnScopeId = trim(entry.turnScopeId);
+    return Boolean(entryTurnScopeId && entryTurnScopeId === normalizedTurnScopeId);
+  });
+  if (!match) return null;
+  return normalizeSessionRunEvent({
+    type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED,
+    state: FrontendRunState.USER_STOPPING,
+    sessionId: normalizedSessionId,
+    dialogProcessId: normalizedDialogProcessId || trim(match.dialogProcessId),
+    turnScopeId: trim(match.turnScopeId),
+    commandId: trim(match.commandId),
+    seq: Number(match.seq || 0),
+    timestamp: Number(match.timestamp || timestamp),
+    source: "remembered_stop_request",
+  });
+}
+
+export function clearRememberedStopRequests({ sessionId = "", dialogProcessId = "", turnScopeId = "" } = {}) {
+  const normalizedSessionId = trim(sessionId);
+  const normalizedDialogProcessId = trim(dialogProcessId);
+  const normalizedTurnScopeId = trim(turnScopeId);
+  if (!normalizedSessionId) return;
+  const entries = readStopRequests().filter((entry) => {
+    if (trim(entry.sessionId) !== normalizedSessionId) return true;
+    const entryTurnScopeId = trim(entry.turnScopeId);
+    if (normalizedTurnScopeId || entryTurnScopeId) {
+      return !(normalizedTurnScopeId && entryTurnScopeId && normalizedTurnScopeId === entryTurnScopeId);
+    }
+    const entryDialogProcessId = trim(entry.dialogProcessId);
+    if (!normalizedDialogProcessId || !entryDialogProcessId) return false;
+    return entryDialogProcessId !== normalizedDialogProcessId;
+  });
+  writeStopRequests(entries);
+}

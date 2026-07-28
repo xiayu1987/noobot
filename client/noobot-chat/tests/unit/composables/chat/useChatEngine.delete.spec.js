@@ -9,17 +9,17 @@ import {
   activateRuntimeTurn,
   makeSession,
 } from "./helpers/useChatEngineHarness.js";
-import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "../../../../src/composables/chat/sessionRunStateMachine.js";
-import { SESSION_DETAIL_APPLY_MODE } from "../../../../src/composables/chat/chatEngine/messageStateGuards.js";
+import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { SESSION_DETAIL_APPLY_MODE } from "../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 import {
   applyTurnRuntimeEvent,
   applyTurnTerminalResolution,
   resolveSessionTurnRuntime,
-} from "../../../../src/composables/chat/sessionRunStateMachine/turnRuntimeRegistry.js";
+} from "../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnTerminalResolution } from "../../../../../../shared/turn-lifecycle-protocol.mjs";
 import {
   RoleEnum,
-} from "../../../../src/shared/constants/chatConstants.js";
+} from "../../../../src/modules/chat/model/chatConstants.js";
 
 function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messages = [] }) {
   const revision = 100;

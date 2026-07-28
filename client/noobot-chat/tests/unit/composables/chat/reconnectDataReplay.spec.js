@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { applyReconnectDataReplay } from "../../../../src/composables/chat/reconnectReplay/reconnectDataReplay.js";
+import { applyReconnectDataReplay } from "../../../../src/modules/chat/runtime/reconnect/reconnectDataReplay.js";
 
 function createFixture(overrides = {}) {
   return {

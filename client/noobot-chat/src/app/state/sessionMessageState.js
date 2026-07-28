@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { sanitizeExecutionLogText } from "../../composables/chat/chatEngine/utils.js";
-import { formatLocalTime, nowIso } from "../../composables/infra/timeFields.js";
+import { sanitizeExecutionLogText } from "../../modules/chat/runtime/engine/utils.js";
+import { formatLocalTime, nowIso } from "../../modules/chat/model/timeFields.js";
 
 const TOOL_LOG_TYPES = new Set(["tool_call", "tool_result"]);
 

@@ -8,8 +8,8 @@ import { classifyRealtimeLog } from "../../../../../src/app/state/sessionMessage
 import {
   MESSAGE_EVENT_REDUCE_RESULT,
   reduceMessageEvent,
-} from "../../../../../src/composables/chat/chatEngine/messageEventReducer.js";
-import { selectToolTimeline, selectToolTimelineLogs } from "../../../../../src/composables/chat/chatEngine/toolTimeline.js";
+} from "../../../../../src/modules/chat/runtime/engine/messageEventReducer.js";
+import { selectToolTimeline, selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 
 function event(overrides = {}) {
   return {

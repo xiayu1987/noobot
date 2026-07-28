@@ -8,7 +8,7 @@ import {
   mapSummaryToSession,
   mergeExistingSessionState,
   reconcileSessionObject,
-} from "../../../../src/composables/chat/chatList/sessionRecords.js";
+} from "../../../../src/modules/session/model/list/sessionRecords.js";
 
 const helpers = {
   sessionTitleFromMessages: (messages, fallback = "") => messages?.[0]?.content || fallback || "title",

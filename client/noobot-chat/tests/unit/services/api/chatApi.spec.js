@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi, afterEach } from "vitest";
 
-import { buildLogWebSocketUrl, renameSessionApi } from "../../../../src/services/api/chatApi.js";
+import { buildLogWebSocketUrl, renameSessionApi } from "../../../../src/infrastructure/api/chat/chatApi.js";
 
 describe("renameSessionApi", () => {
   it("posts trimmed title to rename endpoint with provided fetcher", async () => {
