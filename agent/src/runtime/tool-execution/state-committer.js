@@ -12,8 +12,12 @@ import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { appendMessage } from "../../context/runtime-state/message-store.js";
-import { applyAuthoritativeMessageId } from "../../events/message-event-stream.js";
+import {
+  applyAuthoritativeMessageId,
+  currentAssistantPresentationMessageId,
+} from "../../events/message-event-stream.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
+import { reduceCanonicalToolTimeline } from "../../events/canonical-message-timeline.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
@@ -135,8 +139,26 @@ export function createStateCommitter({
       modelAlias = "",
       modelName = "",
       messageId = "",
+      presentationMessageId = "",
+      chatPresentation = false,
     } = {}) {
       if (!turnMessageStore?.push) return;
+      const pendingActivityTimeline = runtime?.consumePendingCurrentTurnActivities?.() || [];
+      const pendingToolEvents = runtime?.consumePendingCurrentTurnToolEvents?.() || [];
+      const pendingToolTimeline = pendingToolEvents.reduce(reduceCanonicalToolTimeline, []);
+      const canonicalModelContent = {
+        eventId: `model-content:${messageId || presentationMessageId || "turn"}`,
+        event: "main_model_content",
+        type: "main_model_content",
+        text: String(content || ""),
+        output: String(content || ""),
+      };
+      const canonicalActivityTimeline = [
+        ...(Array.isArray(pendingActivityTimeline) ? pendingActivityTimeline : []),
+        ...(type === "tool_call" && String(content || "").trim()
+          ? [{ ...canonicalModelContent, log: canonicalModelContent }]
+          : []),
+      ];
       const assistantMessage = {
         messageUid: createSessionMessageUid(),
         role: "assistant",
@@ -147,6 +169,10 @@ export function createStateCommitter({
         tool_calls: Array.isArray(toolCalls) ? toolCalls : [],
         modelAlias: String(modelAlias || "").trim(),
         modelName: String(modelName || "").trim(),
+        presentationMessageId: String(presentationMessageId || "").trim(),
+        chatPresentation: chatPresentation === true,
+        ...(canonicalActivityTimeline.length ? { activityTimeline: canonicalActivityTimeline } : {}),
+        ...(pendingToolTimeline.length ? { toolTimeline: pendingToolTimeline } : {}),
         rawModelContent:
           typeof rawModelContent === "string" || Array.isArray(rawModelContent)
             ? rawModelContent
@@ -177,6 +203,12 @@ export function createStateCommitter({
         }),
       });
       turnMessageStore.push(assistantMessage);
+      // The in-memory turn store is also the source for the running-turn
+      // recovery checkpoint.  Persist it before returning from the commit so
+      // an immediate reconnect cannot observe a lifecycle without its
+      // analysis/tool timeline.  The callback is installed by the runner and
+      // is serialized there; message events remain read-only on the client.
+      await runtime?.persistCurrentTurnMessages?.();
       await runAgentRuntimeHook({
         runtime,
         point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,
@@ -203,6 +235,9 @@ export function createStateCommitter({
         ...(ownership.turnScopeId ? { turnScopeId: ownership.turnScopeId } : {}),
         tool_call_id: resolvedCallId,
         toolName: resolvedCallName,
+        ...(currentAssistantPresentationMessageId(runtime)
+          ? { presentationMessageId: currentAssistantPresentationMessageId(runtime) }
+          : {}),
       };
       const transferPayload = rawTransferPayload || parseTransferPayloadFromToolResultText(compactedToolResultText);
       if (transferPayload) {
@@ -242,6 +277,7 @@ export function createStateCommitter({
       if (turnMessageStore?.push) {
         turnMessageStore.push(toolResultPayload);
       }
+      await runtime?.persistCurrentTurnMessages?.();
       await runAgentRuntimeHook({
         runtime,
         point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,

@@ -89,6 +89,9 @@ export function createMessageRunHandler({
       attachments = [],
       config = {},
       turnScopeId = "",
+      userMessageId = "",
+      presentationMessageId = "",
+      assistantMessageId = "",
       idempotencyKey = "",
       expectedVersion = undefined,
     } = payload || {};
@@ -127,6 +130,11 @@ export function createMessageRunHandler({
     const normalizedRunConfig = {
       ...normalizeRunConfig(config),
       turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
+      userMessageId: String(userMessageId || config?.userMessageId || "").trim(),
+      presentationMessageId: String(
+        presentationMessageId || config?.presentationMessageId ||
+        assistantMessageId || config?.assistantMessageId || "",
+      ).trim(),
       idempotencyKey: String(
         idempotencyKey || config?.idempotencyKey || turnScopeId || config?.turnScopeId || "",
       ).trim(),
@@ -185,6 +193,7 @@ export function createMessageRunHandler({
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       phase: TURN_PHASE.ACTION,
       action,
+      presentationMessageId: normalizedRunConfig.presentationMessageId,
       startedAt: String(normalizedRunConfig?.thinkingStartedAt || "").trim(),
       createSessionIfAbsent: action === "send",
       expectedRevision: payload?.expectedRevision ?? 0,
@@ -352,13 +361,24 @@ export function createMessageRunHandler({
           });
           return;
         }
-        if (eventType !== "tool_call_start" && eventType !== "tool_call_end") return;
+        if (
+          eventType !== "tool_call_start" &&
+          eventType !== "tool_call_end" &&
+          eventType !== "main_model_content" &&
+          eventType !== "guidance_analysis_response" &&
+          eventType !== "guidance_analysis" &&
+          eventType !== "timeline_checkpoint_persisted"
+        ) return;
         void recordServiceWebSocketLifecycle({
           sessionLogConfig,
           category: "debug",
           level: "debug",
-          debugType: "thinking-replay",
-          event: "service.websocket.runEvent.toolReceived",
+          debugType: "timeline-pipeline",
+          event: eventType === "timeline_checkpoint_persisted"
+            ? "service.timelinePipeline.checkpointPersisted"
+            : eventType === "guidance_analysis_response" || eventType === "guidance_analysis"
+              ? "service.timelinePipeline.activityReceived"
+            : "service.websocket.runEvent.timelineReceived",
           userId,
           sessionId: eventData.sessionId || sessionId,
           dialogProcessId: eventData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
@@ -373,6 +393,18 @@ export function createMessageRunHandler({
           level: "debug",
           debugType: "workflow-diagnostics",
           event: "service.websocket.authoritativeMessage.routed",
+          userId,
+          sessionId,
+          dialogProcessId: routeData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
+          turnScopeId: routeData.turnScopeId || state.currentTurnScopeId || "",
+          data: routeData,
+        });
+        void recordServiceWebSocketLifecycle({
+          sessionLogConfig,
+          category: "debug",
+          level: "debug",
+          debugType: "timeline-pipeline",
+          event: "service.timelinePipeline.authoritativeRouted",
           userId,
           sessionId,
           dialogProcessId: routeData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",

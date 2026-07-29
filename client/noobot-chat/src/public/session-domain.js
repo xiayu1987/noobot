@@ -6,5 +6,3 @@
 export { buildViewMessage, foldConversationMessages } from "../modules/chat/model/messageModel.js";
 export { buildSessionDetailProjection } from "../modules/session/model/list/sessionDetailProjection.js";
 export { mergeCanonicalSessionDetail } from "../modules/chat/model/sessionDetailMerge.js";
-export { buildActivityTimelineFromLegacyLogs } from "../modules/chat/runtime/engine/activityTimeline.js";
-export { buildToolTimelineFromLegacyLogs } from "../modules/chat/runtime/engine/toolTimeline.js";

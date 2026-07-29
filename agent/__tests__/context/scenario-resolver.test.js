@@ -46,6 +46,7 @@ test("resolveScenarioProfile prefers runConfig scenarioProfile over builtin scen
     "scenario",
     "system_runtime",
     "base_prompt",
+    "long_memory",
     "services",
     "mcp_servers",
   ]);
@@ -132,6 +133,7 @@ test("resolveScenarioProfile supports builtin text scenario without a hard-coded
     "scenario",
     "system_runtime",
     "base_prompt",
+    "long_memory",
     "services",
     "mcp_servers",
   ]);

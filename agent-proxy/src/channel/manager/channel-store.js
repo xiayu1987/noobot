@@ -13,7 +13,12 @@ import {
   CONVERSATION_STATE,
   CONVERSATION_SOURCE_EVENT,
 } from "../../shared/constants.js";
-import { normalizeApiKey, nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
+import {
+  messageEventHasContent,
+  normalizeApiKey,
+  nowMs,
+  resolveMessageEventTrace,
+} from "../../shared/utils.js";
 import {
   TURN_EVENT,
   TURN_STATE,
@@ -203,7 +208,7 @@ pushChannelEvent(channel, eventName = "", data = {}) {
       dialogProcessId: envelope.data?.dialogProcessId,
       turnScopeId: envelope.data?.turnScopeId,
       requestId: envelope.data?.requestId,
-      hasContent: Boolean(envelope.data?.content || envelope.data?.text),
+      hasContent: messageEventHasContent(envelope.event, envelope.data),
       ...resolveMessageEventTrace(envelope.event, envelope.data, envelope.sequence),
     },
   });
@@ -322,7 +327,9 @@ updateConversationState(
     previousStateItem &&
     previousStateItem.state === normalizedState &&
     Number(previousStateItem.seq || 0) === Number(seq || 0) &&
-    (!normalizedTurnScopeId || String(previousStateItem?.turnScopeId || "").trim() === normalizedTurnScopeId)
+    (!normalizedTurnScopeId || String(previousStateItem?.turnScopeId || "").trim() === normalizedTurnScopeId) &&
+    String(previousStateItem?.sourceEvent || "").trim() === String(sourceEvent || "").trim() &&
+    String(previousStateItem?.requestId || "").trim() === String(requestId || "").trim()
   ) {
     return previousStateItem;
   }

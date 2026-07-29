@@ -123,6 +123,7 @@ export function createTurnOrchestrator({
         });
         return buildLoopResultFn({
           output: noToolsResult.output,
+          assistantMessageId: noToolsResult.assistantMessageId,
           traces,
           loopState,
           turnTaskStore: noToolsResult.turnTaskStore,
@@ -154,6 +155,7 @@ export function createTurnOrchestrator({
         });
         return buildLoopResultFn({
           output: finalResult.output,
+          assistantMessageId: finalResult.assistantMessageId,
           traces,
           loopState,
           turnTaskStore: finalResult.turnTaskStore,
@@ -200,6 +202,7 @@ export function createTurnOrchestrator({
         const noToolsResult = await invokeNoToolsTurnFn({ modelState, loopState, turn });
         return buildLoopResultFn({
           output: noToolsResult.output,
+          assistantMessageId: noToolsResult.assistantMessageId,
           traces,
           loopState,
           turnTaskStore: noToolsResult.turnTaskStore,
@@ -236,6 +239,7 @@ export function createTurnOrchestrator({
           removeToolChoiceRequiredRetryPrompts(loopState.messages);
           return buildLoopResultFn({
             output: aiContentText,
+            assistantMessageId: withToolsResult.assistantMessageId,
             traces,
             loopState,
             turnTaskStore,
@@ -248,6 +252,7 @@ export function createTurnOrchestrator({
         removeToolChoiceRequiredRetryPrompts(loopState.messages);
         return buildLoopResultFn({
           output: aiContentText,
+          assistantMessageId: withToolsResult.assistantMessageId,
           traces,
           loopState,
           turnTaskStore,
@@ -293,6 +298,7 @@ export function createTurnOrchestrator({
         });
         return buildLoopResultFn({
           output: finalResult.output,
+          assistantMessageId: finalResult.assistantMessageId,
           traces,
           loopState,
           turnTaskStore: finalResult.turnTaskStore,
@@ -362,6 +368,7 @@ export function createTurnOrchestrator({
         });
         return buildLoopResultFn({
           output: finalResult.output,
+          assistantMessageId: finalResult.assistantMessageId,
           traces,
           loopState,
           turnTaskStore: finalResult.turnTaskStore,

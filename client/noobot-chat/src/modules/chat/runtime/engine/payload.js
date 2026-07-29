@@ -26,7 +26,7 @@ export function buildChatPayload({
   safeConfirm,
   safeConfirmLevel,
   sanitizeOutput,
-  requestedTextStreaming = true,
+  requestedTextStreaming = false,
   botScenario,
   selectedModel,
   memoryModel,
@@ -36,6 +36,8 @@ export function buildChatPayload({
   uploadHint = "",
   reuseExistingUserTurn = false,
   turnScopeId = "",
+  userMessageId = "",
+  assistantMessageId = "",
   action = "",
   resumeDialogProcessId = "",
   resumeTurnScopeId = "",
@@ -48,6 +50,8 @@ export function buildChatPayload({
   const normalizedMemoryModel = normalizeTrimmedString(memoryModel?.value ?? memoryModel);
   const normalizedPluginModelConfig = pluginModelConfig?.value ?? pluginModelConfig;
   const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
+  const normalizedUserMessageId = normalizeTrimmedString(userMessageId);
+  const normalizedAssistantMessageId = normalizeTrimmedString(assistantMessageId);
   const normalizedAction = normalizeTrimmedString(action);
   const normalizedResumeDialogProcessId = normalizeTrimmedString(resumeDialogProcessId);
   const normalizedResumeTurnScopeId = normalizeTrimmedString(resumeTurnScopeId);
@@ -57,6 +61,8 @@ export function buildChatPayload({
     userId: userId?.value ?? userId,
     sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
     turnScopeId: normalizedTurnScopeId,
+    ...(normalizedUserMessageId ? { userMessageId: normalizedUserMessageId } : {}),
+    ...(normalizedAssistantMessageId ? { presentationMessageId: normalizedAssistantMessageId } : {}),
     idempotencyKey: normalizeTrimmedString(idempotencyKey) || normalizedTurnScopeId,
     ...(expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== "" ? { expectedVersion } : {}),
     message: message || uploadHint,
@@ -80,6 +86,8 @@ export function buildChatPayload({
         activeSession?.value?.connectorPanelState?.selectedConnectors || {},
       ),
       selectedPlugins: normalizeSelectedPluginKeys(selectedPlugins),
+      ...(normalizedUserMessageId ? { userMessageId: normalizedUserMessageId } : {}),
+      ...(normalizedAssistantMessageId ? { presentationMessageId: normalizedAssistantMessageId } : {}),
       ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
       ...(normalizedResumeDialogProcessId ? { resumeDialogProcessId: normalizedResumeDialogProcessId } : {}),
       ...(normalizedResumeTurnScopeId ? {

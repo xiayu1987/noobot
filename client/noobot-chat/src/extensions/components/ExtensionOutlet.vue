@@ -25,9 +25,30 @@ const contributions = computed(() => {
   return resolved;
 });
 
-function componentProps(contribution) {
-  return { ...props.extraProps, ...resolveExtensionProps(contribution, props.context) };
-}
+// Resolve contribution props inside a computed projection so changes to the
+// host context are propagated to an already mounted extension component.
+// A template method only ran as a side effect of unrelated outlet renders and
+// could therefore leave child props stale after Store-only updates.
+const resolvedContributions = computed(() => contributions.value.map((contribution) => {
+  const componentProps = { ...props.extraProps, ...resolveExtensionProps(contribution, props.context) };
+  if (contribution?.id === "workflow-card") {
+    props.context?.logWorkflowDiagnostics?.("frontend.workflowRender.extensionPropsResolved", {
+      sessionId: String(props.context?.messageItem?.sessionId || ""),
+      dialogProcessId: String(props.context?.messageItem?.dialogProcessId || ""),
+      turnScopeId: String(props.context?.messageItem?.turnScopeId || ""),
+      contributionId: contribution.id,
+      subSessionMessageRegistryVersion: Number(componentProps.subSessionMessageRegistryVersion || 0),
+    });
+  }
+  return {
+    contribution,
+    componentProps,
+    componentListeners: {
+      ...resolveExtensionListeners(contribution, props.context),
+      ...props.extraListeners,
+    },
+  };
+}));
 
 onErrorCaptured((error, instance, info) => {
   emit("extension-error", { point: props.point, error, instance, info });
@@ -38,10 +59,10 @@ onErrorCaptured((error, instance, info) => {
 
 <template>
   <component
-    :is="contribution.component"
-    v-for="contribution in contributions"
-    :key="contribution.id"
-    v-bind="componentProps(contribution)"
-    v-on="{ ...resolveExtensionListeners(contribution, context), ...extraListeners }"
+    :is="entry.contribution.component"
+    v-for="entry in resolvedContributions"
+    :key="entry.contribution.id"
+    v-bind="entry.componentProps"
+    v-on="entry.componentListeners"
   />
 </template>

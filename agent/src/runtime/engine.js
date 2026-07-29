@@ -16,7 +16,6 @@ import { resolveDialogProcessIdFromContext } from "../context/session/dialog-pro
 import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
 import { saveStoppedModelMessageSnapshotCandidate } from "./resume/model-message-snapshot-store.js";
 import {
-  currentAssistantMessageId,
   emitMessageEvent,
 } from "../events/message-event-stream.js";
 
@@ -31,7 +30,7 @@ function messageIdentity(message = {}) {
 
 export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {}) {
   const finalOutput = String(result?.output || "");
-  const messageId = currentAssistantMessageId(runtime);
+  const messageId = String(result?.assistantMessageId || "").trim();
   if (!finalOutput || !messageId) return false;
   let committed = false;
   for (const collection of [result?.turnMessages, result?.modelMessages]) {
@@ -48,15 +47,15 @@ export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {
 export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
   const eventListener = runtime?.eventListener || null;
   const finalOutput = String(result?.output || "");
-  const messageId = currentAssistantMessageId(runtime);
+  const messageId = String(result?.assistantMessageId || "").trim();
   if (!eventListener?.onEvent || !finalOutput || !messageId) return false;
-  emitMessageEvent(eventListener, runtime, "main_model_content", {
+  emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
     text: finalOutput,
     output: finalOutput,
     messageId,
     dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
     category: "model",
-    type: "main_model_content",
+    type: "authoritative_final_content",
     source: "before_final_output_committed",
   });
   return true;

@@ -98,6 +98,8 @@ describe("useChatEngine.resend stopped state", () => {
     const stream = vi.fn(async () => {});
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
       const replacementUser = {
+        id: `msg-user-${turnScopeId}`,
+        messageId: `msg-user-${turnScopeId}`,
         turnScopeId,
         role: RoleEnum.USER,
         content: newContent,
@@ -105,6 +107,7 @@ describe("useChatEngine.resend stopped state", () => {
       };
       return {
         ok: true,
+        newTurn: replacementUser,
         session: makeSession("local-resend-repeat-stopped", {
           messages: [replacementUser],
           rawMessages: [replacementUser],
@@ -186,6 +189,8 @@ describe("useChatEngine.resend stopped state", () => {
     });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
       const replacementUser = {
+        id: `msg-user-${turnScopeId}`,
+        messageId: `msg-user-${turnScopeId}`,
         role: RoleEnum.USER,
         content: newContent,
         turnScopeId,
@@ -193,6 +198,7 @@ describe("useChatEngine.resend stopped state", () => {
       };
       return {
         ok: true,
+        newTurn: replacementUser,
         session: makeSession(sessionId, {
           messages: [replacementUser],
           rawMessages: [replacementUser],
@@ -277,6 +283,8 @@ describe("useChatEngine.resend stopped state", () => {
     const stream = vi.fn(async () => {});
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
       const replacementUser = {
+        id: `msg-user-${turnScopeId}`,
+        messageId: `msg-user-${turnScopeId}`,
         turnScopeId,
         role: RoleEnum.USER,
         content: newContent,
@@ -284,6 +292,7 @@ describe("useChatEngine.resend stopped state", () => {
       };
       return {
         ok: true,
+        newTurn: replacementUser,
         session: makeSession("local-resend-second-stopped", {
           messages: [replacementUser],
           rawMessages: [replacementUser],
@@ -369,6 +378,8 @@ describe("useChatEngine.resend stopped state", () => {
     });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
       const replacementUser = {
+        id: `msg-user-${turnScopeId}`,
+        messageId: `msg-user-${turnScopeId}`,
         turnScopeId,
         role: RoleEnum.USER,
         content: newContent,
@@ -376,6 +387,7 @@ describe("useChatEngine.resend stopped state", () => {
       };
       return {
         ok: true,
+        newTurn: replacementUser,
         session: makeSession("local-resend-stale-stop-replay", {
           messages: [
             {
@@ -445,13 +457,17 @@ describe("useChatEngine.resend stopped state", () => {
 
   it("resendMonotonicMessage ignores stale global run state when Registry has no active turn", async () => {
     const stream = vi.fn(async () => {});
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => ({
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+      const replacementUser = { id: `msg-user-${turnScopeId}`, messageId: `msg-user-${turnScopeId}`, turnScopeId, role: RoleEnum.USER, content: newContent };
+      return {
       ok: true,
+      newTurn: replacementUser,
       session: makeSession("local-resend-state-mismatch", {
-        messages: [{ turnScopeId, role: RoleEnum.USER, content: newContent }],
-        rawMessages: [{ turnScopeId, role: RoleEnum.USER, content: newContent }],
+        messages: [replacementUser],
+        rawMessages: [replacementUser],
       }),
-    }));
+    };
+    });
     const { engine, activeSession, activeTurnRuntime, sending, canStop, deps } = createHarness({
       sessionId: "local-resend-state-mismatch",
       stream,
@@ -493,12 +509,15 @@ describe("useChatEngine.resend stopped state", () => {
     };
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
       const replacementUser = {
+        id: `msg-user-${turnScopeId}`,
+        messageId: `msg-user-${turnScopeId}`,
         turnScopeId,
         role: RoleEnum.USER,
         content: newContent,
       };
       return {
         ok: true,
+        newTurn: replacementUser,
         session: makeSession("local-resend-ignore-stale-assistant", {
           messages: [replacementUser, staleStoppedAssistant],
           rawMessages: [replacementUser, staleStoppedAssistant],

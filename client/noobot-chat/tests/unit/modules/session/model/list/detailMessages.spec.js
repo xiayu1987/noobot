@@ -8,6 +8,22 @@ import { describe, expect, it } from "vitest";
 import { buildNormalizedDetailMessages } from "../../../../../../src/modules/session/model/list/detailMessages.js";
 
 describe("buildNormalizedDetailMessages turnTimings", () => {
+  it("binds projected messages to their session envelope identity", () => {
+    const messages = buildNormalizedDetailMessages({
+      detailMessages: [{ role: "assistant", turnScopeId: "turn-session" }],
+      rootSessionId: "session-envelope",
+      isSummaryDetail: true,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (source) => source.map((message) => ({ ...message })),
+    });
+
+    expect(messages[0]).toMatchObject({
+      sessionId: "session-envelope",
+      session_id: "session-envelope",
+      turnScopeId: "turn-session",
+    });
+  });
+
   it("does not copy authoritative turnTimings into disposable view messages", () => {
     const messages = buildNormalizedDetailMessages({
     detailMessages: [

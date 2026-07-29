@@ -204,11 +204,15 @@ function resolveRendererContext() {
     allMessages: props.allMessages,
     messageRuntime: messageRuntime.value,
     workflowNodeStateRegistry: chatStore.workflowNodeStateRegistry,
+    // Pass the reactive registry itself, not only an opaque selector closure.
+    // Plugin watchers must establish an explicit dependency on this fact source.
+    subSessionMessageRegistry: chatStore.subSessionMessageRegistry,
+    subSessionMessageRegistryVersion: chatStore.subSessionMessageRegistryVersion,
     turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
     selectExecutionDetail: chatStore.selectExecutionDetail,
     stopExecution: props.stopExecution,
     selectSessionMessages,
-    mergeSubSessionSnapshot: chatStore.mergeSubSessionSnapshot,
+    applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     logWorkflowDiagnostics,
     userId: props.userId,
     renderMarkdown: props.renderMarkdown,
@@ -238,6 +242,26 @@ function resolveRendererContext() {
     onOpenThinkingDetails: handleOpenThinkingDetails,
   };
 }
+
+const extensionRendererContext = computed(() => {
+  const context = resolveRendererContext();
+  const sessions = context.subSessionMessageRegistry?.sessions || {};
+  logWorkflowDiagnostics("frontend.workflowRender.extensionContextProjected", {
+    sessionId: String(props.messageItem?.sessionId || ""),
+    dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
+    turnScopeId: String(props.messageItem?.turnScopeId || ""),
+    subSessionMessageRegistryVersion: Number(context.subSessionMessageRegistryVersion || 0),
+    subSessions: Object.values(sessions).map((session = {}) => ({
+      sessionId: String(session?.sessionId || session?.id || ""),
+      messages: (Array.isArray(session?.messages) ? session.messages : []).map((message = {}) => ({
+        id: String(message?.id || message?.messageId || ""),
+        role: String(message?.role || ""),
+        contentLength: String(message?.content || "").length,
+      })),
+    })),
+  });
+  return context;
+});
 
 function handleOpenThinkingDetails(payload = {}) {
   emit("open-thinking-details", {
@@ -275,7 +299,7 @@ async function handleCopyAssistantMessageText() {
     />
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_CARD_PRE"
-      :context="resolveRendererContext()"
+      :context="extensionRendererContext"
       :extra-listeners="{ openThinkingDetails: handleOpenThinkingDetails }"
     />
 
@@ -290,7 +314,7 @@ async function handleCopyAssistantMessageText() {
 
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS"
-      :context="resolveRendererContext()"
+      :context="extensionRendererContext"
     />
 
     <BaseMarkdownContent
@@ -302,7 +326,7 @@ async function handleCopyAssistantMessageText() {
 
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_ACTION_POST_CONTENT"
-      :context="resolveRendererContext()"
+      :context="extensionRendererContext"
     />
 
     <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
@@ -346,7 +370,7 @@ async function handleCopyAssistantMessageText() {
 
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_CARD_POST"
-      :context="resolveRendererContext()"
+      :context="extensionRendererContext"
       :extra-listeners="{ openThinkingDetails: handleOpenThinkingDetails }"
     />
   </BaseMessageShell>

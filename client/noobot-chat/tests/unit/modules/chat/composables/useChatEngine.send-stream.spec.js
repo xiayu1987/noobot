@@ -20,6 +20,30 @@ import {
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 
 describe("useChatEngine.send-stream", () => {
+  it("uses one preallocated identity for the local user message and transport payload", async () => {
+    let capturedPayload = null;
+    const stream = vi.fn(async (payload) => {
+      capturedPayload = payload;
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "s-user-message-identity",
+      stream,
+    });
+
+    await engine.send();
+
+    const userMessage = activeSession.value.messages.find((message) => message.role === RoleEnum.USER);
+    expect(userMessage).toEqual(expect.objectContaining({
+      id: expect.stringMatching(/^msg_/),
+      messageId: expect.stringMatching(/^msg_/),
+      sessionId: "s-user-message-identity",
+      turnScopeId: capturedPayload.turnScopeId,
+    }));
+    expect(userMessage.id).toBe(userMessage.messageId);
+    expect(capturedPayload.userMessageId).toBe(userMessage.messageId);
+    expect(capturedPayload.config.userMessageId).toBe(userMessage.messageId);
+  });
+
   it("refreshes a stale session version without replaying the failed Turn", async () => {
     const conflict = new Error("session version conflict");
     conflict.data = {
@@ -171,7 +195,7 @@ describe("useChatEngine.send-stream", () => {
   it("ignores another session in-flight run state while sending and finalizing the active session", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
-        event: StreamEventEnum.THINKING,
+        event: "message",
         data: {
           sessionId: "s-active-send",
           dialogProcessId: "dp-active-send",
@@ -218,9 +242,7 @@ describe("useChatEngine.send-stream", () => {
     expect(deps.notify).not.toHaveBeenCalledWith(expect.objectContaining({
       message: "chat.sessionStateOutOfSync",
     }));
-    expect(selectToolTimelineLogs(assistant)).toEqual([
-      expect.objectContaining({ event: "tool_call", text: expect.stringContaining("running tool") }),
-    ]);
+    expect(selectToolTimelineLogs(assistant)).toEqual([]);
     await vi.waitFor(() => expect(sending.value).toBe(false));
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.id);
   });
@@ -228,7 +250,7 @@ describe("useChatEngine.send-stream", () => {
   it("accepts active stream events without turnScopeId and still finalizes frontend completion", async () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       onEvent({
-        event: StreamEventEnum.THINKING,
+        event: "message",
         data: {
           sessionId: "s-missing-turn",
           dialogProcessId: "dp-missing-turn",
@@ -274,9 +296,7 @@ describe("useChatEngine.send-stream", () => {
     const assistant = assistantMessage(activeSession);
     expect(result).toBe(true);
     expect(assistant?.dialogProcessId).toBe("dp-missing-turn");
-    expect(selectToolTimelineLogs(assistant)).toEqual([
-      expect.objectContaining({ text: expect.stringContaining("thinking without frontend turn scope") }),
-    ]);
+    expect(selectToolTimelineLogs(assistant)).toEqual([]);
     await vi.waitFor(() => expect(sending.value).toBe(false));
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.id);
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
@@ -326,10 +346,38 @@ describe("useChatEngine.send-stream", () => {
   });
 
   it("DONE projects the resolved Turn without promoting Session identity", async () => {
-    const stream = vi.fn(async (_payload, onEvent) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.DELTA,
         data: { dialogProcessId: "dp-new", text: "partial " },
+      });
+      onEvent({
+        event: "message_event",
+        data: {
+          channelKind: "message_event",
+          channelVersion: 1,
+          route: { scope: "main_session", sessionId: "local-1" },
+          event: {
+            envelopeKind: "noobot.message_event",
+            envelopeVersion: 2,
+            eventId: "evt-final-answer",
+            eventType: "authoritative_final_content",
+            sessionId: "local-1",
+            messageId: "model-output-final-answer",
+            presentationMessageId: payload.presentationMessageId,
+            dialogProcessId: "dp-new",
+            turnScopeId: payload.turnScopeId,
+            sequence: 1,
+            timestamp: "2026-07-22T05:00:01.000Z",
+            text: "final answer",
+            output: "final answer",
+            modelAlias: "alias-a",
+            modelName: "model-a",
+            modelRuns: [{ runId: "r1" }],
+            attachments: [{ name: "f1" }],
+            tool_calls: [{ id: "tc1" }],
+          },
+        },
       });
       onEvent({
         event: StreamEventEnum.DONE,
@@ -342,7 +390,9 @@ describe("useChatEngine.send-stream", () => {
             { role: RoleEnum.USER, content: "hello" },
             {
               role: RoleEnum.ASSISTANT,
+              messageId: payload.presentationMessageId,
               dialogProcessId: "dp-new",
+              turnScopeId: payload.turnScopeId,
               content: "final answer",
               modelAlias: "alias-a",
               modelName: "model-a",
@@ -354,7 +404,7 @@ describe("useChatEngine.send-stream", () => {
         },
       });
     });
-    const { engine, activeSession, activeSessionId, sending } = createHarness({
+    const { engine, deps, activeSession, activeSessionId, sending } = createHarness({
       sessionId: "local-1",
       stream,
       deps: {
@@ -366,6 +416,19 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
+    const reductionLog = deps.sessionLogWebSocketClient.log.mock.calls
+      .map(([entry]) => entry)
+      .find((entry) => entry?.event === "frontend.messageEvent.reduced");
+    expect(reductionLog).toEqual(expect.objectContaining({
+      sessionId: "local-1",
+      data: expect.objectContaining({
+        messageId: "model-output-final-answer",
+        presentationMessageId: expect.any(String),
+        result: "applied",
+        errors: [],
+      }),
+    }));
+
     expect(activeSession.value.id).toBe("local-1");
     expect(activeSession.value.backendSessionId).toBe("local-1");
     expect(activeSessionId.value).toBe("local-1");
@@ -376,8 +439,7 @@ describe("useChatEngine.send-stream", () => {
     expect(botMessage.role).toBe(RoleEnum.ASSISTANT);
     expect(botMessage.content).toBe("final answer");
     expect(botMessage.dialogProcessId).toBe("dp-new");
-    expect(botMessage.modelAlias).toBe("alias-a");
-    expect(botMessage.tool_calls).toEqual([{ id: "tc1" }]);
+    expect(botMessage.messageEventState.consumedEventIds).toContain("evt-final-answer");
     expect(botMessage.pending).toBe(true);
     expect(botMessage.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(sending.value).toBe(false);
@@ -680,13 +742,14 @@ describe("useChatEngine.send-stream", () => {
     harness.deps.fetchSessionDetail = fetchSessionDetail;
     harness.deps.applySessionDetail = applySessionDetail;
     harness.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "edited question", turnScopeId: "client-turn:fresh" },
+      { id: "msg-user-fresh", messageId: "msg-user-fresh", role: RoleEnum.USER, content: "edited question", turnScopeId: "client-turn:fresh" },
     ];
 
     await harness.engine.send({
       content: "edited question",
       turnScopeId: "client-turn:fresh",
       reuseExistingUserTurn: true,
+      userMessageId: "msg-user-fresh",
     });
 
     const messages = harness.activeSession.value.messages;

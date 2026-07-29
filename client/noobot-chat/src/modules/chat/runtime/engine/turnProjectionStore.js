@@ -8,12 +8,13 @@ import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdent
 import {
   initializeMessageEventState,
   resolveMessageEventLaneState,
-  syncMessageEventAggregateState,
 } from "../../model/messageEventState.js";
 import { mergeToolTimelines } from "./toolTimeline.js";
 import { mergeActivityTimelines } from "./activityTimeline.js";
 import { createTurnObservation } from "./turnObservation.js";
 import { mergeAttachmentSnapshot } from "../../model/dialogProcessChain.js";
+import { validateMessageEventEnvelope } from "@noobot/shared/message-event-protocol";
+import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 
 export const TURN_PROJECTION_SOURCE = Object.freeze({
   NORMAL_LIVE: "normal_live",
@@ -38,18 +39,59 @@ export function dispatchTurnEnvelope({
 } = {}) {
   const identity = resolveTurnIdentity(envelope);
   const turnKey = createTurnKey(identity);
-  const observe = (values = {}) => createTurnObservation({
-    requestedSessionId: identity.sessionId,
-    canonicalSessionId: identity.sessionId,
-    turnKey,
-    eventId: envelope?.eventId,
-    sequence: envelope?.sequence,
-    source,
-    authority: envelope?.authority,
-    ...values,
-  });
+  const observe = (values = {}) => {
+    const observation = createTurnObservation({
+      requestedSessionId: identity.sessionId,
+      canonicalSessionId: identity.sessionId,
+      turnKey,
+      eventId: envelope?.eventId,
+      sequence: envelope?.sequence,
+      source,
+      authority: envelope?.authority,
+      ...values,
+    });
+    logThinkingReplayDebug("frontend.turnProjection.envelopeObserved", {
+      sessionId: identity.sessionId,
+      dialogProcessId: identity.dialogProcessId,
+      turnScopeId: identity.turnScopeId,
+      source,
+      eventId: String(envelope?.eventId || ""),
+      eventType: String(envelope?.eventType || ""),
+      messageId: String(envelope?.messageId || ""),
+      presentationMessageId: String(envelope?.presentationMessageId || envelope?.messageId || ""),
+      envelopeKind: String(envelope?.envelopeKind || ""),
+      envelopeVersion: Number(envelope?.envelopeVersion || 0),
+      sequence: Number(envelope?.sequence || 0),
+      sequenceDomain: String(envelope?.sequenceDomain || ""),
+      sequenceScopeId: String(envelope?.sequenceScopeId || envelope?.messageId || ""),
+      authority: String(envelope?.authority || ""),
+      textLength: String(envelope?.text || "").length,
+      outputLength: String(envelope?.output || "").length,
+      result: String(observation.result || ""),
+      reason: String(observation.reason || ""),
+      applied: observation.applied === true,
+      activityTimelineCount: Array.isArray(targetMessage?.activityTimeline)
+        ? targetMessage.activityTimeline.length
+        : 0,
+      activityEventIds: (targetMessage?.activityTimeline || [])
+        .slice(-16)
+        .map((activity = {}) => String(activity.eventId || "")),
+      toolTimelineCount: Array.isArray(targetMessage?.toolTimeline)
+        ? targetMessage.toolTimeline.length
+        : 0,
+    });
+    return observation;
+  };
   if (!turnKey) {
     return observe({ result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: ["turn_identity_missing"], reason: "missing_turn_identity" });
+  }
+  const envelopeValidation = validateMessageEventEnvelope(envelope);
+  if (!envelopeValidation.valid) {
+    return observe({
+      result: MESSAGE_EVENT_REDUCE_RESULT.INVALID,
+      errors: envelopeValidation.errors,
+      reason: "invalid_message_event_envelope",
+    });
   }
   if (!targetMessage || !messageOwnsTurn(targetMessage, identity)) {
     return observe({
@@ -89,7 +131,6 @@ export function dispatchTurnEnvelope({
     if (state.pendingEnvelopes && !Object.keys(state.pendingEnvelopes).length) {
       delete state.pendingEnvelopes;
     }
-    syncMessageEventAggregateState(targetMessage);
   }
   return observe({
     ...reduced,

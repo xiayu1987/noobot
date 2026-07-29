@@ -98,6 +98,7 @@ function snapshotTurn(turn = {}) {
   return {
     ...executionIdentity,
     turnScopeId: clean(turn.turnScopeId),
+    presentationMessageId: clean(turn.presentationMessageId),
     dialogProcessId: clean(turn.dialogProcessId),
     commandId: clean(turn.commandId),
     action: clean(turn.action),
@@ -168,6 +169,7 @@ export function createTurnLifecycleEnvelope({
   sessionId,
   parentSessionId = "",
   turnScopeId,
+  presentationMessageId = "",
   dialogProcessId = "",
   revision,
   sequence,
@@ -206,6 +208,7 @@ export function createTurnLifecycleEnvelope({
     sessionId: clean(sessionId),
     parentSessionId: clean(parentSessionId),
     turnScopeId: clean(turnScopeId),
+    presentationMessageId: clean(presentationMessageId),
     dialogProcessId: clean(dialogProcessId),
     revision: Number(revision || 0),
     sequence: Number(sequence || 0),

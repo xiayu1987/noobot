@@ -18,6 +18,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
   const selectedNodeRawMessages = ref([]);
   const selectedNodeSessionSummary = ref(null);
   const selectedNodeSessionId = ref("");
+  const runningPlaceholderViewModel = ref(null);
   const semanticPreviewExpanded = ref(false);
   const applyingWorkflowDrawerHistory = ref(false);
 
@@ -66,6 +67,7 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedNodeRawMessages,
     selectedNodeSessionSummary,
     selectedNodeSessionId,
+    runningPlaceholderViewModel,
   });
 
   const {
@@ -96,10 +98,11 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedNodeRawMessages,
     selectedNodeSessionSummary,
     selectedNodeSessionId,
+    runningPlaceholderViewModel,
     selectedGraphDialogProcessId,
     runtimeNodeSessions,
     applyingWorkflowDrawerHistory,
-    mergeSubSessionSnapshot: props.mergeSubSessionSnapshot,
+    applyWorkflowRuntimeEvent: props.applyWorkflowRuntimeEvent,
   });
 
   return {

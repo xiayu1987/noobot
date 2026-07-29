@@ -23,11 +23,26 @@ function createPrepareHarness({ existingMessages = [] } = {}) {
     appended.push(message);
     return message;
   });
+  const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
+    const existing = activeSession.value.messages.find((message) => (
+      message.role === RoleEnum.ASSISTANT && message.messageId === messageId
+    ));
+    if (existing) return existing;
+    const message = {
+      role: RoleEnum.ASSISTANT,
+      content: "",
+      messageId,
+      ...identity,
+    };
+    activeSession.value.messages.push(message);
+    return message;
+  });
   return {
     input: { value: "" },
     uploadFiles: { value: [] },
     activeSession,
     appendMessage,
+    upsertCanonicalAssistantMessage,
     appended,
     applyConversationState: vi.fn(),
     translate: vi.fn((key) => key),

@@ -133,6 +133,10 @@ export function createChatRunService({
     const memoryModel = normalizeSelectedModel(source?.memoryModel);
     const pluginModelConfig = normalizePluginModelConfig(source?.pluginModelConfig);
     const normalizedTurnScopeId = String(source?.turnScopeId || "").trim();
+    const normalizedUserMessageId = String(source?.userMessageId || "").trim();
+    const normalizedPresentationMessageId = String(
+      source?.presentationMessageId || source?.assistantMessageId || "",
+    ).trim();
     const normalizedThinkingStartedAt = (() => {
       const value = String(source?.thinkingStartedAt || "").trim();
       if (!value) return "";
@@ -163,6 +167,10 @@ export function createChatRunService({
       selectedPlugins: normalizeStringArray(input?.selectedPlugins),
       plugins: normalizePlugins(source?.plugins, input?.selectedPlugins),
       ...(normalizedTurnScopeId ? { turnScopeId: normalizedTurnScopeId } : {}),
+      ...(normalizedUserMessageId ? { userMessageId: normalizedUserMessageId } : {}),
+      ...(normalizedPresentationMessageId ? {
+        presentationMessageId: normalizedPresentationMessageId,
+      } : {}),
       ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
       ...(source?.reuseExistingUserTurn === true ? {
         reuseExistingUserTurn: true,
@@ -181,6 +189,9 @@ export function createChatRunService({
         attachments = [],
         config = {},
         turnScopeId = "",
+        userMessageId = "",
+        presentationMessageId = "",
+        assistantMessageId = "",
       } = req.body;
       if (!userId || !sessionId || !message) {
         throw new Error(translateText("common.userSessionMessageRequired", req.locale));
@@ -205,6 +216,11 @@ export function createChatRunService({
         runConfig: {
           ...normalizeRunConfig(config),
           turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
+          userMessageId: String(userMessageId || config?.userMessageId || "").trim(),
+          presentationMessageId: String(
+            presentationMessageId || config?.presentationMessageId ||
+            assistantMessageId || config?.assistantMessageId || "",
+          ).trim(),
         },
       });
       res.json({ ok: true, ...result });

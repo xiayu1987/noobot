@@ -4,231 +4,68 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import fixture from "../../../../fixtures/thinking-detail/tool-calls-and-results.json";
 import { normalizeThinkingToolLogs } from "../../../../../src/modules/chat/model/thinkingDetailModel.js";
 
-describe("thinking detail model", () => {
-  it("normalizes a real response shape with empty call text", () => {
-    const logs = normalizeThinkingToolLogs({
-      ...fixture,
-      variant: "details",
-      toolResultFallback: "tool_result",
-    });
+const fact = (eventId, sequence, event, text) => ({
+  eventId, sequence, sequenceScopeId: "message-1", sequenceDomain: "message-event",
+  authority: "authoritative", timestamp: `2026-07-25T01:00:0${sequence}.000Z`,
+  log: { event, type: event, toolCallId: "call-1", text },
+});
 
-    expect(logs.map((item) => item.event)).toEqual([
-      "tool_call",
-      "tool_result",
-      "tool_call",
-      "tool_result",
-    ]);
-    expect(logs.map((item) => item.toolCallId || item.tool_call_id)).toEqual([
-      "call-search",
-      "call-search",
-      "call-read",
-      "call-read",
-    ]);
-    expect(logs[0].text).toContain("search");
-    expect(logs[0].text).toContain("completedToolLogs");
-    expect(logs[2].text).toContain("read_file");
-    expect(logs[1].detailText).toContain('"ok":true');
+describe("thinking detail model canonical timeline", () => {
+  it("projects call and result logs exclusively from toolTimeline", () => {
+    const logs = normalizeThinkingToolLogs({ messageItem: { toolTimeline: [{
+      key: "call:call-1", toolCallId: "call-1", status: "completed",
+      call: fact("call-1", 1, "tool_call", "read_file"),
+      resultEvent: fact("result-1", 2, "tool_result", "read_file done"),
+    }] } });
+    expect(logs.map((item) => item.event)).toEqual(["tool_call", "tool_result"]);
   });
 
-  it("keeps non-empty server projections authoritative", () => {
-    const logs = normalizeThinkingToolLogs({
-      messageItem: {
-        ...fixture.messageItem,
-        completedToolLogs: [{
+  it("projects canonical tool arguments and results as expandable detail", () => {
+    const logs = normalizeThinkingToolLogs({ messageItem: { toolTimeline: [{
+      key: "call:call-detail",
+      toolCallId: "call-detail",
+      status: "completed",
+      call: {
+        ...fact("call-detail", 1, "tool_call", "write_file"),
+        log: {
+          event: "tool_call",
+          type: "tool_call",
+          toolCallId: "call-detail",
+          text: "write_file",
+          args: { filePath: "notes.txt", content: "hello" },
+        },
+      },
+      resultEvent: {
+        ...fact("result-detail", 2, "tool_result", "write_file done"),
+        log: {
           event: "tool_result",
           type: "tool_result",
-          text: "server result",
-          toolCallId: "call-search",
-          ts: "2026-07-18T01:00:01.000Z",
-        }],
+          toolCallId: "call-detail",
+          text: "write_file done",
+          result: { ok: true, filePath: "notes.txt" },
+        },
       },
-      allMessages: fixture.allMessages,
-      variant: "details",
-    });
+    }] } });
 
-    expect(logs).toHaveLength(1);
-    expect(logs[0].text).toBe("server result");
+    expect(logs[0].detailText).toContain('"filePath": "notes.txt"');
+    expect(logs[0].detailText).toContain('"content": "hello"');
+    expect(logs[1].detailText).toContain('"ok": true');
   });
 
-  it("deduplicates equivalent event and call id pairs", () => {
-    const result = fixture.messageItem.completedToolLogs[1];
-    const logs = normalizeThinkingToolLogs({
-      messageItem: {
-        ...fixture.messageItem,
-        completedToolLogs: [result, { ...result, text: "duplicate" }],
-      },
-      allMessages: fixture.allMessages,
-      variant: "details",
-    });
-
-    expect(logs).toHaveLength(1);
-    expect(logs[0].text).toBe("search ok=true");
+  it("does not synthesize timeline facts from historical messages", () => {
+    expect(normalizeThinkingToolLogs({
+      messageItem: {},
+      allMessages: [{ role: "tool", type: "tool_result", content: "legacy result" }],
+      sessionDocs: [{ messages: [{ role: "assistant", tool_calls: [{ id: "call-1" }] }] }],
+    })).toEqual([]);
   });
 
-  it("keeps one readable result when duplicate projections differ only by text", () => {
-    const logs = normalizeThinkingToolLogs({
-      messageItem: {
-        ...fixture.messageItem,
-        completedToolLogs: [
-          {
-            event: "tool_result",
-            type: "tool_result",
-            text: "",
-            detailText: "{\"ok\":true}",
-            toolCallId: "call-search",
-          },
-          {
-            event: "tool_result",
-            type: "tool_result",
-            text: "search ok=true",
-            detailText: "{\"ok\":true}",
-            tool_call_id: "call-search",
-          },
-        ],
-      },
-      allMessages: fixture.allMessages,
-      variant: "details",
-    });
-
-    expect(logs).toHaveLength(1);
-    expect(logs[0].text).toBe("search ok=true");
-  });
-
-  it("reconciles an id-less compact result with its identified full projection", () => {
-    const logs = normalizeThinkingToolLogs({
-      messageItem: {
-        ...fixture.messageItem,
-        completedToolLogs: [
-          {
-            event: "tool_result",
-            type: "tool_result",
-            text: "",
-            detailText: "{\"ok\":true}",
-          },
-          {
-            event: "tool_result",
-            type: "tool_result",
-            text: "search ok=true",
-            detailText: "{\"ok\":true}",
-            toolCallId: "call-search",
-          },
-        ],
-      },
-      allMessages: fixture.allMessages,
-      variant: "details",
-    });
-
-    expect(logs).toHaveLength(1);
-    expect(logs[0].toolCallId).toBe("call-search");
-    expect(logs[0].text).toBe("search ok=true");
-  });
-
-  it("uses scoped allMessages as the authoritative history source", () => {
-    const logs = normalizeThinkingToolLogs({
-      messageItem: {
-        role: "assistant",
-        sessionId: "root",
-        turnScopeId: "client-turn:history",
-      },
-      allMessages: [{
-        role: "assistant",
-        type: "tool_call",
-        sessionId: "root",
-        turnScopeId: "client-turn:history",
-        ts: "2026-07-18T01:00:00.000Z",
-        tool_calls: [{ id: "call-current", function: { name: "current_tool", arguments: "{}" } }],
-      }],
-      sessionDocs: [{
-        sessionId: "root",
-        messages: [{
-          role: "assistant",
-          type: "tool_call",
-          sessionId: "root",
-          turnScopeId: "client-turn:history",
-          tool_calls: [{ id: "call-stale", function: { name: "stale_tool", arguments: "{}" } }],
-        }],
-      }],
-      variant: "details",
-    });
-
-    expect(logs).toHaveLength(1);
-    expect(logs[0].toolCallId).toBe("call-current");
-    expect(logs[0].text).toContain("current_tool");
-  });
-
-  it("falls back to workflow sessionDocs when allMessages has no scoped raw messages", () => {
-    const logs = normalizeThinkingToolLogs({
-      messageItem: {
-        role: "assistant",
-        sessionId: "node-session-1",
-        dialogProcessId: "workflow-dialog",
-        turnScopeId: "client-turn:workflow",
-      },
-      allMessages: [],
-      sessionDocs: [{
-        sessionId: "node-session-1",
-        messages: [
-          {
-            role: "assistant",
-            type: "tool_call",
-            sessionId: "node-session-1",
-            dialogProcessId: "workflow-dialog",
-            turnScopeId: "client-turn:workflow",
-            ts: "2026-07-18T01:00:00.000Z",
-            tool_calls: [{ id: "call-workflow", function: { name: "workflow_tool", arguments: "{\"node\":1}" } }],
-          },
-          {
-            role: "tool",
-            type: "tool_result",
-            sessionId: "node-session-1",
-            dialogProcessId: "workflow-dialog",
-            turnScopeId: "client-turn:workflow",
-            ts: "2026-07-18T01:00:01.000Z",
-            tool_call_id: "call-workflow",
-            content: "{\"ok\":true}",
-          },
-        ],
-      }],
-      variant: "details",
-    });
-
-    expect(logs.map((item) => item.event)).toEqual(["tool_call", "tool_result"]);
-    expect(logs[0].text).toContain("workflow_tool");
-    expect(logs[1].detailText).toContain('"ok":true');
-  });
-  it("projects child-session tool facets and raw events for the details drawer", () => {
-    const scope = {
-      role: "assistant",
-      sessionId: "child-session",
-      dialogProcessId: "child-dialog",
-      turnScopeId: "client-turn:child",
-    };
-    const logs = normalizeThinkingToolLogs({
-      messageItem: scope,
-      allMessages: [
-        { ...scope, toolCall: { id: "call-facet", name: "read_file", args: { filePath: "a.js" } } },
-        { ...scope, toolResult: { toolCallId: "call-facet", name: "read_file", output: { ok: true } } },
-        { ...scope, rawEvents: [
-          { event: "tool_call_start", data: { eventType: "tool_call_start", toolCallId: "call-raw", tool: "search", args: { query: "needle" } } },
-          { event: "tool_call_end", data: { eventType: "tool_call_end", toolCallId: "call-raw", tool: "search", result: { matches: 1 } } },
-        ] },
-      ],
-      variant: "details",
-    });
-
-    expect(logs.map((item) => `${item.event}:${item.toolCallId}`)).toEqual([
-      "tool_call:call-facet",
-      "tool_result:call-facet",
-      "tool_call:call-raw",
-      "tool_result:call-raw",
-    ]);
-    expect(logs[0].text).toContain("read_file");
-    expect(logs[1].detailText).toContain('"ok":true');
-    expect(logs[2].text).toContain("search");
-    expect(logs[3].detailText).toContain('"matches":1');
-    expect(logs[3].text).toContain("ok=true");
+  it("does not read removed realtime or completed log fields", () => {
+    expect(normalizeThinkingToolLogs({ messageItem: {
+      realtimeLogs: [{ event: "tool_call", text: "legacy call" }],
+      completedToolLogs: [{ event: "tool_result", text: "legacy result" }],
+    } })).toEqual([]);
   });
 });

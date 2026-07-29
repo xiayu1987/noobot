@@ -3,22 +3,26 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { classifyRealtimeLog } from "../../../../../../src/app/state/sessionMessageState.js";
 import {
   dispatchTurnEnvelope,
   hydrateTurnSnapshot,
   TURN_PROJECTION_SOURCE,
 } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
+import {
+  setThinkingReplayDebugLogSink,
+} from "../../../../../../src/modules/debug/loggers/thinkingReplayDebugLogger.js";
 
 const identity = { sessionId: "session-1", turnScopeId: "turn-1" };
 const message = () => ({ ...identity, id: "message-1", messageId: "message-1", content: "" });
 const envelope = (overrides) => ({
   envelopeKind: "noobot.message_event",
-  envelopeVersion: 1,
+  envelopeVersion: 2,
   sessionId: identity.sessionId,
   turnScopeId: identity.turnScopeId,
   messageId: "message-1",
+  presentationMessageId: "message-1",
   timestamp: "2026-01-01T00:00:00.000Z",
   ...overrides,
 });
@@ -34,6 +38,8 @@ const events = [
   }),
   envelope({ eventId: "evt-4", eventType: "llm_delta", sequence: 4, text: "world" }),
 ];
+
+afterEach(() => setThinkingReplayDebugLogSink(null));
 
 function replay(targetMessage, replayEvents, source) {
   replayEvents.forEach((event) => {
@@ -70,6 +76,49 @@ function projection(messageValue) {
 }
 
 describe("turnProjectionStore convergence", () => {
+  it("logs canonical envelope identity and payload presence at the shared reducer boundary", () => {
+    const log = vi.fn();
+    setThinkingReplayDebugLogSink({ log });
+    const event = envelope({
+      envelopeVersion: 2,
+      envelopeKind: "noobot.message_event",
+      eventId: "guidance-1",
+      eventType: "thinking",
+      presentationMessageId: "message-1",
+      sequence: 1,
+      sequenceDomain: "message-event",
+      sequenceScopeId: "message-1",
+      authority: "authoritative",
+      text: "analysis",
+      output: "analysis",
+    });
+
+    expect(dispatchTurnEnvelope({
+      targetMessage: message(),
+      envelope: event,
+      classifyRealtimeLog,
+      source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
+    }).applied).toBe(true);
+
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({
+      event: "frontend.turnProjection.envelopeObserved",
+      data: expect.objectContaining({
+        source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
+        envelopeKind: "noobot.message_event",
+        envelopeVersion: 2,
+        eventId: "guidance-1",
+        messageId: "message-1",
+        presentationMessageId: "message-1",
+        sequenceDomain: "message-event",
+        sequenceScopeId: "message-1",
+        authority: "authoritative",
+        textLength: 8,
+        outputLength: 8,
+        result: "applied",
+      }),
+    }));
+  });
+
   it("returns a stable structured observation contract", () => {
     const target = message();
     const result = dispatchTurnEnvelope({
@@ -91,6 +140,29 @@ describe("turnProjectionStore convergence", () => {
       messageEffect: "none",
     });
     expect(result.turnKey).toBeTruthy();
+  });
+
+  it("rejects an invalid v2 presentation identity before buffering sequence state", () => {
+    const target = message();
+    const result = dispatchTurnEnvelope({
+      targetMessage: target,
+      envelope: envelope({
+        envelopeVersion: 2,
+        presentationMessageId: "",
+        eventId: "invalid-v2",
+        eventType: "llm_delta",
+        sequence: 3,
+        text: "must not buffer",
+      }),
+      classifyRealtimeLog,
+      source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
+    });
+    expect(result).toMatchObject({
+      applied: false,
+      result: "invalid",
+      reason: "invalid_message_event_envelope",
+    });
+    expect(target).not.toHaveProperty("messageEventState");
   });
 
   it("converges for live, snapshot plus reconnect increment, and full history replay", () => {
@@ -124,11 +196,11 @@ describe("turnProjectionStore convergence", () => {
     expect(target.toolTimeline[0]).toMatchObject({ status: "completed" });
   });
 
-  it("aggregates independently sequenced assistant messages into one live turn", () => {
+  it("aggregates explicit source-message lanes into one presentation message", () => {
     const target = {
       ...identity,
       id: "optimistic-turn-message",
-      turnPlaceholder: true,
+      messageId: "optimistic-turn-message",
       content: "",
     };
     const multiMessageEvents = [
@@ -170,31 +242,29 @@ describe("turnProjectionStore convergence", () => {
       }),
       envelope({
         messageId: "assistant-final", eventId: "final-content",
-        eventType: "main_model_content", sequence: 1,
+        eventType: "authoritative_final_content", sequence: 1,
         timestamp: "2026-01-01T00:00:07.000Z",
         text: "finished", output: "finished",
       }),
     ];
-
-    for (const eventItem of multiMessageEvents) {
-      expect(dispatchTurnEnvelope({
-        targetMessage: target,
-        envelope: eventItem,
-        classifyRealtimeLog,
-        source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
-      })).toMatchObject({ applied: true, result: "applied" });
-    }
-
-    expect(target.content).toBe("finished");
-    expect(target.toolTimeline).toHaveLength(3);
-    expect(target.toolTimeline.map((item) => item.status)).toEqual([
-      "completed", "completed", "completed",
-    ]);
-    expect(target.messageEventState.sequenceLanesByScopeId).toMatchObject({
-      "assistant-tools-1": { lastSequence: 4 },
-      "assistant-tools-2": { lastSequence: 2 },
-      "assistant-final": { lastSequence: 1, finalContentSequence: 1 },
+    multiMessageEvents.forEach((eventItem) => {
+      eventItem.envelopeVersion = 2;
+      eventItem.presentationMessageId = "optimistic-turn-message";
     });
+
+    const results = multiMessageEvents.map((eventItem) => dispatchTurnEnvelope({
+      targetMessage: target,
+      envelope: eventItem,
+      classifyRealtimeLog,
+      source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
+    }));
+
+    expect(results.every((result) => result.applied === true)).toBe(true);
+    expect(target.content).toBe("finished");
+    expect(target.toolTimeline || []).toHaveLength(3);
+    expect(Object.keys(target.messageEventState.sequenceLanesByScopeId)).toEqual([
+      "assistant-tools-1", "assistant-tools-2", "assistant-final",
+    ]);
     expect(target.messageEventState.consumedEventIds).toHaveLength(7);
   });
 

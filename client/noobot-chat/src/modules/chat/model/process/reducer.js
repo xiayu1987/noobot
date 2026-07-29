@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  PROCESS_COMPAT_LOG_LIMIT,
   PROCESS_EVENT_VERSION,
   ProcessEventType,
   ProcessNodeStatus,
@@ -158,34 +157,5 @@ export function selectProcessSnapshot(state, processId = "") {
     updatedAt: processItem.updatedAt,
     nodes,
     meta: { eventCount: Number(processItem.eventCount || 0) },
-  };
-}
-
-export function selectProcessCompatView(state, processId = {}) {
-  const normalizedProcessId = normalizeProcessString(processId);
-  const snapshot = selectProcessSnapshot(state, normalizedProcessId);
-  if (!snapshot) return { realtimeLogs: [], completedToolLogs: [], executionLogTotal: 0, lastSequence: 0 };
-  const logs = snapshot.nodes
-    .map((node, sourceIndex) => {
-      const log = node?.log || node?.payload?.log;
-      if (!log) return null;
-      const sequence = toProcessSequence(
-        node?.sequence ?? node?.meta?.sequence ?? log?.sequence ?? log?.seq,
-        0,
-      );
-      return { log: sequence ? { ...log, sequence } : log, sequence, sourceIndex };
-    })
-    .filter(Boolean)
-    .sort((left, right) => {
-      if (left.sequence !== right.sequence) return left.sequence - right.sequence;
-      return left.sourceIndex - right.sourceIndex;
-    })
-    .map((item) => item.log);
-  return {
-    realtimeLogs: logs.slice(-PROCESS_COMPAT_LOG_LIMIT),
-    completedToolLogs: logs,
-    executionLogTotal: logs.length,
-    lastSequence: snapshot.lastSequence,
-    status: snapshot.status,
   };
 }

@@ -9,12 +9,11 @@ import { normalizeTrimmedString } from "./utils.js";
 import { applyLatestSessionVersion, getCurrentSessionVersion, isNewerSessionVersion } from "./sessionVersionManager.js";
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
-  const { activeSession, sessionId, upsertSubSessionEvent } = context;
+  const { activeSession, sessionId } = context;
   if (event === StreamEventEnum.TURN_LIFECYCLE) {
     const eventSessionId = normalizeTrimmedString(data?.sessionId);
     const mainSessionId = normalizeTrimmedString(activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId);
     if (eventSessionId && mainSessionId && eventSessionId !== mainSessionId) {
-      upsertSubSessionEvent?.(event, data || {});
       return true;
     }
   }

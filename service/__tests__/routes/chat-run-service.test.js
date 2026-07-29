@@ -125,3 +125,19 @@ test("chat-run-service: normalizeRunConfig should preserve neutral turnScopeId",
   assert.equal(normalized.turnScopeId, "turn-scope:abc");
 });
 
+test("chat-run-service: normalizeRunConfig should converge presentation message identity", () => {
+  const service = createService();
+
+  const normalized = service.normalizeRunConfig({ assistantMessageId: "  msg_assistant-1  " });
+
+  assert.equal(normalized.presentationMessageId, "msg_assistant-1");
+  assert.equal(Object.prototype.hasOwnProperty.call(normalized, "assistantMessageId"), false);
+});
+
+test("chat-run-service: normalizeRunConfig should preserve userMessageId", () => {
+  const service = createService();
+
+  const normalized = service.normalizeRunConfig({ userMessageId: "  msg_user-1  " });
+
+  assert.equal(normalized.userMessageId, "msg_user-1");
+});

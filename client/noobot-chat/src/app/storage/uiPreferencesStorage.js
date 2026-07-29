@@ -120,6 +120,33 @@ export function normalizePluginModelConfig(value = {}) {
   return normalizeNode(value) || {};
 }
 
+export function applyFrontendPluginModelConfigDefaults(value = {}) {
+  const normalized = normalizePluginModelConfig(value);
+  const harness = normalized?.harness && typeof normalized.harness === "object"
+    ? normalized.harness
+    : {};
+  const capabilityProfile = harness?.capabilityProfile && typeof harness.capabilityProfile === "object"
+    ? harness.capabilityProfile
+    : {};
+  return {
+    ...normalized,
+    harness: {
+      ...harness,
+      capabilityProfile: {
+        ...capabilityProfile,
+        planning: {
+          ...(capabilityProfile?.planning || {}),
+          enabled: capabilityProfile?.planning?.enabled === true,
+        },
+        acceptance: {
+          ...(capabilityProfile?.acceptance || {}),
+          enabled: capabilityProfile?.acceptance?.enabled === true,
+        },
+      },
+    },
+  };
+}
+
 export function normalizePluginModelConfigByScenarioPreference(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const nextValue = {};
@@ -170,7 +197,7 @@ export function loadUiPreferences() {
     safeConfirm: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.safeConfirm, true),
     safeConfirmLevel: normalizeSafeConfirmLevel(readStorageValue(UI_PREFERENCE_STORAGE_KEYS.safeConfirmLevel, "low")),
     sanitizeOutput: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.sanitizeOutput, true),
-    streamOutput: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.streamOutput, true),
+    streamOutput: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.streamOutput, false),
     botScenario,
     selectedModel: readSelectedModelPreference(botScenario),
     selectedModelByScenario,

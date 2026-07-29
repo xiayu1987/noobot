@@ -23,12 +23,7 @@ import {
   normalizeTurnScopeIdKey,
 } from "../../../chat/model/messageIdentity.js";
 import { getMessageAttachments } from "../../../chat/model/messageModel.js";
-import {
-  buildToolTimelineFromLegacyLogs,
-  countCompletedToolAttachments,
-  fillMissingToolTimelineFacets,
-} from "../../../chat/runtime/engine/toolTimeline.js";
-import { adaptLegacyMessageTimelines } from "../../../chat/runtime/engine/legacyTimelineAdapter.js";
+import { countCompletedToolAttachments } from "../../../chat/runtime/engine/toolTimeline.js";
 import {
   getMessageRuntimeChannelState,
   isMessageInFlightAssistant,
@@ -72,30 +67,29 @@ const FINALIZED_ASSISTANT_STATES = new Set([
 
 export function buildTurnTimingsByTurnScopeId({
   turnTimings = [],
-  messages = [],
   currentTimingsByTurnScopeId = {},
   onTimingHydrated = null,
 } = {}) {
-  const sourceMessages = Array.isArray(messages) ? messages : [];
   const currentTimings = currentTimingsByTurnScopeId && typeof currentTimingsByTurnScopeId === "object"
     ? currentTimingsByTurnScopeId
     : {};
   const projectedEntries = (Array.isArray(turnTimings) ? turnTimings : [])
     .map((item = {}) => {
-        const timingDialogProcessId = getMessageDialogProcessId(item);
-        const matchingMessage = timingDialogProcessId
-          ? sourceMessages.find(
-            (messageItem) => getMessageDialogProcessId(messageItem) === timingDialogProcessId,
-          )
-          : null;
-        const turnScopeId = getMessageTurnScopeId(item) || getMessageTurnScopeId(matchingMessage);
+        const turnScopeId = getMessageTurnScopeId(item);
         const turnScopeKey = normalizeTurnScopeIdKey(turnScopeId);
         const current = currentTimings[turnScopeKey] || currentTimings[turnScopeId] || {};
         const timing = {
           thinkingStartedAt: item?.thinkingStartedAt || current.thinkingStartedAt || null,
           thinkingFinishedAt: item?.thinkingFinishedAt || current.thinkingFinishedAt || null,
         };
-        onTimingHydrated?.({ item, matchingMessage, turnScopeId: turnScopeKey || turnScopeId, current, timing });
+        onTimingHydrated?.({
+          item,
+          matchingMessage: null,
+          turnScopeId: turnScopeKey || turnScopeId,
+          current,
+          timing,
+          retained: Boolean(turnScopeKey || turnScopeId),
+        });
         return [turnScopeKey || turnScopeId, timing];
       })
     .filter(([turnScopeId]) => Boolean(turnScopeId));
@@ -103,7 +97,6 @@ export function buildTurnTimingsByTurnScopeId({
   for (const [turnScopeId, timing] of Object.entries(currentTimings)) {
     const turnScopeKey = normalizeTurnScopeIdKey(turnScopeId);
     if (projectedTurnScopeIds.has(turnScopeKey)) continue;
-    if (!sourceMessages.some((messageItem) => getMessageTurnScopeIdKey(messageItem) === turnScopeKey)) continue;
     projectedEntries.push([turnScopeKey, timing]);
   }
   return Object.fromEntries(projectedEntries);
@@ -135,11 +128,10 @@ function buildTurnStatusMap(turnStatuses = []) {
   return map;
 }
 
-function shouldInjectTurnStatusPlaceholder(turnStatus = {}, hasAssistantResponse = false) {
+function shouldInjectTurnStatusPlaceholder(turnStatus = {}) {
   const status = normalizeState(turnStatus?.status);
   if (!status || TURN_STATUS_COMPLETED_STATES.has(status)) return false;
-  if (!TURN_STATUS_PLACEHOLDER_STATES.has(status)) return false;
-  return !hasAssistantResponse;
+  return TURN_STATUS_PLACEHOLDER_STATES.has(status);
 }
 
 function formatTurnStatusPlaceholderContent(turnStatus = {}) {
@@ -195,7 +187,6 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
   if (!sourceMessages.length || !statusMap.size) return sourceMessages;
   const output = [];
   const placeholdersByKey = new Map();
-  const assistantResponseKeys = new Set();
   for (const messageItem of sourceMessages) {
     const turnScopeId = normalizeText(getMessageTurnScopeId(messageItem));
     const dialogProcessId = normalizeText(getMessageDialogProcessId(messageItem));
@@ -205,13 +196,6 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
     ].filter(Boolean);
     if (messageItem?.turnStatusPlaceholder === true) {
       keys.forEach((key) => placeholdersByKey.set(key, messageItem));
-      continue;
-    }
-    if (
-      getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
-      messageItem?.pending === false
-    ) {
-      keys.forEach((key) => assistantResponseKeys.add(key));
     }
   }
   const injectedKeys = new Set();
@@ -230,8 +214,7 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
       (messageTurnScopeId ? statusMap.get(`turn:${messageTurnScopeId}`) : null) ||
       (messageDialogProcessId ? statusMap.get(`dialog:${messageDialogProcessId}`) : null);
     if (!turnStatus) continue;
-    const hasAssistantResponse = turnKeys.some((key) => assistantResponseKeys.has(key));
-    if (!shouldInjectTurnStatusPlaceholder(turnStatus, hasAssistantResponse)) continue;
+    if (!shouldInjectTurnStatusPlaceholder(turnStatus)) continue;
     const existingPlaceholder = turnKeys
       .map((key) => placeholdersByKey.get(key))
       .find(Boolean);
@@ -242,7 +225,7 @@ export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
 }
 
 function countCompletedToolLogAttachments(messageItem = {}) {
-  return countCompletedToolAttachments(adaptLegacyMessageTimelines(messageItem));
+  return countCompletedToolAttachments(messageItem);
 }
 
 function isInFlightAssistantMessage(messageItem = {}) {
@@ -307,9 +290,19 @@ function restoreFrozenAssistantDisplayFields(messageItem = {}, frozen = null) {
   messageItem.pending = false;
 }
 
-function conflictsWithInFlightAssistant(existingMessages = [], detailMessageItem = {}) {
+function conflictsWithInFlightAssistant(
+  existingMessages = [],
+  detailMessageItem = {},
+  { registry = null, sessionId = "" } = {},
+) {
   const detailTurnScopeId = getMessageTurnScopeId(detailMessageItem);
   const detailDialogProcessId = getMessageDialogProcessId(detailMessageItem);
+  const registryRuntime = selectTurnMessageRuntime(registry, {
+    sessionId,
+    turnScopeId: detailTurnScopeId,
+    dialogProcessId: detailDialogProcessId,
+  });
+  if (registryRuntime?.source && registryRuntime.running === true) return true;
   return (Array.isArray(existingMessages) ? existingMessages : []).some((messageItem) => {
     const existingTurnScopeId = getMessageTurnScopeId(messageItem);
     const existingDialogProcessId = getMessageDialogProcessId(messageItem);
@@ -395,6 +388,10 @@ export function buildMessageIdentity(messageItem = {}) {
   return buildMessageIdentityKey(messageItem);
 }
 
+function getCanonicalMessageId(messageItem = {}) {
+  return normalizeText(messageItem?.messageId || messageItem?.id);
+}
+
 function isInlineEditingUserMessage(messageItem = {}) {
   return (
     normalizeMessageRole(messageItem) === RoleEnum.USER &&
@@ -403,6 +400,13 @@ function isInlineEditingUserMessage(messageItem = {}) {
 }
 
 export function findExistingMessageIndexForDetailMessage(existingMessages = [], detailMessageItem = {}) {
+  const detailMessageId = getCanonicalMessageId(detailMessageItem);
+  if (detailMessageId) {
+    return existingMessages.findIndex(
+      (messageItem) => getCanonicalMessageId(messageItem) === detailMessageId,
+    );
+  }
+  if (normalizeMessageRole(detailMessageItem) === RoleEnum.ASSISTANT) return -1;
   if (buildMessageIdentity(detailMessageItem)) {
     const identityIndex = findMessageIdentityIndex(detailMessageItem, existingMessages);
     if (identityIndex >= 0) return identityIndex;
@@ -542,8 +546,11 @@ export function mergePreservedDetailMessages(
       restoreRunningThinkingState();
       continue;
     }
+    const canAppendDetailMessage =
+      detailMessageItem?.turnStatusPlaceholder === true ||
+      hasReliableCompletedAssistantIdentity(detailMessageItem);
     if (
-      hasReliableCompletedAssistantIdentity(detailMessageItem) &&
+      canAppendDetailMessage &&
       !conflictsWithInFlightAssistant(existingMessages, detailMessageItem, { registry, sessionId })
     ) {
       existingMessages.push(detailMessageItem);
@@ -578,6 +585,12 @@ export function buildNormalizedDetailMessages({
   const normalizedMessages = isSummaryDetail
     ? sourceMessages.map((messageItem) => makeViewMessage(messageItem))
     : foldMessagesForView(sourceMessages);
+  for (const messageItem of normalizedMessages) {
+    if (!messageItem.sessionId && rootSessionId) {
+      messageItem.sessionId = rootSessionId;
+      messageItem.session_id = rootSessionId;
+    }
+  }
   if (!isSummaryDetail) {
     mergeChildTurnAttachmentsIntoRootMessages({
       rootMessages: normalizedMessages,
@@ -712,31 +725,4 @@ export function mergeChildTurnAttachmentsIntoRootMessages({
     );
   }
   return messages;
-}
-
-export function applySummaryToolLogs(sessionItem, sessionDocs = []) {
-  const logsByTurnScopeId = new Map();
-  for (const sessionDoc of sessionDocs) {
-    for (const logItem of Array.isArray(sessionDoc?.toolLogSummaries) ? sessionDoc.toolLogSummaries : []) {
-      const turnScopeId = getMessageTurnScopeId(logItem);
-      if (!turnScopeId) continue;
-      logsByTurnScopeId.set(turnScopeId, [
-        ...(logsByTurnScopeId.get(turnScopeId) || []),
-        logItem,
-      ]);
-    }
-  }
-  for (const messageItem of sessionItem.messages || []) {
-    if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) continue;
-    if (!canUseTurnScopedAssets(messageItem)) {
-      clearTurnScopedAssets(messageItem);
-      continue;
-    }
-    const turnScopeId = getMessageTurnScopeId(messageItem);
-    const logs = logsByTurnScopeId.get(turnScopeId) || [];
-    messageItem.toolTimeline = fillMissingToolTimelineFacets(
-      messageItem.toolTimeline,
-      buildToolTimelineFromLegacyLogs(logs),
-    );
-  }
 }

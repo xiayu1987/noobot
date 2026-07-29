@@ -7,12 +7,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildUnifiedSessionDetail,
+  createRunningAssistantPlaceholderViewModel,
   hasNewProtocolNodeIdentity,
   mergeUnifiedSessionDetail,
   resolveNodeChildExecutionIds,
   resolveIsolatedNodeSessionId,
   resolveRuntimeNodeSession,
-  withRunningAssistantPlaceholder,
 } from "../../frontend/runtime/workflowUnifiedSessionDetail.js";
 import {
   fetchExecutionSessionDetail,
@@ -51,22 +51,24 @@ test("realtime projection cannot erase persisted user messages", () => {
   assert.equal(merged.messages[1].content, "streamed");
 });
 
-test("running child Execution adds an assistant placeholder beside its user message", () => {
-  const messages = withRunningAssistantPlaceholder([
+test("running child Execution creates a view-only placeholder", () => {
+  const messages = [
     { id: "user-1", role: "user", content: "request", turnScopeId: "turn-1" },
-  ], {
+  ];
+  const placeholder = createRunningAssistantPlaceholderViewModel(messages, {
     sessionId: "child-session-a",
     turnScopeId: "turn-1",
     state: "running",
   });
 
-  assert.deepEqual(messages.map(({ role }) => role), ["user", "assistant"]);
-  assert.equal(messages[1].pending, true);
-  assert.equal(messages[1].workflowNodeRunningPlaceholder, true);
+  assert.deepEqual(messages.map(({ role }) => role), ["user"]);
+  assert.equal(placeholder.viewKey, "workflow-node-running:turn-1");
+  assert.equal(placeholder.role, undefined);
+  assert.equal(placeholder.content, undefined);
 });
 
-test("running placeholder inherits the persisted child user identity", () => {
-  const messages = withRunningAssistantPlaceholder([{
+test("running placeholder view model inherits the persisted child user identity", () => {
+  const placeholder = createRunningAssistantPlaceholderViewModel([{
     id: "user-1",
     role: "user",
     sessionId: "child-session",
@@ -79,28 +81,26 @@ test("running placeholder inherits the persisted child user identity", () => {
     state: "running",
   });
 
-  assert.equal(messages[1].sessionId, "child-session");
-  assert.equal(messages[1].dialogProcessId, "child-dialog");
+  assert.equal(placeholder.sessionId, "child-session");
+  assert.equal(placeholder.dialogProcessId, "child-dialog");
 });
 
-test("running child Execution does not duplicate a real assistant or leak into terminal state", () => {
+test("running placeholder view model is absent beside a real assistant or in terminal state", () => {
   const realMessages = [
     { id: "user-1", role: "user", turnScopeId: "turn-1" },
     { id: "assistant-1", role: "assistant", turnScopeId: "turn-1" },
   ];
-  assert.equal(withRunningAssistantPlaceholder(realMessages, { turnScopeId: "turn-1", state: "running" }), realMessages);
+  assert.equal(createRunningAssistantPlaceholderViewModel(realMessages, { turnScopeId: "turn-1", state: "running" }), null);
   const userOnly = realMessages.slice(0, 1);
-  assert.equal(withRunningAssistantPlaceholder(userOnly, { turnScopeId: "turn-1", state: "completed" }), userOnly);
+  assert.equal(createRunningAssistantPlaceholderViewModel(userOnly, { turnScopeId: "turn-1", state: "completed" }), null);
 });
 
-test("real assistant message supersedes a previously merged running placeholder", () => {
+test("real assistant message merges without a synthetic placeholder entity", () => {
   const turnScopeId = "turn-1";
   const running = mergeUnifiedSessionDetail({}, {
     sessionId: "child-session-a",
     execution: { state: "running" },
-    messages: withRunningAssistantPlaceholder([
-      { id: "user-1", role: "user", turnScopeId },
-    ], { sessionId: "child-session-a", turnScopeId, state: "running" }),
+    messages: [{ id: "user-1", role: "user", turnScopeId }],
   });
   const completed = mergeUnifiedSessionDetail(running, {
     sessionId: "child-session-a",
@@ -111,14 +111,12 @@ test("real assistant message supersedes a previously merged running placeholder"
   assert.deepEqual(completed.messages.map(({ id }) => id), ["user-1", "assistant-1"]);
 });
 
-test("terminal child state keeps the thinking surface until the real assistant materializes", () => {
+test("terminal child state does not persist a thinking placeholder as a message", () => {
   const turnScopeId = "turn-1";
   const running = {
     sessionId: "child-session-a",
     execution: { state: "running" },
-    messages: withRunningAssistantPlaceholder([
-      { id: "user-1", role: "user", turnScopeId },
-    ], { sessionId: "child-session-a", turnScopeId, state: "running" }),
+    messages: [{ id: "user-1", role: "user", turnScopeId }],
   };
   const completed = mergeUnifiedSessionDetail(running, {
     sessionId: "child-session-a",
@@ -127,10 +125,7 @@ test("terminal child state keeps the thinking surface until the real assistant m
     messages: [{ id: "user-1", role: "user", turnScopeId }],
   });
 
-  assert.deepEqual(completed.messages.map(({ id }) => id), [
-    "user-1",
-    `workflow-node-running:${turnScopeId}`,
-  ]);
+  assert.deepEqual(completed.messages.map(({ id }) => id), ["user-1"]);
 });
 
 function selectSessionMessages(sessionId) {
@@ -220,11 +215,14 @@ test("does not let a root-bound Execution overwrite the isolated workflow node s
   });
 
   assert.equal(detail.sessionId, "child-session-a");
-  assert.deepEqual(detail.messages.map(({ id }) => id), [
-    "child-user",
-    `workflow-node-running:${turnScopeId}`,
-  ]);
-  assert.equal(detail.messages[1].sessionId, "child-session-a");
+  assert.deepEqual(detail.messages.map(({ id }) => id), ["child-user"]);
+  const placeholder = createRunningAssistantPlaceholderViewModel(detail.messages, {
+    sessionId: detail.sessionId,
+    turnScopeId,
+    state: "running",
+  });
+  assert.equal(placeholder.viewKey, `workflow-node-running:${turnScopeId}`);
+  assert.equal(placeholder.sessionId, "child-session-a");
   assert.equal(detail.messages.some(({ id }) => id === "root-user"), false);
 });
 
@@ -340,7 +338,7 @@ test("builds content-only unified detail with scoped messages", () => {
   assert.equal(detail.sessionId, "child-session-a");
   assert.equal(detail.sessionSummary.turnScopeId, "workflow-node:node-exec-a");
   assert.equal(detail.sessionSummary.turnRuntime, undefined);
-  assert.deepEqual(detail.messages.map((item) => item.id), ["m-1", "m-3"]);
+  assert.deepEqual(detail.messages.map((item) => item.id), ["m-1"]);
   assert.deepEqual(detail.messages[0].toolLogs, [{ id: "tool-1" }]);
 });
 

@@ -7,7 +7,6 @@ import {
   MESSAGE_EVENT_ENVELOPE_KIND,
   assertMessageEventEnvelope,
   isMessageEventEnvelope,
-  normalizeSseLogEvent,
 } from "#agent/event";
 import {
   buildParentOwnedChildRunPayload,
@@ -30,6 +29,13 @@ export function createRunEventListener({
   onAuthoritativeMessageRouted = null,
   onEventReceived = null,
 } = {}) {
+  const subagentEventName = (value = "") => {
+    const normalized = String(value || "event")
+      .trim()
+      .replace(/^subagent_/, "")
+      .replace(/[^a-zA-Z0-9_]+/g, "_");
+    return `subagent_${normalized || "event"}`;
+  };
   const resolveTurnScopeId = () =>
     getCurrentRunMeta()?.turnScopeId || getCurrentTurnScopeId() || "";
 
@@ -45,6 +51,32 @@ export function createRunEventListener({
         turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
         envelopeKind: String(eventData?.envelopeKind || "").trim(),
         messageId: String(eventData?.messageId || "").trim(),
+        presentationMessageId: String(eventData?.presentationMessageId || "").trim(),
+        eventId: String(eventData?.eventId || "").trim(),
+        messageCount: Number(eventData?.messageCount || 0),
+        assistantCount: Number(eventData?.assistantCount || 0),
+        toolCount: Number(eventData?.toolCount || 0),
+        activityTimelineCount: Number(eventData?.activityTimelineCount || 0),
+        messages: Array.isArray(eventData?.messages)
+          ? eventData.messages.slice(0, 64).map((message = {}) => ({
+              messageUid: String(message?.messageUid || "").trim(),
+              messageId: String(message?.messageId || "").trim(),
+              presentationMessageId: String(message?.presentationMessageId || "").trim(),
+              role: String(message?.role || "").trim(),
+              type: String(message?.type || "").trim(),
+              activityTimelineCount: Number(message?.activityTimelineCount || 0),
+              activityTimeline: Array.isArray(message?.activityTimeline)
+                ? message.activityTimeline.slice(0, 64).map((activity = {}) => ({
+                    eventId: String(activity?.eventId || "").trim(),
+                    activityKind: String(activity?.activityKind || "").trim(),
+                    sequence: Number(activity?.sequence || 0),
+                    sequenceDomain: String(activity?.sequenceDomain || "").trim(),
+                    sequenceScopeId: String(activity?.sequenceScopeId || "").trim(),
+                    authority: String(activity?.authority || "").trim(),
+                  }))
+                : [],
+            }))
+          : [],
         workflowRunId: String(eventData?.workflowRunId || "").trim(),
         nodeExecutionId: String(eventData?.nodeExecutionId || "").trim(),
         workflowStatus: String(eventData?.status || "").trim(),
@@ -183,20 +215,12 @@ export function createRunEventListener({
             rootSessionId: sessionId,
             parentDialogProcessId,
           });
-          const normalizedEvent = normalizeSseLogEvent({
-            ...eventPayload,
-            event: "subagent_llm_delta",
-            data: {
-              ...parentOwnedData,
-              category: "system",
-              type: "subagent_delta",
-              event: "subagent_delta",
-              text: String(parentOwnedData.text || ""),
-            },
-          });
           sendEvent(
-            normalizedEvent.event,
-            buildParentOwnedChildRunPayload(normalizedEvent.data, parentOwnedData, {
+            "subagent_llm_delta",
+            buildParentOwnedChildRunPayload({
+              ...parentOwnedData,
+              text: String(parentOwnedData.text || ""),
+            }, parentOwnedData, {
               rootSessionId: sessionId,
               turnScopeId: resolveTurnScopeId(),
             }),
@@ -257,14 +281,8 @@ export function createRunEventListener({
         return;
       }
       if (workflowChildRunEvent) {
-        const normalizedEvent = normalizeSseLogEvent(eventPayload);
-        const normalizedType = String(normalizedEvent?.data?.type || eventName || "event")
-          .trim()
-          .replace(/^subagent_/, "")
-          .replace(/[^a-zA-Z0-9_]+/g, "_");
-        sendEvent(`subagent_${normalizedType || "event"}`, buildSubSessionWirePayload({
+        sendEvent(subagentEventName(eventName), buildSubSessionWirePayload({
           ...eventData,
-          ...normalizedEvent.data,
           rawEvent: eventName,
         }, {
           rootSessionId: sessionId,
@@ -273,32 +291,25 @@ export function createRunEventListener({
         }));
         return;
       }
-      const normalizedEvent = normalizeSseLogEvent(
-        childRunEvent
-          ? {
-              ...eventPayload,
-              data: parentOwnsChildRunEventData(eventData, {
-                rootSessionId: sessionId,
-                parentDialogProcessId,
-              }),
-            }
-          : eventPayload,
-      );
       if (childRunEvent) {
         const parentOwnedData = parentOwnsChildRunEventData(eventData, {
           rootSessionId: sessionId,
           parentDialogProcessId,
         });
         sendEvent(
-          normalizedEvent.event,
-          buildParentOwnedChildRunPayload(normalizedEvent.data, parentOwnedData, {
+          subagentEventName(eventName),
+          buildParentOwnedChildRunPayload(parentOwnedData, parentOwnedData, {
             rootSessionId: sessionId,
             turnScopeId: resolveTurnScopeId(),
           }),
         );
         return;
       }
-      sendEvent(normalizedEvent.event, normalizedEvent.data);
+      sendEvent(eventName, {
+        ...eventData,
+        sessionId: String(eventData?.sessionId || sessionId || ""),
+        turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || ""),
+      });
     },
   };
 }

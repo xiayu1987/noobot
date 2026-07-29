@@ -19,6 +19,7 @@ const props = defineProps({
   viewerError: { type: String, default: "" },
   viewerState: { type: String, default: "idle" },
   selectedNodeSessionId: { type: String, default: "" },
+  runningPlaceholderViewModel: { type: Object, default: null },
   selectedExecutionId: { type: String, default: "" },
   executionDirectory: { type: Array, default: () => [] },
   attemptExecutionIds: { type: Array, default: () => [] },
@@ -317,6 +318,13 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
           file-preview-dialog-class="workflow-session-preview-dialog"
           @open-thinking-details="$emit('open-thinking-details', $event)"
         />
+        <div
+          v-if="selectedRuntimeStep && runningPlaceholderViewModel"
+          class="workflow-node-running-placeholder"
+          data-testid="workflow-node-running-placeholder"
+        >
+          {{ translate("workflow.nodeSessionPending") }}
+        </div>
         <BaseEmptyHint
           v-else-if="selectedRuntimeStep && !viewerLoading"
           class="workflow-node-empty"

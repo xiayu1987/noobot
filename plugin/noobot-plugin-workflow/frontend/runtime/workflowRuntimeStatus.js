@@ -7,7 +7,7 @@
 export function normalizeStatus(value = "") {
   const status = String(value || "").trim().toLowerCase();
   if (status === "error") return "failed";
-  if (status === "done" || status === "completed") return "success";
+  if (status === "done" || status === "completed" || status === "succeeded") return "success";
   return status;
 }
 
@@ -22,20 +22,15 @@ export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
       return "failed";
     }
 
-    const nodeExecutionId = String(stepItem?.nodeExecutionId || "").trim();
-    if (!nodeExecutionId) {
-      const explicit = normalizeStatus(stepItem?.stepStatus || stepItem?.status || stepItem?._status || "");
-      if (explicit) return explicit;
-    }
+    const explicit = normalizeStatus(stepItem?.status || stepItem?._status || "");
+    if (explicit) return explicit;
 
     const dialogProcessId = resolveWorkflowDialogProcessId(stepItem);
     const runItem = dialogProcessId ? nodeRunByDialogProcessId.value.get(dialogProcessId) : null;
     if (runItem?.stepFailure) return "failed";
 
-    if (!nodeExecutionId) {
-      const runStatus = normalizeStatus(runItem?.stepStatus || runItem?.status || "");
-      if (runStatus) return runStatus;
-    }
+    const runStatus = normalizeStatus(runItem?.status || "");
+    if (runStatus) return runStatus;
     return "pending";
   };
 }

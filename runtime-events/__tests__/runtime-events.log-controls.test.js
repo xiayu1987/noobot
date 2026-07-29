@@ -163,3 +163,52 @@ test('runtime-events writer drops unknown debug session logs by default', async 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, true);
 });
+
+test('routed debug logs without session context still honor their debug control', async () => {
+  const root = await tempRoot();
+  const event = {
+    source: 'frontend',
+    category: 'debug',
+    level: 'debug',
+    event: 'frontend.toolLogWindow.executionWindowSelected',
+    userId: 'admin',
+    data: { debugType: 'tool-log-window', candidateCount: 100 },
+  };
+
+  const skipped = await writeRoutedRuntimeEvent(event, {
+    root,
+    includeProcess: false,
+    frontendToolLogWindowDebug: false,
+  });
+
+  assert.equal(skipped.ok, true);
+  assert.equal(skipped.skipped, true);
+  assert.equal(skipped.record.scope, 'system');
+  assert.equal(await pathExists(path.join(root, 'system', 'frontend', 'debug.jsonl')), false);
+
+  const recorded = await writeRoutedRuntimeEvent(event, {
+    root,
+    includeProcess: false,
+    frontendToolLogWindowDebug: true,
+  });
+
+  assert.equal(recorded.ok, true);
+  assert.equal(recorded.skipped, undefined);
+  assert.equal(recorded.record.scope, 'system');
+  assert.match(recorded.file, /system\/frontend\/debug\.jsonl$/);
+  assert.equal((await readJsonl(recorded.file))[0].data.candidateCount, 100);
+});
+
+test('non-debug system runtime events are not governed by session log controls', async () => {
+  const root = await tempRoot();
+  const result = await writeSystemRuntimeEvent({
+    source: 'service',
+    category: 'system',
+    level: 'info',
+    event: 'service.runtime.ready',
+  }, { root, includeProcess: false, systemLog: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.skipped, undefined);
+  assert.equal((await readJsonl(result.file))[0].event, 'service.runtime.ready');
+});

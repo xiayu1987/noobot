@@ -45,12 +45,13 @@ export async function loadThinkingDetail({
   turnScopeId = "",
   fetchThinkingDetail = null,
   thinkingDetailService = defaultThinkingDetailService,
+  refresh = false,
 } = {}) {
   const detailService = thinkingDetailService || defaultThinkingDetailService;
   const identity = resolveThinkingDetailIdentity({ ...messageItem, dialogProcessId: dialogProcessId || messageItem?.dialogProcessId, turnScopeId: turnScopeId || messageItem?.turnScopeId }, sessionId);
   if (!identity.key) return null;
   const cached = cache.entries[identity.key];
-  if (cached?.data) return cached.data;
+  if (cached?.data && refresh !== true) return cached.data;
   if (inflight.has(identity.key)) return inflight.get(identity.key);
   const request = (async () => {
     const runFetch = typeof fetchThinkingDetail === "function"

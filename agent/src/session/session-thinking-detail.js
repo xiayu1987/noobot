@@ -13,15 +13,7 @@ export function isInjectedMessage(messageItem = {}) {
 }
 
 export function isToolOrThinkingMessage(messageItem = {}) {
-  const role = normalizeRouteText(messageItem?.role).toLowerCase();
-  const type = normalizeRouteText(messageItem?.type).toLowerCase();
-  return (
-    role === "tool" ||
-    type === "tool_call" ||
-    type === "tool_result" ||
-    Array.isArray(messageItem?.realtimeLogs) ||
-    Array.isArray(messageItem?.completedToolLogs)
-  );
+  return Array.isArray(messageItem?.toolTimeline) || Array.isArray(messageItem?.activityTimeline);
 }
 
 export function isSameThinkingRound(rootMessage = {}, candidateMessage = {}, filters = {}) {
@@ -34,24 +26,6 @@ export function isSameThinkingRound(rootMessage = {}, candidateMessage = {}, fil
     return false;
   }
   return true;
-}
-
-export function buildToolLogFromMessage(messageItem = {}, fallbackIndex = 0) {
-  const role = normalizeRouteText(messageItem?.role).toLowerCase();
-  const type = normalizeRouteText(messageItem?.type).toLowerCase();
-  const event = type === "tool_result" || role === "tool" ? "tool_result" : "tool_call";
-  return {
-    sessionId: normalizeRouteText(messageItem?.sessionId),
-    depth: Number(messageItem?.depth || 1),
-    dialogProcessId: normalizeRouteText(messageItem?.dialogProcessId),
-    turnScopeId: normalizeRouteText(messageItem?.turnScopeId),
-    type: event,
-    event,
-    text: typeof messageItem?.content === "string"
-      ? messageItem.content
-      : JSON.stringify(messageItem?.content ?? `tool_${fallbackIndex + 1}`),
-    ts: messageItem?.ts || messageItem?.createdAt || "",
-  };
 }
 
 export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
@@ -73,30 +47,26 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
     isSameThinkingRound(rootMessage?.role ? rootMessage : { dialogProcessId, turnScopeId }, item, filters) &&
     (isInjectedMessage(item) || isToolOrThinkingMessage(item) || item === rootMessage)
   );
-  const toolLogs = scopedMessages
-    .filter((item = {}) => isToolOrThinkingMessage(item))
-    .flatMap((item = {}, index) => {
-      const completed = Array.isArray(item?.completedToolLogs) ? item.completedToolLogs : [];
-      if (completed.length) return completed;
-      const realtime = Array.isArray(item?.realtimeLogs) ? item.realtimeLogs : [];
-      if (realtime.length) return realtime;
-      return [buildToolLogFromMessage(item, index)];
-    });
   const injectedMessages = scopedMessages.filter((item = {}) => isInjectedMessage(item));
+  const toolTimeline = Array.isArray(rootMessage?.toolTimeline) ? rootMessage.toolTimeline : [];
+  const activityTimeline = Array.isArray(rootMessage?.activityTimeline) ? rootMessage.activityTimeline : [];
+  const thinkingDetailCount = toolTimeline.length + activityTimeline.length;
+  const sessionId = fullResult?.sessionId || sessionItem?.sessionId || "";
   const messageItem = {
     ...rootMessage,
-    hasThinkingDetails: toolLogs.length > 0 || injectedMessages.length > 0,
-    thinkingDetailCount: toolLogs.length,
-    executionLogTotal: toolLogs.length,
-    completedToolLogs: toolLogs,
+    sessionId: normalizeRouteText(rootMessage?.sessionId || sessionId),
+    toolTimeline,
+    activityTimeline,
+    hasThinkingDetails: thinkingDetailCount > 0 || injectedMessages.length > 0,
+    thinkingDetailCount,
   };
   return {
     exists: Boolean(rootMessage?.role || scopedMessages.length),
-    sessionId: fullResult?.sessionId || sessionItem?.sessionId || "",
+    sessionId,
     messageItem,
     allMessages: scopedMessages,
     counts: {
-      executionLogCount: toolLogs.length,
+      executionLogCount: toolTimeline.length,
       injectedMessageCount: injectedMessages.length,
       messageCount: scopedMessages.length,
     },

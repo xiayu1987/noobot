@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
+import {
+  createAuthoritativeMessageEnvelope,
+  createCanonicalAssistant,
+  createFixture,
+  createFakeProcessStore,
+} from "../helpers/useReconnectReplayHelper.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { applyTurnRuntimeEvent } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -17,7 +22,7 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("upgrades a refreshed assistant placeholder to the finalized workflow message from live DONE", async () => {
+  it("does not let a live DONE snapshot replace a canonical assistant by weak turn identity", async () => {
     const { api, refs } = createFixture();
     const placeholder = {
       role: RoleEnum.ASSISTANT,
@@ -73,13 +78,8 @@ describe("useReconnectReplay", () => {
 
     expect(refs.activeSession.value.messages).toHaveLength(2);
     expect(refs.activeSession.value.messages[1]).toMatchObject({
-      type: "workflow",
-      content: "workflow finalized",
-      pluginMessage: true,
-      pluginMeta: {
-        source: "workflow-plugin",
-        kind: "workflow",
-      },
+      content: "",
+      pending: true,
       thinkingExpanded: true,
     });
   });
@@ -213,14 +213,14 @@ describe("useReconnectReplay", () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-t", content: "", pending: true, realtimeLogs: [] },
+      createCanonicalAssistant({ dialogProcessId: "dp-t" }),
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.THINKING, {
+    await api.applyCanonicalMessageEvent("thinking", {
       sessionId: "s-1",
       dialogProcessId: "dp-t",
       seq: 1,
-      dialogProcessIdFromLog: "dp-t",
+      event: "execution_step",
       text: "thinking",
     });
 
@@ -235,16 +235,16 @@ describe("useReconnectReplay", () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-delta", content: "", pending: true },
+      createCanonicalAssistant({ dialogProcessId: "dp-delta" }),
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-delta",
       seq: 1,
       text: "A",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-delta",
       seq: 2,
@@ -362,7 +362,7 @@ describe("useReconnectReplay", () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
 
-    await api.applyReconnectEvent(StreamEventEnum.THINKING, {
+    await api.applyReconnectEvent("message", {
       sessionId: "s-1",
       dialogProcessId: "dp-thinking",
       seq: 1,
@@ -372,7 +372,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(false);
   });
 
-  it("EV-01b: when current turn has no user, render session first then replay", async () => {
+  it("EV-01b: reconnect transaction hydrates detail before canonical replay updates the explicit assistant identity", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "old-q", ts: 1 },
@@ -389,6 +389,13 @@ describe("useReconnectReplay", () => {
             { role: RoleEnum.USER, content: "old-q", ts: 1 },
             { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", content: "old-a", ts: 2 },
             { role: RoleEnum.USER, content: "new-q", ts: 3 },
+            createCanonicalAssistant({
+              sessionId: "s-1",
+              messageId: "message-dp-new",
+              dialogProcessId: "dp-new",
+              turnScopeId: "turn-dp-new",
+              ts: 4,
+            }),
           ],
         },
       ],
@@ -399,11 +406,28 @@ describe("useReconnectReplay", () => {
       refs.activeSession.value.rawMessages = [...refs.activeSession.value.messages];
     });
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    const envelope = createAuthoritativeMessageEnvelope("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-new",
+      turnScopeId: "turn-dp-new",
+      messageId: "message-dp-new",
       seq: 1,
       text: "A",
+    });
+    await api.applyReconnectData({
+      sessions: [{
+        sessionId: "s-1",
+        currentRun: {
+          sessionId: "s-1",
+          dialogProcessId: "dp-new",
+          turnScopeId: "turn-dp-new",
+          state: "sending",
+        },
+        dialogProcesses: [{
+          dialogProcessId: "dp-new",
+          messages: [envelope],
+        }],
+      }],
     });
 
     const userIdx = refs.activeSession.value.messages.findIndex(
@@ -415,10 +439,19 @@ describe("useReconnectReplay", () => {
         message.dialogProcessId === "dp-new" &&
         message.content === "A",
     );
-    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", {
+      source: "reconnectHydration",
+      allowLoadedSnapshot: false,
+      reuseRecentlyLoaded: false,
+    });
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
-    expect(userIdx).toBeGreaterThan(-1);
+    expect(userIdx).toBeGreaterThanOrEqual(0);
     expect(assistantIdx).toBeGreaterThan(userIdx);
+    expect(refs.activeSession.value.messages[assistantIdx]).toMatchObject({
+      id: "message-dp-new",
+      messageId: "message-dp-new",
+      content: "A",
+    });
   });
 
   it("EV-03: INTERACTION_REQUEST sets pending interaction without terminal cleanup", async () => {

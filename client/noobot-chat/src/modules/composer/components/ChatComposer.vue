@@ -28,7 +28,7 @@ const props = defineProps({
   safeConfirm: { type: Boolean, default: true },
   safeConfirmLevel: { type: String, default: "low" },
   sanitizeOutput: { type: Boolean, default: true },
-  streamOutput: { type: Boolean, default: true },
+  streamOutput: { type: Boolean, default: false },
   botScenario: { type: String, default: "" },
   scenarioOptions: { type: Array, default: () => [] },
   selectedModel: { type: String, default: "" },

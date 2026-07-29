@@ -3,4 +3,4 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export { classifyExecutionEvent, normalizeSseLogEvent } from "./log-normalizer.js";
+export { classifyExecutionEvent } from "./log-normalizer.js";

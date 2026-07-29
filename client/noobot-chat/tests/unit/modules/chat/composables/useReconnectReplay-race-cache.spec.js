@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
+import {
+  createAuthoritativeMessageEnvelope,
+  createCanonicalAssistant,
+  createFixture,
+  createFakeProcessStore,
+} from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 afterEach(() => {
@@ -31,14 +36,22 @@ describe("useReconnectReplay", () => {
     const { api, refs } = createFixture();
     refs.sessions.value.find((session) => session.id === "s-1").messages = [
       { role: RoleEnum.USER, content: "s1-q" },
+      createCanonicalAssistant({
+        sessionId: "s-1", messageId: "message-s1", dialogProcessId: "dp-s1", turnScopeId: "turn-s1",
+      }),
     ];
     refs.sessions.value.find((session) => session.id === "s-2").messages = [
       { role: RoleEnum.USER, content: "s2-q" },
+      createCanonicalAssistant({
+        sessionId: "s-2", messageId: "message-s2", dialogProcessId: "dp-s2", turnScopeId: "turn-s2",
+      }),
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-2",
       dialogProcessId: "dp-s2",
+      turnScopeId: "turn-s2",
+      messageId: "message-s2",
       seq: 1,
       text: "A",
     });
@@ -46,9 +59,11 @@ describe("useReconnectReplay", () => {
     refs.activeSessionId.value = "s-2";
     refs.activeSession.value = refs.sessions.value.find((s) => s.id === "s-2");
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-2",
       dialogProcessId: "dp-s2",
+      turnScopeId: "turn-s2",
+      messageId: "message-s2",
       seq: 2,
       text: "B",
     });
@@ -56,9 +71,11 @@ describe("useReconnectReplay", () => {
     refs.activeSessionId.value = "s-1";
     refs.activeSession.value = refs.sessions.value.find((s) => s.id === "s-1");
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-s1",
+      turnScopeId: "turn-s1",
+      messageId: "message-s1",
       seq: 1,
       text: "C",
     });
@@ -76,7 +93,12 @@ describe("useReconnectReplay", () => {
 
   it("RC-02: applyReconnectData + realtime event mixed replay still deduplicates by sequence", async () => {
     const { api, refs } = createFixture();
-    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      createCanonicalAssistant({
+        sessionId: "s-1", messageId: "message-mix", dialogProcessId: "dp-mix", turnScopeId: "turn-mix",
+      }),
+    ];
 
     await api.applyReconnectData({
       sessions: [
@@ -88,8 +110,12 @@ describe("useReconnectReplay", () => {
             {
               dialogProcessId: "dp-mix",
               messages: [
-                { event: StreamEventEnum.DELTA, data: { seq: 1, text: "A", dialogProcessId: "dp-mix" } },
-                { event: StreamEventEnum.DELTA, data: { seq: 2, text: "B", dialogProcessId: "dp-mix" } },
+                createAuthoritativeMessageEnvelope("llm_delta", {
+                  messageId: "message-mix", dialogProcessId: "dp-mix", turnScopeId: "turn-mix", seq: 1, text: "A",
+                }),
+                createAuthoritativeMessageEnvelope("llm_delta", {
+                  messageId: "message-mix", dialogProcessId: "dp-mix", turnScopeId: "turn-mix", seq: 2, text: "B",
+                }),
               ],
             },
           ],
@@ -97,15 +123,19 @@ describe("useReconnectReplay", () => {
       ],
     });
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-mix",
+      turnScopeId: "turn-mix",
+      messageId: "message-mix",
       seq: 2,
       text: "B2",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-mix",
+      turnScopeId: "turn-mix",
+      messageId: "message-mix",
       seq: 3,
       text: "C",
     });
@@ -119,15 +149,22 @@ describe("useReconnectReplay", () => {
 
   it("RC-03: large reconnect batch (>1000 envelopes) can be applied without crash", async () => {
     const { api, refs } = createFixture();
-    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
-    const bigBatch = Array.from({ length: 1200 }).map((_, index) => ({
-      event: StreamEventEnum.DELTA,
-      data: {
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      createCanonicalAssistant({
+        sessionId: "s-1", messageId: "message-big", dialogProcessId: "dp-big", turnScopeId: "turn-big",
+      }),
+    ];
+    const bigBatch = Array.from({ length: 1200 }).map((_, index) =>
+      createAuthoritativeMessageEnvelope("llm_delta", {
+        sessionId: "s-1",
+        messageId: "message-big",
+        turnScopeId: "turn-big",
         seq: index + 1,
         text: "x",
         dialogProcessId: "dp-big",
-      },
-    }));
+      }),
+    );
 
     await expect(
       api.applyReconnectData({

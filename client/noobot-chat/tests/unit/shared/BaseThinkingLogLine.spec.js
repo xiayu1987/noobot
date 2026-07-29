@@ -8,6 +8,21 @@ import { describe, expect, it } from "vitest";
 import BaseThinkingLogLine from "../../../src/shared/ui/BaseThinkingLogLine.vue";
 
 describe("BaseThinkingLogLine", () => {
+  it("emits toggle when an expandable detail row is clicked", async () => {
+    const wrapper = mount(BaseThinkingLogLine, {
+      props: {
+        eventText: "tool_call",
+        contentText: "write_file",
+        detailText: "full arguments",
+        expandable: true,
+        tool: true,
+      },
+    });
+
+    await wrapper.find(".base-thinking-log-line__text").trigger("click");
+    expect(wrapper.emitted("toggle")).toHaveLength(1);
+  });
+
   it("renders a readable call label for tool calls", () => {
     const wrapper = mount(BaseThinkingLogLine, {
       props: {

@@ -17,6 +17,7 @@ import { getMessageRole, getMessageTurnScopeId } from "../../model/messageIdenti
 import { logWorkflowDiagnostics, summarizeWorkflowMessage } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 
 export function createSessionMessageView({
+  sessions,
   activeSession,
   activeSessionId,
   userId,
@@ -29,6 +30,39 @@ export function createSessionMessageView({
     activeSession.value.lastMessage = findVisibleLastMessage(activeSession.value.messages);
     activeSession.value.updatedAt = nowIso();
     return msg;
+  }
+
+  function findCanonicalMessageById(sessionId, messageId) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedMessageId = String(messageId || "").trim();
+    if (!normalizedSessionId || !normalizedMessageId) return null;
+    const sessionItems = Array.isArray(sessions?.value) ? sessions.value : [];
+    const targetSession = sessionItems.find((sessionItem) => [
+      sessionItem?.id,
+      sessionItem?.sessionId,
+      sessionItem?.backendSessionId,
+    ].some((candidate) => String(candidate || "").trim() === normalizedSessionId));
+    const messages = Array.isArray(targetSession?.messages)
+      ? targetSession.messages
+      : [];
+    return messages.find((message) => (
+      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
+    )) || null;
+  }
+
+  function upsertCanonicalAssistantMessage(messageId, identity = {}) {
+    const normalizedMessageId = String(messageId || "").trim();
+    if (!normalizedMessageId) return null;
+    const sessionId = String(
+      identity?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId.value || "",
+    ).trim();
+    const existing = findCanonicalMessageById(sessionId, normalizedMessageId);
+    if (existing) return existing;
+    return appendMessage(RoleEnum.ASSISTANT, "", [], {
+      ...identity,
+      id: normalizedMessageId,
+      messageId: normalizedMessageId,
+    });
   }
 
   function makeViewMessage(messageItem = {}) {
@@ -61,7 +95,14 @@ export function createSessionMessageView({
     return shouldRender;
   }
 
-  return { appendMessage, makeViewMessage, foldMessagesForView, shouldRenderMessageInChat };
+  return {
+    appendMessage,
+    findCanonicalMessageById,
+    upsertCanonicalAssistantMessage,
+    makeViewMessage,
+    foldMessagesForView,
+    shouldRenderMessageInChat,
+  };
 }
 
 export function closeMobileSidebarOnSelect(isMobileRef, mobileSidebarOpenRef) {

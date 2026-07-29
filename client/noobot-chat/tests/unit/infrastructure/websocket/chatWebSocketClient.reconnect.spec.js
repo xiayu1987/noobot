@@ -47,7 +47,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
     await reconnectPromise;
-    socket.emit(StreamEventEnum.THINKING, {
+    socket.emit("message", {
       sessionId: "s-live-replay",
       dialogProcessId: "dp-live-replay",
       turnScopeId: "turn-live-replay",
@@ -63,7 +63,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     });
 
     expect(onReconnectData).toHaveBeenNthCalledWith(1, {
-      event: StreamEventEnum.THINKING,
+      event: "message",
       data: expect.objectContaining({ text: "continued thinking", seq: 2 }),
     });
     expect(onReconnectData).toHaveBeenNthCalledWith(2, {

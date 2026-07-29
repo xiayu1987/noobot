@@ -7,13 +7,32 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 
+function applyMessageEvent(store, eventName, data) {
+  return store.applyWorkflowRuntimeEvent({
+    event: "workflow_message_event",
+    data: { ...data, eventType: data?.eventType || eventName },
+  }, { source: "test" });
+}
+
+function applySessionSnapshot(store, sessionDoc) {
+  return store.applyWorkflowRuntimeEvent({
+    event: "workflow_session_snapshot_loaded",
+    data: { snapshotVersion: 1, ...sessionDoc },
+  }, { source: "test_snapshot" });
+}
+
 function messageEvent(eventType, data = {}) {
+  const messageId = data.messageId || "message-1";
   return {
     envelopeKind: "noobot.message_event",
-    envelopeVersion: 1,
+    envelopeVersion: 2,
     timestamp: "2026-01-01T00:00:00.000Z",
     sequence: 1,
     eventType,
+    messageId,
+    presentationMessageId: data.presentationMessageId || messageId,
+    sequenceDomain: "message-event",
+    sequenceScopeId: messageId,
     ...data,
   };
 }
@@ -33,14 +52,14 @@ describe("sub-session realtime message projection", () => {
       messageId: "msg-assistant-1",
     };
 
-    store.upsertSubSessionEvent("thinking_delta", messageEvent("thinking", {
+    applyMessageEvent(store, "thinking_delta", messageEvent("thinking", {
       ...identity,
       eventId: "thinking-1",
       sequence: 1,
       role: "assistant",
       thinking: "```mermaid\ngraph TD; A-->B\n```",
     }));
-    store.upsertSubSessionEvent("tool_result", messageEvent("tool_call_end", {
+    applyMessageEvent(store, "tool_result", messageEvent("tool_call_end", {
       ...identity,
       eventId: "tool-result-1",
       sequence: 2,
@@ -63,7 +82,7 @@ describe("sub-session realtime message projection", () => {
 
   it("does not attach a tool event to an assistant from another turn", () => {
     const store = useChatStore();
-    store.upsertSubSessionEvent("thinking_delta", messageEvent("thinking", {
+    applyMessageEvent(store, "thinking_delta", messageEvent("thinking", {
       sessionId: "child-session",
       turnScopeId: "turn-1",
       eventId: "thinking-1",
@@ -72,7 +91,7 @@ describe("sub-session realtime message projection", () => {
       messageId: "msg-assistant-1",
       sequence: 1,
     }));
-    store.upsertSubSessionEvent("tool_result", messageEvent("tool_call_end", {
+    applyMessageEvent(store, "tool_result", messageEvent("tool_call_end", {
       sessionId: "child-session",
       turnScopeId: "turn-2",
       eventId: "tool-2",
@@ -96,7 +115,7 @@ describe("sub-session realtime message projection", () => {
       dialogProcessId: "dialog-child",
       messageId: "assistant-completed",
     };
-    store.upsertSubSessionEvent("thinking", messageEvent("thinking", {
+    applyMessageEvent(store, "thinking", messageEvent("thinking", {
       ...identity,
       eventId: "started",
       sequence: 1,
@@ -105,7 +124,7 @@ describe("sub-session realtime message projection", () => {
       timestamp: "2026-01-01T00:00:00.000Z",
       thinking: "working",
     }));
-    store.upsertSubSessionEvent("turn_lifecycle", messageEvent("turn_lifecycle", {
+    applyMessageEvent(store, "turn_lifecycle", messageEvent("turn_lifecycle", {
       ...identity,
       eventId: "completed",
       sequence: 2,

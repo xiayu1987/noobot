@@ -14,9 +14,12 @@ describe("sendFlow sub-session message routing", () => {
       route: { scope: "sub_session", sessionId: "042e2095-166a-4ff0-b1c3-daf18779a75c" },
       event: {
         envelopeKind: "noobot.message_event",
-        envelopeVersion: 1,
+        envelopeVersion: 2,
         sessionId: "042e2095-166a-4ff0-b1c3-daf18779a75c",
         messageId: "msg_55f39303-4216-4103-b500-c98983a9eb1e",
+        presentationMessageId: "msg_55f39303-4216-4103-b500-c98983a9eb1e",
+        sequenceDomain: "message-event",
+        sequenceScopeId: "msg_55f39303-4216-4103-b500-c98983a9eb1e",
         toolCallId: "call_rp9JoyKOqvVwNpAJUobrY6bU",
         eventType: "tool_call_end",
         eventId: "event-2",

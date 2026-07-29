@@ -38,19 +38,26 @@ test("user_interaction: should forward lifecycle/ackMode defaults to bridge", as
   assert.ok(tool, "user_interaction tool should exist");
 
   const result = parseToolJson(
-    await tool.invoke({
-      content: "please confirm",
-      fields: {
-        fields: [
-          {
-            name: "confirmTest",
-            displayName: "确认",
-            required: true,
-            description: "",
-          },
-        ],
+    await tool.invoke(
+      {
+        content: "please confirm",
+        fields: {
+          fields: [
+            {
+              name: "confirmTest",
+              displayName: "确认",
+              required: true,
+              description: "",
+            },
+          ],
+        },
       },
-    }),
+      {
+        configurable: {
+          noobotHookContext: { call: { id: "call-stable-1" } },
+        },
+      },
+    ),
   );
 
   assert.equal(result.ok, true);
@@ -58,6 +65,7 @@ test("user_interaction: should forward lifecycle/ackMode defaults to bridge", as
   assert.equal(String(calls[0]?.lifecycle || ""), "pending");
   assert.equal(String(calls[0]?.ackMode || ""), "manual");
   assert.equal(String(calls[0]?.resolvedBy || ""), "");
+  assert.equal(String(calls[0]?.interactionId || ""), "call-stable-1");
 });
 
 test("user_interaction: should tolerate unescaped quotes inside fields string descriptions", async () => {

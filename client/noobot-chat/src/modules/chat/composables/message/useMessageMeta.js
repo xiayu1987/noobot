@@ -15,7 +15,6 @@ import {
   resolveTurnRuntimeByScope,
   turnRuntimeDisplayState,
 } from "../../runtime/run-state-machine/turnRuntimeRegistry.js";
-import { adaptLegacyMessageTimelines } from "../../runtime/engine/legacyTimelineAdapter.js";
 import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
 import { resolveStatusStepPresentation } from "../../model/messagePresentation.js";
 
@@ -38,14 +37,10 @@ export function useMessageMeta({
 
   const showSubTaskActivity = computed(() => {
     const messageItem = getMessageItem() || {};
-    const realtimeLogs = Array.isArray(messageItem?.realtimeLogs)
-      ? messageItem.realtimeLogs
-      : [];
     const completedToolResultLogs = selectCompletedToolArtifacts(
-      adaptLegacyMessageTimelines(messageItem),
+      messageItem,
     ).logs;
     return (
-      realtimeLogs.some((logItem) => Boolean(logItem?.subAgentCall)) ||
       completedToolResultLogs.some((logItem) => Number(logItem?.depth || 0) > 1)
     );
   });

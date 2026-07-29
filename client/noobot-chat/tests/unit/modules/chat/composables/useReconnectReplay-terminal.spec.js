@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
+import {
+  createCanonicalAssistant,
+  createFixture,
+  createFakeProcessStore,
+} from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   FrontendRunState,
@@ -185,25 +189,27 @@ describe("useReconnectReplay", () => {
     expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
   });
 
-  it("RC-04: terminal event blocks subsequent DELTA mutation", async () => {
+  it("RC-04: transport terminal does not override later canonical message events", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-terminal", content: "", pending: true },
+      createCanonicalAssistant({ dialogProcessId: "dp-terminal" }),
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-terminal",
       seq: 1,
       text: "A",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DONE, {
+    await api.applyCanonicalMessageEvent("main_model_content", {
       sessionId: "s-1",
       dialogProcessId: "dp-terminal",
       seq: 2,
+      text: "A",
+      output: "A",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-terminal",
       seq: 3,
@@ -213,6 +219,6 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-terminal",
     );
-    expect(assistant?.content).toBe("A");
+    expect(assistant?.content).toBe("AB");
   });
 });

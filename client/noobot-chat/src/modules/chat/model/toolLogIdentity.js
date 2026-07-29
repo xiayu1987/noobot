@@ -8,10 +8,23 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
+function detail(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value === "string") return value.trim();
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 export function normalizeToolLog(item = {}) {
   const event = text(item.event || item.type).toLowerCase();
   const toolCallId = text(item.toolCallId || item.tool_call_id);
-  const detailText = text(item.detailText || item.content);
+  const detailText = detail(
+    item.detailText ?? item.content ??
+      (event === "tool_call" ? item.args : event === "tool_result" ? item.result : ""),
+  );
   const summaryText = text(item.text);
   return { ...item, event, type: item.type || event, toolCallId, detailText, text: summaryText };
 }

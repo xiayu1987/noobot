@@ -30,6 +30,7 @@ export function createTurnCommand({ userId = "", sessionId = "", parentSessionId
     userId: trim(userId), sessionId: trim(sessionId), parentSessionId: trim(parentSessionId),
     dialogProcessId: trim(dialogProcessId), parentDialogProcessId: trim(parentDialogProcessId),
     turnScopeId: trim(turnScopeId), message: String(message || "").trim(),
+    messageId: trim(runConfig?.userMessageId),
     attachments: Array.isArray(attachments) ? attachments : [],
     expectedVersion: runConfig?.expectedVersion,
     idempotencyKey: trim(runConfig?.idempotencyKey || turnScopeId),
@@ -57,6 +58,7 @@ export function toCommitTurnPayload(command = {}) {
   return {
     userId: command.userId, sessionId: command.sessionId, parentSessionId: command.parentSessionId,
     content: command.message, attachments: command.attachments,
+    messageId: command.messageId,
     dialogProcessId: command.dialogProcessId, parentDialogProcessId: command.parentDialogProcessId,
     turnScopeId: command.turnScopeId, action: command.type,
     frontendUserMessage: command.origin === TURN_COMMAND_ORIGIN.USER,

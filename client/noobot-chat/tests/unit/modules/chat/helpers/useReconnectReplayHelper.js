@@ -34,6 +34,78 @@ function createSession(id) {
   };
 }
 
+const normalizeIdentityPart = (value, fallback) => String(value || fallback).trim();
+
+export function createCanonicalAssistant({
+  messageId,
+  presentationMessageId,
+  sessionId = "s-1",
+  dialogProcessId,
+  turnScopeId,
+  content = "",
+  ...extra
+} = {}) {
+  const normalizedDialogProcessId = normalizeIdentityPart(dialogProcessId, "dp-1");
+  const normalizedMessageId = normalizeIdentityPart(messageId, `message-${normalizedDialogProcessId}`);
+  return {
+    id: normalizedMessageId,
+    messageId: normalizedMessageId,
+    role: RoleEnum.ASSISTANT,
+    sessionId,
+    dialogProcessId: normalizedDialogProcessId,
+    turnScopeId: normalizeIdentityPart(turnScopeId, `turn-${normalizedDialogProcessId}`),
+    content,
+    pending: true,
+    statusLabel: "",
+    realtimeLogs: [],
+    ...extra,
+  };
+}
+
+export function createAuthoritativeMessageEnvelope(eventType, {
+  messageId,
+  presentationMessageId,
+  sessionId = "s-1",
+  dialogProcessId,
+  turnScopeId,
+  seq = 1,
+  eventId,
+  ...eventData
+} = {}) {
+  const normalizedDialogProcessId = normalizeIdentityPart(dialogProcessId, "dp-1");
+  const normalizedMessageId = normalizeIdentityPart(messageId, `message-${normalizedDialogProcessId}`);
+  const normalizedTurnScopeId = normalizeIdentityPart(turnScopeId, `turn-${normalizedDialogProcessId}`);
+  const sequence = Number(seq || 0);
+  return {
+    event: "message_event",
+    data: {
+      channelKind: "message_event",
+      channelVersion: 1,
+      route: { scope: "main_session", sessionId },
+      sessionId,
+      dialogProcessId: normalizedDialogProcessId,
+      turnScopeId: normalizedTurnScopeId,
+      seq: sequence,
+      event: {
+        envelopeKind: "noobot.message_event",
+        envelopeVersion: 2,
+        eventId: normalizeIdentityPart(eventId, `${normalizedMessageId}-${eventType}-${sequence}`),
+        eventType,
+        sessionId,
+        messageId: normalizedMessageId,
+        presentationMessageId: normalizeIdentityPart(presentationMessageId, normalizedMessageId),
+        sequenceDomain: "message-event",
+        sequenceScopeId: normalizedMessageId,
+        dialogProcessId: normalizedDialogProcessId,
+        turnScopeId: normalizedTurnScopeId,
+        sequence,
+        timestamp: `2026-01-01T00:00:${String(sequence % 60).padStart(2, "0")}.000Z`,
+        ...eventData,
+      },
+    },
+  };
+}
+
 export function createFakeProcessStore() {
   const events = [];
   return {
@@ -153,6 +225,37 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     return msg;
   });
 
+  const findCanonicalMessageById = vi.fn((sessionId, messageId) => {
+    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedMessageId = String(messageId || "").trim();
+    if (!normalizedSessionId || !normalizedMessageId) return null;
+    const targetSession = sessions.value.find((sessionItem) => [
+      sessionItem?.id,
+      sessionItem?.sessionId,
+      sessionItem?.backendSessionId,
+    ].some((candidate) => String(candidate || "").trim() === normalizedSessionId));
+    if (!targetSession) return null;
+    return targetSession.messages.find((message) =>
+      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
+    ) || null;
+  });
+
+  const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
+    const normalizedMessageId = String(messageId || "").trim();
+    if (!normalizedMessageId || !activeSession.value) return null;
+    const existing = activeSession.value.messages.find((message) =>
+      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
+    );
+    if (existing) return existing;
+    const message = createCanonicalAssistant({
+      ...identity,
+      messageId: normalizedMessageId,
+    });
+    activeSession.value.messages.push(message);
+    activeSession.value.rawMessages.push(message);
+    return message;
+  });
+
   const api = useReconnectReplay({
     sessions,
     activeSession,
@@ -161,6 +264,8 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     chatList,
     chatWebSocketClient,
     appendMessage,
+    findCanonicalMessageById,
+    upsertCanonicalAssistantMessage,
     makeViewMessage: (message) => ({ ...message }),
     foldMessagesForView: (messages) => [...messages],
     applyCompletedToolLogsToMessages,
@@ -183,8 +288,13 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     resolveTurnTerminalState,
   });
 
+  const applyCanonicalMessageEvent = (eventType, data = {}) => {
+    const envelope = createAuthoritativeMessageEnvelope(eventType, data);
+    return api.applyReconnectEvent(envelope.event, envelope.data);
+  };
+
   return {
-    api,
+    api: { ...api, applyCanonicalMessageEvent },
     refs: {
       sessions,
       activeSession,
@@ -200,6 +310,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     },
     mocks: {
       appendMessage,
+      findCanonicalMessageById,
       clearPendingInteraction,
       clearPendingInteractionIfObsolete,
       setPendingInteractionRequest,

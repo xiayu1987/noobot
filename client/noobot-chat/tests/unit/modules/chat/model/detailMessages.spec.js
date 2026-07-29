@@ -5,11 +5,11 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  applySummaryToolLogs,
   buildNormalizedDetailMessages,
   buildChildAttachmentsByParentDialogProcessId,
   mergeChildTurnAttachmentsIntoRootMessages,
   mergePreservedDetailMessages,
+  injectTurnStatusPlaceholders,
 } from "../../../../../src/modules/session/model/list/detailMessages.js";
 import {
   buildViewMessage,
@@ -113,18 +113,22 @@ describe("detailMessages", () => {
 
   it("does not overwrite the user message with assistant detail from the same turn scope", () => {
     const existingMessages = [
-      { role: RoleEnum.USER, content: "question", turnScopeId: "client-turn:1" },
-      { role: RoleEnum.ASSISTANT, content: "streaming", turnScopeId: "client-turn:1", pending: true },
+      { id: "msg-user-1", messageId: "msg-user-1", role: RoleEnum.USER, content: "question", turnScopeId: "client-turn:1" },
+      { id: "msg-assistant-1", messageId: "msg-assistant-1", role: RoleEnum.ASSISTANT, content: "streaming", turnScopeId: "client-turn:1", pending: true },
     ];
 
     mergePreservedDetailMessages(existingMessages, [
       {
+        id: "msg-user-1",
+        messageId: "msg-user-1",
         role: RoleEnum.USER,
         content: "question",
         turnScopeId: "client-turn:1",
         dialogProcessId: "dp-1",
       },
       {
+        id: "msg-assistant-1",
+        messageId: "msg-assistant-1",
         role: RoleEnum.ASSISTANT,
         content: "final answer",
         turnScopeId: "client-turn:1",
@@ -150,8 +154,10 @@ describe("detailMessages", () => {
 
   it("merges same-turn finalized assistant into pending overlay without duplicating it", () => {
     const existingMessages = [
-      { role: RoleEnum.USER, content: "q", turnScopeId: "turn-merge" },
+      { id: "msg-user-merge", messageId: "msg-user-merge", role: RoleEnum.USER, content: "q", turnScopeId: "turn-merge" },
       {
+        id: "msg-assistant-merge",
+        messageId: "msg-assistant-merge",
         role: RoleEnum.ASSISTANT,
         content: "partial",
         turnScopeId: "turn-merge",
@@ -163,6 +169,8 @@ describe("detailMessages", () => {
 
     mergePreservedDetailMessages(existingMessages, [
       {
+        id: "msg-assistant-merge",
+        messageId: "msg-assistant-merge",
         role: RoleEnum.ASSISTANT,
         content: "final",
         turnScopeId: "turn-merge",
@@ -184,8 +192,10 @@ describe("detailMessages", () => {
   it("preserves frontend completion runtime mark while merging finalized detail attachments", () => {
     const runtimeKey = "frontend_completion_requesting|session-runtime|dp-runtime|turn-runtime|100";
     const existingMessages = [
-      { role: RoleEnum.USER, content: "q", turnScopeId: "turn-runtime" },
+      { id: "msg-user-runtime", messageId: "msg-user-runtime", role: RoleEnum.USER, content: "q", turnScopeId: "turn-runtime" },
       {
+        id: "msg-assistant-runtime",
+        messageId: "msg-assistant-runtime",
         role: RoleEnum.ASSISTANT,
         content: "partial",
         turnScopeId: "turn-runtime",
@@ -204,6 +214,8 @@ describe("detailMessages", () => {
 
     mergePreservedDetailMessages(existingMessages, [
       {
+        id: "msg-assistant-runtime",
+        messageId: "msg-assistant-runtime",
         role: RoleEnum.ASSISTANT,
         content: "final",
         turnScopeId: "turn-runtime",
@@ -289,6 +301,65 @@ describe("detailMessages", () => {
     expect(existingMessages[2].attachments).toEqual([{ attachmentId: "safe-file", name: "safe.md" }]);
   });
 
+  it("preserves the explicit terminal presentation entity when refreshed detail is merged", () => {
+    const userMessage = {
+      id: "user-stopped",
+      messageId: "user-stopped",
+      role: RoleEnum.USER,
+      content: "q",
+      turnScopeId: "turn-stopped",
+      dialogProcessId: "dp-stopped",
+    };
+    const existingMessages = [{ ...userMessage }];
+    const detailMessages = injectTurnStatusPlaceholders(
+      [{ ...userMessage }],
+      [{
+        status: "user_stopped",
+        reason: "user_stop",
+        description: "用户停止了本轮生成",
+        turnScopeId: "turn-stopped",
+        dialogProcessId: "dp-stopped",
+      }],
+    );
+
+    mergePreservedDetailMessages(existingMessages, detailMessages);
+
+    expect(existingMessages).toHaveLength(2);
+    expect(existingMessages[1]).toMatchObject({
+      id: "turn-status-placeholder:turn-stopped",
+      role: RoleEnum.ASSISTANT,
+      turnStatusPlaceholder: true,
+      content: "本轮已由用户停止\n用户停止了本轮生成\n原因：user_stop",
+    });
+  });
+
+  it("does not merge a terminal presentation over an in-flight assistant", () => {
+    const existingMessages = [
+      { role: RoleEnum.USER, content: "q", turnScopeId: "turn-running", dialogProcessId: "dp-running" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "partial",
+        pending: true,
+        turnScopeId: "turn-running",
+        dialogProcessId: "dp-running",
+        channelState: { state: "sending", turnScopeId: "turn-running" },
+      },
+    ];
+    const detailMessages = injectTurnStatusPlaceholders(
+      [existingMessages[0]],
+      [{
+        status: "user_stopped",
+        turnScopeId: "turn-running",
+        dialogProcessId: "dp-running",
+      }],
+    );
+
+    mergePreservedDetailMessages(existingMessages, detailMessages);
+
+    expect(existingMessages.filter((message) => message.turnStatusPlaceholder === true)).toHaveLength(0);
+    expect(existingMessages[1]).toMatchObject({ pending: true, content: "partial" });
+  });
+
   it("preserves running thinking timing fields while merging refreshed detail", () => {
     const startedAt = "2026-06-22T10:00:00.000Z";
     const existingMessages = [
@@ -360,69 +431,6 @@ describe("detailMessages", () => {
       channelState: { state: "sending", turnScopeId: "client-turn:new" },
     });
     expect(existingMessages[1].statusLabel).toBeUndefined();
-  });
-
-  it("does not apply summary tool logs to assistant messages before turnScopeId is persisted", () => {
-    const sessionItem = {
-      messages: [
-        {
-          role: RoleEnum.ASSISTANT,
-          dialogProcessId: "dp-reused",
-          content: "current answer without persisted turn scope",
-        },
-      ],
-    };
-
-    applySummaryToolLogs(sessionItem, [
-      {
-        toolLogSummaries: [
-          {
-            dialogProcessId: "dp-reused",
-            turnScopeId: "client-turn:previous",
-            event: "tool_call",
-            text: "previous tool",
-          },
-        ],
-      },
-    ]);
-
-    expect(sessionItem.messages[0].completedToolLogs).toEqual([]);
-  });
-
-  it("applies summary tool logs by turnScopeId when assistant turnScopeId is available", () => {
-    const sessionItem = {
-      messages: [
-        {
-          role: RoleEnum.ASSISTANT,
-          dialogProcessId: "dp-current",
-          turnScopeId: "client-turn:current",
-          content: "current answer",
-        },
-      ],
-    };
-
-    applySummaryToolLogs(sessionItem, [
-      {
-        toolLogSummaries: [
-          {
-            dialogProcessId: "dp-previous",
-            turnScopeId: "client-turn:previous",
-            event: "tool_call",
-            text: "previous tool",
-          },
-          {
-            dialogProcessId: "dp-current",
-            turnScopeId: "client-turn:current",
-            event: "tool_call",
-            text: "current tool",
-          },
-        ],
-      },
-    ]);
-
-    const logs = selectToolTimelineLogs(sessionItem.messages[0]);
-    expect(logs).toHaveLength(1);
-    expect(logs[0].text).toBe("current tool");
   });
 
   it("collects child attachments from transfer envelopes for refreshed detail", () => {
@@ -599,13 +607,16 @@ describe("detailMessages", () => {
               ],
             },
           },
-          completedToolLogs: [
-            {
-              attachments: [
+          toolTimeline: [{
+            key: "call:completed-tool", toolCallId: "completed-tool", status: "completed",
+            resultEvent: {
+              eventId: "completed-tool-result", sequence: 1, sequenceScopeId: "message-1",
+              sequenceDomain: "message-event", authority: "authoritative",
+              log: { event: "tool_result", type: "tool_result", attachments: [
                 { attachmentId: "completed-tool-1", name: "completed-tool.md" },
-              ],
+              ] },
             },
-          ],
+          }],
         },
       ],
       sessionDocs: [],

@@ -6,11 +6,14 @@
 import WorkflowMessageCard from "./components/WorkflowMessageCard.vue";
 import WorkflowModelExtension from "./components/WorkflowModelExtension.vue";
 import { hydrateWorkflowRegistryFromSessionDetail } from "./runtime/sessionHydration.js";
+import { routeWorkflowDiagnosticsPayload } from "./runtime/workflowDiagnosticsRoute.js";
 
 export const FRONTEND_PLUGIN_API_VERSION = "1";
 
 const WORKFLOW_NODE_STATE_EVENT = "workflow_node_state_committed";
 const WORKFLOW_PLANNING_EVENT = "workflow_planning_message_prepared";
+const SUBAGENT_MESSAGE_EVENT = "subagent_message_event";
+const WORKFLOW_MESSAGE_EVENT = "workflow_message_event";
 
 function requireAuthenticatedGet(get) {
   if (typeof get !== "function") {
@@ -46,12 +49,12 @@ function createWorkflowSessionService(authenticatedGet) {
 }
 
 function routeWorkflowRuntimeEvent({ event, data = {}, context = {} } = {}) {
-  if (![WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT].includes(event)) return false;
+  if (![WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT, SUBAGENT_MESSAGE_EVENT].includes(event)) return false;
   const {
     applyWorkflowRuntimeEvent, logSessionEvent, sessionId, turnScopeId,
-    upsertWorkflowNodeStateEvent, upsertWorkflowPlanningEvent,
   } = context;
   const planning = event === WORKFLOW_PLANNING_EVENT;
+  const message = event === SUBAGENT_MESSAGE_EVENT;
   logSessionEvent?.({
     category: "debug",
     level: "debug",
@@ -73,10 +76,12 @@ function routeWorkflowRuntimeEvent({ event, data = {}, context = {} } = {}) {
       dataKeys: Object.keys(data || {}).sort(),
     },
   });
-  if (typeof applyWorkflowRuntimeEvent === "function") {
-    applyWorkflowRuntimeEvent({ event, data, transportSequence: Number(data?.seq || 0) }, { source: context?.source || "live" });
-  } else if (planning) upsertWorkflowPlanningEvent?.(data);
-  else upsertWorkflowNodeStateEvent?.(data);
+  if (typeof applyWorkflowRuntimeEvent !== "function") return false;
+  applyWorkflowRuntimeEvent({
+    event: message ? WORKFLOW_MESSAGE_EVENT : event,
+    data: message ? data.event : data,
+    transportSequence: Number(data?.seq || 0),
+  }, { source: context?.source || "live" });
   return true;
 }
 
@@ -124,6 +129,8 @@ export function registerFrontendPlugin(ctx = {}) {
           formatFileSize: context?.formatFileSize,
           isImageMime: context?.isImageMime,
           workflowNodeStateRegistry: context?.workflowNodeStateRegistry || null,
+          subSessionMessageRegistry: context?.subSessionMessageRegistry || null,
+          subSessionMessageRegistryVersion: Number(context?.subSessionMessageRegistryVersion || 0),
           selectExecutionDetail: typeof context?.selectExecutionDetail === "function"
             ? context.selectExecutionDetail
             : null,
@@ -133,18 +140,30 @@ export function registerFrontendPlugin(ctx = {}) {
           selectSessionMessages: typeof context?.selectSessionMessages === "function"
             ? context.selectSessionMessages
             : null,
-          mergeSubSessionSnapshot: typeof context?.mergeSubSessionSnapshot === "function"
-            ? context.mergeSubSessionSnapshot
+          applyWorkflowRuntimeEvent: typeof context?.applyWorkflowRuntimeEvent === "function"
+            ? context.applyWorkflowRuntimeEvent
             : null,
+          // Session logs are owned by the root chat session. Keep that routing
+          // identity separate from the isolated node session business identity.
           logWorkflowDiagnostics: typeof context?.logWorkflowDiagnostics === "function"
-            ? context.logWorkflowDiagnostics
+            ? (event, payload = {}) => {
+                const parentSessionId = String(
+                  context?.messageItem?.sessionId ||
+                  context?.messageItem?.pluginMeta?.payload?.planningDialog?.sessionId ||
+                  "",
+                ).trim();
+                context.logWorkflowDiagnostics(
+                  event,
+                  routeWorkflowDiagnosticsPayload(parentSessionId, payload),
+                );
+              }
             : null,
         }),
   });
   contribute(points.RUNTIME_STREAM_ROUTE, {
     id: "workflow-runtime-stream-route",
     priority: 20,
-    when: ({ event } = {}) => [WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT].includes(event),
+    when: ({ event } = {}) => [WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT, SUBAGENT_MESSAGE_EVENT].includes(event),
     provide: () => [routeWorkflowRuntimeEvent],
   });
   contribute(points.SESSION_DETAIL_HYDRATOR, {

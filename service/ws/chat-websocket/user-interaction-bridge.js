@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   RUNTIME_EVENT_CATEGORIES,
@@ -21,6 +21,21 @@ export function createUserInteractionBridge({
   pendingInteractionRequests,
   sessionLogConfig,
 } = {}) {
+  const interactionRequestsByIdentity = new Map();
+  const writeInteractionLifecycle = (event, data = {}) => {
+    const currentRunMeta = getCurrentRunMeta();
+    void writeRoutedRuntimeEvent({
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.INTERACTION,
+      event,
+      userId: currentRunMeta?.userId || "",
+      sessionId: currentRunMeta?.sessionId || "",
+      dialogProcessId: currentRunMeta?.dialogProcessId || "",
+      turnScopeId: currentRunMeta?.turnScopeId || "",
+      data,
+    }, sessionLogConfig);
+  };
   const rejectAllPendingInteractions = (error) => {
     const currentRunMeta = getCurrentRunMeta();
     for (const [, requestItem] of pendingInteractionRequests.entries()) {
@@ -43,10 +58,12 @@ export function createUserInteractionBridge({
       clearTimeout(requestItem?.timer);
     }
     pendingInteractionRequests.clear();
+    interactionRequestsByIdentity.clear();
   };
 
   const userInteractionBridge = {
     requestUserInteraction: ({
+      interactionId = "",
       content = "",
       fields = [],
       dialogProcessId = "",
@@ -62,21 +79,69 @@ export function createUserInteractionBridge({
       ackMode = "manual",
       resolvedBy = "",
       notification = {},
-    } = {}) =>
-      new Promise((resolveInteraction, rejectInteraction) => {
-        const requestId = randomBytes(12).toString("hex");
+    } = {}) => {
+      const normalizedInteractionId = String(interactionId || "").trim();
+      const interactionIdentityKey = normalizedInteractionId
+        ? `${String(sessionId || "").trim()}::${normalizedInteractionId}`
+        : "";
+      const existingRequest = interactionIdentityKey
+        ? interactionRequestsByIdentity.get(interactionIdentityKey)
+        : null;
+      if (existingRequest) {
+        writeInteractionLifecycle("service.websocket.interaction.deduplicated", {
+          interactionId: normalizedInteractionId,
+          requestId: existingRequest.requestId,
+          state: existingRequest.state,
+        });
+        return existingRequest.promise;
+      }
+
+      const requestId = normalizedInteractionId
+        ? createHash("sha256")
+            .update(`${String(sessionId || "").trim()}:${normalizedInteractionId}`)
+            .digest("hex")
+            .slice(0, 24)
+        : randomBytes(12).toString("hex");
+      const requestItem = {
+        interactionId: normalizedInteractionId,
+        requestId,
+        state: "pending",
+        result: undefined,
+        promise: null,
+        resolve: null,
+        reject: null,
+        timer: null,
+      };
+      requestItem.promise = new Promise((resolveInteraction, rejectInteraction) => {
         const timer = setTimeout(() => {
           pendingInteractionRequests.delete(requestId);
+          if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
+          requestItem.state = "rejected";
           rejectInteraction(new Error(translateText("ws.userInteractionTimeout", getCurrentLocale())));
         }, USER_INTERACTION_TIMEOUT_MS);
 
-        pendingInteractionRequests.set(requestId, {
-          resolve: resolveInteraction,
-          reject: rejectInteraction,
-          timer,
-        });
+        requestItem.timer = timer;
+        requestItem.resolve = (response) => {
+          requestItem.state = "resolved";
+          requestItem.result = response;
+          writeInteractionLifecycle("service.websocket.interaction.resolved", {
+            interactionId: normalizedInteractionId,
+            requestId,
+          });
+          resolveInteraction(response);
+        };
+        requestItem.reject = (error) => {
+          requestItem.state = "rejected";
+          if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
+          rejectInteraction(error);
+        };
+        pendingInteractionRequests.set(requestId, requestItem);
+        if (interactionIdentityKey) {
+          interactionRequestsByIdentity.set(interactionIdentityKey, requestItem);
+        }
 
         sendEvent("interaction_request", {
+          interactionId: normalizedInteractionId,
           requestId,
           content: String(content || ""),
           fields: Array.isArray(fields) ? fields : [],
@@ -100,7 +165,13 @@ export function createUserInteractionBridge({
               ? interactionData
               : {},
         });
-      }),
+        writeInteractionLifecycle("service.websocket.interaction.registered", {
+          interactionId: normalizedInteractionId,
+          requestId,
+        });
+      });
+      return requestItem.promise;
+    },
     emitNotification: ({ eventName = "notification", data = {} } = {}) => {
       const normalizedEventName =
         String(eventName || "").trim().toLowerCase() || "notification";

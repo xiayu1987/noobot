@@ -251,6 +251,56 @@ export function registerSessionRoutes(
         channel: RUNTIME_EVENT_CHANNELS.DIRECT,
         category: RUNTIME_EVENT_CATEGORIES.DEBUG,
         level: "debug",
+        debugType: "timeline-pipeline",
+        event: "service.timelinePipeline.sessionDetailRead",
+        userId: String(userId || "").trim(),
+        sessionId: String(sessionId || "").trim(),
+        data: {
+          mode,
+          exists: result?.exists !== false,
+          responseSessionId: String(result?.sessionId || "").trim(),
+          sessionDocCount: sessionDocs.length,
+          sessionDocs: sessionDocs.map((doc = {}) => ({
+            sessionId: String(doc.sessionId || "").trim(),
+            version: Number(doc.version || 0),
+            revision: Number(doc.revision || 0),
+            turnOrderCount: Array.isArray(doc.turnOrder) ? doc.turnOrder.length : 0,
+            turnOrderMessageCount: Array.isArray(doc.turnOrder)
+              ? doc.turnOrder.reduce((count, item = {}) => count + Math.max(0, Number(item.messageCount || 0)), 0)
+              : 0,
+            summaryMessageCount: Array.isArray(doc.messages) ? doc.messages.length : 0,
+            summaryStatsMessageCount: Number(doc.stats?.messageCount || 0),
+            summaryStatsDisplayMessageCount: Number(doc.stats?.displayMessageCount || 0),
+            summaryAssistantCount: Array.isArray(doc.messages)
+              ? doc.messages.filter((message = {}) => String(message.role || "").trim() === "assistant").length
+              : 0,
+            summaryAssistantActivityCount: Array.isArray(doc.messages)
+              ? doc.messages.reduce((count, message = {}) => count + (Array.isArray(message.activityTimeline) ? message.activityTimeline.length : 0), 0)
+              : 0,
+          })),
+          messages: sessionDocs.flatMap((doc = {}) =>
+            (Array.isArray(doc.messages) ? doc.messages : []).map((message = {}) => ({
+              messageUid: String(message.messageUid || "").trim(),
+              messageId: String(message.messageId || message.id || "").trim(),
+              presentationMessageId: String(message.presentationMessageId || "").trim(),
+              sourceMessageId: String(message.sourceMessageId || "").trim(),
+              sourceMessageUid: String(message.sourceMessageUid || "").trim(),
+              role: String(message.role || "").trim(),
+              type: String(message.type || "").trim(),
+              chatPresentation: message.chatPresentation,
+              contentLength: typeof message.content === "string" ? message.content.length : 0,
+              activityTimelineCount: Array.isArray(message.activityTimeline) ? message.activityTimeline.length : 0,
+              toolTimelineCount: Array.isArray(message.toolTimeline) ? message.toolTimeline.length : 0,
+            })),
+          ),
+        },
+      });
+      void writeRoutedRuntimeEvent({
+        scope: "session",
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+        level: "debug",
         debugType: "workflow-diagnostics",
         event: "service.workflowDetail.dataSourceRead",
         userId: String(userId || "").trim(),

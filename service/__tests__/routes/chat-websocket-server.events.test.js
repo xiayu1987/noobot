@@ -88,7 +88,8 @@ test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta",
       },
     });
     const names = events.map((item) => String(item?.event || ""));
-    assert.equal(names.includes("thinking"), true);
+    assert.equal(names.includes("tool_call_start"), true);
+    assert.equal(names.includes("tool_call_end"), true);
     assert.equal(names.includes("delta"), false);
     assert.equal(names.includes("done"), true);
   } finally {
@@ -153,7 +154,7 @@ test("chat-websocket-server: parsed attachment updates and delta events keep req
     assert.equal(deltaEvent?.data?.turnScopeId, "turn-parent");
 
     const subagentDeltaEvent = events.find(
-      (item) => item?.event === "thinking" && item?.data?.rawEvent === "subagent_llm_delta",
+      (item) => item?.event === "subagent_llm_delta",
     );
     assert.equal(subagentDeltaEvent?.data?.sessionId, "s1");
     assert.equal(subagentDeltaEvent?.data?.dialogProcessId, "dp-root");
@@ -228,11 +229,10 @@ test("chat-websocket-server: child run system events are owned by parent dialog 
       },
     });
 
-    const childSystemEvents = events.filter(
-      (item) =>
-        item?.event === "thinking" &&
-        item?.data?.childSessionId === "child-session-1" &&
-        ["session_starting", "workspace_ready", "tool_call_start"].includes(item?.data?.rawEvent),
+    const childSystemEvents = events.filter((item) =>
+      item?.data?.childSessionId === "child-session-1" &&
+      ["subagent_session_starting", "subagent_workspace_ready", "subagent_tool_call_start"]
+        .includes(item?.event),
     );
     assert.equal(childSystemEvents.length, 3);
     assert.deepEqual(
@@ -256,7 +256,7 @@ test("chat-websocket-server: child run system events are owned by parent dialog 
       true,
     );
     assert.equal(
-      events.some((item) => item?.event === "thinking" && item?.data?.dialogProcessId === "dp-child"),
+      events.some((item) => item?.data?.dialogProcessId === "dp-child"),
       false,
     );
     const doneEvent = events.find((item) => item?.event === "done");
@@ -269,13 +269,14 @@ test("chat-websocket-server: child run system events are owned by parent dialog 
 test("chat-websocket-server preserves authoritative identity for workflow child tool events", async () => {
   const identity = {
     envelopeKind: "noobot.message_event",
-    envelopeVersion: 1,
+    envelopeVersion: 2,
     sessionId: "workflow-child-1",
     parentSessionId: "s1",
     dialogProcessId: "workflow-child-dialog",
     parentDialogProcessId: "dp-parent",
     turnScopeId: "workflow-child-turn",
     messageId: "msg-workflow-1",
+    presentationMessageId: "msg-workflow-presentation-1",
     scope: "sub_session",
     workflowRunId: "workflow-1",
     nodeExecutionId: "node-1",

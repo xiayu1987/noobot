@@ -5,6 +5,11 @@
  */
 
 import { emitEvent } from "../../events/index.js";
+import {
+  isActivityMessageEvent,
+  isToolMessageEvent,
+  reduceCanonicalToolTimeline,
+} from "../../events/canonical-message-timeline.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { isAbortError, isUserStopAbort, resolveAbortStopType } from "../../shared/utils/error-utils.js";
 import {
@@ -58,6 +63,7 @@ export class SessionExecutionRunner {
     prepareTurnInput,
     prepareAgentTurnExecution,
     commitSummaryCheckpoint,
+    appendAgentMessages,
     appendSessionTurn,
     assertPersistenceContextIdentity,
     commitSessionTurn,
@@ -79,6 +85,7 @@ export class SessionExecutionRunner {
     this.prepareTurnInput = prepareTurnInput;
     this.prepareAgentTurnExecution = prepareAgentTurnExecution;
     this.commitSummaryCheckpoint = commitSummaryCheckpoint;
+    this.appendAgentMessages = appendAgentMessages;
     this.appendSessionTurn = appendSessionTurn;
     this.assertPersistenceContextIdentity = assertPersistenceContextIdentity;
     this.commitSessionTurn = commitSessionTurn;
@@ -380,7 +387,7 @@ export class SessionExecutionRunner {
           turnScopeId: resolvedTurnScopeId,
           dialogProcessId,
           attachments: canonicalAttachments,
-          persistenceContext,
+          ...(persistenceContext ? { persistenceContext } : {}),
         });
       } else {
         const turnCommand = createTurnCommand({
@@ -431,6 +438,199 @@ export class SessionExecutionRunner {
         applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
         bindLifecycleToRuntime(dispatchRuntime, lifecycle);
         attachStoppedSnapshotAbortListener();
+        const pendingMessageEvents = [];
+        const activityState = dispatchRuntime.systemRuntime && typeof dispatchRuntime.systemRuntime === "object"
+          ? dispatchRuntime.systemRuntime
+          : (dispatchRuntime.systemRuntime = {});
+        activityState.activityTimeline = activityState.activityTimeline && typeof activityState.activityTimeline === "object"
+          ? activityState.activityTimeline
+          : { sequence: 0 };
+        const reduceCurrentTurnActivity = (activityFact = {}) => {
+          const eventId = String(activityFact.eventId || "").trim();
+          if (!eventId) return null;
+          const sequence = Number(activityFact.sequence) > 0
+            ? Number(activityFact.sequence)
+            : (activityState.activityTimeline.sequence += 1);
+          activityState.activityTimeline.sequence = Math.max(
+            Number(activityState.activityTimeline.sequence || 0),
+            sequence,
+          );
+          return {
+            ...activityFact,
+            sequence,
+            sequenceDomain: String(activityFact.sequenceDomain || "message-event").trim(),
+            sequenceScopeId: String(
+              activityFact.sequenceScopeId ||
+                dispatchRuntime?.runConfig?.presentationMessageId ||
+                dispatchRuntime?.systemRuntime?.turnScopeId ||
+                resolvedTurnScopeId ||
+                "turn",
+            ).trim(),
+            authority: String(activityFact.authority || "authoritative").trim(),
+          };
+        };
+        dispatchRuntime.projectCurrentTurnMessageEvent = (envelope = {}) => {
+          if (!envelope || typeof envelope !== "object") return null;
+          const eventId = String(envelope.eventId || "").trim();
+          if (!eventId) return null;
+          if (!isToolMessageEvent(envelope) && !isActivityMessageEvent(envelope)) return envelope;
+          const store = dispatchRuntime.currentTurnMessages;
+          const messages = store?.toArray?.() || [];
+          const existingAssistantIndex = [...messages]
+            .map((item, index) => ({ item, index }))
+            .reverse()
+            .find(({ item }) => item?.role === "assistant");
+          if (!existingAssistantIndex) {
+            if (!pendingMessageEvents.some((item) => item.eventId === eventId)) {
+              pendingMessageEvents.push(envelope);
+            }
+            return envelope;
+          }
+          const isToolEvent = isToolMessageEvent(envelope);
+          const currentTimeline = isToolEvent
+            ? existingAssistantIndex.item.toolTimeline
+            : existingAssistantIndex.item.activityTimeline;
+          const observed = isToolEvent
+            ? (Array.isArray(currentTimeline) ? currentTimeline : []).some((item) =>
+                String(item?.call?.eventId || "") === eventId || String(item?.resultEvent?.eventId || "") === eventId)
+            : (Array.isArray(currentTimeline) ? currentTimeline : []).some((item) => String(item?.eventId || "") === eventId);
+          if (observed) {
+            return envelope;
+          }
+          const patch = isToolEvent
+            ? { toolTimeline: reduceCanonicalToolTimeline(currentTimeline, envelope) }
+            : { activityTimeline: [...(Array.isArray(currentTimeline) ? currentTimeline : []), reduceCurrentTurnActivity(envelope)] };
+          store.updateWhere(
+            patch,
+            (_item, index) => index === existingAssistantIndex.index,
+          );
+          void dispatchRuntime.persistCurrentTurnMessages?.();
+          return envelope;
+        };
+        dispatchRuntime.consumePendingCurrentTurnActivities = () => {
+          const facts = pendingMessageEvents.filter((item) =>
+            !isToolMessageEvent(item));
+          pendingMessageEvents.splice(
+            0,
+            pendingMessageEvents.length,
+            ...pendingMessageEvents.filter((item) => !facts.includes(item)),
+          );
+          return facts;
+        };
+        dispatchRuntime.consumePendingCurrentTurnToolEvents = () => {
+          const facts = pendingMessageEvents.filter((item) =>
+            isToolMessageEvent(item));
+          pendingMessageEvents.splice(0, pendingMessageEvents.length, ...pendingMessageEvents.filter((item) => !facts.includes(item)));
+          return facts;
+        };
+        let persistCurrentTurnMessagesTail = Promise.resolve();
+        dispatchRuntime.timelineCheckpointPersistedMessageUids = [];
+        dispatchRuntime.persistCurrentTurnMessages = () => {
+          const persist = async () => {
+            const store = dispatchRuntime.currentTurnMessages;
+            const messages = store?.toArray?.();
+            if (!Array.isArray(messages) || !messages.length) return;
+            await this.appendAgentMessages?.({
+              userId,
+              sessionId: usedSessionId,
+              parentSessionId,
+              messages,
+              dialogProcessId,
+              parentDialogProcessId,
+              turnScopeId: resolvedTurnScopeId,
+              eventListener: runtimeEventListener,
+              persistenceContext,
+            });
+            const activityMessages = messages.filter((item = {}) =>
+              String(item.messageUid || "").trim() &&
+              Array.isArray(item.activityTimeline) &&
+              item.activityTimeline.length > 0);
+            let durableActivityMessages = [];
+            if (activityMessages.length > 0 && typeof this.getSessionTurns === "function") {
+              const durableMessages = await this.getSessionTurns({
+                userId,
+                sessionId: usedSessionId,
+                parentSessionId,
+                persistenceContext,
+              });
+              const durableByUid = new Map((Array.isArray(durableMessages) ? durableMessages : [])
+                .map((item = {}) => [String(item.messageUid || "").trim(), item])
+                .filter(([messageUid]) => messageUid));
+              durableActivityMessages = activityMessages.map((item = {}) => {
+                const messageUid = String(item.messageUid || "").trim();
+                const expectedEventIds = item.activityTimeline
+                  .map((activity = {}) => String(activity.eventId || "").trim())
+                  .filter(Boolean);
+                const durable = durableByUid.get(messageUid);
+                const durableEventIds = (Array.isArray(durable?.activityTimeline) ? durable.activityTimeline : [])
+                  .map((activity = {}) => String(activity.eventId || "").trim())
+                  .filter(Boolean);
+                const missingEventIds = expectedEventIds.filter((eventId) => !durableEventIds.includes(eventId));
+                return { messageUid, expectedEventIds, durableEventIds, missingEventIds };
+              });
+              const mismatch = durableActivityMessages.find((item) => item.missingEventIds.length > 0);
+              if (mismatch) {
+                emitEvent(runtimeEventListener, "timeline_checkpoint_durability_mismatch", {
+                  sessionId: usedSessionId,
+                  dialogProcessId,
+                  turnScopeId: resolvedTurnScopeId,
+                  messages: durableActivityMessages,
+                });
+                const error = new Error("canonical activity timeline was not durably persisted");
+                error.code = "TIMELINE_CHECKPOINT_DURABILITY_MISMATCH";
+                throw error;
+              }
+            }
+            dispatchRuntime.timelineCheckpointPersistedMessageUids = messages
+              .map((item = {}) => String(item.messageUid || "").trim())
+              .filter(Boolean);
+            emitEvent(runtimeEventListener, "timeline_checkpoint_verified", {
+              sessionId: usedSessionId,
+              dialogProcessId,
+              turnScopeId: resolvedTurnScopeId,
+              activityMessageCount: activityMessages.length,
+              messages: durableActivityMessages,
+            });
+            emitEvent(runtimeEventListener, "timeline_checkpoint_persisted", {
+              sessionId: usedSessionId,
+              dialogProcessId,
+              parentDialogProcessId,
+              turnScopeId: resolvedTurnScopeId,
+              messageCount: messages.length,
+              assistantCount: messages.filter((item = {}) => item.role === "assistant").length,
+              toolCount: messages.filter((item = {}) => item.role === "tool").length,
+              messages: messages.map((item = {}) => ({
+                messageUid: String(item.messageUid || "").trim(),
+                messageId: String(item.messageId || item.id || "").trim(),
+                presentationMessageId: String(item.presentationMessageId || "").trim(),
+                role: String(item.role || "").trim(),
+                type: String(item.type || "").trim(),
+                chatPresentation: item.chatPresentation === true,
+                contentLength: typeof item.content === "string" ? item.content.length : 0,
+                activityTimelineCount: Array.isArray(item.activityTimeline) ? item.activityTimeline.length : 0,
+                toolTimelineCount: Array.isArray(item.toolTimeline) ? item.toolTimeline.length : 0,
+                toolCallIds: Array.isArray(item.toolTimeline)
+                  ? item.toolTimeline
+                      .map((tool = {}) => String(tool.toolCallId || "").trim())
+                      .filter(Boolean)
+                  : [],
+                activityTimeline: Array.isArray(item.activityTimeline)
+                  ? item.activityTimeline.slice(0, 64).map((activity = {}) => ({
+                      eventId: String(activity.eventId || "").trim(),
+                      activityKind: String(activity.activityKind || activity.type || "").trim(),
+                      sequence: Number(activity.sequence || 0),
+                      sequenceDomain: String(activity.sequenceDomain || "").trim(),
+                      sequenceScopeId: String(activity.sequenceScopeId || "").trim(),
+                      authority: String(activity.authority || "").trim(),
+                    }))
+                  : [],
+              })),
+            });
+          };
+          const next = persistCurrentTurnMessagesTail.then(persist, persist);
+          persistCurrentTurnMessagesTail = next.catch(() => {});
+          return next;
+        };
         dispatchRuntime.commitSummaryCheckpoint = (payload = {}) =>
           this.commitSummaryCheckpoint?.({
             runtime: dispatchRuntime,
@@ -514,11 +714,20 @@ export class SessionExecutionRunner {
     } catch (error) {
       if (isAbortError(error)) {
         if (isUserStopAbort(error, abortSignal)) {
+          // A user stop is still a completed persistence boundary for the
+          // work already committed to the current turn.  Keep the same
+          // canonical messages used by live checkpoints and replay.
+          await lifecycleRuntime?.persistCurrentTurnMessages?.();
           const stoppedSnapshotPersistence = await persistStoppedSnapshotFromRuntime("runner_user_stop_catch");
-          lifecycle?.userStop?.({
+          await lifecycle?.userStop?.({
             reason: tSystem("ws.dialogStoppedByUser"),
             stoppedSnapshotPersistence,
           });
+          // Lifecycle terminal persistence may write a stale session object.
+          // Re-commit the canonical turn store after that boundary so the
+          // durable turn artifact contains the same activity timeline as the
+          // last running checkpoint.
+          await lifecycleRuntime?.persistCurrentTurnMessages?.();
         } else {
           lifecycle?.interrupt?.({
             reason: error?.message || String(error),

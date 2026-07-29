@@ -23,6 +23,7 @@ import {
   normalizeProxyPathname,
 } from "../http/http-proxy.js";
 import { interceptConnectRequest } from "../http/connect-interceptor.js";
+import { bridgeDuplexStreams } from "../http/duplex-stream-bridge.js";
 import { createSessionLogClient } from "../websocket/session-log-client.js";
 import { parseRequestPathname, parseRequestQuery, normalizeApiKey } from "../shared/utils.js";
 import {
@@ -192,6 +193,7 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
   const transport = isHttps ? https : http;
   const requestHeaders = { ...(request?.headers || {}) };
   requestHeaders.host = `${upstreamUrl.hostname}${upstreamUrl.port ? `:${upstreamUrl.port}` : ""}`;
+  let upgradeEstablished = false;
   const upstreamRequest = transport.request({
     protocol: upstreamUrl.protocol,
     hostname: upstreamUrl.hostname,
@@ -201,19 +203,44 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
     headers: requestHeaders,
     timeout: config.httpUpstreamTimeoutMs,
   });
+  socket.on("error", (error) => {
+    if (upgradeEstablished) return;
+    agentProxyLogDiagnostic("proxy upgrade downstream error", {
+      pathname: upstreamUrl?.pathname || "",
+      reason: error?.code || "downstream_error",
+      error: error?.message || String(error),
+    });
+    upstreamRequest.destroy();
+  });
+  socket.once("close", () => {
+    if (!upgradeEstablished) upstreamRequest.destroy();
+  });
   upstreamRequest.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
+    upgradeEstablished = true;
     if (isLogProxyPath(parseRequestPathname(request))) {
       agentProxyLogDiagnostic("proxy upgrade accepted", { statusCode: upstreamResponse.statusCode || 101 });
     }
-    socket.write(
-      `HTTP/1.1 ${upstreamResponse.statusCode || 101} ${upstreamResponse.statusMessage || "Switching Protocols"}\r\n` +
-        Object.entries(upstreamResponse.headers || {})
-          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
-          .join("\r\n") +
-        "\r\n\r\n",
-    );
-    if (upstreamHead?.length) socket.write(upstreamHead);
-    upstreamSocket.pipe(socket).pipe(upstreamSocket);
+    bridgeDuplexStreams({
+      upstream: upstreamSocket,
+      downstream: socket,
+      beforePipe: () => {
+        socket.write(
+          `HTTP/1.1 ${upstreamResponse.statusCode || 101} ${upstreamResponse.statusMessage || "Switching Protocols"}\r\n` +
+            Object.entries(upstreamResponse.headers || {})
+              .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+              .join("\r\n") +
+            "\r\n\r\n",
+        );
+        if (upstreamHead?.length) socket.write(upstreamHead);
+      },
+      onError: ({ reason, error }) => {
+        agentProxyLogDiagnostic("proxy upgrade stream error", {
+          pathname: upstreamUrl?.pathname || "",
+          reason,
+          error: error?.message || String(error),
+        });
+      },
+    });
   });
   upstreamRequest.on("response", (upstreamResponse) => {
     if (isLogProxyPath(parseRequestPathname(request))) {

@@ -81,6 +81,11 @@ function isEmptyAssistantPlaceholder(message = {}) {
     !text(message?.content);
 }
 
+function isTurnStatusPresentation(message = {}) {
+  return getMessageRole(message) === "assistant" &&
+    message?.turnStatusPlaceholder === true;
+}
+
 export function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSessionId = "") {
   const workflowRunId = text(workflow?.workflowRunId);
   const sessionId = text(workflow?.sessionId || fallbackSessionId);
@@ -130,7 +135,31 @@ function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
   };
 }
 
-function coalescePersistedWorkflowShells(messages = [], activeSessionId = "") {
+function mergeTurnStatusIntoAssistant(shell = {}, terminalPresentation = {}) {
+  const shellContent = text(shell?.content);
+  const terminalContent = text(terminalPresentation?.content);
+  const content = shellContent && terminalContent && shellContent !== terminalContent
+    ? `${shellContent}\n\n${terminalContent}`
+    : shellContent || terminalContent;
+  return {
+    ...shell,
+    ...terminalPresentation,
+    id: shell?.id || shell?.messageId || terminalPresentation?.id,
+    messageId: shell?.messageId || shell?.id || terminalPresentation?.messageId || terminalPresentation?.id,
+    sessionId: getMessageSessionId(shell) || getMessageSessionId(terminalPresentation),
+    turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(terminalPresentation),
+    dialogProcessId: shell?.dialogProcessId || terminalPresentation?.dialogProcessId || "",
+    content,
+    toolTimeline: shell?.toolTimeline || terminalPresentation?.toolTimeline || [],
+    activityTimeline: shell?.activityTimeline || terminalPresentation?.activityTimeline || [],
+    attachments: shell?.attachments || terminalPresentation?.attachments || [],
+    ts: shell?.ts || terminalPresentation?.ts,
+    __turnStatusPresentation: true,
+    __turnStatusPlaceholderId: text(terminalPresentation?.id),
+  };
+}
+
+function coalescePersistedAssistantPresentations(messages = [], activeSessionId = "") {
   const output = [];
   const assistantIndexByTurn = new Map();
   for (const message of messages) {
@@ -146,6 +175,14 @@ function coalescePersistedWorkflowShells(messages = [], activeSessionId = "") {
       continue;
     }
     const existing = output[existingIndex];
+    const existingTurnStatus = isTurnStatusPresentation(existing);
+    const incomingTurnStatus = isTurnStatusPresentation(message);
+    if (existingTurnStatus !== incomingTurnStatus) {
+      output[existingIndex] = existingTurnStatus
+        ? mergeTurnStatusIntoAssistant(message, existing)
+        : mergeTurnStatusIntoAssistant(existing, message);
+      continue;
+    }
     const existingWorkflow = isWorkflowPresentationMessage(existing);
     const incomingWorkflow = isWorkflowPresentationMessage(message);
     if (incomingWorkflow && (existingWorkflow || isEmptyAssistantPlaceholder(existing))) {
@@ -166,7 +203,7 @@ export function selectTurnPresentations({
   const activeSessionId = sessionIdFromSession(activeSession);
   const activeSessionIds = sessionIdentitySet(activeSession);
   const sourceMessages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
-  const messages = coalescePersistedWorkflowShells(sourceMessages, activeSessionId);
+  const messages = coalescePersistedAssistantPresentations(sourceMessages, activeSessionId);
   const persistedRunIds = new Set(messages.map(workflowRunIdFromMessage).filter(Boolean));
   const persistedTurnKeys = new Set(
     messages

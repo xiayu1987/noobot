@@ -90,7 +90,7 @@ test("appendTurn does not overwrite another dialog when local message ids collid
   ]);
 });
 
-test("appendTurn still appends messages without an authoritative messageId", async () => {
+test("appendTurn assigns a stable persisted identity when no runtime messageId is provided", async () => {
   const session = { currentTaskId: "", messages: [] };
   const service = {
     now: () => "2026-07-25T00:01:00.000Z",
@@ -110,8 +110,9 @@ test("appendTurn still appends messages without an authoritative messageId", asy
   });
 
   assert.equal(session.messages.length, 1);
-  assert.equal("messageId" in session.messages[0], false);
   assert.match(session.messages[0].messageUid, /^sm_/);
+  assert.equal(session.messages[0].messageId, session.messages[0].messageUid);
+  assert.equal(session.messages[0].id, session.messages[0].messageUid);
 });
 
 test("appendTurn uses messageUid as the persistence identity and validates its dialog scope", async () => {
@@ -151,4 +152,32 @@ test("appendTurn uses messageUid as the persistence identity and validates its d
     role: "assistant", content: "ambiguous update", messageId: "a-different-runtime-id",
     dialogProcessId: "dialog-1", turnScopeId: "turn-1",
   }), (error) => error.code === "SESSION_MESSAGE_UID_MISMATCH");
+});
+
+test("appendTurn preserves assistant presentation identity in the authoritative snapshot", async () => {
+  const session = { currentTaskId: "", messages: [] };
+  const service = {
+    now: () => "2026-07-25T00:01:00.000Z",
+    _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
+    _resolveParentSessionId: async () => "",
+    sessionRepo: { findById: async () => session, save: async () => {} },
+  };
+
+  await appendTurn.call(service, {
+    userId: "u1",
+    sessionId: "s1",
+    role: "assistant",
+    messageUid: "sm_analysis",
+    messageId: "msg_model_turn_1",
+    presentationMessageId: "msg_chat_1",
+    chatPresentation: false,
+    content: "working through the model analysis",
+    type: "tool_call",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+  });
+
+  assert.equal(session.messages.length, 1);
+  assert.equal(session.messages[0].presentationMessageId, "msg_chat_1");
+  assert.equal(session.messages[0].chatPresentation, false);
 });

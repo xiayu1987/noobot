@@ -20,6 +20,16 @@ export function createTurnScopeId() {
   return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function createAssistantMessageId() {
+  const randomUuid = globalThis?.crypto?.randomUUID?.();
+  if (randomUuid) return `msg_${randomUuid}`;
+  return `msg_${nowMs().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function createUserMessageId() {
+  return createAssistantMessageId();
+}
+
 export function isEventForCurrentTurn(data = {}, botMessage = {}) {
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
   const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);

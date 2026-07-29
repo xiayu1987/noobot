@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
+import {
+  createAuthoritativeMessageEnvelope,
+  createCanonicalAssistant,
+  createFixture,
+  createFakeProcessStore,
+} from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   BackendChannelState,
@@ -127,7 +132,7 @@ describe("useReconnectReplay", () => {
     expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
-  it("writes reconnect turn identity onto an in-flight assistant created after refresh", async () => {
+  it("restores reconnect turn runtime without manufacturing an assistant placeholder", async () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
 
@@ -156,20 +161,25 @@ describe("useReconnectReplay", () => {
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT,
     );
-    expect(assistant).toMatchObject({
-      pending: true,
-      dialogProcessId: "dp-refresh-running",
+    expect(assistant).toBeUndefined();
+    expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1")).toMatchObject({
+      sending: true,
+      canStop: true,
       turnScopeId: "turn-refresh-running",
-      channelState: {
-        state: BackendChannelState.SENDING,
-        turnScopeId: "turn-refresh-running",
-      },
     });
   });
 
   it("keeps currentRun turn identity when refresh replays buffered messages", async () => {
     const { api, refs, mocks } = createFixture();
-    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      createCanonicalAssistant({
+        sessionId: "s-1",
+        messageId: "message-refresh-buffered",
+        dialogProcessId: "dp-refresh-buffered",
+        turnScopeId: "turn-refresh-buffered",
+      }),
+    ];
 
     await api.applyReconnectData({
       sessions: [{
@@ -179,15 +189,20 @@ describe("useReconnectReplay", () => {
           sessionId: "s-1",
           dialogProcessId: "dp-refresh-buffered",
           turnScopeId: "turn-refresh-buffered",
+          assistantMessageId: "message-refresh-buffered",
           state: BackendChannelState.SENDING,
           seq: 4,
         },
         dialogProcesses: [{
           dialogProcessId: "dp-refresh-buffered",
-          messages: [{
-            event: StreamEventEnum.DELTA,
-            data: { dialogProcessId: "dp-refresh-buffered", seq: 3, text: "partial" },
-          }],
+          messages: [createAuthoritativeMessageEnvelope("llm_delta", {
+            sessionId: "s-1",
+            messageId: "message-refresh-buffered",
+            dialogProcessId: "dp-refresh-buffered",
+            turnScopeId: "turn-refresh-buffered",
+            seq: 3,
+            text: "partial",
+          })],
         }],
       }],
     });
@@ -245,7 +260,7 @@ describe("useReconnectReplay", () => {
     });
   });
 
-  it("projects live reconnect thinking without sessionId without writing process mirrors", async () => {
+  it("projects canonical reconnect thinking without writing process mirrors", async () => {
     const processStore = createFakeProcessStore();
     const { api, refs } = createFixture({ processStore });
     const hydratedLogs = Array.from({ length: 2 }, (_, index) => ({
@@ -256,10 +271,7 @@ describe("useReconnectReplay", () => {
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
       {
-        role: RoleEnum.ASSISTANT,
-        dialogProcessId: "dp-live",
-        content: "",
-        pending: true,
+        ...createCanonicalAssistant({ dialogProcessId: "dp-live" }),
         executionLogTotal: 0,
         processExecutionLogTotal: 2,
         processLastSequence: 2,
@@ -268,21 +280,32 @@ describe("useReconnectReplay", () => {
       },
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.THINKING, {
+    await api.applyCanonicalMessageEvent("thinking", {
+      sessionId: "s-1",
       dialogProcessId: "dp-live",
       text: "tool still running",
-      event: "tool_call",
+      seq: 3,
     });
 
     const assistant = refs.activeSession.value.messages[1];
     expect(processStore.applyEventBatch).not.toHaveBeenCalled();
-    expect(selectToolTimelineLogs(assistant).some((item) => item.text.includes("tool still running"))).toBe(true);
-    expect(selectActivityTimelineLogs(assistant)).toHaveLength(0);
+    expect(selectToolTimelineLogs(assistant)).toHaveLength(0);
+    expect(selectActivityTimelineLogs(assistant).some((item) => item.text.includes("tool still running"))).toBe(true);
   });
 
   it("RT-01: applyReconnectData routes active to replay and non-active to replayCache", async () => {
     const { api, refs } = createFixture();
-    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      createCanonicalAssistant({
+        sessionId: "s-1", messageId: "message-a", dialogProcessId: "dp-a", turnScopeId: "turn-a",
+      }),
+    ];
+    refs.sessions.value.find((session) => session.id === "s-2").messages = [
+      createCanonicalAssistant({
+        sessionId: "s-2", messageId: "message-b", dialogProcessId: "dp-b", turnScopeId: "turn-b",
+      }),
+    ];
 
     await api.applyReconnectData({
       sessions: [
@@ -293,7 +316,9 @@ describe("useReconnectReplay", () => {
           dialogProcesses: [
             {
               dialogProcessId: "dp-a",
-              messages: [{ event: StreamEventEnum.DELTA, data: { seq: 1, text: "A", dialogProcessId: "dp-a" } }],
+              messages: [createAuthoritativeMessageEnvelope("llm_delta", {
+                sessionId: "s-1", messageId: "message-a", dialogProcessId: "dp-a", turnScopeId: "turn-a", seq: 1, text: "A",
+              })],
             },
           ],
         },
@@ -304,7 +329,9 @@ describe("useReconnectReplay", () => {
           dialogProcesses: [
             {
               dialogProcessId: "dp-b",
-              messages: [{ event: StreamEventEnum.DELTA, data: { seq: 1, text: "B", dialogProcessId: "dp-b" } }],
+              messages: [createAuthoritativeMessageEnvelope("llm_delta", {
+                sessionId: "s-2", messageId: "message-b", dialogProcessId: "dp-b", turnScopeId: "turn-b", seq: 1, text: "B",
+              })],
             },
           ],
         },
@@ -337,11 +364,18 @@ describe("useReconnectReplay", () => {
 
   it("RT-02: active realtime event applies directly and does not write replayCache", async () => {
     const { api, refs } = createFixture();
-    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      createCanonicalAssistant({
+        sessionId: "s-1", messageId: "message-active", dialogProcessId: "dp-active", turnScopeId: "turn-active",
+      }),
+    ];
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-active",
+      messageId: "message-active",
+      turnScopeId: "turn-active",
       seq: 1,
       text: "hello",
     });
@@ -355,10 +389,17 @@ describe("useReconnectReplay", () => {
 
   it("RT-04: cached events are consumed after session switch without duplicate apply", async () => {
     const { api, refs } = createFixture();
+    refs.sessions.value.find((session) => session.id === "s-2").messages = [
+      createCanonicalAssistant({
+        sessionId: "s-2", messageId: "message-2", dialogProcessId: "dp-2", turnScopeId: "turn-2",
+      }),
+    ];
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-2",
       dialogProcessId: "dp-2",
+      messageId: "message-2",
+      turnScopeId: "turn-2",
       seq: 1,
       text: "A",
     });
@@ -366,9 +407,11 @@ describe("useReconnectReplay", () => {
     refs.activeSessionId.value = "s-2";
     refs.activeSession.value = refs.sessions.value.find((s) => s.id === "s-2");
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-2",
       dialogProcessId: "dp-2",
+      messageId: "message-2",
+      turnScopeId: "turn-2",
       seq: 2,
       text: "B",
     });

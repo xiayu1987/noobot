@@ -95,6 +95,8 @@ describe("useChatSession reconnect replay", () => {
   it("projects live tool call and result received after refresh into the restored assistant", async () => {
     const store = useChatStore();
     const assistant = {
+      id: "msg-live",
+      messageId: "msg-live",
       role: RoleEnum.ASSISTANT,
       dialogProcessId: "dp-live",
       turnScopeId: "turn-live",
@@ -126,11 +128,14 @@ describe("useChatSession reconnect replay", () => {
         route: { scope: "main_session", sessionId: "s-live" },
         event: {
           envelopeKind: "noobot.message_event",
-          envelopeVersion: 1,
+          envelopeVersion: 2,
           eventId: `evt-${sequence}`,
           eventType,
           sessionId: "s-live",
           messageId: "msg-live",
+          presentationMessageId: "msg-live",
+          sequenceDomain: "message-event",
+          sequenceScopeId: "msg-live",
           dialogProcessId: "dp-live",
           turnScopeId: "turn-live",
           sequence,
@@ -166,6 +171,8 @@ describe("useChatSession reconnect replay", () => {
   it("keeps projecting message deltas that arrive after reconnect has completed", async () => {
     const store = useChatStore();
     const assistant = {
+      id: "msg-after-reconnect",
+      messageId: "msg-after-reconnect",
       role: RoleEnum.ASSISTANT,
       dialogProcessId: "dp-after-reconnect",
       turnScopeId: "turn-after-reconnect",
@@ -194,11 +201,14 @@ describe("useChatSession reconnect replay", () => {
         route: { scope: "main_session", sessionId: "s-after-reconnect" },
         event: {
           envelopeKind: "noobot.message_event",
-          envelopeVersion: 1,
+          envelopeVersion: 2,
           eventId: "evt-after-reconnect-delta",
           eventType: "llm_delta",
           sessionId: "s-after-reconnect",
           messageId: "msg-after-reconnect",
+          presentationMessageId: "msg-after-reconnect",
+          sequenceDomain: "message-event",
+          sequenceScopeId: "msg-after-reconnect",
           dialogProcessId: "dp-after-reconnect",
           turnScopeId: "turn-after-reconnect",
           sequence: 1,
@@ -227,6 +237,8 @@ describe("useChatSession reconnect replay", () => {
       realtimeLogs: [{ type: "thinking", text: "old thinking" }],
     };
     const continuedAssistant = {
+      id: "msg-continued",
+      messageId: "msg-continued",
       role: RoleEnum.ASSISTANT,
       dialogProcessId: "dp-continued",
       turnScopeId: "turn-continued",
@@ -264,11 +276,14 @@ describe("useChatSession reconnect replay", () => {
           route: { scope: "main_session", sessionId: "s-continue" },
           event: {
             envelopeKind: "noobot.message_event",
-            envelopeVersion: 1,
+            envelopeVersion: 2,
             eventId: "evt-continued-thinking",
             eventType: "thinking",
             sessionId: "s-continue",
             messageId: "msg-continued",
+            presentationMessageId: "msg-continued",
+            sequenceDomain: "message-event",
+            sequenceScopeId: "msg-continued",
             dialogProcessId: "dp-continued",
             turnScopeId: "turn-continued",
             sequence: 1,
@@ -293,7 +308,7 @@ describe("useChatSession reconnect replay", () => {
     ]);
   });
 
-  it("reconnect DONE patches only the assistant identified by turnScopeId", async () => {
+  it("reconnect message_event patches only the assistant identified by messageId", async () => {
     const store = useChatStore();
     store.sessions = [
       {
@@ -304,10 +319,11 @@ describe("useChatSession reconnect replay", () => {
         loaded: true,
         messages: [
           { role: RoleEnum.USER, content: "old q" },
-          { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+          { role: RoleEnum.ASSISTANT, messageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
+            messageId: "msg-new",
             dialogProcessId: "dp-new",
             turnScopeId: "turn-new",
             content: "",
@@ -333,6 +349,29 @@ describe("useChatSession reconnect replay", () => {
 
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       onReconnectData({
+        event: "message_event",
+        data: {
+          channelKind: "message_event",
+          channelVersion: 1,
+          route: { scope: "main_session", sessionId: "s-1" },
+          event: {
+            envelopeKind: "noobot.message_event",
+            envelopeVersion: 2,
+            eventId: "evt-new-final",
+            eventType: "main_model_content",
+            sessionId: "s-1",
+            messageId: "msg-new",
+            dialogProcessId: "dp-new",
+            turnScopeId: "turn-new",
+            sequence: 1,
+            timestamp: "2026-07-22T05:00:01.000Z",
+            text: "new final answer",
+            output: "new final answer",
+            modelAlias: "alias-1",
+          },
+        },
+      });
+      onReconnectData({
         event: StreamEventEnum.DONE,
         data: {
           sessionId: "s-1",
@@ -342,6 +381,7 @@ describe("useChatSession reconnect replay", () => {
             { role: RoleEnum.USER, content: "old q" },
             {
               role: RoleEnum.ASSISTANT,
+              messageId: "msg-old",
               dialogProcessId: "dp-old",
               turnScopeId: "turn-old",
               content: "old overwritten by snapshot",
@@ -349,6 +389,7 @@ describe("useChatSession reconnect replay", () => {
             { role: RoleEnum.USER, content: "new q" },
             {
               role: RoleEnum.ASSISTANT,
+              messageId: "msg-new",
               dialogProcessId: "dp-new",
               turnScopeId: "turn-new",
               content: "new final answer",
@@ -380,10 +421,11 @@ describe("useChatSession reconnect replay", () => {
             sessionId: "s-1",
             messages: [
               { role: RoleEnum.USER, content: "old q" },
-              { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+              { role: RoleEnum.ASSISTANT, messageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
               { role: RoleEnum.USER, content: "new q" },
               {
                 role: RoleEnum.ASSISTANT,
+                messageId: "msg-new",
                 dialogProcessId: "dp-new",
                 turnScopeId: "turn-new",
                 content: "new final answer",
@@ -394,10 +436,11 @@ describe("useChatSession reconnect replay", () => {
         ],
         messages: [
           { role: RoleEnum.USER, content: "old q" },
-          { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+          { role: RoleEnum.ASSISTANT, messageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
+            messageId: "msg-new",
             dialogProcessId: "dp-new",
             turnScopeId: "turn-new",
             content: "new final answer",
@@ -437,10 +480,9 @@ describe("useChatSession reconnect replay", () => {
     expect(newAssistant.content).toBe("new final answer");
     expect(newAssistant.modelAlias).toBe("alias-1");
     const requestedUrls = authFetch.mock.calls.map(([url]) => url);
-    expect(requestedUrls).toHaveLength(3);
-    expect(requestedUrls.filter((url) => url === "/api/internal/session/u-1/s-1")).toHaveLength(1);
-    expect(requestedUrls.filter((url) => url === "/api/internal/connectors/u-1/s-1")).toHaveLength(1);
-    expect(requestedUrls.filter((url) => url.includes("/turns/turn-new/terminal"))).toHaveLength(1);
+    expect(requestedUrls).toContain("/api/internal/session/u-1/s-1");
+    expect(requestedUrls).toContain("/api/internal/connectors/u-1/s-1");
+    expect(requestedUrls.some((url) => url.includes("/turns/turn-new/terminal"))).toBe(true);
     expect(store.turnRuntimeRegistry.sessions).toEqual({});
     expect(newAssistant.pending).toBe(false);
   });

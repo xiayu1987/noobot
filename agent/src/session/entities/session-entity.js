@@ -94,6 +94,7 @@ export function normalizeMessageEntity(
     : [];
   // Provider/runtime IDs may be scoped to one model run. They are retained for
   // streaming correlation, while messageUid is the persistence identity.
+  const messageUid = normalizeMessageUid(message?.messageUid);
   const runtimeMessageId = String(
     message?.messageId ||
       message?.id ||
@@ -103,6 +104,7 @@ export function normalizeMessageEntity(
       message?.lc_kwargs?.messageId ||
       message?.lc_kwargs?.additional_kwargs?.noobotMessageId ||
       message?.lc_kwargs?.additional_kwargs?.messageId ||
+      messageUid ||
       "",
   ).trim();
   const normalizedMessage = {
@@ -122,7 +124,6 @@ export function normalizeMessageEntity(
     summarized: message?.summarized === true,
     ts: String(message?.ts || "").trim() || now(),
   };
-  const messageUid = normalizeMessageUid(message?.messageUid);
   if (messageUid) normalizedMessage.messageUid = messageUid;
   if (runtimeMessageId) {
     normalizedMessage.id = runtimeMessageId;
@@ -171,6 +172,17 @@ export function normalizeMessageEntity(
   if (messageOrigin === "user" || messageOrigin === "internal") {
     normalizedMessage.messageOrigin = messageOrigin;
   }
+  const presentationMessageId = String(message?.presentationMessageId || "").trim();
+  if (presentationMessageId) normalizedMessage.presentationMessageId = presentationMessageId;
+  if (message?.chatPresentation === true || message?.chatPresentation === false) {
+    normalizedMessage.chatPresentation = message.chatPresentation === true;
+  }
+  if (Array.isArray(message?.activityTimeline)) {
+    normalizedMessage.activityTimeline = message.activityTimeline;
+  }
+  if (Array.isArray(message?.toolTimeline)) {
+    normalizedMessage.toolTimeline = message.toolTimeline;
+  }
   if (message?.isMonotonic === true || message?.monotonic === true) {
     normalizedMessage.isMonotonic = true;
     normalizedMessage.monotonic = true;
@@ -188,12 +200,6 @@ export function normalizeMessageEntity(
     !Array.isArray(message.pluginMeta)
   ) {
     normalizedMessage.pluginMeta = message.pluginMeta;
-  }
-  if (Array.isArray(message?.realtimeLogs)) {
-    normalizedMessage.realtimeLogs = message.realtimeLogs;
-  }
-  if (Array.isArray(message?.completedToolLogs)) {
-    normalizedMessage.completedToolLogs = message.completedToolLogs;
   }
   for (const key of ["done", "pending", "error"]) {
     if (message?.[key] !== undefined) normalizedMessage[key] = message[key];

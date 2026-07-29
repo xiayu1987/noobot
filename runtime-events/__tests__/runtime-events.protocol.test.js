@@ -9,7 +9,6 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
-  RUNTIME_EVENTS_CONFIG_DEFAULTS,
   RUNTIME_EVENTS_CONFIG_ENVS,
 } from '@noobot/shared/runtime-events-config';
 import {
@@ -60,6 +59,7 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'stop-continue' } }), 'frontendStopContinueDebug');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'terminal-resolution' } }), 'frontendTerminalResolutionDebug');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'tool-log-window' } }), 'frontendToolLogWindowDebug');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'timeline-pipeline' } }), 'timelinePipelineDebug');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-proxy-route' } }), 'agentProxyRouteDebug');
 
   const record = buildSessionLogRecord({
@@ -107,8 +107,7 @@ test('tool log window debug uses its own file when enabled', async () => {
   assert.equal((await readJsonl(result.file))[0].data.selectedCount, 10);
 });
 
-test('workflow diagnostics debug is disabled by default and writes only when enabled', async () => {
-  assert.equal(RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls.workflowDiagnosticsDebug, false);
+test('workflow diagnostics debug follows explicit disabled and enabled controls', async () => {
   assert.equal(
     RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.workflowDiagnosticsDebug,
     'NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG',
@@ -124,7 +123,11 @@ test('workflow diagnostics debug is disabled by default and writes only when ena
     sessionId: 'session-workflow',
     data: { debugType: 'workflow-diagnostics', workflowRunId: 'workflow-1' },
   };
-  const skipped = await writeRuntimeEvent(event, { root, includeProcess: false });
+  const skipped = await writeRuntimeEvent(event, {
+    root,
+    includeProcess: false,
+    workflowDiagnosticsDebug: false,
+  });
 
   assert.equal(skipped.ok, true);
   assert.equal(skipped.skipped, true);

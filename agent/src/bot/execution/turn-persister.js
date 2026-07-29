@@ -239,6 +239,8 @@ export class SessionTurnPersister {
     role,
     messageUid = "",
     messageId = "",
+    presentationMessageId = "",
+    chatPresentation = false,
     content,
     type = "",
     taskId = null,
@@ -253,6 +255,8 @@ export class SessionTurnPersister {
     rawModelContent = null,
     modelAdditionalKwargs = null,
     modelResponseMetadata = null,
+    activityTimeline = [],
+    toolTimeline = [],
     dialogProcessId = "",
     parentDialogProcessId = "",
     parentSessionId = "",
@@ -287,6 +291,10 @@ export class SessionTurnPersister {
       role,
       ...(String(messageUid || "").trim() ? { messageUid: String(messageUid || "").trim() } : {}),
       ...(String(messageId || "").trim() ? { messageId: String(messageId || "").trim() } : {}),
+      ...(String(presentationMessageId || "").trim()
+        ? { presentationMessageId: String(presentationMessageId || "").trim() }
+        : {}),
+      ...(role === MESSAGE_ROLE.ASSISTANT ? { chatPresentation: chatPresentation === true } : {}),
       content: sessionContent,
       type: type || "",
       userName: String(userName || "").trim(),
@@ -334,6 +342,8 @@ export class SessionTurnPersister {
         !Array.isArray(modelResponseMetadata)
           ? modelResponseMetadata
           : null,
+      ...(Array.isArray(activityTimeline) && activityTimeline.length ? { activityTimeline } : {}),
+      ...(Array.isArray(toolTimeline) && toolTimeline.length ? { toolTimeline } : {}),
     };
     try {
       await this.messagePersister.appendExecutionLog({
@@ -378,6 +388,8 @@ export class SessionTurnPersister {
       role,
       messageUid: String(messageUid || "").trim(),
       messageId: String(messageId || "").trim(),
+      presentationMessageId: String(presentationMessageId || "").trim(),
+      chatPresentation: chatPresentation === true,
       content: sessionContent,
       type,
       userName,
@@ -396,6 +408,8 @@ export class SessionTurnPersister {
       rawModelContent,
       modelAdditionalKwargs,
       modelResponseMetadata,
+      activityTimeline: Array.isArray(activityTimeline) ? activityTimeline : [],
+      toolTimeline: Array.isArray(toolTimeline) ? toolTimeline : [],
       injectedMessage,
       injectedBy,
       injectedMessageType,
@@ -435,6 +449,8 @@ export class SessionTurnPersister {
         role: messageItem.role || MESSAGE_ROLE.ASSISTANT,
         messageUid: String(messageItem?.messageUid || "").trim(),
         messageId: resolveAuthoritativeMessageId(messageItem),
+        presentationMessageId: String(messageItem.presentationMessageId || "").trim(),
+        chatPresentation: messageItem.chatPresentation === true,
         content: messageItem.content || "",
         type: messageItem.type || "",
         parentSessionId,
@@ -485,6 +501,8 @@ export class SessionTurnPersister {
           !Array.isArray(messageItem.modelResponseMetadata)
             ? messageItem.modelResponseMetadata
             : null,
+        activityTimeline: Array.isArray(messageItem.activityTimeline) ? messageItem.activityTimeline : [],
+        toolTimeline: Array.isArray(messageItem.toolTimeline) ? messageItem.toolTimeline : [],
         turnScopeId: String(messageItem.turnScopeId || turnScopeId || "").trim(),
         thinkingStartedAt: "",
         thinkingFinishedAt: "",

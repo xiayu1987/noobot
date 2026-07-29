@@ -2,7 +2,7 @@
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
- */
+*/
 
 import { resolveMessageEventSequenceIdentity } from "@noobot/shared/message-event-protocol";
 
@@ -30,18 +30,15 @@ function createLaneState() {
 
 export function resolveMessageEventLaneState(message = {}, envelope = {}) {
   const root = initializeMessageEventState(message).messageEventState;
-  const sequenceIdentity = resolveMessageEventSequenceIdentity(envelope);
-  const eventMessageId = text(envelope?.messageId);
-  const sequenceScopeId = text(sequenceIdentity.sequenceScopeId);
-  const targetMessageId = text(message?.messageId || message?.id);
-  const aggregateProjection = message?.turnPlaceholder === true ||
-    !targetMessageId ||
-    Boolean(eventMessageId && eventMessageId !== targetMessageId);
-  if (!aggregateProjection || !sequenceScopeId) return root;
+  const sequenceScopeId = text(resolveMessageEventSequenceIdentity(envelope).sequenceScopeId);
+  const sourceMessageId = text(envelope?.messageId);
+  const presentationMessageId = text(envelope?.presentationMessageId || envelope?.messageId);
+  const aggregateProjection = Boolean(
+    sequenceScopeId && sourceMessageId && presentationMessageId && sourceMessageId !== presentationMessageId,
+  );
+  if (!aggregateProjection) return root;
   if (!root.sequenceLanesByScopeId || typeof root.sequenceLanesByScopeId !== "object") {
-    root.sequenceLanesByScopeId = root.lanesByMessageId && typeof root.lanesByMessageId === "object"
-      ? root.lanesByMessageId
-      : {};
+    root.sequenceLanesByScopeId = {};
   }
   if (!root.sequenceLanesByScopeId[sequenceScopeId]) {
     root.sequenceLanesByScopeId[sequenceScopeId] = createLaneState();
@@ -54,19 +51,14 @@ export function resolveMessageEventLaneState(message = {}, envelope = {}) {
 
 export function syncMessageEventAggregateState(message = {}) {
   const root = initializeMessageEventState(message).messageEventState;
-  const lanes = Object.values(
-    root.sequenceLanesByScopeId || root.lanesByMessageId || {},
-  );
+  const lanes = Object.values(root.sequenceLanesByScopeId || {});
   if (!lanes.length) return root;
   root.lastSequence = lanes.reduce(
     (maximum, lane) => Math.max(maximum, Number(lane?.lastSequence || 0)),
-    Number(root.lastSequence || 0),
+    0,
   );
-  root.consumedEventIds = [...new Set([
-    ...root.consumedEventIds,
-    ...lanes.flatMap(
-      (lane) => Array.isArray(lane?.consumedEventIds) ? lane.consumedEventIds : [],
-    ),
-  ])].slice(-1000);
+  root.consumedEventIds = [...new Set(lanes.flatMap(
+    (lane) => Array.isArray(lane?.consumedEventIds) ? lane.consumedEventIds : [],
+  ))].slice(-1000);
   return root;
 }

@@ -6,7 +6,9 @@
 import {
   MESSAGE_CONTENT_EFFECT,
   MESSAGE_EVENT_TYPE,
+  isAuthoritativeFinalContentEvent,
   projectMessageEventContent,
+  resolveMessageEventPresentationId,
   resolveMessageEventSequenceIdentity,
   validateMessageEventEnvelope,
 } from "@noobot/shared/message-event-protocol";
@@ -40,6 +42,7 @@ export const MESSAGE_EVENT_REDUCE_RESULT = Object.freeze({
   INVALID: "invalid",
   TARGET_MISSING: "target_missing",
   MESSAGE_IDENTITY_CONFLICT: "message_identity_conflict",
+  FINAL_CONTENT_LOCKED: "final_content_locked",
 });
 
 function stateFor(message, event) {
@@ -50,8 +53,7 @@ function conflicts(message, event) {
   const messageId = text(message.messageId || message.id);
   if (
     messageId &&
-    messageId !== text(event.messageId) &&
-    message?.turnPlaceholder !== true
+    messageId !== resolveMessageEventPresentationId(event)
   ) return true;
   const messageTurn = text(message.turnScopeId || message.turn_scope_id);
   const eventTurn = text(event.turnScopeId);
@@ -79,11 +81,17 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   const gap = Boolean(lastSequence && sequence > lastSequence + 1);
 
   const contentProjection = projectMessageEventContent(event);
+  if (
+    contentProjection.effect === MESSAGE_CONTENT_EFFECT.APPEND &&
+    Number(state.finalContentSequence || 0) > 0
+  ) {
+    return { result: MESSAGE_EVENT_REDUCE_RESULT.FINAL_CONTENT_LOCKED };
+  }
   if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.APPEND) {
     targetMessage.content = String(targetMessage.content || "") + contentProjection.content;
   } else if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.REPLACE) {
     targetMessage.content = contentProjection.content;
-    state.finalContentSequence = sequence;
+    if (isAuthoritativeFinalContentEvent(event)) state.finalContentSequence = sequence;
   } else {
     const log = classifyRealtimeLog?.(event);
     if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.eventType)) {

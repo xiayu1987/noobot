@@ -56,6 +56,7 @@ import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.j
 import {
   applyAuthoritativeMessageId,
   beginAssistantMessageEventStream,
+  currentAssistantPresentationMessageId,
   emitMessageEvent,
 } from "../../events/message-event-stream.js";
 export { normalizeToolResultAttachments } from "./tool-result-normalizer.js";
@@ -174,6 +175,7 @@ export async function invokeNoToolsTurn({
   const locale = String(systemRuntime?.locale || "zh-CN");
   let modelResponse = null;
   const assistantMessageId = beginAssistantMessageEventStream(runtime, { turn });
+  const presentationMessageId = currentAssistantPresentationMessageId(runtime);
   try {
     modelResponse = await invokeLlmWithTransientRetry({
       modelState,
@@ -287,9 +289,11 @@ export async function invokeNoToolsTurn({
     responseContentText,
     turn,
     messageId: assistantMessageId,
+    presentationMessageId,
   });
   return {
     output: responseContentText,
+    assistantMessageId,
     turnTaskStore,
     turnMessageStore,
     modelMessages: messages,
@@ -393,6 +397,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   let ai = null;
   const assistantMessageId = beginAssistantMessageEventStream(runtime, { turn });
+  const presentationMessageId = currentAssistantPresentationMessageId(runtime);
   try {
     ai = await invokeBoundLlmWithToolChoice();
   } catch (error) {
@@ -521,6 +526,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
     messageId: assistantMessageId,
+    presentationMessageId,
+    chatPresentation: calls.length === 0,
   });
 
   const mainModelToolTurnContent = String(aiContentText || "").trim();
@@ -534,6 +541,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       text: mainModelToolTurnContent,
       output: mainModelToolTurnContent,
       messageId: assistantMessageId,
+      eventId: `model-content:${assistantMessageId || presentationMessageId || "turn"}`,
     });
   }
 
@@ -560,6 +568,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   return {
     ai,
+    assistantMessageId,
     aiContentText,
     calls,
     toolMap,

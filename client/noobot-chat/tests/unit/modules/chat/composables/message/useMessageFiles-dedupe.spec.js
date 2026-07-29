@@ -21,16 +21,18 @@ describe("useMessageFiles dedupe", () => {
           transferFilePath: "/workspace/admin/runtime/result.md",
         },
       ],
-      completedToolLogs: [
-        {
+      toolTimeline: [{
+        key: "call:write-1", toolCallId: "write-1", status: "completed",
+        resultEvent: {
+          eventId: "write-result-1", sequence: 1, sequenceScopeId: "message-1",
+          sequenceDomain: "message-event", authority: "authoritative",
           writtenFiles: [
             {
               fileName: "result.md",
               resolvedPath: "/workspace/admin/runtime/result.md",
             },
           ],
-        },
-      ],
+        } }],
     };
 
     const { displayedAttachments, writtenFiles } = createMessageFiles({
@@ -95,16 +97,19 @@ describe("useMessageFiles dedupe", () => {
           name: "result.md",
         },
       ],
-      completedToolLogs: [
-        {
-          writtenFiles: [
+      toolTimeline: [{
+        key: "call:write-1", toolCallId: "write-1", status: "completed",
+        resultEvent: {
+          eventId: "write-result-1", sequence: 1, sequenceScopeId: "message-1",
+          sequenceDomain: "message-event", authority: "authoritative",
+          log: { event: "tool_result", type: "tool_result", writtenFiles: [
             {
               fileName: "result.md",
               resolvedPath: "/workspace/admin/runtime/different/result.md",
             },
-          ],
+          ] },
         },
-      ],
+      }],
     };
 
     const { displayedAttachments, writtenFiles } = createMessageFiles({

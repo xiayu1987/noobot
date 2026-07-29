@@ -97,8 +97,33 @@ forwardToUpstream(channel, payload = {}) {
     if (String(payload?.action || "").trim().toLowerCase() === WS_ACTION.INTERACTION_RESPONSE) {
       const requestId = String(payload?.requestId || "").trim();
       if (requestId) {
+        const resolvedEnvelope = channel.pendingInteractionRequests.get(requestId) || null;
         channel.pendingInteractionRequests.delete(requestId);
         this.requestChannelMap.delete(requestId);
+        if (resolvedEnvelope) {
+          const interactionData = resolvedEnvelope?.data || {};
+          const dialogProcessId = String(interactionData?.dialogProcessId || "").trim();
+          const turnScopeId = String(interactionData?.turnScopeId || "").trim();
+          const stateKey = dialogProcessId || CONVERSATION_SCOPE_KEY;
+          const currentState = channel.conversationStateByDialogProcessId.get(stateKey) || null;
+          const hasRemainingInteraction = Array.from(channel.pendingInteractionRequests.values())
+            .some((envelope) => String(envelope?.data?.dialogProcessId || "").trim() === dialogProcessId);
+          this.updateConversationState(channel, {
+            sessionId: String(interactionData?.sessionId || currentState?.sessionId || "").trim(),
+            dialogProcessId,
+            turnScopeId: turnScopeId || String(currentState?.turnScopeId || "").trim(),
+            state: hasRemainingInteraction
+              ? CONVERSATION_STATE.INTERACTION_PENDING
+              : CONVERSATION_STATE.SENDING,
+            sourceEvent: WS_ACTION.INTERACTION_RESPONSE,
+            seq: Math.max(
+              Number(currentState?.seq || 0),
+              Number(interactionData?.seq || resolvedEnvelope?.sequence || 0),
+            ),
+            createdAtMs: Number(currentState?.createdAtMs || 0),
+            requestId,
+          });
+        }
       }
     }
     return true;

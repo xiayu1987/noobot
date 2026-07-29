@@ -113,7 +113,7 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
 
     expect(resolved).toBe(false);
 
-    socket.emit(StreamEventEnum.THINKING, {
+    socket.emit("message", {
       sessionId: "s-1",
       dialogProcessId: "dp-live",
       turnScopeId: "turn-live",
@@ -121,7 +121,7 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
       text: "still running",
     });
     expect(onEvent).toHaveBeenCalledWith({
-      event: StreamEventEnum.THINKING,
+      event: "message",
       data: expect.objectContaining({
         dialogProcessId: "dp-live",
         turnScopeId: "turn-live",

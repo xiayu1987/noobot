@@ -26,8 +26,7 @@ export function createSendStreamEventHandler(context) {
     logSessionEvent, makeViewMessage, mergeAssistantAttachments, navigateOnFirstResponseOnce,
     refreshSessionConnectorsAsync, requestedTextStreaming, sessionId, setPendingInteractionRequest,
     startFinalDoneSessionDetailOnce, streamState, tryAutoResolveInteraction, turnScopeId,
-    upsertConnectedConnectorInPanelState, upsertSubSessionEvent, upsertWorkflowNodeStateEvent,
-    upsertWorkflowPlanningEvent,
+    findCanonicalMessageById, upsertConnectedConnectorInPanelState,
   } = context;
 
   return (incomingEnvelope) => {
@@ -69,14 +68,26 @@ export function createSendStreamEventHandler(context) {
     logSessionEvent({
       category: event === StreamEventEnum.INTERACTION_REQUEST ? "interaction" : "transport",
       event: `stream.${event || "event"}`,
-      sessionId: data?.sessionId || sessionId,
-      dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
-      turnScopeId: data?.turnScopeId || turnScopeId,
+      sessionId: authoritativeEvent?.sessionId || data?.sessionId || sessionId,
+      dialogProcessId: authoritativeEvent?.dialogProcessId || data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
+      turnScopeId: authoritativeEvent?.turnScopeId || data?.turnScopeId || turnScopeId,
       data: {
         streamEvent: event,
         state: data?.state || "",
         seq: data?.seq || 0,
         hasContent: Boolean(data?.content || data?.delta || data?.message),
+        eventId: String(authoritativeEvent?.eventId || ""),
+        eventType: String(authoritativeEvent?.eventType || ""),
+        messageId: String(authoritativeEvent?.messageId || ""),
+        presentationMessageId: String(authoritativeEvent?.presentationMessageId || ""),
+        envelopeKind: String(authoritativeEvent?.envelopeKind || ""),
+        envelopeVersion: Number(authoritativeEvent?.envelopeVersion || 0),
+        sequence: Number(authoritativeEvent?.sequence || 0),
+        sequenceDomain: String(authoritativeEvent?.sequenceDomain || ""),
+        sequenceScopeId: String(authoritativeEvent?.sequenceScopeId || authoritativeEvent?.messageId || ""),
+        authority: String(authoritativeEvent?.authority || ""),
+        textLength: String(authoritativeEvent?.text || "").length,
+        outputLength: String(authoritativeEvent?.output || "").length,
       },
     });
     logResendDebug("send.stream.event", {
@@ -89,15 +100,15 @@ export function createSendStreamEventHandler(context) {
     if (routeRuntimeStreamEvent(event, data, {
       source: "live",
       applyWorkflowRuntimeEvent, logSessionEvent, sessionId, turnScopeId,
-      upsertWorkflowNodeStateEvent, upsertWorkflowPlanningEvent,
     })) return;
     if (routeMessageProjectionEvent(event, data, {
       botMessage: botMsg, classifyRealtimeLog,
+      findCanonicalMessageById,
       locateSendingStartedMessageOnce, logSessionEvent, navigateOnFirstResponseOnce,
-      sessionId, turnScopeId, upsertSubSessionEvent,
+      sessionId, turnScopeId,
     })) return;
     if (isIgnoredSubSessionEvent(event, data)) return;
-    if (routeForeignTurnLifecycleEvent(event, data, { activeSession, sessionId, upsertSubSessionEvent })) return;
+    if (routeForeignTurnLifecycleEvent(event, data, { activeSession, sessionId })) return;
     if (!isEventForCurrentTurn(data || {}, botMsg)) return;
     if (routeCurrentTurnLifecycleEvent(event, data, { activeSession, applyRunStateEvent, sessionId })) return;
     if (isUserStoppedEvent(event, data || {}) && hasDialogProcessConflictForTurn({

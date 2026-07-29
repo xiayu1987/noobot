@@ -129,6 +129,102 @@ describe("selectTurnPresentations", () => {
     expect(result[0].__workflowLiveProjection).toBeUndefined();
   });
 
+  it("coalesces an empty canonical assistant and terminal status into one presentation", () => {
+    const canonicalAssistant = {
+      id: "assistant-canonical-a",
+      messageId: "assistant-canonical-a",
+      sessionId: "session-a",
+      role: "assistant",
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-a",
+      content: "",
+      toolTimeline: [{ key: "tool-a" }],
+      activityTimeline: [{ eventId: "activity-a" }],
+    };
+    const terminalPresentation = {
+      id: "turn-status-placeholder:turn-a",
+      sessionId: "session-a",
+      role: "assistant",
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-a",
+      content: "本轮已由用户停止\n原因：user_stop",
+      status: "user_stopped",
+      turnStatusPlaceholder: true,
+    };
+    const result = selectTurnPresentations({
+      activeSession: {
+        id: "session-a",
+        messages: [terminalPresentation, canonicalAssistant],
+      },
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "assistant-canonical-a",
+      messageId: "assistant-canonical-a",
+      content: "本轮已由用户停止\n原因：user_stop",
+      status: "user_stopped",
+      turnStatusPlaceholder: true,
+      toolTimeline: [{ key: "tool-a" }],
+      activityTimeline: [{ eventId: "activity-a" }],
+      __turnStatusPresentation: true,
+      __turnStatusPlaceholderId: "turn-status-placeholder:turn-a",
+    });
+  });
+
+  it("keeps partial assistant content and terminal reason in one presentation", () => {
+    const canonicalAssistant = {
+      id: "assistant-partial-a",
+      sessionId: "session-a",
+      role: "assistant",
+      turnScopeId: "turn-a",
+      content: "partial answer",
+    };
+    const terminalPresentation = {
+      id: "turn-status-placeholder:turn-a",
+      sessionId: "session-a",
+      role: "assistant",
+      turnScopeId: "turn-a",
+      content: "本轮异常停止\n原因：model_failed",
+      status: "error",
+      turnStatusPlaceholder: true,
+    };
+    const result = selectTurnPresentations({
+      activeSession: {
+        id: "session-a",
+        messages: [canonicalAssistant, terminalPresentation],
+      },
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "assistant-partial-a",
+      content: "partial answer\n\n本轮异常停止\n原因：model_failed",
+      status: "error",
+      __turnStatusPresentation: true,
+    });
+  });
+
+  it("does not coalesce terminal status across Turn boundaries", () => {
+    const result = selectTurnPresentations({
+      activeSession: {
+        id: "session-a",
+        messages: [
+          { id: "assistant-a", role: "assistant", turnScopeId: "turn-a", content: "" },
+          {
+            id: "turn-status-placeholder:turn-b",
+            role: "assistant",
+            turnScopeId: "turn-b",
+            content: "本轮已由用户停止",
+            turnStatusPlaceholder: true,
+          },
+        ],
+      },
+    });
+
+    expect(result).toHaveLength(2);
+  });
+
   it("never projects across Session or Turn ownership boundaries", () => {
     const result = selectTurnPresentations({
       activeSession: {

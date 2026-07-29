@@ -3,42 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "../../model/chatConstants.js";
-import { sanitizeExecutionLogForDisplay } from "../engine/utils.js";
+import { StreamEventEnum } from "../../model/chatConstants.js";
 import {
-  findReconnectDoneEnvelopeWithMessages,
   getReconnectEnvelopeSequence,
   getReconnectMaxSequence,
   isPendingInteractionReplay,
 } from "../../model/reconnectReplayModel.js";
-import { getMessageDialogProcessId } from "../../model/messageIdentity.js";
-import { _ensureArray, _trimStr, normalizeReplayError } from "./utils.js";
-import {
-  hydrateSessionBeforeReconnectReplayIfNeeded,
-} from "./hydrationReplay.js";
-import {
-  applyDoneRealtimeLogsFromReconnectBatch,
-} from "./doneReplay.js";
-import {
-  createFinalAssistantFromReconnectReplay,
-  resolveReconnectTargetAssistantMessage,
-} from "./assistantMessageReplay.js";
+import { _ensureArray, _trimStr } from "./utils.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
-import {
-  logToolLogWindowDebug,
-  summarizeToolLogWindow,
-  summarizeToolLogWindowItem,
-} from "../../../debug/loggers/toolLogWindowDebugLogger.js";
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../engine/turnProjectionStore.js";
-import {
-  buildToolTimelineFromLegacyLogs,
-  fillMissingToolTimelineFacets,
-  selectToolTimelineLogs,
-  TOOL_SEQUENCE_DOMAIN,
-  TOOL_TIMELINE_AUTHORITY,
-} from "../engine/toolTimeline.js";
-import { buildActivityTimelineFromLegacyLogs, mergeActivityTimelines } from "../engine/activityTimeline.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import { resolveMessageEventPresentationId } from "@noobot/shared/message-event-protocol";
 
 function summarizeReconnectEnvelope(envelope = {}) {
   return {
@@ -97,8 +72,6 @@ export function prepareReconnectReplayBatchPlan({
   normalizedDpId = "",
   terminalDialogProcessIdSet,
   isReconnectTerminalBatch,
-  allowCreate = true,
-  authoritativeCurrentRun = false,
 } = {}) {
   const { nextMessages, maxSequence } = prepareReconnectReplayMessages({
     messages,
@@ -117,84 +90,12 @@ export function prepareReconnectReplayBatchPlan({
     maxSequence,
     shouldSkipAfterTerminal,
     batchHasTerminalEvent,
-    shouldCreateTarget: Boolean(allowCreate) && (
-      !batchHasTerminalEvent || Boolean(authoritativeCurrentRun)
-    ),
   };
-}
-
-export function applyDoneSnapshotReconnectBatch({
-  activeSession,
-  messages = [],
-  normalizedDpId = "",
-  applyDoneMessages,
-  classifyRealtimeLog,
-  normalizeExecutionLogForRealtime,
-} = {}) {
-  const doneEnvelopeWithMessages = findReconnectDoneEnvelopeWithMessages(messages);
-  if (!doneEnvelopeWithMessages) return false;
-  applyDoneMessages?.(doneEnvelopeWithMessages.data || {});
-  applyDoneRealtimeLogsFromReconnectBatch({
-    activeSession,
-    messages,
-    normalizedDpId,
-    classifyRealtimeLog,
-    normalizeExecutionLogForRealtime,
-  });
-  return true;
-}
-
-export function applyReconnectFallbackAssistant({
-  activeSession,
-  appendMessage,
-  messages = [],
-  normalizedDpId = "",
-  legacyDialogFallback = false,
-} = {}) {
-  if (!legacyDialogFallback) return null;
-  return createFinalAssistantFromReconnectReplay({
-    activeSession,
-    appendMessage,
-    messages,
-    dialogProcessId: normalizedDpId,
-    legacyDialogFallback,
-  });
-}
-
-export function resolveReconnectTargetOrApplyFallbackAssistant({
-  activeSession,
-  appendMessage,
-  messages = [],
-  normalizedDpId = "",
-  turnScopeId = "",
-  allowCreate = true,
-  authoritativeCurrentRun = false,
-  legacyDialogFallback = false,
-} = {}) {
-  const targetMessage = resolveReconnectTargetAssistantMessage({
-    activeSession,
-    appendMessage,
-    dialogProcessId: normalizedDpId,
-    turnScopeId,
-    allowCreate,
-    authoritativeCurrentRun,
-  });
-  if (targetMessage) {
-    return { targetMessage, usedFallback: false };
-  }
-  const fallbackMessage = applyReconnectFallbackAssistant({
-    activeSession,
-    appendMessage,
-    messages,
-    normalizedDpId,
-    legacyDialogFallback,
-  });
-  return { targetMessage: null, usedFallback: Boolean(fallbackMessage) };
 }
 
 export function applyReconnectEnvelopeToTargetMessage({
   envelope,
-  targetMessage,
+  findCanonicalMessageById,
   normalizedDpId = "",
   terminalDialogProcessIdSet,
   isReconnectTerminalEvent,
@@ -203,10 +104,8 @@ export function applyReconnectEnvelopeToTargetMessage({
   onInteractionRequest,
   onConnectorStatus,
   onAttachments,
-  onDoneMessages,
   processStore,
 } = {}) {
-  if (!targetMessage) return false;
   const eventName = _trimStr(envelope?.event);
   const eventData = envelope?.data || {};
   if (
@@ -217,8 +116,35 @@ export function applyReconnectEnvelopeToTargetMessage({
   }
   if (eventName === "message_event") {
     const messageEvent = eventData?.event;
+    const sourceMessageId = _trimStr(messageEvent?.messageId);
+    const presentationMessageId = resolveMessageEventPresentationId(messageEvent);
+    if (!sourceMessageId || !presentationMessageId) {
+      logWorkflowDiagnostics("frontend.workflowReplay.messageEventRejected", {
+        sessionId: _trimStr(messageEvent?.sessionId || eventData?.sessionId),
+        dialogProcessId: _trimStr(messageEvent?.dialogProcessId || eventData?.dialogProcessId || normalizedDpId),
+        turnScopeId: _trimStr(messageEvent?.turnScopeId || eventData?.turnScopeId),
+        reason: !sourceMessageId ? "missing_message_id" : "missing_presentation_message_id",
+      });
+      return false;
+    }
+    const targetSessionId = _trimStr(messageEvent?.sessionId || eventData?.sessionId);
+    const canonicalTarget = findCanonicalMessageById?.(targetSessionId, presentationMessageId);
+    if (
+      !canonicalTarget ||
+      _trimStr(canonicalTarget?.messageId || canonicalTarget?.id) !== presentationMessageId
+    ) {
+      logWorkflowDiagnostics("frontend.workflowReplay.messageEventRejected", {
+        sessionId: _trimStr(messageEvent?.sessionId || eventData?.sessionId),
+        dialogProcessId: _trimStr(messageEvent?.dialogProcessId || eventData?.dialogProcessId || normalizedDpId),
+        turnScopeId: _trimStr(messageEvent?.turnScopeId || eventData?.turnScopeId),
+        messageId: sourceMessageId,
+        presentationMessageId,
+        reason: "target_missing",
+      });
+      return false;
+    }
     const reduction = dispatchTurnEnvelope({
-      targetMessage,
+      targetMessage: canonicalTarget,
       envelope: messageEvent,
       classifyRealtimeLog,
       source: TURN_PROJECTION_SOURCE.HISTORY_REPLAY,
@@ -229,197 +155,46 @@ export function applyReconnectEnvelopeToTargetMessage({
       dialogProcessId: String(messageEvent?.dialogProcessId || eventData?.dialogProcessId || normalizedDpId),
       turnScopeId: String(messageEvent?.turnScopeId || eventData?.turnScopeId || ""),
       messageId: String(messageEvent?.messageId || ""),
+      presentationMessageId,
       eventId: String(messageEvent?.eventId || ""),
       eventType: String(messageEvent?.eventType || ""),
       sequence: messageEvent?.sequence ?? envelope?.sequence ?? null,
       result: reduction.result,
       errors: reduction.errors || [],
     });
-  } else if (eventName === StreamEventEnum.DELTA) {
-    targetMessage.content += String(eventData?.text || "");
-  } else if (eventName === StreamEventEnum.THINKING) {
-    const logItem = sanitizeExecutionLogForDisplay(classifyRealtimeLog(eventData));
-    const traceScope = {
-      sessionId: String(eventData?.sessionId || targetMessage?.sessionId || ""),
-      dialogProcessId: String(
-        eventData?.dialogProcessId || getMessageDialogProcessId(targetMessage) || normalizedDpId,
-      ),
-      turnScopeId: String(eventData?.turnScopeId || targetMessage?.turnScopeId || ""),
-    };
-    logToolLogWindowDebug("frontend.toolLogWindow.reconnectClassified", {
-      ...traceScope,
-      envelopeSequence: envelope?.sequence ?? null,
-      dataSequence: eventData?.sequence ?? eventData?.seq ?? null,
-      raw: summarizeToolLogWindowItem(eventData),
-      classified: logItem ? summarizeToolLogWindowItem(logItem) : null,
-    });
-    logThinkingReplayDebug("frontend.thinkingReplay.reconnectThinkingClassified", {
-      sessionId: String(eventData?.sessionId || targetMessage?.sessionId || ""),
-      dialogProcessId: String(
-        eventData?.dialogProcessId || getMessageDialogProcessId(targetMessage) || normalizedDpId,
-      ),
-      turnScopeId: String(eventData?.turnScopeId || targetMessage?.turnScopeId || ""),
-      envelopeSequence: envelope?.sequence ?? null,
-      dataSequence: eventData?.sequence ?? eventData?.seq ?? null,
-      eventDataKeys: Object.keys(eventData || {}).sort(),
-      logType: Array.isArray(eventData?.log) ? "array" : typeof eventData?.log,
-      logEvent: String(eventData?.log?.event || eventData?.data?.log?.event || ""),
-      logKeys: Object.keys(eventData?.log || {}).sort(),
-      nestedDataKeys: Object.keys(eventData?.data || {}).sort(),
-      nestedLogKeys: Object.keys(eventData?.data?.log || {}).sort(),
-      classified: Boolean(logItem),
-      classifiedType: String(logItem?.type || logItem?.event || ""),
-      classifiedTextLength: String(logItem?.text || "").length,
-      targetPending: targetMessage?.pending === true,
-      targetRealtimeLogCount: Array.isArray(targetMessage?.realtimeLogs)
-        ? targetMessage.realtimeLogs.length
-        : 0,
-    });
-    if (!logItem || !_trimStr(logItem.text)) {
-      const rawTextCandidates = {
-        text: eventData?.text,
-        output: eventData?.output,
-        content: eventData?.content,
-        message: eventData?.message,
-        displayText: eventData?.displayText,
-        nestedText: eventData?.data?.text,
-        nestedOutput: eventData?.data?.output,
-        nestedContent: eventData?.data?.content,
-        nestedMessage: eventData?.data?.message,
-        nestedDisplayText: eventData?.data?.displayText,
-      };
-      logThinkingReplayDebug("frontend.thinkingReplay.reconnectThinkingDropped", {
-        sessionId: String(eventData?.sessionId || targetMessage?.sessionId || ""),
-        dialogProcessId: String(
-          eventData?.dialogProcessId || getMessageDialogProcessId(targetMessage) || normalizedDpId,
-        ),
-        turnScopeId: String(eventData?.turnScopeId || targetMessage?.turnScopeId || ""),
-        sequence: eventData?.sequence ?? eventData?.seq ?? envelope?.sequence ?? null,
-        eventDataKeys: Object.keys(eventData || {}).sort(),
-        nestedDataKeys: Object.keys(eventData?.data || {}).sort(),
-        rawTextCandidates: Object.fromEntries(
-          Object.entries(rawTextCandidates).map(([key, value]) => {
-            const text = typeof value === "string"
-              ? value
-              : value == null
-                ? ""
-                : JSON.stringify(value);
-            return [key, { length: text.length, preview: text.slice(0, 500) }];
-          }),
-        ),
-      });
-      return true;
-    }
-    if (logItem?.dialogProcessId && !getMessageDialogProcessId(targetMessage)) {
-      targetMessage.dialogProcessId = _trimStr(logItem.dialogProcessId);
-    }
-    const compatibilityLogItem = {
-      ...logItem,
-      authority: TOOL_TIMELINE_AUTHORITY.COMPATIBILITY,
-      sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
-    };
-    const toolProjection = buildToolTimelineFromLegacyLogs([compatibilityLogItem], {
-      sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
-    });
-    if (toolProjection.length) {
-      targetMessage.toolTimeline = fillMissingToolTimelineFacets(
-        targetMessage.toolTimeline || [],
-        toolProjection,
-      );
-    } else {
-      targetMessage.activityTimeline = mergeActivityTimelines(
-        targetMessage.activityTimeline || [],
-        buildActivityTimelineFromLegacyLogs([compatibilityLogItem]),
-      );
-    }
-    logToolLogWindowDebug("frontend.toolLogWindow.reconnectTimelineMerged", {
-      ...traceScope,
-      timelineEntryCount: targetMessage.toolTimeline?.length || 0,
-      timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(targetMessage)),
-    });
-  } else if (eventName === StreamEventEnum.INTERACTION_REQUEST) {
-    onInteractionRequest?.(eventData);
-  } else if (eventName === StreamEventEnum.CONNECTOR_STATUS) {
-    onConnectorStatus?.(eventData);
-  } else if (eventName === StreamEventEnum.ATTACHMENTS) {
-    onAttachments?.(targetMessage, eventData?.attachments || []);
-  } else if (eventName === StreamEventEnum.DONE) {
+  } else if (
+    eventName === StreamEventEnum.INTERACTION_REQUEST ||
+    eventName === StreamEventEnum.CONNECTOR_STATUS
+  ) {
+    if (eventName === StreamEventEnum.INTERACTION_REQUEST) onInteractionRequest?.(eventData);
+    else onConnectorStatus?.(eventData);
+  } else if (
+    eventName === StreamEventEnum.USER_STOPPED ||
+    eventName === StreamEventEnum.DONE ||
+    eventName === StreamEventEnum.ERROR
+  ) {
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
-    const executionSummarySteps = Array.isArray(eventData?.executionSummary?.steps)
-      ? eventData.executionSummary.steps
-      : [];
-    const doneExecutionLogSource = executionSummarySteps.length
-      ? executionSummarySteps
-      : Array.isArray(eventData?.executionLogs)
-        ? eventData.executionLogs
-        : [];
-    if (doneExecutionLogSource.length) {
-      const doneRealtimeLogs = doneExecutionLogSource
-        .map((executionLogItem) =>
-          classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
-        )
-        .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
-        .filter((logItem) => logItem && _trimStr(logItem.text))
-        .map((logItem) => ({
-          ...logItem,
-          authority: TOOL_TIMELINE_AUTHORITY.COMPATIBILITY,
-          sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
-        }));
-      if (doneRealtimeLogs.length) {
-        const doneTraceScope = {
-          sessionId: String(eventData?.sessionId || targetMessage?.sessionId || ""),
-          dialogProcessId: String(
-            eventData?.dialogProcessId || getMessageDialogProcessId(targetMessage) || normalizedDpId,
-          ),
-          turnScopeId: String(eventData?.turnScopeId || targetMessage?.turnScopeId || ""),
-        };
-        logToolLogWindowDebug("frontend.toolLogWindow.reconnectDoneClassified", {
-          ...doneTraceScope,
-          sourceCount: doneExecutionLogSource.length,
-          classifiedCount: doneRealtimeLogs.length,
-          classified: summarizeToolLogWindow(doneRealtimeLogs),
-        });
-        targetMessage.toolTimeline = fillMissingToolTimelineFacets(
-          targetMessage.toolTimeline || [],
-          buildToolTimelineFromLegacyLogs(doneRealtimeLogs, {
-            sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
-          }),
-        );
-        targetMessage.activityTimeline = mergeActivityTimelines(
-          targetMessage.activityTimeline || [],
-          buildActivityTimelineFromLegacyLogs(doneRealtimeLogs),
-        );
-        if (!getMessageDialogProcessId(targetMessage)) {
-          const latestDialogProcessId = [...doneRealtimeLogs]
-            .reverse()
-            .map((logItem) => _trimStr(logItem?.dialogProcessId))
-            .find(Boolean);
-          if (latestDialogProcessId) {
-            targetMessage.dialogProcessId = latestDialogProcessId;
-          }
-        }
-        logToolLogWindowDebug("frontend.toolLogWindow.reconnectDoneTimelineMerged", {
-          ...doneTraceScope,
-          timelineEntryCount: targetMessage.toolTimeline?.length || 0,
-          timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(targetMessage)),
-        });
-      }
-    }
-    if (Array.isArray(eventData?.messages) && eventData.messages.length) {
-      onDoneMessages?.(eventData);
-    }
-  } else if (eventName === StreamEventEnum.USER_STOPPED) {
-    terminalDialogProcessIdSet?.add?.(normalizedDpId);
-  } else if (eventName === StreamEventEnum.ERROR) {
-    targetMessage.error = normalizeReplayError(eventData?.error) || normalizeReplayError(targetMessage?.error);
-    terminalDialogProcessIdSet?.add?.(normalizedDpId);
+    logWorkflowDiagnostics("frontend.workflowReplay.legacyMessageMutationSkipped", {
+      dialogProcessId: _trimStr(normalizedDpId),
+      turnScopeId: _trimStr(eventData?.turnScopeId),
+      event: eventName,
+      reason: "stable_message_id_required",
+    });
+  } else {
+    logWorkflowDiagnostics("frontend.workflowReplay.legacyMessageMutationSkipped", {
+      dialogProcessId: _trimStr(normalizedDpId),
+      turnScopeId: _trimStr(eventData?.turnScopeId),
+      event: eventName,
+      reason: "stable_message_id_required",
+    });
+    return false;
   }
   return true;
 }
 
 export function applyReconnectEnvelopeBatchToTargetMessage({
   messages = [],
-  targetMessage,
+  findCanonicalMessageById,
   normalizedDpId = "",
   lastAppliedSeq = 0,
   terminalDialogProcessIdSet,
@@ -429,7 +204,6 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
   onInteractionRequest,
   onConnectorStatus,
   onAttachments,
-  onDoneMessages,
   processStore,
 } = {}) {
   let maxAppliedSeq = Number(lastAppliedSeq || 0);
@@ -437,7 +211,7 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
     maxAppliedSeq = Math.max(maxAppliedSeq, getReconnectEnvelopeSequence(envelope));
     applyReconnectEnvelopeToTargetMessage({
       envelope,
-      targetMessage,
+      findCanonicalMessageById,
       normalizedDpId,
       terminalDialogProcessIdSet,
       isReconnectTerminalEvent,
@@ -446,7 +220,6 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
       onInteractionRequest,
       onConnectorStatus,
       onAttachments,
-      onDoneMessages,
       processStore,
     });
   }
@@ -457,14 +230,12 @@ export function buildReconnectReplayEnvelopeCallbacks({
   onInteractionRequest,
   onConnectorStatus,
   onAttachments,
-  onDoneMessages,
 } = {}) {
   return {
     onInteractionRequest: (eventData) => onInteractionRequest?.(eventData),
     onConnectorStatus: (eventData) => onConnectorStatus?.(eventData),
     onAttachments: (targetMessage, attachments = []) =>
       onAttachments?.(targetMessage, attachments),
-    onDoneMessages: (eventData) => onDoneMessages?.(eventData),
   };
 }
 
@@ -490,14 +261,11 @@ export function finalizeReconnectReplayBatch({
 export async function applyReconnectReplayBatchToActiveSession({
   activeSession,
   activeSessionId,
-  appendMessage,
+  findCanonicalMessageById,
   chatList,
   messages = [],
   dialogProcessId = "",
   turnScopeId = "",
-  allowCreate = true,
-  authoritativeCurrentRun = false,
-  legacyDialogFallback = false,
   lastAppliedSeq = 0,
   lastAppliedEventKinds = null,
   terminalDialogProcessIdSet,
@@ -505,10 +273,6 @@ export async function applyReconnectReplayBatchToActiveSession({
   isReconnectTerminalEvent,
   classifyRealtimeLog,
   normalizeExecutionLogForRealtime,
-  getReplayHydrationPromise = () => null,
-  setReplayHydrationPromise = () => {},
-  onHydrationError = () => {},
-  applyDoneMessages,
   envelopeCallbacks = {},
   markReconnectSequenceApplied,
   navigateToLastMessage,
@@ -518,7 +282,9 @@ export async function applyReconnectReplayBatchToActiveSession({
   const normalizedDpId = _trimStr(dialogProcessId);
   const envelopeTurnScopeIds = new Set(
     _ensureArray(messages)
-      .map(({ data } = {}) => _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId))
+      .map(({ data } = {}) => _trimStr(
+        data?.turnScopeId || data?.event?.turnScopeId || data?.messageEvent?.turnScopeId,
+      ))
       .filter(Boolean),
   );
   const normalizedTurnScopeId =
@@ -527,7 +293,6 @@ export async function applyReconnectReplayBatchToActiveSession({
     nextMessages,
     maxSequence,
     shouldSkipAfterTerminal,
-    shouldCreateTarget,
   } = prepareReconnectReplayBatchPlan({
     messages,
     lastAppliedSeq,
@@ -536,8 +301,6 @@ export async function applyReconnectReplayBatchToActiveSession({
     turnScopeId: normalizedTurnScopeId,
     terminalDialogProcessIdSet,
     isReconnectTerminalBatch,
-    allowCreate,
-    authoritativeCurrentRun,
   });
   logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchPlanned", {
     sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
@@ -549,7 +312,6 @@ export async function applyReconnectReplayBatchToActiveSession({
     lastAppliedSeq: Number(lastAppliedSeq || 0),
     maxSequence,
     shouldSkipAfterTerminal,
-    shouldCreateTarget,
   });
   logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchPlanned", {
     sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
@@ -567,7 +329,6 @@ export async function applyReconnectReplayBatchToActiveSession({
       normalizedDpId && terminalDialogProcessIdSet?.has?.(normalizedDpId),
     ),
     shouldSkipAfterTerminal,
-    shouldCreateTarget,
     inputEnvelopes: _ensureArray(messages).map(summarizeReconnectEnvelope),
     replayEnvelopes: nextMessages.map(summarizeReconnectEnvelope),
   });
@@ -601,79 +362,9 @@ export async function applyReconnectReplayBatchToActiveSession({
     });
     return true;
   }
-  await hydrateSessionBeforeReconnectReplayIfNeeded({
-    activeSession,
-    activeSessionId,
-    chatList,
-    messages: nextMessages,
-    dialogProcessId: normalizedDpId,
-    allowCreate: shouldCreateTarget,
-    legacyDialogFallback,
-    getReplayHydrationPromise,
-    setReplayHydrationPromise,
-    onError: onHydrationError,
-  });
-  if (applyDoneSnapshotReconnectBatch({
-    activeSession,
-    messages: nextMessages,
-    normalizedDpId,
-    applyDoneMessages,
-    classifyRealtimeLog,
-    normalizeExecutionLogForRealtime,
-  })) {
-    logWorkflowDiagnostics("frontend.workflowReplay.doneSnapshotApplied", {
-      sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
-      dialogProcessId: normalizedDpId,
-      turnScopeId: normalizedTurnScopeId,
-      messageCount: Array.isArray(activeSession.value?.messages)
-        ? activeSession.value.messages.length
-        : 0,
-      maxTransportSequence: maxSequence,
-    });
-    finalizeReconnectReplayBatch({
-      normalizedDpId,
-      sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
-      turnScopeId: normalizedTurnScopeId,
-      maxAppliedSeq: maxSequence,
-      eventKindsAtSequence: eventKindsAtMaxSequence,
-      markReconnectSequenceApplied,
-      navigateToLastMessage,
-    });
-    return true;
-  }
-
-  const { targetMessage, usedFallback } = resolveReconnectTargetOrApplyFallbackAssistant({
-    activeSession,
-    appendMessage,
-    messages: nextMessages,
-    normalizedDpId,
-    turnScopeId: normalizedTurnScopeId,
-    allowCreate: shouldCreateTarget,
-    authoritativeCurrentRun,
-  });
-  if (usedFallback) {
-    logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchFallback", {
-      sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
-      dialogProcessId: normalizedDpId,
-      turnScopeId: normalizedTurnScopeId,
-      replayCount: nextMessages.length,
-      lastAppliedSeq: Number(lastAppliedSeq || 0),
-      maxSequence,
-    });
-    finalizeReconnectReplayBatch({
-      normalizedDpId,
-      sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
-      turnScopeId: normalizedTurnScopeId,
-      maxAppliedSeq: maxSequence,
-      eventKindsAtSequence: eventKindsAtMaxSequence,
-      markReconnectSequenceApplied,
-      navigateToLastMessage,
-    });
-    return true;
-  }
   const maxAppliedSeq = applyReconnectEnvelopeBatchToTargetMessage({
     messages: nextMessages,
-    targetMessage,
+    findCanonicalMessageById,
     normalizedDpId,
     lastAppliedSeq,
     terminalDialogProcessIdSet,

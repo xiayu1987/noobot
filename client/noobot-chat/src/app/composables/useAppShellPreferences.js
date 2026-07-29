@@ -29,6 +29,7 @@ import {
   persistMemoryModelPreference,
   updateSelectedModelPreference,
   updateStreamOutputPreference,
+  applyFrontendPluginModelConfigDefaults,
 } from "../storage/uiPreferencesStorage.js";
 
 function resolveModelValue(value) {
@@ -81,7 +82,9 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   const botScenario = ref(uiPreferences.botScenario);
   const selectedModel = ref(uiPreferences.selectedModel);
   const memoryModel = ref(uiPreferences.memoryModel);
-  const pluginModelConfig = ref(uiPreferences.pluginModelConfig);
+  const pluginModelConfig = ref(
+    applyFrontendPluginModelConfigDefaults(uiPreferences.pluginModelConfig),
+  );
   const hasStoredSelectedPlugins = ref(hasStoredSelectedPluginKeys());
   const selectedPlugins = ref(loadSelectedPluginKeys());
 
@@ -148,7 +151,9 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
 
   function syncPluginModelConfigWithPreference() {
     const currentScenarioKey = String(botScenario.value || "").trim();
-    pluginModelConfig.value = readPluginModelConfigPreference(currentScenarioKey);
+    pluginModelConfig.value = applyFrontendPluginModelConfigDefaults(
+      readPluginModelConfigPreference(currentScenarioKey),
+    );
     memoryModel.value = readMemoryModelPreference(currentScenarioKey);
   }
 

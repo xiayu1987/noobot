@@ -195,8 +195,12 @@ export class SessionCrudService {
       let summary = typeof this.sessionRepo?.readSessionDisplaySummary === "function"
         ? await this.sessionRepo.readSessionDisplaySummary(userId, currentSessionId, currentParentSessionId)
         : null;
+      const canonicalMessageCount = typeof this.sessionRepo?.getTurnMessageCount === "function"
+        ? await this.sessionRepo.getTurnMessageCount(userId, currentSessionId, currentParentSessionId)
+        : 0;
       const needsRebuild = !isSessionDisplaySummaryPayload(summary, currentSessionId) ||
         Number(summary?.depth || 0) !== Number(depth || 0) ||
+        canonicalMessageCount > Number(summary?.stats?.messageCount || summary?.messages?.length || 0) ||
         (Array.isArray(summary?.toolLogSummaries) &&
           summary.toolLogSummaries.some((item) => Number(item?.depth || 0) !== Number(depth || 0)));
       if (needsRebuild && typeof this.sessionRepo?.rebuildSessionDisplaySummary === "function") {

@@ -95,7 +95,7 @@ describe("reconnectReplay support modules", () => {
     vi.useRealTimers();
   });
 
-  it("reuses recently loaded session detail when hydrating active session before replay", async () => {
+  it("fetches fresh session detail when hydrating active session before replay", async () => {
     const detail = { sessionId: "s-1", sessions: [{ sessionId: "s-1", messages: [] }] };
     const fetchSessionDetail = vi.fn(async () => detail);
     const applySessionDetail = vi.fn();
@@ -109,10 +109,48 @@ describe("reconnectReplay support modules", () => {
     expect(result).toBe(true);
     expect(fetchSessionDetail).toHaveBeenCalledWith("s-1", {
       source: "reconnectHydration",
-      reuseRecentlyLoaded: true,
-      allowLoadedSnapshot: true,
+      reuseRecentlyLoaded: false,
+      allowLoadedSnapshot: false,
     });
     expect(applySessionDetail).toHaveBeenCalledWith(detail, { preserveCurrentMessages: true });
+  });
+
+  it.each([
+    ["empty detail", { sessions: [] }],
+    ["mismatched top-level identity", { sessionId: "s-other", sessions: [{ sessionId: "s-other" }] }],
+    ["mismatched session document", { sessionId: "s-1", sessions: [{ sessionId: "s-other" }] }],
+  ])("rejects %s before applying reconnect hydration", async (_label, detail) => {
+    const applySessionDetail = vi.fn();
+    const result = await renderActiveSessionBeforeReplay({
+      activeSession: { value: { id: "s-1", backendSessionId: "s-1", messages: [] } },
+      activeSessionId: { value: "s-1" },
+      chatList: {
+        fetchSessionDetail: vi.fn(async () => detail),
+        applySessionDetail,
+      },
+    });
+
+    expect(result).toBe(false);
+    expect(applySessionDetail).not.toHaveBeenCalled();
+  });
+
+  it("does not apply hydration after the active session changes during the request", async () => {
+    const activeSession = { value: { id: "s-1", backendSessionId: "s-1", messages: [] } };
+    const applySessionDetail = vi.fn();
+    const result = await renderActiveSessionBeforeReplay({
+      activeSession,
+      activeSessionId: { value: "s-1" },
+      chatList: {
+        fetchSessionDetail: vi.fn(async () => {
+          activeSession.value = { id: "s-2", backendSessionId: "s-2", messages: [] };
+          return { sessionId: "s-1", sessions: [{ sessionId: "s-1", messages: [] }] };
+        }),
+        applySessionDetail,
+      },
+    });
+
+    expect(result).toBe(false);
+    expect(applySessionDetail).not.toHaveBeenCalled();
   });
 
   it("reports expired refresh failure when session refresh fails", async () => {

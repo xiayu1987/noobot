@@ -45,7 +45,15 @@ function runtimeState(runtime = {}) {
 export function beginAssistantMessageEventStream(runtime = {}, { turn = 0 } = {}) {
   const state = runtimeState(runtime);
   const messageId = `msg_${randomUUID()}`;
+  const presentationMessageId = text(
+    runtime?.runConfig?.presentationMessageId ||
+    runtime?.runConfig?.assistantMessageId ||
+    state?.config?.presentationMessageId ||
+    state?.config?.assistantMessageId ||
+    messageId,
+  );
   state.messageEventStream.activeMessageId = messageId;
+  state.messageEventStream.activePresentationMessageId = presentationMessageId;
   state.messageEventStream.activeTurn = Number(turn || 0);
   state.messageEventStream.sequence = 0;
   return messageId;
@@ -53,6 +61,10 @@ export function beginAssistantMessageEventStream(runtime = {}, { turn = 0 } = {}
 
 export function currentAssistantMessageId(runtime = {}) {
   return text(runtimeState(runtime)?.messageEventStream?.activeMessageId);
+}
+
+export function currentAssistantPresentationMessageId(runtime = {}) {
+  return text(runtimeState(runtime)?.messageEventStream?.activePresentationMessageId);
 }
 
 export function applyAuthoritativeMessageId(message = {}, messageId = "") {
@@ -65,14 +77,20 @@ export function applyAuthoritativeMessageId(message = {}, messageId = "") {
   return message;
 }
 
-export function emitMessageEvent(eventListener, runtime = {}, eventType = "", data = {}) {
+export function createMessageEvent(runtime = {}, eventType = "", data = {}) {
   const state = runtimeState(runtime);
   const stream = state.messageEventStream || (state.messageEventStream = { sequence: 0 });
   const messageId = text(data?.messageId || stream.activeMessageId);
   if (!messageId) throw new Error(`authoritative message event requires messageId: ${eventType}`);
+  const presentationMessageId = text(
+    data?.presentationMessageId || stream.activePresentationMessageId || messageId,
+  );
+  if (!presentationMessageId) {
+    throw new Error(`authoritative message event requires presentationMessageId: ${eventType}`);
+  }
   const sequence = Math.max(0, Number(stream.sequence || 0)) + 1;
   stream.sequence = sequence;
-  const eventId = `evt_${randomUUID()}`;
+  const eventId = text(data?.eventId) || `evt_${randomUUID()}`;
   const toolCallId = text(data?.toolCallId || data?.tool_call_id || data?.call?.id);
   const payload = deepFreeze({
     ...data,
@@ -85,12 +103,27 @@ export function emitMessageEvent(eventListener, runtime = {}, eventType = "", da
     dialogProcessId: text(data?.dialogProcessId || state?.dialogProcessId || state?.currentDialogProcessId),
     turnScopeId: text(data?.turnScopeId || state?.turnScopeId || state?.config?.turnScopeId || runtime?.runConfig?.turnScopeId),
     messageId,
+    presentationMessageId,
     sequenceScopeId: messageId,
     ...(toolCallId ? { toolCallId } : {}),
     sequence,
     timestamp: new Date().toISOString(),
   });
   assertMessageEventEnvelope(payload);
-  emitEvent(eventListener, eventType, payload);
   return payload;
+}
+
+export function emitPreparedMessageEvent(eventListener, payload = {}) {
+  assertMessageEventEnvelope(payload);
+  emitEvent(eventListener, payload.eventType, payload);
+  return payload;
+}
+
+export function emitMessageEvent(eventListener, runtime = {}, eventType = "", data = {}) {
+  const payload = createMessageEvent(runtime, eventType, data);
+  const projected = runtime?.projectCurrentTurnMessageEvent?.(payload);
+  if (runtime?.projectCurrentTurnMessageEvent && !projected) {
+    throw new Error(`canonical message event projector rejected event: ${payload.eventId}`);
+  }
+  return emitPreparedMessageEvent(eventListener, payload);
 }

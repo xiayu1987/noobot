@@ -46,4 +46,18 @@ describe("workflow node view transaction", () => {
     expect(transaction.state).toMatchObject({ ownerKey: "", phase: "idle" });
     expect(clearSnapshot).toHaveBeenCalledTimes(2);
   });
+
+  it("reports the actual live snapshot merge result", () => {
+    const mergeSnapshot = vi.fn(() => false);
+    const transaction = createWorkflowNodeViewTransaction({
+      clearSnapshot: vi.fn(),
+      replaceSnapshot: vi.fn(),
+      mergeSnapshot,
+    });
+    const ticket = transaction.begin("root:node-a");
+    transaction.activate(ticket);
+
+    expect(transaction.merge("root:node-a", { messages: [] })).toBe(false);
+    expect(mergeSnapshot).toHaveBeenCalledOnce();
+  });
 });

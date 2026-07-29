@@ -6,6 +6,14 @@
 import { computed } from "vue";
 import { collectWorkflowDialogProcessIds, resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
 
+function normalizeRuntimeStatusInput(item = {}) {
+  const { stepStatus: legacyStepStatus, ...canonical } = item && typeof item === "object" ? item : {};
+  return {
+    ...canonical,
+    status: String(canonical.status || legacyStepStatus || "").trim(),
+  };
+}
+
 function makeNodeSessionFromRun(item = {}, workflowPayload) {
   const step = item?.step && typeof item.step === "object" ? item.step : {};
   const dialogProcessId = resolveWorkflowDialogProcessId(item, step);
@@ -42,7 +50,7 @@ function makeNodeSessionFromRun(item = {}, workflowPayload) {
       : Array.isArray(item?.transferEnvelopes)
         ? item.transferEnvelopes
         : [],
-    stepStatus: String(item?.stepStatus || item?.status || "").trim(),
+    status: String(item?.status || item?.stepStatus || "").trim(),
     stepFailure:
       item?.stepFailure && typeof item.stepFailure === "object"
         ? item.stepFailure
@@ -84,7 +92,6 @@ function normalizeCommittedNodeFact(item = {}) {
     childExecutionId: String(item?.childExecutionId || item?.activeChildExecutionId || "").trim(),
     attemptExecutionIds: Array.isArray(item?.attemptExecutionIds) ? item.attemptExecutionIds.map(String) : [],
     status: String(item?.status || item?.stepStatus || "").trim(),
-    stepStatus: String(item?.stepStatus || item?.status || "").trim(),
     stepFailure: item?.failure && typeof item.failure === "object"
       ? item.failure
       : item?.stepFailure && typeof item.stepFailure === "object"
@@ -99,24 +106,26 @@ function normalizeCommittedNodeFact(item = {}) {
 
 function mergeCommittedNodeFact(base = {}, fact = {}) {
   if (!fact?.nodeExecutionId) return base;
+  const canonicalBase = normalizeRuntimeStatusInput(base);
+  const canonicalFact = normalizeRuntimeStatusInput(fact);
   const merged = {
-    ...base,
-    ...fact,
-    stepStatus: String(fact.stepStatus || fact.status || base.stepStatus || base.status || "").trim(),
-    stepFailure: fact.stepFailure || base.stepFailure || null,
+    ...canonicalBase,
+    ...canonicalFact,
+    status: String(canonicalFact.status || canonicalBase.status || "").trim(),
+    stepFailure: canonicalFact.stepFailure || canonicalBase.stepFailure || null,
   };
-  if (!fact.sessionId) merged.sessionId = String(base.sessionId || base.nodeSessionId || "").trim();
-  if (!fact.dialogProcessId) merged.dialogProcessId = String(base.dialogProcessId || base.nodeDialogProcessId || "").trim();
-  if (!fact.turnScopeId) merged.turnScopeId = String(base.turnScopeId || "").trim();
-  if (!fact.nodeId) merged.nodeId = String(base.nodeId || "").trim();
-  if (!fact.nodeName) merged.nodeName = String(base.nodeName || base.nodeId || "").trim();
-  if (!fact.actionNodeStateId) merged.actionNodeStateId = String(base.actionNodeStateId || base.nodeStateId || "").trim();
-  if (!fact.stepId) merged.stepId = String(base.stepId || "").trim();
-  if (!fact.activeChildExecutionId) {
-    merged.activeChildExecutionId = String(base.activeChildExecutionId || base.childExecutionId || "").trim();
+  if (!canonicalFact.sessionId) merged.sessionId = String(canonicalBase.sessionId || canonicalBase.nodeSessionId || "").trim();
+  if (!canonicalFact.dialogProcessId) merged.dialogProcessId = String(canonicalBase.dialogProcessId || canonicalBase.nodeDialogProcessId || "").trim();
+  if (!canonicalFact.turnScopeId) merged.turnScopeId = String(canonicalBase.turnScopeId || "").trim();
+  if (!canonicalFact.nodeId) merged.nodeId = String(canonicalBase.nodeId || "").trim();
+  if (!canonicalFact.nodeName) merged.nodeName = String(canonicalBase.nodeName || canonicalBase.nodeId || "").trim();
+  if (!canonicalFact.actionNodeStateId) merged.actionNodeStateId = String(canonicalBase.actionNodeStateId || canonicalBase.nodeStateId || "").trim();
+  if (!canonicalFact.stepId) merged.stepId = String(canonicalBase.stepId || "").trim();
+  if (!canonicalFact.activeChildExecutionId) {
+    merged.activeChildExecutionId = String(canonicalBase.activeChildExecutionId || canonicalBase.childExecutionId || "").trim();
   }
-  if (!fact.childExecutionId) {
-    merged.childExecutionId = String(base.childExecutionId || base.activeChildExecutionId || "").trim();
+  if (!canonicalFact.childExecutionId) {
+    merged.childExecutionId = String(canonicalBase.childExecutionId || canonicalBase.activeChildExecutionId || "").trim();
   }
   return merged;
 }
@@ -166,15 +175,17 @@ function findRuntimeEntryIndex(entryIndexByKey, item = {}) {
 }
 
 function mergeRuntimeEntry(base = {}, fallback = {}) {
+  const canonicalBase = normalizeRuntimeStatusInput(base);
+  const canonicalFallback = normalizeRuntimeStatusInput(fallback);
   return {
-    ...fallback,
-    ...base,
-    stepStatus: String(base?.stepStatus || base?.status || fallback?.stepStatus || fallback?.status || "").trim(),
+    ...canonicalFallback,
+    ...canonicalBase,
+    status: String(canonicalBase.status || canonicalFallback.status || "").trim(),
     stepFailure:
-      base?.stepFailure && typeof base.stepFailure === "object"
-        ? base.stepFailure
-        : fallback?.stepFailure && typeof fallback.stepFailure === "object"
-          ? fallback.stepFailure
+      canonicalBase?.stepFailure && typeof canonicalBase.stepFailure === "object"
+        ? canonicalBase.stepFailure
+        : canonicalFallback?.stepFailure && typeof canonicalFallback.stepFailure === "object"
+          ? canonicalFallback.stepFailure
           : null,
   };
 }
@@ -190,10 +201,11 @@ export function createRuntimeNodeSessions({ workflowPayload, nodeSessions, execu
       : {};
 
     for (const item of nodeSessions.value) {
-      const nodeExecutionId = String(item?.nodeExecutionId || "").trim();
+      const canonicalItem = normalizeRuntimeStatusInput(item);
+      const nodeExecutionId = String(canonicalItem?.nodeExecutionId || "").trim();
       const committed = nodeExecutionId ? normalizeCommittedNodeFact(committedNodes[nodeExecutionId]) : null;
-      entries.push(committed?.nodeExecutionId ? mergeCommittedNodeFact(item, committed) : item);
-      rememberRuntimeEntryKeys(entryIndexByKey, item, entries.length - 1);
+      entries.push(committed?.nodeExecutionId ? mergeCommittedNodeFact(canonicalItem, committed) : canonicalItem);
+      rememberRuntimeEntryKeys(entryIndexByKey, canonicalItem, entries.length - 1);
     }
 
     for (const committedItem of Object.values(committedNodes)) {

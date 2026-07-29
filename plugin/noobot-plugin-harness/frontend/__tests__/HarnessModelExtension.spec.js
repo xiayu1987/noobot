@@ -28,6 +28,24 @@ function mountHarnessModelExtension(props = {}) {
 }
 
 describe("HarnessModelExtension", () => {
+  it("defaults planning and planning acceptance to disabled", () => {
+    const wrapper = mountHarnessModelExtension();
+
+    expect(wrapper.vm.isHarnessCapabilityEnabled("planning")).toBe(false);
+    expect(wrapper.vm.isHarnessCapabilityEnabled("acceptance")).toBe(false);
+  });
+
+  it("persists an explicit true when planning is enabled", () => {
+    const patch = vi.fn();
+    const wrapper = mountHarnessModelExtension({ patch });
+
+    wrapper.vm.onHarnessCapabilityEnabledChange("planning", true);
+
+    expect(patch).toHaveBeenCalledWith({
+      capabilityProfile: { planning: { enabled: true } },
+    });
+  });
+
   it("uses a guidance analysis intensity slider instead of a fixed guidance toggle", async () => {
     const wrapper = mountHarnessModelExtension({
       pluginConfig: {

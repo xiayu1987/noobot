@@ -84,6 +84,30 @@ test("ChannelManager writes message and state logs to business session", () => {
   });
 });
 
+test("ChannelManager detects content in nested authoritative message events", () => {
+  const records = [];
+  const manager = new ChannelManager({ OPEN: 1 }, {
+    sessionLogClient: { log: (apiKey, event) => records.push({ apiKey, event }) },
+  });
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-1" }),
+    { sessionId: "session-1" },
+  );
+  channel.apiKey = "api-key-1";
+  records.length = 0;
+
+  manager.pushChannelEvent(channel, "message", {
+    sessionId: "session-1",
+    payload: {
+      eventType: "main_model_content",
+      messageId: "message-1",
+      content: "authoritative result",
+    },
+  });
+
+  assert.equal(records[0].event.data.hasContent, true);
+});
+
 test("ChannelManager falls back to session id from channel key for session logs", () => {
   const records = [];
   const manager = new ChannelManager({ OPEN: 1 }, {

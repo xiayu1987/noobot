@@ -8,39 +8,12 @@ import {
   applyFoldedMessagesForDialogProcess,
   applyFoldedMessagesToActiveSession,
 } from "../../../../../../src/modules/chat/runtime/reconnect/messageReplay.js";
-import { resolveReconnectTargetAssistantMessage } from "../../../../../../src/modules/chat/runtime/reconnect/assistantMessageReplay.js";
 import { selectToolTimeline } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 
 describe("messageReplay", () => {
-  it("promotes a dialog-only reconnect assistant when the authoritative turn scope arrives", () => {
-    const assistant = {
-      role: "assistant",
-      content: "",
-      pending: true,
-      turnPlaceholder: true,
-      dialogProcessId: "dp-workflow",
-    };
-    const activeSession = { value: { id: "session-1", messages: [assistant] } };
-    const appendMessage = (role, content) => {
-      const message = { role, content };
-      activeSession.value.messages.push(message);
-      return message;
-    };
-
-    const resolved = resolveReconnectTargetAssistantMessage({
-      activeSession,
-      appendMessage,
-      dialogProcessId: "dp-workflow",
-      turnScopeId: "client-turn:workflow-1",
-    });
-
-    expect(resolved).toBe(assistant);
-    expect(assistant.turnScopeId).toBe("client-turn:workflow-1");
-    expect(activeSession.value.messages).toHaveLength(1);
-  });
-
-  it("patches an existing pending assistant for a reconnect DONE dialog process", () => {
+  it("patches only the existing assistant with the same stable message id", () => {
     const pendingAssistant = {
+      messageId: "message-1",
       role: "assistant",
       pending: true,
       dialogProcessId: "dp-1",
@@ -61,6 +34,7 @@ describe("messageReplay", () => {
       activeSession,
       [
         {
+          messageId: "message-1",
           role: "assistant",
           pending: false,
           dialogProcessId: "dp-1",
@@ -84,7 +58,7 @@ describe("messageReplay", () => {
     });
   });
 
-  it("does not append missing finalized reconnect DONE assistants as a second completed-message source", () => {
+  it("does not use matching Turn and Dialog as a substitute for message identity", () => {
     const activeSession = {
       value: {
         messages: [
@@ -104,6 +78,7 @@ describe("messageReplay", () => {
       activeSession,
       [
         {
+          messageId: "message-missing",
           role: "assistant",
           pending: false,
           dialogProcessId: "dp-missing",
@@ -143,6 +118,7 @@ describe("messageReplay", () => {
     const liveToolCall = { eventId: "event-tool-call", type: "tool_call", toolCallId: "call-1" };
     const liveToolResult = { eventId: "event-tool-result", type: "tool_result", toolCallId: "call-1" };
     const assistant = {
+      messageId: "message-tool-state",
       role: "assistant",
       pending: true,
       dialogProcessId: "shared-dialog",
@@ -162,6 +138,7 @@ describe("messageReplay", () => {
     const activeSession = { value: { messages: [assistant], turnStatuses: [] } };
 
     applyFoldedMessagesForDialogProcess(activeSession, [{
+      messageId: "message-tool-state",
       role: "assistant",
       pending: true,
       dialogProcessId: "shared-dialog",

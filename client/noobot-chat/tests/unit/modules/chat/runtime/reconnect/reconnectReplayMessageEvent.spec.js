@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { applyReconnectEnvelopeToTargetMessage } from "../../../../../../src/modules/chat/runtime/reconnect/batchReplay.js";
+import {
+  applyReconnectEnvelopeBatchToTargetMessage,
+  applyReconnectEnvelopeToTargetMessage,
+} from "../../../../../../src/modules/chat/runtime/reconnect/batchReplay.js";
 import {
   dispatchTurnEnvelope,
   hydrateTurnSnapshot,
@@ -15,8 +18,16 @@ import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/r
 
 const classify = (event) => ({
   ...event,
-  type: event.eventType === "tool_call_start" ? "tool_call" : "tool_result",
-  text: event.eventType === "tool_call_start" ? `[tool] ${event.tool}` : "[tool] result",
+  type: event.eventType === "tool_call_start"
+    ? "tool_call"
+    : event.eventType === "tool_call_end"
+      ? "tool_result"
+      : event.type || event.eventType,
+  text: event.eventType === "tool_call_start"
+    ? `[tool] ${event.tool}`
+    : event.eventType === "tool_call_end"
+      ? "[tool] result"
+      : event.text || event.output || "",
 });
 
 const authoritative = (eventType, sequence, extra = {}) => ({
@@ -28,11 +39,12 @@ const authoritative = (eventType, sequence, extra = {}) => ({
     route: { scope: "main_session", sessionId: "session-1" },
     event: {
       envelopeKind: "noobot.message_event",
-      envelopeVersion: 1,
+      envelopeVersion: 2,
       eventId: `event-${sequence}`,
       eventType,
       sessionId: "session-1",
       messageId: "message-1",
+      presentationMessageId: "message-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       sequence,
@@ -42,10 +54,64 @@ const authoritative = (eventType, sequence, extra = {}) => ({
   },
 });
 
+const canonicalFindFor = (targetMessage) => (sessionId, messageId) => {
+  if (sessionId !== targetMessage.sessionId) return null;
+  if (messageId !== targetMessage.messageId) return null;
+  return targetMessage;
+};
+
 describe("reconnect authoritative message event replay", () => {
+  it("restores multiple assistant messages in one turn by each authoritative messageId", () => {
+    const canonicalMessages = new Map([
+      ["message-1", { id: "message-1", messageId: "message-1", sessionId: "session-1", turnScopeId: "turn-1", content: "" }],
+      ["message-2", { id: "message-2", messageId: "message-2", sessionId: "session-1", turnScopeId: "turn-1", content: "" }],
+    ]);
+    const findCanonicalMessageById = (sessionId, messageId) => sessionId === "session-1"
+      ? canonicalMessages.get(messageId) || null
+      : null;
+    const first = authoritative("llm_delta", 1, { messageId: "message-1", text: "first" });
+    const second = authoritative("llm_delta", 1, {
+      messageId: "message-2",
+      presentationMessageId: "message-2",
+      eventId: "message-2-event-1",
+      text: "second",
+    });
+
+    applyReconnectEnvelopeBatchToTargetMessage({
+      messages: [first, second],
+      targetMessage: null,
+      findCanonicalMessageById,
+      classifyRealtimeLog: classify,
+    });
+
+    expect([...canonicalMessages.keys()]).toEqual(["message-1", "message-2"]);
+    expect(canonicalMessages.get("message-1")).toMatchObject({ content: "first", turnScopeId: "turn-1" });
+    expect(canonicalMessages.get("message-2")).toMatchObject({ content: "second", turnScopeId: "turn-1" });
+    expect(canonicalMessages.get("message-1").messageEventState.lastSequence).toBe(1);
+    expect(canonicalMessages.get("message-2").messageEventState.lastSequence).toBe(1);
+  });
+
+  it("rejects reconnect message events without an authoritative messageId", () => {
+    const findCanonicalMessageById = () => {
+      throw new Error("must not upsert an unidentified message");
+    };
+    const envelope = authoritative("llm_delta", 1, { messageId: "", text: "wrong" });
+
+    const applied = applyReconnectEnvelopeToTargetMessage({
+      envelope,
+      targetMessage: { messageId: "legacy", content: "unchanged" },
+      findCanonicalMessageById,
+      classifyRealtimeLog: classify,
+    });
+
+    expect(applied).toBe(false);
+    expect(envelope.data.event.messageId).toBe("");
+  });
+
   it("uses the canonical reducer and consumes no-text tool events idempotently", () => {
     const targetMessage = {
       messageId: "message-1",
+      sessionId: "session-1",
       turnScopeId: "turn-1",
       content: "",
     };
@@ -60,9 +126,10 @@ describe("reconnect authoritative message event replay", () => {
       result: { ok: true },
     });
 
-    applyReconnectEnvelopeToTargetMessage({ envelope: start, targetMessage, classifyRealtimeLog: classify });
-    applyReconnectEnvelopeToTargetMessage({ envelope: start, targetMessage, classifyRealtimeLog: classify });
-    applyReconnectEnvelopeToTargetMessage({ envelope: end, targetMessage, classifyRealtimeLog: classify });
+    const findCanonicalMessageById = canonicalFindFor(targetMessage);
+    applyReconnectEnvelopeToTargetMessage({ envelope: start, findCanonicalMessageById, classifyRealtimeLog: classify });
+    applyReconnectEnvelopeToTargetMessage({ envelope: start, findCanonicalMessageById, classifyRealtimeLog: classify });
+    applyReconnectEnvelopeToTargetMessage({ envelope: end, findCanonicalMessageById, classifyRealtimeLog: classify });
 
     expect(selectToolTimelineLogs(targetMessage)).toEqual([
       expect.objectContaining({ type: "tool_call", toolCallId: "call-1" }),
@@ -80,6 +147,59 @@ describe("reconnect authoritative message event replay", () => {
     expect(targetMessage.messageEventState).toMatchObject({ lastSequence: 2 });
   });
 
+  it("continues guidance analysis on the refreshed canonical message", () => {
+    const targetMessage = {
+      messageId: "message-1",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      content: "",
+    };
+    const guidance = (sequence, output) => authoritative("thinking", sequence, {
+      envelopeVersion: 2,
+      eventId: `guidance-analysis-${sequence}`,
+      messageId: "model-message-1",
+      presentationMessageId: "message-1",
+      sequenceDomain: "message-event",
+      sequenceScopeId: "model-message-1",
+      event: "guidance_analysis_response",
+      type: "guidance_analysis",
+      purpose: "guidance",
+      pluginFlow: "analysis",
+      chain: "auxiliary",
+      text: output,
+      output,
+    });
+    const findCanonicalMessageById = canonicalFindFor(targetMessage);
+
+    applyReconnectEnvelopeToTargetMessage({
+      envelope: guidance(1, "analysis before refresh"),
+      findCanonicalMessageById,
+      classifyRealtimeLog: classify,
+    });
+    applyReconnectEnvelopeToTargetMessage({
+      envelope: guidance(2, "analysis after refresh"),
+      findCanonicalMessageById,
+      classifyRealtimeLog: classify,
+    });
+
+    expect(selectActivityTimelineLogs(targetMessage)).toEqual([
+      expect.objectContaining({
+        eventId: "guidance-analysis-1",
+        output: "analysis before refresh",
+        sequenceDomain: "message-event",
+      }),
+      expect.objectContaining({
+        eventId: "guidance-analysis-2",
+        output: "analysis after refresh",
+        sequenceDomain: "message-event",
+      }),
+    ]);
+    expect(targetMessage.messageEventState.consumedEventIds).toEqual([
+      "guidance-analysis-1",
+      "guidance-analysis-2",
+    ]);
+  });
+
   it("produces equivalent state for normal live, reconnect live and history replay", () => {
     const events = [
       authoritative("llm_delta", 1, { text: "hello " }),
@@ -91,7 +211,7 @@ describe("reconnect authoritative message event replay", () => {
       }),
       authoritative("llm_delta", 4, { text: "world" }),
     ];
-    const createTarget = () => ({ messageId: "message-1", turnScopeId: "turn-1" });
+    const createTarget = () => ({ sessionId: "session-1", messageId: "message-1", turnScopeId: "turn-1" });
     const normalLive = createTarget();
     const reconnectLive = createTarget();
     const historyReplay = createTarget();
@@ -109,7 +229,11 @@ describe("reconnect authoritative message event replay", () => {
         classifyRealtimeLog: classify,
         source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
       });
-      applyReconnectEnvelopeToTargetMessage({ envelope, targetMessage: historyReplay, classifyRealtimeLog: classify });
+      applyReconnectEnvelopeToTargetMessage({
+        envelope,
+        findCanonicalMessageById: canonicalFindFor(historyReplay),
+        classifyRealtimeLog: classify,
+      });
     }
 
     const observableState = ({ content, toolTimeline, activityTimeline, messageEventState }) => ({
@@ -135,7 +259,7 @@ describe("reconnect authoritative message event replay", () => {
   });
 
   it("does not allow an older snapshot boundary to replace newer live projection", () => {
-    const targetMessage = { messageId: "message-1", turnScopeId: "turn-1" };
+    const targetMessage = { sessionId: "session-1", messageId: "message-1", turnScopeId: "turn-1" };
     for (const sequence of [1, 2]) {
       dispatchTurnEnvelope({
         targetMessage,
@@ -193,30 +317,34 @@ describe("reconnect authoritative message event replay", () => {
     expect(staleSnapshot.result).toBe("snapshot_stale");
   });
 
-  it("does not mistake same-sequence legacy and authoritative events for the same fact", () => {
-    const targetMessage = { messageId: "message-1", turnScopeId: "turn-1" };
+  it("ignores non-canonical transport events after canonical facts", () => {
+    const targetMessage = {
+      sessionId: "session-1",
+      messageId: "message-1",
+      turnScopeId: "turn-1",
+    };
     const authoritativeDelta = authoritative("llm_delta", 1, { text: "canonical" });
     const authoritativeTool = authoritative("tool_call_start", 2, {
       tool: "read_file", toolCallId: "call-1", args: {},
     });
-    applyReconnectEnvelopeToTargetMessage({ envelope: authoritativeDelta, targetMessage, classifyRealtimeLog: classify });
-    applyReconnectEnvelopeToTargetMessage({ envelope: authoritativeTool, targetMessage, classifyRealtimeLog: classify });
+    const findCanonicalMessageById = canonicalFindFor(targetMessage);
+    applyReconnectEnvelopeToTargetMessage({ envelope: authoritativeDelta, findCanonicalMessageById, classifyRealtimeLog: classify });
+    applyReconnectEnvelopeToTargetMessage({ envelope: authoritativeTool, findCanonicalMessageById, classifyRealtimeLog: classify });
     applyReconnectEnvelopeToTargetMessage({
       envelope: { event: "delta", sequence: 1, data: { seq: 1, text: " duplicate" } },
-      targetMessage,
+      findCanonicalMessageById,
       classifyRealtimeLog: classify,
     });
     applyReconnectEnvelopeToTargetMessage({
       envelope: { event: "thinking", sequence: 2, data: { seq: 2, text: "duplicate tool" } },
-      targetMessage,
+      findCanonicalMessageById,
       classifyRealtimeLog: classify,
     });
 
-    expect(targetMessage.content).toBe("canonical duplicate");
+    expect(targetMessage.content).toBe("canonical");
     expect([
       ...selectToolTimelineLogs(targetMessage),
       ...selectActivityTimelineLogs(targetMessage),
-      ...(targetMessage.realtimeLogs || []),
-    ]).toHaveLength(2);
+    ]).toHaveLength(1);
   });
 });

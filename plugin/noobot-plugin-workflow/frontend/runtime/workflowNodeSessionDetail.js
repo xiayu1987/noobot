@@ -95,34 +95,68 @@ export async function fetchExecutionSessionDetail({
   if (!payload?.ok) {
     throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
   }
-  const session = payload?.workflowSession?.session || {};
-  const sessionSummary = payload?.workflowSession?.sessionSummary || {};
-  if (!session?.sessionId && !sessionSummary?.sessionId) {
-    return {
-      state: "pending",
-      reason: "session_not_materialized",
-      sessionId: normalizedSessionId,
-    };
-  }
-  const messages = Array.isArray(sessionSummary?.messages)
-    ? sessionSummary.messages
-    : Array.isArray(session?.messages)
-      ? session.messages
+  props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.normalizationStarted", {
+    traceId: request.traceId,
+    ...request,
+    requestedChildSessionId: normalizedSessionId,
+    workflowSessionType: Array.isArray(payload?.workflowSession) ? "array" : typeof payload?.workflowSession,
+  });
+  try {
+    const workflowSession = payload?.workflowSession;
+    if (!workflowSession || typeof workflowSession !== "object" || Array.isArray(workflowSession)) {
+      throw new TypeError("workflowSession must be an object");
+    }
+    const session = workflowSession.session && typeof workflowSession.session === "object" && !Array.isArray(workflowSession.session)
+      ? workflowSession.session
+      : {};
+    const sessionSummary = workflowSession.sessionSummary && typeof workflowSession.sessionSummary === "object" && !Array.isArray(workflowSession.sessionSummary)
+      ? workflowSession.sessionSummary
+      : {};
+    if (!session.sessionId && !sessionSummary.sessionId) {
+      const pending = {
+        state: "pending",
+        reason: "session_not_materialized",
+        sessionId: normalizedSessionId,
+      };
+      props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.normalizationCompleted", {
+        traceId: request.traceId, ...request, requestedChildSessionId: normalizedSessionId,
+        responseState: pending.state, responseSessionId: pending.sessionId, messageCount: 0, executionLogCount: 0,
+      });
+      return pending;
+    }
+    const messages = Array.isArray(sessionSummary.messages)
+      ? sessionSummary.messages
+      : Array.isArray(session.messages)
+        ? session.messages
+        : [];
+    const executionLogs = Array.isArray(workflowSession.executionLogs)
+      ? workflowSession.executionLogs
       : [];
-  const executionLogs = Array.isArray(payload?.workflowSession?.executionLogs)
-    ? payload.workflowSession.executionLogs
-    : [];
-  return {
-    state: messages.length ? "ready" : "empty",
-    sessionId: String(sessionSummary?.sessionId || session?.sessionId || session?.id || normalizedSessionId).trim(),
-    sessionSummary: {
-      ...sessionSummaryWithoutMutableRuntime(session),
-      ...sessionSummaryWithoutMutableRuntime(sessionSummary),
-    },
-    messages,
-    rawMessages: messages,
-    executionLogs,
-  };
+    const detail = {
+      state: messages.length ? "ready" : "empty",
+      sessionId: String(sessionSummary.sessionId || session.sessionId || session.id || normalizedSessionId).trim(),
+      sessionSummary: {
+        ...sessionSummaryWithoutMutableRuntime(session),
+        ...sessionSummaryWithoutMutableRuntime(sessionSummary),
+      },
+      messages,
+      rawMessages: messages,
+      executionLogs,
+    };
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.normalizationCompleted", {
+      traceId: request.traceId, ...request, requestedChildSessionId: normalizedSessionId,
+      responseState: detail.state, responseSessionId: detail.sessionId,
+      messageCount: messages.length, executionLogCount: executionLogs.length,
+    });
+    return detail;
+  } catch (error) {
+    props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.normalizationFailed", {
+      traceId: request.traceId, ...request, requestedChildSessionId: normalizedSessionId,
+      errorName: String(error?.name || "Error"), errorMessage: String(error?.message || error || ""),
+      errorStack: String(error?.stack || "").slice(0, 4000),
+    });
+    throw error;
+  }
 }
 
 export async function fetchWorkflowNodeSessionDetail({

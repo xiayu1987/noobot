@@ -97,6 +97,7 @@ test("final content commit follows hook-appended streaming delta", () => {
   const messageId = beginAssistantMessageEventStream(runtime);
   const result = buildLoopResult({
     output: "draft",
+    assistantMessageId: messageId,
     traces: [],
     loopState: {
       turnMessages: [{
@@ -114,12 +115,42 @@ test("final content commit follows hook-appended streaming delta", () => {
   assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
   assert.equal(emitFinalStreamingAppendDeltaAfterHooks({ result, runtime }), true);
   assert.equal(emitAuthoritativeFinalMessageContent({ result, runtime }), true);
-  const messageEvents = events.filter((item) => ["llm_delta", "main_model_content"].includes(item?.event));
-  assert.deepEqual(messageEvents.map((item) => item.event), ["llm_delta", "main_model_content"]);
+  const messageEvents = events.filter((item) => ["llm_delta", "authoritative_final_content"].includes(item?.event));
+  assert.deepEqual(messageEvents.map((item) => item.event), ["llm_delta", "authoritative_final_content"]);
   assert.deepEqual(messageEvents.map((item) => item.data.sequence), [1, 2]);
   assert.equal(messageEvents[1].data.text, "draft plus hook");
   assert.equal(messageEvents[1].data.messageId, messageId);
   assert.equal(result.turnMessages[0].content, "draft plus hook");
+});
+
+test("final content uses the result message identity after active stream changes", () => {
+  const events = [];
+  const runtime = {
+    eventListener: { onEvent: (payload = {}) => events.push(payload) },
+    systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
+  };
+  const finalMessageId = beginAssistantMessageEventStream(runtime);
+  const result = buildLoopResult({
+    output: "authoritative final answer",
+    assistantMessageId: finalMessageId,
+    traces: [],
+    loopState: {
+      turnMessages: [{
+        role: "assistant",
+        content: "draft",
+        messageId: finalMessageId,
+      }],
+      turnTasks: [],
+    },
+  });
+  const laterActiveMessageId = beginAssistantMessageEventStream(runtime);
+
+  assert.notEqual(laterActiveMessageId, finalMessageId);
+  assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
+  assert.equal(emitAuthoritativeFinalMessageContent({ result, runtime }), true);
+  assert.equal(events.at(-1)?.data?.messageId, finalMessageId);
+  assert.equal(events.at(-1)?.data?.text, "authoritative final answer");
+  assert.equal(result.turnMessages[0].content, "authoritative final answer");
 });
 
 test("final streaming append delta: skips when hook rewrites instead of appends", () => {

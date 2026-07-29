@@ -50,10 +50,13 @@ function runtimeEvents() {
       transportSequence: 9999,
       data: {
         envelopeKind: "noobot.message_event",
-        envelopeVersion: 1,
+        envelopeVersion: 2,
         eventId: "message-content",
-        eventType: "main_model_content",
+        eventType: "authoritative_final_content",
         messageId: "assistant-1",
+        presentationMessageId: "assistant-1",
+        sequenceDomain: "message-event",
+        sequenceScopeId: "assistant-1",
         sessionId: "child-1",
         parentSessionId: "root-1",
         dialogProcessId: "node-dialog-1",
@@ -84,6 +87,45 @@ function runtimeEvents() {
 function newStore() {
   setActivePinia(createPinia());
   return useChatStore();
+}
+
+function messageEvent({ sequence = 1, eventId = `message-${sequence}`, text = "live result" } = {}) {
+  return {
+    event: "workflow_message_event",
+    data: {
+      envelopeKind: "noobot.message_event",
+      envelopeVersion: 2,
+      eventId,
+      eventType: "authoritative_final_content",
+      messageId: "assistant-1",
+      presentationMessageId: "assistant-1",
+      sequenceDomain: "message-event",
+      sequenceScopeId: "assistant-1",
+      sessionId: "child-1",
+      parentSessionId: "root-1",
+      dialogProcessId: "node-dialog-1",
+      turnScopeId: "workflow-node:node-1",
+      workflowRunId: "run-1",
+      nodeExecutionId: "node-1",
+      sequence,
+      revision: sequence,
+      timestamp: `2026-07-26T00:00:0${sequence}.000Z`,
+      text,
+    },
+  };
+}
+
+function snapshotEvent({ version = 1, status = "running", content = "snapshot result" } = {}) {
+  return {
+    event: "workflow_session_snapshot_loaded",
+    data: {
+      sessionId: "child-1",
+      parentSessionId: "root-1",
+      snapshotVersion: version,
+      status,
+      messages: [{ id: "assistant-1", messageId: "assistant-1", role: "assistant", content }],
+    },
+  };
 }
 
 describe("workflow runtime live/replay homomorphism", () => {
@@ -130,5 +172,58 @@ describe("workflow runtime live/replay homomorphism", () => {
 
     expect(result).toMatchObject({ applied: false, reason: "sequence_domain_mismatch" });
     expect(store.workflowNodeStateRegistry).toBeNull();
+  });
+
+  it("keeps the authoritative realtime message when a snapshot arrives before or after it", () => {
+    const snapshotFirst = newStore();
+    snapshotFirst.applyWorkflowRuntimeEvent(snapshotEvent(), { source: "snapshot" });
+    snapshotFirst.applyWorkflowRuntimeEvent(messageEvent(), { source: "live" });
+
+    const realtimeFirst = newStore();
+    realtimeFirst.applyWorkflowRuntimeEvent(messageEvent(), { source: "live" });
+    realtimeFirst.applyWorkflowRuntimeEvent(snapshotEvent(), { source: "snapshot" });
+
+    expect(snapshotFirst.selectSubSessionMessages("child-1").messages).toEqual(
+      realtimeFirst.selectSubSessionMessages("child-1").messages,
+    );
+    expect(realtimeFirst.selectSubSessionMessages("child-1").messages[0]).toMatchObject({
+      messageId: "assistant-1",
+      content: "live result",
+      sequenceDomain: "message-event",
+    });
+  });
+
+  it("rejects stale and duplicate snapshots by the session snapshot version lane", () => {
+    const store = newStore();
+    expect(store.applyWorkflowRuntimeEvent(snapshotEvent({ version: 2 }), { source: "snapshot" }).applied).toBe(true);
+    expect(store.applyWorkflowRuntimeEvent(snapshotEvent({ version: 2, content: "conflict" }), { source: "snapshot" }))
+      .toMatchObject({ applied: false, reason: "duplicate_snapshot_version" });
+    expect(store.applyWorkflowRuntimeEvent(snapshotEvent({ version: 1, content: "stale" }), { source: "snapshot" }))
+      .toMatchObject({ applied: false, reason: "stale_snapshot" });
+    expect(store.selectSubSessionMessages("child-1")).toMatchObject({
+      sequenceByDomain: { "workflow-session-snapshot": 2 },
+      messages: [{ content: "snapshot result" }],
+    });
+  });
+
+  it("does not let a reconnect snapshot overwrite a live terminal lifecycle", () => {
+    const store = newStore();
+    store.applyWorkflowRuntimeEvent({
+      event: "workflow_node_state_committed",
+      data: {
+        workflowRunId: "run-1",
+        nodeExecutionId: "node-1",
+        sessionId: "child-1",
+        parentSessionId: "root-1",
+        turnScopeId: "workflow-node:node-1",
+        status: "failed",
+        eventId: "node-failed",
+        revision: 3,
+        sequence: 3,
+      },
+    }, { source: "live" });
+
+    store.applyWorkflowRuntimeEvent(snapshotEvent({ version: 9, status: "running" }), { source: "snapshot" });
+    expect(store.selectSubSessionMessages("child-1").status).toBe("failed");
   });
 });

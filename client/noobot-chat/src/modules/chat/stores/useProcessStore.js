@@ -10,7 +10,6 @@ import {
   applyProcessEvents,
   createEmptyProcessState,
   hydrateProcessSnapshot,
-  selectProcessCompatView,
   selectProcessSnapshot,
 } from "../model/process/reducer.js";
 
@@ -33,10 +32,6 @@ export const useProcessStore = defineStore("process", () => {
     return selectProcessSnapshot(state, processId);
   }
 
-  function getCompatView(processId = "") {
-    return selectProcessCompatView(state, processId);
-  }
-
   function getLastSequence(processId = "") {
     return Number(getSnapshot(processId)?.lastSequence || 0);
   }
@@ -55,7 +50,6 @@ export const useProcessStore = defineStore("process", () => {
     applyEvent,
     applyEventBatch,
     getSnapshot,
-    getCompatView,
     getLastSequence,
     resetProcessStore,
   };

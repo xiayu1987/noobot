@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildUnifiedSessionDetail,
+  mergeUnifiedSessionDetail,
   projectTurnStatusOntoAssistant,
 } from "../runtime/workflowUnifiedSessionDetail.js";
 
@@ -78,7 +79,7 @@ describe("workflow child Turn status projection", () => {
     expect(result).toEqual([otherSession, otherTurn]);
   });
 
-  it("projects status onto the synthesized running assistant", () => {
+  it("keeps the running placeholder outside canonical messages", () => {
     const user = { id: "user-a", role: "user", content: "run", ...childIdentity };
     const detail = buildUnifiedSessionDetail({
       nodeItem: {
@@ -97,12 +98,57 @@ describe("workflow child Turn status projection", () => {
       }),
     });
 
-    expect(detail.messages.map((message) => message.role)).toEqual(["user", "assistant"]);
-    expect(detail.messages[1]).toMatchObject({
-      pending: true,
-      workflowNodeRunningPlaceholder: true,
-      statusTurnScopeId: childIdentity.turnScopeId,
-      projectedStatusStepState: "completing",
+    expect(detail.messages).toEqual([user]);
+    expect(detail.rawMessages).toEqual([user]);
+    expect(detail.runningPlaceholderViewModel).toMatchObject({
+      viewKey: `workflow-node-running:${childIdentity.turnScopeId}`,
+      sessionId: childIdentity.sessionId,
+      turnScopeId: childIdentity.turnScopeId,
+      dialogProcessId: childIdentity.dialogProcessId,
     });
+    expect(detail.runningPlaceholderViewModel).not.toHaveProperty("role");
+    expect(detail.runningPlaceholderViewModel).not.toHaveProperty("content");
+  });
+
+  it("merges a terminal canonical assistant without retaining a view placeholder as a message", () => {
+    const user = { id: "user-a", role: "user", content: "run", ...childIdentity };
+    const finalAssistant = {
+      id: "assistant-final",
+      role: "assistant",
+      content: "done once",
+      ...childIdentity,
+    };
+
+    const detail = mergeUnifiedSessionDetail(
+      { state: "running", messages: [user], runningPlaceholderViewModel: { viewKey: "view-only" } },
+      { state: "succeeded", messages: [finalAssistant] },
+    );
+
+    expect(detail.messages).toEqual([user, finalAssistant]);
+    expect(detail.messages.every((message) => Boolean(message.id))).toBe(true);
+  });
+
+  it("keeps assistants with different stable message identities separate", () => {
+    const liveAssistant = {
+      id: "assistant-live-tool-stream",
+      role: "assistant",
+      content: "done once",
+      ...childIdentity,
+      rawEvents: [{ type: "tool_call_start" }],
+    };
+    const finalAssistant = {
+      id: "assistant-terminal",
+      role: "assistant",
+      content: "done once",
+      ...childIdentity,
+    };
+
+    const detail = mergeUnifiedSessionDetail(
+      { state: "running", messages: [liveAssistant], rawMessages: [liveAssistant] },
+      { state: "succeeded", messages: [finalAssistant], rawMessages: [finalAssistant] },
+    );
+
+    expect(detail.messages).toEqual([liveAssistant, finalAssistant]);
+    expect(detail.rawMessages).toEqual([liveAssistant, finalAssistant]);
   });
 });

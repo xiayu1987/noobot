@@ -5,28 +5,13 @@
  */
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "./turnProjectionStore.js";
 import { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./sendFlowSupport.js";
+import { resolveMessageEventPresentationId } from "@noobot/shared/message-event-protocol";
 
 export function routeMessageProjectionEvent(event, data, context) {
   const {
     botMessage, classifyRealtimeLog, locateSendingStartedMessageOnce,
-    logSessionEvent, navigateOnFirstResponseOnce, sessionId, turnScopeId, upsertSubSessionEvent,
+    findCanonicalMessageById, logSessionEvent, navigateOnFirstResponseOnce, sessionId, turnScopeId,
   } = context;
-  if (shouldProjectSubSessionEvent(event, data || {})) {
-    const result = upsertSubSessionEvent?.(data.event?.eventType, data.event || {});
-    logSessionEvent({
-      category: "debug", level: "debug", debugType: "workflow-diagnostics",
-      event: "frontend.workflowTransport.subSessionMessageReduced",
-      sessionId: data.event?.sessionId || data.route?.subSessionId || "",
-      dialogProcessId: data.event?.dialogProcessId || "", turnScopeId: data.event?.turnScopeId || "",
-      data: {
-        eventType: String(data.event?.eventType || ""), eventId: String(data.event?.eventId || ""),
-        messageId: String(data.event?.messageId || ""), sequence: Number(data.event?.sequence || 0),
-        applied: result?.applied === true, reason: String(result?.reason || ""),
-        projectedMessageCount: Array.isArray(result?.session?.messages) ? result.session.messages.length : 0,
-      },
-    });
-    return true;
-  }
   if (event === "subagent_message_event") {
     logSessionEvent({
       category: "debug", level: "warn", debugType: "workflow-diagnostics",
@@ -43,14 +28,18 @@ export function routeMessageProjectionEvent(event, data, context) {
   }
   if (shouldProjectMainSessionEvent(event, data || {})) {
     const messageEvent = data.event || {};
-    const reduction = dispatchTurnEnvelope({ targetMessage: botMessage, envelope: messageEvent, classifyRealtimeLog, source: TURN_PROJECTION_SOURCE.NORMAL_LIVE });
+    const presentationMessageId = resolveMessageEventPresentationId(messageEvent);
+    const targetSessionId = String(messageEvent.sessionId || sessionId || "").trim();
+    const targetMessage = findCanonicalMessageById?.(targetSessionId, presentationMessageId);
+    const reduction = dispatchTurnEnvelope({ targetMessage, envelope: messageEvent, classifyRealtimeLog, source: TURN_PROJECTION_SOURCE.NORMAL_LIVE });
     logSessionEvent({
       category: "transport", level: reduction.applied ? "debug" : "warn", event: "frontend.messageEvent.reduced",
       sessionId: messageEvent.sessionId || sessionId, dialogProcessId: messageEvent.dialogProcessId || "",
       turnScopeId: messageEvent.turnScopeId || turnScopeId,
       data: {
         source: "normal_live", eventId: messageEvent.eventId || "", eventType: messageEvent.eventType || "",
-        messageId: messageEvent.messageId || "", sequence: messageEvent.sequence ?? null,
+        messageId: messageEvent.messageId || "", presentationMessageId,
+        sequence: messageEvent.sequence ?? null,
         result: reduction.result, errors: reduction.errors || [],
       },
     });

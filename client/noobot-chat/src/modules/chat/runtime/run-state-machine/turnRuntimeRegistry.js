@@ -827,9 +827,3 @@ export function applyTurnTimingSnapshot(registry, snapshot = {}) {
     ? { applied: true, bucket, hydratedTurnScopeIds }
     : { applied: false, deduplicated: true, reason: "timing_snapshot_unchanged" };
 }
-
-export function hydrateSessionTurnRuntime(registry, session, turnStatuses = session?.turnStatuses || []) {
-  const sessionId = sessionRuntimeId(session);
-  if (!sessionId) return { registry, applied: false, reason: "missing_session_identity" };
-  return { registry, applied: false, reason: "legacy_runtime_projection_disabled" };
-}

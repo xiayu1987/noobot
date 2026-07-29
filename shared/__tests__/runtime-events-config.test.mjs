@@ -13,6 +13,7 @@ import {
   resolveRuntimeEventsMaxArchives,
   resolveRuntimeEventsMaxFileBytes,
   resolveRuntimeEventsRetentionDays,
+  resolveRuntimeEventsSessionLogControls,
   resolveRuntimeEventsStorageConfig,
 } from '../runtime-events-config.mjs';
 
@@ -42,6 +43,23 @@ test('runtime-events storage cleanup can be disabled with zero values', () => {
     retentionDays: 0,
     maxArchives: 0,
   });
+});
+
+test('session log controls honor explicit environment values independently of defaults', () => {
+  for (const [controlKey, envName] of Object.entries(
+    RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls,
+  )) {
+    assert.equal(
+      resolveRuntimeEventsSessionLogControls({ [envName]: 'off' })[controlKey],
+      false,
+      `${controlKey} should resolve an explicit off value`,
+    );
+    assert.equal(
+      resolveRuntimeEventsSessionLogControls({ [envName]: 'on' })[controlKey],
+      true,
+      `${controlKey} should resolve an explicit on value`,
+    );
+  }
 });
 
 test('hook runtime-events mode defaults to summary and recognizes verbose values', () => {

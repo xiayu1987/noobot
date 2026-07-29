@@ -3,12 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  getMessageDialogProcessId,
-  getMessageRole,
-  getMessageTurnScopeId,
-} from "./messageIdentity.js";
-
 const TERMINAL_TURN_STATES = new Set([
   "completed", "frontend_completed", "user_stopped", "cancelled", "aborted",
   "error", "expired", "timeout", "no_conversation",
@@ -25,11 +19,13 @@ function object(value) {
 function entityKey(item = {}, index = 0, kind = "entity") {
   const stableId = text(item?.id || item?.messageId || item?.toolCallId);
   if (stableId) return `id:${stableId}`;
-  const turnScopeId = text(getMessageTurnScopeId(item) || item?.turnScopeId);
-  const role = text(getMessageRole(item) || item?.role);
-  if (turnScopeId) return `turn:${turnScopeId}:${role || kind}`;
-  const dialogProcessId = text(getMessageDialogProcessId(item) || item?.dialogProcessId);
-  if (dialogProcessId) return `dialog:${dialogProcessId}:${role || kind}`;
+  // Message identity is protocol identity. Turn, dialog, role and array order
+  // are projection attributes and must never be used to guess entity equality.
+  if (kind === "message") return "";
+  const turnScopeId = text(item?.turnScopeId);
+  if (turnScopeId) return `turn:${turnScopeId}:${kind}`;
+  const dialogProcessId = text(item?.dialogProcessId);
+  if (dialogProcessId) return `dialog:${dialogProcessId}:${kind}`;
   return `${kind}:index:${index}`;
 }
 
@@ -51,10 +47,13 @@ function mergeEntity(previous = {}, incoming = {}, kind = "entity") {
 export function mergeSessionDetailEntities(baseItems = [], incomingItems = [], { kind = "entity", replace = false } = {}) {
   const base = Array.isArray(baseItems) ? baseItems : [];
   const incoming = Array.isArray(incomingItems) ? incomingItems : [];
-  if (replace) return incoming.map((item) => ({ ...object(item) }));
+  const accepted = (items) => kind === "message"
+    ? items.filter((item) => Boolean(entityKey(item, 0, kind)))
+    : items;
+  if (replace) return accepted(incoming).map((item) => ({ ...object(item) }));
   const merged = new Map();
-  base.forEach((item, index) => merged.set(entityKey(item, index, kind), { ...object(item) }));
-  incoming.forEach((item, index) => {
+  accepted(base).forEach((item, index) => merged.set(entityKey(item, index, kind), { ...object(item) }));
+  accepted(incoming).forEach((item, index) => {
     const key = entityKey(item, index, kind);
     merged.set(key, mergeEntity(merged.get(key), object(item), kind));
   });

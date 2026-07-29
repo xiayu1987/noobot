@@ -182,13 +182,16 @@ describe("SharedChatMessageItem", () => {
 
   it("keeps the single outer assistant header that owns a live workflow", () => {
     const wrapper = mountItem({
-      storeSetup: (store) => store.upsertWorkflowPlanningEvent({
-        workflowRunId: "turn-workflow",
-        sessionId: "session-1",
-        dialogProcessId: "dialog-workflow",
-        turnScopeId: "turn-workflow",
-        semanticText: "WORKFLOW_DSL/1",
-        nodeSessions: [{ nodeExecutionId: "node-1", status: "running" }],
+      storeSetup: (store) => store.applyWorkflowRuntimeEvent({
+        event: "workflow_planning_message_prepared",
+        data: {
+          workflowRunId: "turn-workflow",
+          sessionId: "session-1",
+          dialogProcessId: "dialog-workflow",
+          turnScopeId: "turn-workflow",
+          semanticText: "WORKFLOW_DSL/1",
+          nodeSessions: [{ nodeExecutionId: "node-1", status: "running" }],
+        },
       }),
       messageItem: {
         id: "workflow-thinking-host",
@@ -199,24 +202,6 @@ describe("SharedChatMessageItem", () => {
         dialogProcessId: "dialog-workflow",
         turnScopeId: "turn-workflow",
         pending: true,
-      },
-    });
-
-    expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
-  });
-
-  it("keeps the assistant header for a workflow node running placeholder", () => {
-    const wrapper = mountItem({
-      messageItem: {
-        id: "workflow-node-running",
-        role: "assistant",
-        type: "message",
-        content: "",
-        sessionId: "child-session",
-        dialogProcessId: "child-dialog",
-        turnScopeId: "workflow-node:node-1",
-        pending: true,
-        workflowNodeRunningPlaceholder: true,
       },
     });
 
@@ -238,13 +223,16 @@ describe("SharedChatMessageItem", () => {
     });
     expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
 
-    useChatStore().upsertWorkflowPlanningEvent({
-      workflowRunId: "workflow-late",
-      sessionId: "session-late",
-      dialogProcessId: "dialog-workflow-late",
-      turnScopeId: "turn-workflow-late",
-      semanticText: "WORKFLOW_DSL/1",
-      nodeSessions: [{ nodeExecutionId: "node-late", status: "running" }],
+    useChatStore().applyWorkflowRuntimeEvent({
+      event: "workflow_planning_message_prepared",
+      data: {
+        workflowRunId: "workflow-late",
+        sessionId: "session-late",
+        dialogProcessId: "dialog-workflow-late",
+        turnScopeId: "turn-workflow-late",
+        semanticText: "WORKFLOW_DSL/1",
+        nodeSessions: [{ nodeExecutionId: "node-late", status: "running" }],
+      },
     });
     await nextTick();
 

@@ -190,7 +190,7 @@ test('runtime event writer does not recreate a deleted parent session for child 
   assert.equal(await pathExists(sessionDir), false);
 });
 
-test('runtime-events writer records normal session logs by default', async () => {
+test('runtime-events writer records normal session logs when their control is enabled', async () => {
   const root = await tempRoot();
   const result = await writeRuntimeEvent({
     source: 'frontend',
@@ -200,7 +200,7 @@ test('runtime-events writer records normal session logs by default', async () =>
     event: 'chat.message',
     userId: 'admin',
     sessionId: 'session-log-default',
-  }, { root, includeProcess: false });
+  }, { root, includeProcess: false, messageLog: true });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);
