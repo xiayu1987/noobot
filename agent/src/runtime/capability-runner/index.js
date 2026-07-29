@@ -11,7 +11,7 @@ import {
   adaptToolsForBinding,
   normalizeToolCalls,
 } from "../../models/index.js";
-import { executeToolCall } from "../tool-execution/tool-runner.js";
+import { executeToolCallInTurn } from "../tool-execution/tool-runner.js";
 import { filterForModelContext } from "../../context/session/message-context-policy.js";
 import {
   getRuntimeFromAgentContext,
@@ -26,9 +26,7 @@ import { resolveBoundToolModelRequestOverrides } from "../turn/tool-choice-strat
 import { resolveHookClientEmitter } from "../../extensions/hooks/index.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createHash } from "node:crypto";
-import {
-  emitMessageEvent,
-} from "../../events/message-event-stream.js";
+import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/shared/message-event-protocol";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS =
@@ -135,15 +133,19 @@ function buildPluginCapabilityLogBase({
 function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
   const normalizedText = String(text || "").trim();
   if (!event) return;
+  const isWorkflowSemanticResponse =
+    event === "plugin_capability_response" &&
+    String(data?.purpose || "").trim() === "workflow_semantic" &&
+    String(data?.domain || "").trim() === "workflow";
   const isGuidanceAnalysisResponse =
     event === "plugin_capability_response" &&
     String(data?.purpose || "").trim() === "guidance" &&
     String(data?.pluginFlow || "").trim() === "analysis" &&
     String(data?.chain || "").trim() === "auxiliary";
   if (event === "plugin_capability_response") {
-    if (!isGuidanceAnalysisResponse) return;
+    if (!isGuidanceAnalysisResponse && !isWorkflowSemanticResponse) return;
   }
-  if (isGuidanceAnalysisResponse) {
+  if (isGuidanceAnalysisResponse || isWorkflowSemanticResponse) {
     const canonicalOutput = String(data?.output || "").trim();
     if (!canonicalOutput) {
       throw new Error("guidance analysis response is missing canonical output");
@@ -158,18 +160,27 @@ function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data
       String(data?.turn || "").trim(),
       canonicalOutput,
     ].join("|");
-    const eventId = `guidance-analysis:${createHash("sha256").update(stableIdentity).digest("hex").slice(0, 24)}`;
+    const activityKind = isGuidanceAnalysisResponse
+      ? "guidance_analysis"
+      : "workflow_semantic";
+    const activityEvent = isGuidanceAnalysisResponse
+      ? GUIDANCE_ANALYSIS_RESPONSE_EVENT
+      : "workflow_semantic_response";
+    const eventIdPrefix = isGuidanceAnalysisResponse
+      ? "guidance-analysis"
+      : "workflow_semantic";
+    const eventId = `${eventIdPrefix}:${createHash("sha256").update(stableIdentity).digest("hex").slice(0, 24)}`;
     emitMessageEvent(runtime?.eventListener, runtime, MESSAGE_EVENT_TYPE.THINKING, {
       eventId,
-      event: GUIDANCE_ANALYSIS_RESPONSE_EVENT,
-      type: "guidance_analysis",
+      event: activityEvent,
+      type: activityKind,
       category: "system",
       text: canonicalOutput,
       output: canonicalOutput,
-      purpose: "guidance",
-      pluginFlow: "analysis",
-      chain: "auxiliary",
-      activityKind: "guidance_analysis",
+      purpose: String(data?.purpose || "").trim(),
+      pluginFlow: String(data?.pluginFlow || "").trim(),
+      chain: String(data?.chain || "").trim(),
+      activityKind,
       rawEvent: "plugin_capability_response",
       ...sessionMeta,
       dialogProcessId: String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
@@ -199,7 +210,7 @@ export function createAgentCapabilityModelInvoker({
   resolveDefaultModelSpecFn = resolveDefaultModelSpec,
   resolveModelSpecByNameFn = resolveModelSpecByName,
   adaptToolsForBindingFn = adaptToolsForBinding,
-  executeToolCallFn = executeToolCall,
+  executeToolCallFn = executeToolCallInTurn,
 } = {}) {
   const baseAllowPolicy = resolveAllowPolicy(toolAllowlist);
   const maxTurnCount =

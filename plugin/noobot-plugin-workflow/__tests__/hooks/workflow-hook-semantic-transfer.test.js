@@ -112,11 +112,25 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     runConfig: {
       locale: "zh-CN",
       streaming: false,
+      presentationMessageId: "assistant-presentation-1",
     },
     agentContext: {
       execution: {
         controllers: {
           runtime: {
+            materializePendingCurrentTurnMessageEvents() {
+              return { activityTimeline: [{
+                eventId: "workflow_semantic:test",
+                event: "workflow_semantic_response",
+                type: "workflow_semantic",
+                text: "canonical workflow analysis",
+                output: "canonical workflow analysis",
+                sequence: 1,
+                sequenceDomain: "message-event",
+                sequenceScopeId: "assistant-presentation-1",
+                authority: "authoritative",
+              }], toolTimeline: [] };
+            },
             sharedTools: {
               resolveAttachmentDisplayPath({ meta = {} } = {}) {
                 const normalized = String(meta?.path || "").trim();
@@ -180,6 +194,15 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   );
 
   assert.ok(agentResult.workflow);
+  assert.ok(String(agentResult.workflow?.workflowRunId || "").trim());
+  assert.equal(
+    agentResult.workflow?.execution?.workflowRunId,
+    agentResult.workflow?.workflowRunId,
+  );
+  assert.equal(
+    agentResult.workflow?.execution?.instanceId,
+    agentResult.workflow?.workflowRunId,
+  );
   assert.equal(agentResult.workflow?.planningDialog?.dialogProcessId, "d1");
   assert.equal(agentResult.workflow?.planningDialog?.dialogId, undefined);
   assert.match(String(agentResult.workflow.nodeSessions[0]?.dialogProcessId || ""), /^wf_node_/);
@@ -201,7 +224,13 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   const workflowTurnMessage = workflowTurn(agentResult);
   assert.ok(workflowTurnMessage);
   assert.equal(workflowTurnMessage?.type, "workflow");
+  assert.equal(workflowTurnMessage?.chatPresentation, true);
+  assert.equal(workflowTurnMessage?.presentationMessageId, "assistant-presentation-1");
   assert.equal(workflowTurnMessage?.attachments, undefined);
+  assert.equal(workflowTurnMessage?.activityTimeline?.length, 1);
+  assert.equal(workflowTurnMessage?.activityTimeline?.[0]?.eventId, "workflow_semantic:test");
+  assert.equal(workflowTurnMessage?.activityTimeline?.[0]?.event, "workflow_semantic_response");
+  assert.equal(workflowTurnMessage?.activityTimeline?.[0]?.text, "canonical workflow analysis");
   assert.match(
     String(workflowTurnMessage?.content || ""),
     /\/injected\/attachments\/s1\/workflow-node-1-result\.md/,
@@ -209,6 +238,10 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(String(workflowTurnMessage?.content || "").includes("message-node-done"), false);
   assert.equal(String(workflowTurnMessage?.content || "").includes("answer-node-done"), false);
   assert.equal(workflowTurnMessage?.pluginMeta?.source, "workflow-plugin");
+  assert.equal(
+    workflowTurnMessage?.pluginMeta?.payload?.workflowRunId,
+    agentResult.workflow?.workflowRunId,
+  );
   assert.equal(
     workflowTurnMessage?.pluginMeta?.payload?.execution?.nodeAgentRuns?.[0]?.nodeResultText,
     undefined,
@@ -330,6 +363,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
   assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.length, 1);
   assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
   const workflowTurnMessage = workflowTurn(agentResult);
+  assert.equal(workflowTurnMessage?.chatPresentation, true);
   assert.equal(workflowTurnMessage?.transferEnvelopes?.length, 1);
   assert.equal(workflowTurnMessage?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
   assert.equal(workflowTurnMessage?.transferEnvelopes?.[0]?.files?.[0]?.attachmentMeta?.attachmentId, "wf-semantic-result-1");
@@ -455,5 +489,3 @@ test("workflow hook routes final attachment summary composition through semantic
   assert.match(workflowContent, /final-summary\.md/);
   assert.doesNotMatch(workflowContent, /node-summary\.md/);
 });
-
-

@@ -24,6 +24,8 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       executionKind: "agent",
       sessionId,
       turnScopeId,
+      messageId: `msg-event-${turnScopeId}`,
+      presentationMessageId: `msg-${turnScopeId}`,
       dialogProcessId: "a31a2316-61b9-452b-af1d-4be302fc375d",
       commandId: `${turnScopeId}:completed`,
       action: "send",
@@ -52,7 +54,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const first = engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
     await vi.waitFor(() => expect(releaseResponse).toBeTypeOf("function"));
     expect(applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, {
-      protocolVersion: 1,
+      protocolVersion: 2,
       eventType: "turn.snapshot",
       commandId: "snapshot-refresh",
       userId: "u-1",

@@ -453,6 +453,10 @@ test("harness records tool call and state commit hook artifacts", async () => {
   assert.equal(errorResult.failureReason, "invoke_error");
 
   const turnMessageStore = { items: [], push(item = {}) { this.items.push(item); } };
+  runtime.materializePendingCurrentTurnMessageEvents = () => ({
+    activityTimeline: [],
+    toolTimeline: [],
+  });
   const committer = createStateCommitter({
     messages: [],
     traces: [],

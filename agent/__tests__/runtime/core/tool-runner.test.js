@@ -9,8 +9,32 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { executeToolCall } from "../../../src/runtime/tool-execution/tool-runner.js";
+import {
+  executeToolCall as executeToolCallWithoutTurn,
+  executeToolCallInTurn,
+} from "../../../src/runtime/tool-execution/tool-runner.js";
 import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../../src/extensions/hooks/index.js";
+
+function executeToolCall(options = {}) {
+  if (!options.eventListener) return executeToolCallWithoutTurn(options);
+  const runtime = options.runtime && typeof options.runtime === "object"
+    ? options.runtime
+    : {};
+  const systemRuntime = runtime.systemRuntime && typeof runtime.systemRuntime === "object"
+    ? runtime.systemRuntime
+    : (runtime.systemRuntime = {});
+  systemRuntime.sessionId = String(systemRuntime.sessionId || "test-session");
+  systemRuntime.dialogProcessId = String(systemRuntime.dialogProcessId || "test-dialog");
+  systemRuntime.turnScopeId = String(systemRuntime.turnScopeId || "test-turn");
+  systemRuntime.messageEventStream = systemRuntime.messageEventStream && typeof systemRuntime.messageEventStream === "object"
+    ? systemRuntime.messageEventStream
+    : {
+        activeMessageId: "test-turn-message",
+        activePresentationMessageId: "test-turn-presentation",
+        sequence: 0,
+      };
+  return executeToolCallInTurn({ ...options, runtime });
+}
 
 function getPrimaryTransferFile(envelope = {}) {
   return Array.isArray(envelope?.files) ? envelope.files[0] || {} : {};
@@ -114,6 +138,49 @@ test("executeToolCall extracts attachmentMetas from transferEnvelopes", async ()
   assert.equal(Array.isArray(result.extractedAttachments), true);
   assert.equal(result.extractedAttachments.length, 1);
   assert.equal(result.extractedAttachments[0]?.attachmentId, "att_t1");
+});
+
+test("executeToolCall publishes write_file artifacts on the canonical tool_call_end event", async () => {
+  const events = [];
+  const runtime = {
+    systemRuntime: {
+      sessionId: "child-session",
+      dialogProcessId: "child-dialog",
+      turnScopeId: "workflow-node:turn-1",
+      messageEventStream: {
+        activeMessageId: "message-1",
+        activePresentationMessageId: "child-assistant-1",
+        sequence: 0,
+      },
+    },
+  };
+  await executeToolCall({
+    call: { id: "call-write", name: "write_file", args: {} },
+    tool: {
+      invoke: async () => ({
+        toolName: "write_file",
+        ok: true,
+        state: "OK",
+        resolvedPath: "/workspace/result.txt",
+        fileName: "result.txt",
+        isSandbox: true,
+      }),
+    },
+    runtime,
+    messageId: "message-1",
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+
+  const completed = events.find((event = {}) => event.event === "tool_call_end")?.data;
+  assert.deepEqual(completed?.writtenFiles, [{
+    toolName: "write_file",
+    resolvedPath: "/workspace/result.txt",
+    fileName: "result.txt",
+    isSandbox: true,
+    sourceType: "tool",
+    recognized: false,
+  }]);
+  assert.equal(completed?.presentationMessageId, "child-assistant-1");
 });
 
 test("executeToolCall returns toToolJsonResult when tool is missing", async () => {

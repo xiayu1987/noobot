@@ -52,7 +52,6 @@ export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {}
   emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
     text: finalOutput,
     output: finalOutput,
-    messageId,
     dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
     category: "model",
     type: "authoritative_final_content",

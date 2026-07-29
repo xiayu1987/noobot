@@ -63,18 +63,28 @@ export function settleTerminal(registry, {
 }
 
 export function snapshot(overrides = {}) {
-  const activeTurn = overrides.activeTurn === undefined ? {
+  const withMessageIdentity = (turn) => turn ? {
+    messageId: `msg-event-${turn.turnScopeId}`,
+    presentationMessageId: `msg-${turn.turnScopeId}`,
+    ...turn,
+  } : null;
+  const activeTurn = withMessageIdentity(overrides.activeTurn === undefined ? {
     turnScopeId: "t1", dialogProcessId: "dp1", commandId: "c1", action: "send",
     state: "processing", phase: "processing", executionState: "sending",
     revision: 2, sequence: 2, summaryVersion: 0, failure: null,
     capabilities: { actionLocked: true, canStop: true },
     createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:01.000Z",
-  } : overrides.activeTurn;
+  } : overrides.activeTurn);
+  const recentTerminalTurns = (Array.isArray(overrides.recentTerminalTurns)
+    ? overrides.recentTerminalTurns
+    : []).map(withMessageIdentity);
   return {
-    protocolVersion: 1, eventType: "turn.snapshot", commandId: "snapshot-1",
+    protocolVersion: 2, eventType: "turn.snapshot", commandId: "snapshot-1",
     userId: "u1", sessionId: "s1", sequence: 2,
     activeTurnScopeId: activeTurn?.turnScopeId || "", activeTurn,
-    recentTerminalTurns: [], unchanged: false, generatedAt: "2026-01-01T00:00:02.000Z",
+    recentTerminalTurns, unchanged: false, generatedAt: "2026-01-01T00:00:02.000Z",
     ...overrides,
+    activeTurn,
+    recentTerminalTurns,
   };
 }

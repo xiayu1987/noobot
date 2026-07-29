@@ -58,6 +58,8 @@ export function scheduleMissingInteractionPayloadFailure({
   missingInteractionPayloadTimers,
   sessionId = "",
   dialogProcessId = "",
+  interactionSubmitting,
+  clearPendingInteraction,
   translate,
   notify = () => {},
   timeoutMs = TIME_THRESHOLDS.client.missingInteractionPayloadTimeoutMs,
@@ -69,6 +71,8 @@ export function scheduleMissingInteractionPayloadFailure({
     missingInteractionPayloadTimers.delete(key);
     if (hasPendingInteractionForDialog(pendingInteractionRequest, dialogProcessId)) return;
     const missingInteractionError = translate("chat.interactionPayloadMissing");
+    if (interactionSubmitting) interactionSubmitting.value = false;
+    clearPendingInteraction?.();
     notify({ type: "error", message: missingInteractionError });
   }, timeoutMs);
   missingInteractionPayloadTimers.set(key, timer);

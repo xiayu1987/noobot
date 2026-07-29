@@ -25,7 +25,6 @@ import {
   buildWorkflowUpstreamAttachmentResults,
   resolveSemanticNodeForPendingStep,
   resolveStepIndexForAction,
-  resolveWorkflowInstanceId,
   runNodeAgent,
 } from "../hooks/node-agent.js";
 import {
@@ -345,7 +344,11 @@ export async function runWorkflowExecution({
   workflowRunId = "",
   planningNodeSessions = [],
 } = {}) {
-  const instanceId = workflowRunId || resolveWorkflowInstanceId(ctx);
+  const instanceId = String(workflowRunId || "").trim();
+  if (!instanceId) throw new Error("workflowRunId is required");
+  if (!Array.isArray(planningNodeSessions) || !planningNodeSessions.length) {
+    throw new Error("workflow planning node identities are required");
+  }
   let snapshot = createWorkflowInstance({
     instanceId,
     semantic,
@@ -360,12 +363,11 @@ export async function runWorkflowExecution({
     resolveWorkflowExecutionLimits(options);
   const nodeAgentRuns = [];
   const completedStepResults = new Map();
-  const nodeStateRepository = Array.isArray(planningNodeSessions) && planningNodeSessions.length
-    ? resolveWorkflowNodeStateRepository(options)
-    : null;
-  let nodeStateSnapshot = nodeStateRepository
-    ? await nodeStateRepository.initialize({ workflowRunId: instanceId, planningNodeSessions })
-    : null;
+  const nodeStateRepository = resolveWorkflowNodeStateRepository(options);
+  let nodeStateSnapshot = await nodeStateRepository.initialize({
+    workflowRunId: instanceId,
+    planningNodeSessions,
+  });
   let transitions = 0;
 
   try {

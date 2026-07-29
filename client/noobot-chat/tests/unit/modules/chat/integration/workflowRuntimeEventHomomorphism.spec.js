@@ -193,6 +193,56 @@ describe("workflow runtime live/replay homomorphism", () => {
     });
   });
 
+  it("reduces multiple child model messages into one presentation entity", () => {
+    const store = newStore();
+    const applyMessageEvent = (overrides = {}) => store.applyWorkflowRuntimeEvent({
+      event: "workflow_message_event",
+      data: {
+        envelopeKind: "noobot.message_event",
+        envelopeVersion: 2,
+        sessionId: "child-1",
+        parentSessionId: "root-1",
+        dialogProcessId: "node-dialog-1",
+        turnScopeId: "workflow-node:node-1",
+        presentationMessageId: "presentation-1",
+        sequenceDomain: "message-event",
+        timestamp: "2026-07-26T00:00:01.000Z",
+        ...overrides,
+      },
+    }, { source: "live" });
+
+    applyMessageEvent({
+      eventId: "tool-1-start", eventType: "tool_call_start",
+      messageId: "model-tool-1", sequenceScopeId: "model-tool-1", sequence: 1,
+      tool: "read_file", toolCallId: "call-1", args: { path: "a.txt" },
+    });
+    applyMessageEvent({
+      eventId: "tool-1-end", eventType: "tool_call_end",
+      messageId: "model-tool-1", sequenceScopeId: "model-tool-1", sequence: 2,
+      tool: "read_file", toolCallId: "call-1", result: "a",
+    });
+    applyMessageEvent({
+      eventId: "tool-2-start", eventType: "tool_call_start",
+      messageId: "model-tool-2", sequenceScopeId: "model-tool-2", sequence: 1,
+      tool: "search", toolCallId: "call-2", args: { query: "a" },
+    });
+    applyMessageEvent({
+      eventId: "final", eventType: "authoritative_final_content",
+      messageId: "model-final", sequenceScopeId: "model-final", sequence: 1,
+      text: "one final answer",
+    });
+
+    const child = store.selectSubSessionMessages("child-1");
+    expect(child.messages).toHaveLength(1);
+    expect(child.messages[0]).toMatchObject({
+      id: "presentation-1",
+      messageId: "presentation-1",
+      presentationMessageId: "presentation-1",
+      content: "one final answer",
+    });
+    expect(child.messages[0].toolTimeline).toHaveLength(2);
+  });
+
   it("rejects stale and duplicate snapshots by the session snapshot version lane", () => {
     const store = newStore();
     expect(store.applyWorkflowRuntimeEvent(snapshotEvent({ version: 2 }), { source: "snapshot" }).applied).toBe(true);

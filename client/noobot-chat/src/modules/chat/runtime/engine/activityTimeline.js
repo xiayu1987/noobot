@@ -109,3 +109,29 @@ export function selectActivityTimelineLogs(message = {}) {
       timelineTimestamp: text(item.timestamp || item.ts),
     }));
 }
+
+const activityEventOf = (item = {}) =>
+  text(item.event || item.type || item.activityKind).toLowerCase();
+
+export function selectLatestAnalysisActivities(message = {}) {
+  const timeline = selectActivityTimeline(message);
+  let latestGuidance = null;
+  let latestModelAnalysis = null;
+  for (let index = timeline.length - 1; index >= 0; index -= 1) {
+    const item = timeline[index];
+    const event = activityEventOf(item);
+    if (
+      !latestGuidance &&
+      (event === "guidance_analysis_response" || event === "guidance_analysis")
+    ) latestGuidance = item;
+    if (!latestModelAnalysis && event === "main_model_content") {
+      latestModelAnalysis = item;
+    }
+    if (latestGuidance && latestModelAnalysis) break;
+  }
+  return {
+    activityTimelineCount: timeline.length,
+    latestGuidance,
+    latestModelAnalysis,
+  };
+}

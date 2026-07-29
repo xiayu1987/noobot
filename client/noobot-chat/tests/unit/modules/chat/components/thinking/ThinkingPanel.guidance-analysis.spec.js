@@ -50,6 +50,35 @@ describe("ThinkingPanel canonical analysis timeline", () => {
     expect(wrapper.text()).not.toContain("before refresh");
   });
 
+  it("projects analysis independently from a large execution timeline", () => {
+    const toolTimeline = Array.from({ length: 2000 }, (_, index) => ({
+      key: `call:tool-${index}`,
+      toolCallId: `tool-${index}`,
+      status: "running",
+      call: {
+        eventId: `tool-event-${index}`,
+        sequence: index + 1,
+        sequenceScopeId: "model-message-1",
+        sequenceDomain: "message-event",
+        authority: "authoritative",
+        timestamp: `2026-07-25T01:00:00.${String(index % 1000).padStart(3, "0")}Z`,
+        log: { event: "tool_call", type: "tool_call", text: `tool ${index}` },
+      },
+    }));
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: true,
+      toolTimeline,
+      activityTimeline: [
+        activity("guidance-fast", 2001, "guidance_analysis_response", "analysis without tool-window dependency", {
+          purpose: "guidance", pluginFlow: "analysis", chain: "auxiliary",
+        }),
+      ],
+    }, { runtime: { running: true, terminal: false } });
+
+    expect(wrapper.text()).toContain("analysis without tool-window dependency");
+  });
+
   it("does not infer guidance from plugin capability responses", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant", pending: true,

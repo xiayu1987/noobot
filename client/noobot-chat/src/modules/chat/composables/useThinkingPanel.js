@@ -42,7 +42,10 @@ import {
   selectToolTimelineCount,
   selectToolTimelineLogs,
 } from "../runtime/engine/toolTimeline.js";
-import { selectActivityTimelineLogs } from "../runtime/engine/activityTimeline.js";
+import {
+  selectActivityTimelineLogs,
+  selectLatestAnalysisActivities,
+} from "../runtime/engine/activityTimeline.js";
 import { compareTimelineFacts } from "../runtime/engine/timelineFact.js";
 
 export function useThinkingPanel(props, emit) {
@@ -122,7 +125,7 @@ export function useThinkingPanel(props, emit) {
 
   function getRealtimeLogs(messageItem = {}) {
     if (messageItem === props.messageItem) {
-      return currentTimelineProjection.value.visibleLogs;
+      return currentExecutionTimelineProjection.value.visibleLogs;
     }
     return getAllRealtimeLogs(messageItem)
       .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
@@ -134,9 +137,9 @@ export function useThinkingPanel(props, emit) {
 
   function getAllRealtimeLogs(messageItem = {}) {
     if (messageItem === props.messageItem) {
-      return currentTimelineProjection.value.allLogs;
+      return currentExecutionTimelineProjection.value.allLogs;
     }
-    return buildTimelineProjection(messageItem).allLogs;
+    return buildExecutionTimelineProjection(messageItem).allLogs;
   }
 
   function mergeOrderedTimelineLogs(activityLogs = [], toolLogs = []) {
@@ -157,10 +160,7 @@ export function useThinkingPanel(props, emit) {
     return merged;
   }
 
-  function buildTimelineProjection(messageItem = {}) {
-    const canonicalMessage = timelineMessage(messageItem);
-    const activityLogs = selectActivityTimelineLogs(canonicalMessage);
-    const toolLogs = selectToolTimelineLogs(canonicalMessage);
+  function projectExecutionTimeline(activityLogs = [], toolLogs = []) {
     const allLogs = mergeOrderedTimelineLogs(activityLogs, toolLogs);
     const visibleLogs = allLogs
       .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
@@ -168,26 +168,36 @@ export function useThinkingPanel(props, emit) {
       .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
       .filter(Boolean)
       .slice(-EXECUTION_LOG_DISPLAY_LIMIT);
-    let latestGuidance = null;
-    let latestModelAnalysis = null;
-    for (let index = activityLogs.length - 1; index >= 0; index -= 1) {
-      const logItem = activityLogs[index];
-      if (!latestGuidance && isGuidanceAnalysisResponseLog(logItem)) latestGuidance = logItem;
-      if (!latestModelAnalysis && isMainModelContentLog(logItem)) latestModelAnalysis = logItem;
-      if (latestGuidance && latestModelAnalysis) break;
-    }
     return {
       activityLogs,
       toolLogs,
       allLogs,
       visibleLogs,
-      latestGuidance,
-      latestModelAnalysis,
     };
   }
 
-  const currentTimelineProjection = computed(() =>
-    buildTimelineProjection(props.messageItem),
+  function buildExecutionTimelineProjection(messageItem = {}) {
+    const canonicalMessage = timelineMessage(messageItem);
+    return projectExecutionTimeline(
+      selectActivityTimelineLogs(canonicalMessage),
+      selectToolTimelineLogs(canonicalMessage),
+    );
+  }
+
+  const currentAnalysisProjection = computed(() =>
+    selectLatestAnalysisActivities(timelineMessage(props.messageItem)),
+  );
+  const currentActivityTimelineLogs = computed(() =>
+    selectActivityTimelineLogs(timelineMessage(props.messageItem)),
+  );
+  const currentToolTimelineLogs = computed(() =>
+    selectToolTimelineLogs(timelineMessage(props.messageItem)),
+  );
+  const currentExecutionTimelineProjection = computed(() =>
+    projectExecutionTimeline(
+      currentActivityTimelineLogs.value,
+      currentToolTimelineLogs.value,
+    ),
   );
 
   function isFreshPendingAssistant(messageItem = {}) {
@@ -290,7 +300,7 @@ export function useThinkingPanel(props, emit) {
 
   function getLatestMainModelContentLog(messageItem = {}) {
     if (messageItem === props.messageItem) {
-      const logItem = currentTimelineProjection.value.latestModelAnalysis;
+      const logItem = currentAnalysisProjection.value.latestModelAnalysis;
       const output = getMainModelContentLogOutput(logItem || {});
       if (output) return { ...logItem, output };
     }
@@ -311,7 +321,7 @@ export function useThinkingPanel(props, emit) {
 
   function getLatestPluginAnalysisLog(messageItem = {}) {
     if (messageItem === props.messageItem) {
-      const logItem = currentTimelineProjection.value.latestGuidance;
+      const logItem = currentAnalysisProjection.value.latestGuidance;
       const output = getPluginAnalysisLogOutput(logItem || {});
       if (output) return { ...logItem, output };
     }
@@ -420,22 +430,31 @@ export function useThinkingPanel(props, emit) {
 
   function summarizeAnalysisProjection(messageItem = {}) {
     const projection = messageItem === props.messageItem
-      ? currentTimelineProjection.value
-      : buildTimelineProjection(messageItem);
+      ? currentAnalysisProjection.value
+      : selectLatestAnalysisActivities(timelineMessage(messageItem));
     const latestGuidance = projection.latestGuidance;
     const latestModelAnalysis = projection.latestModelAnalysis;
     return {
-      activityTimelineCount: projection.activityLogs.length,
+      activityTimelineCount: projection.activityTimelineCount,
       latestGuidanceEventId: String(latestGuidance?.eventId || ""),
       latestGuidanceOutputLength: getPluginAnalysisLogOutput(latestGuidance || {}).length,
+      latestGuidanceTimestamp: String(latestGuidance?.timestamp || latestGuidance?.ts || ""),
       latestModelAnalysisEventId: String(latestModelAnalysis?.eventId || ""),
       latestModelAnalysisOutputLength: getMainModelContentLogOutput(latestModelAnalysis || {}).length,
+      latestModelAnalysisTimestamp: String(latestModelAnalysis?.timestamp || latestModelAnalysis?.ts || ""),
     };
+  }
+
+  function sourceToProjectionLatencyMs(timestamp = "", projectedAtMs = Date.now()) {
+    const sourceAtMs = Date.parse(String(timestamp || ""));
+    return Number.isFinite(sourceAtMs)
+      ? Math.max(0, projectedAtMs - sourceAtMs)
+      : null;
   }
 
   watch(
     () => {
-      const timeline = currentTimelineProjection.value;
+      const timeline = currentExecutionTimelineProjection.value;
       const lastCandidate = timeline.allLogs.at(-1) || {};
       const lastVisible = currentExecutionLogs.value.at(-1) || {};
       const analysis = summarizeAnalysisProjection(props.messageItem);
@@ -461,10 +480,12 @@ export function useThinkingPanel(props, emit) {
       const identity = thinkingReplayScope(props.messageItem);
       const running = getRuntimeView(props.messageItem).running === true;
       const pending = props.messageItem?.pending === true;
-      const timeline = currentTimelineProjection.value;
+      const timeline = currentExecutionTimelineProjection.value;
       const selectedLogs = currentExecutionLogs.value;
       const source = timeline.visibleLogs.length > 0 ? "live" : "detail-fallback";
       const analysis = summarizeAnalysisProjection(props.messageItem);
+      const projectedAtMs = Date.now();
+      const projectedAt = new Date(projectedAtMs).toISOString();
       logThinkingReplayDebug("frontend.thinkingReplay.displayProjectionChanged", {
         ...identity,
         running,
@@ -473,6 +494,15 @@ export function useThinkingPanel(props, emit) {
         visibleLogCount: selectedLogs.length,
         visibleLogs: selectedLogs.slice(-10).map(summarizeRealtimeLog),
         ...analysis,
+        projectedAt,
+        guidanceSourceToProjectionLatencyMs: sourceToProjectionLatencyMs(
+          analysis.latestGuidanceTimestamp,
+          projectedAtMs,
+        ),
+        modelAnalysisSourceToProjectionLatencyMs: sourceToProjectionLatencyMs(
+          analysis.latestModelAnalysisTimestamp,
+          projectedAtMs,
+        ),
       });
       logToolLogWindowDebug("frontend.toolLogWindow.executionWindowSelected", {
         ...identity,

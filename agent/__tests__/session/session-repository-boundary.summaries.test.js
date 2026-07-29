@@ -12,7 +12,10 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 
 import { createSessionServices } from "../../src/session/index.js";
 import { writeSessionArtifact } from "../../src/session/session-artifact-store.js";
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import {
+  buildSessionDisplaySummary,
+  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
+} from "../../src/session/session-summary-builders.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 
 async function withTempWorkspace(fn) {
@@ -182,6 +185,60 @@ test("session display summary projects persisted messageUid as canonical message
   );
 });
 
+test("session display summary retains a workflow final assistant with stable presentation identity", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "workflow-final-session",
+    messages: [{
+      role: "assistant",
+      type: "workflow",
+      content: "final workflow body\n\n/workspace/result.md",
+      messageUid: "sm-workflow-final",
+      messageId: "sm-workflow-final",
+      presentationMessageId: "assistant-presentation-workflow",
+      chatPresentation: true,
+      turnScopeId: "turn-workflow",
+      transferEnvelopes: [{
+        protocol: "noobot.semantic-transfer",
+        version: 1,
+        direction: "output",
+        transport: "file",
+        files: [{ filePath: "/workspace/result.md" }],
+      }],
+    }],
+  });
+
+  assert.equal(summary.messages.length, 1);
+  assert.equal(summary.messages[0]?.messageId, "assistant-presentation-workflow");
+  assert.equal(summary.messages[0]?.content.includes("/workspace/result.md"), true);
+  assert.equal(summary.messages[0]?.transferEnvelopes?.length, 1);
+});
+
+test("session display summary does not synthesize a missing workflow presentation identity", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "workflow-lifecycle-session",
+    messages: [{
+      role: "assistant",
+      type: "workflow",
+      content: "persisted workflow final",
+      messageUid: "sm-workflow-lifecycle",
+      messageId: "sm-workflow-lifecycle",
+      chatPresentation: true,
+      turnScopeId: "turn-workflow-lifecycle",
+    }],
+    turnLifecycle: {
+      turns: {
+        "turn-workflow-lifecycle": {
+          turnScopeId: "turn-workflow-lifecycle",
+          presentationMessageId: "assistant-from-lifecycle",
+          state: "completed",
+        },
+      },
+    },
+  });
+
+  assert.equal(summary.messages.length, 0);
+});
+
 test("session display summary projects one explicit assistant presentation from many model messages", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "assistant-presentation-session",
@@ -329,9 +386,19 @@ test("session display summary should keep chat view lightweight and rebuild stal
         }],
         toolTimeline: [{
           key: "call:call-1", toolCallId: "call-1", status: "completed",
-          call: { eventId: "tool-call-1" }, resultEvent: { eventId: "tool-result-1" },
+          call: { eventId: "tool-call-1" },
+          resultEvent: {
+            eventId: "tool-result-1",
+            writtenFiles: [{
+              toolName: "write_file",
+              resolvedPath: "/workspace/u1/project/a.txt",
+              fileName: "a.txt",
+              sourceType: "tool",
+              recognized: false,
+            }],
+          },
         }],
-        tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: { path: "/tmp/a" } } }],
+        tool_calls: [{ id: "call-1", function: { name: "write_file", arguments: { path: "/tmp/a" } } }],
         rawMessages: [{ role: "assistant", content: "raw" }],
       },
       {
@@ -374,7 +441,18 @@ test("session display summary should keep chat view lightweight and rebuild stal
         id: "w1",
         role: "assistant",
         type: "workflow",
+        turnScopeId: "turn-scope-workflow",
+        presentationMessageId: "w1",
+        chatPresentation: true,
         content: longWorkflowContent,
+        activityTimeline: [{
+          eventId: "workflow-activity-1",
+          event: "workflow_semantic_response",
+          sequence: 1,
+          sequenceDomain: "message-event",
+          sequenceScopeId: "w1",
+          authority: "authoritative",
+        }],
         pluginMessage: true,
         pluginMeta: {
           pluginId: "p1",
@@ -384,6 +462,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           nodeName: "Done",
           internalState: { huge: true },
           payload: {
+            workflowRunId: "workflow-run-1",
             semantic: {
               nodes: [
                 { id: "start", type: "state", stateType: "start", name: "Start" },
@@ -392,6 +471,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
               flowtos: [{ from: "start", to: "act", extra: { keep: true } }],
             },
             execution: {
+              workflowRunId: "workflow-run-1",
+              instanceId: "workflow-run-1",
               completed: true,
               status: "success",
               nodeAgentRuns: [
@@ -463,7 +544,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const persistedSession = await readSessionArtifact({ sessionDir: scopeB.sessionDir });
     assert.equal(persistedSession.messages.every((item) => "turnScopeId" in item), true);
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 9);
+    assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.messages.length, 6);
     assert.equal(summary.messages.every((item) => "turnScopeId" in item), true);
@@ -474,7 +555,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.messageCount, 11);
     assert.equal(summary.stats.displayMessageCount, 6);
     assert.equal(summary.stats.injectedMessageCount, 1);
-    assert.equal(summary.stats.thinkingMessageCount, 2);
+    assert.equal(summary.stats.thinkingMessageCount, 3);
     assert.equal(summary.stats.attachmentCount, 3);
     assert.equal(summary.stats.toolLogCount, 5);
     assert.equal(summary.stats.displayToolLogCount, 1);
@@ -540,6 +621,10 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("completedToolLogs" in toolOnlyAssistantMessage, false);
     assert.equal(JSON.stringify(summary.messages).includes("tool only result detail"), false);
     const workflowMessage = summary.messages.find((item) => item.id === "w1");
+    assert.equal(workflowMessage.type, "workflow");
+    assert.equal(workflowMessage.pluginMeta.payload.workflowRunId, "workflow-run-1");
+    assert.equal(workflowMessage.pluginMeta.payload.execution.workflowRunId, "workflow-run-1");
+    assert.equal(workflowMessage.pluginMeta.payload.execution.instanceId, "workflow-run-1");
     assert.equal(workflowMessage.content, longWorkflowContent);
     assert.equal(workflowMessage.content.endsWith(workflowContentTail), true);
     assert.equal(workflowMessage.content.includes(`${workflowContentTail}…`), false);
@@ -584,7 +669,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(displayData.sessions[0].depth, 2);
     assert.equal(displayData.sessions[0].toolLogSummaries.every((item) => item.depth === 2), true);
     summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 9);
+    assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.depth, 2);
   });

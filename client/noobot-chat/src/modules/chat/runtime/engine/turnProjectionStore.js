@@ -37,6 +37,9 @@ export function dispatchTurnEnvelope({
   classifyRealtimeLog,
   source = TURN_PROJECTION_SOURCE.NORMAL_LIVE,
 } = {}) {
+  const reducerObservedAtMs = Date.now();
+  const eventTimestamp = String(envelope?.timestamp || "");
+  const eventTimestampMs = Date.parse(eventTimestamp);
   const identity = resolveTurnIdentity(envelope);
   const turnKey = createTurnKey(identity);
   const observe = (values = {}) => {
@@ -67,6 +70,11 @@ export function dispatchTurnEnvelope({
       authority: String(envelope?.authority || ""),
       textLength: String(envelope?.text || "").length,
       outputLength: String(envelope?.output || "").length,
+      eventTimestamp,
+      reducerObservedAt: new Date(reducerObservedAtMs).toISOString(),
+      sourceToReducerLatencyMs: Number.isFinite(eventTimestampMs)
+        ? Math.max(0, reducerObservedAtMs - eventTimestampMs)
+        : null,
       result: String(observation.result || ""),
       reason: String(observation.reason || ""),
       applied: observation.applied === true,

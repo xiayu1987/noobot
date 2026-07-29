@@ -550,21 +550,10 @@ export function createChatWebSocketClient({
   }
 
   function requestStop(stopPayload = {}) {
-    const ws = getActiveSocket();
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({ action: "stop", ...stopPayload }));
-      } catch {
-        return false;
-      }
-      return true;
-    }
-
-    if (ws && ws.readyState === WebSocket.CONNECTING) {
-      ws.close(1000, "stop_requested");
-    }
-
-    return false;
+    return requestJson(
+      { action: "stop", ...stopPayload },
+      { expectedEvents: [StreamEventEnum.TURN_LIFECYCLE] },
+    ).then(() => true);
   }
 
   const sendJson = commandRequests.sendJson;

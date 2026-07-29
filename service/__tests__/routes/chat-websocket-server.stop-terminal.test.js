@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
+import { startServerWithWs, closeServer, stopChatWs } from "./chat-websocket-server.test-helpers.js";
 import { transitionTurnLifecycle } from "../../../agent/src/session/entities/turn-lifecycle-entity.js";
 
 test("chat-websocket-server: stop persists and emits the user_stopped turnScopeId", async () => {
@@ -257,6 +257,8 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       eventType: "turn.action_accepted",
       phase: "action",
       action: "send",
+      messageId: "msg-event-idle-stop",
+      presentationMessageId: "msg-idle-stop",
     },
     {
       turnScopeId: "turn-idle-stop",
@@ -356,6 +358,8 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       eventType: "turn.action_accepted",
       phase: "action",
       action: "send",
+      messageId: "msg-event-after-idle-stop",
+      presentationMessageId: "msg-after-idle-stop",
     });
     assert.equal(nextAction.applied, true);
   } finally {
@@ -363,74 +367,32 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
   }
 });
 
-test("chat-websocket-server: pending stop is consumed by a later run with the same turnScopeId", async () => {
-  let capturedStopPayload = null;
-  let persistStopCalls = 0;
-  const server = await startServerWithWs({
-    bot: {
-      persistStoppedAssistantMessage: async (payload = {}) => {
-        persistStopCalls += 1;
-        if (persistStopCalls === 1) throw new Error("temporary persistence failure");
-        capturedStopPayload = payload;
-        return {
-          turnScopeId: payload?.partialAssistant?.turnScopeId || "",
-          dialogProcessId: payload?.partialAssistant?.dialogProcessId || "",
-          status: "user_stopped",
-          reason: "user_stop",
-          description: "用户停止了本轮生成",
-        };
-      },
-      runSession: async ({ abortSignal }) => {
-        await new Promise((resolve) => {
-          if (abortSignal?.aborted) return resolve();
-          abortSignal?.addEventListener?.("abort", resolve, { once: true });
-        });
-        const error = new Error("aborted by pending stop");
-        error.name = "AbortError";
-        throw error;
-      },
-    },
-  });
+test("chat-websocket-server: stop without an authoritative Turn is rejected", async () => {
+  const server = await startServerWithWs();
   try {
     const { port } = server.address();
-    await new Promise((resolve, reject) => {
+    const events = await new Promise((resolve, reject) => {
+      const messages = [];
       const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
         headers: { authorization: "Bearer test-key" },
       });
-      const timer = setTimeout(() => reject(new Error("pending stop ack timeout")), 1000);
       ws.on("open", () => ws.send(JSON.stringify({
         action: "stop",
-        sessionId: "s-pending",
-        turnScopeId: "turn-pending",
-        partialAssistant: { dialogProcessId: "dp-pending", turnScopeId: "turn-pending" },
+        sessionId: "s-without-turn",
+        turnScopeId: "turn-without-authority",
       })));
       ws.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
-        if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
-          clearTimeout(timer);
-          ws.close(1000, "pending_stop_recorded");
-          resolve();
-        }
+        messages.push(parsed);
+        if (parsed?.event === "error") ws.close(1000, "stop_rejected");
       });
-      ws.on("error", (error) => { clearTimeout(timer); reject(error); });
+      ws.on("close", () => resolve(messages));
+      ws.on("error", reject);
     });
 
-    const events = await callChatWs({
-      port,
-      payload: {
-        userId: "u1",
-        sessionId: "s-pending",
-        message: "hello",
-        turnScopeId: "turn-pending",
-        config: { locale: "zh-CN" },
-      },
-    });
-
-    const stoppedEvent = events.find((item) => item?.event === "user_stopped");
-    assert.equal(stoppedEvent?.data?.sessionId, "s-pending");
-    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-pending");
-    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-pending");
-    assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-pending");
+    const errorEvent = events.find((item) => item?.event === "error");
+    assert.equal(errorEvent?.data?.errorCode, "turn_message_identity_incomplete");
+    assert.equal(events.some((item) => item?.event === "channel_state"), false);
   } finally {
     await closeServer(server);
   }

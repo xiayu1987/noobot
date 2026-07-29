@@ -14,7 +14,7 @@ import {
   resolveWorkflowTransferFileDisplayPath,
   resolveWorkflowTransferFilesFromPayload,
 } from "./attachments.js";
-import { resolveWorkflowRuntimeFromContext } from "./runtime.js";
+import { resolveWorkflowParentRunConfig, resolveWorkflowRuntimeFromContext } from "./runtime.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
@@ -327,6 +327,16 @@ export async function appendWorkflowPlanningMessage({
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join("\n\n");
+  const presentationMessageId = String(
+    ctx?.presentationMessageId ||
+      resolveWorkflowParentRunConfig(ctx)?.presentationMessageId ||
+      "",
+  ).trim();
+  const runtime = resolveWorkflowRuntimeFromContext(ctx);
+  if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
+    throw new Error("Turn message event materializer is required");
+  }
+  const messageEventProjection = runtime.materializePendingCurrentTurnMessageEvents();
   applyWorkflowTransferPayload(baseWorkflowPayload, mergedTransferPayload);
   const authoritativeWorkflowRunId = String(
     workflowRunId ||
@@ -348,6 +358,14 @@ export async function appendWorkflowPlanningMessage({
   const workflowMessage = {
     role: "assistant",
     type: "workflow",
+    chatPresentation: true,
+    ...(presentationMessageId ? { presentationMessageId } : {}),
+    ...(Array.isArray(messageEventProjection.activityTimeline) && messageEventProjection.activityTimeline.length
+      ? { activityTimeline: messageEventProjection.activityTimeline }
+      : {}),
+    ...(Array.isArray(messageEventProjection.toolTimeline) && messageEventProjection.toolTimeline.length
+      ? { toolTimeline: messageEventProjection.toolTimeline }
+      : {}),
     content,
     dialogProcessId,
     modelAlias: String(semanticResolution?.model || options?.semanticModel || "").trim(),

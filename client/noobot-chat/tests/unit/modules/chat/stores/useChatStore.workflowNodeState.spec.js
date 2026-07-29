@@ -6,6 +6,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
+import {
+  selectTurnMessageRuntime,
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 function applyNodeEvent(store, data) {
   return store.applyWorkflowRuntimeEvent({ event: "workflow_node_state_committed", data }, { source: "test" });
@@ -66,6 +69,41 @@ describe("useChatStore workflow node state registry", () => {
     expect(stale.reason).toBe("stale");
     expect(storedNode(store).eventId).toBe("evt-2");
     expect(storedNode(store).status).toBe("running");
+  });
+
+  it("projects child node lifecycle into the canonical Turn Runtime Registry", () => {
+    const store = useChatStore();
+
+    applyNodeEvent(store, nodeEvent({ status: "running", revision: 2, sequence: 2, eventId: "evt-running" }));
+    const running = selectTurnMessageRuntime(store.turnRuntimeRegistry, {
+      sessionId: "child-session-a",
+      turnScopeId: "workflow-node:node-exec-a",
+    });
+    expect(running.running).toBe(true);
+    expect(running.state).toBe("frontend_processing");
+    expect(running.dialogProcessId).toBe("");
+
+    const timing = store.applyTurnTimingSnapshot({
+      sessionId: "child-session-a",
+      turnTimings: [{
+        turnScopeId: "workflow-node:node-exec-a",
+        dialogProcessId: "real-child-dialog",
+        thinkingStartedAt: "2026-07-19T00:00:00.000Z",
+      }],
+    });
+    expect(timing.applied).toBe(true);
+    expect(selectTurnMessageRuntime(store.turnRuntimeRegistry, {
+      sessionId: "child-session-a",
+      turnScopeId: "workflow-node:node-exec-a",
+    }).dialogProcessId).toBe("real-child-dialog");
+
+    applyNodeEvent(store, nodeEvent({ status: "succeeded", revision: 3, sequence: 3, eventId: "evt-completed" }));
+    const completed = selectTurnMessageRuntime(store.turnRuntimeRegistry, {
+      sessionId: "child-session-a",
+      turnScopeId: "workflow-node:node-exec-a",
+    });
+    expect(completed.running).toBe(false);
+    expect(completed.terminal).toBe("completed");
   });
 
   it("applies newer sequence within the same revision and rejects sequence rollback", () => {

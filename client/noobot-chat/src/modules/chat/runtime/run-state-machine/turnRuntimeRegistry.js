@@ -424,7 +424,7 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
     updatedAt: turn.updatedAt || "",
     updatedAtMs: Number(turn.updatedAtMs || 0),
     terminal: turn.terminal || null,
-    running: !turn.terminal && [
+    running: !turn.finishedAt && !turn.terminal && [
       FrontendRunState.ACTION_REQUESTING,
       FrontendRunState.PROCESSING,
       FrontendRunState.FRONTEND_COMPLETION_REQUESTING,

@@ -10,6 +10,7 @@ import { resolveParsedResultAccessMeta } from "../../infrastructure/api/attachme
 
 const props = defineProps({
   attachmentItem: { type: Object, required: true },
+  userId: { type: String, default: "" },
   thumbnailUrl: { type: String, default: "" },
   isImageMime: { type: Function, required: true },
   canPreviewAttachment: { type: Function, required: true },
@@ -58,7 +59,9 @@ const showCustomBadge = computed(() => Boolean(String(props.customBadgeText || "
 const hasParsedResult = computed(
   () =>
     props.showParsedResult &&
-    resolveParsedResultAccessMeta(props.attachmentItem).hasIdentity,
+    resolveParsedResultAccessMeta(props.attachmentItem, {
+      userId: props.userId,
+    }).hasIdentity,
 );
 const parsedResultPreviewEnabled = computed(() =>
   hasParsedResult.value &&

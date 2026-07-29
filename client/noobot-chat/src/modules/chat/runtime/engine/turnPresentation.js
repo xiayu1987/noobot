@@ -100,6 +100,14 @@ function terminalStatusKey(status = {}, fallbackSessionId = "") {
   );
 }
 
+function terminalErrorText(status = {}) {
+  return text(
+    typeof status?.error === "string"
+      ? status.error
+      : status?.error?.message || status?.error?.reason,
+  );
+}
+
 function formatTerminalStatusContent(status = {}) {
   const state = text(status?.status).toLowerCase();
   const title = state === "user_stopped"
@@ -109,11 +117,7 @@ function formatTerminalStatusContent(status = {}) {
       : "本轮异常停止";
   const description = text(status?.description);
   const reason = text(status?.reason);
-  const error = text(
-    typeof status?.error === "string"
-      ? status.error
-      : status?.error?.message || status?.error?.reason,
-  );
+  const error = terminalErrorText(status);
   return [
     title,
     description,
@@ -142,7 +146,7 @@ function buildTerminalPresentation(status = {}, fallbackSessionId = "") {
     state: status?.status,
     statusReason: status?.reason,
     statusDescription: status?.description,
-    error: status?.error,
+    error: terminalErrorText(status),
     turnScopeId,
     dialogProcessId,
     ts: timestamp,

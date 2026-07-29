@@ -54,8 +54,24 @@ export async function markSessionMessagesSummarized({
     }, parentSessionId, persistenceContext);
   }
 
-export async function getSessionTurns({ userId, sessionId }) {
-    const session = await this.sessionRepo.findById(userId, sessionId);
+export async function getSessionTurns({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    persistenceContext = null,
+  } = {}) {
+    const resolvedParentSessionId = await this._resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
+      persistenceContext,
+    );
     return session?.messages || [];
   }
 

@@ -11,11 +11,22 @@ import {
   emitAuthoritativeFinalMessageContent,
   emitFinalStreamingAppendDeltaAfterHooks,
 } from "../../../src/runtime/engine.js";
-import { beginAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
+import {
+  beginAssistantMessageEventStream,
+  bindAssistantMessageEventStream,
+} from "../../../src/events/message-event-stream.js";
 import {
   buildLoopResult,
   FINAL_STREAMING_RESULT_META_KEY,
 } from "../../../src/runtime/turn/turn-result-aggregator.js";
+
+function bindTestTurn(runtime = {}, suffix = "1") {
+  bindAssistantMessageEventStream(runtime, {
+    messageId: `turn-message-${suffix}`,
+    presentationMessageId: `presentation-${suffix}`,
+  });
+  return runtime;
+}
 
 test("final streaming append delta: emits only hook-appended suffix after final output mutation", () => {
   const events = [];
@@ -46,6 +57,7 @@ test("final streaming append delta: emits only hook-appended suffix after final 
       dialogProcessId: "dp1",
     },
   };
+  bindTestTurn(runtime);
   beginAssistantMessageEventStream(runtime);
   const emitted = emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
 
@@ -78,6 +90,7 @@ test("final streaming append delta: tolerates finalizer trim before appending", 
     },
     systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
   };
+  bindTestTurn(runtime);
   beginAssistantMessageEventStream(runtime);
   const emitted = emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
 
@@ -94,6 +107,7 @@ test("final content commit follows hook-appended streaming delta", () => {
     eventListener: { onEvent: (payload = {}) => events.push(payload) },
     systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
   };
+  bindTestTurn(runtime);
   const messageId = beginAssistantMessageEventStream(runtime);
   const result = buildLoopResult({
     output: "draft",
@@ -119,7 +133,8 @@ test("final content commit follows hook-appended streaming delta", () => {
   assert.deepEqual(messageEvents.map((item) => item.event), ["llm_delta", "authoritative_final_content"]);
   assert.deepEqual(messageEvents.map((item) => item.data.sequence), [1, 2]);
   assert.equal(messageEvents[1].data.text, "draft plus hook");
-  assert.equal(messageEvents[1].data.messageId, messageId);
+  assert.equal(messageEvents[1].data.messageId, "turn-message-1");
+  assert.equal(result.turnMessages[0].messageId, messageId);
   assert.equal(result.turnMessages[0].content, "draft plus hook");
 });
 
@@ -129,6 +144,7 @@ test("final content uses the result message identity after active stream changes
     eventListener: { onEvent: (payload = {}) => events.push(payload) },
     systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
   };
+  bindTestTurn(runtime);
   const finalMessageId = beginAssistantMessageEventStream(runtime);
   const result = buildLoopResult({
     output: "authoritative final answer",
@@ -148,7 +164,7 @@ test("final content uses the result message identity after active stream changes
   assert.notEqual(laterActiveMessageId, finalMessageId);
   assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
   assert.equal(emitAuthoritativeFinalMessageContent({ result, runtime }), true);
-  assert.equal(events.at(-1)?.data?.messageId, finalMessageId);
+  assert.equal(events.at(-1)?.data?.messageId, "turn-message-1");
   assert.equal(events.at(-1)?.data?.text, "authoritative final answer");
   assert.equal(result.turnMessages[0].content, "authoritative final answer");
 });

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { RUNTIME_EVENT_CATEGORIES, RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEvent } from "@noobot/runtime-events";
-import { consumePendingStop, attachRunTransport, findActiveRun, publishRunEvent, registerActiveRun } from "./run-registry.js";
+import { attachRunTransport, findActiveRun, publishRunEvent, registerActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle, summarizeDebugAttachments } from "./runtime-events.js";
 import { isPluginDebugEnabled, resolveEffectiveRunTimeoutMs, resolveEffectiveStreamingEnabled, summarizePluginConfig } from "./run-config.js";
 import { isUserStopRunAbort } from "./stop-lifecycle.js";
@@ -91,7 +91,6 @@ export function createMessageRunHandler({
       turnScopeId = "",
       userMessageId = "",
       presentationMessageId = "",
-      assistantMessageId = "",
       idempotencyKey = "",
       expectedVersion = undefined,
     } = payload || {};
@@ -132,8 +131,7 @@ export function createMessageRunHandler({
       turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
       userMessageId: String(userMessageId || config?.userMessageId || "").trim(),
       presentationMessageId: String(
-        presentationMessageId || config?.presentationMessageId ||
-        assistantMessageId || config?.assistantMessageId || "",
+        presentationMessageId || config?.presentationMessageId || "",
       ).trim(),
       idempotencyKey: String(
         idempotencyKey || config?.idempotencyKey || turnScopeId || config?.turnScopeId || "",
@@ -183,6 +181,13 @@ export function createMessageRunHandler({
         ? "resend"
         : "send";
     const commandId = String(payload?.commandId || normalizedRunConfig.idempotencyKey || state.currentTurnScopeId).trim();
+    normalizedRunConfig.presentationMessageId = String(
+      normalizedRunConfig.presentationMessageId || `msg_${state.currentTurnScopeId}`,
+    ).trim();
+    normalizedRunConfig.messageId = String(
+      normalizedRunConfig.messageId ||
+        `msg_event_${normalizedRunConfig.presentationMessageId || state.currentTurnScopeId}`,
+    ).trim();
     const actionEvent = {
       userId,
       sessionId,
@@ -193,6 +198,7 @@ export function createMessageRunHandler({
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       phase: TURN_PHASE.ACTION,
       action,
+      messageId: normalizedRunConfig.messageId,
       presentationMessageId: normalizedRunConfig.presentationMessageId,
       startedAt: String(normalizedRunConfig?.thinkingStartedAt || "").trim(),
       createSessionIfAbsent: action === "send",
@@ -283,18 +289,6 @@ export function createMessageRunHandler({
       stopPayload: null,
     });
     state.currentRunTransportBinding = attachRunTransport(state.currentRunHandle, sendEvent);
-    const pendingStopPayload = consumePendingStop({
-      ...state.currentRunMeta,
-      userId: state.currentRunMeta.runOwnerId,
-    });
-    if (pendingStopPayload) {
-      state.stopRequested = true;
-      state.currentStopPayload = {
-        ...pendingStopPayload,
-        sessionId: pendingStopPayload?.sessionId || state.currentRunMeta.sessionId || "",
-        turnScopeId: pendingStopPayload?.turnScopeId || state.currentRunMeta.turnScopeId || "",
-      };
-    }
     if (state.stopRequested && state.currentAbortController && !state.currentAbortController.signal?.aborted) {
       if (state.currentRunHandle) {
         state.currentRunHandle.stopRequested = true;

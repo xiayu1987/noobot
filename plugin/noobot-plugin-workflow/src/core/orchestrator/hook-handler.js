@@ -135,6 +135,7 @@ export async function handleBeforeAgentDispatch({
     });
     markWorkflowRetrySucceeded(retryMeta);
     const { workflowPayload, workflowAttachments } = await buildFinalWorkflowPayload({
+      workflowRunId,
       options,
       ctx,
       sourceText,
@@ -166,6 +167,7 @@ export async function handleBeforeAgentDispatch({
       throw error;
     }
     return handleWorkflowFailure({
+      workflowRunId,
       error,
       options,
       ctx,

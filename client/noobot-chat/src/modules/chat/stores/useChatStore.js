@@ -24,7 +24,7 @@ export const useChatStore = defineStore("chat", () => {
   const pendingInteractionRequest=ref(null); const pendingInteractionRequests=ref([]); const interactionSubmitting=ref(false);
   const activeSession=computed(()=>sessions.value.find(item=>item.id===activeSessionId.value));
   const turnActions=createTurnRuntimeStoreActions(turnRuntimeRegistry);
-  const subSessions=createSubSessionStore({subSessionMessageRegistry,subSessionMessageRegistryVersion});
+  const subSessions=createSubSessionStore({subSessionMessageRegistry,subSessionMessageRegistryVersion,applyTurnRuntimeEvent:turnActions.applyTurnRuntimeEvent,applyTurnTimingSnapshot:turnActions.applyTurnTimingSnapshot});
   const workflows=createWorkflowStore({
     workflowNodeStateRegistry,
     applySubSessionLifecycleEvent:subSessions.applySubSessionLifecycleEvent,

@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { readJsonlArtifactFile, readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import os from "node:os";
 import path from "node:path";
 
@@ -259,7 +260,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
   const aggregatedSession = await readSessionArtifact({ sessionDir: persisted.outputDir });
   assert.equal("id" in aggregatedSession.messages[0].attachments[0], false);
   const sessionSummary = JSON.parse(await fs.readFile(persisted.files.sessionSummary, "utf8"));
-  assert.equal(sessionSummary.schemaVersion, 9);
+  assert.equal(sessionSummary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
   assert.equal(sessionSummary.sessionId, "s1");
   assert.equal(sessionSummary.parentSessionId, "p1");
   assert.equal(sessionSummary.stats.messageCount, 1);

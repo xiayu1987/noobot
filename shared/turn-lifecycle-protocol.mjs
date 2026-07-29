@@ -8,7 +8,7 @@ import {
   normalizeExecutionIdentity,
 } from "./execution-lifecycle-protocol.mjs";
 
-export const TURN_LIFECYCLE_PROTOCOL_VERSION = 1;
+export const TURN_LIFECYCLE_PROTOCOL_VERSION = 2;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";
 export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 1;
 export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";
@@ -98,6 +98,7 @@ function snapshotTurn(turn = {}) {
   return {
     ...executionIdentity,
     turnScopeId: clean(turn.turnScopeId),
+    messageId: clean(turn.messageId),
     presentationMessageId: clean(turn.presentationMessageId),
     dialogProcessId: clean(turn.dialogProcessId),
     commandId: clean(turn.commandId),
@@ -152,6 +153,8 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
   const turns = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])].filter(Boolean);
   for (const turn of turns) {
     if (!clean(turn.turnScopeId)) errors.push("missing_turn_scope_id");
+    if (!clean(turn.messageId)) errors.push("missing_message_id");
+    if (!clean(turn.presentationMessageId)) errors.push("missing_presentation_message_id");
     if (!Number.isInteger(Number(turn.revision)) || Number(turn.revision) < 1) errors.push("invalid_turn_revision");
     if (!Number.isInteger(Number(turn.sequence)) || Number(turn.sequence) < 1) errors.push("invalid_turn_sequence");
   }
@@ -169,6 +172,7 @@ export function createTurnLifecycleEnvelope({
   sessionId,
   parentSessionId = "",
   turnScopeId,
+  messageId = "",
   presentationMessageId = "",
   dialogProcessId = "",
   revision,
@@ -208,6 +212,7 @@ export function createTurnLifecycleEnvelope({
     sessionId: clean(sessionId),
     parentSessionId: clean(parentSessionId),
     turnScopeId: clean(turnScopeId),
+    messageId: clean(messageId),
     presentationMessageId: clean(presentationMessageId),
     dialogProcessId: clean(dialogProcessId),
     revision: Number(revision || 0),
@@ -237,6 +242,8 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   if (!clean(envelope.eventId)) errors.push("missing_event_id");
   if (!clean(envelope.sessionId)) errors.push("missing_session_id");
   if (!clean(envelope.turnScopeId)) errors.push("missing_turn_scope_id");
+  if (!clean(envelope.messageId)) errors.push("missing_message_id");
+  if (!clean(envelope.presentationMessageId)) errors.push("missing_presentation_message_id");
   if (!Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1) errors.push("invalid_revision");
   if (!Number.isInteger(Number(envelope.sequence)) || Number(envelope.sequence) < 1) errors.push("invalid_sequence");
   if ([TURN_EVENT.COMPLETED, TURN_EVENT.STOP_COMPLETED].includes(clean(envelope.eventType))) {

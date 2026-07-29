@@ -339,8 +339,8 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.commitTurnSummaryCheckpoint(payload);
     },
 
-    async getSessionTurns({ userId, sessionId }) {
-      return sessionMessageService.getSessionTurns({ userId, sessionId });
+    async getSessionTurns(payload = {}) {
+      return sessionMessageService.getSessionTurns(payload);
     },
 
     async getSessionContextSource({ userId, sessionId }) {

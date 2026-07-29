@@ -9,14 +9,24 @@ import assert from "node:assert/strict";
 import { classifyExecutionEvent } from "../../src/observability/event-log/log-normalizer.js";
 import {
   assertMessageEventEnvelope,
+  bindAssistantMessageEventStream,
   beginAssistantMessageEventStream,
   emitMessageEvent,
   isMessageEventEnvelope,
 } from "../../src/events/message-event-stream.js";
 
+function runtimeForTurn({ messageId = "turn-message-1", presentationMessageId = "presentation-1" } = {}) {
+  const runtime = {
+    runConfig: { messageId, presentationMessageId },
+    systemRuntime: { sessionId: "session-1" },
+  };
+  bindAssistantMessageEventStream(runtime, { messageId, presentationMessageId });
+  return runtime;
+}
+
 test("authoritative message events declare the message-event sequence domain", () => {
   const emitted = [];
-  const runtime = { systemRuntime: { sessionId: "session-1" } };
+  const runtime = runtimeForTurn();
   beginAssistantMessageEventStream(runtime);
   const envelope = emitMessageEvent({ onEvent: (event) => emitted.push(event) }, runtime, "llm_delta", { text: "token" });
 
@@ -26,8 +36,8 @@ test("authoritative message events declare the message-event sequence domain", (
   assert.equal(emitted[0]?.data?.sequenceScopeId, envelope.messageId);
 });
 
-test("each assistant message owns an independent contiguous event sequence", () => {
-  const runtime = { systemRuntime: { sessionId: "session-1" } };
+test("one Turn Aggregate owns a contiguous event sequence across model messages", () => {
+  const runtime = runtimeForTurn();
   const listener = { onEvent() {} };
   const firstMessageId = beginAssistantMessageEventStream(runtime);
   const first = emitMessageEvent(listener, runtime, "llm_delta", { text: "first" });
@@ -36,25 +46,36 @@ test("each assistant message owns an independent contiguous event sequence", () 
   const next = emitMessageEvent(listener, runtime, "llm_delta", { text: "next" });
 
   assert.notEqual(nextMessageId, firstMessageId);
-  assert.deepEqual([first.sequence, second.sequence, next.sequence], [1, 2, 1]);
-  assert.equal(first.sequenceScopeId, firstMessageId);
-  assert.equal(next.sequenceScopeId, nextMessageId);
+  assert.deepEqual([first.sequence, second.sequence, next.sequence], [1, 2, 3]);
+  assert.equal(first.sequenceScopeId, "turn-message-1");
+  assert.equal(next.sequenceScopeId, "turn-message-1");
 });
 
 test("model streams keep independent identities while sharing the run presentation identity", () => {
-  const runtime = {
-    runConfig: { assistantMessageId: "msg_preallocated" },
-    systemRuntime: { sessionId: "session-1" },
-  };
+  const runtime = runtimeForTurn({
+    messageId: "turn-message-preallocated",
+    presentationMessageId: "msg_preallocated",
+  });
   const firstMessageId = beginAssistantMessageEventStream(runtime);
   const first = emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "first" });
   const nextMessageId = beginAssistantMessageEventStream(runtime);
   const next = emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "next" });
 
   assert.notEqual(nextMessageId, firstMessageId);
+  assert.equal(first.messageId, "turn-message-preallocated");
+  assert.equal(next.messageId, "turn-message-preallocated");
   assert.equal(first.presentationMessageId, "msg_preallocated");
   assert.equal(next.presentationMessageId, "msg_preallocated");
   assert.equal(first.envelopeVersion, 2);
+  assert.deepEqual([first.sequence, next.sequence], [1, 2]);
+});
+
+test("Turn message event identity is immutable after binding", () => {
+  const runtime = runtimeForTurn();
+  assert.throws(() => bindAssistantMessageEventStream(runtime, {
+    messageId: "other-message",
+    presentationMessageId: "presentation-1",
+  }), /messageId conflict/);
 });
 
 test("authoritative message envelope validation rejects partial events", () => {

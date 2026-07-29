@@ -10,7 +10,7 @@ import path from "node:path";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/shared/turn-lifecycle-protocol";
-import { createSessionServices } from "../../src/session/index.js";
+import { createSessionFacade, createSessionServices } from "../../src/session/index.js";
 
 async function withTempWorkspace(operation) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-initial-provision-"));
@@ -35,6 +35,8 @@ function firstSend(commandId, turnScopeId = "turn-1") {
     userId: "u1",
     sessionId: "session-1",
     turnScopeId,
+    messageId: `turn-message-${turnScopeId}`,
+    presentationMessageId: `presentation-${turnScopeId}`,
     dialogProcessId: "dialog-1",
     commandId,
     eventType: TURN_EVENT.ACTION_ACCEPTED,
@@ -160,5 +162,64 @@ test("appendTurn cannot implicitly create a missing Session", async () => {
     });
     assert.deepEqual(result, { appended: false, reason: "session_not_found" });
     assert.equal(await exists(scope.sessionFile), false);
+  });
+});
+
+test("getSessionTurns reads from the same scoped persistence location used by appendTurn", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const runtime = createSessionServices({ workspaceRoot });
+    const session = runtime.sessionMessageService;
+    const facade = createSessionFacade(runtime);
+    const persistenceContext = runtime.createScopedPersistenceContext({
+      userId: "u1",
+      sessionId: "child-session-1",
+      parentSessionId: "parent-session-1",
+      scopeId: "agent:node-1",
+      relativeDir: "runtime/workflow-runs/run-1/nodes/node-1/child-session",
+      allowedRoot: "runtime/workflow-runs/run-1",
+    });
+    await runtime.sessionCrudService.ensureSession(
+      "u1",
+      "child-session-1",
+      "parent-session-1",
+      {},
+      persistenceContext,
+    );
+    await session.appendTurn({
+      userId: "u1",
+      sessionId: "child-session-1",
+      parentSessionId: "parent-session-1",
+      persistenceContext,
+      role: "assistant",
+      messageUid: "sm-child-1",
+      messageId: "msg-child-1",
+      dialogProcessId: "dialog-child-1",
+      turnScopeId: "turn-child-1",
+      content: "child model response",
+      activityTimeline: [{
+        eventId: "model-content:msg-child-1",
+        activityKind: "model-content",
+        sequence: 1,
+        sequenceDomain: "message-event",
+        sequenceScopeId: "msg-child-1",
+        authority: "authoritative",
+      }],
+    });
+
+    const scopedTurns = await facade.getSessionTurns({
+      userId: "u1",
+      sessionId: "child-session-1",
+      parentSessionId: "parent-session-1",
+      persistenceContext,
+    });
+    assert.equal(scopedTurns.length, 1);
+    assert.equal(scopedTurns[0]?.messageUid, "sm-child-1");
+    assert.equal(scopedTurns[0]?.activityTimeline?.[0]?.eventId, "model-content:msg-child-1");
+
+    const defaultScopeTurns = await session.getSessionTurns({
+      userId: "u1",
+      sessionId: "child-session-1",
+    });
+    assert.deepEqual(defaultScopeTurns, []);
   });
 });

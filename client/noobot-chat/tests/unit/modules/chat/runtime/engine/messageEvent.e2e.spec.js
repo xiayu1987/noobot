@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import {
+  bindAssistantMessageEventStream,
   beginAssistantMessageEventStream,
   emitMessageEvent,
 } from "../../../../../../../../agent/src/events/message-event-stream.js";
@@ -61,7 +62,14 @@ describe("authoritative message event end-to-end fidelity", () => {
       },
     });
 
-    const messageId = beginAssistantMessageEventStream(runtime, { turn: 1 });
+    const messageId = "child-turn-message";
+    const presentationMessageId = "child-turn-presentation";
+    bindAssistantMessageEventStream(runtime, {
+      messageId,
+      presentationMessageId,
+    });
+    const modelMessageId = beginAssistantMessageEventStream(runtime, { turn: 1 });
+    expect(modelMessageId).not.toBe(messageId);
     produced.push(emitMessageEvent(listener, runtime, "main_model_content", {
       sessionId: "child-session",
       parentSessionId: "parent-session",
@@ -92,18 +100,33 @@ describe("authoritative message event end-to-end fidelity", () => {
     let session = store.selectSubSessionMessages("child-session");
     expect(session.messages).toHaveLength(1);
     expect(session.messages[0]).toMatchObject({
-      id: messageId,
-      messageId,
+      id: presentationMessageId,
+      messageId: presentationMessageId,
       role: "assistant",
-      thinking: "```mermaid\ngraph TD; A-->B\n```",
-      toolResult: { tool_call_id: "call-1", output: "ok" },
     });
+    expect(session.messages[0].activityTimeline).toEqual([
+      expect.objectContaining({
+        event: "main_model_content",
+        text: "```mermaid\ngraph TD; A-->B\n```",
+      }),
+    ]);
+    expect(session.messages[0].toolTimeline).toEqual([
+      expect.objectContaining({
+        key: "call:call-1",
+        status: "completed",
+        result: "ok",
+      }),
+    ]);
+    expect(session.messages[0].messageEventState.consumedEventIds).toEqual(
+      produced.map((event) => event.eventId),
+    );
 
     applySessionSnapshot(store, {
       id: "child-session",
       messages: [{
-        id: messageId,
-        messageId,
+        id: presentationMessageId,
+      messageId: presentationMessageId,
+      presentationMessageId,
         role: "assistant",
         content: "final answer",
       }],
@@ -111,11 +134,16 @@ describe("authoritative message event end-to-end fidelity", () => {
     session = store.selectSubSessionMessages("child-session");
     expect(session.messages).toHaveLength(1);
     expect(session.messages[0]).toMatchObject({
-      id: messageId,
+      id: presentationMessageId,
       content: "final answer",
-      thinking: "```mermaid\ngraph TD; A-->B\n```",
-      toolResult: { tool_call_id: "call-1", output: "ok" },
     });
-    expect(session.messages[0].rawEvents).toHaveLength(2);
+    expect(session.messages[0].activityTimeline).toHaveLength(1);
+    expect(session.messages[0].toolTimeline).toHaveLength(1);
+    expect(session.messages[0].messageEventState.consumedEventIds).toEqual(
+      produced.map((event) => event.eventId),
+    );
+    expect(session.messages[0]).not.toHaveProperty("thinking");
+    expect(session.messages[0]).not.toHaveProperty("toolResult");
+    expect(session.messages[0]).not.toHaveProperty("rawEvents");
   });
 });

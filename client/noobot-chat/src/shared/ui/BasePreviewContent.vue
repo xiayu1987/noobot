@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { computed, watch, nextTick, ref } from "vue";
+import { CopyDocument, Memo } from "@element-plus/icons-vue";
 import { renderMermaidInElement } from "../utils/mermaid-renderer.js";
 import { useLocale } from "../i18n/useLocale.js";
 
@@ -76,12 +77,34 @@ watch(
 <template>
   <div class="preview-body noobot-preview-surface" v-loading="resolvedLoading">
     <div v-if="showCopyActions" class="preview-copy-actions">
-      <el-button size="small" type="primary" plain @click="emitCopyMarkdownRich">{{
-        translate("message.copyFormat")
-      }}</el-button>
-      <el-button size="small" @click="emit('copy-markdown-text')">{{
-        translate("message.copyText")
-      }}</el-button>
+      <el-tooltip
+        :content="translate('message.copyFormat')"
+        placement="top"
+        :show-after="300"
+      >
+        <el-button
+          size="small"
+          class="noobot-flat-inline-icon-btn"
+          :aria-label="translate('message.copyFormat')"
+          @click="emitCopyMarkdownRich"
+        >
+          <el-icon><CopyDocument /></el-icon>
+        </el-button>
+      </el-tooltip>
+      <el-tooltip
+        :content="translate('message.copyText')"
+        placement="top"
+        :show-after="300"
+      >
+        <el-button
+          size="small"
+          class="noobot-flat-inline-icon-btn"
+          :aria-label="translate('message.copyText')"
+          @click="emit('copy-markdown-text')"
+        >
+          <el-icon><Memo /></el-icon>
+        </el-button>
+      </el-tooltip>
     </div>
     <div v-if="resolvedError" class="preview-error noobot-error-surface is-preview">{{ resolvedError }}</div>
     <img

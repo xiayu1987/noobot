@@ -9,6 +9,7 @@ import net from "node:net";
 import fs from "node:fs/promises";
 import { WebSocket } from "ws";
 import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
+import { transitionTurnLifecycle } from "../../../agent/src/session/entities/turn-lifecycle-entity.js";
 
 export async function startServerWithWs({
   runSession = async () => ({}),
@@ -23,8 +24,14 @@ export async function startServerWithWs({
   });
 
   const suppliedBot = bot || { runSession };
+  let turnLifecycle = {};
   const testBot = {
     ...suppliedBot,
+    applyTurnLifecycleEvent: suppliedBot.applyTurnLifecycleEvent || (async (event = {}) => {
+      const result = transitionTurnLifecycle(turnLifecycle, event);
+      if (result.applied) turnLifecycle = result.lifecycle;
+      return result;
+    }),
     upsertTurnStatus: suppliedBot.upsertTurnStatus || (async (payload = {}) => {
       const contract = {
         completed: ["completed", "run_completed"],
@@ -46,6 +53,19 @@ export async function startServerWithWs({
       } };
     }),
   };
+  if (typeof suppliedBot.applyTurnLifecycleEvent !== "function") {
+    testBot.runSession = async (payload = {}) => {
+      payload?.eventListener?.onEvent?.({
+        event: "agent_lifecycle_state_changed",
+        data: {
+          state: "running",
+          sessionId: String(payload?.sessionId || ""),
+          turnScopeId: String(payload?.runConfig?.turnScopeId || ""),
+        },
+      });
+      return suppliedBot.runSession(payload);
+    };
+  }
   if (typeof suppliedBot.persistStoppedAssistantMessage === "function") {
     testBot.persistStoppedAssistantMessage = async (payload = {}) => {
       const persisted = await suppliedBot.persistStoppedAssistantMessage(payload);
@@ -118,7 +138,10 @@ export async function callChatWs({ port, payload = {} } = {}) {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
       headers: { authorization: "Bearer test-key" },
     });
-    ws.on("open", () => ws.send(JSON.stringify(payload)));
+    ws.on("open", () => ws.send(JSON.stringify({
+      ...payload,
+      turnScopeId: String(payload?.turnScopeId || "test-turn"),
+    })));
     ws.on("message", (raw) => {
       try {
         messages.push(JSON.parse(String(raw || "{}")));
@@ -134,16 +157,21 @@ export async function callChatWs({ port, payload = {} } = {}) {
 export async function stopChatWs({ port, payload = {}, stopPayload = {} } = {}) {
   return new Promise((resolve, reject) => {
     const messages = [];
+    let stopSent = false;
     const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
       headers: { authorization: "Bearer test-key" },
     });
     ws.on("open", () => {
       ws.send(JSON.stringify(payload));
-      setTimeout(() => ws.send(JSON.stringify({ action: "stop", ...stopPayload })), 10);
     });
     ws.on("message", (raw) => {
       try {
-        messages.push(JSON.parse(String(raw || "{}")));
+        const parsed = JSON.parse(String(raw || "{}"));
+        messages.push(parsed);
+        if (!stopSent && parsed?.event === "turn_lifecycle" && parsed?.data?.capabilities?.canStop === true) {
+          stopSent = true;
+          ws.send(JSON.stringify({ action: "stop", ...stopPayload }));
+        }
       } catch (error) {
         reject(error);
       }

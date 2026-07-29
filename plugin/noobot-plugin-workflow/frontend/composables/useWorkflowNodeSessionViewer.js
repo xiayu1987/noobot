@@ -43,7 +43,6 @@ import {
   buildUnifiedSessionDetail,
   hasNewProtocolNodeIdentity,
   mergeUnifiedSessionDetail,
-  projectTurnStatusOntoAssistant,
   resolveIsolatedNodeSessionId,
   resolveNodeChildExecutionIds,
   resolveRuntimeNodeSession,
@@ -495,13 +494,7 @@ export function useWorkflowNodeSessionViewer({
                   dialogProcessId,
                   state: projectionState,
                 });
-              const projectedMessages = projectTurnStatusOntoAssistant(rawMessages, {
-                  sessionId: sessionIdHint,
-                  turnScopeId: text(canonicalNodeItem?.turnScopeId),
-                  dialogProcessId,
-                  state: projectionState,
-                });
-              const messages = projectedMessages;
+              const messages = rawMessages;
               nodeViewTransaction.replace(viewTicket, {
                 ...hydratedDetail,
                 messages,

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { findActiveRun, rememberPendingStop } from "./run-registry.js";
+import { findActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
 
@@ -163,7 +163,29 @@ export function createMessageStopHandler({
         return;
       }
       if (!turnStatus) {
-        rememberPendingStop(stopPayload, stopPayload);
+        const failed = await commitTurnLifecycle({
+          userId,
+          sessionId: stopPayload.sessionId,
+          parentSessionId: String(payload?.parentSessionId || "").trim(),
+          turnScopeId: stopPayload.turnScopeId,
+          dialogProcessId: stopPayload.dialogProcessId,
+          commandId: `${stopCommandId}:persistence-failed`,
+          eventType: TURN_EVENT.FAILED,
+          phase: TURN_PHASE.STOP,
+          failure: {
+            message: "stopped assistant persistence failed",
+            retryable: false,
+          },
+        });
+        sendEvent("error", {
+          error: failed?.reason || "stopped_assistant_persistence_failed",
+          errorCode: failed?.reason || "stopped_assistant_persistence_failed",
+          failurePhase: TURN_PHASE.STOP,
+          sessionId: stopPayload.sessionId,
+          dialogProcessId: stopPayload.dialogProcessId,
+          turnScopeId: stopPayload.turnScopeId,
+        });
+        return;
       }
       sendEvent("channel_state", {
         ...stopPayload,

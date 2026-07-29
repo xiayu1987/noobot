@@ -19,6 +19,7 @@ function resolveWorkflowErrorMessage(error = null) {
 }
 
 export async function handleWorkflowFailure({
+  workflowRunId = "",
   error,
   options = {},
   ctx = {},
@@ -49,6 +50,7 @@ export async function handleWorkflowFailure({
     data: { message },
   });
   const workflowPayload = buildWorkflowOrchestrationPayload({
+    workflowRunId,
     ctx,
     options,
     sourceText,

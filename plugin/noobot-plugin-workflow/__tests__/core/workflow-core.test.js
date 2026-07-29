@@ -15,6 +15,7 @@ import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
 import { PLUGIN_NAME, WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { getWorkflowDefaultSemanticPrompt } from "../../src/core/i18n.js";
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
+import { installTurnMessageEventRuntimeFixture } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 
 test("default semantic prompt documents closed state-node constructs", () => {
@@ -381,7 +382,7 @@ test("workflow hook owns the turn and never falls back to main agent when semant
     runConfig: { locale: "zh-CN" },
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
-  const dispatchOutcome = await listener.handler(beforeContext);
+  const dispatchOutcome = await listener.handler(installTurnMessageEventRuntimeFixture(beforeContext));
   assert.equal(dispatchClaims.length, 1);
   assert.equal(dispatchOutcome?.kind, "noobot.bot_dispatch_outcome");
   assert.equal(dispatchOutcome?.disposition, "handled");
@@ -442,7 +443,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
     agentResult: null,
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
-  const dispatchOutcome = await listener.handler(beforeContext);
+  const dispatchOutcome = await listener.handler(installTurnMessageEventRuntimeFixture(beforeContext));
   assert.equal(dispatchClaims.length, 1);
   assert.equal(dispatchOutcome?.kind, "noobot.bot_dispatch_outcome");
   assert.equal(dispatchOutcome?.disposition, "handled");

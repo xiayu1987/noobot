@@ -79,6 +79,25 @@ describe("turn status presentations", () => {
     expect(result[1].content).toBe(
       "partial answer\n\n本轮异常停止\n模型生成失败\n原因：model_failed\n异常：upstream disconnected",
     );
+    expect(result[1].error).toBe("upstream disconnected");
+    expect(result[1].turnStatus.error).toEqual({ message: "upstream disconnected" });
+  });
+
+  it("keeps structured terminal errors out of the presentation error alert", () => {
+    const persistedError = {
+      name: "Error",
+      message: "authoritative event failed",
+      code: "WORKFLOW_EXECUTION_FAILED",
+      stack: "Error: authoritative event failed",
+    };
+    const result = project(
+      [status("error", { error: persistedError })],
+      [user],
+    );
+
+    expect(result[1].error).toBe("authoritative event failed");
+    expect(result[1].turnStatus.error).toEqual(persistedError);
+    expect(result[1].content).toContain("异常：authoritative event failed");
   });
 
   it("creates one stable presentation when the canonical assistant is absent", () => {

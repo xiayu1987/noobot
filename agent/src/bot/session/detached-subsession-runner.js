@@ -25,6 +25,7 @@ export function createDetachedSubSessionRunner({
   pluginRuntime = {},
   mergeRunConfigWithPluginStrategy = null,
   prepareRunConfig = null,
+  now = () => new Date().toISOString(),
 } = {}) {
   return async ({
     parentContext = {},
@@ -93,6 +94,13 @@ export function createDetachedSubSessionRunner({
     mergedRunConfig.rootExecutionId = String(
       strategy?.rootExecutionId || metadata?.rootExecutionId || mergedRunConfig.executionId,
     ).trim();
+    mergedRunConfig.presentationMessageId = String(
+      mergedRunConfig.presentationMessageId || `msg_${randomUUID()}`,
+    ).trim();
+    delete mergedRunConfig.assistantMessageId;
+    if (!String(mergedRunConfig.thinkingStartedAt || "").trim()) {
+      mergedRunConfig.thinkingStartedAt = String(now()).trim();
+    }
     delete mergedRunConfig.hookManager;
     delete mergedRunConfig.hooks;
     delete mergedRunConfig.botHookManager;
@@ -200,6 +208,8 @@ function clearParentTurnTransactionIdentity(runConfig = {}) {
   delete runConfig.idempotencyKey;
   delete runConfig.reuseExistingUserTurn;
   delete runConfig.thinkingStartedAt;
+  delete runConfig.presentationMessageId;
+  delete runConfig.assistantMessageId;
   return runConfig;
 }
 

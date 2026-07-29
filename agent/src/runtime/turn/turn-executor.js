@@ -540,7 +540,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       turn,
       text: mainModelToolTurnContent,
       output: mainModelToolTurnContent,
-      messageId: assistantMessageId,
       eventId: `model-content:${assistantMessageId || presentationMessageId || "turn"}`,
     });
   }
