@@ -218,10 +218,11 @@ test("upstream message log detects nested authoritative content", () => {
     data: {
       event: {
         envelopeKind: "noobot.message_event",
-        envelopeVersion: 1,
+        envelopeVersion: 2,
         eventId: "event-1",
         eventType: "main_model_content",
         messageId: "message-1",
+        presentationMessageId: "message-1",
         sequence: 1,
         timestamp: "2026-01-01T00:00:00.000Z",
         sessionId: "session-upstream-content",
