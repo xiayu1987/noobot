@@ -40,16 +40,6 @@ import {
   summarizeStateMachineMessage,
 } from "../../../debug/loggers/stateMachineLogger.js";
 
-const TURN_STATUS_PLACEHOLDER_STATES = new Set([
-  "user_stopped",
-  "error",
-  "timeout",
-]);
-
-const TURN_STATUS_COMPLETED_STATES = new Set([
-  "completed",
-]);
-
 const TERMINAL_STOP_CHANNEL_STATES = new Set([
   "user_stopped",
 ]);
@@ -113,115 +103,6 @@ function normalizeText(value = "") {
 function resolveTurnStatusKey(item = {}) {
   return normalizeTurnScopeIdKey(item?.turnScopeId || getMessageTurnScopeId(item)) ||
     normalizeText(item?.dialogProcessId || getMessageDialogProcessId(item));
-}
-
-function buildTurnStatusMap(turnStatuses = []) {
-  const map = new Map();
-  for (const item of Array.isArray(turnStatuses) ? turnStatuses : []) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-    const normalized = { ...item, status: normalizeState(item.status) };
-    const turnScopeId = normalizeTurnScopeIdKey(item.turnScopeId);
-    const dialogProcessId = normalizeText(item.dialogProcessId || getMessageDialogProcessId(item));
-    if (turnScopeId) map.set(`turn:${turnScopeId}`, normalized);
-    if (dialogProcessId) map.set(`dialog:${dialogProcessId}`, normalized);
-  }
-  return map;
-}
-
-function shouldInjectTurnStatusPlaceholder(turnStatus = {}) {
-  const status = normalizeState(turnStatus?.status);
-  if (!status || TURN_STATUS_COMPLETED_STATES.has(status)) return false;
-  return TURN_STATUS_PLACEHOLDER_STATES.has(status);
-}
-
-function formatTurnStatusPlaceholderContent(turnStatus = {}) {
-  const status = normalizeState(turnStatus?.status);
-  const description = normalizeText(turnStatus?.description);
-  const reason = normalizeText(turnStatus?.reason);
-  const errorMessage = normalizeText(
-    typeof turnStatus?.error === "string"
-      ? turnStatus.error
-      : turnStatus?.error?.message || turnStatus?.error?.reason || "",
-  );
-  const title = status === "user_stopped"
-    ? "本轮已由用户停止"
-    : status === "timeout"
-      ? "本轮已超时停止"
-      : "本轮异常停止";
-  const details = [description, reason && `原因：${reason}`, errorMessage && `异常：${errorMessage}`]
-    .filter(Boolean);
-  return [title, ...details].join("\n");
-}
-
-function buildTurnStatusPlaceholderMessage(userMessage = {}, turnStatus = {}) {
-  const turnScopeId = normalizeText(turnStatus?.turnScopeId || getMessageTurnScopeId(userMessage));
-  const dialogProcessId = normalizeText(turnStatus?.dialogProcessId || getMessageDialogProcessId(userMessage));
-  const updatedAt = normalizeText(turnStatus?.updatedAt || turnStatus?.createdAt || userMessage?.updatedAt || userMessage?.createdAt);
-  return {
-    id: `turn-status-placeholder:${turnScopeId || dialogProcessId}`,
-    role: RoleEnum.ASSISTANT,
-    content: formatTurnStatusPlaceholderContent(turnStatus),
-    pending: false,
-    synthetic: true,
-    placeholder: true,
-    turnPlaceholder: true,
-    turnStatusPlaceholder: true,
-    turnStatus: { ...turnStatus },
-    status: turnStatus?.status,
-    state: turnStatus?.status,
-    statusReason: turnStatus?.reason,
-    statusDescription: turnStatus?.description,
-    error: turnStatus?.error,
-    turnScopeId,
-    dialogProcessId,
-    parentDialogProcessId: normalizeText(turnStatus?.parentDialogProcessId || userMessage?.parentDialogProcessId),
-    createdAt: updatedAt,
-    updatedAt,
-    ts: updatedAt,
-  };
-}
-
-export function injectTurnStatusPlaceholders(messages = [], turnStatuses = []) {
-  const sourceMessages = Array.isArray(messages) ? messages : [];
-  const statusMap = buildTurnStatusMap(turnStatuses);
-  if (!sourceMessages.length || !statusMap.size) return sourceMessages;
-  const output = [];
-  const placeholdersByKey = new Map();
-  for (const messageItem of sourceMessages) {
-    const turnScopeId = normalizeText(getMessageTurnScopeId(messageItem));
-    const dialogProcessId = normalizeText(getMessageDialogProcessId(messageItem));
-    const keys = [
-      turnScopeId ? `turn:${turnScopeId}` : "",
-      dialogProcessId ? `dialog:${dialogProcessId}` : "",
-    ].filter(Boolean);
-    if (messageItem?.turnStatusPlaceholder === true) {
-      keys.forEach((key) => placeholdersByKey.set(key, messageItem));
-    }
-  }
-  const injectedKeys = new Set();
-  for (const messageItem of sourceMessages) {
-    if (messageItem?.turnStatusPlaceholder === true) continue;
-    output.push(messageItem);
-    if (getMessageRole(messageItem) !== RoleEnum.USER) continue;
-    const messageTurnScopeId = normalizeText(getMessageTurnScopeId(messageItem));
-    const messageDialogProcessId = normalizeText(getMessageDialogProcessId(messageItem));
-    const turnKeys = [
-      messageTurnScopeId ? `turn:${messageTurnScopeId}` : "",
-      messageDialogProcessId ? `dialog:${messageDialogProcessId}` : "",
-    ].filter(Boolean);
-    if (!turnKeys.length || turnKeys.some((key) => injectedKeys.has(key))) continue;
-    const turnStatus =
-      (messageTurnScopeId ? statusMap.get(`turn:${messageTurnScopeId}`) : null) ||
-      (messageDialogProcessId ? statusMap.get(`dialog:${messageDialogProcessId}`) : null);
-    if (!turnStatus) continue;
-    if (!shouldInjectTurnStatusPlaceholder(turnStatus)) continue;
-    const existingPlaceholder = turnKeys
-      .map((key) => placeholdersByKey.get(key))
-      .find(Boolean);
-    output.push(existingPlaceholder || buildTurnStatusPlaceholderMessage(messageItem, turnStatus));
-    turnKeys.forEach((key) => injectedKeys.add(key));
-  }
-  return output;
 }
 
 function countCompletedToolLogAttachments(messageItem = {}) {
@@ -475,7 +356,7 @@ export function mergePreservedDetailMessages(
       });
       if (
         registryConfirmsInFlight &&
-        (detailMessageItem?.turnStatusPlaceholder === true || isTerminalStopAssistantDetail(detailMessageItem))
+        isTerminalStopAssistantDetail(detailMessageItem)
       ) {
         logResendDebug("detail.merge.skipStoppedOverInFlight", {
           identity: detailIdentity,
@@ -546,11 +427,8 @@ export function mergePreservedDetailMessages(
       restoreRunningThinkingState();
       continue;
     }
-    const canAppendDetailMessage =
-      detailMessageItem?.turnStatusPlaceholder === true ||
-      hasReliableCompletedAssistantIdentity(detailMessageItem);
     if (
-      canAppendDetailMessage &&
+      hasReliableCompletedAssistantIdentity(detailMessageItem) &&
       !conflictsWithInFlightAssistant(existingMessages, detailMessageItem, { registry, sessionId })
     ) {
       existingMessages.push(detailMessageItem);
@@ -599,13 +477,12 @@ export function buildNormalizedDetailMessages({
       makeViewMessage,
     });
   }
-  const messagesWithPlaceholders = injectTurnStatusPlaceholders(normalizedMessages, turnStatuses);
   applyStatusTurnScopeIds({
-    messages: messagesWithPlaceholders,
+    messages: normalizedMessages,
     sessionDocs,
     turnStatuses,
   });
-  return messagesWithPlaceholders;
+  return normalizedMessages;
 }
 
 export function applyStatusTurnScopeIds({ messages = [], sessionDocs = [], turnStatuses = [] } = {}) {

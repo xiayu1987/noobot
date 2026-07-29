@@ -9,7 +9,6 @@ import {
   buildChildAttachmentsByParentDialogProcessId,
   mergeChildTurnAttachmentsIntoRootMessages,
   mergePreservedDetailMessages,
-  injectTurnStatusPlaceholders,
 } from "../../../../../src/modules/session/model/list/detailMessages.js";
 import {
   buildViewMessage,
@@ -299,65 +298,6 @@ describe("detailMessages", () => {
       "safe finalized",
     ]);
     expect(existingMessages[2].attachments).toEqual([{ attachmentId: "safe-file", name: "safe.md" }]);
-  });
-
-  it("preserves the explicit terminal presentation entity when refreshed detail is merged", () => {
-    const userMessage = {
-      id: "user-stopped",
-      messageId: "user-stopped",
-      role: RoleEnum.USER,
-      content: "q",
-      turnScopeId: "turn-stopped",
-      dialogProcessId: "dp-stopped",
-    };
-    const existingMessages = [{ ...userMessage }];
-    const detailMessages = injectTurnStatusPlaceholders(
-      [{ ...userMessage }],
-      [{
-        status: "user_stopped",
-        reason: "user_stop",
-        description: "用户停止了本轮生成",
-        turnScopeId: "turn-stopped",
-        dialogProcessId: "dp-stopped",
-      }],
-    );
-
-    mergePreservedDetailMessages(existingMessages, detailMessages);
-
-    expect(existingMessages).toHaveLength(2);
-    expect(existingMessages[1]).toMatchObject({
-      id: "turn-status-placeholder:turn-stopped",
-      role: RoleEnum.ASSISTANT,
-      turnStatusPlaceholder: true,
-      content: "本轮已由用户停止\n用户停止了本轮生成\n原因：user_stop",
-    });
-  });
-
-  it("does not merge a terminal presentation over an in-flight assistant", () => {
-    const existingMessages = [
-      { role: RoleEnum.USER, content: "q", turnScopeId: "turn-running", dialogProcessId: "dp-running" },
-      {
-        role: RoleEnum.ASSISTANT,
-        content: "partial",
-        pending: true,
-        turnScopeId: "turn-running",
-        dialogProcessId: "dp-running",
-        channelState: { state: "sending", turnScopeId: "turn-running" },
-      },
-    ];
-    const detailMessages = injectTurnStatusPlaceholders(
-      [existingMessages[0]],
-      [{
-        status: "user_stopped",
-        turnScopeId: "turn-running",
-        dialogProcessId: "dp-running",
-      }],
-    );
-
-    mergePreservedDetailMessages(existingMessages, detailMessages);
-
-    expect(existingMessages.filter((message) => message.turnStatusPlaceholder === true)).toHaveLength(0);
-    expect(existingMessages[1]).toMatchObject({ pending: true, content: "partial" });
   });
 
   it("preserves running thinking timing fields while merging refreshed detail", () => {

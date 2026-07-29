@@ -86,6 +86,71 @@ function isTurnStatusPresentation(message = {}) {
     message?.turnStatusPlaceholder === true;
 }
 
+const TERMINAL_PRESENTATION_STATES = new Set(["user_stopped", "error", "timeout"]);
+
+function normalizeTerminalStatus(status = {}) {
+  const state = text(status?.status).toLowerCase();
+  return TERMINAL_PRESENTATION_STATES.has(state) ? { ...status, status: state } : null;
+}
+
+function terminalStatusKey(status = {}, fallbackSessionId = "") {
+  return turnKey(
+    text(fallbackSessionId || status?.sessionId),
+    status?.turnScopeId,
+  );
+}
+
+function formatTerminalStatusContent(status = {}) {
+  const state = text(status?.status).toLowerCase();
+  const title = state === "user_stopped"
+    ? "本轮已由用户停止"
+    : state === "timeout"
+      ? "本轮已超时停止"
+      : "本轮异常停止";
+  const description = text(status?.description);
+  const reason = text(status?.reason);
+  const error = text(
+    typeof status?.error === "string"
+      ? status.error
+      : status?.error?.message || status?.error?.reason,
+  );
+  return [
+    title,
+    description,
+    reason && `原因：${reason}`,
+    error && `异常：${error}`,
+  ].filter(Boolean).join("\n");
+}
+
+function buildTerminalPresentation(status = {}, fallbackSessionId = "") {
+  const turnScopeId = text(status?.turnScopeId);
+  const dialogProcessId = text(status?.dialogProcessId);
+  const timestamp = text(status?.updatedAt || status?.createdAt);
+  return {
+    id: `turn-status-placeholder:${turnScopeId || dialogProcessId}`,
+    messageId: `turn-status-placeholder:${turnScopeId || dialogProcessId}`,
+    sessionId: text(fallbackSessionId || status?.sessionId),
+    role: "assistant",
+    content: formatTerminalStatusContent(status),
+    pending: false,
+    synthetic: true,
+    placeholder: true,
+    turnPlaceholder: true,
+    turnStatusPlaceholder: true,
+    turnStatus: { ...status },
+    status: status?.status,
+    state: status?.status,
+    statusReason: status?.reason,
+    statusDescription: status?.description,
+    error: status?.error,
+    turnScopeId,
+    dialogProcessId,
+    ts: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
 export function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSessionId = "") {
   const workflowRunId = text(workflow?.workflowRunId);
   const sessionId = text(workflow?.sessionId || fallbackSessionId);
@@ -203,7 +268,41 @@ export function selectTurnPresentations({
   const activeSessionId = sessionIdFromSession(activeSession);
   const activeSessionIds = sessionIdentitySet(activeSession);
   const sourceMessages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
-  const messages = coalescePersistedAssistantPresentations(sourceMessages, activeSessionId);
+  const terminalByTurn = new Map(
+    (Array.isArray(activeSession?.turnStatuses) ? activeSession.turnStatuses : [])
+      .map(normalizeTerminalStatus)
+      .filter(Boolean)
+      .map((status) => [terminalStatusKey(status, activeSessionId), status])
+      .filter(([key]) => Boolean(key)),
+  );
+  const projectedTerminalTurns = new Set();
+  const messagesWithTerminalPresentation = sourceMessages.map((message) => {
+    if (getMessageRole(message) !== "assistant") return message;
+    const key = messageTurnKey(message, activeSessionId);
+    const status = terminalByTurn.get(key);
+    if (!status) return message;
+    projectedTerminalTurns.add(key);
+    return mergeTurnStatusIntoAssistant(
+      message,
+      buildTerminalPresentation(status, activeSessionId),
+    );
+  });
+  for (const [key, status] of terminalByTurn.entries()) {
+    if (projectedTerminalTurns.has(key)) continue;
+    const presentation = buildTerminalPresentation(status, activeSessionId);
+    const userIndex = messagesWithTerminalPresentation.findLastIndex((message) =>
+      getMessageRole(message) === "user" && messageTurnKey(message, activeSessionId) === key,
+    );
+    messagesWithTerminalPresentation.splice(
+      userIndex >= 0 ? userIndex + 1 : messagesWithTerminalPresentation.length,
+      0,
+      presentation,
+    );
+  }
+  const messages = coalescePersistedAssistantPresentations(
+    messagesWithTerminalPresentation,
+    activeSessionId,
+  );
   const persistedRunIds = new Set(messages.map(workflowRunIdFromMessage).filter(Boolean));
   const persistedTurnKeys = new Set(
     messages

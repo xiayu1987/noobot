@@ -24,6 +24,29 @@ describe("buildNormalizedDetailMessages turnTimings", () => {
     });
   });
 
+  it("keeps terminal presentation entities out of the canonical detail message list", () => {
+    const messages = buildNormalizedDetailMessages({
+      detailMessages: [
+        { role: "user", content: "stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop" },
+        { role: "assistant", content: "", turnScopeId: "turn-stop", dialogProcessId: "dp-stop" },
+      ],
+      rootSessionId: "session-stop",
+      turnStatuses: [{
+        status: "user_stopped",
+        reason: "user_stop",
+        turnScopeId: "turn-stop",
+        dialogProcessId: "dp-stop",
+      }],
+      isSummaryDetail: true,
+      makeViewMessage: (message) => ({ ...message }),
+      foldMessagesForView: (source) => source.map((message) => ({ ...message })),
+    });
+
+    expect(messages).toHaveLength(2);
+    expect(messages.filter((message) => message.role === "assistant")).toHaveLength(1);
+    expect(messages.some((message) => message.turnStatusPlaceholder === true)).toBe(false);
+  });
+
   it("does not copy authoritative turnTimings into disposable view messages", () => {
     const messages = buildNormalizedDetailMessages({
     detailMessages: [

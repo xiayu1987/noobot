@@ -172,6 +172,48 @@ describe("selectTurnPresentations", () => {
     });
   });
 
+  it("derives one terminal presentation from turnStatuses without mutating canonical messages", () => {
+    const canonicalAssistant = {
+      id: "assistant-status-a",
+      messageId: "assistant-status-a",
+      sessionId: "session-a",
+      role: "assistant",
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-a",
+      content: "",
+      toolTimeline: [{ key: "tool-a" }],
+    };
+    const sourceMessages = [
+      { id: "user-status-a", sessionId: "session-a", role: "user", turnScopeId: "turn-a", content: "stop" },
+      canonicalAssistant,
+    ];
+    const result = selectTurnPresentations({
+      activeSession: {
+        id: "session-a",
+        messages: sourceMessages,
+        turnStatuses: [{
+          turnScopeId: "turn-a",
+          dialogProcessId: "dialog-a",
+          status: "user_stopped",
+          reason: "user_stop",
+          description: "用户停止了本轮生成",
+        }],
+      },
+    });
+
+    expect(sourceMessages).toHaveLength(2);
+    expect(sourceMessages[1]).toBe(canonicalAssistant);
+    expect(canonicalAssistant).not.toHaveProperty("turnStatusPlaceholder");
+    expect(result).toHaveLength(2);
+    expect(result[1]).toMatchObject({
+      id: "assistant-status-a",
+      messageId: "assistant-status-a",
+      content: "本轮已由用户停止\n用户停止了本轮生成\n原因：user_stop",
+      turnStatusPlaceholder: true,
+      toolTimeline: [{ key: "tool-a" }],
+    });
+  });
+
   it("keeps partial assistant content and terminal reason in one presentation", () => {
     const canonicalAssistant = {
       id: "assistant-partial-a",
