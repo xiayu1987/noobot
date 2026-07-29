@@ -17,9 +17,11 @@
     "build:win:portable": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && electron-builder --win portable",
     "build:win:zip": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && electron-builder --win zip"
   },
-  "devDependencies": {
+  "dependencies": {
     "@noobot/client-shared": "file:../shared",
-    "@noobot/runtime-events": "file:../../runtime-events",
+    "@noobot/runtime-events": "file:../../runtime-events"
+  },
+  "devDependencies": {
     "electron": "43.2.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1"

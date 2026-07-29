@@ -28,6 +28,7 @@
     "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:frontend-structure && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
   },
   "dependencies": {
+    "@noobot/client-shared": "file:../shared",
     "@noobot/shared": "file:../../shared",
     "@element-plus/icons-vue": "^2.3.2",
     "element-plus": "^2.14.3",
@@ -38,7 +39,6 @@
     "noobot-i18n": "file:../../i18n"
   },
   "devDependencies": {
-    "@noobot/client-shared": "file:../shared",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.11",
     "es-module-lexer": "^2.1.0",
