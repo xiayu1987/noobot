@@ -116,11 +116,12 @@ test("connection ids are stable per socket and isolated between sockets", () => 
 test("message event tracing only accepts the shared authoritative envelope", () => {
   const authoritative = {
     envelopeKind: "noobot.message_event",
-    envelopeVersion: 1,
+    envelopeVersion: 2,
     eventId: "event-1",
     eventType: "tool_call_start",
     sessionId: "session-1",
     messageId: "message-1",
+    presentationMessageId: "message-1",
     sequence: 7,
     timestamp: "2026-07-22T00:00:00.000Z",
     tool: "read_file",

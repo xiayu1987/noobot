@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { createJsonRouteWrapper } from "../../routes/route-wrapper.js";
 import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
+import { persistSessionArtifactSnapshot } from "noobot-agent/session";
 import { registerServiceRoutes as registerWorkflowServiceRoutes } from "../../../plugin/noobot-plugin-workflow/src/service/routes.js";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 
@@ -44,36 +45,16 @@ test("workflow service reads persisted segmented child execution events after re
 test("session-routes: workflow session returns summary and execution jsonl from scoped path", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-session-route-"));
   const workflowDir = path.join(workspaceRoot, "runtime/workflow/session/root-s/wf_node_1");
-  await fs.mkdir(workflowDir, { recursive: true });
-  await Promise.all([
-    fs.writeFile(
-      path.join(workflowDir, "session.json"),
-      `${JSON.stringify({ sessionId: "node-s", messages: [{ role: "assistant", content: "done" }] })}\n`,
-      "utf8",
-    ),
-    fs.writeFile(
-      path.join(workflowDir, "session-summary.json"),
-      `${JSON.stringify({
-        schemaVersion: 10,
-        sessionId: "node-s",
-        messages: [{ role: "assistant", content: "done" }],
-        stats: { messageCount: 1 },
-      })}\n`,
-      "utf8",
-    ),
-    fs.writeFile(
-      path.join(workflowDir, "task.json"),
-      `${JSON.stringify({ sessionId: "node-s", tasks: [] })}\n`,
-      "utf8",
-    ),
-    fs.writeFile(
-      path.join(workflowDir, "execution.json"),
-      `${JSON.stringify({ sessionId: "node-s" })}\n`,
-      "utf8",
-    ),
-    fs.writeFile(path.join(workflowDir, "execution.jsonl"), `${JSON.stringify({ event: "x" })}\n`, "utf8"),
-    fs.writeFile(path.join(workflowDir, "meta.json"), `${JSON.stringify({ nodeId: "n1" })}\n`, "utf8"),
-  ]);
+  await persistSessionArtifactSnapshot({
+    outputDir: workflowDir,
+    sessionPayload: {
+      sessionId: "node-s",
+      messages: [{ role: "assistant", content: "done" }],
+    },
+    taskPayload: { sessionId: "node-s", tasks: [] },
+    executionPayload: { sessionId: "node-s", logs: [{ event: "x" }] },
+    metadata: { nodeId: "n1" },
+  });
 
   const app = express();
   const bot = {

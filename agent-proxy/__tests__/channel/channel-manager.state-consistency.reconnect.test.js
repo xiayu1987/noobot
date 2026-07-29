@@ -10,6 +10,18 @@ import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents, sortReconnectSessions } from "./channel-manager.state-consistency.test-helpers.js";
 
+function authoritativeLifecycle(fields = {}) {
+  const eventType = String(fields.eventType || "").trim();
+  const terminal = eventType === "turn.completed" || eventType === "turn.stop_completed";
+  return {
+    protocolVersion: 2,
+    messageId: "message-1",
+    presentationMessageId: "message-1",
+    ...(terminal ? { completionCommitId: "commit-1", summaryVersion: 1 } : {}),
+    ...fields,
+  };
+}
+
 test("authoritative lifecycle replay is session-scoped, ordered, and deduplicated", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channel = manager.ensureChannel(
@@ -47,8 +59,7 @@ test("reconnect derives an active run only from the authoritative lifecycle wind
   });
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
-  manager.pushChannelEvent(channel, "turn_lifecycle", {
-    protocolVersion: 1,
+  manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
     eventType: "turn.action_accepted",
     eventId: "active-1",
     commandId: "command-active",
@@ -59,9 +70,8 @@ test("reconnect derives an active run only from the authoritative lifecycle wind
     sequence: 1,
     state: "action_requesting",
     phase: "action",
-  });
-  manager.pushChannelEvent(channel, "turn_lifecycle", {
-    protocolVersion: 1,
+  }));
+  manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
     eventType: "turn.processing_started",
     eventId: "active-2",
     commandId: "command-active",
@@ -72,7 +82,7 @@ test("reconnect derives an active run only from the authoritative lifecycle wind
     sequence: 2,
     state: "processing",
     phase: "processing",
-  });
+  }));
   manager.pushChannelEvent(channel, "delta", {
     sessionId,
     turnScopeId,
@@ -108,14 +118,13 @@ test("terminal lifecycle removes the reconnect active-run projection", () => {
     { eventType: "turn.processing_started", eventId: "terminal-1", state: "processing", phase: "processing", revision: 1, sequence: 1 },
     { eventType: "turn.completed", eventId: "terminal-2", state: "completed", phase: "completion", revision: 2, sequence: 2 },
   ]) {
-    manager.pushChannelEvent(channel, "turn_lifecycle", {
-      protocolVersion: 1,
+    manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
       commandId: "command-terminal",
       sessionId,
       turnScopeId,
       dialogProcessId: "dp-authoritative-terminal",
       ...envelope,
-    });
+    }));
   }
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
@@ -142,8 +151,7 @@ test("reconnect aggregates lifecycle authority across channels of the same sessi
     channel.ownerApiKey = "api-key-1";
     channel.ownerUserId = "user-1";
   }
-  manager.pushChannelEvent(firstChannel, "turn_lifecycle", {
-    protocolVersion: 1,
+  manager.pushChannelEvent(firstChannel, "turn_lifecycle", authoritativeLifecycle({
     eventType: "turn.action_accepted",
     eventId: "multi-active-1",
     commandId: "multi-active-command",
@@ -154,9 +162,8 @@ test("reconnect aggregates lifecycle authority across channels of the same sessi
     sequence: 1,
     state: "action_requesting",
     phase: "action",
-  });
-  manager.pushChannelEvent(secondChannel, "turn_lifecycle", {
-    protocolVersion: 1,
+  }));
+  manager.pushChannelEvent(secondChannel, "turn_lifecycle", authoritativeLifecycle({
     eventType: "turn.processing_started",
     eventId: "multi-active-2",
     commandId: "multi-active-command",
@@ -167,7 +174,7 @@ test("reconnect aggregates lifecycle authority across channels of the same sessi
     sequence: 2,
     state: "processing",
     phase: "processing",
-  });
+  }));
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
   manager.handleReconnect(client, { currentSessionId: sessionId });
@@ -202,14 +209,13 @@ test("latest terminal lifecycle wins across channels of the same session", () =>
     [activeChannel, { eventType: "turn.processing_started", eventId: "multi-terminal-1", state: "processing", phase: "processing", revision: 1, sequence: 1 }],
     [terminalChannel, { eventType: "turn.completed", eventId: "multi-terminal-2", state: "completed", phase: "completion", revision: 2, sequence: 2 }],
   ]) {
-    manager.pushChannelEvent(channel, "turn_lifecycle", {
-      protocolVersion: 1,
+    manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
       commandId: "multi-terminal-command",
       sessionId,
       turnScopeId,
       dialogProcessId: "dp-multi-terminal",
       ...envelope,
-    });
+    }));
   }
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
