@@ -18,5 +18,10 @@
   },
   "peerDependencies": {
     "noobot-chat": "^4.1.3"
+  },
+  "peerDependenciesMeta": {
+    "noobot-chat": {
+      "optional": true
+    }
   }
 }
