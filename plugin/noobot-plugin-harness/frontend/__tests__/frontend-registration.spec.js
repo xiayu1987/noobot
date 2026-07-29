@@ -33,4 +33,21 @@ describe("Harness frontend registration", () => {
     expect(modelExtension.when({ selectedPluginKeySet })).toBe(true);
     expect(modelExtension.when({})).toBe(false);
   });
+
+  it("leaves canonical message assets at the host-owned render outlet", () => {
+    const contributions = [];
+    registerFrontendPlugin({
+      contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
+      extensionPoints: {
+        MARKDOWN_COLLAPSE_MARKERS: "markdown-collapse-markers",
+        COMPOSER_OPTIONS_MODEL: "composer-options-model",
+        MESSAGE_CARD_PRE: "message-card-pre",
+        MESSAGE_CARD_POST: "message-card-post",
+      },
+      services: {},
+    });
+
+    expect(contributions.filter(({ point }) => point === "message-card-post")).toEqual([]);
+    expect(contributions.some(({ contribution }) => contribution.suppressDefaultAssets === true)).toBe(false);
+  });
 });

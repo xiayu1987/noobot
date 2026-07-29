@@ -18,6 +18,7 @@ const props = defineProps({
   formatFileSize: { type: Function, required: true },
   isImageMime: { type: Function, required: true },
   sending: { type: Boolean, default: false },
+  currentTurn: { type: Boolean, default: false },
   deleteMonotonicMessage: { type: Function, default: null },
   resendMonotonicMessage: { type: Function, default: null },
   stopExecution: { type: Function, default: null },

@@ -16,6 +16,10 @@ import {
   getMessageTurnScopeId,
 } from "../../model/messageIdentity.js";
 import { selectTurnMessageRuntime } from "../../runtime/run-state-machine/turnRuntimeRegistry.js";
+import {
+  getTurnUiState,
+  setTurnAssistantContentExpanded,
+} from "../../runtime/engine/turnUiStore.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { useChatStore } from "../../stores/useChatStore.js";
 import MonotonicMessageActions from "./actions/MonotonicMessageActions.vue";
@@ -51,6 +55,7 @@ const props = defineProps({
   formatFileSize: { type: Function, required: true },
   isImageMime: { type: Function, required: true },
   sending: { type: Boolean, default: false },
+  currentTurn: { type: Boolean, default: false },
   deleteMonotonicMessage: { type: Function, default: null },
   resendMonotonicMessage: { type: Function, default: null },
   stopExecution: { type: Function, default: null },
@@ -129,6 +134,11 @@ const messageRuntime = computed(() => selectTurnMessageRuntime(chatStore.turnRun
   turnScopeId: getMessageTurnScopeId(props.messageItem),
   dialogProcessId: getMessageDialogProcessId(props.messageItem),
 }));
+const assistantContentExpanded = computed(() => {
+  if (getMessageRole(props.messageItem) !== "assistant") return true;
+  const explicit = getTurnUiState(props.messageItem)?.assistantContentExpanded;
+  return typeof explicit === "boolean" ? explicit : props.currentTurn;
+});
 
 const preMessageCardRenderers = computed(() =>
   resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE, { messageItem: props.messageItem }),
@@ -282,6 +292,10 @@ async function handleCopyAssistantMessageRich() {
 async function handleCopyAssistantMessageText() {
   await onCopyMessageMarkdownText(props.messageItem.content);
 }
+
+function toggleAssistantContent() {
+  setTurnAssistantContentExpanded(props.messageItem, !assistantContentExpanded.value);
+}
 </script>
 
 <template>
@@ -310,6 +324,8 @@ async function handleCopyAssistantMessageText() {
       :translate="translate"
       :on-copy-rich="handleCopyAssistantMessageRich"
       :on-copy-text="handleCopyAssistantMessageText"
+      :content-expanded="assistantContentExpanded"
+      :on-toggle-content="toggleAssistantContent"
     />
 
     <ExtensionOutlet
@@ -318,7 +334,7 @@ async function handleCopyAssistantMessageText() {
     />
 
     <BaseMarkdownContent
-      v-if="!hideMessageMarkdownForInlineEditor"
+      v-if="!hideMessageMarkdownForInlineEditor && (getMessageRole(messageItem) !== 'assistant' || assistantContentExpanded)"
       ref="messageMarkdownRef"
       :content="messageItem.content"
       :render-markdown="renderMarkdown"

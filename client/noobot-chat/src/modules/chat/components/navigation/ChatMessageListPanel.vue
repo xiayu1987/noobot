@@ -14,6 +14,7 @@ import {
   getMessageSessionId,
   getMessageTurnScopeId,
   getMessageRole,
+  getMessageTurnScopeKey,
 } from "../../model/messageIdentity.js";
 
 defineEmits(["open-thinking-details"]);
@@ -64,6 +65,23 @@ const messageItemSharedProps = computed(() => ({
   resendMonotonicMessage: props.resendMonotonicMessage,
   stopExecution: props.stopExecution,
 }));
+const currentAssistantMessage = computed(() => {
+  for (let index = presentedMessages.value.length - 1; index >= 0; index -= 1) {
+    const messageItem = presentedMessages.value[index];
+    if (getMessageRole(messageItem) === "assistant") return messageItem;
+  }
+  return null;
+});
+
+function isCurrentTurnMessage(messageItem = {}) {
+  const current = currentAssistantMessage.value;
+  if (!current || getMessageRole(messageItem) !== "assistant") return false;
+  const currentTurnKey = getMessageTurnScopeKey(current);
+  const candidateTurnKey = getMessageTurnScopeKey(messageItem);
+  return currentTurnKey && candidateTurnKey
+    ? currentTurnKey === candidateTurnKey
+    : current === messageItem;
+}
 
 function getWrapRef() {
   return listRef.value?.wrapRef || null;
@@ -141,6 +159,7 @@ defineExpose({
             <ChatMessageItem
               v-bind="messageItemSharedProps"
               :message-item="messageItem"
+              :current-turn="isCurrentTurnMessage(messageItem)"
               @open-thinking-details="$emit('open-thinking-details', $event)"
             />
           </div>

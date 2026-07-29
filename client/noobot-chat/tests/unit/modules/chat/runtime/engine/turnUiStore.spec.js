@@ -10,6 +10,7 @@ import {
   getTurnUiState,
   promoteSessionTurnUiStates,
   setTurnThinkingOpenNames,
+  setTurnAssistantContentExpanded,
   toggleTurnDetailKey,
 } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
 import { hydrateTurnSnapshot } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
@@ -38,6 +39,17 @@ describe("turnUiStore lifecycle", () => {
       thinkingOpenNames: [],
       expandedDetailLogKeys: [],
     });
+  });
+
+  it("stores assistant body expansion as turn-scoped presentation state", () => {
+    const first = turn("session-a", "turn-1");
+    const second = turn("session-a", "turn-2");
+
+    expect(getTurnUiState(first).assistantContentExpanded).toBeNull();
+    setTurnAssistantContentExpanded(first, true);
+
+    expect(getTurnUiState(first).assistantContentExpanded).toBe(true);
+    expect(getTurnUiState(second).assistantContentExpanded).toBeNull();
   });
 
   it("clears one turn without affecting sibling turns", () => {

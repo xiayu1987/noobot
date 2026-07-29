@@ -49,6 +49,16 @@ function messageRenderKey(messageItem = {}, messageIndex = 0) {
   const role = String(messageItem?.role || "message").trim();
   return `${props.executionId}-${turnScopeKey || "unscoped"}-${role}-${messageIndex}`;
 }
+
+function isCurrentAssistantMessage(messageItem = {}, messageIndex = 0) {
+  if (String(messageItem?.role || "").trim() !== "assistant") return false;
+  for (let index = props.messages.length - 1; index >= 0; index -= 1) {
+    if (String(props.messages[index]?.role || "").trim() === "assistant") {
+      return index === messageIndex;
+    }
+  }
+  return false;
+}
 </script>
 
 <template>
@@ -60,6 +70,7 @@ function messageRenderKey(messageItem = {}, messageIndex = 0) {
     >
       <SharedChatMessageItem
         :message-item="messageItem"
+        :current-turn="isCurrentAssistantMessage(messageItem, messageIndex)"
         :all-messages="allMessages"
         :session-docs="sessionDocs"
         :user-id="userId"

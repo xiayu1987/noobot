@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import SharedChatMessageItem from "../../../../../../src/modules/chat/components/message/SharedChatMessageItem.vue";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
 import { contributeExtension } from "../../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../../../../../../src/extensions/extension-point-ids.js";
+import { clearSessionTurnUiStates } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
 
 vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
@@ -142,12 +143,74 @@ function mountItem(props = {}) {
       plugins: [pinia],
       stubs: {
         "el-dialog": true,
+        "el-button": defineComponent({
+          name: "ElButton",
+          setup(_, { slots }) {
+            return () => h("button", slots.default?.());
+          },
+        }),
       },
     },
   });
 }
 
 describe("SharedChatMessageItem", () => {
+  afterEach(() => clearSessionTurnUiStates("session-content"));
+
+  it("mounts the current assistant body and unmounts it when collapsed", async () => {
+    const wrapper = mountItem({
+      currentTurn: true,
+      messageItem: {
+        id: "assistant-current",
+        role: "assistant",
+        content: "current body",
+        sessionId: "session-content",
+        turnScopeId: "turn-current",
+      },
+    });
+
+    expect(wrapper.find(".BaseMarkdownContent-stub").exists()).toBe(true);
+    await wrapper.find(".assistant-copy-actions").trigger("click");
+    expect(wrapper.find(".BaseMarkdownContent-stub").exists()).toBe(false);
+    expect(wrapper.html()).not.toContain("current body");
+  });
+
+  it("does not mount a historical assistant body until expanded", async () => {
+    const wrapper = mountItem({
+      currentTurn: false,
+      messageItem: {
+        id: "assistant-history",
+        role: "assistant",
+        content: "historical body",
+        sessionId: "session-content",
+        turnScopeId: "turn-history",
+      },
+    });
+
+    expect(wrapper.find(".BaseMarkdownContent-stub").exists()).toBe(false);
+    expect(wrapper.html()).not.toContain("historical body");
+    await wrapper.find(".assistant-copy-actions").trigger("click");
+    expect(wrapper.find(".BaseMarkdownContent-stub").text()).toBe("historical body");
+  });
+
+  it("keeps the canonical asset area mounted while assistant body is collapsed", () => {
+    const wrapper = mountItem({
+      currentTurn: false,
+      messageItem: {
+        id: "assistant-assets-history",
+        role: "assistant",
+        content: "collapsed body",
+        sessionId: "session-content",
+        turnScopeId: "turn-assets-history",
+        attachments: [{ attachmentId: "asset-1", name: "report.pdf", size: 42 }],
+      },
+    });
+
+    expect(wrapper.find(".BaseMarkdownContent-stub").exists()).toBe(false);
+    expect(wrapper.find(".BaseFileCardList-stub").exists()).toBe(true);
+    expect(wrapper.find(".BaseAttachmentFileCard-stub").text()).toBe("report.pdf");
+  });
+
   it("hides the message type tag for an empty assistant thinking host", () => {
     const wrapper = mountItem({
       messageItem: {
