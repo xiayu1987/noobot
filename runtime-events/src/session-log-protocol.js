@@ -52,6 +52,7 @@ export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze({
   "stop-continue": "frontendStopContinueDebug",
   "reconnect-timing": "frontendReconnectTimingDebug",
   "thinking-replay": "frontendThinkingReplayDebug",
+  "timeline-pipeline": "timelinePipelineDebug",
   "tool-log-window": "frontendToolLogWindowDebug",
   "terminal-resolution": "frontendTerminalResolutionDebug",
   "agent-proxy-route": "agentProxyRouteDebug",

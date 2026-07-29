@@ -5,15 +5,11 @@
  */
 import {
   findRecoverableReconnectSessionId,
-  isDialogProcessRecoverable,
   resolveDialogProcessIdFromReplay,
   splitReconnectMessagesByTurnIdentity,
 } from "../../model/reconnectReplayModel.js";
 import { nowMs } from "../../model/timeFields.js";
-import {
-  isInFlightConversationState,
-  isTerminalConversationState,
-} from "./conversationState.js";
+import { isInFlightConversationState } from "./conversationState.js";
 import { _trimStr } from "./utils.js";
 import {
   BackendChannelState,
@@ -102,7 +98,6 @@ export async function applyReconnectDataReplay({
   ensureReconnectSessionActive,
   applyRunStateEvents,
   isCurrentActiveSession,
-  resolveReconnectTargetAssistantMessage,
   replayCache,
   applyReconnectMessagesToActiveSession,
   applyChannelState,
@@ -110,6 +105,7 @@ export async function applyReconnectDataReplay({
   reconcileSessionState,
   applySubSessionReplayMessages,
   isDeletedTurn,
+  hydrateActiveSessionBeforeReplay,
 } = {}) {
   const receivedSessions = Array.isArray(reconnectData?.sessions)
     ? reconnectData.sessions
@@ -132,34 +128,27 @@ export async function applyReconnectDataReplay({
   if (recoverableSessionId) {
     await ensureReconnectSessionActive(recoverableSessionId);
     applyReconnectRunState();
-    const recoverableSessionEntry = reconnectSessions.find(
-      (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
-    );
-    const recoverableDialogProcesses = Array.isArray(
-      recoverableSessionEntry?.dialogProcesses,
-    )
-      ? recoverableSessionEntry.dialogProcesses
-      : [];
-    const hasReconnectMessages = recoverableDialogProcesses.some(
-      (dialogProcess) => Array.isArray(dialogProcess?.messages) && dialogProcess.messages.length,
-    );
-    if (!hasReconnectMessages && isCurrentActiveSession(recoverableSessionId)) {
-      const currentRunMeta = normalizeTurnMeta(recoverableSessionEntry?.currentRun || {});
-      resolveReconnectTargetAssistantMessage(currentRunMeta.dialogProcessId, {
-        allowCreate: true,
-        turnScopeId: currentRunMeta.turnScopeId,
-      });
-    }
   }
 
   for (const sessionEntry of reconnectSessions) {
     const sessionId = _trimStr(sessionEntry?.sessionId);
     if (!sessionId) continue;
     const currentRunMeta = normalizeTurnMeta(sessionEntry?.currentRun || {});
-    const hasAuthoritativeCurrentRun = hasValidCurrentRun(sessionEntry);
     const dialogProcesses = Array.isArray(sessionEntry?.dialogProcesses)
       ? sessionEntry.dialogProcesses
       : [];
+    const hasReplayMessages = dialogProcesses.some((dp) =>
+      Array.isArray(dp?.messages) && dp.messages.length > 0,
+    );
+    const hasActiveCurrentRun =
+      hasValidCurrentRun(sessionEntry) &&
+      isInFlightConversationState(sessionEntry?.currentRun?.state);
+    if ((hasActiveCurrentRun || hasReplayMessages) && isCurrentActiveSession(sessionId)) {
+      // Baseline restoration belongs to the reconnect-data transaction, not to
+      // individual event batches. An authoritative in-flight currentRun also
+      // requires the baseline when no replay event has been persisted yet.
+      await hydrateActiveSessionBeforeReplay?.(sessionId, sessionEntry?.currentRun || null);
+    }
     for (const dp of dialogProcesses) {
       const dpMessages = Array.isArray(dp?.messages) ? dp.messages : [];
       if (!dpMessages.length) continue;
@@ -197,16 +186,7 @@ export async function applyReconnectDataReplay({
             });
             continue;
           }
-          const belongsToAuthoritativeCurrentRun = Boolean(
-            hasAuthoritativeCurrentRun &&
-            replayTurnScopeId &&
-            replayTurnScopeId === currentRunMeta.turnScopeId &&
-            (!currentRunMeta.dialogProcessId || dpId === currentRunMeta.dialogProcessId),
-          );
           await applyReconnectMessagesToActiveSession(messages, dpId, {
-            allowCreate: isDialogProcessRecoverable(sessionEntry, messages) ||
-              belongsToAuthoritativeCurrentRun,
-            authoritativeCurrentRun: belongsToAuthoritativeCurrentRun,
             turnScopeId: replayTurnScopeId,
           });
         }

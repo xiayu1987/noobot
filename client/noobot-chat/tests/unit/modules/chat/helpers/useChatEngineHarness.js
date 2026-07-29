@@ -137,13 +137,46 @@ export const createHarness = ({
     return result;
   };
 
-  const appendMessage = vi.fn((role, content = "", attachments = []) => {
-    const message = makeMessage(role, content, attachments);
+  const appendMessage = vi.fn((role, content = "", attachments = [], options = {}) => {
+    const message = { ...makeMessage(role, content, attachments), ...options };
     activeSession.value.messages.push(message);
     activeSession.value.rawMessages.push(message);
     activeSession.value.messageCount = activeSession.value.messages.length;
     activeSession.value.lastMessage = message;
     return message;
+  });
+
+  const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
+    const normalizedMessageId = String(messageId || "").trim();
+    if (!normalizedMessageId) return null;
+    const existing = activeSession.value.messages.find((message) => (
+      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
+    ));
+    if (existing) return existing;
+    const message = appendMessage(RoleEnum.ASSISTANT, "", [], {
+      ...identity,
+      id: normalizedMessageId,
+      messageId: normalizedMessageId,
+    });
+    Object.assign(message, identity, {
+      id: normalizedMessageId,
+      messageId: normalizedMessageId,
+    });
+    return message;
+  });
+
+  const findCanonicalMessageById = vi.fn((targetSessionId, messageId) => {
+    const normalizedSessionId = String(targetSessionId || "").trim();
+    const normalizedMessageId = String(messageId || "").trim();
+    if (!normalizedSessionId || !normalizedMessageId) return null;
+    const targetSession = sessions.value.find((sessionItem) => [
+      sessionItem?.id,
+      sessionItem?.sessionId,
+      sessionItem?.backendSessionId,
+    ].some((candidate) => String(candidate || "").trim() === normalizedSessionId));
+    return targetSession?.messages?.find((message) => (
+      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
+    )) || null;
   });
 
   const defaultDeps = {
@@ -164,6 +197,8 @@ export const createHarness = ({
     clearUploads: vi.fn(),
     serializeAttachments: vi.fn(async () => []),
     appendMessage,
+    findCanonicalMessageById,
+    upsertCanonicalAssistantMessage,
     makeViewMessage: (message) => ({ ...message }),
     foldMessagesForView: (messages) => [...messages],
     fetchSessionDetail: vi.fn(async () => ({})),
@@ -210,6 +245,7 @@ export const createHarness = ({
       clearLastReceivedSeqMap: vi.fn(),
       dispose: vi.fn(),
     },
+    sessionLogWebSocketClient: { log: vi.fn() },
     ensureConnected: vi.fn(() => true),
     notify: vi.fn(),
     terminalResolutionFetcher: vi.fn(async (url) => ({

@@ -10,12 +10,12 @@ function createFixture(overrides = {}) {
   return {
     ensureReconnectSessionActive: vi.fn(async () => {}),
     isCurrentActiveSession: vi.fn((sessionId) => sessionId === "s-1"),
-    resolveReconnectTargetAssistantMessage: vi.fn(),
     replayCache: {},
     applyReconnectMessagesToActiveSession: vi.fn(async () => {}),
     applyChannelState: vi.fn(),
     scheduleCacheExpiredSessionRefresh: vi.fn(),
     reconcileSessionState: vi.fn(async () => true),
+    hydrateActiveSessionBeforeReplay: vi.fn(async () => true),
     ...overrides,
   };
 }
@@ -59,7 +59,7 @@ describe("applyReconnectDataReplay", () => {
     expect(fixture.applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
   });
 
-  it("applies active session replay messages with recoverable allowCreate", async () => {
+  it("applies active session replay without currentRun message-creation controls", async () => {
     const fixture = createFixture();
     const messages = [
       { event: "delta", data: { seq: 1, text: "hello", dialogProcessId: "dp-1" } },
@@ -82,9 +82,136 @@ describe("applyReconnectDataReplay", () => {
     expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
       messages,
       "dp-1",
-      { allowCreate: true, authoritativeCurrentRun: true, turnScopeId: "turn-1" },
+      { turnScopeId: "turn-1" },
     );
     expect(fixture.replayCache).toEqual({});
+    expect(fixture.hydrateActiveRunningSession).toBeUndefined();
+  });
+
+  it("replays analysis-only envelopes through the same batch path as every other event", async () => {
+    const messages = [{
+      event: "thinking",
+      data: {
+        sessionId: "s-1",
+        dialogProcessId: "dp-thinking",
+        turnScopeId: "turn-thinking",
+        seq: 1,
+        text: "analysis",
+      },
+    }];
+    const fixture = createFixture({
+      applyReconnectMessagesToActiveSession: vi.fn(async () => {
+      }),
+    });
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          hasRunningTask: true,
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-thinking",
+            turnScopeId: "turn-thinking",
+            presentationMessageId: "assistant-thinking",
+            state: "sending",
+          },
+          dialogProcesses: [{ dialogProcessId: "dp-thinking", messages }],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
+      messages,
+      "dp-thinking",
+      { turnScopeId: "turn-thinking" },
+    );
+    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledTimes(1);
+    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledWith(
+      "s-1",
+      expect.objectContaining({ presentationMessageId: "assistant-thinking" }),
+    );
+    expect(fixture.hydrateActiveSessionBeforeReplay.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.applyReconnectMessagesToActiveSession.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("hydrates the active canonical baseline once for a reconnect transaction with multiple replay groups", async () => {
+    const fixture = createFixture();
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          currentRun: { sessionId: "s-1", dialogProcessId: "dp-2", turnScopeId: "turn-2", state: "sending" },
+          dialogProcesses: [
+            { dialogProcessId: "dp-1", messages: [{ event: "thinking", data: { sessionId: "s-1", turnScopeId: "turn-1" } }] },
+            { dialogProcessId: "dp-2", messages: [{ event: "message_event", data: { sessionId: "s-1", turnScopeId: "turn-2" } }] },
+          ],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledTimes(1);
+    expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledTimes(2);
+    expect(fixture.hydrateActiveSessionBeforeReplay.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.applyReconnectMessagesToActiveSession.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("hydrates an active in-flight currentRun even when no replay message exists yet", async () => {
+    const fixture = createFixture();
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          hasRunningTask: true,
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-1",
+            turnScopeId: "turn-1",
+            presentationMessageId: "assistant-1",
+            state: "sending",
+          },
+          dialogProcesses: [],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledTimes(1);
+    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledWith(
+      "s-1",
+      expect.objectContaining({ presentationMessageId: "assistant-1" }),
+    );
+    expect(fixture.applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
+  });
+
+  it("does not hydrate a terminal currentRun without replay messages", async () => {
+    const fixture = createFixture();
+
+    await applyReconnectDataReplay({
+      reconnectData: {
+        sessions: [{
+          sessionId: "s-1",
+          hasRunningTask: false,
+          currentRun: {
+            sessionId: "s-1",
+            dialogProcessId: "dp-1",
+            turnScopeId: "turn-1",
+            presentationMessageId: "assistant-1",
+            state: "completed",
+          },
+          dialogProcesses: [],
+        }],
+      },
+      ...fixture,
+    });
+
+    expect(fixture.hydrateActiveSessionBeforeReplay).not.toHaveBeenCalled();
   });
 
   it("caches non-active session replay messages by dialog process id", async () => {

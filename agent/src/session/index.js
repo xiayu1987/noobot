@@ -470,6 +470,5 @@ export {
   isInjectedMessage as isSessionThinkingInjectedMessage,
   isToolOrThinkingMessage as isSessionToolOrThinkingMessage,
   isSameThinkingRound as isSameSessionThinkingRound,
-  buildToolLogFromMessage as buildSessionThinkingToolLogFromMessage,
   buildThinkingDetailPayload,
 } from "./session-thinking-detail.js";

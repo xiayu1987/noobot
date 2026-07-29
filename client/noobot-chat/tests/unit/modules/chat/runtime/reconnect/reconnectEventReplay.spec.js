@@ -173,7 +173,7 @@ describe("applyReconnectEventReplay", () => {
     const applyReconnectMessagesToActiveSession = vi.fn(async () => {});
 
     await applyReconnectEventReplay({
-      event: StreamEventEnum.THINKING,
+      event: "message",
       data: { dialogProcessId: "dp-1", text: "tool running" },
       replayCache,
       isCurrentActiveSession: vi.fn(() => false),
@@ -185,7 +185,7 @@ describe("applyReconnectEventReplay", () => {
 
     expect(consumeReplayCacheForSession).not.toHaveBeenCalled();
     expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
-      [{ event: StreamEventEnum.THINKING, data: { dialogProcessId: "dp-1", text: "tool running" } }],
+      [{ event: "message", data: { dialogProcessId: "dp-1", text: "tool running" } }],
       "dp-1",
       { turnScopeId: "" },
     );

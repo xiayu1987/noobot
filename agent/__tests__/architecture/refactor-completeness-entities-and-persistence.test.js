@@ -23,6 +23,16 @@ describe('2. 字段对齐测试', () => {
       assert.equal(normalized.id, 'message-1');
       assert.equal(normalized.messageId, 'message-1');
     });
+    it('缺失运行时 ID 时应使用已落盘的 messageUid 作为稳定身份', () => {
+      const normalized = normalizeMessageEntity({
+        role: 'user',
+        content: 'legacy user message',
+        messageUid: 'sm_persisted-1',
+      });
+      assert.equal(normalized.id, 'sm_persisted-1');
+      assert.equal(normalized.messageId, 'sm_persisted-1');
+      assert.equal(normalized.messageUid, 'sm_persisted-1');
+    });
     it('应包含 role, content, type, ts 等核心字段', () => {
       const raw = { role: 'user', content: 'hello', type: 'text' };
       const normalized = normalizeMessageEntity(raw);

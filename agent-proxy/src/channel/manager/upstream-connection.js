@@ -11,7 +11,12 @@ import {
   CHANNEL_STATUS,
   UPSTREAM_CLOSE_REASON,
 } from "../../shared/constants.js";
-import { nowMs, buildUpstreamUrl, resolveMessageEventTrace } from "../../shared/utils.js";
+import {
+  nowMs,
+  buildUpstreamUrl,
+  messageEventHasContent,
+  resolveMessageEventTrace,
+} from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 
 class UpstreamConnectionMethods {
@@ -142,7 +147,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
           sessionId: eventData?.sessionId,
           dialogProcessId: eventData?.dialogProcessId,
           turnScopeId: eventData?.turnScopeId,
-          hasContent: Boolean(eventData?.content || eventData?.text),
+          hasContent: messageEventHasContent(eventName, eventData),
           eventDataKeys: Object.keys(eventData || {}).sort(),
           logType: Array.isArray(eventData?.log) ? "array" : typeof eventData?.log,
           logEvent: String(eventData?.log?.event || eventData?.data?.log?.event || ""),

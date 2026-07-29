@@ -79,7 +79,7 @@ export function projectTurnStatusOntoAssistant(messages = [], {
   });
 }
 
-export function withRunningAssistantPlaceholder(messages = [], {
+export function createRunningAssistantPlaceholderViewModel(messages = [], {
   sessionId = "",
   turnScopeId = "",
   dialogProcessId = "",
@@ -89,7 +89,7 @@ export function withRunningAssistantPlaceholder(messages = [], {
   const normalizedState = text(state).toLowerCase();
   const scopeId = text(turnScopeId);
   const normalizedDialogProcessId = text(dialogProcessId);
-  if (!normalizedState || TERMINAL_EXECUTION_STATES.has(normalizedState)) return source;
+  if (!normalizedState || TERMINAL_EXECUTION_STATES.has(normalizedState)) return null;
   const matchesTurn = (item = {}) => {
     const itemScopeId = text(item?.turnScopeId || item?.metadata?.turnScopeId);
     const itemDialogId = text(item?.dialogProcessId || item?.metadata?.dialogProcessId);
@@ -98,54 +98,22 @@ export function withRunningAssistantPlaceholder(messages = [], {
     return !scopeId && !normalizedDialogProcessId;
   };
   const matchingUser = source.find((item = {}) => text(item?.role).toLowerCase() === "user" && matchesTurn(item));
-  if (!matchingUser) return source;
-  if (source.some((item = {}) => text(item?.role).toLowerCase() === "assistant" && matchesTurn(item))) return source;
-  return [...source, {
-    id: `workflow-node-running:${scopeId || normalizedDialogProcessId || text(sessionId)}`,
-    role: "assistant",
-    type: "message",
-    content: "",
-    pending: true,
-    synthetic: true,
-    placeholder: true,
-    turnPlaceholder: true,
-    workflowNodeRunningPlaceholder: true,
+  if (!matchingUser) return null;
+  if (source.some((item = {}) => text(item?.role).toLowerCase() === "assistant" && matchesTurn(item))) return null;
+  return {
+    viewKey: `workflow-node-running:${scopeId || normalizedDialogProcessId || text(sessionId)}`,
     sessionId: text(matchingUser?.sessionId || matchingUser?.metadata?.sessionId || sessionId),
     turnScopeId: scopeId,
     dialogProcessId: text(
       matchingUser?.dialogProcessId || matchingUser?.metadata?.dialogProcessId || normalizedDialogProcessId,
     ),
-  }];
-}
-
-function withoutSupersededRunningPlaceholders(messages = [], { terminal = false } = {}) {
-  const source = Array.isArray(messages) ? messages : [];
-  const realAssistantKeys = new Set(source
-    .filter((item = {}) => text(item?.role).toLowerCase() === "assistant" && item?.workflowNodeRunningPlaceholder !== true)
-    .flatMap((item = {}) => [
-      text(item?.turnScopeId || item?.metadata?.turnScopeId),
-      text(item?.dialogProcessId || item?.metadata?.dialogProcessId),
-    ].filter(Boolean)));
-  return source.filter((item = {}) => {
-    if (item?.workflowNodeRunningPlaceholder !== true) return true;
-    const identityKeys = [text(item?.turnScopeId), text(item?.dialogProcessId)].filter(Boolean);
-    return !identityKeys.some((key) => realAssistantKeys.has(key));
-  });
+  };
 }
 
 export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
   const merged = mergeCanonicalSessionDetail(contentOnly(base), contentOnly(incoming));
-  const mergedState = resolveProjectionState(
-    merged?.execution?.state,
-    merged?.execution?.status,
-    merged?.sessionSummary?.state,
-    merged?.sessionSummary?.status,
-    merged?.state,
-    merged?.status,
-  );
-  const terminal = TERMINAL_EXECUTION_STATES.has(mergedState);
-  const messages = withoutSupersededRunningPlaceholders(merged.messages, { terminal });
-  const rawMessages = withoutSupersededRunningPlaceholders(merged.rawMessages, { terminal });
+  const messages = Array.isArray(merged.messages) ? merged.messages : [];
+  const rawMessages = Array.isArray(merged.rawMessages) ? merged.rawMessages : [];
   return {
     ...contentOnly(merged),
     messages,
@@ -173,14 +141,9 @@ export function resolveNodeChildExecutionIds(nodeItem = {}, runtimeNodeSessions 
 
 export function resolveRuntimeNodeSession(nodeItem = {}, runtimeNodeSessions = []) {
   const nodeExecutionId = text(nodeItem?.nodeExecutionId);
-  const dialogProcessId = resolveWorkflowDialogProcessId(nodeItem);
-  const sessionId = text(nodeItem?.sessionId || nodeItem?.nodeSessionId);
   const nodes = getListValue(runtimeNodeSessions);
-  return nodes.find((item = {}) => nodeExecutionId && text(item?.nodeExecutionId) === nodeExecutionId) ||
-    nodes.find((item = {}) => dialogProcessId && resolveWorkflowDialogProcessId(item) === dialogProcessId) ||
-    nodes.find((item = {}) => sessionId && text(item?.sessionId || item?.nodeSessionId) === sessionId) ||
-    nodeItem ||
-    {};
+  if (!nodeExecutionId) return nodeItem || {};
+  return nodes.find((item = {}) => text(item?.nodeExecutionId) === nodeExecutionId) || nodeItem || {};
 }
 
 export function resolveIsolatedNodeSessionId(nodeItem = {}, runtimeNode = {}) {
@@ -249,15 +212,14 @@ export function buildUnifiedSessionDetail({
         nodeItem?.status,
         nodeItem?.state,
       );
-      const messages = projectTurnStatusOntoAssistant(
-        withRunningAssistantPlaceholder(rawMessages, {
+      const runningPlaceholderViewModel = createRunningAssistantPlaceholderViewModel(rawMessages, {
           sessionId,
           turnScopeId,
           dialogProcessId,
           state: projectionState,
-        }),
-        { sessionId, turnScopeId, dialogProcessId, state: projectionState },
-      );
+        });
+      const messages = projectTurnStatusOntoAssistant(rawMessages,
+        { sessionId, turnScopeId, dialogProcessId, state: projectionState });
       if (!messages.length && !execution && !allowEmptyMessages) return null;
       return {
         executionId: text(execution.executionId || childExecutionIds[0]),
@@ -268,6 +230,7 @@ export function buildUnifiedSessionDetail({
         sessionId,
         messages,
         rawMessages,
+        runningPlaceholderViewModel,
         sessionSummary: {
           ...sessionDoc,
           sessionId,
@@ -297,10 +260,7 @@ export function buildUnifiedSessionDetail({
   const scopedRawMessages = turnScopeId
     ? messages.filter((messageItem = {}) => {
       const messageTurnScopeId = text(messageItem?.turnScopeId || messageItem?.metadata?.turnScopeId || messageItem?.pluginMeta?.turnScopeId);
-      const messageDialogProcessId = text(messageItem?.dialogProcessId || messageItem?.metadata?.dialogProcessId || messageItem?.pluginMeta?.dialogProcessId);
-      if (messageTurnScopeId) return messageTurnScopeId === turnScopeId;
-      if (messageDialogProcessId && dialogProcessId) return messageDialogProcessId === dialogProcessId;
-      return true;
+      return Boolean(messageTurnScopeId) && messageTurnScopeId === turnScopeId;
     })
     : messages;
   if (!scopedRawMessages.length && !allowEmptyMessages && !childExecutionIds.length) return null;
@@ -312,21 +272,21 @@ export function buildUnifiedSessionDetail({
     nodeItem?.status,
     nodeItem?.state,
   );
-  const scopedMessages = projectTurnStatusOntoAssistant(
-    withRunningAssistantPlaceholder(scopedRawMessages, {
+  const runningPlaceholderViewModel = createRunningAssistantPlaceholderViewModel(scopedRawMessages, {
       sessionId,
       turnScopeId,
       dialogProcessId,
       state: projectionState,
-    }),
-    { sessionId, turnScopeId, dialogProcessId, state: projectionState },
-  );
+    });
+  const scopedMessages = projectTurnStatusOntoAssistant(scopedRawMessages,
+    { sessionId, turnScopeId, dialogProcessId, state: projectionState });
   return {
     executionId: text(childExecutionIds[0]),
     attemptExecutionIds: childExecutionIds,
     sessionId,
     messages: scopedMessages,
     rawMessages: scopedRawMessages,
+    runningPlaceholderViewModel,
     sessionSummary: {
       ...(sessionDoc && typeof sessionDoc === "object" ? sessionDoc : {}),
       sessionId,

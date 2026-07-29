@@ -38,6 +38,7 @@ export function normalizeTurnLifecycleEntity(source = {}) {
     if (!turnScopeId) continue;
     turns[turnScopeId] = {
       turnScopeId,
+      presentationMessageId: clean(value.presentationMessageId),
       executionId: clean(value.executionId) || `agent:${turnScopeId}`,
       executionKind: clean(value.executionKind) || "agent",
       parentExecutionId: clean(value.parentExecutionId),
@@ -156,6 +157,9 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
       : current?.origin || {},
     stage: clean(input.stage || current?.stage),
   };
+  const requestedPresentationMessageId = clean(
+    input.presentationMessageId || current?.presentationMessageId,
+  );
   const requestHash = JSON.stringify({
     eventType,
     turnScopeId,
@@ -164,6 +168,7 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
     executionState: clean(input.executionState),
     startedAt: clean(input.startedAt),
     finishedAt: clean(input.finishedAt),
+    presentationMessageId: requestedPresentationMessageId,
     ...requestedExecutionIdentity,
   });
   const receipt = lifecycle.commandReceipts.find((item) => item.commandId === commandId && item.eventType === eventType);
@@ -215,6 +220,7 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
   const turn = {
     ...(current || {}),
     turnScopeId,
+    presentationMessageId: requestedPresentationMessageId,
     ...requestedExecutionIdentity,
     dialogProcessId: clean(input.dialogProcessId || current?.dialogProcessId),
     commandId,

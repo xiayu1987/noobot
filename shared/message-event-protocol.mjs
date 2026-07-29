@@ -5,19 +5,28 @@
  */
 
 export const MESSAGE_EVENT_ENVELOPE_KIND = "noobot.message_event";
-export const MESSAGE_EVENT_ENVELOPE_VERSION = 1;
+export const MESSAGE_EVENT_ENVELOPE_VERSION = 2;
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
 export const MESSAGE_EVENT_SEQUENCE_SCOPE_KIND = "message";
 
 export const MESSAGE_EVENT_TYPE = Object.freeze({
   LLM_DELTA: "llm_delta",
   MAIN_MODEL_CONTENT: "main_model_content",
+  AUTHORITATIVE_FINAL_CONTENT: "authoritative_final_content",
   THINKING: "thinking",
   TOOL_CALL_START: "tool_call_start",
   TOOL_CALL_END: "tool_call_end",
 });
 
 export const MESSAGE_EVENT_TYPES = Object.freeze(new Set(Object.values(MESSAGE_EVENT_TYPE)));
+
+export const AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES = Object.freeze(new Set([
+  MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
+]));
+
+export const REPLACE_MESSAGE_CONTENT_EVENT_TYPES = Object.freeze(new Set([
+  MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
+]));
 
 export const MESSAGE_CONTENT_EFFECT = Object.freeze({
   NONE: "none",
@@ -26,6 +35,10 @@ export const MESSAGE_CONTENT_EFFECT = Object.freeze({
 });
 
 const text = (value) => String(value || "").trim();
+
+export function resolveMessageEventPresentationId(value = {}) {
+  return text(value?.presentationMessageId);
+}
 
 export function resolveMessageEventSequenceIdentity(value = {}) {
   const sequenceDomain = text(value?.sequenceDomain) || MESSAGE_EVENT_SEQUENCE_DOMAIN;
@@ -43,16 +56,18 @@ export function resolveMessageEventSequenceIdentity(value = {}) {
 }
 
 export function isMessageEventEnvelope(value = {}) {
+  const envelopeVersion = Number(value?.envelopeVersion);
   return Boolean(
     value &&
       typeof value === "object" &&
       !Array.isArray(value) &&
       value.envelopeKind === MESSAGE_EVENT_ENVELOPE_KIND &&
-      Number(value.envelopeVersion) === MESSAGE_EVENT_ENVELOPE_VERSION &&
+      envelopeVersion === MESSAGE_EVENT_ENVELOPE_VERSION &&
       text(value.eventId) &&
       text(value.eventType) &&
       text(value.sessionId) &&
       text(value.messageId) &&
+      text(value.presentationMessageId) &&
       Number.isInteger(Number(value.sequence)) &&
       Number(value.sequence) > 0 &&
       text(value.timestamp),
@@ -78,7 +93,10 @@ export function validateMessageEventEnvelope(value = {}) {
     errors.push("missing_text");
   }
   if (
-    eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT &&
+    (
+      REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType) ||
+      eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT
+    ) &&
     typeof value?.text !== "string" &&
     typeof value?.output !== "string"
   ) errors.push("missing_content");
@@ -117,7 +135,7 @@ export function projectMessageEventContent(event = {}) {
       content: typeof event?.text === "string" ? event.text : "",
     });
   }
-  if (eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT) {
+  if (REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType)) {
     return Object.freeze({
       effect: MESSAGE_CONTENT_EFFECT.REPLACE,
       content: typeof event?.text === "string"
@@ -126,6 +144,11 @@ export function projectMessageEventContent(event = {}) {
     });
   }
   return Object.freeze({ effect: MESSAGE_CONTENT_EFFECT.NONE, content: "" });
+}
+
+export function isAuthoritativeFinalContentEvent(event = {}) {
+  const eventType = text(event?.eventType);
+  return AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES.has(eventType);
 }
 
 export function projectMessageEventToolFacets(event = {}) {

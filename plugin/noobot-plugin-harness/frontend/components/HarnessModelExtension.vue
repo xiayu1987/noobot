@@ -92,7 +92,9 @@ function onHarnessStepModelChange(stepKey = "", value = "") {
 function isHarnessCapabilityEnabled(capabilityKey = "") {
   const key = String(capabilityKey || "").trim();
   if (!key) return true;
-  return pluginConfig.value?.capabilityProfile?.[key]?.enabled !== false;
+  const configuredValue = pluginConfig.value?.capabilityProfile?.[key]?.enabled;
+  if (key === "planning" || key === "acceptance") return configuredValue === true;
+  return configuredValue !== false;
 }
 
 function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
@@ -108,11 +110,7 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
   const nextCapability = nextProfile[key] && typeof nextProfile[key] === "object"
     ? { ...nextProfile[key] }
     : {};
-  if (enabled) {
-    if (Object.prototype.hasOwnProperty.call(nextCapability, "enabled")) delete nextCapability.enabled;
-  } else {
-    nextCapability.enabled = false;
-  }
+  nextCapability.enabled = enabled;
   if (Object.keys(nextCapability).length) nextProfile[key] = nextCapability;
   else delete nextProfile[key];
   patchPluginConfig({ ...currentHarness, capabilityProfile: nextProfile });

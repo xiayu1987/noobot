@@ -15,6 +15,7 @@ export async function commitTurn({
     userId, sessionId, parentSessionId = "", content = "", action = "send",
     turnScopeId = "", dialogProcessId = "", parentDialogProcessId = "",
     attachments = [], expectedVersion = null, idempotencyKey = "",
+    messageId = "",
     resumeDialogProcessId = "", resumeTurnScopeId = "",
     frontendUserMessage = true,
     persistenceContext = null,
@@ -68,7 +69,10 @@ export async function commitTurn({
       const nowValue = this.now();
       assertCanonicalAttachments(attachments, sessionId);
       const canonicalAttachments = dedupeAttachments(Array.isArray(attachments) ? attachments : []);
-      const userMessage = normalizeMessageEntity({ messageUid: createSessionMessageUid(), role: "user", type: "message", content: normalizedContent,
+      const userMessage = normalizeMessageEntity({
+        messageUid: createSessionMessageUid(),
+        messageId: String(messageId || "").trim(),
+        role: "user", type: "message", content: normalizedContent,
         userName: String(userId), sessionId, parentSessionId: resolvedParentSessionId,
         dialogProcessId: String(dialogProcessId || "").trim(), parentDialogProcessId: String(parentDialogProcessId || "").trim(),
         turnScopeId: normalizedTurnScopeId,

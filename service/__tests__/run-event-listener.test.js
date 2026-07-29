@@ -179,7 +179,7 @@ test("run-event-listener rejects malformed authoritative envelopes instead of le
       event: "tool_call_end",
       data: {
         envelopeKind: "noobot.message_event",
-        envelopeVersion: 1,
+        envelopeVersion: 2,
         eventId: "evt-incomplete",
         eventType: "tool_call_end",
         sessionId: "sub-session",
@@ -203,8 +203,8 @@ test("run-event-listener separates root and child authoritative message channels
     registerActiveRun: () => {},
   });
   const base = {
-    envelopeKind: "noobot.message_event", envelopeVersion: 1,
-    eventType: "tool_call_start", messageId: "msg-1", sequence: 1,
+    envelopeKind: "noobot.message_event", envelopeVersion: 2,
+    eventType: "tool_call_start", messageId: "msg-1", presentationMessageId: "presentation-1", sequence: 1,
     tool: "read_file", toolCallId: "call-1", args: {},
     timestamp: "2026-01-01T00:00:00.000Z",
   };
@@ -232,9 +232,10 @@ test("non-streaming delivery suppresses only deltas and preserves root and workf
   });
   const base = {
     envelopeKind: "noobot.message_event",
-    envelopeVersion: 1,
+    envelopeVersion: 2,
     sequenceDomain: "message-event",
     messageId: "msg-1",
+    presentationMessageId: "presentation-1",
     timestamp: "2026-01-01T00:00:00.000Z",
   };
   listener.onEvent({ event: "llm_delta", data: {

@@ -43,16 +43,10 @@ import {
   selectToolTimelineLogs,
 } from "../runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../runtime/engine/activityTimeline.js";
-import {
-  getPluginFlow,
-  isPluginCapabilityResponseEvent,
-  stripPluginModelResponsePrefix,
-} from "../model/pluginLogCompatibility.js";
-import { adaptLegacyMessageTimelines } from "../runtime/engine/legacyTimelineAdapter.js";
 import { compareTimelineFacts } from "../runtime/engine/timelineFact.js";
 
 export function useThinkingPanel(props, emit) {
-  const timelineMessage = (messageItem = {}) => adaptLegacyMessageTimelines(messageItem);
+  const timelineMessage = (messageItem = {}) => messageItem;
   const thinkingDetailLoadingKey = ref("");
   const loadedThinkingDetail = ref(null);
   const injectedMessages = computed(() =>
@@ -111,9 +105,7 @@ export function useThinkingPanel(props, emit) {
       sequence: logItem?.sequence ?? logItem?.seq ?? null,
       textLength: text.length,
       textPreview: text.slice(0, 240),
-      filteredBy: isPluginCapabilityResponseLog(logItem)
-        ? "plugin-capability"
-        : isGuidanceAnalysisResponseLog(logItem)
+      filteredBy: isGuidanceAnalysisResponseLog(logItem)
           ? "guidance-analysis"
           : isMainModelContentLog(logItem)
             ? "main-model-content"
@@ -123,17 +115,13 @@ export function useThinkingPanel(props, emit) {
     };
   }
 
-  function getRuntimeView(messageItem = props.messageItem) {
+  function getRuntimeView() {
     const runtime = props.runtime || { running: false, terminal: false, startedAt: "", finishedAt: "" };
-    if (messageItem?.workflowNodeRunningPlaceholder === true && messageItem?.pending === true && !runtime.running) {
-      return { ...runtime, running: true, terminal: false, phase: "processing" };
-    }
     return runtime;
   }
 
   function getRealtimeLogs(messageItem = {}) {
     return getAllRealtimeLogs(messageItem)
-      .filter((logItem) => !isPluginCapabilityResponseLog(logItem))
       .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
       .filter((logItem) => !isMainModelContentLog(logItem))
       .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
@@ -209,7 +197,7 @@ export function useThinkingPanel(props, emit) {
     const purpose = normalizeLogString(
       logItem?.purpose || logItem?.data?.purpose,
     );
-    const pluginFlow = normalizeLogString(getPluginFlow(logItem));
+    const pluginFlow = normalizeLogString(logItem?.pluginFlow);
     const chain = normalizeLogString(
       logItem?.chain ||
         logItem?.data?.chain ||
@@ -267,18 +255,8 @@ export function useThinkingPanel(props, emit) {
     return null;
   }
 
-  function isPluginCapabilityResponseLog(logItem = {}) {
-    const eventName = normalizeLogString(logItem?.event || logItem?.type);
-    return isPluginCapabilityResponseEvent(eventName);
-  }
-
   function getPluginAnalysisLogOutput(logItem = {}) {
-    const output = String(
-      logItem?.output ?? logItem?.data?.output ?? "",
-    ).trim();
-    if (output) return output;
-    const text = String(logItem?.text || "").trim();
-    return stripPluginModelResponsePrefix(text);
+    return String(logItem?.output || "").trim();
   }
 
   function getLatestPluginAnalysisLog(messageItem = {}) {
@@ -308,7 +286,6 @@ export function useThinkingPanel(props, emit) {
         ...getAllCompletedLogs(messageItem),
       ].filter(
         (logItem) =>
-          isPluginCapabilityResponseLog(logItem) ||
           isGuidanceAnalysisResponseLog(logItem) ||
           isMainModelContentLog(logItem),
       ).length;
@@ -322,7 +299,6 @@ export function useThinkingPanel(props, emit) {
 
     const realtimeLogs = getAllRealtimeLogs(messageItem).filter(
       (logItem) =>
-        !isPluginCapabilityResponseLog(logItem) &&
         !isGuidanceAnalysisResponseLog(logItem) &&
         !isMainModelContentLog(logItem),
     );
@@ -369,6 +345,10 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getThinkingDetailForMessage(messageItem = {}) {
+    if (
+      selectToolTimelineCount(timelineMessage(messageItem)) > 0 ||
+      selectActivityTimelineLogs(timelineMessage(messageItem)).length > 0
+    ) return null;
     const loaded = loadedThinkingDetail.value;
     const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
     if (!identity.key) return loaded;
@@ -382,6 +362,20 @@ export function useThinkingPanel(props, emit) {
     if (liveLogs.length > 0) return liveLogs;
     return getExecutionLogs(detail?.messageItem || props.messageItem);
   });
+
+  function summarizeAnalysisProjection(messageItem = {}) {
+    const activityLogs = selectActivityTimelineLogs(timelineMessage(messageItem));
+    const latestGuidance = [...activityLogs].reverse().find(isGuidanceAnalysisResponseLog);
+    const latestModelAnalysis = [...activityLogs].reverse().find(isMainModelContentLog);
+    return {
+      activityTimelineCount: activityLogs.length,
+      latestGuidanceEventId: String(latestGuidance?.eventId || ""),
+      latestGuidanceOutputLength: getPluginAnalysisLogOutput(latestGuidance || {}).length,
+      latestModelAnalysisEventId: String(latestModelAnalysis?.eventId || ""),
+      latestModelAnalysisOutputLength: getMainModelContentLogOutput(latestModelAnalysis || {}).length,
+    };
+  }
+
   watch(
     () => ({
       identity: thinkingReplayScope(props.messageItem),
@@ -389,6 +383,7 @@ export function useThinkingPanel(props, emit) {
       pending: props.messageItem?.pending === true,
       source: getExecutionLogs(props.messageItem).length > 0 ? "live" : "detail-fallback",
       visibleLogs: currentExecutionLogs.value.map(summarizeRealtimeLog),
+      analysis: summarizeAnalysisProjection(props.messageItem),
     }),
     (projection) => {
       logThinkingReplayDebug("frontend.thinkingReplay.displayProjectionChanged", {
@@ -398,6 +393,7 @@ export function useThinkingPanel(props, emit) {
         source: projection.source,
         visibleLogCount: projection.visibleLogs.length,
         visibleLogs: projection.visibleLogs.slice(-10),
+        ...projection.analysis,
       });
       const candidateLogs = getAllRealtimeLogs(props.messageItem);
       logToolLogWindowDebug("frontend.toolLogWindow.executionWindowSelected", {
@@ -419,7 +415,6 @@ export function useThinkingPanel(props, emit) {
 
   const thinkingDetailLoadKey = computed(() => {
     const messageItem = props.messageItem || {};
-    if (String(props.variant || "panel") === "details") return "";
     if (hasLocalThinkingDetails(messageItem)) return "";
     if (messageItem?.pending === true) return "";
     const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
@@ -433,8 +428,9 @@ export function useThinkingPanel(props, emit) {
       const messageItem = props.messageItem || {};
       const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
       if (!identity.key) return;
+      const refreshDetail = String(props.variant || "panel") === "details";
       const cached = getCachedThinkingDetail(identity);
-      if (cached) {
+      if (cached && !refreshDetail) {
         loadedThinkingDetail.value = { ...cached, __thinkingDetailIdentity: identity };
         logThinkingReplayDebug("frontend.thinkingReplay.detailCacheCommitted", {
           ...thinkingReplayScope(messageItem),
@@ -460,6 +456,7 @@ export function useThinkingPanel(props, emit) {
           dialogProcessId: identity.dialogProcessId,
           turnScopeId: identity.turnScopeId,
           thinkingDetailService: props.thinkingDetailService,
+          refresh: refreshDetail,
         });
         if (!detail) {
           logThinkingReplayDebug("frontend.thinkingReplay.detailRequestEmpty", {
@@ -585,7 +582,6 @@ export function useThinkingPanel(props, emit) {
   function getCompletedToolLogsForMessage(messageItem = {}) {
     const seen = new Set();
     return getAllCompletedLogs(messageItem)
-      .filter((logItem) => !isPluginCapabilityResponseLog(logItem))
       .filter((logItem) => {
         const event = String(logItem?.event || logItem?.type || "").trim();
         const callId = String(
@@ -670,10 +666,15 @@ export function useThinkingPanel(props, emit) {
   }
 
   function openThinkingDetailDrawer() {
+    const detail = getThinkingDetailForMessage(props.messageItem) || {};
     emit("open-thinking-details", {
-      messageItem: props.messageItem,
-      allMessages: props.allMessages,
-      sessionDocs: props.sessionDocs,
+      messageItem: detail.messageItem || props.messageItem,
+      allMessages: Array.isArray(detail.allMessages) ? detail.allMessages : props.allMessages,
+      sessionDocs: Array.isArray(detail.sessionDocs)
+        ? detail.sessionDocs
+        : Array.isArray(detail.sessions)
+          ? detail.sessions
+          : props.sessionDocs,
     });
   }
 

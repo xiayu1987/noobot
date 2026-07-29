@@ -49,6 +49,22 @@ test("commitTurn increments structural version and preserves canonical attachmen
   assert.deepEqual(first.attachments, [canonical()]);
 });
 
+test("commitTurn persists the preallocated user message identity", async () => {
+  const h = harness();
+  const result = await h.service.commitTurn({
+    userId: "u1",
+    sessionId: "s1",
+    content: "hello",
+    turnScopeId: "t1",
+    idempotencyKey: "i1",
+    messageId: "msg_user-1",
+  });
+
+  assert.equal(result.userMessage.id, "msg_user-1");
+  assert.equal(result.userMessage.messageId, "msg_user-1");
+  assert.equal(h.get().messages[0].messageId, "msg_user-1");
+});
+
 test("commitTurn persists internal run origin without frontend user identity", async () => {
   const h = harness();
   const result = await h.service.commitTurn({

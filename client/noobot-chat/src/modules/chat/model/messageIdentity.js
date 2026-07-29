@@ -164,10 +164,8 @@ export function canUseTurnScopedAssets(messageItem = {}) {
 export function clearTurnScopedAssets(messageItem = {}) {
   if (!messageItem || typeof messageItem !== "object") return messageItem;
   messageItem.attachments = [];
-  messageItem.completedToolLogs = [];
-  messageItem.realtimeLogs = [];
-  messageItem.executionLogTotal = 0;
   messageItem.toolTimeline = [];
+  messageItem.activityTimeline = [];
   return messageItem;
 }
 

@@ -82,7 +82,7 @@ describe("useChatEngine.session-detail", () => {
     });
   });
 
-  it("keys a persisted timing without turnScopeId through its matching message", () => {
+  it("keys a persisted timing by its canonical turnScopeId", () => {
     const turnScopeId = "client-turn:hydrated-timing";
     const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
       sessionId: "s-hydrated-timing",
@@ -92,8 +92,9 @@ describe("useChatEngine.session-detail", () => {
       sessionId: "s-hydrated-timing",
       sessions: [{
         sessionId: "s-hydrated-timing",
-        messages: [{ role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-hydrated-timing" }],
+        messages: [{ id: "msg-hydrated-timing", messageId: "msg-hydrated-timing", role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-hydrated-timing" }],
         turnTimings: [{
+          turnScopeId,
           dialogProcessId: "dp-hydrated-timing",
           thinkingStartedAt: "2026-07-15T10:00:00.000Z",
           thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
@@ -152,8 +153,10 @@ describe("useChatEngine.session-detail", () => {
       backendSessionId: "s-apply-preserve",
       title: "current",
       messages: [
-        { role: RoleEnum.USER, content: "edited again", turnScopeId: freshTurnScopeId },
+        { id: "msg-user-fresh-apply", messageId: "msg-user-fresh-apply", role: RoleEnum.USER, content: "edited again", turnScopeId: freshTurnScopeId },
         {
+          id: "msg-assistant-fresh-apply",
+          messageId: "msg-assistant-fresh-apply",
           role: RoleEnum.ASSISTANT,
           content: "",
           turnScopeId: freshTurnScopeId,
@@ -181,8 +184,10 @@ describe("useChatEngine.session-detail", () => {
       sessions: [{
         sessionId: "s-apply-preserve",
         messages: [
-          { role: RoleEnum.USER, content: "old stopped", turnScopeId: staleStoppedTurnScopeId },
+          { id: "msg-user-old-apply", messageId: "msg-user-old-apply", role: RoleEnum.USER, content: "old stopped", turnScopeId: staleStoppedTurnScopeId },
           {
+            id: "msg-assistant-old-apply",
+            messageId: "msg-assistant-old-apply",
             role: RoleEnum.ASSISTANT,
             content: "已停止",
             turnScopeId: staleStoppedTurnScopeId,
@@ -266,8 +271,10 @@ describe("useChatEngine.session-detail", () => {
       backendSessionId: "s-apply-same-scope-stopped",
       title: "current",
       messages: [
-        { role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
+        { id: "msg-user-same-scope-stopped", messageId: "msg-user-same-scope-stopped", role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
         {
+          id: "msg-assistant-same-scope-stopped",
+          messageId: "msg-assistant-same-scope-stopped",
           role: RoleEnum.ASSISTANT,
           content: "",
           turnScopeId: freshTurnScopeId,
@@ -360,8 +367,10 @@ describe("useChatEngine.session-detail", () => {
           dialogProcessId: "dp-stale-stopped",
         }],
         messages: [
-          { role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
+          { id: "msg-user-same-scope-stopped", messageId: "msg-user-same-scope-stopped", role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
           {
+            id: "msg-assistant-same-scope-stopped",
+            messageId: "msg-assistant-same-scope-stopped",
             role: RoleEnum.ASSISTANT,
             content: "已停止",
             turnScopeId: freshTurnScopeId,
@@ -462,8 +471,10 @@ describe("useChatEngine.session-detail", () => {
       backendSessionId: "s-apply-same-scope-completed",
       title: "current",
       messages: [
-        { role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
+        { id: "msg-user-same-scope-completed", messageId: "msg-user-same-scope-completed", role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
         {
+          id: "msg-assistant-same-scope-completed",
+          messageId: "msg-assistant-same-scope-completed",
           role: RoleEnum.ASSISTANT,
           content: "",
           turnScopeId: freshTurnScopeId,
@@ -492,8 +503,10 @@ describe("useChatEngine.session-detail", () => {
       sessions: [{
         sessionId: "s-apply-same-scope-completed",
         messages: [
-          { role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
+          { id: "msg-user-same-scope-completed", messageId: "msg-user-same-scope-completed", role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
           {
+            id: "msg-assistant-same-scope-completed",
+            messageId: "msg-assistant-same-scope-completed",
             role: RoleEnum.ASSISTANT,
             content: "answer done",
             turnScopeId: freshTurnScopeId,

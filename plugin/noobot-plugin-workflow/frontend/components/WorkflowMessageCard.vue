@@ -19,10 +19,12 @@ const props = defineProps({
   formatFileSize: { type: Function, default: (value = 0) => `${Number(value || 0)} B` },
   isImageMime: { type: Function, default: (mimeType = "") => String(mimeType || "").startsWith("image/") },
   workflowNodeStateRegistry: { type: Object, default: null },
+  subSessionMessageRegistry: { type: Object, default: null },
+  subSessionMessageRegistryVersion: { type: Number, default: 0 },
   selectExecutionDetail: { type: Function, default: null },
   stopExecution: { type: Function, default: null },
   selectSessionMessages: { type: Function, default: null },
-  mergeSubSessionSnapshot: { type: Function, default: null },
+  applyWorkflowRuntimeEvent: { type: Function, default: null },
   logWorkflowDiagnostics: { type: Function, default: null },
 });
 const emit = defineEmits(["open-thinking-details"]);
@@ -45,6 +47,28 @@ function logCardRender(stage) {
 
 onMounted(() => logCardRender("Mounted"));
 watch(() => props.messageItem, () => logCardRender("Updated"));
+watch(
+  () => props.subSessionMessageRegistryVersion,
+  (version, previousVersion) => {
+    const sessions = props.subSessionMessageRegistry?.sessions || {};
+    props.logWorkflowDiagnostics?.("frontend.workflowRender.cardRegistryVersionReceived", {
+      sessionId: String(props.messageItem?.sessionId || ""),
+      dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
+      turnScopeId: String(props.messageItem?.turnScopeId || ""),
+      previousVersion: Number(previousVersion || 0),
+      subSessionMessageRegistryVersion: Number(version || 0),
+      subSessions: Object.values(sessions).map((session = {}) => ({
+        sessionId: String(session?.sessionId || session?.id || ""),
+        messages: (Array.isArray(session?.messages) ? session.messages : []).map((message = {}) => ({
+          id: String(message?.id || message?.messageId || ""),
+          role: String(message?.role || ""),
+          contentLength: String(message?.content || "").length,
+        })),
+      })),
+    });
+  },
+  { immediate: true },
+);
 
 const {
   selectedExecutionId,
@@ -58,6 +82,7 @@ const {
   selectedRuntimeNode,
   selectedRuntimeStep,
   selectedNodeSessionId,
+  runningPlaceholderViewModel,
   selectedGraphDialogProcessId,
   semanticPreviewExpanded,
   semanticFlowtos,
@@ -104,6 +129,7 @@ const {
     :viewer-error="viewerError"
     :viewer-state="viewerState"
     :selected-node-session-id="selectedNodeSessionId"
+    :running-placeholder-view-model="runningPlaceholderViewModel"
     :selected-execution-id="selectedExecutionId"
     :execution-directory="executionDirectory"
     :attempt-execution-ids="attemptExecutionIds"

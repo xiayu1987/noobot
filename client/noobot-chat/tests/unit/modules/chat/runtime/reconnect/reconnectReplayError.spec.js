@@ -15,7 +15,7 @@ describe("reconnect replay error normalization", () => {
     expect(normalizeReplayError(null)).toBe("");
   });
 
-  it("does not render an object error as [object Object]", () => {
+  it("does not let a legacy object error mutate a canonical message", () => {
     const targetMessage = { error: "", pending: true };
 
     const applied = applyReconnectEnvelopeToTargetMessage({
@@ -29,7 +29,7 @@ describe("reconnect replay error normalization", () => {
     });
 
     expect(applied).toBe(true);
-    expect(targetMessage.error).toBe("对话已被用户停止");
+    expect(targetMessage.error).toBe("");
     expect(targetMessage.error).not.toBe("[object Object]");
   });
 });

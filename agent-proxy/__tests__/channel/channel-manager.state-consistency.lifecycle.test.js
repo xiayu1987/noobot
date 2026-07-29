@@ -197,6 +197,47 @@ test("upstream close without authoritative event does not synthesize a turn term
   assert.equal(listEvents(client, "error").length, 0);
 });
 
+test("upstream message log detects nested authoritative content", () => {
+  FakeUpstreamWebSocket.instances = [];
+  const records = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket, {
+    sessionLogClient: { log: (apiKey, event) => records.push({ apiKey, event }) },
+  });
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-upstream-content" }),
+    { userId: "user-1", sessionId: "session-upstream-content" },
+  );
+  channel.apiKey = "api-key-1";
+
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  records.length = 0;
+  upstream.emit("message", JSON.stringify({
+    event: "message_event",
+    data: {
+      event: {
+        envelopeKind: "noobot.message_event",
+        envelopeVersion: 1,
+        eventId: "event-1",
+        eventType: "main_model_content",
+        messageId: "message-1",
+        sequence: 1,
+        timestamp: "2026-01-01T00:00:00.000Z",
+        sessionId: "session-upstream-content",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+        payload: { content: "authoritative result" },
+      },
+    },
+  }));
+
+  const upstreamRecord = records.find(({ event }) => event.event === "agentProxy.upstream.message");
+  assert.ok(upstreamRecord);
+  assert.equal(upstreamRecord.event.data.hasContent, true);
+  assert.equal(upstreamRecord.event.data.messageId, "message-1");
+});
+
 test("upstream close reason user_stopped is transport metadata, not confirmation", () => {
   FakeUpstreamWebSocket.instances = [];
   const manager = new ChannelManager(FakeUpstreamWebSocket);

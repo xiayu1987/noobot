@@ -19,6 +19,7 @@ import {
   buildSessionArtifactFileMap,
   readSessionDisplaySummaryArtifact,
   readSessionArtifact,
+  readRecentSessionTurns,
   rebuildSessionDisplaySummaryArtifact,
   writeSessionArtifact,
 } from "../session-artifact-store.js";
@@ -494,7 +495,31 @@ export class FileSystemSessionRepository {
   async rebuildSessionDisplaySummary(userId = "", sessionId = "", parentSessionId = "", { depth = 0, persistenceContext = null } = {}) {
     const session = await this.findById(userId, sessionId, parentSessionId, persistenceContext);
     if (!session) return null;
-    return this.writeSessionDisplaySummary(userId, session, { depth, persistenceContext });
+    const turns = await readRecentSessionTurns({
+      sessionDir: (await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext)).sessionDir,
+      limit: Number.MAX_SAFE_INTEGER,
+      fallback: null,
+    });
+    const messages = turns.flatMap((turn = {}) => Array.isArray(turn.messages) ? turn.messages : []);
+    if (Array.isArray(session.turnOrder) && session.turnOrder.length > 0 && messages.length === 0) {
+      const error = new Error("canonical session turn artifacts contain no messages");
+      error.code = "SESSION_TURN_ARTIFACT_EMPTY";
+      throw error;
+    }
+    return this.writeSessionDisplaySummary(
+      userId,
+      Array.isArray(session.turnOrder) && session.turnOrder.length > 0
+        ? { ...session, messages }
+        : session,
+      { depth, persistenceContext },
+    );
+  }
+
+  async getTurnMessageCount(userId = "", sessionId = "", parentSessionId = "", persistenceContext = null) {
+    const session = await this.findById(userId, sessionId, parentSessionId, persistenceContext);
+    return Array.isArray(session?.turnOrder)
+      ? session.turnOrder.reduce((count, item = {}) => count + Math.max(0, Number(item?.messageCount || 0)), 0)
+      : Array.isArray(session?.messages) ? session.messages.length : 0;
   }
 
   async removeSessionDisplaySummaries(userId = "", sessionIds = []) {
@@ -676,6 +701,10 @@ export class FileSystemSessionRepository {
             throw rebuildError;
           }
         }
+        // The display summary is a durable projection of the same canonical
+        // session messages. Keep it in the save boundary so a reconnect or
+        // refresh cannot observe a stale projection while the turn is live.
+        await this.writeSessionDisplaySummary(userId, payload, { persistenceContext });
         return true;
       },
       persistenceContext,

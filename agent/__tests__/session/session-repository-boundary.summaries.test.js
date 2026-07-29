@@ -97,6 +97,40 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
+test("session save refreshes the display projection with live activity timeline", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "live" });
+    await runtime.sessionCrudService.ensureSession(userId, "live", "");
+
+    const session = await runtime.repositories.sessionRepository.findById(userId, "live", "");
+    session.messages = [{
+      role: "assistant",
+      type: "tool_call",
+      chatPresentation: false,
+      presentationMessageId: "presentation-live",
+      turnScopeId: "turn-live",
+      activityTimeline: [{
+        eventId: "guidance-analysis:live",
+        activityKind: "guidance_analysis",
+        sequence: 1,
+        sequenceDomain: "activity",
+        sequenceScopeId: "presentation-live",
+        authority: "authoritative",
+        text: "analysis in progress",
+      }],
+    }];
+    await runtime.repositories.sessionRepository.save(userId, session, "");
+
+    const display = await runtime.repositories.sessionRepository.readSessionDisplaySummary(userId, "live", "");
+    assert.equal(display.messages.length, 1);
+    assert.equal(display.messages[0].presentationMessageId, "presentation-live");
+    assert.equal(display.messages[0].activityTimeline[0].eventId, "guidance-analysis:live");
+  });
+});
+
 test("concurrent saves for different sessions preserve every sessions summary entry", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
@@ -123,6 +157,89 @@ test("concurrent saves for different sessions preserve every sessions summary en
     assert.equal(summary.sessions.find((item) => item.sessionId === "A").title, "updated A");
     assert.equal(summary.sessions.find((item) => item.sessionId === "B").title, "updated B");
   });
+});
+
+test("session display summary projects persisted messageUid as canonical message identity", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "identity-session",
+    messages: [{
+      role: "user",
+      content: "persisted user",
+      messageUid: "sm-persisted-user",
+      frontendUserMessage: true,
+      turnScopeId: "turn-identity",
+    }],
+  });
+
+  assert.deepEqual(
+    (({ id, messageId, messageUid, role }) => ({ id, messageId, messageUid, role }))(summary.messages[0]),
+    {
+      id: "sm-persisted-user",
+      messageId: "sm-persisted-user",
+      messageUid: "sm-persisted-user",
+      role: "user",
+    },
+  );
+});
+
+test("session display summary projects one explicit assistant presentation from many model messages", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "assistant-presentation-session",
+    messages: [
+      {
+        role: "assistant",
+        type: "tool_call",
+        content: "",
+        messageUid: "sm-tool-call",
+        messageId: "model-tool-call",
+        presentationMessageId: "presentation-1",
+        chatPresentation: false,
+        turnScopeId: "turn-1",
+        activityTimeline: [{
+          eventId: "thinking-1",
+          event: "thinking",
+          type: "thinking",
+          text: "working",
+          sequence: 1,
+          sequenceScopeId: "model-tool-call",
+          sequenceDomain: "message-event",
+          authority: "authoritative",
+        }],
+        toolTimeline: [{
+          key: "call:tool-1",
+          toolCallId: "tool-1",
+          status: "completed",
+        }],
+      },
+      {
+        role: "assistant",
+        type: "message",
+        content: "final answer",
+        messageUid: "sm-final",
+        messageId: "model-final",
+        presentationMessageId: "presentation-1",
+        chatPresentation: true,
+        turnScopeId: "turn-1",
+      },
+    ],
+  });
+
+  assert.equal(summary.messages.length, 1);
+  assert.equal(summary.messages[0].activityTimeline.length, 1);
+  assert.equal(summary.messages[0].toolTimeline.length, 1);
+  assert.deepEqual(
+    (({ id, messageId, messageUid, sourceMessageId, sourceMessageUid, content }) => ({
+      id, messageId, messageUid, sourceMessageId, sourceMessageUid, content,
+    }))(summary.messages[0]),
+    {
+      id: "presentation-1",
+      messageId: "presentation-1",
+      messageUid: undefined,
+      sourceMessageId: "model-final",
+      sourceMessageUid: "sm-final",
+      content: "final answer",
+    },
+  );
 });
 
 
@@ -188,6 +305,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
     sessionB.messages = [
       {
         id: "u1",
+        messageId: "u1",
+        messageUid: "sm-u1",
         role: "user",
         turnScopeId: "turn-scope-u1",
         content: longUserContent,
@@ -203,8 +322,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
         id: "a1",
         role: "assistant",
         content: longAssistantContent,
-        realtimeLogs: [{ event: "thinking", text: "full thinking" }],
-        completedToolLogs: [{ event: "tool", text: "full tool detail" }],
+        activityTimeline: [{
+          eventId: "activity-1", event: "thinking", sequence: 1,
+          sequenceDomain: "message-event", sequenceScopeId: "a1", authority: "authoritative",
+          text: "full thinking",
+        }],
+        toolTimeline: [{
+          key: "call:call-1", toolCallId: "call-1", status: "completed",
+          call: { eventId: "tool-call-1" }, resultEvent: { eventId: "tool-result-1" },
+        }],
         tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: { path: "/tmp/a" } } }],
         rawMessages: [{ role: "assistant", content: "raw" }],
       },
@@ -309,6 +435,10 @@ test("session display summary should keep chat view lightweight and rebuild stal
         type: "message",
         dialogProcessId: "dp-tool-only",
         content: "tool only final answer",
+        toolTimeline: [
+          { key: "call:tool-only-1", toolCallId: "tool-only-1", status: "running", call: { eventId: "tool-only-call-1" } },
+          { key: "call:tool-only-2", toolCallId: "tool-only-2", status: "completed", call: { eventId: "tool-only-call-2" }, resultEvent: { eventId: "tool-only-result-2" } },
+        ],
       },
       {
         role: "assistant",
@@ -333,10 +463,14 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const persistedSession = await readSessionArtifact({ sessionDir: scopeB.sessionDir });
     assert.equal(persistedSession.messages.every((item) => "turnScopeId" in item), true);
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 6);
+    assert.equal(summary.schemaVersion, 9);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.messages.length, 6);
     assert.equal(summary.messages.every((item) => "turnScopeId" in item), true);
+    assert.deepEqual(
+      (({ id, messageId, messageUid }) => ({ id, messageId, messageUid }))(summary.messages[0]),
+      { id: "u1", messageId: "u1", messageUid: "sm-u1" },
+    );
     assert.equal(summary.stats.messageCount, 11);
     assert.equal(summary.stats.displayMessageCount, 6);
     assert.equal(summary.stats.injectedMessageCount, 1);
@@ -450,7 +584,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(displayData.sessions[0].depth, 2);
     assert.equal(displayData.sessions[0].toolLogSummaries.every((item) => item.depth === 2), true);
     summary = JSON.parse(await readFile(summaryFile, "utf8"));
-    assert.equal(summary.schemaVersion, 6);
+    assert.equal(summary.schemaVersion, 9);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.depth, 2);
   });

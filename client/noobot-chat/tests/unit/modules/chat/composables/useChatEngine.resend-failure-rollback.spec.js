@@ -156,9 +156,10 @@ describe("useChatEngine.resend failure rollback", () => {
       throw new Error("network failed");
     });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
-      const replacementUser = { id: "m-new", turnScopeId, role: RoleEnum.USER, content: "edited retry text" };
+      const replacementUser = { id: "m-new", messageId: "m-new", turnScopeId, role: RoleEnum.USER, content: "edited retry text" };
       return {
         ok: true,
+        newTurn: replacementUser,
         session: makeSession("local-resend-send-fail", {
           messages: [replacementUser],
           rawMessages: [replacementUser],

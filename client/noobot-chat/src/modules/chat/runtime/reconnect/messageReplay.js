@@ -5,34 +5,27 @@
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import {
-  findLatestPendingAssistantAfterLastUser,
   findReusableMessageObject,
   mergeCurrentUserMessagesIntoFoldedMessages,
   patchMessageObjectPreservingUiState,
 } from "../../model/reconnectReplayModel.js";
-import { getMessageDialogProcessId } from "../../model/messageIdentity.js";
-import { _ensureArray, _isAssistantRole, _matchesDialogProcessId, _trimStr } from "./utils.js";
+import { _ensureArray, _isAssistantRole, _trimStr } from "./utils.js";
 import {
   findAssistantMessageByDialogProcessId,
   hasAssistantMessageWithContent,
 } from "./messageLookup.js";
 
 export {
-  hydrateSessionBeforeReconnectReplayIfNeeded,
   renderActiveSessionBeforeReplay,
-  shouldHydrateSessionBeforeReplay,
 } from "./hydrationReplay.js";
 export {
   applyReconnectReplayBatchToActiveSession,
-  applyDoneSnapshotReconnectBatch,
   applyReconnectEnvelopeBatchToTargetMessage,
   applyReconnectEnvelopeToTargetMessage,
-  applyReconnectFallbackAssistant,
   buildReconnectReplayEnvelopeCallbacks,
   finalizeReconnectReplayBatch,
   prepareReconnectReplayBatchPlan,
   prepareReconnectReplayMessages,
-  resolveReconnectTargetOrApplyFallbackAssistant,
   shouldSkipReconnectBatchAfterTerminal,
 } from "./batchReplay.js";
 export {
@@ -41,16 +34,6 @@ export {
   findLatestAssistantMessageForRealtimeLogs,
   hasAssistantMessageWithContent,
 } from "./messageLookup.js";
-export {
-  createFinalAssistantFromReconnectReplay,
-  hasReconnectInFlightEvent,
-  resolveReconnectTargetAssistantMessage,
-} from "./assistantMessageReplay.js";
-export {
-  applyDoneMessagesFromReconnect,
-  applyDoneRealtimeLogsFromReconnectBatch,
-} from "./doneReplay.js";
-
 export function applyAssistantFailureState({ targetAssistantMessage, errorMessage = "", translate } = {}) {
   if (!targetAssistantMessage) return;
   targetAssistantMessage.error = _trimStr(errorMessage);
@@ -113,28 +96,19 @@ export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessage
     .filter(
       (messageItem) =>
         _isAssistantRole(messageItem) &&
-        _matchesDialogProcessId(messageItem, normalizedDpId),
+        _trimStr(messageItem?.dialogProcessId) === normalizedDpId,
     );
   if (!assistantMessagesForDialogProcess.length) return existingMessages;
 
   for (const nextMessage of assistantMessagesForDialogProcess) {
-    let reusableMessage = findReusableMessageObject(nextMessage, existingMessages);
-    if (!reusableMessage) {
-      reusableMessage = existingMessages.find(
-        (messageItem) =>
-          _isAssistantRole(messageItem) &&
-          messageItem?.pending === true &&
-          _matchesDialogProcessId(messageItem, normalizedDpId),
-      );
-    }
-    if (!reusableMessage) {
-      reusableMessage = findLatestPendingAssistantAfterLastUser(existingMessages);
-      if (reusableMessage && getMessageDialogProcessId(reusableMessage)) {
-        reusableMessage = null;
-      }
-    }
+    const nextMessageId = _trimStr(nextMessage?.messageId || nextMessage?.id);
+    if (!nextMessageId) continue;
+    const reusableMessage = existingMessages.find(
+      (messageItem) =>
+        _isAssistantRole(messageItem) &&
+        _trimStr(messageItem?.messageId || messageItem?.id) === nextMessageId,
+    );
     if (!reusableMessage) continue;
-    reusableMessage.dialogProcessId = normalizedDpId;
     patchMessageObjectPreservingUiState(
       reusableMessage,
       nextMessage,

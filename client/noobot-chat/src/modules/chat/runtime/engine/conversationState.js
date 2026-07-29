@@ -166,8 +166,6 @@ export function createChatEngineConversationState({
   function scheduleMissingInteractionPayloadFailure({
     sessionId = "",
     dialogProcessId = "",
-    turnScopeId = "",
-    targetAssistantMessage = null,
   } = {}) {
     if (hasPendingInteractionForDialog(dialogProcessId)) return;
     const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
@@ -175,23 +173,7 @@ export function createChatEngineConversationState({
     const timer = setTimeout(() => {
       missingInteractionPayloadTimers.delete(key);
       if (hasPendingInteractionForDialog(dialogProcessId)) return;
-      applyRunStateEvent?.({
-          type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-          state: BackendChannelState.ERROR,
-          sessionId,
-          dialogProcessId,
-          turnScopeId,
-          source: "interaction_payload_missing",
-      });
-      clearPendingInteraction();
       const missingInteractionError = translate("chat.interactionPayloadMissing");
-      applyAssistantFailureState(targetAssistantMessage, missingInteractionError);
-      emitSyntheticErrorConversationState({
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        sourceEvent: "interaction_payload_missing",
-      });
       notify({ type: "error", message: missingInteractionError });
     }, 1200);
     missingInteractionPayloadTimers.set(key, timer);

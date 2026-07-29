@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   UI_PREFERENCE_STORAGE_KEYS,
+  applyFrontendPluginModelConfigDefaults,
   loadUiPreferences,
   persistBotScenarioPreference,
   persistPluginModelConfigPreference,
@@ -45,7 +46,7 @@ describe("ui preferences storage", () => {
       safeConfirm: true,
       safeConfirmLevel: "low",
       sanitizeOutput: true,
-      streamOutput: true,
+      streamOutput: false,
       botScenario: "",
       selectedModel: "",
       selectedModelByScenario: {},
@@ -72,6 +73,28 @@ describe("ui preferences storage", () => {
       selectedModelByScenario: {},
       memoryModel: "",
       pluginModelConfig: {},
+    });
+  });
+
+  it("defaults harness planning and planning acceptance to disabled", () => {
+    expect(applyFrontendPluginModelConfigDefaults({})).toEqual({
+      harness: {
+        capabilityProfile: {
+          planning: { enabled: false },
+          acceptance: { enabled: false },
+        },
+      },
+    });
+    expect(applyFrontendPluginModelConfigDefaults({
+      harness: {
+        capabilityProfile: {
+          planning: { enabled: true },
+          acceptance: { enabled: true },
+        },
+      },
+    }).harness.capabilityProfile).toEqual({
+      planning: { enabled: true },
+      acceptance: { enabled: true },
     });
   });
 

@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { SessionExecutionRunner } from "../../src/bot/execution/runner.js";
+import { finalizeAgentTurn } from "../../src/bot/execution/runner/result-finalizer.js";
 import {
   AGENT_LIFECYCLE_BRANCH_STATE,
   AGENT_LIFECYCLE_EVENT,
@@ -218,6 +219,54 @@ test("runSession recovers checkpoint UIDs and active prefix from the durable rec
     capturedFinalizePayload.persistedTurnMessages.map((message) => message.messageUid),
     ["sm_first", "sm_retained"],
   );
+});
+
+test("finalizer preserves canonical activity from the timeline checkpoint", async () => {
+  let capturedFinalizePayload = null;
+  await finalizeAgentTurn({
+    resolvedRunConfig: {},
+    runtimeEventListener: null,
+    usedSessionId: "s1",
+    dialogProcessId: "dialog-1",
+    resolvedTurnScopeId: "turn-a",
+    dispatchRuntime: {
+      timelineCheckpointPersistedMessageUids: ["sm_assistant"],
+    },
+    getSessionTurns: async () => [{
+      messageUid: "sm_assistant",
+      role: "assistant",
+      type: "tool_call",
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-1",
+      activityTimeline: [{ eventId: "guidance-analysis:1" }],
+    }],
+    getTurnSummaryCheckpointState: null,
+    finalizeRunSession: async (payload = {}) => {
+      capturedFinalizePayload = payload;
+      return { ok: true };
+    },
+    userId: "u1",
+    parentSessionId: "",
+    parentDialogProcessId: "",
+    caller: "user",
+    agentResult: {
+      turnMessages: [{
+        messageUid: "sm_assistant",
+        role: "assistant",
+        type: "tool_call",
+        activityTimeline: [],
+      }],
+    },
+    executionStartIndex: 0,
+    userConfig: {},
+    resolvedParentAsyncResultContainer: null,
+    lifecycle: null,
+    persistenceContext: null,
+  });
+
+  assert.equal(capturedFinalizePayload.persistedTurnMessages.length, 1);
+  assert.equal(capturedFinalizePayload.persistedTurnMessages[0].activityTimeline[0].eventId, "guidance-analysis:1");
+  assert.equal(capturedFinalizePayload.alreadyPersistedTurnMessageCount, 1);
 });
 
 function collectLifecycleStates(events) {

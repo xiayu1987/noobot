@@ -4,8 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
-import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import {
+  createCanonicalAssistant,
+  createFixture,
+  createFakeProcessStore,
+} from "../helpers/useReconnectReplayHelper.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -16,28 +20,28 @@ describe("useReconnectReplay", () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", content: "", pending: true },
+      createCanonicalAssistant({ dialogProcessId: "dp-1" }),
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       seq: 3,
       text: "C",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       seq: 1,
       text: "A",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       seq: 2,
       text: "B",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       seq: 2,
@@ -55,16 +59,16 @@ describe("useReconnectReplay", () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-gap", content: "", pending: true },
+      createCanonicalAssistant({ dialogProcessId: "dp-gap" }),
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-gap",
       seq: 5,
       text: "X",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-gap",
       seq: 6,
@@ -82,22 +86,22 @@ describe("useReconnectReplay", () => {
     const { api, refs } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-inc", content: "", pending: true },
+      createCanonicalAssistant({ dialogProcessId: "dp-inc" }),
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-inc",
       seq: 1,
       text: "A",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-inc",
       seq: 2,
       text: "B",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-inc",
       seq: 3,
@@ -116,15 +120,11 @@ describe("useReconnectReplay", () => {
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q", turnScopeId: "turn-boundary" },
       {
-        role: RoleEnum.ASSISTANT,
-        dialogProcessId: "dp-boundary",
-        turnScopeId: "turn-boundary",
-        content: "",
-        pending: true,
+        ...createCanonicalAssistant({ dialogProcessId: "dp-boundary", turnScopeId: "turn-boundary" }),
       },
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.THINKING, {
+    await api.applyCanonicalMessageEvent("thinking", {
       sessionId: "s-1",
       dialogProcessId: "dp-boundary",
       turnScopeId: "turn-boundary",
@@ -132,23 +132,24 @@ describe("useReconnectReplay", () => {
       event: "execution_step",
       text: "thinking once",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-boundary",
       turnScopeId: "turn-boundary",
-      seq: 9,
+      seq: 10,
       text: "answer",
     });
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
+    await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-boundary",
       turnScopeId: "turn-boundary",
-      seq: 9,
+      seq: 10,
+      eventId: "message-dp-boundary-llm_delta-10",
       text: " duplicate",
     });
 
     const assistant = refs.activeSession.value.messages[1];
     expect(assistant.content).toBe("answer");
-    expect(api.__test.appliedReconnectSeqByDialogProcessId["dp-boundary"]).toBe(9);
+    expect(api.__test.appliedReconnectSeqByDialogProcessId["dp-boundary"]).toBe(10);
   });
 });

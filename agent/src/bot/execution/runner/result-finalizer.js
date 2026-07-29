@@ -41,6 +41,9 @@ const durablePersistedMessageUids = (Array.isArray(durableCheckpointState?.recei
     : []);
 const checkpointPersistedMessageUids = new Set(
   [
+    ...(Array.isArray(dispatchRuntime?.timelineCheckpointPersistedMessageUids)
+      ? dispatchRuntime.timelineCheckpointPersistedMessageUids
+      : []),
     ...(Array.isArray(dispatchRuntime?.summaryCheckpointPersistedMessageUids)
       ? dispatchRuntime.summaryCheckpointPersistedMessageUids
       : []),

@@ -22,16 +22,6 @@ describe("ChatMessageNavigator theme colors", () => {
     expect(navigatorSource).toContain(':disabled="isMobile"');
   });
 
-  it("uses theme-aware el-anchor container colors", () => {
-    expect(navigatorSource).toContain("class=\"chat-message-navigator noobot-surface-card\"");
-    expect(navigatorSource).toContain(":marker=\"false\"");
-    expect(navigatorSource).toContain("color: var(--noobot-text-main, var(--el-text-color-primary));");
-    expect(navigatorSource).toContain("class=\"chat-message-navigator noobot-surface-card\"");
-    expect(navigatorSource).toContain("--el-anchor-bg-color: transparent;");
-    expect(navigatorSource).toContain("--el-anchor-text-color: var(--noobot-text-secondary, var(--el-text-color-secondary));");
-    expect(navigatorSource).toContain("padding-inline-start: 0;");
-  });
-
   it("uses theme-aware item container colors for base, hover, and current states", () => {
     expect(navigatorSource).toContain("background: var(--noobot-fill-soft, var(--el-fill-color-lighter));");
     expect(navigatorSource).toContain("color: var(--noobot-text-secondary, var(--el-text-color-secondary));");

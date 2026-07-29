@@ -15,7 +15,7 @@ export function logThinkingReplayDebug(event, payload = {}) {
     sessionLogSink?.log?.({
       category: "debug",
       level: "debug",
-      debugType: "thinking-replay",
+      debugType: "timeline-pipeline",
       event,
       sessionId: payload?.sessionId || "",
       dialogProcessId: payload?.dialogProcessId || "",

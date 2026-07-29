@@ -13,31 +13,73 @@ import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatCo
 import { selectToolTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 
+function authoritative(eventType, sequence, extra = {}) {
+  const messageId = extra.messageId || "message-1";
+  return {
+    event: "message_event",
+    sequence,
+    data: {
+      event: {
+        envelopeKind: "noobot.message_event",
+        envelopeVersion: 2,
+        eventId: extra.eventId || `${messageId}-event-${sequence}`,
+        eventType,
+        sessionId: "s-1",
+        messageId,
+        presentationMessageId: extra.presentationMessageId || messageId,
+        sequenceDomain: "message-event",
+        sequenceScopeId: messageId,
+        dialogProcessId: extra.dialogProcessId || "dp-1",
+        turnScopeId: extra.turnScopeId || "turn-1",
+        sequence,
+        timestamp: `2026-07-22T05:00:${String(sequence).padStart(2, "0")}.000Z`,
+        ...extra,
+      },
+    },
+  };
+}
+
 function createActiveReplayFixture(overrides = {}) {
   const activeSession = {
     value: {
+      id: "s-1",
+      sessionId: "s-1",
       messages: [
-        { role: "assistant", dialogProcessId: "dp-1", content: "", pending: true },
+        {
+          id: "message-1",
+          messageId: "message-1",
+          sessionId: "s-1",
+          role: "assistant",
+          dialogProcessId: "dp-1",
+          turnScopeId: "turn-1",
+          content: "",
+        },
       ],
     },
   };
 
-  return {
+  const fixture = {
     activeSession,
     activeSessionId: { value: "s-1" },
-    appendMessage: vi.fn((message) => activeSession.value.messages.push(message)),
     chatList: { value: [] },
     appliedReconnectSeqByDialogProcessId: {},
     terminalDialogProcessIdSet: new Set(),
     classifyRealtimeLog: vi.fn((logItem) => logItem),
     getReplayHydrationPromise: vi.fn(() => null),
     setReplayHydrationPromise: vi.fn(),
-    applyDoneMessages: vi.fn(),
     envelopeCallbacks: {},
     markReconnectSequenceApplied: vi.fn(),
     scrollBottom: vi.fn(),
     ...overrides,
   };
+  fixture.findCanonicalMessageById = overrides.findCanonicalMessageById || ((sessionId, messageId) => {
+    const targetSessionId = fixture.activeSession.value.sessionId || fixture.activeSession.value.id;
+    if (sessionId !== targetSessionId) return null;
+    return fixture.activeSession.value.messages.find(
+      (message) => (message.messageId || message.id) === messageId,
+    ) || null;
+  });
+  return fixture;
 }
 
 function createFakeProcessStore() {
@@ -115,7 +157,7 @@ describe("replayCacheConsumer", () => {
       2,
       [{ event: StreamEventEnum.DELTA, data: { text: "b" } }],
       "",
-      { turnScopeId: "", legacyDialogFallback: true },
+      { turnScopeId: "" },
     );
     expect(replayCache).toEqual({
       "s-2": {
@@ -143,16 +185,16 @@ describe("replayCacheConsumer", () => {
       ...fixture,
       dialogProcessId: " dp-1 ",
       messages: [
-        { event: StreamEventEnum.DELTA, data: { seq: 1, text: "old" } },
-        { event: StreamEventEnum.DELTA, data: { seq: 3, text: "new" } },
+        authoritative("llm_delta", 1, { text: "old" }),
+        authoritative("llm_delta", 3, { text: "new" }),
       ],
     });
 
     expect(fixture.activeSession.value.messages[0].content).toBe("new");
     expect(fixture.markReconnectSequenceApplied).toHaveBeenCalledWith("dp-1", 3, expect.objectContaining({
-      sessionId: "",
-      turnScopeId: "",
-      eventKindsAtSequence: [StreamEventEnum.DELTA],
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      eventKindsAtSequence: ["message_event"],
     }));
     expect(fixture.scrollBottom).not.toHaveBeenCalled();
   });
@@ -165,15 +207,15 @@ describe("replayCacheConsumer", () => {
       ...fixture,
       dialogProcessId: "dp-1",
       messages: [
-        { event: StreamEventEnum.DELTA, data: { seq: 1, text: "final" } },
+        authoritative("llm_delta", 1, { text: "final" }),
         { event: StreamEventEnum.DONE, data: { seq: 2 } },
       ],
     });
 
     expect(terminalDialogProcessIdSet.has("dp-1")).toBe(true);
     expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 2, expect.objectContaining({
-      sessionId: "",
-      turnScopeId: "",
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
       eventKindsAtSequence: [StreamEventEnum.DONE],
     }));
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
@@ -182,19 +224,19 @@ describe("replayCacheConsumer", () => {
       ...fixture,
       dialogProcessId: "dp-1",
       messages: [
-        { event: StreamEventEnum.DELTA, data: { seq: 3, text: "ignored" } },
+        authoritative("llm_delta", 3, { text: "ignored" }),
       ],
     });
 
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
     expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 3, expect.objectContaining({
-      sessionId: "",
-      turnScopeId: "",
-      eventKindsAtSequence: [StreamEventEnum.DELTA],
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      eventKindsAtSequence: ["message_event"],
     }));
   });
 
-  it("continues reconnect thinking execution count and items from refresh hydrated process fields", async () => {
+  it("projects authoritative reconnect thinking without mutating process display mirrors", async () => {
     const processStore = createFakeProcessStore();
     const hydratedCompletedLogs = Array.from({ length: 12 }, (_, index) => ({
       event: "tool_call",
@@ -205,10 +247,16 @@ describe("replayCacheConsumer", () => {
       processStore,
       activeSession: {
         value: {
+          id: "s-1",
+          sessionId: "s-1",
           messages: [
             {
               role: "assistant",
+              id: "message-1",
+              messageId: "message-1",
+              sessionId: "s-1",
               dialogProcessId: "dp-1",
+              turnScopeId: "turn-1",
               content: "",
               pending: true,
               executionLogTotal: 12,
@@ -223,20 +271,17 @@ describe("replayCacheConsumer", () => {
       ...fixture,
       dialogProcessId: "dp-1",
       messages: [
-        {
-          event: StreamEventEnum.THINKING,
-          data: { text: "next step", event: "tool_call", dialogProcessId: "dp-1" },
-        },
+        authoritative("thinking", 1, { text: "next step" }),
       ],
     });
 
     const targetMessage = fixture.activeSession.value.messages[0];
     expect(processStore.applyEventBatch).not.toHaveBeenCalled();
-    expect(selectToolTimelineLogs(targetMessage)).toHaveLength(1);
-    expect(selectToolTimelineLogs(targetMessage)[0].text).toContain("next step");
+    expect(selectActivityTimelineLogs(targetMessage)).toHaveLength(1);
+    expect(selectActivityTimelineLogs(targetMessage)[0].text).toContain("next step");
   });
 
-  it("keeps reconnect error execution facts out of process display mirrors", async () => {
+  it("keeps legacy reconnect errors out of canonical messages and process display mirrors", async () => {
     const processStore = createFakeProcessStore();
     const fixture = createActiveReplayFixture({ processStore });
 
@@ -260,14 +305,14 @@ describe("replayCacheConsumer", () => {
     });
 
     const targetMessage = fixture.activeSession.value.messages[0];
-    expect(targetMessage.error).toBe("tool failed");
+    expect(targetMessage.error).toBeUndefined();
     expect(processStore.applyEventBatch).not.toHaveBeenCalled();
     expect(targetMessage.processExecutionLogTotal).toBeUndefined();
     expect(targetMessage.processRealtimeLogs).toBeUndefined();
     expect(targetMessage.processCompletedToolLogs).toBeUndefined();
   });
 
-  it("does not create process display mirrors for reconnect thinking", async () => {
+  it("does not let legacy reconnect thinking mutate canonical timelines", async () => {
     const processStore = createFakeProcessStore();
     const fixture = createActiveReplayFixture({ processStore });
 
@@ -276,7 +321,7 @@ describe("replayCacheConsumer", () => {
       dialogProcessId: "dp-1",
       messages: [
         {
-          event: StreamEventEnum.THINKING,
+          event: "message",
           data: { seq: 7, text: "searching", event: "tool_call", dialogProcessId: "dp-1" },
         },
       ],
@@ -284,7 +329,8 @@ describe("replayCacheConsumer", () => {
 
     const targetMessage = fixture.activeSession.value.messages[0];
     expect(processStore.applyEventBatch).not.toHaveBeenCalled();
-    expect(selectToolTimelineLogs(targetMessage)[0].text).toContain("searching");
+    expect(selectToolTimelineLogs(targetMessage)).toEqual([]);
+    expect(selectActivityTimelineLogs(targetMessage)).toEqual([]);
     expect(targetMessage.processExecutionLogTotal).toBeUndefined();
     expect(targetMessage.processRealtimeLogs).toBeUndefined();
     expect(targetMessage.processCompletedToolLogs).toBeUndefined();
@@ -293,6 +339,9 @@ describe("replayCacheConsumer", () => {
   it("derives the continuation turn from cached envelopes before resolving a reused dialog", async () => {
     const stoppedAssistant = {
       role: "assistant",
+      id: "message-stopped",
+      messageId: "message-stopped",
+      sessionId: "s-1",
       dialogProcessId: "dp-shared",
       turnScopeId: "turn-stopped",
       content: "stopped",
@@ -301,6 +350,9 @@ describe("replayCacheConsumer", () => {
     };
     const continuationAssistant = {
       role: "assistant",
+      id: "message-continuation",
+      messageId: "message-continuation",
+      sessionId: "s-1",
       dialogProcessId: "dp-shared",
       turnScopeId: "turn-continuation",
       content: "",
@@ -308,29 +360,31 @@ describe("replayCacheConsumer", () => {
       realtimeLogs: [],
     };
     const fixture = createActiveReplayFixture({
-      activeSession: { value: { id: "s-1", messages: [stoppedAssistant, continuationAssistant] } },
+      activeSession: {
+        value: {
+          id: "s-1",
+          sessionId: "s-1",
+          messages: [stoppedAssistant, continuationAssistant],
+        },
+      },
     });
 
     await applyReconnectMessagesToActiveSessionReplay({
       ...fixture,
       dialogProcessId: "dp-shared",
-      messages: [{
-        event: StreamEventEnum.THINKING,
-        data: {
-          seq: 12,
-          event: "tool_call",
-          text: "continuation tool",
-          dialogProcessId: "dp-shared",
-          turnScopeId: "turn-continuation",
-        },
-      }],
+      messages: [authoritative("thinking", 1, {
+        messageId: "message-continuation",
+        text: "continuation tool",
+        dialogProcessId: "dp-shared",
+        turnScopeId: "turn-continuation",
+      })],
     });
 
     expect(stoppedAssistant.realtimeLogs).toEqual([]);
     expect(selectToolTimelineLogs(stoppedAssistant)).toEqual([]);
     expect(selectActivityTimelineLogs(stoppedAssistant)).toEqual([]);
     expect(continuationAssistant.turnScopeId).toBe("turn-continuation");
-    expect(selectToolTimelineLogs(continuationAssistant)).toHaveLength(1);
-    expect(selectToolTimelineLogs(continuationAssistant)[0].text).toContain("continuation tool");
+    expect(selectActivityTimelineLogs(continuationAssistant)).toHaveLength(1);
+    expect(selectActivityTimelineLogs(continuationAssistant)[0].text).toContain("continuation tool");
   });
 });

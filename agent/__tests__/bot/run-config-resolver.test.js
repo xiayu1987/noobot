@@ -184,6 +184,15 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "scenario",
     "system_runtime",
     "base_prompt",
+    "long_memory",
+    "services",
+    "mcp_servers",
+  ]);
+  assert.deepEqual(resolved.contextPolicy.includeContextKeys, [
+    "scenario",
+    "system_runtime",
+    "base_prompt",
+    "long_memory",
     "services",
     "mcp_servers",
   ]);

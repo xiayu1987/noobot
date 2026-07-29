@@ -89,11 +89,12 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
         eventListener.onEvent({
           event: "tool_call_start",
           data: {
-            envelopeKind: "noobot.message_event", envelopeVersion: 1,
+            envelopeKind: "noobot.message_event", envelopeVersion: 2,
             eventId: "evt-refresh-tool", eventType: "tool_call_start",
             sessionId: "s-refresh", dialogProcessId: "dp-refresh",
             turnScopeId: "turn-refresh", sequence: 1,
             timestamp: new Date().toISOString(), messageId: "msg-refresh",
+            presentationMessageId: "msg-refresh-presentation",
             toolCallId: "call-refresh", tool: "read_file", args: {},
           },
         });

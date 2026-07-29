@@ -4,21 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/shared/message-event-protocol";
+
 const text = (value) => String(value || "").trim();
 
 export const TIMELINE_AUTHORITY = Object.freeze({
   AUTHORITATIVE: "authoritative",
-  COMPATIBILITY: "compatibility",
 });
 
 export const SEQUENCE_DOMAIN = Object.freeze({
-  MESSAGE: "message",
-  TRANSPORT: "transport",
-  LEGACY: "legacy",
+  MESSAGE: MESSAGE_EVENT_SEQUENCE_DOMAIN,
 });
-
-const authorityRank = (value = {}) =>
-  text(value.authority) === TIMELINE_AUTHORITY.AUTHORITATIVE ? 2 : 1;
 
 const sequenceOf = (value = {}) => {
   const sequence = Number(value.sequence ?? value.seq);
@@ -36,8 +32,6 @@ const sequenceScopeOf = (value = {}) =>
 export function preferTimelineFact(left, right) {
   if (!left) return right;
   if (!right) return left;
-  const authorityDifference = authorityRank(right) - authorityRank(left);
-  if (authorityDifference !== 0) return authorityDifference > 0 ? right : left;
   const leftDomain = text(left.sequenceDomain);
   const rightDomain = text(right.sequenceDomain);
   const leftSequence = sequenceOf(left);

@@ -19,7 +19,7 @@ export { ExecutionLogRepository } from "./execution-log/execution-log-repository
 export { ExecutionLogService } from "./execution-log/execution-log-service.js";
 export { summarizeExecutionLogs } from "./execution-log/execution-log-summary.js";
 
-export { classifyExecutionEvent, normalizeSseLogEvent } from "./event-log/log-normalizer.js";
+export { classifyExecutionEvent } from "./event-log/log-normalizer.js";
 
 export {
   logger,

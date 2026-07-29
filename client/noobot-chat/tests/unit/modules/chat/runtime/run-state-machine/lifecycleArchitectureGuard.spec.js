@@ -140,7 +140,7 @@ describe("lifecycle architecture guard", () => {
     expect(callers).toEqual([files.registry]);
   });
 
-  it("keeps legacy completed tool logs behind the timeline adapter", () => {
+  it("forbids legacy timeline, log compatibility, and thinking transport projection", () => {
     const renderConsumers = [
       "src/app/composables/useThinkingDetailsPanel.js",
       "src/modules/chat/runtime/engine/sessionFinalize.js",
@@ -154,11 +154,30 @@ describe("lifecycle architecture guard", () => {
     ];
     for (const relativePath of renderConsumers) {
       expect(source(relativePath)).not.toMatch(/messageItem\?*\.completedToolLogs/);
+      expect(source(relativePath)).not.toMatch(/adaptLegacyMessageTimelines|pluginLogCompatibility/);
       expect(source(relativePath)).not.toContain("turnStatuses");
       expect(source(relativePath)).not.toContain("turnTimingsByTurnScopeId");
     }
-    expect(source("src/modules/chat/runtime/engine/legacyTimelineAdapter.js"))
-      .toContain("message.completedToolLogs");
+    expect(productionFiles().some((relativePath) =>
+      relativePath.endsWith("legacyTimelineAdapter.js") ||
+      relativePath.endsWith("pluginLogCompatibility.js"))).toBe(false);
+    expect(source("src/modules/chat/runtime/engine/streamHandlers.js"))
+      .not.toMatch(/handleThinkingStreamEvent|legacy-stream:|buildToolTimelineFromLegacyLogs/);
+    const legacyPatterns = [
+      /adaptLegacyMessageTimelines|legacyTimelineAdapter|pluginLogCompatibility|MESSAGE_LOG_COMPATIBILITY/,
+      /handleThinkingStreamEvent|legacy-stream:|buildToolTimelineFromLegacyLogs/,
+      /buildActivityTimelineFromLegacyLogs|fillMissingToolTimelineFacets/,
+      /TOOL_TIMELINE_AUTHORITY\.COMPATIBILITY|SEQUENCE_DOMAIN\.(?:LEGACY|TRANSPORT)/,
+      /normalizeSseLogEvent|StreamEventEnum\.THINKING/,
+      /hydrateSessionTurnRuntime|legacy_runtime_projection_disabled/,
+      /(?:message|messageItem)\?*\.(?:realtimeLogs|completedToolLogs|processRealtimeLogs|processCompletedToolLogs)/,
+    ];
+    const violations = productionFiles().flatMap((relativePath) =>
+      legacyPatterns
+        .filter((pattern) => pattern.test(source(relativePath)))
+        .map((pattern) => ({ relativePath, pattern: String(pattern) })),
+    );
+    expect(violations).toEqual([]);
   });
 
   it("keeps interaction requests pending until websocket send returns successfully", () => {

@@ -9,6 +9,7 @@ import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 import {
   __resetThinkingDetailCacheForTests,
   getCachedThinkingDetail,
+  loadThinkingDetail,
   resolveThinkingDetailIdentity,
 } from "../../../../../../src/modules/chat/model/thinkingDetailCache.js";
 import { normalizeThinkingToolLogs } from "../../../../../../src/modules/chat/model/thinkingDetailModel.js";
@@ -31,6 +32,17 @@ function thinkingDetailPayload(messageItem) {
   };
 }
 
+function persistedToolTimeline(text, id = "call-1") {
+  return [{
+    key: `call:${id}`, toolCallId: id, status: "completed",
+    resultEvent: {
+      eventId: `result:${id}`, sequence: 1, sequenceScopeId: "message-1",
+      sequenceDomain: "message-event", authority: "authoritative",
+      log: { event: "tool_result", type: "tool_result", toolCallId: id, text },
+    },
+  }];
+}
+
 describe("ThinkingPanel thinking-detail recovery", () => {
   afterEach(() => {
     __resetThinkingDetailCacheForTests();
@@ -49,9 +61,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
         role: "assistant",
         sessionId: "session-restore",
         turnScopeId: "client-turn:restore",
-        completedToolLogs: [
-          { event: "tool_result", type: "tool_result", toolCallId: "call-1", text: "persisted-tool" },
-        ],
+        toolTimeline: persistedToolTimeline("persisted-tool"),
       });
     });
 
@@ -76,7 +86,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     }, "session-restore");
     const cached = getCachedThinkingDetail(identity);
     expect(cached).toBeTruthy();
-    expect(cached?.messageItem?.completedToolLogs?.[0]?.text).toBe("persisted-tool");
+    expect(cached?.messageItem?.toolTimeline).toHaveLength(1);
     expect(normalizeThinkingToolLogs({
       messageItem: cached.messageItem,
       allMessages: cached.allMessages,
@@ -84,7 +94,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       variant: "panel",
       toolResultFallback: "tool_result",
     }).map((item) => item.text || item.detailText)).toContain("persisted-tool");
-    expect(cached.messageItem.completedToolLogs).toHaveLength(1);
+    expect(cached.messageItem.toolTimeline).toHaveLength(1);
 
     await wrapper.setProps({
       messageItem: {
@@ -98,8 +108,63 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     await flushAsync();
 
     expect(getDetail).toHaveBeenCalledTimes(1);
-    expect(getCachedThinkingDetail(identity)?.messageItem?.completedToolLogs?.[0]?.text)
-      .toBe("persisted-tool");
+    expect(getCachedThinkingDetail(identity)?.messageItem?.toolTimeline).toHaveLength(1);
+  });
+
+  it("loads a summary-only canonical detail in details mode", async () => {
+    const getDetail = vi.fn(async () => thinkingDetailPayload({
+      role: "assistant",
+      sessionId: "session-details",
+      turnScopeId: "client-turn:details",
+      toolTimeline: persistedToolTimeline("details-tool", "call-details"),
+    }));
+
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      sessionId: "session-details",
+      turnScopeId: "client-turn:details",
+      hasThinkingDetails: true,
+      thinkingDetailCount: 1,
+    }, {
+      variant: "details",
+      userId: "user-1",
+      thinkingDetailService: { getDetail },
+    });
+    await flushAsync();
+
+    expect(getDetail).toHaveBeenCalledTimes(1);
+    expect(wrapper.findAll(".execution-log-line").map((item) => item.text()))
+      .toContain("details-tool");
+  });
+
+  it("refreshes an empty cached detail in details mode", async () => {
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-cached-details",
+      turnScopeId: "client-turn:cached-details",
+      hasThinkingDetails: true,
+      thinkingDetailCount: 1,
+    };
+    await loadThinkingDetail({
+      sessionId: messageItem.sessionId,
+      messageItem,
+      fetchThinkingDetail: async () => thinkingDetailPayload(messageItem),
+    });
+    const getDetail = vi.fn(async () => thinkingDetailPayload({
+      ...messageItem,
+      toolTimeline: persistedToolTimeline("fresh-details-tool", "call-fresh-details"),
+    }));
+
+    const wrapper = mountThinkingPanel(messageItem, {
+      variant: "details",
+      userId: "user-1",
+      thinkingDetailService: { getDetail },
+    });
+    await flushAsync();
+
+    expect(getDetail).toHaveBeenCalledTimes(1);
+    expect(wrapper.findAll(".execution-log-line").map((item) => item.text()))
+      .toContain("fresh-details-tool");
   });
 
   it("does not fetch canonical details while a message is pending or local logs exist", async () => {
@@ -125,7 +190,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       turnScopeId: "client-turn:local",
       hasThinkingDetails: true,
       thinkingDetailCount: 1,
-      realtimeLogs: [{ event: "tool_result", type: "tool_result", text: "live-tool" }],
+      toolTimeline: persistedToolTimeline("live-tool", "call-live"),
     }, {
       userId: "user-1",
       thinkingDetailService: { getDetail },
@@ -141,9 +206,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       role: "assistant",
       sessionId: "session-stale",
       turnScopeId: "client-turn:stale",
-      completedToolLogs: [
-        { event: "tool_result", type: "tool_result", toolCallId: "call-stale", text: "restored-after-refresh" },
-      ],
+      toolTimeline: persistedToolTimeline("restored-after-refresh", "call-stale"),
     }));
 
     const wrapper = mountThinkingPanel({
@@ -165,7 +228,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       turnScopeId: "client-turn:stale",
     }, "session-stale");
     const staleCached = getCachedThinkingDetail(staleIdentity);
-    expect(staleCached?.messageItem?.completedToolLogs).toHaveLength(1);
+    expect(staleCached?.messageItem?.toolTimeline).toHaveLength(1);
     expect(normalizeThinkingToolLogs({
       messageItem: staleCached.messageItem,
       allMessages: staleCached.allMessages,
@@ -175,7 +238,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     expect(wrapper.vm.currentExecutionLogs).toEqual(expect.arrayContaining([
       expect.objectContaining({ text: "restored-after-refresh" }),
     ]));
-    expect(wrapper.vm.loadedThinkingDetail?.messageItem?.completedToolLogs).toHaveLength(1);
+    expect(wrapper.vm.loadedThinkingDetail?.messageItem?.toolTimeline).toHaveLength(1);
     expect(wrapper.vm.hasThinking).toBe(true);
     await nextTick();
     expect(wrapper.findComponent(ThinkingPanelRealtime).exists()).toBe(true);

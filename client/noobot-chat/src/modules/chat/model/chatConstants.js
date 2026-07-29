@@ -23,7 +23,6 @@ export const CONNECTOR_TYPES = Object.freeze([
 ]);
 
 export const StreamEventEnum = Object.freeze({
-  THINKING: "thinking",
   DELTA: "delta",
   DONE: "done",
   ERROR: "error",

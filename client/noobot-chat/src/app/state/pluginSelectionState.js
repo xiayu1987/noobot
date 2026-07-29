@@ -5,6 +5,7 @@
  */
 export const SELECTED_PLUGINS_STORAGE_KEY = "noobot_selected_plugins";
 export const DEFAULT_ON_PLUGINS_STORAGE_KEY = "noobot_default_on_plugins";
+const FRONTEND_DEFAULT_ON_PLUGIN_KEYS = new Set(["harness"]);
 
 export function safeParseStringArray(rawValue = "") {
   try {
@@ -50,7 +51,8 @@ export function getDefaultOnPluginKeys(pluginOptions = []) {
     .filter(
       (pluginItem) =>
         pluginItem?.enabled === true &&
-        String(pluginItem?.mode || "").toLowerCase() === "on",
+        (String(pluginItem?.mode || "").toLowerCase() === "on" ||
+          FRONTEND_DEFAULT_ON_PLUGIN_KEYS.has(String(pluginItem?.key || "").trim())),
     )
     .map((pluginItem) => String(pluginItem?.key || "").trim())
     .filter(Boolean);

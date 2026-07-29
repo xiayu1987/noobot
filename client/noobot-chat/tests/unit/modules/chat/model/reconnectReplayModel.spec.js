@@ -56,7 +56,7 @@ describe("reconnectReplayModel", () => {
       isDialogProcessRecoverable(
         { hasRunningTask: false },
         [
-          { event: StreamEventEnum.THINKING, data: {} },
+          { event: "message", data: {} },
           { event: StreamEventEnum.DELTA, data: { text: "history" } },
         ],
       ),
@@ -79,7 +79,7 @@ describe("reconnectReplayModel", () => {
     const groups = splitReconnectMessagesByDialogProcessId([
       { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-1", turnScopeId: "turn-1", text: "a" } },
       { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-2", text: "b" } },
-      { event: StreamEventEnum.THINKING, data: { dialogProcessId: "dp-1", turnScopeId: "turn-1" } },
+      { event: "message", data: { dialogProcessId: "dp-1", turnScopeId: "turn-1" } },
       { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-1", turnScopeId: "turn-2", text: "c" } },
     ]);
 

@@ -106,6 +106,40 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.equal(messages[0]?.content, "tool_result_overridden_by_hook");
 });
 
+test("state-committer checkpoints assistant and tool records with presentation identity", async () => {
+  const turnMessageStore = createInMemoryTurnStore();
+  let checkpointCount = 0;
+  const runtime = {
+    systemRuntime: {
+      messageEventStream: { activePresentationMessageId: "msg_chat_checkpoint" },
+    },
+    persistCurrentTurnMessages: async () => { checkpointCount += 1; },
+  };
+  const committer = createStateCommitter({
+    messages: [],
+    traces: [],
+    turnMessageStore,
+    dialogProcessId: "dp_checkpoint",
+    runtime,
+  });
+
+  await committer.pushAssistantMessage({
+    content: "analysis",
+    messageId: "msg_model_checkpoint",
+    presentationMessageId: "msg_chat_checkpoint",
+    type: "tool_call",
+  });
+  await committer.pushToolResult({
+    call: { id: "call_checkpoint", name: "demo_tool" },
+    toolResultText: "done",
+  });
+
+  assert.equal(checkpointCount, 2);
+  assert.equal(turnMessageStore.items[0].presentationMessageId, "msg_chat_checkpoint");
+  assert.equal(turnMessageStore.items[0].chatPresentation, false);
+  assert.equal(turnMessageStore.items[1].presentationMessageId, "msg_chat_checkpoint");
+});
+
 test("state-committer writes tool result through message store when holder is provided", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   const loopState = {

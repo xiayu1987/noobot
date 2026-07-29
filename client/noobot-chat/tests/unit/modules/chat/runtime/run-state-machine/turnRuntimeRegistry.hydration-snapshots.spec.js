@@ -17,7 +17,6 @@ import {
   selectSessionTurnRuntime,
   selectTurnMessageRuntime,
   turnRuntimeDisplayState,
-  hydrateSessionTurnRuntime,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
   applyTurnTimingSnapshot,
@@ -36,57 +35,6 @@ import {
 } from "./turnRuntimeRegistryTestFixtures.js";
 
 describe("turnRuntimeRegistry: hydration and snapshots", () => {
-  it("treats legacy terminal statuses as discovery data only", () => {
-    const registry = createTurnRuntimeRegistryState();
-    hydrateSessionTurnRuntime(registry, { backendSessionId: "s1" }, [
-      { status: "user_stopped", turnScopeId: "t1", dialogProcessId: "dp1" },
-      { status: "completed", turnScopeId: "t2", dialogProcessId: "dp2" },
-    ]);
-    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toBeNull();
-    expect(resolveTurnRuntimeByScope(registry, "t2", { sessionId: "s1" })).toBeNull();
-    expect(selectSessionTurnRuntime(registry, "s1")).toMatchObject({
-      sending: false,
-      displayState: "send",
-    });
-  });
-
-  it("does not let a legacy non-terminal status create a running Turn", () => {
-    const registry = createTurnRuntimeRegistryState();
-    hydrateSessionTurnRuntime(registry, { backendSessionId: "s1" }, [
-      { status: "sending", turnScopeId: "t1", dialogProcessId: "dp1" },
-    ]);
-
-    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toBeNull();
-    expect(registry.sessions.s1).toBeUndefined();
-    expect(registry.routeIndex.dp1).toBeUndefined();
-    expect(selectSessionTurnRuntime(registry, "s1")).toMatchObject({
-      sending: false,
-      canStop: false,
-      displayState: "send",
-    });
-  });
-
-  it("restores persisted turn timing instead of using hydration update time", () => {
-    const registry = createTurnRuntimeRegistryState();
-    const persistedStartedAt = "2026-07-21T10:00:00.000Z";
-    const hydrationUpdatedAt = "2026-07-21T10:30:00.000Z";
-    hydrateSessionTurnRuntime(registry, {
-      backendSessionId: "s1",
-      turnTimings: [{
-        turnScopeId: "t1",
-        thinkingStartedAt: persistedStartedAt,
-        thinkingFinishedAt: "2026-07-21T10:00:15.000Z",
-      }],
-    }, [{
-      status: "completed",
-      turnScopeId: "t1",
-      updatedAt: hydrationUpdatedAt,
-    }]);
-
-    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toBeNull();
-    expect(registry.sessions.s1).toBeUndefined();
-  });
-
   it("hydrates every persisted turn timing without creating lifecycle authority", () => {
     const registry = createTurnRuntimeRegistryState();
     const result = applyTurnTimingSnapshot(registry, {
@@ -195,21 +143,6 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       sequence: 3,
     });
     expect(completed).toMatchObject({ applied: true, turn: { state: "frontend_completion_requesting", seq: 3 } });
-  });
-
-  it("never lets legacy hydration take ownership before or after a snapshot", () => {
-    const registry = createTurnRuntimeRegistryState();
-    hydrateSessionTurnRuntime(registry, { backendSessionId: "s1" }, [
-      { status: "completed", turnScopeId: "legacy", dialogProcessId: "legacy-dp" },
-    ]);
-    expect(resolveTurnRuntimeByScope(registry, "legacy", { sessionId: "s1" })).toBeNull();
-    applyTurnLifecycleSnapshot(registry, snapshot());
-    const before = JSON.stringify(registry.sessions.s1);
-    hydrateSessionTurnRuntime(registry, { backendSessionId: "s1" }, [
-      { status: "user_stopped", turnScopeId: "late-legacy", dialogProcessId: "late-dp" },
-    ]);
-    expect(JSON.stringify(registry.sessions.s1)).toBe(before);
-    expect(resolveTurnRuntimeByScope(registry, "late-legacy", { sessionId: "s1" })).toBeNull();
   });
 
 });

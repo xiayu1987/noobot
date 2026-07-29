@@ -199,8 +199,8 @@ describe("useChatList", () => {
               createdAt: "2026-05-14T00:00:00.000Z",
               updatedAt: "2026-05-14T00:03:00.000Z",
               messages: [
-                { role: RoleEnum.USER, content: "fresh server" },
-                { role: RoleEnum.ASSISTANT, content: "fresh answer" },
+                { id: "refresh-user", messageId: "refresh-user", role: RoleEnum.USER, content: "fresh server" },
+                { id: "refresh-assistant", messageId: "refresh-assistant", role: RoleEnum.ASSISTANT, content: "fresh answer" },
               ],
             },
           ],
@@ -354,11 +354,15 @@ describe("useChatList", () => {
   it("applySessionDetail with preserveCurrentMessages replaces matching local user instead of duplicating it", () => {
     const { api, refs } = createUseChatListFixture();
     const localUserMessage = {
+      id: "edited-user",
+      messageId: "edited-user",
       role: RoleEnum.USER,
       content: "edited question",
       pending: true,
     };
     const localAssistantMessage = {
+      id: "edited-assistant",
+      messageId: "edited-assistant",
       role: RoleEnum.ASSISTANT,
       content: "pending answer",
       dialogProcessId: "dp-edited",
@@ -395,11 +399,15 @@ describe("useChatList", () => {
             updatedAt: "2026-05-14T00:02:00.000Z",
             messages: [
               {
+                id: "edited-user",
+                messageId: "edited-user",
                 role: RoleEnum.USER,
                 content: "edited question",
                 dialogProcessId: "dp-edited",
               },
               {
+                id: "edited-assistant",
+                messageId: "edited-assistant",
                 role: RoleEnum.ASSISTANT,
                 content: "final answer",
                 dialogProcessId: "dp-edited",
@@ -425,8 +433,16 @@ describe("useChatList", () => {
   it("applySessionDetail reuses a turn placeholder for the completed assistant reply", () => {
     const { api, refs } = createUseChatListFixture();
     const turnScopeId = "client-turn:completed-placeholder";
-    const userMessage = { role: RoleEnum.USER, content: "question", turnScopeId };
+    const userMessage = {
+      id: "completed-user",
+      messageId: "completed-user",
+      role: RoleEnum.USER,
+      content: "question",
+      turnScopeId,
+    };
     const placeholder = {
+      id: "completed-assistant",
+      messageId: "completed-assistant",
       role: RoleEnum.ASSISTANT,
       content: "",
       turnScopeId,
@@ -459,8 +475,14 @@ describe("useChatList", () => {
       sessions: [{
         sessionId: session.backendSessionId,
         messages: [
-          { role: RoleEnum.USER, content: "question", turnScopeId, dialogProcessId: "dp-completed" },
-          { role: RoleEnum.ASSISTANT, content: "final answer", turnScopeId, dialogProcessId: "dp-completed" },
+          {
+            id: "completed-user", messageId: "completed-user",
+            role: RoleEnum.USER, content: "question", turnScopeId, dialogProcessId: "dp-completed",
+          },
+          {
+            id: "completed-assistant", messageId: "completed-assistant",
+            role: RoleEnum.ASSISTANT, content: "final answer", turnScopeId, dialogProcessId: "dp-completed",
+          },
         ],
       }],
     }, { preserveCurrentMessages: true });
@@ -478,11 +500,15 @@ describe("useChatList", () => {
   it("applySessionDetail preserves one inline editing user message when stop refresh returns original content", () => {
     const { api, refs } = createUseChatListFixture();
     const editingUserMessage = {
+      id: "editing-user",
+      messageId: "editing-user",
       role: RoleEnum.USER,
       content: "draft edited question",
       __monotonicEditing: true,
     };
     const stoppedAssistantMessage = {
+      id: "editing-assistant",
+      messageId: "editing-assistant",
       role: RoleEnum.ASSISTANT,
       content: "partial answer",
       dialogProcessId: "dp-editing-stop",
@@ -520,11 +546,15 @@ describe("useChatList", () => {
             updatedAt: "2026-05-14T00:02:00.000Z",
             messages: [
               {
+                id: "editing-user",
+                messageId: "editing-user",
                 role: RoleEnum.USER,
                 content: "original question",
                 dialogProcessId: "dp-editing-stop",
               },
               {
+                id: "editing-assistant",
+                messageId: "editing-assistant",
                 role: RoleEnum.ASSISTANT,
                 content: "stopped answer",
                 dialogProcessId: "dp-editing-stop",
@@ -625,8 +655,14 @@ describe("useChatList", () => {
             createdAt: "2026-05-14T00:00:00.000Z",
             updatedAt: "2026-05-14T00:02:00.000Z",
             messages: [
-              { role: RoleEnum.USER, content: "restored question" },
-              { role: RoleEnum.ASSISTANT, content: "restored answer" },
+              {
+                id: "restored-user", messageId: "restored-user",
+                role: RoleEnum.USER, content: "restored question",
+              },
+              {
+                id: "restored-assistant", messageId: "restored-assistant",
+                role: RoleEnum.ASSISTANT, content: "restored answer",
+              },
             ],
           },
         ],

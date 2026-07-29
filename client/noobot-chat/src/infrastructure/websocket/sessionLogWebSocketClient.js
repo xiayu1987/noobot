@@ -16,6 +16,7 @@ import {
 } from "./webSocketTransportSupervisor.js";
 
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
+const MAX_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
 
 function envFlag(name, fallback = false) {
   const raw = String(import.meta?.env?.[name] || "").trim().toLowerCase();
@@ -37,6 +38,7 @@ export function createSessionLogWebSocketClient({
 } = {}) {
   const queue = [];
   const inFlight = [];
+  let queueOverflowReported = false;
   let disposed = false;
   const transport = createWebSocketTransportSupervisor({
     channelId: "session-log",
@@ -88,7 +90,6 @@ export function createSessionLogWebSocketClient({
     if (!inFlight.length) return 0;
     const count = inFlight.length;
     queue.unshift(...inFlight.splice(0));
-    if (queue.length > MAX_QUEUE_SIZE) queue.splice(0, queue.length - MAX_QUEUE_SIZE);
     return count;
   }
 
@@ -103,6 +104,7 @@ export function createSessionLogWebSocketClient({
     const ackCount = Math.max(0, Math.min(Number(parsed.count || 1), inFlight.length));
     inFlight.splice(0, ackCount);
     logDiagnostic("ack", { count: ackCount, queueLength: queue.length, inFlightLength: inFlight.length });
+    if (!inFlight.length) flush();
   }
 
   function connect() {
@@ -138,8 +140,12 @@ export function createSessionLogWebSocketClient({
   function flush() {
     const socket = transport.current();
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    const count = queue.length;
-    while (queue.length) {
+    // Keep one bounded batch in flight. The server ACK is the authority that
+    // permits advancing the window; otherwise reconnect recovery can reorder
+    // or silently discard records from an arbitrarily large in-flight set.
+    if (inFlight.length) return;
+    const count = Math.min(queue.length, MAX_BATCH_SIZE);
+    while (inFlight.length < count) {
       const record = queue.shift();
       inFlight.push(record);
       try {
@@ -162,7 +168,21 @@ export function createSessionLogWebSocketClient({
       includeTimestamp: false,
     });
     queue.push(record);
-    if (queue.length > MAX_QUEUE_SIZE) queue.splice(0, queue.length - MAX_QUEUE_SIZE);
+    // MAX_QUEUE_SIZE is an observability threshold, not permission to erase
+    // unacknowledged diagnostics. Report pressure explicitly and retain order.
+    if (queue.length > MAX_QUEUE_SIZE && !queueOverflowReported) {
+      queueOverflowReported = true;
+      queue.push(buildSessionLogRecord({
+        category: "debug",
+        event: "frontend.sessionLogWs.queueCapacityExceeded",
+        sessionId: record.sessionId,
+        data: { threshold: MAX_QUEUE_SIZE, retainedCount: queue.length },
+      }, {
+        source,
+        defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
+        includeTimestamp: false,
+      }));
+    }
     logDiagnostic("queued", { category: record.category, event: record.event, sessionId: record.sessionId, queueLength: queue.length });
     connect();
     flush();
@@ -173,6 +193,7 @@ export function createSessionLogWebSocketClient({
     return {
       queueLength: queue.length,
       inFlightLength: inFlight.length,
+      queueOverflowReported,
       ...transport.status(),
       suspended: isSuspended(),
     };

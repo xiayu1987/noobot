@@ -58,7 +58,6 @@ export function createReconnectInteractionEnvelopeCallbacks({
   upsertConnectedConnectorInPanelState,
   refreshSessionConnectorsAsync,
   onAttachments,
-  onDoneMessages,
 } = {}) {
   return buildReconnectReplayEnvelopeCallbacks({
     onInteractionRequest: (eventData) => {
@@ -82,6 +81,5 @@ export function createReconnectInteractionEnvelopeCallbacks({
       });
     },
     onAttachments,
-    onDoneMessages,
   });
 }

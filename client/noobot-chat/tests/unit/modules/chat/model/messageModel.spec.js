@@ -36,7 +36,7 @@ const envelope = {
 };
 
 describe("messageModel semantic transfer", () => {
-  it("preserves workflow node running placeholder ownership through the view boundary", () => {
+  it("does not admit workflow running view models into canonical messages", () => {
     const message = buildViewMessage({
       role: "assistant",
       type: "message",
@@ -53,8 +53,8 @@ describe("messageModel semantic transfer", () => {
       synthetic: true,
       placeholder: true,
       turnPlaceholder: true,
-      workflowNodeRunningPlaceholder: true,
     });
+    expect(message).not.toHaveProperty("workflowNodeRunningPlaceholder");
   });
 
   it("keeps turn UI state out of message projections", () => {
@@ -533,7 +533,11 @@ describe("messageModel execution logs", () => {
         turnScopeId: "client-turn:new-stream",
         dialogProcessId: "dp-new-stream",
         attachments: [{ attachmentId: "att-new", name: "new.md" }],
-        realtimeLogs: [{ text: "new tool log" }],
+        activityTimeline: [{
+          activityId: "event:new-log-1", eventId: "new-log-1", event: "thinking", type: "thinking",
+          text: "new tool log", sequence: 1, sequenceScopeId: "message-new",
+          sequenceDomain: "message-event", authority: "authoritative",
+        }],
         tool_calls: [{ id: "tool-new" }],
         executionLogTotal: 1,
       },
@@ -542,7 +546,11 @@ describe("messageModel execution logs", () => {
         content: "new continuation",
         turnScopeId: "client-turn:new-stream",
         dialogProcessId: "dp-new-stream",
-        realtimeLogs: [{ text: "new tool log 2" }],
+        activityTimeline: [{
+          activityId: "event:new-log-2", eventId: "new-log-2", event: "thinking", type: "thinking",
+          text: "new tool log 2", sequence: 2, sequenceScopeId: "message-new",
+          sequenceDomain: "message-event", authority: "authoritative",
+        }],
         executionLogTotal: 2,
       },
     ], buildViewMessage);
@@ -556,7 +564,7 @@ describe("messageModel execution logs", () => {
     expect(messages[0].tool_calls).toHaveLength(1);
   });
 
-  it("keeps the user message and merges assistant chunks even when storage ids differ", () => {
+  it("keeps the user message and merges assistant projections with the same stable id", () => {
     const messages = foldConversationMessages([
       {
         id: "storage-user-1",
@@ -572,7 +580,7 @@ describe("messageModel execution logs", () => {
         turnScopeId: "client-turn:render-1",
       },
       {
-        id: "storage-assistant-2",
+        id: "storage-assistant-1",
         role: "assistant",
         content: "answer part 2",
         dialogProcessId: "dp-render-1",
@@ -588,6 +596,64 @@ describe("messageModel execution logs", () => {
     expect(messages[1].role).toBe("assistant");
     expect(messages[1].content).toContain("answer part 1");
     expect(messages[1].content).toContain("answer part 2");
+  });
+
+  it("projects the canonical persisted model analysis onto the presentation message", () => {
+    const messages = foldConversationMessages([
+      {
+        messageUid: "sm-analysis-1",
+        messageId: "msg-model-1",
+        presentationMessageId: "msg-chat-1",
+        chatPresentation: false,
+        role: "assistant",
+        type: "tool_call",
+        content: "I should inspect the repository first.",
+        activityTimeline: [{
+          eventId: "model-content:msg-model-1",
+          sequence: 1,
+          sequenceScopeId: "msg-model-1",
+          sequenceDomain: "message-event",
+          authority: "authoritative",
+          event: "main_model_content",
+          type: "main_model_content",
+          text: "I should inspect the repository first.",
+          log: {
+            eventId: "model-content:msg-model-1",
+            event: "main_model_content",
+            type: "main_model_content",
+            text: "I should inspect the repository first.",
+          },
+        }],
+        turnScopeId: "client-turn:refresh",
+        dialogProcessId: "dp-refresh",
+        ts: "2026-07-29T01:00:00.000Z",
+      },
+      {
+        messageUid: "sm-final-1",
+        messageId: "msg-model-2",
+        presentationMessageId: "msg-chat-1",
+        chatPresentation: true,
+        role: "assistant",
+        type: "message",
+        content: "Final answer",
+        turnScopeId: "client-turn:refresh",
+        dialogProcessId: "dp-refresh",
+        ts: "2026-07-29T01:01:00.000Z",
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "msg-chat-1",
+      messageId: "msg-chat-1",
+      content: "Final answer",
+    });
+    expect(selectActivityTimelineLogs(messages[0])).toEqual([
+      expect.objectContaining({
+        event: "main_model_content",
+        text: "I should inspect the repository first.",
+      }),
+    ]);
   });
 
   it("keeps summary thinking entry fields when merging assistant messages", () => {
@@ -718,7 +784,11 @@ describe("messageModel execution logs", () => {
         content: "part 1",
         turnScopeId: "client-turn:logs",
         dialogProcessId: "dp-logs",
-        realtimeLogs: Array.from({ length: 6 }, (_, index) => ({ text: `log-${index + 1}` })),
+        activityTimeline: Array.from({ length: 6 }, (_, index) => ({
+          activityId: `event:log-${index + 1}`, eventId: `log-${index + 1}`, event: "thinking", type: "thinking",
+          text: `log-${index + 1}`, sequence: index + 1, sequenceScopeId: "message-logs",
+          sequenceDomain: "message-event", authority: "authoritative",
+        })),
         executionLogTotal: 6,
       },
       {
@@ -726,7 +796,11 @@ describe("messageModel execution logs", () => {
         content: "part 2",
         turnScopeId: "client-turn:logs",
         dialogProcessId: "dp-logs",
-        realtimeLogs: Array.from({ length: 6 }, (_, index) => ({ text: `log-${index + 7}` })),
+        activityTimeline: Array.from({ length: 6 }, (_, index) => ({
+          activityId: `event:log-${index + 7}`, eventId: `log-${index + 7}`, event: "thinking", type: "thinking",
+          text: `log-${index + 7}`, sequence: index + 7, sequenceScopeId: "message-logs",
+          sequenceDomain: "message-event", authority: "authoritative",
+        })),
         executionLogTotal: 12,
       },
     ], buildViewMessage);

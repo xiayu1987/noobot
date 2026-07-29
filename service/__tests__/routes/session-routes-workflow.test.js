@@ -54,7 +54,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     fs.writeFile(
       path.join(workflowDir, "session-summary.json"),
       `${JSON.stringify({
-        schemaVersion: 6,
+        schemaVersion: 9,
         sessionId: "node-s",
         messages: [{ role: "assistant", content: "done" }],
         stats: { messageCount: 1 },
@@ -121,7 +121,19 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     `${JSON.stringify({
       sessionId: "node-s",
       messages: [
-        { id: "a1", role: "assistant", type: "message", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, content: "answer" },
+        {
+          id: "a1",
+          role: "assistant",
+          type: "message",
+          sessionId: "node-s",
+          dialogProcessId: "dp-1",
+          turnScopeId,
+          content: "answer",
+          toolTimeline: [
+            { key: "call:call-1", toolCallId: "call-1", status: "running" },
+            { key: "call:call-2", toolCallId: "call-2", status: "completed" },
+          ],
+        },
         { id: "i1", role: "system", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, injectedMessage: true, injectedBy: "harness-plugin", content: "injected" },
         { id: "t1", role: "assistant", type: "tool_call", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, content: "tool call" },
         { id: "t2", role: "tool", type: "tool_result", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, content: "tool result" },
@@ -168,6 +180,6 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     assert.equal(payload.messageItem.turnScopeId, turnScopeId);
     assert.equal(payload.counts.executionLogCount, 2);
     assert.equal(payload.counts.injectedMessageCount, 1);
-    assert.deepEqual(payload.allMessages.map((item) => item.id).sort(), ["a1", "i1", "t1", "t2"]);
+    assert.deepEqual(payload.allMessages.map((item) => item.id).sort(), ["a1", "i1"]);
   });
 });

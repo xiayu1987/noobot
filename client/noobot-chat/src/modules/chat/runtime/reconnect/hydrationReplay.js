@@ -3,35 +3,23 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "../../model/chatConstants.js";
-import { findLatestPendingAssistantAfterLastUser } from "../../model/reconnectReplayModel.js";
-import { getMessageRole } from "../../model/messageIdentity.js";
-import { _ensureArray, _trimStr } from "./utils.js";
-import { findAssistantMessageByDialogProcessId } from "./messageLookup.js";
+import { _trimStr } from "./utils.js";
 import {
   logResendDebug,
   summarizeDebugMessages,
 } from "../../../debug/loggers/resendDebugLogger.js";
 
-export function shouldHydrateSessionBeforeReplay({
-  activeSession,
-  messages = [],
-  dialogProcessId = "",
-  allowCreate = true,
-} = {}) {
-  const normalizedDpId = _trimStr(dialogProcessId);
-  if (!allowCreate || !normalizedDpId || !activeSession?.value) return false;
-  if (findAssistantMessageByDialogProcessId(activeSession, normalizedDpId)) return false;
-  const messageList = Array.isArray(activeSession.value.messages)
-    ? activeSession.value.messages
-    : [];
-  if (findLatestPendingAssistantAfterLastUser(messageList)) return false;
-  const lastMessage = messageList.length ? messageList[messageList.length - 1] : null;
-  if (getMessageRole(lastMessage) === RoleEnum.USER) return false;
-  return (_ensureArray(messages)).some((envelope) => {
-    const eventName = _trimStr(envelope?.event);
-    return eventName === StreamEventEnum.DELTA || eventName === StreamEventEnum.THINKING;
-  });
+function sessionIdentity(value = {}) {
+  return _trimStr(value?.sessionId || value?.backendSessionId || value?.id);
+}
+
+export function resolveMatchingSessionDetail(detail, backendSessionId = "") {
+  const expectedSessionId = _trimStr(backendSessionId);
+  if (!expectedSessionId || !detail || typeof detail !== "object") return null;
+  const detailSessionId = sessionIdentity(detail);
+  if (detailSessionId && detailSessionId !== expectedSessionId) return null;
+  const sessionDocs = Array.isArray(detail?.sessions) ? detail.sessions : [];
+  return sessionDocs.find((sessionDoc) => sessionIdentity(sessionDoc) === expectedSessionId) || null;
 }
 
 export async function renderActiveSessionBeforeReplay({
@@ -59,10 +47,20 @@ export async function renderActiveSessionBeforeReplay({
     try {
       const detail = await chatList.fetchSessionDetail(backendSessionId, {
         source: "reconnectHydration",
-        reuseRecentlyLoaded: true,
-        allowLoadedSnapshot: true,
+        reuseRecentlyLoaded: false,
+        allowLoadedSnapshot: false,
       });
-      if (!detail) return false;
+      const matchingSessionDoc = resolveMatchingSessionDetail(detail, backendSessionId);
+      const currentActiveSessionId = sessionIdentity(activeSession?.value);
+      if (!matchingSessionDoc || currentActiveSessionId !== backendSessionId) {
+        logResendDebug("hydration.detail.rejected", {
+          sessionId: backendSessionId,
+          currentActiveSessionId,
+          detailSessionId: sessionIdentity(detail),
+          reason: !matchingSessionDoc ? "identity_mismatch_or_empty" : "active_session_changed",
+        });
+        return false;
+      }
       logResendDebug("hydration.detail.apply.before", {
         sessionId: backendSessionId,
         preserveCurrentMessages: true,
@@ -83,34 +81,5 @@ export async function renderActiveSessionBeforeReplay({
   })();
   setReplayHydrationPromise(hydrationPromise);
   return hydrationPromise;
-}
-
-export async function hydrateSessionBeforeReconnectReplayIfNeeded({
-  activeSession,
-  activeSessionId,
-  chatList,
-  messages = [],
-  dialogProcessId = "",
-  allowCreate = true,
-  getReplayHydrationPromise = () => null,
-  setReplayHydrationPromise = () => {},
-  onError = () => {},
-} = {}) {
-  if (!shouldHydrateSessionBeforeReplay({
-    activeSession,
-    messages,
-    dialogProcessId,
-    allowCreate,
-  })) {
-    return false;
-  }
-  return renderActiveSessionBeforeReplay({
-    activeSession,
-    activeSessionId,
-    chatList,
-    getReplayHydrationPromise,
-    setReplayHydrationPromise,
-    onError,
-  });
 }
 

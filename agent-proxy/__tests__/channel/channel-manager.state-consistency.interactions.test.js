@@ -69,6 +69,11 @@ test("interaction_request resolved by one client should be consistent across all
     false,
     "resolved interaction should not be replayed to any client",
   );
+  const reconnectState = getEvent(clientBAfterResolve, "reconnect_data")?.data?.sessions?.[0]
+    ?.conversationStates?.find((item) => item?.dialogProcessId === "dp-1");
+  assert.equal(reconnectState?.state, "sending");
+  assert.equal(reconnectState?.sourceEvent, "interaction_response");
+  assert.equal(reconnectState?.requestId, "req-1");
 });
 
 test("interaction_pending channel_state should carry pendingInteractions snapshot", () => {
@@ -112,7 +117,7 @@ test("interaction_pending channel_state should carry pendingInteractions snapsho
   assert.deepEqual(latestState?.data?.pendingRequestIds, ["req-a", "req-b"]);
 });
 
-test("resolving one concurrent interaction does not synthesize a business channel state", () => {
+test("resolving one concurrent interaction atomically publishes the remaining pending snapshot", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-concurrent" });
   const channel = manager.ensureChannel(channelKey, {
@@ -153,7 +158,13 @@ test("resolving one concurrent interaction does not synthesize a business channe
   });
 
   assert.equal(forwarded, true);
-  assert.equal(listEvents(client, "channel_state").length, stateEventsBeforeResponse);
+  const stateEventsAfterResponse = listEvents(client, "channel_state");
+  assert.equal(stateEventsAfterResponse.length, stateEventsBeforeResponse + 1);
+  const latestState = stateEventsAfterResponse.at(-1);
+  assert.equal(latestState?.data?.state, "interaction_pending");
+  assert.equal(latestState?.data?.sourceEvent, "interaction_response");
+  assert.deepEqual(latestState?.data?.pendingRequestIds, ["req-b"]);
+  assert.equal(latestState?.data?.pendingInteraction?.requestId, "req-b");
   assert.equal(channel.pendingInteractionRequests.has("req-a"), false);
   assert.equal(channel.pendingInteractionRequests.has("req-b"), true);
 });
@@ -217,4 +228,3 @@ test("interaction_response should resolve channel by pending requestId", () => {
 
   assert.equal(resolvedChannel, channel);
 });
-

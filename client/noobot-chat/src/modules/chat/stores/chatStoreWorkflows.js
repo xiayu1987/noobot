@@ -7,22 +7,16 @@ import { compareWorkflowRuntimeFacts, normalizeWorkflowRuntimeEvent, WORKFLOW_RU
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 
 const text = (value) => String(value || "").trim();
-const TERMINAL = new Set(["completed","succeeded","failed","cancelled","canceled","stopped","aborted","error","expired","timeout","no_conversation"]);
-const isSubSessionTerminalStatus = (value) => TERMINAL.has(text(value).toLowerCase());
-function projectSubSessionTurnState(currentSession = {}, eventData = {}) {
-  const turnScopeId=text(eventData.turnScopeId);
-  if (!turnScopeId) return { turnStatuses: currentSession.turnStatuses || [], turnTimings: currentSession.turnTimings || [] };
-  const timestamp=eventData.timestamp || eventData.updatedAt || eventData.createdAt || new Date().toISOString();
-  const dialogProcessId=text(eventData.dialogProcessId); const status=text(eventData.status || eventData.state).toLowerCase();
-  const turnStatuses=[...(currentSession.turnStatuses || [])]; let i=turnStatuses.findIndex(x=>text(x.turnScopeId)===turnScopeId); const old=i>=0?turnStatuses[i]:{};
-  const next={...old,turnScopeId,dialogProcessId:dialogProcessId||old.dialogProcessId||"",status:status||old.status||"sending",updatedAt:timestamp}; i>=0?turnStatuses[i]=next:turnStatuses.push(next);
-  const turnTimings=[...(currentSession.turnTimings || [])]; i=turnTimings.findIndex(x=>text(x.turnScopeId)===turnScopeId); const timing=i>=0?turnTimings[i]:{};
-  const nextTiming={...timing,turnScopeId,dialogProcessId:dialogProcessId||timing.dialogProcessId||"",thinkingStartedAt:timing.thinkingStartedAt||timestamp,thinkingFinishedAt:isSubSessionTerminalStatus(status)?(timing.thinkingFinishedAt||timestamp):null}; i>=0?turnTimings[i]=nextTiming:turnTimings.push(nextTiming);
-  return {turnStatuses,turnTimings};
+const WORKFLOW_NODE_TERMINAL_STATUSES = new Set([
+  "succeeded", "completed", "failed", "cancelled", "canceled", "stopped",
+  "aborted", "error", "expired", "timeout",
+]);
+function isWorkflowNodeTerminalStatus(value) {
+  return WORKFLOW_NODE_TERMINAL_STATUSES.has(text(value).toLowerCase());
 }
 function shouldApplyWorkflowNodeStateEvent(current,incoming){ if(!current)return true; const c=compareWorkflowRuntimeFacts(incoming,current,{defaultDomain:WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE}); if(!c.comparable)return false; if(c.order!==0)return c.order>0; return text(incoming.eventId)===text(current.eventId); }
 export function createWorkflowNodeStateRegistry(){ return {workflows:{},viewerStates:{}}; }
-export function createWorkflowStore({ workflowNodeStateRegistry, subSessionMessageRegistry, upsertSubSessionEvent }) {
+export function createWorkflowStore({ workflowNodeStateRegistry, applySubSessionLifecycleEvent, reduceSubSessionMessageEvent, reduceSubSessionSnapshot }) {
 function upsertWorkflowNodeStateEvent(eventData = {}) {
   const workflowRunId = text(eventData?.workflowRunId);
   const nodeExecutionId = text(eventData?.nodeExecutionId);
@@ -51,6 +45,16 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
   const workflow = registry.workflows[workflowRunId];
   if (!workflow.nodes) workflow.nodes = {};
   const current = workflow.nodes[nodeExecutionId] || null;
+  const currentStatus = text(current?.status).toLowerCase();
+  const incomingStatus = text(eventData?.status || eventData?.stepStatus).toLowerCase();
+  if (
+    current &&
+    isWorkflowNodeTerminalStatus(currentStatus) &&
+    incomingStatus &&
+    incomingStatus !== currentStatus
+  ) {
+    return { applied: false, reason: "terminal_state_immutable", current };
+  }
   if (!shouldApplyWorkflowNodeStateEvent(current, eventData)) {
     const result = { applied: false, reason: "stale", current };
     logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", {
@@ -67,9 +71,12 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
     });
     return result;
   }
+  const authoritativeStatus = text(eventData?.status || eventData?.stepStatus || current?.status || current?.stepStatus);
+  const { stepStatus: _incomingStepStatus, ...incomingFact } = eventData || {};
+  const { stepStatus: _currentStepStatus, ...currentFact } = current || {};
   const next = {
-    ...(current || {}),
-    ...(eventData || {}),
+    ...currentFact,
+    ...incomingFact,
     workflowRunId,
     nodeExecutionId,
     commandId: text(eventData?.commandId || current?.commandId),
@@ -77,7 +84,7 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
     parentSessionId: text(eventData?.parentSessionId || current?.parentSessionId),
     dialogProcessId: text(eventData?.dialogProcessId || current?.dialogProcessId),
     turnScopeId: text(eventData?.turnScopeId || current?.turnScopeId),
-    status: text(eventData?.status || current?.status),
+    status: authoritativeStatus,
     eventId: text(eventData?.eventId || current?.eventId),
     revision: Number(eventData?.revision ?? current?.revision ?? 0),
     sequence: Number(eventData?.sequence ?? current?.sequence ?? 0),
@@ -88,49 +95,11 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
   workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
   const childSessionId = text(next.sessionId);
   if (childSessionId && childSessionId !== text(next.parentSessionId)) {
-    const subRegistry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
-    if (!subRegistry.sessions) subRegistry.sessions = {};
-    const currentSubSession = subRegistry.sessions[childSessionId] || {
-      id: childSessionId,
-      sessionId: childSessionId,
-      messages: [],
-      eventsById: {},
-      sequence: 0,
-    };
-    const turnState = projectSubSessionTurnState(currentSubSession, {
+    const lifecycleResult = applySubSessionLifecycleEvent({
       ...next,
       sessionId: childSessionId,
       state: next.status,
     });
-    subRegistry.sessions[childSessionId] = {
-      ...currentSubSession,
-      id: childSessionId,
-      sessionId: childSessionId,
-      parentSessionId: text(next.parentSessionId || currentSubSession.parentSessionId),
-      dialogProcessId: text(next.dialogProcessId || currentSubSession.dialogProcessId),
-      turnScopeId: text(next.turnScopeId || currentSubSession.turnScopeId),
-      workflowRunId,
-      nodeExecutionId,
-      status: text(next.status || currentSubSession.status),
-      turnStatuses: turnState.turnStatuses,
-      turnTimings: turnState.turnTimings,
-      sequenceByDomain: {
-        ...(currentSubSession.sequenceByDomain || {}),
-        [WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE]: Math.max(
-          Number(currentSubSession.sequenceByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE] || 0),
-          Number(next.sequence || 0),
-        ),
-      },
-      revisionByDomain: {
-        ...(currentSubSession.revisionByDomain || {}),
-        [WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE]: Math.max(
-          Number(currentSubSession.revisionByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE] || 0),
-          Number(next.revision || 0),
-        ),
-      },
-      updatedAt: next.updatedAt || new Date().toISOString(),
-    };
-    subSessionMessageRegistry.value = { ...subRegistry, sessions: { ...subRegistry.sessions } };
     logWorkflowDiagnostics("frontend.workflowStore.nodeSessionStatusApplied", {
       sessionId: childSessionId,
       parentSessionId: next.parentSessionId,
@@ -139,8 +108,9 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
       workflowRunId,
       nodeExecutionId,
       status: next.status,
-      terminal: isSubSessionTerminalStatus(next.status),
-      messageCount: currentSubSession.messages.length,
+      applied: lifecycleResult?.applied === true,
+      reason: text(lifecycleResult?.reason),
+      messageCount: lifecycleResult?.session?.messages?.length || 0,
     });
   }
   logWorkflowDiagnostics("frontend.workflowStore.nodeStateApplied", {
@@ -200,7 +170,6 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
     workflowRunId: text(nodeSession?.workflowRunId) || workflowRunId,
     nodeExecutionId: text(nodeSession?.nodeExecutionId),
     status: text(nodeSession?.status || nodeSession?.stepStatus),
-    stepStatus: text(nodeSession?.stepStatus || nodeSession?.status),
     revision: Number(nodeSession?.revision || 1),
     sequence: Number(nodeSession?.sequence || index + 1),
     eventId: text(nodeSession?.eventId) || `workflow-plan:${text(nodeSession?.nodeExecutionId)}`,
@@ -248,7 +217,9 @@ function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
   } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
     result = upsertWorkflowNodeStateEvent(canonical.data);
   } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.MESSAGE) {
-    result = upsertSubSessionEvent(canonical.data.eventType, canonical.data);
+    result = reduceSubSessionMessageEvent(canonical.data.eventType, canonical.data);
+  } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
+    result = reduceSubSessionSnapshot(canonical.data);
   } else {
     result = { applied: false, reason: "unsupported_event" };
   }
@@ -268,5 +239,5 @@ function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
   });
   return { ...(result || {}), canonical };
 }
-  return { upsertWorkflowNodeStateEvent, upsertWorkflowPlanningEvent, applyWorkflowRuntimeEvent };
+  return { applyWorkflowRuntimeEvent };
 }

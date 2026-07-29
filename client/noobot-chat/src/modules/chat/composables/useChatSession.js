@@ -5,7 +5,6 @@
  */
 import { ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { applyCompletedToolLogsToMessages } from "../model/sessionToolLogs.js";
 import { normalizeTimePair, nowMs } from "../model/timeFields.js";
 import {
   buildChatWebSocketUrl,
@@ -296,8 +295,6 @@ export function useChatSession({
       sessionItem,
       mainSessionDoc,
     }, {
-      upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
-      upsertWorkflowNodeStateEvent: chatStore.upsertWorkflowNodeStateEvent,
       applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
       turnRuntimeRegistry: turnRuntimeRegistry.value,
       isTurnRuntimeDeleted,
@@ -426,10 +423,12 @@ export function useChatSession({
 
   const {
     appendMessage,
+    findCanonicalMessageById,
+    upsertCanonicalAssistantMessage,
     makeViewMessage,
     foldMessagesForView,
     shouldRenderMessageInChat,
-  } = createSessionMessageView({ activeSession, activeSessionId, userId, isImageMime });
+  } = createSessionMessageView({ sessions, activeSession, activeSessionId, userId, isImageMime });
 
   const chatList = useChatList({
     userId,
@@ -444,7 +443,6 @@ export function useChatSession({
     createConnectorPanelState,
     generateSessionId,
     sessionTitleFromMessages,
-    applyCompletedToolLogsToMessages,
     getSessionsApi,
     getSessionDetailApi,
     getSessionFullDetailApi,
@@ -487,6 +485,8 @@ export function useChatSession({
     clearUploads,
     serializeAttachments,
     appendMessage,
+    findCanonicalMessageById,
+    upsertCanonicalAssistantMessage,
     makeViewMessage,
     foldMessagesForView,
     fetchSessionDetail: chatList.fetchSessionDetail,
@@ -510,9 +510,6 @@ export function useChatSession({
     sessionLogWebSocketClient,
     applyTurnRuntimeEvent: submitTurnRuntimeEvent,
     runtimeEventsAlreadyProjected: true,
-    upsertWorkflowNodeStateEvent: chatStore.upsertWorkflowNodeStateEvent,
-    upsertWorkflowPlanningEvent: chatStore.upsertWorkflowPlanningEvent,
-    upsertSubSessionEvent: chatStore.upsertSubSessionEvent,
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     ensureConnected,
     notify,
@@ -532,9 +529,10 @@ export function useChatSession({
     chatList,
     chatWebSocketClient,
     appendMessage,
+    findCanonicalMessageById,
+    upsertCanonicalAssistantMessage,
     makeViewMessage,
     foldMessagesForView,
-    applyCompletedToolLogsToMessages,
     sessionTitleFromMessages,
     pendingInteractionRequest,
     clearPendingInteraction,

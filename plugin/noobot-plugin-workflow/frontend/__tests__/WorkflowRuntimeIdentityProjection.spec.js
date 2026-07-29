@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { ref } from "vue";
 import { projectWorkflowMessageIdentity } from "../composables/useWorkflowMeta.js";
 import { createRuntimeNodeSessions } from "../runtime/workflowRuntimeSessions.js";
+import { createStepStatusResolver } from "../runtime/workflowRuntimeStatus.js";
 
 describe("workflow runtime identity projection", () => {
   it("restores a missing persisted workflowRunId from the outer Turn envelope", () => {
@@ -73,5 +74,34 @@ describe("workflow runtime identity projection", () => {
       status: "succeeded",
       sessionId: "child-session",
     });
+    expect(runtimeNodeSessions.value[0]).not.toHaveProperty("stepStatus");
+  });
+
+  it("adapts legacy stepStatus only at the runtime input boundary", () => {
+    const runtimeNodeSessions = createRuntimeNodeSessions({
+      workflowPayload: ref({ workflowRunId: "client-turn:main" }),
+      nodeSessions: ref([{
+        nodeExecutionId: "node-execution-legacy",
+        dialogProcessId: "legacy-dialog",
+        stepStatus: "running",
+      }]),
+      executionMeta: ref({ nodeAgentRuns: [] }),
+      workflowNodeStateRegistry: ref({ workflows: {} }),
+    });
+
+    expect(runtimeNodeSessions.value[0]).toMatchObject({
+      nodeExecutionId: "node-execution-legacy",
+      status: "running",
+    });
+    expect(runtimeNodeSessions.value[0]).not.toHaveProperty("stepStatus");
+  });
+
+  it("resolves the authoritative status for nodes with a stable execution identity", () => {
+    const resolveStepStatus = createStepStatusResolver({
+      nodeRunByDialogProcessId: ref(new Map()),
+    });
+
+    expect(resolveStepStatus({ nodeExecutionId: "node-execution-1", status: "running" })).toBe("running");
+    expect(resolveStepStatus({ nodeExecutionId: "node-execution-1", status: "succeeded" })).toBe("success");
   });
 });

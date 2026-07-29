@@ -43,19 +43,31 @@ function activityKey(value = {}, index = 0) {
 
 export function normalizeRunActivity(value = {}, index = 0) {
   if (!isRunActivityLog(value)) return null;
+  if (text(value.authority) !== TIMELINE_AUTHORITY.AUTHORITATIVE) return null;
+  if (text(value.sequenceDomain) !== SEQUENCE_DOMAIN.MESSAGE) return null;
   const sequence = sequenceOf(value) || index + 1;
   const eventId = text(value.eventId || value.id) || activityKey(value, index);
   return {
     activityId: activityKey(value, index),
     eventId,
+    event: text(value.event || value.type || value.rawEvent).toLowerCase() || "activity",
     sequence,
     sequenceScopeId: text(value.sequenceScopeId || value.sequenceScope),
-    authority: text(value.authority) || TIMELINE_AUTHORITY.COMPATIBILITY,
-    sequenceDomain: text(value.sequenceDomain) || SEQUENCE_DOMAIN.LEGACY,
+    authority: TIMELINE_AUTHORITY.AUTHORITATIVE,
+    sequenceDomain: SEQUENCE_DOMAIN.MESSAGE,
     type: text(value.event || value.type || value.rawEvent).toLowerCase() || "activity",
+    activityKind: text(value.activityKind),
     source: text(value.source || value.category || value?.data?.source),
     status: text(value.status) || "completed",
     text: text(value.text ?? value.output ?? value?.data?.text ?? value?.data?.output),
+    output: text(value.output ?? value.text ?? value?.data?.output ?? value?.data?.text),
+    purpose: text(value.purpose),
+    pluginFlow: text(value.pluginFlow),
+    chain: text(value.chain),
+    messageId: text(value.messageId),
+    presentationMessageId: text(value.presentationMessageId),
+    sessionId: text(value.sessionId),
+    turnScopeId: text(value.turnScopeId),
     timestamp: text(value.timestamp || value.ts),
     log: value,
   };
@@ -65,13 +77,6 @@ export function reduceActivityTimeline(timeline = [], value = {}) {
   const activity = normalizeRunActivity(value, Array.isArray(timeline) ? timeline.length : 0);
   if (!activity) return Array.isArray(timeline) ? timeline : [];
   return mergeActivityTimelines(timeline, [activity]);
-}
-
-export function buildActivityTimelineFromLegacyLogs(logs = []) {
-  return (Array.isArray(logs) ? logs : [])
-    .map(normalizeRunActivity)
-    .filter(Boolean)
-    .reduce((timeline, activity) => mergeActivityTimelines(timeline, [activity]), []);
 }
 
 export function mergeActivityTimelines(...timelines) {
@@ -92,16 +97,15 @@ export function selectActivityTimeline(message = {}) {
 
 export function selectActivityTimelineLogs(message = {}) {
   return selectActivityTimeline(message)
-    .filter((item) => item?.log)
+    .filter((item) => isRunActivityLog(item))
     .map((item) => ({
-      ...item.log,
-      sequence: sequenceOf(item) || sequenceOf(item.log),
-      sequenceScopeId: text(
-        item.sequenceScopeId || item.sequenceScope ||
-        item.log?.sequenceScopeId || item.log?.sequenceScope,
-      ),
-      authority: text(item.authority || item.log?.authority) || TIMELINE_AUTHORITY.COMPATIBILITY,
-      sequenceDomain: text(item.sequenceDomain || item.log?.sequenceDomain) || SEQUENCE_DOMAIN.LEGACY,
-      timelineTimestamp: text(item.timestamp || item.log?.timestamp || item.log?.ts),
+      ...item,
+      event: text(item.event || item.type || item.activityKind),
+      type: text(item.type || item.event || item.activityKind),
+      sequence: sequenceOf(item),
+      sequenceScopeId: text(item.sequenceScopeId),
+      authority: text(item.authority),
+      sequenceDomain: text(item.sequenceDomain),
+      timelineTimestamp: text(item.timestamp || item.ts),
     }));
 }

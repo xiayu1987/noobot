@@ -25,7 +25,11 @@ function thinkingMessage(overrides = {}) {
     role: "assistant",
     sessionId: "session-1",
     turnScopeId: "turn-1",
-    completedToolLogs: [{ type: "tool_result", text: "thinking" }],
+    activityTimeline: [{
+      activityId: "event:thinking-1", eventId: "thinking-1", event: "thinking", type: "thinking",
+      sequence: 1, sequenceScopeId: "message-1", sequenceDomain: "message-event",
+      authority: "authoritative", text: "thinking", output: "thinking",
+    }],
     ...overrides,
   };
 }
@@ -98,18 +102,19 @@ describe("ThinkingPanel runtime timing", () => {
     }));
     expect(wrapper.text()).toContain("--:--");
     expect(wrapper.text()).not.toContain("00:12");
-    expect(wrapper.find(".thinking-realtime-shell").classes()).not.toContain("is-running");
+    const shell = wrapper.find(".thinking-realtime-shell");
+    expect(shell.exists()).toBe(true);
+    expect(shell.classes()).not.toContain("is-running");
   });
 
-  it("renders a running thinking panel for a workflow node placeholder without a root runtime", () => {
+  it("does not infer a running thinking panel from legacy workflow message fields", () => {
     const wrapper = mountThinkingPanel(buildViewMessage(thinkingMessage({
-      completedToolLogs: [],
+      activityTimeline: [],
       pending: true,
       workflowNodeRunningPlaceholder: true,
     })));
 
-    expect(wrapper.find(".thinking-realtime-shell").exists()).toBe(true);
-    expect(wrapper.find(".thinking-realtime-shell").classes()).toContain("is-running");
+    expect(wrapper.find(".thinking-realtime-shell").exists()).toBe(false);
   });
 
   it("prefers Runtime Store timestamps over stale message and channel timestamps", () => {

@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
+import {
+  createAuthoritativeMessageEnvelope,
+  createCanonicalAssistant,
+  createFixture,
+  createFakeProcessStore,
+} from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 afterEach(() => {
@@ -13,7 +18,23 @@ afterEach(() => {
 
 describe("useReconnectReplay", () => {
   it("终态 channel_state 只触发权威查询，不直接清理交互或结算消息", async () => {
-    const { api, mocks } = createFixture();
+    const { api, refs, mocks } = createFixture();
+    const assistant = createCanonicalAssistant({
+      messageId: "message-order",
+      dialogProcessId: "dp-order",
+      turnScopeId: "turn-order",
+    });
+    refs.activeSession.value.messages = [
+      { role: RoleEnum.USER, content: "q" },
+      assistant,
+    ];
+    const deltaEnvelope = createAuthoritativeMessageEnvelope("llm_delta", {
+      messageId: assistant.messageId,
+      dialogProcessId: "dp-order",
+      turnScopeId: "turn-order",
+      seq: 1,
+      text: "A",
+    });
     await api.applyReconnectData({
       sessions: [
         {
@@ -22,10 +43,7 @@ describe("useReconnectReplay", () => {
           dialogProcesses: [
             {
               dialogProcessId: "dp-order",
-              messages: [
-                { event: StreamEventEnum.DELTA, data: { seq: 1, text: "A", dialogProcessId: "dp-order" } },
-                { event: StreamEventEnum.ERROR, data: { seq: 2, error: "x", dialogProcessId: "dp-order" } },
-              ],
+              messages: [deltaEnvelope],
             },
           ],
           conversationStates: [
@@ -35,7 +53,8 @@ describe("useReconnectReplay", () => {
       ],
     });
 
-    expect(mocks.appendMessage).toHaveBeenCalled();
+    expect(assistant.content).toBe("A");
+    expect(mocks.appendMessage).not.toHaveBeenCalled();
     expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith(
       "s-1",
       "turn-order",
@@ -82,6 +101,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(true);
     expect(assistant?.statusLabel).toBe("");
     expect(assistant?.error).toBeUndefined();
+    expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
     expect(mocks.notify).toHaveBeenCalledWith({
       type: "error",
       message: "chat.interactionPayloadMissing",

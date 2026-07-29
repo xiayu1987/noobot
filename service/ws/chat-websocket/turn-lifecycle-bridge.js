@@ -25,6 +25,7 @@ export function createCommittedTurnLifecyclePublisher({ sendEvent } = {}) {
       sessionId: event.sessionId,
       parentSessionId: event.parentSessionId || turn.parentSessionId,
       turnScopeId: event.turnScopeId || turn.turnScopeId,
+      presentationMessageId: turn.presentationMessageId,
       dialogProcessId: turn.dialogProcessId || event.dialogProcessId,
       revision: turn.revision,
       sequence: turn.sequence,

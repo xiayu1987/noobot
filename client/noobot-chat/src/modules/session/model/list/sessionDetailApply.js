@@ -16,10 +16,8 @@ import {
   getMessageTurnScopeId,
 } from "../../../chat/model/messageIdentity.js";
 import {
-  applySummaryToolLogs,
   buildWorkflowMessageSignature,
   mergePreservedDetailMessages,
-  patchExistingWorkflowMessage,
 } from "./detailMessages.js";
 import { buildSessionDetailProjection } from "./sessionDetailProjection.js";
 import { mergeCanonicalSessionDetail } from "../../../chat/model/sessionDetailMerge.js";
@@ -54,7 +52,6 @@ export function createSessionDetailApplicator({
   makeViewMessage,
   foldMessagesForView,
   sessionTitleFromMessages,
-  applyCompletedToolLogsToMessages,
   navigateToLastMessage,
   isSameSessionIdentity,
   onSessionDetailApplied = null,
@@ -257,7 +254,17 @@ export function createSessionDetailApplicator({
       normalizedMessageCount: normalizedDetailMessages.length,
       assistantMessages: normalizedDetailMessages
         .filter((item) => getMessageRole(item) === RoleEnum.ASSISTANT)
-        .map(summarizeToolProjection),
+        .map((item) => ({
+          ...summarizeToolProjection(item),
+          activityTimelineFacts: (item.activityTimeline || []).slice(0, 64).map((activity = {}) => ({
+            eventId: String(activity.eventId || ""),
+            activityKind: String(activity.type || activity.activityKind || ""),
+            sequence: Number(activity.sequence || 0),
+            sequenceDomain: String(activity.sequenceDomain || ""),
+            sequenceScopeId: String(activity.sequenceScopeId || ""),
+            authority: String(activity.authority || ""),
+          })),
+        })),
     });
 
     if (!preserveCurrentMessages && !shouldKeepCurrentMessagesForEmptyDetail) {
@@ -291,18 +298,6 @@ export function createSessionDetailApplicator({
         for (const workflowMessageItem of workflowMessages) {
           const signature = buildWorkflowMessageSignature(workflowMessageItem);
           if (!signature || existingWorkflowSignatures.has(signature)) continue;
-          const workflowDialogProcessId = getMessageDialogProcessId(workflowMessageItem);
-          const existingAssistantForDialog = existingMessages.find(
-            (messageItem) =>
-              getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
-              messageItem?.workflowMessage !== true &&
-              workflowDialogProcessId &&
-              getMessageDialogProcessId(messageItem) === workflowDialogProcessId,
-          );
-          if (patchExistingWorkflowMessage(existingAssistantForDialog, workflowMessageItem)) {
-            existingWorkflowSignatures.add(signature);
-            continue;
-          }
           existingMessages.push(workflowMessageItem);
           existingWorkflowSignatures.add(signature);
         }
@@ -311,11 +306,6 @@ export function createSessionDetailApplicator({
       sessionItem.messages = currentRenderedMessages;
     }
 
-    if (isSummaryDetail) {
-      applySummaryToolLogs(sessionItem, sessionDocs);
-    } else {
-      applyCompletedToolLogsToMessages(sessionItem.messages, sessionDocs);
-    }
     logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailApplied", {
       sessionId: detail.sessionId,
       applyMode,

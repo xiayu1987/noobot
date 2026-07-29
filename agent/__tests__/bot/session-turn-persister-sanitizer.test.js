@@ -56,6 +56,44 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
   assert.equal(turns[0].messageId, "message-1");
 });
 
+test("appendAgentMessages forwards presentation identity and checkpoint context", async () => {
+  const turns = [];
+  const persistenceContext = { locationResolver: { scope: "running-turn" } };
+  const persister = new SessionTurnPersister({
+    session: {
+      appendExecutionLog: async () => {},
+      appendTurn: async (payload = {}) => turns.push(payload),
+    },
+  });
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    persistenceContext,
+    messages: [{
+      role: "assistant",
+      content: "analysis",
+      messageUid: "sm_analysis",
+      messageId: "msg_model_1",
+      presentationMessageId: "msg_chat_1",
+      chatPresentation: false,
+      type: "tool_call",
+      activityTimeline: [{
+        eventId: "guidance-analysis:1",
+        sequence: 1,
+        sequenceDomain: "activity",
+        sequenceScopeId: "msg_chat_1",
+        authority: "authoritative",
+      }],
+    }],
+  });
+
+  assert.equal(turns[0].presentationMessageId, "msg_chat_1");
+  assert.equal(turns[0].chatPresentation, false);
+  assert.equal(turns[0].activityTimeline[0].eventId, "guidance-analysis:1");
+  assert.equal(turns[0].persistenceContext, persistenceContext);
+});
+
 test("SessionTurnPersister normalizes parentSessionId once for every persistence outlet", async () => {
   const appendedTurns = [];
   const executionLogs = [];

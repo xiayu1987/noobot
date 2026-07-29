@@ -12,19 +12,22 @@ import {
   MESSAGE_CONTENT_EFFECT,
   validateMessageEventEnvelope,
   hasMessageEventToolPayload,
+  isAuthoritativeFinalContentEvent,
   projectMessageEventContent,
   projectMessageEventToolFacets,
+  resolveMessageEventPresentationId,
   resolveMessageEventSequenceIdentity,
 } from "../message-event-protocol.mjs";
 
 function envelope(overrides = {}) {
   return {
     envelopeKind: "noobot.message_event",
-    envelopeVersion: 1,
+    envelopeVersion: 2,
     eventId: "event-1",
     eventType: "tool_call_start",
     sessionId: "child-1",
     messageId: "message-1",
+    presentationMessageId: "presentation-1",
     sequence: 1,
     timestamp: "2026-07-21T00:00:00.000Z",
     tool: "read_file",
@@ -36,6 +39,25 @@ function envelope(overrides = {}) {
 test("message event protocol validates the authoritative identity envelope", () => {
   assert.equal(assertMessageEventEnvelope(envelope()).sessionId, "child-1");
   assert.throws(() => assertMessageEventEnvelope(envelope({ messageId: "" })), /invalid authoritative/);
+});
+
+test("message event protocol requires an explicit presentation identity", () => {
+  const current = envelope();
+  assert.equal(assertMessageEventEnvelope(current), current);
+  assert.equal(resolveMessageEventPresentationId(current), "presentation-1");
+  assert.equal(isAuthoritativeFinalContentEvent(envelope({ eventType: "main_model_content" })), false);
+  assert.equal(isAuthoritativeFinalContentEvent({
+    ...current,
+    eventType: "main_model_content",
+  }), false);
+  assert.equal(isAuthoritativeFinalContentEvent({
+    ...current,
+    eventType: "authoritative_final_content",
+  }), true);
+  assert.throws(
+    () => assertMessageEventEnvelope(envelope({ presentationMessageId: "" })),
+    /invalid authoritative/,
+  );
 });
 
 test("message event protocol makes the message-scoped sequence identity explicit", () => {
@@ -111,8 +133,11 @@ test("message content protocol separates incremental delivery from authoritative
     { effect: MESSAGE_CONTENT_EFFECT.APPEND, content: "token" },
   );
   assert.deepEqual(
-    projectMessageEventContent(envelope({ eventType: "main_model_content", text: "final" })),
-    { effect: MESSAGE_CONTENT_EFFECT.REPLACE, content: "final" },
+    projectMessageEventContent(envelope({
+      eventType: "main_model_content",
+      text: "intermediate model analysis",
+    })),
+    { effect: MESSAGE_CONTENT_EFFECT.NONE, content: "" },
   );
   assert.deepEqual(
     projectMessageEventContent(envelope()),

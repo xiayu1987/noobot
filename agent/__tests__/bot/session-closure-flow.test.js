@@ -251,7 +251,14 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(capturedBuildContextInput?.runConfig?.scenarioProfile?.model, "gpt-4.1-mini");
   assert.deepEqual(
     capturedBuildContextInput?.runConfig?.contextPolicy?.includeContextKeys,
-    ["scenario", "system_runtime", "base_prompt", "services", "mcp_servers"],
+    [
+      "scenario",
+      "system_runtime",
+      "base_prompt",
+      "long_memory",
+      "services",
+      "mcp_servers",
+    ],
   );
   assert.equal(
     capturedBuildContextInput?.userMessageAttachments?.[0]?.name,

@@ -51,16 +51,11 @@ import {
   applyFoldedMessagesForDialogProcess as applyFoldedMessagesForDialogProcessWithContext,
   applyFoldedMessagesToActiveSession as applyFoldedMessagesToActiveSessionWithContext,
   buildReconnectReplayEnvelopeCallbacks,
-  createFinalAssistantFromReconnectReplay as createFinalAssistantFromReconnectReplayWithContext,
   findAssistantMessageByDialogProcessId as findAssistantMessageByDialogProcessIdWithContext,
   findAssistantMessageByTurnScopeId as findAssistantMessageByTurnScopeIdWithContext,
   hasAssistantMessageWithContent as hasAssistantMessageWithContentWithContext,
   mergeAssistantAttachments as mergeAssistantAttachmentsWithContext,
-  resolveReconnectTargetAssistantMessage as resolveReconnectTargetAssistantMessageWithContext,
 } from "../runtime/reconnect/messageReplay.js";
-import {
-  applyDoneMessagesFromReconnect as applyDoneMessagesFromReconnectWithContext,
-} from "../runtime/reconnect/doneReplay.js";
 import { createReconnectReplayPublicApi } from "../runtime/reconnect/publicApi.js";
 import { registerReconnectReplayLifecycleCleanup } from "../runtime/reconnect/lifecycle.js";
 import {
@@ -70,6 +65,7 @@ import {
 import { isTurnRuntimeDeleted } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { finalizeDoneTurnPresentation } from "../runtime/engine/sessionFinalize.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
+import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationReplay.js";
 
 export function useReconnectReplay({
   sessions,
@@ -79,9 +75,10 @@ export function useReconnectReplay({
   chatList,
   chatWebSocketClient,
   appendMessage,
+  findCanonicalMessageById,
+  upsertCanonicalAssistantMessage,
   makeViewMessage,
   foldMessagesForView,
-  applyCompletedToolLogsToMessages,
   sessionTitleFromMessages,
   pendingInteractionRequest,
   clearPendingInteraction,
@@ -235,7 +232,6 @@ export function useReconnectReplay({
       upsertConnectedConnectorInPanelState,
       refreshSessionConnectorsAsync,
       onAttachments: mergeAssistantAttachments,
-      onDoneMessages: applyDoneMessagesFromReconnect,
     });
   }
 
@@ -257,24 +253,13 @@ export function useReconnectReplay({
   function scheduleMissingInteractionPayloadFailure({
     sessionId = "",
     dialogProcessId = "",
-    turnScopeId = "",
-    targetAssistantMessage = null,
   } = {}) {
     return scheduleMissingInteractionPayloadFailureWithContext({
       pendingInteractionRequest,
       missingInteractionPayloadTimers,
       sessionId,
       dialogProcessId,
-      turnScopeId,
-      targetAssistantMessage,
-      applyRunStateEvent,
-      interactionSubmitting,
-      clearPendingInteraction,
       translate,
-      findFallbackAssistantMessage: () =>
-        findLatestPendingAssistantAfterLastUser(activeSession.value?.messages || []),
-      applyAssistantFailureState,
-      emitSyntheticErrorConversationState,
       notify,
     });
   }
@@ -335,7 +320,6 @@ export function useReconnectReplay({
       ensureReconnectSessionActive,
       applyRunStateEvents,
       isCurrentActiveSession,
-      resolveReconnectTargetAssistantMessage,
       replayCache,
       applyReconnectMessagesToActiveSession,
       applyChannelState,
@@ -343,7 +327,41 @@ export function useReconnectReplay({
       reconcileSessionState,
       applySubSessionReplayMessages,
       isDeletedTurn,
+      hydrateActiveSessionBeforeReplay,
     });
+  }
+
+  async function hydrateActiveSessionBeforeReplay(sessionId = "", currentRun = null) {
+    const requestedSessionId = String(sessionId || "").trim();
+    if (!requestedSessionId || !isCurrentActiveSession(requestedSessionId)) return false;
+    const hydrated = await renderActiveSessionBeforeReplay({
+      activeSession,
+      activeSessionId,
+      chatList,
+      getReplayHydrationPromise: () => replayHydrationPromise,
+      setReplayHydrationPromise: (promise) => {
+        replayHydrationPromise = promise;
+        reconnectReplayContext.replayHydrationPromise = promise;
+      },
+      onError: (error) => logReconnectReplaySystemEvent("reconnectReplay.hydration.failed", {
+        sessionId: requestedSessionId,
+        error: String(error?.message || error || ""),
+      }),
+    });
+    if (!isCurrentActiveSession(requestedSessionId)) return false;
+    const presentationMessageId = String(currentRun?.presentationMessageId || "").trim();
+    if (!presentationMessageId) return hydrated;
+    const existing = findCanonicalMessageById?.(requestedSessionId, presentationMessageId);
+    if (!existing) {
+      upsertCanonicalAssistantMessage?.(presentationMessageId, {
+        sessionId: requestedSessionId,
+        dialogProcessId: String(currentRun?.dialogProcessId || "").trim(),
+        turnScopeId: String(currentRun?.turnScopeId || "").trim(),
+      });
+    }
+    return Boolean(
+      findCanonicalMessageById?.(requestedSessionId, presentationMessageId),
+    );
   }
 
   async function reconcileSessionState({
@@ -443,19 +461,6 @@ export function useReconnectReplay({
     });
   }
 
-  function resolveReconnectTargetAssistantMessage(
-    dialogProcessId = "",
-    { allowCreate = true, turnScopeId = "" } = {},
-  ) {
-    return resolveReconnectTargetAssistantMessageWithContext({
-      activeSession,
-      appendMessage,
-      dialogProcessId,
-      turnScopeId,
-      allowCreate,
-    });
-  }
-
   function scheduleCacheExpiredSessionRefresh({
     sessionId = "",
     dialogProcessId = "",
@@ -542,30 +547,6 @@ export function useReconnectReplay({
     );
   }
 
-  function createFinalAssistantFromReconnectReplay(messages = [], dialogProcessId = "") {
-    return createFinalAssistantFromReconnectReplayWithContext({
-      activeSession,
-      appendMessage,
-      messages,
-      dialogProcessId,
-    });
-  }
-
-  function applyDoneMessagesFromReconnect(eventData = {}) {
-    return applyDoneMessagesFromReconnectWithContext({
-      activeSession,
-      activeSessionId,
-      eventData,
-      makeViewMessage,
-      foldMessagesForView,
-      applyCompletedToolLogsToMessages,
-      sessionTitleFromMessages,
-      applyFoldedMessagesForDialogProcess: applyFoldedMessagesForDialogProcessWithContext,
-      applyFoldedMessagesToActiveSession: applyFoldedMessagesToActiveSessionWithContext,
-      mergeAssistantAttachments,
-    });
-  }
-
   async function finalizeReconnectDoneSessionDetail(eventData = {}) {
     const sessionId = String(
       eventData?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || "",
@@ -630,7 +611,7 @@ export function useReconnectReplay({
   async function applyReconnectMessagesToActiveSession(
     messages,
     dialogProcessId,
-    { allowCreate = true, turnScopeId = "", authoritativeCurrentRun = false } = {},
+    { turnScopeId = "" } = {},
   ) {
     const sessionId = String(
       activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value || "",
@@ -641,31 +622,19 @@ export function useReconnectReplay({
     return applyReconnectMessagesToActiveSessionReplay({
       activeSession,
       activeSessionId,
-      appendMessage,
+      findCanonicalMessageById,
       chatList,
       messages,
       dialogProcessId,
       turnScopeId,
-      allowCreate,
-      authoritativeCurrentRun,
       appliedReconnectSeqByDialogProcessId,
       appliedReconnectEventKindsByTurnKey,
       terminalDialogProcessIdSet,
       classifyRealtimeLog,
-      getReplayHydrationPromise: () => replayHydrationPromise,
-      setReplayHydrationPromise: (promise) => {
-        replayHydrationPromise = promise;
-        reconnectReplayContext.replayHydrationPromise = promise;
-      },
-      applyDoneMessages: applyDoneMessagesFromReconnect,
       envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
       markReconnectSequenceApplied,
       navigateToLastMessage,
       processStore,
-      onHydrationError: (error) => logReconnectReplaySystemEvent("reconnectReplay.hydration.failed", {
-        dialogProcessId,
-        error: String(error?.message || error || ""),
-      }),
     });
   }
 

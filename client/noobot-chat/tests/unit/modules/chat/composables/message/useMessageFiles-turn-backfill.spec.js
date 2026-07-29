@@ -78,7 +78,7 @@ describe("useMessageFiles turn backfill", () => {
     expect(writtenFiles.value).toEqual([]);
   });
 
-  it("collects written files from the current normalized message completedToolLogs", () => {
+  it("collects written files from the current canonical tool timeline", () => {
     const messageItem = {
       role: "assistant",
       pending: false,
@@ -86,8 +86,11 @@ describe("useMessageFiles turn backfill", () => {
       sessionId: "session-1",
       turnScopeId: "turn-1",
       content: "",
-      completedToolLogs: [
-        {
+      toolTimeline: [{
+        key: "call:write-1", toolCallId: "write-1", status: "completed",
+        resultEvent: {
+          eventId: "write-result-1", sequence: 1, sequenceScopeId: "message-1",
+          sequenceDomain: "message-event", authority: "authoritative",
           writtenFiles: [
             {
               toolName: "write_file",
@@ -95,8 +98,7 @@ describe("useMessageFiles turn backfill", () => {
               fileName: "current.md",
             },
           ],
-        },
-      ],
+        } }],
     };
     const { writtenFiles } = createMessageFiles({
       getMessageItem: () => messageItem,

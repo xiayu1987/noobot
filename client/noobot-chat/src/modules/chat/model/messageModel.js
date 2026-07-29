@@ -29,7 +29,6 @@ import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { initializeMessageEventState } from "./messageEventState.js";
 import { mergeToolTimelines } from "../runtime/engine/toolTimeline.js";
 import { mergeActivityTimelines } from "../runtime/engine/activityTimeline.js";
-import { adaptLegacyMessageTimelines } from "../runtime/engine/legacyTimelineAdapter.js";
 import {
   mergeMessagePresentationFacets,
   normalizeStatusStepDisplayState,
@@ -187,7 +186,7 @@ function normalizeMessageType(messageItem = {}) {
 }
 
 function createMessageModel(messageItem = {}) {
-  const canonicalMessage = adaptLegacyMessageTimelines(messageItem);
+  const canonicalMessage = messageItem;
   const normalizedAttachments = getMessageAttachments(canonicalMessage);
   const transferEnvelopes = getMessageTransferEnvelopes(canonicalMessage);
   const workflowMeta = normalizeWorkflowMeta(canonicalMessage);
@@ -195,14 +194,25 @@ function createMessageModel(messageItem = {}) {
   const sessionId = String(canonicalMessage?.sessionId || canonicalMessage?.session_id || "").trim();
   const messageTimestamp = getMessageTimestamp(canonicalMessage);
   const messageRole = getMessageRole(canonicalMessage) || "assistant";
+  const sourceMessageId = String(canonicalMessage?.messageId || canonicalMessage?.id || "").trim();
+  const presentationMessageId = String(canonicalMessage?.presentationMessageId || "").trim();
+  const messageId = messageRole === "assistant" && presentationMessageId
+    ? presentationMessageId
+    : sourceMessageId;
+  const messageType = normalizeMessageType(canonicalMessage);
+  const activityTimeline = normalizeArray(canonicalMessage.activityTimeline);
   return initializeMessageEventState({
-    id: canonicalMessage.id || "",
+    id: messageId,
+    messageId,
+    ...(sourceMessageId && sourceMessageId !== messageId ? { sourceMessageId } : {}),
     turnScopeId,
     sessionId,
     session_id: sessionId,
     role: messageRole,
-    content: getMessageContentIdentity(canonicalMessage),
-    type: normalizeMessageType(canonicalMessage),
+    content: canonicalMessage?.chatPresentation === false
+      ? ""
+      : getMessageContentIdentity(canonicalMessage),
+    type: messageType,
     tool_calls: normalizeArray(canonicalMessage.tool_calls),
     toolCalls: normalizeArray(canonicalMessage.toolCalls),
     tool_call_id: canonicalMessage.tool_call_id || "",
@@ -218,7 +228,7 @@ function createMessageModel(messageItem = {}) {
     attachments: normalizeArray(normalizedAttachments),
     transferEnvelopes,
     toolTimeline: normalizeArray(canonicalMessage.toolTimeline),
-    activityTimeline: normalizeArray(canonicalMessage.activityTimeline),
+    activityTimeline,
     messageEventState: canonicalMessage.messageEventState,
     hasThinkingDetails: canonicalMessage.hasThinkingDetails === true,
     thinkingDetailCount: Number(
@@ -229,7 +239,6 @@ function createMessageModel(messageItem = {}) {
     synthetic: canonicalMessage.synthetic === true,
     placeholder: canonicalMessage.placeholder === true,
     turnPlaceholder: canonicalMessage.turnPlaceholder === true,
-    workflowNodeRunningPlaceholder: canonicalMessage.workflowNodeRunningPlaceholder === true,
     state: canonicalMessage.state || "",
     status: canonicalMessage.status || "",
     channelState: canonicalMessage.channelState || "",
@@ -252,6 +261,7 @@ function createMessageModel(messageItem = {}) {
 
 function buildAppendMessage(role, content = "", attachments = [], options = {}) {
   return createMessageModel({
+    ...options,
     role,
     content,
     type: "message",
@@ -261,7 +271,7 @@ function buildAppendMessage(role, content = "", attachments = [], options = {}) 
 }
 
 function resolveStableMessageIdentity(messageItem = {}) {
-  return "";
+  return String(messageItem?.messageId || messageItem?.id || "").trim();
 }
 
 function resolveMessageTurnScopeMergeKey(messageItem = {}) {

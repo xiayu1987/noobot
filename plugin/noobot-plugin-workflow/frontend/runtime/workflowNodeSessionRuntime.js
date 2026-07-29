@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
-import { workflowSessionText as text } from "./workflowNodeSessionProjection.js";
+const text = (value) => String(value || "").trim();
 
 export function resolveWorkflowDetailSessionId(detail = {}) {
   return text(detail?.sessionId || detail?.sessionSummary?.sessionId || detail?.session?.sessionId || detail?.session?.id);
@@ -38,6 +38,22 @@ export function findWorkflowOwningRuntimeNode(stepItem = {}, flowNodes = []) {
       }),
     ),
   ) || null;
+}
+
+export function findCurrentWorkflowRuntimeStep(stepItem = {}, runtimeNode = null) {
+  if (!stepItem || !runtimeNode) return null;
+  const stepExecutionId = text(stepItem?.nodeExecutionId);
+  const stepDialogProcessId = resolveWorkflowDialogProcessId(stepItem);
+  const stepSessionId = text(stepItem?.sessionId || stepItem?.nodeSessionId);
+  const stepId = text(stepItem?.stepId);
+  const candidates = (Array.isArray(runtimeNode?.actionNodeStates) ? runtimeNode.actionNodeStates : [])
+    .flatMap((stateBox = {}) => Array.isArray(stateBox?.steps) ? stateBox.steps : []);
+  return candidates.find((candidate = {}) => {
+    if (stepExecutionId && text(candidate?.nodeExecutionId) === stepExecutionId) return true;
+    if (stepDialogProcessId && resolveWorkflowDialogProcessId(candidate) === stepDialogProcessId) return true;
+    if (stepSessionId && text(candidate?.sessionId || candidate?.nodeSessionId) === stepSessionId) return true;
+    return Boolean(stepId && text(candidate?.stepId) === stepId);
+  }) || null;
 }
 
 export function findCurrentWorkflowRuntimeNode(nodeItem = {}, flowNodes = []) {

@@ -25,6 +25,11 @@ import {
 import { resolveBoundToolModelRequestOverrides } from "../turn/tool-choice-strategy.js";
 import { resolveHookClientEmitter } from "../../extensions/hooks/index.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { createHash } from "node:crypto";
+import {
+  emitMessageEvent,
+} from "../../events/message-event-stream.js";
+import { MESSAGE_EVENT_TYPE } from "@noobot/shared/message-event-protocol";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS =
   TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
@@ -129,7 +134,7 @@ function buildPluginCapabilityLogBase({
 
 function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
   const normalizedText = String(text || "").trim();
-  if (!event || !normalizedText) return;
+  if (!event) return;
   const isGuidanceAnalysisResponse =
     event === "plugin_capability_response" &&
     String(data?.purpose || "").trim() === "guidance" &&
@@ -139,20 +144,39 @@ function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data
     if (!isGuidanceAnalysisResponse) return;
   }
   if (isGuidanceAnalysisResponse) {
+    const canonicalOutput = String(data?.output || "").trim();
+    if (!canonicalOutput) {
+      throw new Error("guidance analysis response is missing canonical output");
+    }
     const runtime = resolveRuntime(ctx);
-    runtime?.eventListener?.onEvent?.({
+    const sessionMeta = resolveSessionMeta(ctx, runtime);
+    const suppliedIdentity = String(data?.eventId || data?.pluginEventId || data?.requestId || "").trim();
+    const stableIdentity = suppliedIdentity || [
+      sessionMeta.sessionId,
+      String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
+      String(runtime?.systemRuntime?.turnScopeId || "").trim(),
+      String(data?.turn || "").trim(),
+      canonicalOutput,
+    ].join("|");
+    const eventId = `guidance-analysis:${createHash("sha256").update(stableIdentity).digest("hex").slice(0, 24)}`;
+    emitMessageEvent(runtime?.eventListener, runtime, MESSAGE_EVENT_TYPE.THINKING, {
+      eventId,
       event: GUIDANCE_ANALYSIS_RESPONSE_EVENT,
-      data: {
-      ...data,
-      category: "system",
       type: "guidance_analysis",
-      event: "guidance_analysis",
+      category: "system",
+      text: canonicalOutput,
+      output: canonicalOutput,
+      purpose: "guidance",
+      pluginFlow: "analysis",
+      chain: "auxiliary",
+      activityKind: "guidance_analysis",
       rawEvent: "plugin_capability_response",
-      text: normalizedText,
-      },
+      ...sessionMeta,
+      dialogProcessId: String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
     });
     return;
   }
+  if (!normalizedText) return;
   const emitClientEvent = resolveHookClientEmitter(ctx);
   if (!emitClientEvent) return;
   emitClientEvent(event, {

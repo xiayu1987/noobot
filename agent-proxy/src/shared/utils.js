@@ -37,6 +37,25 @@ export function resolveMessageEventTrace(eventName = "", data = {}, transportSeq
   };
 }
 
+export function messageEventHasContent(eventName = "", data = {}) {
+  const normalizedEventName = String(eventName || "").trim();
+  const authoritative = normalizedEventName === "message_event" || normalizedEventName === "subagent_message_event"
+    ? data?.event
+    : null;
+  const payload = authoritative?.payload && typeof authoritative.payload === "object"
+    ? authoritative.payload
+    : data?.payload && typeof data.payload === "object"
+      ? data.payload
+      : data?.messageEvent && typeof data.messageEvent === "object"
+        ? data.messageEvent
+        : authoritative || data;
+  return Boolean(
+    payload?.content || payload?.text ||
+    payload?.delta?.content || payload?.delta?.text ||
+    authoritative?.content || authoritative?.text,
+  );
+}
+
 export function normalizeApiKey(input = "") {
   return String(input || "").trim();
 }

@@ -214,7 +214,7 @@ export function createUserInteractionTool({ agentContext }) {
         .optional()
         .describe(tTool(runtime, "tools.user_interaction.fieldFieldsPayload")),
     }),
-    func: async ({ content, fields }) => {
+    func: async ({ content, fields }, _runManager, config = {}) => {
       if (!bridge?.requestUserInteraction) {
         throw recoverableToolError(tUserInteraction(runtime, "bridgeMissing"), {
           code: ERROR_CODE.RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING,
@@ -257,6 +257,12 @@ export function createUserInteractionTool({ agentContext }) {
       }
 
       const result = await bridge.requestUserInteraction({
+        interactionId: String(
+          config?.configurable?.noobotHookContext?.call?.id ||
+            config?.configurable?.noobotHookContext?.call?.tool_call_id ||
+            config?.configurable?.noobotHookContext?.call?.toolCallId ||
+            "",
+        ).trim(),
         content: interactionContent,
         fields: normalizedFieldsPayload.fields || [],
         dialogProcessId,

@@ -156,6 +156,7 @@ test("mini-runner preserves standalone system previous-summary context", async (
 test("mini-runner sends guidance analysis response through execution event listener only", async () => {
   const hookEvents = [];
   const executionEvents = [];
+  const activityFacts = [];
   const invoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
     createChatModelFn: () => ({
@@ -177,6 +178,22 @@ test("mini-runner sends guidance analysis response through execution event liste
       },
       agentContext: {
         runtime: {
+          systemRuntime: {
+            sessionId: "s1",
+            turnScopeId: "turn",
+            messageEventStream: {
+              activeMessageId: "model-message-1",
+              activePresentationMessageId: "presentation-message-1",
+              sequence: 0,
+            },
+          },
+          projectCurrentTurnMessageEvent(activityFact) {
+            activityFacts.push(activityFact);
+            return {
+              ...activityFact,
+              authority: "authoritative",
+            };
+          },
           eventListener: {
             onEvent(eventPayload) {
               executionEvents.push(eventPayload);
@@ -190,15 +207,25 @@ test("mini-runner sends guidance analysis response through execution event liste
 
   assert.equal(hookEvents.length, 0);
   assert.equal(executionEvents.length, 1);
+  assert.equal(activityFacts.length, 1);
+  assert.equal(activityFacts[0].text, "guidance output");
+  assert.equal(activityFacts[0].output, "guidance output");
+  assert.equal(activityFacts[0].text.includes("Plugin 模型返回 / guidance"), false);
   const thinkingEvent = executionEvents[0];
-  assert.equal(thinkingEvent.event, "guidance_analysis_response");
+  assert.equal(thinkingEvent.event, "thinking");
+  assert.equal(thinkingEvent.data.envelopeKind, "noobot.message_event");
+  assert.equal(thinkingEvent.data.envelopeVersion, 2);
+  assert.equal(thinkingEvent.data.eventType, "thinking");
   assert.equal(thinkingEvent.data.purpose, "guidance");
   assert.equal(thinkingEvent.data.pluginFlow, "analysis");
   assert.equal(thinkingEvent.data.chain, "auxiliary");
   assert.equal(thinkingEvent.data.type, "guidance_analysis");
-  assert.equal(thinkingEvent.data.event, "guidance_analysis");
+  assert.equal(thinkingEvent.data.event, "guidance_analysis_response");
   assert.equal(thinkingEvent.data.output, "guidance output");
   assert.equal(thinkingEvent.data.dialogProcessId, "dp1");
+  assert.match(thinkingEvent.data.eventId, /^guidance-analysis:/);
+  assert.equal(thinkingEvent.data.sequenceDomain, "message-event");
+  assert.equal(thinkingEvent.data.sequenceScopeId, thinkingEvent.data.messageId);
 });
 
 test("mini-runner uses harness flow for plugin flow header without changing purpose", async () => {
@@ -224,6 +251,21 @@ test("mini-runner uses harness flow for plugin flow header without changing purp
       sessionId: "s1",
       agentContext: {
         runtime: {
+          systemRuntime: {
+            sessionId: "s1",
+            turnScopeId: "turn",
+            messageEventStream: {
+              activeMessageId: "model-message-1",
+              activePresentationMessageId: "presentation-message-1",
+              sequence: 0,
+            },
+          },
+          projectCurrentTurnMessageEvent(activityFact) {
+            return {
+              ...activityFact,
+              authority: "authoritative",
+            };
+          },
           eventListener: { onEvent() {} },
         },
         payload: { tools: { registry: [] } },

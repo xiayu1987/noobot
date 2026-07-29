@@ -46,6 +46,7 @@ function createRunner({
     botHookManager,
   }),
   prepareTurnInput = null,
+  appendAgentMessages = async () => {},
   commitSessionTurn = null,
   stampReusedUserTurnDialogProcessId = async () => {},
   assertPersistenceContextIdentity = null,
@@ -62,6 +63,7 @@ function createRunner({
     prepareRunConfig,
     prepareTurnInput,
     prepareAgentTurnExecution,
+    appendAgentMessages,
     appendSessionTurn: async () => {},
     assertPersistenceContextIdentity,
     commitSessionTurn,
@@ -71,6 +73,85 @@ function createRunner({
     now: () => new Date().toISOString(),
   });
 }
+
+test("SessionExecutionRunner checkpoints current turn messages with scoped persistence identity", async () => {
+  const checkpointPayloads = [];
+  const events = [];
+  const persistenceContext = { kind: "noobot.session_persistence_scope", scope: "running-turn" };
+  const runtime = {
+    attachmentMetas: [],
+    currentTurnMessages: {
+      items: [{
+        messageUid: "sm_checkpoint",
+        role: "assistant",
+        type: "message",
+        content: "analysis",
+        presentationMessageId: "msg_chat_checkpoint",
+        chatPresentation: true,
+        activityTimeline: [{ eventId: "activity-checkpoint-1" }],
+        toolTimeline: [{ toolCallId: "tool-checkpoint-1" }],
+      }],
+      toArray() { return this.items.slice(); },
+    },
+  };
+  const runtimeAgentContext = {
+    execution: { controllers: { runtime } },
+  };
+  const runner = createRunner({
+    appendAgentMessages: async (payload = {}) => checkpointPayloads.push(payload),
+    prepareAgentTurnExecution: async () => ({
+      agentContext: runtimeAgentContext,
+      runtimeAgentContext,
+    }),
+    agentRunner: async ({ agentContext }) => {
+      await agentContext.execution.controllers.runtime.persistCurrentTurnMessages();
+      return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    parentSessionId: "root-1",
+    parentDialogProcessId: "parent-dp-1",
+    message: "task",
+    turnScopeId: "turn-checkpoint",
+    persistenceContext,
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+
+  assert.equal(checkpointPayloads.length, 1);
+  assert.equal(checkpointPayloads[0].userId, "u1");
+  assert.equal(checkpointPayloads[0].sessionId, "s1");
+  assert.equal(checkpointPayloads[0].parentSessionId, "root-1");
+  assert.equal(checkpointPayloads[0].parentDialogProcessId, "parent-dp-1");
+  assert.equal(checkpointPayloads[0].turnScopeId, "turn-checkpoint");
+  assert.equal(checkpointPayloads[0].persistenceContext, persistenceContext);
+  assert.equal(checkpointPayloads[0].messages[0].presentationMessageId, "msg_chat_checkpoint");
+  assert.deepEqual(
+    events.find((event) => event?.event === "timeline_checkpoint_persisted")?.data?.messages?.[0],
+    {
+      messageUid: "sm_checkpoint",
+      messageId: "",
+      presentationMessageId: "msg_chat_checkpoint",
+      role: "assistant",
+      type: "message",
+      chatPresentation: true,
+      contentLength: 8,
+      activityTimelineCount: 1,
+      toolTimelineCount: 1,
+      toolCallIds: ["tool-checkpoint-1"],
+      activityTimeline: [{
+        eventId: "activity-checkpoint-1",
+        activityKind: "",
+        sequence: 0,
+        sequenceDomain: "",
+        sequenceScopeId: "",
+        authority: "",
+      }],
+    },
+  );
+});
 
 test("SessionExecutionRunner validates scoped persistence identity before execution", async () => {
   const calls = [];

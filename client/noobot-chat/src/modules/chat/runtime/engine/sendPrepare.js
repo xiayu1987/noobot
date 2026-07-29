@@ -9,22 +9,21 @@ import { enUSMessages } from "noobot-i18n/client/locales/en-US";
 import { BackendChannelState } from "../sessionRunStateMachine.js";
 import { nowMs, toIsoTime } from "../../model/timeFields.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
-import {
-  createTurnPlaceholderMessage,
-  findTurnPlaceholderMessage,
-} from "./turnPlaceholder.js";
 
 export function prepareChatSend({
   input,
   uploadFiles,
   isImageMime,
   appendMessage,
+  upsertCanonicalAssistantMessage,
   activeSession,
   applyConversationState,
   translate,
   navigateToLastMessage,
   messageText = "",
   turnScopeId = "",
+  userMessageId = "",
+  assistantMessageId = "",
   reuseExistingUserTurn = false,
   attachmentFiles = null,
   userAttachments = null,
@@ -36,6 +35,7 @@ export function prepareChatSend({
   input.value = "";
 
   const filesToSend = Array.isArray(attachmentFiles) ? [...attachmentFiles] : [...uploadFiles.value];
+  const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || "");
   const resolvedUserAttachments = Array.isArray(userAttachments) ? [...userAttachments] : filesToSend.map((fileItem) => {
     const clientAttachmentId = String(
       fileItem?.clientAttachmentId || fileItem?.draftAttachmentId || "",
@@ -52,10 +52,15 @@ export function prepareChatSend({
   });
   const userMessage = reuseExistingUserTurn
     ? (activeSession.value?.messages || []).find((message) => (
-      message?.role === RoleEnum.USER &&
-      String(message?.turnScopeId || "").trim() === normalizedTurnScopeId
+      String(message?.messageId || message?.id || "").trim() === String(userMessageId || "").trim()
     ))
-    : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), resolvedUserAttachments);
+    : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), resolvedUserAttachments, {
+      id: userMessageId,
+      messageId: userMessageId,
+      sessionId,
+      turnScopeId: normalizedTurnScopeId,
+      frontendUserMessage: true,
+    });
   if (userMessage && normalizedTurnScopeId) {
     userMessage.turnScopeId = normalizedTurnScopeId;
   }
@@ -76,11 +81,7 @@ export function prepareChatSend({
     activeSession.value.title = text.slice(0, 20);
   }
 
-  const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || "");
-  const botMessage = findTurnPlaceholderMessage(activeSession.value?.messages, {
-    turnScopeId: normalizedTurnScopeId,
-  }) || createTurnPlaceholderMessage({
-    appendMessage,
+  const botMessage = upsertCanonicalAssistantMessage(assistantMessageId, {
     sessionId,
     turnScopeId: normalizedTurnScopeId,
   });

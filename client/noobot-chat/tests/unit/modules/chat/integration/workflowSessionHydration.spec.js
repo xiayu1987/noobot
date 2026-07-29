@@ -30,23 +30,18 @@ function workflowMessage() {
 }
 
 describe("workflow session hydration", () => {
-  it("rebuilds planning state after a refresh cleared the live registry", () => {
-    const upsert = vi.fn();
+  it("does not reconstruct runtime facts from persisted display messages", () => {
+    const applyRuntimeEvent = vi.fn();
     expect(hydrateWorkflowRegistryFromSessionDetail({
       detail: { sessionId: "session-a" },
       mainSessionDoc: { messages: [workflowMessage()] },
-      upsertWorkflowPlanningEvent: upsert,
-    })).toBe(1);
-    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
-      workflowRunId: "workflow-a",
-      turnScopeId: "turn-a",
-      nodeSessions: [expect.objectContaining({ nodeExecutionId: "node-a" })],
-    }));
+      applyWorkflowRuntimeEvent: applyRuntimeEvent,
+    })).toBe(0);
+    expect(applyRuntimeEvent).not.toHaveBeenCalled();
   });
 
   it("rebuilds a running workflow from persisted runtime events before the final message exists", () => {
-    const upsertPlanning = vi.fn(() => ({ applied: true }));
-    const upsertNodeState = vi.fn(() => ({ applied: true }));
+    const applyRuntimeEvent = vi.fn(() => ({ applied: true }));
     const planning = {
       workflowRunId: "workflow-running",
       sessionId: "session-a",
@@ -72,11 +67,16 @@ describe("workflow session hydration", () => {
         ],
       },
       mainSessionDoc: { messages: [{ role: "user", type: "message", content: "run" }] },
-      upsertWorkflowPlanningEvent: upsertPlanning,
-      upsertWorkflowNodeStateEvent: upsertNodeState,
+      applyWorkflowRuntimeEvent: applyRuntimeEvent,
     })).toBe(1);
-    expect(upsertPlanning).toHaveBeenCalledWith(planning);
-    expect(upsertNodeState).toHaveBeenCalledWith(running);
+    expect(applyRuntimeEvent).toHaveBeenNthCalledWith(1, {
+      event: "workflow_planning_message_prepared",
+      data: planning,
+    }, { source: "replay" });
+    expect(applyRuntimeEvent).toHaveBeenNthCalledWith(2, {
+      event: "workflow_node_state_committed",
+      data: running,
+    }, { source: "replay" });
   });
 
   it("supports persisted execution node runs when refresh happens during execution", () => {

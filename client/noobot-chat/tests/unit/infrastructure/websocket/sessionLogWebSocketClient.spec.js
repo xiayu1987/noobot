@@ -91,7 +91,7 @@ describe("sessionLogWebSocketClient", () => {
     expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0, inFlightLength: 0 }));
   });
 
-  it("keeps only the newest 500 queued events while disconnected", async () => {
+  it("retains queued events beyond the pressure threshold and reports overflow", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
@@ -103,10 +103,35 @@ describe("sessionLogWebSocketClient", () => {
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
 
-    const businessRecords = sentBusinessRecords(socket);
-    expect(businessRecords).toHaveLength(500);
-    expect(businessRecords[0].event).toBe("message.5");
-    expect(businessRecords.at(-1).event).toBe("message.504");
+    expect(socket.sent).toHaveLength(100);
+    expect(sentBusinessRecords(socket)[0].event).toBe("message.0");
+    expect(client.status()).toMatchObject({ queueLength: 406, inFlightLength: 100, queueOverflowReported: true });
+
+    for (let batch = 0; batch < 5; batch += 1) {
+      socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 100 }) });
+    }
+    socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 6 }) });
+    const records = sentRecords(socket);
+    expect(records.filter((record) => record.event === "frontend.sessionLogWs.queueCapacityExceeded")).toHaveLength(1);
+    expect(sentBusinessRecords(socket)).toHaveLength(505);
+    expect(sentBusinessRecords(socket).at(-1).event).toBe("message.504");
+  });
+
+  it("sends the next bounded batch only after the current batch is fully acknowledged", async () => {
+    const { createSessionLogWebSocketClient } = await importClient();
+    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
+    for (let index = 0; index < 150; index += 1) client.log({ event: `ordered.${index}`, sessionId: "s-order" });
+    const socket = MockWebSocket.instances[0];
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+    expect(socket.sent).toHaveLength(100);
+    socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 40 }) });
+    expect(socket.sent).toHaveLength(100);
+    socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 60 }) });
+    expect(socket.sent).toHaveLength(150);
+    expect(sentBusinessRecords(socket).map((record) => record.event)).toEqual(
+      Array.from({ length: 150 }, (_, index) => `ordered.${index}`),
+    );
   });
 
   it("restores sent-but-unacked events when the websocket closes", async () => {

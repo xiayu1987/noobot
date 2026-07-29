@@ -7,7 +7,7 @@ import {
   applyExecutionChildren, applyExecutionSnapshot, applyExecutionTree,
   applyTurnLifecycleEnvelope, applyTurnLifecycleSnapshot, applyTurnTimingSnapshot,
   applyTurnTerminalResolution, applyTurnRuntimeEvent, createTurnRuntimeRegistryState,
-  hydrateSessionTurnRuntime, pruneTerminalTurns,
+  pruneTerminalTurns,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 
 export function createTurnRuntimeStoreActions(turnRuntimeRegistry) {
@@ -27,12 +27,6 @@ export function createTurnRuntimeStoreActions(turnRuntimeRegistry) {
     applyExecutionSnapshot: (value) => commitTurnRuntime(applyExecutionSnapshot, value),
     applyExecutionChildren: (value) => commitTurnRuntime(applyExecutionChildren, value),
     applyExecutionTree: (value) => commitTurnRuntime(applyExecutionTree, value),
-    hydrateSessionTurnRuntime(session, statuses) {
-      const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
-      const result = hydrateSessionTurnRuntime(registry, session, statuses);
-      if (result?.applied) turnRuntimeRegistry.value = { ...registry };
-      return result;
-    },
     pruneTerminalTurns(options = {}) {
       const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
       const result = pruneTerminalTurns(registry, options);

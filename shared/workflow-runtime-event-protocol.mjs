@@ -12,12 +12,14 @@ export const WORKFLOW_RUNTIME_EVENT = Object.freeze({
   PLANNING: "workflow_planning_message_prepared",
   NODE_STATE: "workflow_node_state_committed",
   MESSAGE: "workflow_message_event",
+  SESSION_SNAPSHOT: "workflow_session_snapshot_loaded",
 });
 
 export const WORKFLOW_SEQUENCE_DOMAIN = Object.freeze({
   PLANNING: "workflow-planning",
   NODE_STATE: "workflow-node-state",
   MESSAGE: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  SESSION_SNAPSHOT: "workflow-session-snapshot",
   TRANSPORT: "transport",
 });
 
@@ -35,6 +37,7 @@ export function workflowSequenceDomainForEvent(event = "") {
   if (event === WORKFLOW_RUNTIME_EVENT.PLANNING) return WORKFLOW_SEQUENCE_DOMAIN.PLANNING;
   if (event === WORKFLOW_RUNTIME_EVENT.NODE_STATE) return WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
   if (event === WORKFLOW_RUNTIME_EVENT.MESSAGE) return WORKFLOW_SEQUENCE_DOMAIN.MESSAGE;
+  if (event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) return WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT;
   return "";
 }
 
@@ -52,10 +55,20 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
   if (event === WORKFLOW_RUNTIME_EVENT.MESSAGE && !isMessageEventEnvelope(data)) {
     errors.push("invalid_message_envelope");
   }
+  if (event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
+    const sessionId = text(data?.sessionId || data?.id || data?.backendSessionId);
+    if (!sessionId) errors.push("missing_snapshot_session");
+    const messages = Array.isArray(data?.messages) ? data.messages : [];
+    if (messages.some((message = {}) => !text(message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId))) {
+      errors.push("missing_snapshot_message_identity");
+    }
+  }
   const sequence = event === WORKFLOW_RUNTIME_EVENT.PLANNING
     ? 0
-    : Number(data?.sequence || 0);
-  if (event !== WORKFLOW_RUNTIME_EVENT.PLANNING && (!Number.isInteger(sequence) || sequence <= 0)) {
+    : event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT
+      ? Number(data?.snapshotVersion || data?.sessionVersion || data?.revision || 1)
+      : Number(data?.sequence || 0);
+  if (![WORKFLOW_RUNTIME_EVENT.PLANNING, WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT].includes(event) && (!Number.isInteger(sequence) || sequence <= 0)) {
     errors.push("invalid_authoritative_sequence");
   }
   const canonicalData = {

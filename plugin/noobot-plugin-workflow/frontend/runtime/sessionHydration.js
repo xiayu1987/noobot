@@ -50,15 +50,13 @@ export function hydrateWorkflowRegistryFromSessionDetail({
   detail = {},
   sessionItem = {},
   mainSessionDoc = {},
-  upsertWorkflowPlanningEvent,
-  upsertWorkflowNodeStateEvent,
   applyWorkflowRuntimeEvent,
   turnRuntimeRegistry = {},
   isTurnRuntimeDeleted = () => false,
   logRuntimeDiagnostic = () => {},
 } = {}) {
   const logWorkflowDiagnostics = (event, payload) => logRuntimeDiagnostic(event, payload);
-  if (typeof applyWorkflowRuntimeEvent !== "function" && typeof upsertWorkflowPlanningEvent !== "function") {
+  if (typeof applyWorkflowRuntimeEvent !== "function") {
     logWorkflowDiagnostics("frontend.workflowHydration.skipped", {
       sessionId: text(detail?.sessionId || sessionItem?.backendSessionId || sessionItem?.id),
       reason: "missing_upsert",
@@ -94,16 +92,8 @@ export function hydrateWorkflowRegistryFromSessionDetail({
       (workflowRunId && rejectedWorkflowRunIds.has(workflowRunId))
     );
   };
-  const reduceRuntimeEvent = (record = {}, source = "replay") => {
-    if (typeof applyWorkflowRuntimeEvent === "function") {
-      return applyWorkflowRuntimeEvent(record, { source });
-    }
-    const eventName = text(record?.event || record?.type);
-    const data = record?.data && typeof record.data === "object" ? record.data : record;
-    if (eventName === "workflow_planning_message_prepared") return upsertWorkflowPlanningEvent?.(data);
-    if (eventName === "workflow_node_state_committed") return upsertWorkflowNodeStateEvent?.(data);
-    return { applied: false, reason: "unsupported_event" };
-  };
+  const reduceRuntimeEvent = (record = {}, source = "replay") =>
+    applyWorkflowRuntimeEvent(record, { source });
   logWorkflowDiagnostics("frontend.workflowHydration.sourceInspected", {
     sessionId,
     sourceMessageCount: sources.length,
@@ -151,35 +141,6 @@ export function hydrateWorkflowRegistryFromSessionDetail({
       applied: result?.applied === true,
       reason: String(result?.reason || ""),
     });
-  }
-  for (const message of sources) {
-    const event = workflowPlanningEventFromMessage(message, sessionId);
-    if (!event || seen.has(event.workflowRunId)) continue;
-    if (isDeletedPlanning(event)) {
-      rejectedWorkflowRunIds.add(event.workflowRunId);
-      logWorkflowDiagnostics("frontend.workflowHydration.runtimeEventRejected", {
-        sessionId,
-        dialogProcessId: event.dialogProcessId,
-        turnScopeId: event.turnScopeId,
-        workflowRunId: event.workflowRunId,
-        eventName: "workflow_planning_message_prepared",
-        source: "persisted-message",
-        reason: "deleted_turn_tombstoned",
-      });
-      continue;
-    }
-    seen.add(event.workflowRunId);
-    const result = reduceRuntimeEvent({ event: "workflow_planning_message_prepared", data: event }, "persisted-message");
-    logWorkflowDiagnostics("frontend.workflowHydration.candidateApplied", {
-      sessionId,
-      dialogProcessId: event.dialogProcessId,
-      turnScopeId: event.turnScopeId,
-      workflowRunId: event.workflowRunId,
-      nodeSessionCount: event.nodeSessions.length,
-      applied: result?.applied === true,
-      reason: String(result?.reason || ""),
-    });
-    hydrated += 1;
   }
   logWorkflowDiagnostics("frontend.workflowHydration.completed", {
     sessionId,

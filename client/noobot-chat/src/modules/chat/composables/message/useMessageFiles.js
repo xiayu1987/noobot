@@ -24,7 +24,6 @@ import {
 import {
   selectCompletedToolArtifacts,
 } from "../../runtime/engine/toolTimeline.js";
-import { adaptLegacyMessageTimelines } from "../../runtime/engine/legacyTimelineAdapter.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 
 function tryParseJsonContent(content = "") {
@@ -98,7 +97,7 @@ function getMessageAttachments(messageItem = {}) {
 }
 
 function getCompletedToolArtifacts(messageItem = {}) {
-  return selectCompletedToolArtifacts(adaptLegacyMessageTimelines(messageItem));
+  return selectCompletedToolArtifacts(messageItem);
 }
 
 function trim(value = "") {

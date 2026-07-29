@@ -9,11 +9,8 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../model/messageIdentity.js";
-import { applyDoneMessagesPatch } from "./messagePatch.js";
 import {
-  normalizeExecutionLogForRealtime,
   normalizeTrimmedString,
-  sanitizeExecutionLogForDisplay,
   stripInternalEventPlaceholderLines,
 } from "./utils.js";
 import {
@@ -22,20 +19,6 @@ import {
 } from "../interactionPayload.js";
 import { BackendChannelState } from "../sessionRunStateMachine.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
-import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
-import {
-  logToolLogWindowDebug,
-  summarizeToolLogWindow,
-  summarizeToolLogWindowItem,
-} from "../../../debug/loggers/toolLogWindowDebugLogger.js";
-import { isToolActivityLog, reduceActivityTimeline } from "./activityTimeline.js";
-import {
-  buildToolTimelineFromLegacyLogs,
-  fillMissingToolTimelineFacets,
-  selectToolTimelineLogs,
-  TOOL_SEQUENCE_DOMAIN,
-  TOOL_TIMELINE_AUTHORITY,
-} from "./toolTimeline.js";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;
@@ -54,110 +37,6 @@ function resolveFirstResponseNavigator({
   if (typeof navigateOnFirstResponseOnce === "function") return navigateOnFirstResponseOnce;
   if (typeof scrollOnFirstResponseOnce === "function") return scrollOnFirstResponseOnce;
   return () => {};
-}
-
-export function handleThinkingStreamEvent({
-  data,
-  botMessage,
-  classifyRealtimeLog,
-  navigateOnFirstResponseOnce,
-  scrollOnFirstResponseOnce,
-  locateSendingStartedMessageOnce,
-}) {
-  const scope = {
-    sessionId: String(data?.sessionId || botMessage?.sessionId || ""),
-    dialogProcessId: String(data?.dialogProcessId || getMessageDialogProcessId(botMessage) || ""),
-    turnScopeId: String(data?.turnScopeId || getMessageTurnScopeId(botMessage) || ""),
-  };
-  const notifyFirstResponse = resolveFirstResponseNavigator({
-    navigateOnFirstResponseOnce,
-    scrollOnFirstResponseOnce,
-  });
-  const item = sanitizeExecutionLogForDisplay(classifyRealtimeLog(data));
-  logToolLogWindowDebug("frontend.toolLogWindow.streamClassified", {
-    ...scope,
-    transportSequence: data?.sequence ?? data?.seq ?? null,
-    raw: summarizeToolLogWindowItem(data),
-    classified: item ? summarizeToolLogWindowItem(item) : null,
-  });
-  if (!item || !normalizeTrimmedString(item.text)) {
-    const rawTextCandidates = {
-      text: data?.text,
-      output: data?.output,
-      content: data?.content,
-      message: data?.message,
-      displayText: data?.displayText,
-      nestedText: data?.data?.text,
-      nestedOutput: data?.data?.output,
-      nestedContent: data?.data?.content,
-      nestedMessage: data?.data?.message,
-      nestedDisplayText: data?.data?.displayText,
-    };
-    logThinkingReplayDebug("frontend.thinkingReplay.streamThinkingDropped", {
-      ...scope,
-      sequence: data?.sequence ?? data?.seq ?? null,
-      reason: !item ? "classification-empty" : "text-empty",
-      eventKeys: Object.keys(data || {}).sort(),
-      nestedDataKeys: Object.keys(data?.data || {}).sort(),
-      rawTextCandidates: Object.fromEntries(
-        Object.entries(rawTextCandidates).map(([key, value]) => {
-          const text = typeof value === "string"
-            ? value
-            : value == null
-              ? ""
-              : JSON.stringify(value);
-          return [key, { length: text.length, preview: text.slice(0, 500) }];
-        }),
-      ),
-    });
-    return;
-  }
-  if (!item.subAgentCall && item.dialogProcessId) {
-    botMessage.dialogProcessId = item.dialogProcessId;
-  }
-  notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
-  markFirstStreamEvent(botMessage);
-  const currentTimeline = Array.isArray(botMessage.toolTimeline) ? botMessage.toolTimeline : [];
-  const projectedSequence = Number(data?.sequence ?? data?.seq) || currentTimeline.reduce(
-    (maximum, entry) => Math.max(
-      maximum,
-      Number(entry?.call?.sequence || 0),
-      Number(entry?.resultEvent?.sequence || 0),
-    ),
-    0,
-  ) + 1;
-  const projectionItem = {
-    ...item,
-    eventId: data?.eventId || item?.eventId || `legacy-stream:${scope.turnScopeId || scope.dialogProcessId}:${projectedSequence}`,
-    sequence: projectedSequence,
-    authority: TOOL_TIMELINE_AUTHORITY.COMPATIBILITY,
-    sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
-  };
-  const toolProjection = buildToolTimelineFromLegacyLogs([projectionItem], {
-    sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
-  });
-  if (toolProjection.length) {
-    botMessage.toolTimeline = fillMissingToolTimelineFacets(botMessage.toolTimeline, toolProjection);
-  } else {
-    botMessage.activityTimeline = reduceActivityTimeline(botMessage.activityTimeline, {
-      ...projectionItem,
-    });
-  }
-  logToolLogWindowDebug("frontend.toolLogWindow.streamTimelineMerged", {
-    ...scope,
-    projectedSequence,
-    projected: summarizeToolLogWindowItem(projectionItem),
-    timelineEntryCount: botMessage.toolTimeline?.length || 0,
-    timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(botMessage)),
-  });
-  logThinkingReplayDebug("frontend.thinkingReplay.streamThinkingAppended", {
-    ...scope,
-    dialogProcessId: String(item.dialogProcessId || scope.dialogProcessId),
-    sequence: data?.sequence ?? data?.seq ?? null,
-    toolTimelineCount: botMessage.toolTimeline?.length || 0,
-    activityTimelineCount: botMessage.activityTimeline?.length || 0,
-  });
-  notifyFirstResponse();
 }
 
 export function handleDeltaStreamEvent({
@@ -291,17 +170,12 @@ export function handleInteractionRequestStreamEvent({
 
 export function handleDoneStreamEvent({
   data,
-  requestedTextStreaming,
   botMessage,
   activeSession,
   activeSessionId,
   clearPendingInteraction,
-  classifyRealtimeLog,
   navigateOnFirstResponseOnce,
   scrollOnFirstResponseOnce,
-  makeViewMessage,
-  foldMessagesForView,
-  mergeAssistantAttachments,
   locateDoneMessage,
   applyConversationState,
   locateSendingStartedMessageOnce,
@@ -315,76 +189,7 @@ export function handleDoneStreamEvent({
   markFirstStreamEvent(botMessage);
   botMessage.dialogProcessId = data?.dialogProcessId || getMessageDialogProcessId(botMessage) || "";
   notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
-  const executionSummarySteps = Array.isArray(data?.executionSummary?.steps)
-    ? data.executionSummary.steps
-    : [];
-  const doneExecutionLogSource = executionSummarySteps.length
-    ? executionSummarySteps
-    : Array.isArray(data?.executionLogs)
-      ? data.executionLogs
-      : [];
-  if (!requestedTextStreaming && doneExecutionLogSource.length) {
-    const doneRealtimeLogs = doneExecutionLogSource
-      .map((executionLogItem) =>
-        classifyRealtimeLog(normalizeExecutionLogForRealtime(executionLogItem)),
-      )
-      .map((item) => sanitizeExecutionLogForDisplay(item))
-      .filter((item) => item && normalizeTrimmedString(item.text))
-      .map((item) => ({
-        ...item,
-        authority: TOOL_TIMELINE_AUTHORITY.COMPATIBILITY,
-        sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
-      }));
-    if (doneRealtimeLogs.length) {
-      logToolLogWindowDebug("frontend.toolLogWindow.doneClassified", {
-        sessionId: String(data?.sessionId || botMessage?.sessionId || ""),
-        dialogProcessId: String(data?.dialogProcessId || getMessageDialogProcessId(botMessage) || ""),
-        turnScopeId: String(data?.turnScopeId || getMessageTurnScopeId(botMessage) || ""),
-        sourceCount: doneExecutionLogSource.length,
-        classifiedCount: doneRealtimeLogs.length,
-        classified: summarizeToolLogWindow(doneRealtimeLogs),
-      });
-      botMessage.toolTimeline = fillMissingToolTimelineFacets(
-        botMessage.toolTimeline,
-        buildToolTimelineFromLegacyLogs(doneRealtimeLogs, {
-          sequenceDomain: TOOL_SEQUENCE_DOMAIN.TRANSPORT,
-        }),
-      );
-      botMessage.activityTimeline = doneRealtimeLogs
-        .filter((logItem) => !isToolActivityLog(logItem))
-        .reduce(
-        (timeline, logItem) => reduceActivityTimeline(timeline, logItem),
-        botMessage.activityTimeline || [],
-      );
-      if (!getMessageDialogProcessId(botMessage)) {
-        const latestDialogProcessId = [...doneRealtimeLogs]
-          .reverse()
-          .map((logItem) => normalizeTrimmedString(logItem?.dialogProcessId))
-          .find(Boolean);
-        if (latestDialogProcessId) {
-          botMessage.dialogProcessId = latestDialogProcessId;
-          notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
-        }
-      }
-      logToolLogWindowDebug("frontend.toolLogWindow.doneTimelineMerged", {
-        sessionId: String(data?.sessionId || botMessage?.sessionId || ""),
-        dialogProcessId: String(data?.dialogProcessId || getMessageDialogProcessId(botMessage) || ""),
-        turnScopeId: String(data?.turnScopeId || getMessageTurnScopeId(botMessage) || ""),
-        timelineEntryCount: botMessage.toolTimeline?.length || 0,
-        timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(botMessage)),
-      });
-      notifyFirstResponse();
-    }
-  }
   activeSession.value.loaded = true;
-  applyDoneMessagesPatch({
-    data,
-    botMessage,
-    activeSession,
-    makeViewMessage,
-    foldMessagesForView,
-    mergeAssistantAttachments,
-  });
   if (!suppressCompletionConversationState && botMessage?.pending !== false) {
     const turnMeta = normalizeTurnMeta(data);
     applyConversationState?.(
@@ -402,10 +207,6 @@ export function handleDoneStreamEvent({
 }
 
 export function handleBasicStreamEvent(event, context = {}) {
-  if (event === StreamEventEnum.THINKING) {
-    handleThinkingStreamEvent(context);
-    return true;
-  }
   if (event === StreamEventEnum.DELTA) {
     handleDeltaStreamEvent(context);
     return true;

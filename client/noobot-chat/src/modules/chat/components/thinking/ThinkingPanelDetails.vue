@@ -28,8 +28,7 @@ const props = defineProps({
 </script>
 <template>
   <BaseTabPanelBody class="thinking-details-panel"
-    ><template v-if="!isRunning"
-      ><el-tabs class="thinking-details-tabs"
+    ><el-tabs class="thinking-details-tabs"
         ><el-tab-pane :label="detailLabel"
           ><BaseTabPanelBody
             class="thinking-details-scroll-body thinking-details-log-body"
@@ -86,9 +85,8 @@ const props = defineProps({
               v-if="!injectedMessages.length"
               :text="
                 translate('message.noInjectedMessages')
-              " /></BaseTabPanelBody></el-tab-pane></el-tabs></template
-    ><BaseEmptyHint v-else :text="translate('message.detailsAfterDone')"
-  /></BaseTabPanelBody>
+              " /></BaseTabPanelBody></el-tab-pane></el-tabs
+  ></BaseTabPanelBody>
 </template>
 
 <style scoped>

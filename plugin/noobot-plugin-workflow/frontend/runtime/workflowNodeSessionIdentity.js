@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveRuntimeNodeSession } from "./workflowUnifiedSessionDetail.js";
-import { workflowSessionText as text } from "./workflowNodeSessionProjection.js";
+const text = (value) => String(value || "").trim();
 
 export function shouldRejectRootSessionProjection({
   currentSessionId = "",

@@ -11,7 +11,7 @@ import {
   resolveIsolatedNodeSessionId,
   resolveRuntimeNodeSession,
 } from "./workflowUnifiedSessionDetail.js";
-import { workflowSessionText as text } from "./workflowNodeSessionProjection.js";
+const text = (value) => String(value || "").trim();
 
 let workflowNodeDetailTraceSequence = 0;
 
@@ -48,12 +48,12 @@ export function logWorkflowNodeDetailProjection({ props, runtimeNodeSessions }, 
     ...identity,
     isolatedNodeSessionId: resolveIsolatedNodeSessionId(nodeItem, runtimeNode),
     executionSessionId,
+    subSessionMessageRegistryVersion: Number(props.subSessionMessageRegistryVersion || 0),
     messageCount: messages.length,
     messages: messages.map((message = {}) => ({
       id: text(message?.id || message?.messageId), role: text(message?.role),
       sessionId: text(message?.sessionId), turnScopeId: text(message?.turnScopeId),
       dialogProcessId: text(message?.dialogProcessId), pending: message?.pending === true,
-      workflowNodeRunningPlaceholder: message?.workflowNodeRunningPlaceholder === true,
       contentLength: String(message?.content || "").length,
     })),
   });

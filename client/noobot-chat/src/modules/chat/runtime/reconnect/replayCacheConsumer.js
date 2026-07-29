@@ -43,7 +43,6 @@ export async function consumeReconnectReplayCacheForSession({
     }
     await applyReconnectMessagesToActiveSession(replayMessages, dialogProcessId, {
       turnScopeId,
-      ...(!turnScopeId ? { legacyDialogFallback: true } : {}),
     });
   }
 }
@@ -65,26 +64,19 @@ export function markReconnectSequenceApplied(
 export async function applyReconnectMessagesToActiveSessionReplay({
   activeSession,
   activeSessionId,
-  appendMessage,
+  findCanonicalMessageById,
   chatList,
   messages,
   dialogProcessId,
   turnScopeId = "",
-  allowCreate = true,
-  authoritativeCurrentRun = false,
-  legacyDialogFallback = false,
   appliedReconnectSeqByDialogProcessId,
   appliedReconnectEventKindsByTurnKey,
   terminalDialogProcessIdSet,
   classifyRealtimeLog,
-  getReplayHydrationPromise,
-  setReplayHydrationPromise,
-  applyDoneMessages,
   envelopeCallbacks,
   markReconnectSequenceApplied: markSequenceApplied,
   navigateToLastMessage,
   processStore,
-  onHydrationError,
 } = {}) {
   const replayKey = normalizeReplayCacheKey(dialogProcessId, activeSessionId?.value, turnScopeId);
   const lastAppliedSeq = Number(
@@ -97,14 +89,11 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   return applyReconnectReplayBatchToActiveSession({
     activeSession,
     activeSessionId,
-    appendMessage,
+    findCanonicalMessageById,
     chatList,
     messages,
     dialogProcessId,
     turnScopeId,
-    allowCreate,
-    authoritativeCurrentRun,
-    legacyDialogFallback: legacyDialogFallback || !_trimStr(turnScopeId),
     lastAppliedSeq,
     lastAppliedEventKinds: boundary && Number(boundary.sequence || 0) === lastAppliedSeq
       ? boundary.eventKinds
@@ -114,10 +103,6 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     isReconnectTerminalEvent,
     classifyRealtimeLog,
     normalizeExecutionLogForRealtime,
-    getReplayHydrationPromise,
-    setReplayHydrationPromise,
-    onHydrationError,
-    applyDoneMessages,
     envelopeCallbacks,
     markReconnectSequenceApplied: markSequenceApplied,
     navigateToLastMessage,

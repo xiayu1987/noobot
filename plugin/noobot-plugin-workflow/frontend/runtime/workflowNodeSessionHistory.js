@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { onBeforeUnmount, onMounted, watch } from "vue";
-import { workflowSessionText as text } from "./workflowNodeSessionProjection.js";
+const text = (value) => String(value || "").trim();
 import { isSameWorkflowDrawerRoute } from "./workflowNodeSessionIdentity.js";
 
 export function useWorkflowNodeSessionHistory({

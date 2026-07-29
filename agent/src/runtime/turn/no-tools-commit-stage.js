@@ -21,6 +21,7 @@ export async function commitNoToolsTurnState({
   responseContentText = "",
   turn,
   messageId = "",
+  presentationMessageId = "",
 } = {}) {
   const {
     turnMessages,
@@ -52,6 +53,8 @@ export async function commitNoToolsTurnState({
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
     messageId,
+    presentationMessageId,
+    chatPresentation: true,
   });
   await persistModelGeneratedArtifacts({
     aiContent: modelResponse?.content,

@@ -7,7 +7,6 @@ import {
   buildNormalizedDetailMessages,
   buildTurnTimingsByTurnScopeId,
 } from "./detailMessages.js";
-import { applyCompletedToolLogsToMessages } from "../../../chat/model/sessionToolLogs.js";
 
 export function buildSessionDetailProjection({
   sessionDetail = {},
@@ -17,8 +16,6 @@ export function buildSessionDetailProjection({
   isSummaryDetail = false,
   currentTimingsByTurnScopeId = {},
   onTimingHydrated = null,
-  applyToolLogs = false,
-  toolSessionDocs = sessionDocs,
 } = {}) {
   const summary = sessionDetail?.sessionSummary && typeof sessionDetail.sessionSummary === "object"
     ? sessionDetail.sessionSummary
@@ -43,7 +40,6 @@ export function buildSessionDetailProjection({
     foldMessagesForView,
     isSummaryDetail,
   });
-  if (applyToolLogs) applyCompletedToolLogsToMessages(projectedMessages, toolSessionDocs);
   return {
     sessionId,
     messages: projectedMessages,
@@ -51,7 +47,6 @@ export function buildSessionDetailProjection({
     turnTimings,
     turnTimingsByTurnScopeId: buildTurnTimingsByTurnScopeId({
       turnTimings,
-      messages,
       currentTimingsByTurnScopeId,
       onTimingHydrated,
     }),

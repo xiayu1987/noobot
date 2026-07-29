@@ -218,6 +218,7 @@ export class SessionExecutionEngine {
         ? (context = null, identity = {}) => this.session.assertPersistenceContextIdentity(context, identity)
         : null,
       appendSessionTurn: (payload = {}) => this._appendSessionTurn(payload),
+      appendAgentMessages: (payload = {}) => this._appendAgentMessages(payload),
       commitSessionTurn: typeof this.session?.commitTurn === "function"
         ? (payload = {}) => this.session.commitTurn(payload)
         : null,
@@ -581,6 +582,7 @@ export class SessionExecutionEngine {
     parentDialogProcessId = "",
     turnScopeId = "",
     eventListener,
+    persistenceContext = null,
   }) {
     await this.turnPersister.appendAgentMessages({
       userId,
@@ -591,6 +593,7 @@ export class SessionExecutionEngine {
       parentDialogProcessId,
       turnScopeId,
       eventListener,
+      persistenceContext,
     });
   }
 

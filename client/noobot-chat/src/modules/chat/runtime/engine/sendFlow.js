@@ -25,6 +25,8 @@ import {
 } from "../../../debug/loggers/resendDebugLogger.js";
 import { logStateMachineDebug, summarizeStateMachineMessage } from "../../../debug/loggers/stateMachineLogger.js";
 import {
+  createAssistantMessageId,
+  createUserMessageId,
   createTurnScopeId,
   hasActiveTurnInFlight,
 } from "./sendFlowSupport.js";
@@ -40,12 +42,11 @@ export function createChatEngineSender({
   applyConversationStateFromEvent,
   applySessionDetail,
   appendMessage,
+  findCanonicalMessageById,
+  upsertCanonicalAssistantMessage,
   botScenario,
   chatWebSocketClient,
   sessionLogWebSocketClient,
-  upsertWorkflowNodeStateEvent,
-  upsertWorkflowPlanningEvent,
-  upsertSubSessionEvent,
   applyWorkflowRuntimeEvent,
   classifyRealtimeLog,
   clearMissingInteractionPayloadTimer,
@@ -104,6 +105,16 @@ export function createChatEngineSender({
     if (!continueFromUserStopped && !hasTextToSend && uploadFiles.value.length === 0 && !hasExplicitAttachments) return false;
 
     const turnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
+    const reuseExistingUserTurn = options?.reuseExistingUserTurn === true;
+    const requestedUserMessageId = normalizeTrimmedString(options?.userMessageId);
+    if (reuseExistingUserTurn) {
+      const existingUserMessage = (activeSession.value?.messages || []).find((message) => (
+        normalizeTrimmedString(message?.messageId || message?.id) === requestedUserMessageId
+      ));
+      if (!requestedUserMessageId || !existingUserMessage) return false;
+    }
+    const userMessageId = requestedUserMessageId || createUserMessageId();
+    const assistantMessageId = normalizeTrimmedString(options?.assistantMessageId) || createAssistantMessageId();
     const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || "");
     const runtimeView = () => selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
     logSessionEvent({
@@ -112,7 +123,7 @@ export function createChatEngineSender({
       sessionId,
       turnScopeId,
       data: {
-        reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
+        reuseExistingUserTurn,
         allowDuringResend: options?.allowDuringResend === true,
         hasText: hasTextToSend,
         uploadCount: explicitAttachmentFiles?.length ?? uploadFiles.value.length,
@@ -121,7 +132,7 @@ export function createChatEngineSender({
     logResendDebug("send.begin", {
       sessionId,
       turnScopeId,
-      reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
+      reuseExistingUserTurn,
       allowDuringResend: options?.allowDuringResend === true,
       ...runtimeView(),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
@@ -138,6 +149,7 @@ export function createChatEngineSender({
     const {
       text,
       filesToSend,
+      userMessage,
       botMessage: botMsg,
       navigateOnFirstResponseOnce,
     } = prepareChatSend({
@@ -145,13 +157,16 @@ export function createChatEngineSender({
       uploadFiles,
       isImageMime,
       appendMessage,
+      upsertCanonicalAssistantMessage,
       activeSession,
       applyConversationState,
       translate,
       navigateToLastMessage,
       messageText: explicitMessageText,
       turnScopeId,
-      reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
+      userMessageId,
+      assistantMessageId,
+      reuseExistingUserTurn,
       attachmentFiles: explicitAttachmentFiles,
       userAttachments: explicitUserAttachments,
       turnStartedAtMs,
@@ -172,7 +187,7 @@ export function createChatEngineSender({
     try {
       if (!explicitAttachmentFiles) clearUploads();
       const attachments = explicitTransportAttachments || await serializeAttachments(filesToSend);
-      const requestedTextStreaming = streamOutput?.value !== false;
+      const requestedTextStreaming = streamOutput?.value === true;
 
       const buildPayloadForCurrentVersion = () => buildChatPayload({
         userId,
@@ -192,12 +207,14 @@ export function createChatEngineSender({
         locale,
         selectedPlugins,
         turnScopeId,
+        userMessageId: normalizeTrimmedString(userMessage?.messageId || userMessage?.id || userMessageId),
+        assistantMessageId,
         action: continueFromUserStopped ? "continue" : "",
         resumeDialogProcessId: continueFromUserStopped ? resumeDialogProcessId : "",
         resumeTurnScopeId: continueFromUserStopped ? resumeTurnScopeId : "",
         thinkingStartedAt,
         uploadHint: translate("chat.uploadHint"),
-        reuseExistingUserTurn: options?.reuseExistingUserTurn === true,
+        reuseExistingUserTurn,
       });
       let payload = buildPayloadForCurrentVersion();
       logSessionEvent({
@@ -259,11 +276,10 @@ export function createChatEngineSender({
         activeSession, activeSessionId, applyConversationState, applyConversationStateFromEvent,
         applyRunStateEvent, applyWorkflowRuntimeEvent, botMessage: botMsg, classifyRealtimeLog,
         clearMissingInteractionPayloadTimer, clearPendingInteraction, connectorTypeSet, doneTurnFinalizer,
-        foldMessagesForView, locateDoneMessage, locateSendingStartedMessageOnce, logSessionEvent,
+        findCanonicalMessageById, foldMessagesForView, locateDoneMessage, locateSendingStartedMessageOnce, logSessionEvent,
         makeViewMessage, mergeAssistantAttachments, navigateOnFirstResponseOnce, refreshSessionConnectorsAsync,
         requestedTextStreaming, sessionId, setPendingInteractionRequest, startFinalDoneSessionDetailOnce,
         streamState, tryAutoResolveInteraction, turnScopeId, upsertConnectedConnectorInPanelState,
-        upsertSubSessionEvent, upsertWorkflowNodeStateEvent, upsertWorkflowPlanningEvent,
       });
       const streamOnce = (streamPayload) => chatWebSocketClient.stream(streamPayload, handleStreamEvent);
       try {

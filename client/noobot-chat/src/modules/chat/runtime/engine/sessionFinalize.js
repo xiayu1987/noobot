@@ -7,7 +7,6 @@ import { RoleEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { getMessageDialogProcessId, getMessageRole } from "../../model/messageIdentity.js";
 import { getMessageAttachments } from "../../model/messageModel.js";
-import { adaptLegacyMessageTimelines } from "./legacyTimelineAdapter.js";
 import { countCompletedToolAttachments } from "./toolTimeline.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import {
@@ -22,7 +21,7 @@ function summarizeFinalizeMessage(messageItem = {}) {
     ...summary,
     attachmentsCount: getMessageAttachments(messageItem).length,
     completedToolLogAttachmentsCount: countCompletedToolAttachments(
-      adaptLegacyMessageTimelines(messageItem),
+      messageItem,
     ),
   };
 }

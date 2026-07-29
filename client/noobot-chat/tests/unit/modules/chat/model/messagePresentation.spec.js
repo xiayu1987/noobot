@@ -96,7 +96,6 @@ describe("message presentation status steps", () => {
       ...identity,
       content: "",
       pending: true,
-      workflowNodeRunningPlaceholder: true,
       projectedStatusStepState: "completing",
     }], buildViewMessage);
     expect(refreshedRunningMessages).toHaveLength(1);

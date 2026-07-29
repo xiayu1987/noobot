@@ -262,7 +262,13 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
             sessions: [{
               sessionId: "s1",
               rawMessages: [
-                { id: "a1", role: "assistant", type: "message", dialogProcessId: "dp-1", content: "answer" },
+                {
+                  id: "a1", role: "assistant", type: "message", dialogProcessId: "dp-1", content: "answer",
+                  toolTimeline: [
+                    { key: "call:call-1", toolCallId: "call-1", status: "completed", call: { eventId: "tool-1" }, resultEvent: { eventId: "tool-2" } },
+                    { key: "call:call-2", toolCallId: "call-2", status: "running", call: { eventId: "tool-3" } },
+                  ],
+                },
                 { id: "i1", role: "system", dialogProcessId: "dp-1", injectedMessage: true, injectedBy: "harness-plugin", content: "injected without round" },
                 { id: "t1", role: "assistant", type: "tool_call", dialogProcessId: "dp-1", content: "tool call" },
                 { id: "t2", role: "tool", type: "tool_result", dialogProcessId: "dp-1", content: "tool result" },
@@ -295,6 +301,6 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
     assert.equal(payload.messageItem.hasThinkingDetails, true);
     assert.equal(payload.counts.executionLogCount, 2);
     assert.equal(payload.counts.injectedMessageCount, 1);
-    assert.deepEqual(payload.allMessages.map((item) => item.id).sort(), ["a1", "i1", "t1", "t2"]);
+    assert.deepEqual(payload.allMessages.map((item) => item.id).sort(), ["a1", "i1"]);
   });
 });

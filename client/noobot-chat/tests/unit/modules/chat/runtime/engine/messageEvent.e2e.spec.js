@@ -13,10 +13,24 @@ import { createRunEventListener } from "../../../../../../../../service/ws/chat-
 import { shouldProjectSubSessionEvent } from "../../../../../../src/modules/chat/runtime/engine/sendFlow.js";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
 
+function applyMessageEvent(store, eventName, data) {
+  return store.applyWorkflowRuntimeEvent({
+    event: "workflow_message_event",
+    data: { ...data, eventType: data?.eventType || eventName },
+  }, { source: "test" });
+}
+
+function applySessionSnapshot(store, sessionDoc) {
+  return store.applyWorkflowRuntimeEvent({
+    event: "workflow_session_snapshot_loaded",
+    data: { snapshotVersion: 1, ...sessionDoc },
+  }, { source: "test_snapshot" });
+}
+
 function deliverPacketToStore(store, frame) {
   const wireFrame = JSON.parse(JSON.stringify(frame));
   expect(shouldProjectSubSessionEvent(wireFrame.event, wireFrame.data)).toBe(true);
-  return store.upsertSubSessionEvent(
+  return applyMessageEvent(store,
     wireFrame.data.event.eventType,
     wireFrame.data.event,
   );
@@ -85,7 +99,7 @@ describe("authoritative message event end-to-end fidelity", () => {
       toolResult: { tool_call_id: "call-1", output: "ok" },
     });
 
-    store.mergeSubSessionSnapshot({
+    applySessionSnapshot(store, {
       id: "child-session",
       messages: [{
         id: messageId,

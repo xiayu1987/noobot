@@ -8,6 +8,10 @@ import { describe, expect, it } from "vitest";
 import { buildChatPayload } from "../../../../../../src/modules/chat/runtime/engine/payload.js";
 
 describe("buildChatPayload model preferences", () => {
+  it("disables text streaming by default", () => {
+    expect(buildChatPayload({ message: "x" }).config.streaming).toBe(false);
+  });
+
   it("enables output sanitization by default and sends an explicit opt-out", () => {
     expect(buildChatPayload({ message: "x" }).config.sanitizeOutput).toBe(true);
     expect(buildChatPayload({ message: "x", sanitizeOutput: false }).config.sanitizeOutput).toBe(false);
@@ -73,6 +77,30 @@ describe("buildChatPayload model preferences", () => {
     });
 
     expect(payload.config.selectedPlugins).toEqual(["harness", "workflow"]);
+  });
+
+  it("carries the preallocated presentation message identity at both transport boundaries", () => {
+    const payload = buildChatPayload({
+      message: "hello",
+      turnScopeId: "turn-1",
+      assistantMessageId: "  msg_assistant-1  ",
+    });
+
+    expect(payload.presentationMessageId).toBe("msg_assistant-1");
+    expect(payload.config.presentationMessageId).toBe("msg_assistant-1");
+    expect(payload).not.toHaveProperty("assistantMessageId");
+    expect(payload.config).not.toHaveProperty("assistantMessageId");
+  });
+
+  it("carries the preallocated user message identity at both transport boundaries", () => {
+    const payload = buildChatPayload({
+      message: "hello",
+      turnScopeId: "turn-1",
+      userMessageId: "  msg_user-1  ",
+    });
+
+    expect(payload.userMessageId).toBe("msg_user-1");
+    expect(payload.config.userMessageId).toBe("msg_user-1");
   });
 
   it("builds independent continue payload with new turn and stopped snapshot identity", () => {

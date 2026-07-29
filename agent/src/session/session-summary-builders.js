@@ -14,7 +14,7 @@ import {
   dedupeAttachmentRefs,
 } from "./transfer-attachment-refs.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 6;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 9;
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
 const SUMMARY_OBJECT_FIELD_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryObjectFieldChars;
@@ -87,6 +87,8 @@ function buildMessageSummary(message = {}) {
     "injectedBy",
     "injectedMessageType",
     "frontendUserMessage",
+    "chatPresentation",
+    "presentationMessageId",
     "isMonotonic",
     "monotonic",
     "pluginMessage",
@@ -339,29 +341,86 @@ function pickLightTransferEnvelopes(message = {}) {
     });
 }
 
+function pickLightActivityTimeline(message = {}) {
+  const timeline = Array.isArray(message?.activityTimeline) ? message.activityTimeline : [];
+  return timeline
+    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+    .map((item) => {
+      const projected = {};
+      for (const key of [
+        "eventId", "event", "type", "text", "output", "purpose", "pluginFlow",
+        "chain", "activityKind", "sequence", "sequenceScopeId", "authority", "sequenceDomain",
+      ]) {
+        const value = item?.[key];
+        if (value !== undefined && value !== null && value !== "") projected[key] = value;
+      }
+      return projected;
+    })
+    .filter((item) => Object.keys(item).length)
+    .slice(0, 200);
+}
+
+function pickLightToolTimeline(message = {}) {
+  const timeline = Array.isArray(message?.toolTimeline) ? message.toolTimeline : [];
+  return timeline
+    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+    .slice(0, 200);
+}
+
 function buildDisplayMessageSummary(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) return null;
   const role = String(message?.role || "").trim();
   if (!role || message?.injectedMessage === true) return null;
   const type = String(message?.type || "").trim();
   if (!["user", "assistant"].includes(role)) return null;
-  if (["tool_call", "tool_result"].includes(type)) return null;
+  const hasCanonicalActivity =
+    role === "assistant" &&
+    String(message?.presentationMessageId || "").trim() &&
+    Array.isArray(message?.activityTimeline) &&
+    message.activityTimeline.length > 0;
+  if (role === "assistant" && message?.chatPresentation === false && !hasCanonicalActivity) return null;
+  if (["tool_call", "tool_result"].includes(type) && !hasCanonicalActivity) return null;
+  const presentationMessageId = String(message?.presentationMessageId || "").trim();
+  if (role === "assistant" && (message?.chatPresentation === true || hasCanonicalActivity) && !presentationMessageId) return null;
   const summary = buildMessageSummary(message) || {};
   summary.content = typeof message?.content === "string" ? message.content : JSON.stringify(message?.content ?? "");
+  if (hasCanonicalActivity) {
+    summary.type = "message";
+    summary.chatPresentation = true;
+    if (message?.chatPresentation !== true) summary.sourceMessageType = type;
+  }
+  const messageUid = String(message?.messageUid || "").trim();
+  const sourceMessageId = String(message?.messageId || message?.id || "").trim();
+  const messageId = String(presentationMessageId || sourceMessageId || messageUid).trim();
+  if (messageId) {
+    summary.id = messageId;
+    summary.messageId = messageId;
+  }
+  if (presentationMessageId) {
+    if (sourceMessageId && presentationMessageId !== sourceMessageId) {
+      summary.sourceMessageId = sourceMessageId;
+    }
+    if (messageUid) summary.sourceMessageUid = messageUid;
+  } else if (messageUid) {
+    summary.messageUid = messageUid;
+  }
   const attachments = pickLightAttachments(message);
   if (attachments.length) summary.attachments = attachments;
-  for (const key of ["id", "pluginMessage", "done", "pending", "error"]) {
+  for (const key of ["pluginMessage", "done", "pending", "error"]) {
     if (message?.[key] !== undefined) summary[key] = message[key];
   }
   const pluginMeta = pickLightPluginMeta(message);
   const transferEnvelopes = pickLightTransferEnvelopes(message);
   if (pluginMeta) summary.pluginMeta = pluginMeta;
   if (transferEnvelopes.length) summary.transferEnvelopes = transferEnvelopes;
-  if (Array.isArray(message?.realtimeLogs) || Array.isArray(message?.completedToolLogs)) {
+  const activityTimeline = pickLightActivityTimeline(message);
+  if (activityTimeline.length) summary.activityTimeline = activityTimeline;
+  const toolTimeline = pickLightToolTimeline(message);
+  if (toolTimeline.length) summary.toolTimeline = toolTimeline;
+  const thinkingDetailCount = activityTimeline.length + toolTimeline.length;
+  if (thinkingDetailCount > 0) {
     summary.hasThinkingDetails = true;
-    summary.thinkingDetailCount =
-      (Array.isArray(message?.realtimeLogs) ? message.realtimeLogs.length : 0) +
-      (Array.isArray(message?.completedToolLogs) ? message.completedToolLogs.length : 0);
+    summary.thinkingDetailCount = thinkingDetailCount;
   }
   if (Array.isArray(message?.tool_calls) && message.tool_calls.length) {
     summary.toolCalls = message.tool_calls.map((toolCall = {}) => ({
@@ -430,23 +489,14 @@ function collectMessageCorrelationKeys(message = {}) {
 
 function countMessageThinkingDetails(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) return 0;
-  const role = String(message?.role || "").trim();
-  const type = String(message?.type || "").trim();
-  let count = 0;
-  if (Array.isArray(message?.realtimeLogs)) count += message.realtimeLogs.length;
-  if (Array.isArray(message?.completedToolLogs)) count += message.completedToolLogs.length;
-  if (type === "tool_call") count += Math.max(1, Array.isArray(message?.tool_calls) ? message.tool_calls.length : 0);
-  if (role === "tool" || type === "tool_result") count += 1;
-  return count;
+  return (Array.isArray(message?.activityTimeline) ? message.activityTimeline.length : 0) +
+    (Array.isArray(message?.toolTimeline) ? message.toolTimeline.length : 0);
 }
 
 function buildThinkingDetailCountsByCorrelationKey(messages = []) {
   const counts = new Map();
   for (const message of messages) {
-    const role = String(message?.role || "").trim();
-    const type = String(message?.type || "").trim();
-    const isDisplayMessage = ["user", "assistant"].includes(role) && !["tool_call", "tool_result"].includes(type) && message?.injectedMessage !== true;
-    if (isDisplayMessage) continue;
+    if (message?.injectedMessage !== true) continue;
     const count = countMessageThinkingDetails(message);
     if (!count) continue;
     for (const key of collectMessageCorrelationKeys(message)) {
@@ -477,7 +527,7 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
   );
   const customTitle = String(session?.customTitle || "").trim();
   const thinkingDetailCountsByKey = buildThinkingDetailCountsByCorrelationKey(messages);
-  const displayMessages = messages
+  const projectedDisplayMessages = messages
     .map((message) => {
       const summary = buildDisplayMessageSummary(message);
       if (!summary) return null;
@@ -491,6 +541,40 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
       return summary;
     })
     .filter(Boolean);
+  const displayMessageByIdentity = new Map();
+  for (const message of projectedDisplayMessages) {
+    const identity = String(message?.presentationMessageId || message?.messageId || message?.id || "").trim();
+    if (!identity || message?.role !== "assistant") {
+      displayMessageByIdentity.set(`${identity}:${displayMessageByIdentity.size}`, message);
+      continue;
+    }
+    const existing = displayMessageByIdentity.get(identity);
+    if (!existing) {
+      displayMessageByIdentity.set(identity, message);
+      continue;
+    }
+    const existingIsPlaceholder = Boolean(String(existing?.sourceMessageType || "").trim());
+    const incomingIsPlaceholder = Boolean(String(message?.sourceMessageType || "").trim());
+    const presentation = !incomingIsPlaceholder || existingIsPlaceholder ? message : existing;
+    const facts = [
+      ...(Array.isArray(existing.activityTimeline) ? existing.activityTimeline : []),
+      ...(Array.isArray(message.activityTimeline) ? message.activityTimeline : []),
+    ];
+    presentation.activityTimeline = facts.filter((fact, index, list) =>
+      list.findIndex((item) => String(item?.eventId || "") === String(fact?.eventId || "")) === index,
+    );
+    const toolFacts = [
+      ...(Array.isArray(existing.toolTimeline) ? existing.toolTimeline : []),
+      ...(Array.isArray(message.toolTimeline) ? message.toolTimeline : []),
+    ];
+    presentation.toolTimeline = toolFacts.filter((fact, index, list) =>
+      list.findIndex((item) => String(item?.key || item?.toolCallId || "") === String(fact?.key || fact?.toolCallId || "")) === index,
+    );
+    presentation.thinkingDetailCount = presentation.activityTimeline.length + presentation.toolTimeline.length;
+    presentation.hasThinkingDetails = presentation.thinkingDetailCount > 0;
+    displayMessageByIdentity.set(identity, presentation);
+  }
+  const displayMessages = [...displayMessageByIdentity.values()];
   const injectedCount = messages.filter((message) => message?.injectedMessage === true).length;
   const thinkingCount = displayMessages.filter((message) => message?.hasThinkingDetails === true).length;
   const { logs: toolLogSummaries, totalCount: toolLogCount } = buildToolLogSummaries(session, { depth });

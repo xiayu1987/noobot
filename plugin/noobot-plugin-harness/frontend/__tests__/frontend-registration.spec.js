@@ -12,7 +12,6 @@ describe("Harness frontend registration", () => {
     registerFrontendPlugin({
       contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
       extensionPoints: {
-        MESSAGE_LOG_COMPATIBILITY: "message-log-compatibility",
         MARKDOWN_COLLAPSE_MARKERS: "markdown-collapse-markers",
         COMPOSER_OPTIONS_MODEL: "composer-options-model",
         MESSAGE_CARD_PRE: "message-card-pre",

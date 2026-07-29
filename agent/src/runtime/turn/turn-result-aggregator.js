@@ -67,6 +67,7 @@ export function finalizeTurnMessagesBeforeReturn({
 
 export function buildLoopResult({
   output,
+  assistantMessageId = "",
   traces,
   loopState,
   turnTaskStore = null,
@@ -82,6 +83,7 @@ export function buildLoopResult({
   return attachFinalStreamingResultMeta(
     {
       output,
+      assistantMessageId: String(assistantMessageId || "").trim(),
       traces,
       turnMessages: finalTurnMessages,
       modelMessages: Array.isArray(modelMessages) ? modelMessages : [],

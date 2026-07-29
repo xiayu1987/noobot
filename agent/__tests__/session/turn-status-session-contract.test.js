@@ -70,7 +70,7 @@ test("summary projects an authoritative lifecycle snapshot for refresh replay", 
   }, { now });
 
   const summary = buildSessionDisplaySummary(session);
-  assert.equal(summary.schemaVersion, 6);
+  assert.equal(summary.schemaVersion, 9);
   assert.equal(summary.turnLifecycleSnapshot.eventType, "turn.snapshot");
   assert.equal(summary.turnLifecycleSnapshot.sessionId, "s-lifecycle");
   assert.equal(summary.turnLifecycleSnapshot.sequence, 2);

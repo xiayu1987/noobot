@@ -22,14 +22,6 @@ export function registerFrontendPlugin(ctx = {}) {
   if (typeof contribute !== "function" || !points) {
     throw new Error("frontend contribution API is required");
   }
-  contribute(points.MESSAGE_LOG_COMPATIBILITY, {
-    id: "harness-legacy-log-compatibility",
-    provide: ({ kind, value } = {}) => {
-      if (kind === "flow") return [value?.harnessFlow ?? value?.data?.harnessFlow].filter((item) => item != null);
-      if (kind === "capability-response-event") return [value === "harness_capability_response"];
-      return [];
-    },
-  });
   contribute(points.MARKDOWN_COLLAPSE_MARKERS, {
     id: "harness-legacy-collapse-marker",
     provide: () => ["NOOBOT_HARNESS_COLLAPSE"],
