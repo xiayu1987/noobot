@@ -42,21 +42,50 @@ function runtimeState(runtime = {}) {
   return systemRuntime;
 }
 
+export function bindAssistantMessageEventStream(runtime = {}, {
+  messageId = "",
+  presentationMessageId = "",
+} = {}) {
+  const state = runtimeState(runtime);
+  const requestedMessageId = text(
+    messageId ||
+    runtime?.runConfig?.messageId ||
+    state?.config?.messageId,
+  );
+  const requestedPresentationMessageId = text(
+    presentationMessageId ||
+    runtime?.runConfig?.presentationMessageId ||
+    state?.config?.presentationMessageId ||
+    requestedMessageId,
+  );
+  if (!requestedMessageId || !requestedPresentationMessageId) {
+    throw new Error("turn message event identity is incomplete");
+  }
+  const stream = state.messageEventStream;
+  const currentMessageId = text(stream.activeMessageId);
+  const currentPresentationMessageId = text(stream.activePresentationMessageId);
+  if (currentMessageId && currentMessageId !== requestedMessageId) {
+    throw new Error("turn message event messageId conflict");
+  }
+  if (currentPresentationMessageId && currentPresentationMessageId !== requestedPresentationMessageId) {
+    throw new Error("turn message event presentationMessageId conflict");
+  }
+  stream.activeMessageId = requestedMessageId;
+  stream.activePresentationMessageId = requestedPresentationMessageId;
+  stream.sequence = Math.max(0, Number(stream.sequence || 0));
+  return stream;
+}
+
 export function beginAssistantMessageEventStream(runtime = {}, { turn = 0 } = {}) {
   const state = runtimeState(runtime);
-  const messageId = `msg_${randomUUID()}`;
-  const presentationMessageId = text(
-    runtime?.runConfig?.presentationMessageId ||
-    runtime?.runConfig?.assistantMessageId ||
-    state?.config?.presentationMessageId ||
-    state?.config?.assistantMessageId ||
-    messageId,
-  );
-  state.messageEventStream.activeMessageId = messageId;
-  state.messageEventStream.activePresentationMessageId = presentationMessageId;
+  const stream = state.messageEventStream;
+  if (!text(stream.activeMessageId)) {
+    throw new Error("Turn message event domain must be bound before model invocation");
+  }
+  const modelMessageId = `msg_${randomUUID()}`;
+  stream.activeModelMessageId = modelMessageId;
   state.messageEventStream.activeTurn = Number(turn || 0);
-  state.messageEventStream.sequence = 0;
-  return messageId;
+  return modelMessageId;
 }
 
 export function currentAssistantMessageId(runtime = {}) {
@@ -65,6 +94,10 @@ export function currentAssistantMessageId(runtime = {}) {
 
 export function currentAssistantPresentationMessageId(runtime = {}) {
   return text(runtimeState(runtime)?.messageEventStream?.activePresentationMessageId);
+}
+
+export function currentAssistantModelMessageId(runtime = {}) {
+  return text(runtimeState(runtime)?.messageEventStream?.activeModelMessageId);
 }
 
 export function applyAuthoritativeMessageId(message = {}, messageId = "") {
@@ -82,6 +115,9 @@ export function createMessageEvent(runtime = {}, eventType = "", data = {}) {
   const stream = state.messageEventStream || (state.messageEventStream = { sequence: 0 });
   const messageId = text(data?.messageId || stream.activeMessageId);
   if (!messageId) throw new Error(`authoritative message event requires messageId: ${eventType}`);
+  if (text(data?.messageId) && text(stream.activeMessageId) && messageId !== text(stream.activeMessageId)) {
+    throw new Error(`authoritative message event messageId conflicts with Turn domain: ${eventType}`);
+  }
   const presentationMessageId = text(
     data?.presentationMessageId || stream.activePresentationMessageId || messageId,
   );

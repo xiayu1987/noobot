@@ -204,18 +204,18 @@ test("runWorkflowExecution rejects incomplete planning identity", async () => {
   );
 });
 
-test("runWorkflowExecution keeps legacy identity fallback when planning identities are absent", async () => {
+test("runWorkflowExecution rejects missing workflow and planning identities", async () => {
   const semantic = buildSemantic();
   const { ctx } = buildCtx();
-  const result = await runWorkflowExecution({
-    hookManager: { emit: async () => ({ results: [] }) },
-    options: buildOptions(),
-    ctx,
-    semantic,
-    workflowRunId: "",
-    planningNodeSessions: [],
-  });
-  const run = result.execution.nodeAgentRuns[0];
-  assert.match(run.nodeDialogProcessId, /^wf_node_/);
-  assert.equal(run.nodeExecutionId, "");
+  await assert.rejects(
+    runWorkflowExecution({
+      hookManager: { emit: async () => ({ results: [] }) },
+      options: buildOptions(),
+      ctx,
+      semantic,
+      workflowRunId: "",
+      planningNodeSessions: [],
+    }),
+    /workflowRunId is required/,
+  );
 });

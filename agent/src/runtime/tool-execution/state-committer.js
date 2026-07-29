@@ -17,7 +17,6 @@ import {
   currentAssistantPresentationMessageId,
 } from "../../events/message-event-stream.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
-import { reduceCanonicalToolTimeline } from "../../events/canonical-message-timeline.js";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
@@ -143,9 +142,10 @@ export function createStateCommitter({
       chatPresentation = false,
     } = {}) {
       if (!turnMessageStore?.push) return;
-      const pendingActivityTimeline = runtime?.consumePendingCurrentTurnActivities?.() || [];
-      const pendingToolEvents = runtime?.consumePendingCurrentTurnToolEvents?.() || [];
-      const pendingToolTimeline = pendingToolEvents.reduce(reduceCanonicalToolTimeline, []);
+      if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
+        throw new Error("Turn message event materializer is required");
+      }
+      const pendingProjection = runtime.materializePendingCurrentTurnMessageEvents();
       const canonicalModelContent = {
         eventId: `model-content:${messageId || presentationMessageId || "turn"}`,
         event: "main_model_content",
@@ -154,7 +154,7 @@ export function createStateCommitter({
         output: String(content || ""),
       };
       const canonicalActivityTimeline = [
-        ...(Array.isArray(pendingActivityTimeline) ? pendingActivityTimeline : []),
+        ...(Array.isArray(pendingProjection.activityTimeline) ? pendingProjection.activityTimeline : []),
         ...(type === "tool_call" && String(content || "").trim()
           ? [{ ...canonicalModelContent, log: canonicalModelContent }]
           : []),
@@ -172,7 +172,7 @@ export function createStateCommitter({
         presentationMessageId: String(presentationMessageId || "").trim(),
         chatPresentation: chatPresentation === true,
         ...(canonicalActivityTimeline.length ? { activityTimeline: canonicalActivityTimeline } : {}),
-        ...(pendingToolTimeline.length ? { toolTimeline: pendingToolTimeline } : {}),
+        ...(pendingProjection.toolTimeline.length ? { toolTimeline: pendingProjection.toolTimeline } : {}),
         rawModelContent:
           typeof rawModelContent === "string" || Array.isArray(rawModelContent)
             ? rawModelContent

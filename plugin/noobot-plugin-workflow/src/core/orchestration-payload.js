@@ -47,7 +47,17 @@ function previewText(text = "", maxChars = LENGTH_THRESHOLDS.contextPreview.work
   return `${raw.slice(0, maxChars)}...(truncated)`;
 }
 
+function bindWorkflowExecutionIdentity(execution = null, workflowRunId = "") {
+  if (!execution) return null;
+  return {
+    ...execution,
+    workflowRunId,
+    instanceId: workflowRunId,
+  };
+}
+
 export function buildWorkflowOrchestrationPayload({
+  workflowRunId = "",
   ctx = {},
   options = {},
   sourceText = "",
@@ -59,6 +69,14 @@ export function buildWorkflowOrchestrationPayload({
   retryMeta = {},
   error = null,
 } = {}) {
+  const resolvedWorkflowRunId = normalizeMetaValue(workflowRunId);
+  if (!resolvedWorkflowRunId) throw new Error("workflowRunId is required");
+  for (const candidate of [execution?.workflowRunId, execution?.instanceId]) {
+    const existingIdentity = normalizeMetaValue(candidate);
+    if (existingIdentity && existingIdentity !== resolvedWorkflowRunId) {
+      throw new Error("workflow execution identity conflicts with workflowRunId");
+    }
+  }
   const protocolVersion = WORKFLOW_PROTOCOL.ORCHESTRATION_VERSION;
   const now = new Date().toISOString();
   const success = !error && semantic && execution;
@@ -67,9 +85,11 @@ export function buildWorkflowOrchestrationPayload({
       ? WORKFLOW_SEMANTIC.MODE_SEPARATE_MODEL
       : WORKFLOW_SEMANTIC.MODE_INLINE_TEXT;
   const interactionId = createInteractionId(ctx);
+  const identifiedExecution = bindWorkflowExecutionIdentity(execution, resolvedWorkflowRunId);
 
   return {
     protocolVersion,
+    workflowRunId: resolvedWorkflowRunId,
     status: success ? WORKFLOW_PHASE_STATUS.SUCCEEDED : WORKFLOW_PHASE_STATUS.FAILED,
     timestamp: now,
     interactionId,
@@ -92,15 +112,15 @@ export function buildWorkflowOrchestrationPayload({
       history: Array.isArray(retryMeta?.history) ? retryMeta.history : [],
     },
     semantic: semantic || null,
-    execution: execution || null,
+    execution: identifiedExecution,
     artifacts: success
       ? {
           semantic,
-          execution,
+          execution: identifiedExecution,
         }
       : {
           semantic: semantic || null,
-          execution: execution || null,
+          execution: identifiedExecution,
         },
     diagnostics: {
       invokerUsed: semanticResolution?.invoked === true,

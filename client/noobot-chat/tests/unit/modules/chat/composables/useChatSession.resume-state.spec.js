@@ -112,11 +112,12 @@ describe("useChatSession summary and reconnect state", () => {
       id: "s-snapshot", backendSessionId: "s-snapshot",
       turnStatuses: [{ status: "processing", turnScopeId: "t-snapshot", dialogProcessId: "dp-snapshot" }],
       turnLifecycleSnapshot: {
-        protocolVersion: 1, eventType: "turn.snapshot", commandId: "summary:s-snapshot:2",
+        protocolVersion: 2, eventType: "turn.snapshot", commandId: "summary:s-snapshot:2",
         userId: "", sessionId: "s-snapshot", sequence: 2, activeTurnScopeId: "",
         activeTurn: null, unchanged: false, generatedAt: "2026-07-10T00:00:00.000Z",
         recentTerminalTurns: [{
           turnScopeId: "t-snapshot", dialogProcessId: "dp-snapshot", state: "completed",
+          messageId: "msg-event-t-snapshot", presentationMessageId: "msg-t-snapshot",
           phase: "completion", sequence: 2, revision: 2,
           createdAt: "2026-07-10T00:00:00.000Z", updatedAt: "2026-07-10T00:00:01.000Z",
           capabilities: { canStop: false },
@@ -136,7 +137,7 @@ describe("useChatSession summary and reconnect state", () => {
       sending: false,
       displayState: "send",
     });
-    expect(store.turnRuntimeRegistry.sessions["s-snapshot"].protocolVersion).toBe(1);
+    expect(store.turnRuntimeRegistry.sessions["s-snapshot"].protocolVersion).toBe(2);
     expect(store.turnRuntimeRegistry.sessions["s-snapshot"].turns["t-snapshot"].terminal).toBe("completed");
   });
 
@@ -146,7 +147,7 @@ describe("useChatSession summary and reconnect state", () => {
       id: "local-refresh-shell",
       backendSessionId: "s-late-identity",
       turnLifecycleSnapshot: {
-        protocolVersion: 1,
+        protocolVersion: 2,
         eventType: "turn.snapshot",
         commandId: "summary:s-late-identity:2",
         userId: "",
@@ -158,6 +159,8 @@ describe("useChatSession summary and reconnect state", () => {
         generatedAt: "2026-07-10T00:00:00.000Z",
         recentTerminalTurns: [{
           turnScopeId: "t-late-identity",
+          messageId: "msg-event-t-late-identity",
+          presentationMessageId: "msg-t-late-identity",
           dialogProcessId: "dp-late-identity",
           state: "completed",
           phase: "completion",
@@ -198,7 +201,7 @@ describe("useChatSession summary and reconnect state", () => {
       id: sessionId,
       backendSessionId: sessionId,
       turnLifecycleSnapshot: {
-        protocolVersion: 1,
+        protocolVersion: 2,
         eventType: "turn.snapshot",
         commandId: "summary:s-active-refresh:4",
         sessionId,
@@ -207,6 +210,8 @@ describe("useChatSession summary and reconnect state", () => {
         activeTurn: {
           sessionId,
           turnScopeId,
+          messageId: `msg-event-${turnScopeId}`,
+          presentationMessageId: `msg-${turnScopeId}`,
           state: "processing",
           phase: "processing",
           revision: 4,
@@ -265,8 +270,9 @@ describe("useChatSession summary and reconnect state", () => {
       caller: "user",
       messages: [],
       turnLifecycleSnapshot: {
-        protocolVersion: 1,
+        protocolVersion: 2,
         eventType: "turn.snapshot",
+        commandId: "summary:s-async-refresh:4",
         sessionId: "s-async-refresh",
         sequence: 4,
         activeTurnScopeId: "",
@@ -274,6 +280,8 @@ describe("useChatSession summary and reconnect state", () => {
         recentTerminalTurns: [{
           sessionId: "",
           turnScopeId: "t-async-refresh",
+          messageId: "msg-event-t-async-refresh",
+          presentationMessageId: "msg-t-async-refresh",
           dialogProcessId: "dp-async-refresh",
           state: "completed",
           phase: "completion",

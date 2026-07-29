@@ -243,7 +243,7 @@ test("workflow semantic planning includes current available tools like harness p
 
 
 
-test("workflow semantic planning reads available tools from runtimeAgentContext", async () => {
+test("workflow semantic planning reads available tools from the canonical agentContext", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const invokerCalls = [];
@@ -288,7 +288,7 @@ test("workflow semantic planning reads available tools from runtimeAgentContext"
     dialogProcessId: "d1",
     userMessage: "查资料并生成报告",
     runConfig: { locale: "zh-CN" },
-    runtimeAgentContext: {
+    agentContext: {
       payload: {
         tools: {
           registry: [
@@ -313,7 +313,7 @@ test("workflow semantic planning reads available tools from runtimeAgentContext"
 
 
 
-test("workflow semantic planning falls back to runtimeAgentContext history when ctx.messages is empty", async () => {
+test("workflow semantic planning reads canonical agentContext history when ctx.messages is empty", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const invokerCalls = [];
@@ -359,7 +359,7 @@ test("workflow semantic planning falls back to runtimeAgentContext history when 
     userMessage: "请结合上下文生成工作流",
     runConfig: { locale: "zh-CN" },
     messages: [],
-    runtimeAgentContext: {
+    agentContext: {
       payload: {
         messages: {
           history: [
@@ -379,5 +379,4 @@ test("workflow semantic planning falls back to runtimeAgentContext history when 
   assert.equal(semanticMessages[1]?.content, "已记录财务复核约束");
   assert.match(String(semanticMessages.at(-1)?.content || ""), /当前用户消息:\n请结合上下文生成工作流/);
 });
-
 

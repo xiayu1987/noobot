@@ -25,6 +25,7 @@ export function createCommittedTurnLifecyclePublisher({ sendEvent } = {}) {
       sessionId: event.sessionId,
       parentSessionId: event.parentSessionId || turn.parentSessionId,
       turnScopeId: event.turnScopeId || turn.turnScopeId,
+      messageId: turn.messageId,
       presentationMessageId: turn.presentationMessageId,
       dialogProcessId: turn.dialogProcessId || event.dialogProcessId,
       revision: turn.revision,
@@ -60,12 +61,7 @@ export function createTurnLifecycleBridge({ resolveBot, sendEvent } = {}) {
     const bot = resolveBot();
     const applyLifecycle = bot?.applyTurnLifecycleEvent;
     if (typeof applyLifecycle !== "function") {
-      return {
-        applied: true,
-        skipped: true,
-        legacy: true,
-        reason: "lifecycle_protocol_unavailable",
-      };
+      throw new Error("applyTurnLifecycleEvent is required");
     }
     const result = await applyLifecycle.call(bot, {
       ...event,
@@ -75,7 +71,6 @@ export function createTurnLifecycleBridge({ resolveBot, sendEvent } = {}) {
       commandId: clean(event.commandId),
     });
     if (!result?.applied && !result?.deduplicated) return result || { applied: false, reason: "lifecycle_unavailable" };
-    if (result?.deduplicated) return result;
     const turn = result.turn;
     if (!turn) return { ...result, applied: false, reason: "lifecycle_turn_missing" };
     const envelope = publishCommittedTurnLifecycle({ event, turn });

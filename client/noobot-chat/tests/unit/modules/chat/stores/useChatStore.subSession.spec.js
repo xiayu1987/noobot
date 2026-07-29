@@ -30,10 +30,10 @@ function messageEvent(eventType, data = {}) {
     sequence: 1,
     eventType,
     messageId,
-    presentationMessageId: data.presentationMessageId || messageId,
     sequenceDomain: "message-event",
-    sequenceScopeId: messageId,
     ...data,
+    presentationMessageId: data.presentationMessageId || messageId,
+    sequenceScopeId: data.sequenceScopeId || messageId,
   };
 }
 
@@ -57,7 +57,7 @@ describe("sub-session realtime message projection", () => {
       eventId: "thinking-1",
       sequence: 1,
       role: "assistant",
-      thinking: "```mermaid\ngraph TD; A-->B\n```",
+      text: "```mermaid\ngraph TD; A-->B\n```",
     }));
     applyMessageEvent(store, "tool_result", messageEvent("tool_call_end", {
       ...identity,
@@ -65,19 +65,21 @@ describe("sub-session realtime message projection", () => {
       sequence: 2,
       role: "tool",
       toolCallId: "call-1",
-      content: "tool completed",
-      toolResult: { tool_call_id: "call-1", output: "ok" },
+      result: "ok",
     }));
 
     const session = store.selectSubSessionMessages("child-session");
     expect(session.messages).toHaveLength(1);
     expect(session.messages[0]).toMatchObject({
       role: "assistant",
-      thinking: "```mermaid\ngraph TD; A-->B\n```",
       content: "",
-      toolResult: { tool_call_id: "call-1", output: "ok" },
     });
-    expect(session.messages[0].rawEvents).toHaveLength(2);
+    expect(session.messages[0].activityTimeline).toEqual([
+      expect.objectContaining({ event: "thinking", text: "```mermaid\ngraph TD; A-->B\n```" }),
+    ]);
+    expect(session.messages[0].toolTimeline).toEqual([
+      expect.objectContaining({ key: "call:call-1", result: "ok", status: "completed" }),
+    ]);
   });
 
   it("does not attach a tool event to an assistant from another turn", () => {
@@ -87,7 +89,7 @@ describe("sub-session realtime message projection", () => {
       turnScopeId: "turn-1",
       eventId: "thinking-1",
       role: "assistant",
-      thinking: "planning",
+      text: "planning",
       messageId: "msg-assistant-1",
       sequence: 1,
     }));
@@ -98,13 +100,14 @@ describe("sub-session realtime message projection", () => {
       role: "tool",
       toolCallId: "call-2",
       content: "result",
+      result: "result",
       messageId: "msg-assistant-2",
-      sequence: 2,
+      sequence: 1,
     }));
 
     const session = store.selectSubSessionMessages("child-session");
     expect(session.messages).toHaveLength(2);
-    expect(session.messages[0].thinking).toBe("planning");
+    expect(session.messages[0].activityTimeline[0]).toMatchObject({ text: "planning" });
   });
 
   it("finalizes child runtime by turn instead of mutating message pending", () => {
@@ -122,15 +125,23 @@ describe("sub-session realtime message projection", () => {
       status: "sending",
       pending: true,
       timestamp: "2026-01-01T00:00:00.000Z",
-      thinking: "working",
+      text: "working",
     }));
-    applyMessageEvent(store, "turn_lifecycle", messageEvent("turn_lifecycle", {
-      ...identity,
-      eventId: "completed",
-      sequence: 2,
-      status: "completed",
-      timestamp: "2026-01-01T00:00:05.000Z",
-    }));
+    store.applyWorkflowRuntimeEvent({
+      event: "workflow_node_state_committed",
+      data: {
+        ...identity,
+        workflowRunId: "workflow-1",
+        nodeExecutionId: "node-1",
+        parentSessionId: "parent-session",
+        eventId: "completed",
+        sequence: 2,
+        revision: 2,
+        sequenceDomain: "workflow-node-state",
+        status: "completed",
+        timestamp: "2026-01-01T00:00:05.000Z",
+      },
+    }, { source: "test" });
 
     const session = store.selectSubSessionMessages("child-session");
     expect(session.turnStatuses).toEqual([expect.objectContaining({

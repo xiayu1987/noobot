@@ -5,11 +5,9 @@
  */
 
 export function resolveWorkflowAgentContext(ctx = {}) {
-  const candidates = [
-    ctx?.agentContext,
-    ctx?.runtimeAgentContext,
-  ];
-  return candidates.find((item) => item && typeof item === "object") || null;
+  return ctx?.agentContext && typeof ctx.agentContext === "object"
+    ? ctx.agentContext
+    : null;
 }
 
 export function resolveWorkflowRuntimeFromContext(ctx = {}) {

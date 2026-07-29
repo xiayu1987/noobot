@@ -9,7 +9,11 @@ import {
   MESSAGE_EVENT_REDUCE_RESULT,
   reduceMessageEvent,
 } from "../../../../../../src/modules/chat/runtime/engine/messageEventReducer.js";
-import { selectToolTimeline, selectToolTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import {
+  selectCompletedToolArtifacts,
+  selectToolTimeline,
+  selectToolTimelineLogs,
+} from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 
 function event(overrides = {}) {
@@ -51,7 +55,7 @@ describe("reduceMessageEvent", () => {
   });
 
   it("converges streamed deltas and non-streamed final content to the same projection", () => {
-    const streamed = message();
+    const streamed = message({ pending: true });
     reduce(streamed, event({ eventId: "evt-1", eventType: "llm_delta", sequence: 1, text: "draft " }));
     reduce(streamed, event({ eventId: "evt-2", eventType: "llm_delta", sequence: 2, text: "tokens" }));
     reduce(streamed, event({
@@ -59,7 +63,7 @@ describe("reduceMessageEvent", () => {
       text: "authoritative final", output: "authoritative final",
     }));
 
-    const nonStreamed = message();
+    const nonStreamed = message({ pending: true });
     reduce(nonStreamed, event({
       eventId: "evt-final", eventType: "authoritative_final_content", sequence: 1,
       text: "authoritative final", output: "authoritative final",
@@ -69,6 +73,40 @@ describe("reduceMessageEvent", () => {
     expect(nonStreamed.content).toBe(streamed.content);
     expect(streamed.messageEventState.finalContentSequence).toBe(3);
     expect(nonStreamed.messageEventState.finalContentSequence).toBe(1);
+    expect(streamed.hasFirstStreamEvent).toBe(true);
+    expect(nonStreamed.hasFirstStreamEvent).toBe(true);
+    expect(streamed.pending).toBe(true);
+    expect(nonStreamed.pending).toBe(true);
+  });
+
+  it("keeps child-agent written files available after final content resolves the placeholder", () => {
+    const target = message({ pending: true });
+    reduce(target, event());
+    reduce(target, event({
+      eventId: "evt-tool-end",
+      eventType: "tool_call_end",
+      sequence: 2,
+      result: { ok: true },
+      writtenFiles: [{
+        toolName: "write_file",
+        resolvedPath: "/workspace/admin/runtime/ops_workdir/write_test.txt",
+        fileName: "write_test.txt",
+        isSandbox: true,
+      }],
+    }));
+    reduce(target, event({
+      eventId: "evt-final",
+      eventType: "authoritative_final_content",
+      sequence: 3,
+      text: "done",
+      output: "done",
+    }));
+
+    expect(target.pending).toBe(true);
+    expect(target.hasFirstStreamEvent).toBe(true);
+    expect(selectCompletedToolArtifacts(target).writtenFiles).toEqual([
+      expect.objectContaining({ fileName: "write_test.txt" }),
+    ]);
   });
 
   it("keeps authoritative final content immutable against later deltas", () => {

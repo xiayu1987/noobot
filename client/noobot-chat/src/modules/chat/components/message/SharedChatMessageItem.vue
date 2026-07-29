@@ -129,11 +129,13 @@ const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepSta
 const messageMarkdownRef = ref(null);
 const { translate } = useLocale();
 const chatStore = useChatStore();
-const messageRuntime = computed(() => selectTurnMessageRuntime(chatStore.turnRuntimeRegistry, {
-  sessionId: getMessageSessionId(props.messageItem),
-  turnScopeId: getMessageTurnScopeId(props.messageItem),
-  dialogProcessId: getMessageDialogProcessId(props.messageItem),
-}));
+const messageRuntime = computed(() =>
+  selectTurnMessageRuntime(chatStore.turnRuntimeRegistry, {
+    sessionId: getMessageSessionId(props.messageItem),
+    turnScopeId: getMessageTurnScopeId(props.messageItem),
+    dialogProcessId: getMessageDialogProcessId(props.messageItem),
+  }),
+);
 const assistantContentExpanded = computed(() => {
   if (getMessageRole(props.messageItem) !== "assistant") return true;
   const explicit = getTurnUiState(props.messageItem)?.assistantContentExpanded;
@@ -352,6 +354,7 @@ function toggleAssistantContent() {
         v-for="attachmentItem in displayedAttachments"
         :key="`attachment:${attachmentItem.attachmentId || attachmentItem.name || ''}:${attachmentItem.size || 0}`"
         :attachment-item="attachmentItem"
+        :user-id="userId"
         :thumbnail-url="attachmentItem.thumbnailUrl || attachmentItem.previewUrl || ''"
         :is-image-mime="isImageMime"
         :can-preview-attachment="canPreviewAttachment"

@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildUnifiedSessionDetail,
   mergeUnifiedSessionDetail,
-  projectTurnStatusOntoAssistant,
 } from "../runtime/workflowUnifiedSessionDetail.js";
 
 const childIdentity = {
@@ -26,20 +25,8 @@ function childAssistant(overrides = {}) {
   };
 }
 
-describe("workflow child Turn status projection", () => {
-  it("projects a running execution onto an existing child assistant", () => {
-    const [message] = projectTurnStatusOntoAssistant([childAssistant()], {
-      ...childIdentity,
-      state: "running",
-    });
-
-    expect(message).toMatchObject({
-      statusTurnScopeId: childIdentity.turnScopeId,
-      projectedStatusStepState: "completing",
-    });
-  });
-
-  it("normalizes terminal execution state without persisted turnStatuses", () => {
+describe("workflow child unified session detail", () => {
+  it("keeps node execution status out of canonical child messages", () => {
     const detail = buildUnifiedSessionDetail({
       nodeItem: {
         ...childIdentity,
@@ -62,21 +49,9 @@ describe("workflow child Turn status projection", () => {
     });
 
     expect(detail.messages).toHaveLength(1);
-    expect(detail.messages[0]).toMatchObject({
-      statusTurnScopeId: childIdentity.turnScopeId,
-      projectedStatusStepState: "completed",
-    });
-  });
-
-  it("does not project status onto another Session or Turn", () => {
-    const otherSession = childAssistant({ id: "other-session", sessionId: "other" });
-    const otherTurn = childAssistant({ id: "other-turn", turnScopeId: "workflow-node:other" });
-    const result = projectTurnStatusOntoAssistant([otherSession, otherTurn], {
-      ...childIdentity,
-      state: "completed",
-    });
-
-    expect(result).toEqual([otherSession, otherTurn]);
+    expect(detail.messages[0]).toEqual(childAssistant());
+    expect(detail.messages[0]).not.toHaveProperty("projectedStatusStepState");
+    expect(detail.messages[0]).not.toHaveProperty("statusTurnScopeId");
   });
 
   it("keeps the running placeholder outside canonical messages", () => {

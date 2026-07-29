@@ -83,7 +83,7 @@ const beforeAgentDispatchContext = {
   ...botHookBase,
   userMessage: normalizedMessage,
   agentContextSummary,
-  runtimeAgentContext,
+  agentContext: runtimeAgentContext,
   abortSignal,
   messages: dispatchContextMessages,
   attachments: userMessageAttachments,

@@ -28,10 +28,18 @@ function createInMemoryTurnStore() {
   };
 }
 
+function installEmptyMessageEventMaterializer(runtime = {}) {
+  runtime.materializePendingCurrentTurnMessageEvents = () => ({
+    activityTimeline: [],
+    toolTimeline: [],
+  });
+  return runtime;
+}
+
 test("state-committer emits before/after hooks for assistant message commit", async () => {
   const hookCalls = [];
   const hookManager = createAgentHookManager();
-  const runtime = { hookManager };
+  const runtime = installEmptyMessageEventMaterializer({ hookManager });
   const turnMessageStore = createInMemoryTurnStore();
 
   hookManager.on(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
@@ -115,6 +123,7 @@ test("state-committer checkpoints assistant and tool records with presentation i
     },
     persistCurrentTurnMessages: async () => { checkpointCount += 1; },
   };
+  installEmptyMessageEventMaterializer(runtime);
   const committer = createStateCommitter({
     messages: [],
     traces: [],

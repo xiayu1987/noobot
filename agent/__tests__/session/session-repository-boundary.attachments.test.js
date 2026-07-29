@@ -12,7 +12,10 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 
 import { createSessionServices } from "../../src/session/index.js";
 import { readSessionArtifact, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import {
+  buildSessionDisplaySummary,
+  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
+} from "../../src/session/session-summary-builders.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(
@@ -51,7 +54,7 @@ test("session display summary should keep canonical attachment fields", () => {
     ],
   });
 
-  assert.equal(summary.schemaVersion, 9);
+  assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
   assert.equal(summary.messages[0].attachments[0].attachmentId, "att-canonical");
   assert.equal(summary.messages[0].attachments[0].name, "canonical.txt");
   assert.equal(summary.messages[1].attachments[0].attachmentId, "att-legacy");

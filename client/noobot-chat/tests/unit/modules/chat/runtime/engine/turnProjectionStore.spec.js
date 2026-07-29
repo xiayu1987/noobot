@@ -114,6 +114,9 @@ describe("turnProjectionStore convergence", () => {
         authority: "authoritative",
         textLength: 8,
         outputLength: 8,
+        eventTimestamp: "2026-01-01T00:00:00.000Z",
+        reducerObservedAt: expect.any(String),
+        sourceToReducerLatencyMs: expect.any(Number),
         result: "applied",
       }),
     }));

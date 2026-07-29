@@ -8,6 +8,7 @@ import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { isFatalError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
 import { extractAttachmentsFromToolResult } from "../../artifacts/runtime/artifact-service.js";
+import { projectToolResultArtifacts } from "../../artifacts/runtime/tool-result-artifact-projection.js";
 import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../errors/index.js";
@@ -146,7 +147,6 @@ export async function executeToolCall({
   parentSessionId = "",
   runtime = {},
   agentContext = null,
-  messageId = "",
 } = {}) {
   const toolStartedAtMs = Date.now();
   const toolStartedAt = new Date(toolStartedAtMs).toISOString();
@@ -158,12 +158,6 @@ export async function executeToolCall({
       status: "failed",
       code: ERROR_CODE.RECOVERABLE_TOOL_NOT_FOUND,
       error: `tool not found: ${call?.name}`,
-    });
-    emitToolCallEndEvent(eventListener, runtime, messageId, {
-      turn,
-      tool: call?.name,
-      result: String(toolResultText).slice(0, 200),
-      toolCallId: call?.id || call?.tool_call_id || call?.toolCallId || "",
     });
     await runAgentRuntimeHook({
       runtime,
@@ -235,13 +229,6 @@ export async function executeToolCall({
           ...toolInputTransferPayload,
         });
         toolResultText = compactToolResultTextForModel(toolResultText);
-        emitToolCallEndEvent(eventListener, runtime, messageId, {
-          turn,
-          tool: call?.name,
-          result: String(toolResultText).slice(0, 200),
-          success: true,
-          toolCallId: call?.id || call?.tool_call_id || call?.toolCallId || "",
-        });
         await runAgentRuntimeHook({
           runtime,
           point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
@@ -380,6 +367,11 @@ export async function executeToolCall({
     call?.name,
     rawToolResultText || toolResultText,
   );
+  const resultArtifacts = projectToolResultArtifacts({
+    toolName: call?.name,
+    result: rawToolResultText || toolResultText,
+    attachments: rawExtractedAttachments,
+  });
   const overflowNormalized = await transferSemanticContent({
     scenario: "tool",
     strategy: "tool_result_text",
@@ -393,13 +385,6 @@ export async function executeToolCall({
   if (String(call?.name || "").trim() === "task_summary") {
     toolResultText = mergeTaskSummaryTransferPayload(toolResultText, toolInputTransferPayload);
   }
-  emitToolCallEndEvent(eventListener, runtime, messageId, {
-    turn,
-    tool: call?.name,
-    result: String(toolResultText).slice(0, 200),
-    success: failureState.success,
-    toolCallId: call?.id || call?.tool_call_id || call?.toolCallId || "",
-  });
   await runAgentRuntimeHook({
     runtime,
     point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
@@ -432,17 +417,35 @@ export async function executeToolCall({
       : rawExtractedAttachments,
     success: failureState.success,
     failureReason: failureState.reason,
+    writtenFiles: resultArtifacts.writtenFiles,
   };
 }
 
-function emitToolCallEndEvent(eventListener, runtime, messageId, data = {}) {
-  const authoritativeMessageId = String(messageId || "").trim();
-  if (authoritativeMessageId) {
-    return emitMessageEvent(eventListener, runtime, "tool_call_end", {
-      ...data,
-      messageId: authoritativeMessageId,
-    });
-  }
-  emitEvent(eventListener, "tool_call_end", data);
-  return data;
+export async function executeToolCallInTurn(options = {}) {
+  const call = options?.call && typeof options.call === "object" ? options.call : {};
+  const runtime = options?.runtime && typeof options.runtime === "object" ? options.runtime : {};
+  const eventListener = options?.eventListener || null;
+  const turn = Number(options?.turn || 1);
+  const toolCallId = call?.id || call?.tool_call_id || call?.toolCallId || "";
+  emitMessageEvent(eventListener, runtime, "tool_call_start", {
+    turn,
+    tool: call?.name,
+    args: call?.args || {},
+    toolCallId,
+  });
+  const result = await executeToolCall(options);
+  emitMessageEvent(eventListener, runtime, "tool_call_end", {
+    turn,
+    tool: call?.name,
+    result: String(result?.toolResultText || "").slice(0, 200),
+    success: result?.success === true,
+    toolCallId,
+    ...(Array.isArray(result?.extractedAttachments) && result.extractedAttachments.length
+      ? { attachments: result.extractedAttachments }
+      : {}),
+    ...(Array.isArray(result?.writtenFiles) && result.writtenFiles.length
+      ? { writtenFiles: result.writtenFiles }
+      : {}),
+  });
+  return result;
 }

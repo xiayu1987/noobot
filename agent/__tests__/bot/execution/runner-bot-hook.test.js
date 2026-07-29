@@ -12,6 +12,7 @@ import {
   createBotHookManager,
 } from "../../../src/bot/hook/index.js";
 import { warnAgentContextCompatFieldOnce } from "../../../src/context/compatibility-deprecation.js";
+import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
 import { createBotDispatchHandled } from "@noobot/shared/bot-dispatch-protocol";
 
 function createRunner({
@@ -230,12 +231,85 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   ]);
   assert.deepEqual(capturedBuildContextPayload?.userMessageAttachments, [{ attachmentId: "att1" }]);
   assert.equal(capturedBuildContextPayload?.attachmentMetas, undefined);
-  assert.equal(Boolean(beforeDispatchContext?.agentContext), false);
+  assert.equal(
+    beforeDispatchContext?.agentContext?.execution?.controllers?.runtime
+      ?.systemRuntime?.messageEventStream?.activeMessageId,
+    beforeDispatchContext?.runConfig?.messageId,
+  );
+  assert.equal(
+    beforeDispatchContext?.agentContext?.execution?.controllers?.runtime
+      ?.systemRuntime?.messageEventStream?.activePresentationMessageId,
+    beforeDispatchContext?.runConfig?.presentationMessageId,
+  );
+  assert.match(beforeDispatchContext?.runConfig?.messageId, /^msg_event_msg_/);
+  assert.match(beforeDispatchContext?.runConfig?.presentationMessageId, /^msg_/);
+  assert.equal(beforeDispatchContext?.runtimeAgentContext, undefined);
   assert.equal(typeof beforeDispatchContext?.agentContextSummary, "object");
   assert.deepEqual(beforeDispatchContext?.messages, [
     { role: "user", content: "history user" },
     { role: "assistant", content: "history assistant" },
   ]);
+});
+
+test("before-dispatch capability events use the bound Turn message domain", async () => {
+  const botHookManager = createBotHookManager();
+  const events = [];
+  const capabilityModelInvoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    createChatModelFn: () => ({
+      async invoke() {
+        return { content: "WORKFLOW_DSL/1\nEND" };
+      },
+    }),
+  });
+  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
+    await capabilityModelInvoker({
+      purpose: "workflow_semantic",
+      domain: "workflow",
+      ctx,
+    });
+  });
+  const runner = createRunner({
+    botHookManager,
+    prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+      const runtimeAgentContext = {
+        payload: { tools: { registry: [] } },
+        execution: {
+          controllers: {
+            runtime: {
+              attachmentMetas: [],
+              eventListener: buildContextPayload.eventListener,
+            },
+          },
+        },
+      };
+      return { agentContext: runtimeAgentContext, runtimeAgentContext };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "build workflow",
+    turnScopeId: "turn-workflow-semantic",
+    runConfig: {
+      messageId: "message-workflow-semantic",
+      presentationMessageId: "presentation-workflow-semantic",
+    },
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+
+  const thinkingEvent = events.find((item = {}) => (
+    item.event === "thinking" && item?.data?.event === "workflow_semantic_response"
+  ));
+  assert.equal(thinkingEvent?.data?.messageId, "message-workflow-semantic");
+  assert.equal(
+    thinkingEvent?.data?.presentationMessageId,
+    "presentation-workflow-semantic",
+  );
+  assert.equal(thinkingEvent?.data?.sequence, 1);
+  assert.equal(thinkingEvent?.data?.envelopeKind, "noobot.message_event");
+  assert.equal(thinkingEvent?.data?.sequenceDomain, "message-event");
 });
 
 test("before-dispatch takeover can claim root processing before the hook completes", async () => {

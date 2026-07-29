@@ -111,6 +111,23 @@ const AssetRenderer = defineComponent({
   },
 });
 
+const RuntimeRenderer = defineComponent({
+  name: "SharedMessageRuntimeProbe",
+  props: {
+    startedAt: { type: String, default: "" },
+    finishedAt: { type: String, default: "" },
+    running: { type: Boolean, default: false },
+  },
+  setup(props) {
+    return () => h("div", {
+      class: "runtime-probe",
+      "data-started-at": props.startedAt,
+      "data-finished-at": props.finishedAt,
+      "data-running": String(props.running),
+    });
+  },
+});
+
 function mountItem(props = {}) {
   const { storeSetup, ...componentProps } = props;
   const pinia = createPinia();
@@ -375,6 +392,126 @@ describe("SharedChatMessageItem", () => {
     expect(probe.exists()).toBe(true);
     expect(probe.attributes("data-attachment-count")).toBe("1");
     expect(probe.attributes("data-legacy-attachment-count")).toBe("1");
+  });
+
+  it("projects child-session persisted turn timing into the canonical renderer context", () => {
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, {
+      pluginId: "shared-message-runtime-probe",
+      id: "shared-message-runtime-probe:card",
+      slot: "pre",
+      component: RuntimeRenderer,
+      when: (context = {}) => context?.messageItem?.id === "msg-child-timing",
+      resolveProps: (context = {}) => ({
+        startedAt: context?.messageRuntime?.startedAt || "",
+        finishedAt: context?.messageRuntime?.finishedAt || "",
+        running: context?.messageRuntime?.running === true,
+      }),
+    });
+
+    const wrapper = mountItem({
+      storeSetup: (store) => store.applyWorkflowRuntimeEvent({
+        event: "workflow_session_snapshot_loaded",
+        data: {
+          sessionId: "child-session",
+          snapshotVersion: 1,
+          turnTimings: [{
+            dialogProcessId: "child-dialog",
+            turnScopeId: "child-turn",
+            thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+            thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+          }],
+        },
+      }, { source: "test_snapshot" }),
+      messageItem: {
+        id: "msg-child-timing",
+        role: "assistant",
+        content: "child result",
+        sessionId: "child-session",
+        dialogProcessId: "child-dialog",
+        turnScopeId: "child-turn",
+      },
+      sessionDocs: [{
+        sessionId: "child-session",
+        turnTimings: [{
+          dialogProcessId: "child-dialog",
+          turnScopeId: "child-turn",
+          thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+          thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+        }],
+      }],
+    });
+    const probe = wrapper.find(".runtime-probe");
+
+    expect(probe.exists()).toBe(true);
+    expect(probe.attributes("data-started-at")).toBe("2026-07-29T09:44:50.000Z");
+    expect(probe.attributes("data-finished-at")).toBe("2026-07-29T09:44:56.296Z");
+  });
+
+  it("lets persisted child terminal facts close stale realtime sending state", () => {
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, {
+      pluginId: "shared-message-terminal-runtime-probe",
+      id: "shared-message-terminal-runtime-probe:card",
+      slot: "pre",
+      component: RuntimeRenderer,
+      when: (context = {}) => context?.messageItem?.id === "msg-child-terminal",
+      resolveProps: (context = {}) => ({
+        startedAt: context?.messageRuntime?.startedAt || "",
+        finishedAt: context?.messageRuntime?.finishedAt || "",
+        running: context?.messageRuntime?.running === true,
+      }),
+    });
+
+    const wrapper = mountItem({
+      storeSetup: (store) => {
+        store.applyTurnRuntimeEvent({
+          type: "backend_conversation_state",
+          sessionId: "child-session-terminal",
+          dialogProcessId: "child-dialog-terminal",
+          turnScopeId: "workflow-node:terminal",
+          state: "sending",
+          updatedAt: "2026-07-29T09:44:50.000Z",
+        });
+        store.applyWorkflowRuntimeEvent({
+          event: "workflow_session_snapshot_loaded",
+          data: {
+            sessionId: "child-session-terminal",
+            snapshotVersion: 1,
+            turnTimings: [{
+              dialogProcessId: "child-dialog-terminal",
+              turnScopeId: "workflow-node:terminal",
+              thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+              thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+            }],
+          },
+        }, { source: "test_snapshot" });
+      },
+      messageItem: {
+        id: "msg-child-terminal",
+        role: "assistant",
+        content: "child result",
+        sessionId: "child-session-terminal",
+        dialogProcessId: "child-dialog-terminal",
+        turnScopeId: "workflow-node:terminal",
+      },
+      sessionDocs: [{
+        sessionId: "child-session-terminal",
+        turnTimings: [{
+          dialogProcessId: "child-dialog-terminal",
+          turnScopeId: "workflow-node:terminal",
+          thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+          thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+        }],
+        turnStatuses: [{
+          dialogProcessId: "child-dialog-terminal",
+          turnScopeId: "workflow-node:terminal",
+          status: "completed",
+        }],
+      }],
+    });
+    const probe = wrapper.find(".runtime-probe");
+
+    expect(probe.attributes("data-finished-at")).toBe("2026-07-29T09:44:56.296Z");
+    expect(probe.attributes("data-running")).toBe("false");
   });
 
   it("does not render the default asset list when a post renderer suppresses default assets", () => {

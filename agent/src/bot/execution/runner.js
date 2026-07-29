@@ -49,6 +49,7 @@ import { summarizeDebugAttachments, readSelectedModelValue } from "./runner/debu
 import { buildSessionRuntimePluginResolvedEvent } from "./runner/plugin-runtime.js";
 import { dispatchAgentTurn } from "./runner/agent-dispatch.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
+import { bindAssistantMessageEventStream } from "../../events/message-event-stream.js";
 
 export class SessionExecutionRunner {
   constructor({
@@ -270,6 +271,14 @@ export class SessionExecutionRunner {
             })
           : scenarioResolvedRunConfig;
       const resolvedTurnScopeId = String(resolvedRunConfig?.turnScopeId || "").trim();
+      const presentationMessageId = String(
+        resolvedRunConfig?.presentationMessageId || `msg_${resolvedTurnScopeId}`,
+      ).trim();
+      const messageId = String(
+        resolvedRunConfig?.messageId || `msg_event_${presentationMessageId}`,
+      ).trim();
+      resolvedRunConfig.presentationMessageId = presentationMessageId;
+      resolvedRunConfig.messageId = messageId;
       const resumeFromStoppedSnapshot = resolvedRunConfig?.resumeFromStoppedSnapshot === true;
       const contextMode = sessionLoadState === "loaded" ? "existing_session" : "new_session";
       lifecycle = createAgentLifecycleMachine({
@@ -435,6 +444,7 @@ export class SessionExecutionRunner {
       const dispatchRuntime = runtimeAgentContext?.execution?.controllers?.runtime;
       if (dispatchRuntime && typeof dispatchRuntime === "object") {
         lifecycleRuntime = dispatchRuntime;
+        bindAssistantMessageEventStream(dispatchRuntime, { messageId, presentationMessageId });
         applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
         bindLifecycleToRuntime(dispatchRuntime, lifecycle);
         attachStoppedSnapshotAbortListener();
@@ -507,21 +517,22 @@ export class SessionExecutionRunner {
           void dispatchRuntime.persistCurrentTurnMessages?.();
           return envelope;
         };
-        dispatchRuntime.consumePendingCurrentTurnActivities = () => {
-          const facts = pendingMessageEvents.filter((item) =>
-            !isToolMessageEvent(item));
-          pendingMessageEvents.splice(
-            0,
-            pendingMessageEvents.length,
-            ...pendingMessageEvents.filter((item) => !facts.includes(item)),
-          );
-          return facts;
-        };
-        dispatchRuntime.consumePendingCurrentTurnToolEvents = () => {
-          const facts = pendingMessageEvents.filter((item) =>
-            isToolMessageEvent(item));
-          pendingMessageEvents.splice(0, pendingMessageEvents.length, ...pendingMessageEvents.filter((item) => !facts.includes(item)));
-          return facts;
+        dispatchRuntime.materializePendingCurrentTurnMessageEvents = ({
+          activityTimeline = [],
+          toolTimeline = [],
+        } = {}) => {
+          const facts = pendingMessageEvents.splice(0, pendingMessageEvents.length);
+          return facts.reduce((projection, fact) => {
+            if (isToolMessageEvent(fact)) {
+              projection.toolTimeline = reduceCanonicalToolTimeline(projection.toolTimeline, fact);
+            } else if (isActivityMessageEvent(fact)) {
+              projection.activityTimeline.push(reduceCurrentTurnActivity(fact));
+            }
+            return projection;
+          }, {
+            activityTimeline: Array.isArray(activityTimeline) ? [...activityTimeline] : [],
+            toolTimeline: Array.isArray(toolTimeline) ? [...toolTimeline] : [],
+          });
         };
         let persistCurrentTurnMessagesTail = Promise.resolve();
         dispatchRuntime.timelineCheckpointPersistedMessageUids = [];

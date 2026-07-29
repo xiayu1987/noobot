@@ -7,9 +7,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { transitionTurnLifecycle } from "../../../agent/src/session/entities/turn-lifecycle-entity.js";
-import { TURN_EVENT } from "@noobot/shared/turn-lifecycle-protocol";
+import {
+  TURN_EVENT,
+  TURN_LIFECYCLE_WIRE_EVENT,
+  TURN_PHASE,
+} from "@noobot/shared/turn-lifecycle-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
+import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
 
@@ -18,6 +23,7 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
   const committed = [];
   const commitInputs = [];
   let runCount = 0;
+  let lastRunConfig = null;
   const bot = {
     async applyTurnLifecycleEvent(input) {
       commitInputs.push(structuredClone(input));
@@ -39,6 +45,7 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
     },
     async runSession({ sessionId, runConfig, eventListener }) {
       runCount += 1;
+      lastRunConfig = structuredClone(runConfig);
       if (failureAt === "action") throw Object.assign(new Error("agent initialization failed"), { code: "agent_init_failed" });
       eventListener.onEvent({
         event: "agent_lifecycle_state_changed",
@@ -77,6 +84,7 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
     committed: () => [...committed],
     commitInputs: () => structuredClone(commitInputs),
     runCount: () => runCount,
+    lastRunConfig: () => structuredClone(lastRunConfig),
     lifecycle: () => lifecycle,
   };
 }
@@ -117,9 +125,13 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     assert.equal(inputs[0].action, "send");
     assert.equal(inputs[0].startedAt, payload.config.thinkingStartedAt);
     assert.equal(turn.startedAt, payload.config.thinkingStartedAt);
+    assert.equal(turn.messageId, authoritative.lastRunConfig().messageId);
+    assert.equal(turn.presentationMessageId, authoritative.lastRunConfig().presentationMessageId);
     const completedEnvelope = events.find((item) =>
       item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.COMPLETED);
     assert.equal(completedEnvelope.data.startedAt, payload.config.thinkingStartedAt);
+    assert.equal(completedEnvelope.data.messageId, turn.messageId);
+    assert.equal(completedEnvelope.data.presentationMessageId, turn.presentationMessageId);
     assert.equal(Boolean(completedEnvelope.data.finishedAt), true);
     assert.equal(inputs.slice(1).some((input) => "createSessionIfAbsent" in input), false);
   } finally {
@@ -152,6 +164,43 @@ test("rejected initial provision does not start Agent execution", async () => {
   } finally {
     await closeServer(server);
   }
+});
+
+test("deduplicated lifecycle commands republish their authoritative acknowledgement", async () => {
+  const sent = [];
+  let lifecycle = {};
+  const commit = createTurnLifecycleBridge({
+    resolveBot: () => ({
+      applyTurnLifecycleEvent: async (event = {}) => {
+        const result = transitionTurnLifecycle(lifecycle, event);
+        if (result.applied) lifecycle = result.lifecycle;
+        return result;
+      },
+    }),
+    sendEvent: (event, data) => sent.push({ event, data }),
+  });
+  const event = {
+    userId: "u1",
+    sessionId: "s-deduplicated-ack",
+    turnScopeId: "turn-deduplicated-ack",
+    commandId: "command-deduplicated-ack",
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    phase: TURN_PHASE.ACTION,
+    action: "send",
+    messageId: "message-deduplicated-ack",
+    presentationMessageId: "presentation-deduplicated-ack",
+  };
+
+  const first = await commit(event);
+  const replay = await commit(event);
+
+  assert.equal(first.applied, true);
+  assert.equal(replay.deduplicated, true);
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1]?.event, TURN_LIFECYCLE_WIRE_EVENT);
+  assert.equal(sent[1]?.data?.commandId, event.commandId);
+  assert.equal(sent[1]?.data?.revision, sent[0]?.data?.revision);
+  assert.equal(sent[1]?.data?.sequence, sent[0]?.data?.sequence);
 });
 
 test("processing-start persistence rejection is observed while Agent execution is still active", async () => {
@@ -319,6 +368,8 @@ test("a new action recovers a stale persisted turn lost after service restart", 
   const authoritative = createAuthoritativeBot();
   await authoritative.bot.applyTurnLifecycleEvent({
     turnScopeId: "turn-before-restart",
+    messageId: "turn-message-before-restart",
+    presentationMessageId: "presentation-before-restart",
     dialogProcessId: "dialog-before-restart",
     commandId: "command-before-restart",
     eventType: TURN_EVENT.ACTION_ACCEPTED,
@@ -491,7 +542,14 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     lifecycle = result.lifecycle;
     return result;
   };
-  apply({ turnScopeId: "turn-recover", commandId: "start", eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send" });
+  apply({
+    turnScopeId: "turn-recover",
+    messageId: "turn-message-recover",
+    presentationMessageId: "presentation-recover",
+    commandId: "start",
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    action: "send",
+  });
   apply({ turnScopeId: "turn-recover", commandId: "running", eventType: TURN_EVENT.PROCESSING_STARTED, phase: "processing", executionState: "sending" });
   apply({ turnScopeId: "turn-recover", commandId: "processed", eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: "completion", finalizeCommandId: "stable-finalize" });
   const bot = {

@@ -57,17 +57,4 @@ export function logWorkflowNodeDetailProjection({ props, runtimeNodeSessions }, 
       contentLength: String(message?.content || "").length,
     })),
   });
-  const projectedAssistants = messages.filter((message = {}) =>
-    text(message?.role).toLowerCase() === "assistant" &&
-    Boolean(text(message?.statusTurnScopeId) || text(message?.projectedStatusStepState)));
-  props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.statusProjected", {
-    ...identity,
-    assistantFound: messages.some((message = {}) => text(message?.role).toLowerCase() === "assistant"),
-    projectedAssistantCount: projectedAssistants.length,
-    projectedAssistants: projectedAssistants.map((message = {}) => ({
-      id: text(message?.id || message?.messageId),
-      statusTurnScopeId: text(message?.statusTurnScopeId),
-      projectedStatusStepState: text(message?.projectedStatusStepState),
-    })),
-  });
 }

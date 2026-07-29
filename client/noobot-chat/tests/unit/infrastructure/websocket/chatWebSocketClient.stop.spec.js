@@ -11,7 +11,7 @@ import { MockWebSocket, setupWebSocketTestHooks } from "./chatWebSocketClientTes
 setupWebSocketTestHooks();
 
 describe("chatWebSocketClient stop transport", () => {
-  it("sends the supplied stop command without owning its lifecycle", async () => {
+  it("resolves the stop command only after its authoritative lifecycle acknowledgement", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     client.connect();
     const socket = MockWebSocket.instances[0];
@@ -25,12 +25,12 @@ describe("chatWebSocketClient stop transport", () => {
       resolved = true;
     });
 
-    expect(client.requestStop({
+    const stopPromise = client.requestStop({
       commandId: "stop:main-turn",
       sessionId: "s-1",
       dialogProcessId: "main-dp",
       turnScopeId: "main-turn",
-    })).toBe(true);
+    });
     expect(JSON.parse(socket.sent.at(-1))).toEqual({
       action: "stop",
       commandId: "stop:main-turn",
@@ -42,6 +42,15 @@ describe("chatWebSocketClient stop transport", () => {
     await vi.advanceTimersByTimeAsync(10000);
     expect(resolved).toBe(false);
 
+    socket.emit(StreamEventEnum.TURN_LIFECYCLE, {
+      commandId: "stop:main-turn",
+      sessionId: "s-1",
+      dialogProcessId: "main-dp",
+      turnScopeId: "main-turn",
+      state: "action_requesting",
+    });
+    await expect(stopPromise).resolves.toBe(true);
+
     socket.emit(StreamEventEnum.USER_STOPPED, {
       sessionId: "s-1",
       dialogProcessId: "main-dp",
@@ -51,44 +60,49 @@ describe("chatWebSocketClient stop transport", () => {
     expect(resolved).toBe(true);
   });
 
-  it("returns false when no open transport can send the command", () => {
+  it("rejects when no open transport can send the command", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
 
-    expect(client.requestStop({ commandId: "stop:turn-1", turnScopeId: "turn-1" })).toBe(false);
+    await expect(client.requestStop({ commandId: "stop:turn-1", turnScopeId: "turn-1" })).rejects.toThrow();
     expect(client.isStopRequested).toBeUndefined();
     expect(client.getStopRequestedTurnScopeId).toBeUndefined();
     expect(client.clearStopRequested).toBeUndefined();
   });
 
-  it("closes a connecting transport and reports that stop was not sent", () => {
+  it("rejects a stop command while the transport is still connecting", async () => {
     MockWebSocket.initialReadyState = MockWebSocket.CONNECTING;
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     client.connect();
     const socket = MockWebSocket.instances[0];
 
-    expect(client.requestStop({ commandId: "stop:turn-1", turnScopeId: "turn-1" })).toBe(false);
-    expect(socket.readyState).toBe(MockWebSocket.CLOSED);
+    await expect(client.requestStop({ commandId: "stop:turn-1", turnScopeId: "turn-1" })).rejects.toThrow();
+    expect(socket.readyState).toBe(MockWebSocket.CONNECTING);
   });
 
-  it("keeps repeated idempotent stop commands as transport sends", () => {
+  it("rejects a duplicate stop command while its authoritative acknowledgement is pending", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     client.connect();
     const socket = MockWebSocket.instances[0];
 
-    expect(client.requestStop({ commandId: "stop:turn-1", turnScopeId: "turn-1" })).toBe(true);
-    expect(client.requestStop({
+    const first = client.requestStop({ commandId: "stop:turn-1", turnScopeId: "turn-1" });
+    await expect(client.requestStop({
       commandId: "stop:turn-1",
       turnScopeId: "turn-1",
       partialAssistant: { content: "partial" },
-    })).toBe(true);
+    })).rejects.toThrow("commandId request already pending");
 
     const stopMessages = socket.sent.map((item) => JSON.parse(item));
-    expect(stopMessages).toHaveLength(2);
-    expect(stopMessages.at(-1)).toEqual({
+    expect(stopMessages).toHaveLength(1);
+    expect(stopMessages[0]).toEqual({
       action: "stop",
       commandId: "stop:turn-1",
       turnScopeId: "turn-1",
-      partialAssistant: { content: "partial" },
     });
+    socket.emit(StreamEventEnum.TURN_LIFECYCLE, {
+      commandId: "stop:turn-1",
+      turnScopeId: "turn-1",
+      state: "action_requesting",
+    });
+    await expect(first).resolves.toBe(true);
   });
 });

@@ -10,6 +10,7 @@ import {
   MAX_MINI_RUNNER_TOOL_TURNS,
   createAgentCapabilityModelInvoker,
 } from "../../../../src/runtime/capability-runner/index.js";
+import { bindAssistantMessageEventStream } from "../../../../src/events/message-event-stream.js";
 
 function createFakeModel(responses = []) {
   let index = 0;
@@ -440,6 +441,55 @@ test("mini-runner does not emit harness capability response for non-guidance ana
   });
 
   assert.equal(emitted.length, 0);
+});
+
+test("mini-runner emits workflow semantic output as a canonical thinking activity", async () => {
+  const executionEvents = [];
+  const invoker = createAgentCapabilityModelInvoker({
+    enableToolBinding: false,
+    createChatModelFn: () => ({
+      async invoke() {
+        return { content: "WORKFLOW_DSL/1\nEND" };
+      },
+    }),
+  });
+  const runtime = {
+    runConfig: {
+      messageId: "turn-message-workflow",
+      presentationMessageId: "presentation-workflow",
+    },
+    systemRuntime: {
+      sessionId: "session-workflow",
+      turnScopeId: "turn-workflow",
+    },
+    eventListener: {
+      onEvent(eventPayload) {
+        executionEvents.push(eventPayload);
+      },
+    },
+  };
+  bindAssistantMessageEventStream(runtime, {
+    messageId: "turn-message-workflow",
+    presentationMessageId: "presentation-workflow",
+  });
+
+  await invoker({
+    purpose: "workflow_semantic",
+    domain: "workflow",
+    ctx: {
+      sessionId: "session-workflow",
+      agentContext: { runtime, payload: { tools: { registry: [] } } },
+    },
+  });
+
+  assert.equal(executionEvents.length, 1);
+  assert.equal(executionEvents[0]?.event, "thinking");
+  assert.equal(executionEvents[0]?.data?.event, "workflow_semantic_response");
+  assert.equal(executionEvents[0]?.data?.activityKind, "workflow_semantic");
+  assert.equal(executionEvents[0]?.data?.text, "WORKFLOW_DSL/1\nEND");
+  assert.equal(executionEvents[0]?.data?.messageId, "turn-message-workflow");
+  assert.equal(executionEvents[0]?.data?.presentationMessageId, "presentation-workflow");
+  assert.equal(runtime.systemRuntime.messageEventStream.sequence, 1);
 });
 
 test("mini-runner treats * as all tools in current registry", async () => {

@@ -4,13 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  hasMessageEventToolPayload, isMessageEventEnvelope, MESSAGE_CONTENT_EFFECT,
-  isAuthoritativeFinalContentEvent,
-  projectMessageEventContent, projectMessageEventToolFacets,
+  isMessageEventEnvelope,
+  resolveMessageEventPresentationId,
   resolveMessageEventSequenceIdentity, validateMessageEventEnvelope,
 } from "@noobot/shared/message-event-protocol";
 import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
+import { classifyRealtimeLog } from "../runtime/engine/realtimeLogClassifier.js";
+import {
+  dispatchTurnEnvelope,
+  TURN_PROJECTION_SOURCE,
+} from "../runtime/engine/turnProjectionStore.js";
+import { SESSION_RUN_EVENT } from "../runtime/run-state-machine/constants.js";
 
 function text(value) { return String(value || "").trim(); }
 
@@ -83,120 +88,15 @@ function projectSubSessionTurnState(currentSession = {}, eventData = {}) {
   return { turnStatuses, turnTimings };
 }
 
-function shouldApplyOrderedEvent(current = null, incoming = {}) {
-  if (!current) return true;
-  const incomingIdentity = resolveMessageEventSequenceIdentity(incoming);
-  const currentIdentity = resolveMessageEventSequenceIdentity(current);
-  const currentIsAuthoritativeMessageEvent = Boolean(
-    text(current?.eventId) &&
-    text(current?.sequenceDomain) === WORKFLOW_SEQUENCE_DOMAIN.MESSAGE &&
-    currentIdentity.sequenceKey,
-  );
-  // A persisted/runtime assistant shell belongs to the same Turn projection, but
-  // does not own the authoritative message-event sequence lane. The first
-  // canonical event must be allowed to take over that shell regardless of any
-  // revision/sequence metadata written by another workflow domain.
-  if (!currentIsAuthoritativeMessageEvent) return true;
-  if (!incomingIdentity.sequenceKey || incomingIdentity.sequenceKey !== currentIdentity.sequenceKey) {
-    return true;
-  }
-  if (incomingIdentity.sequence !== currentIdentity.sequence) {
-    return incomingIdentity.sequence > currentIdentity.sequence;
-  }
-  const incomingEventId = text(incoming?.eventId || incoming?.id);
-  const currentEventId = text(current?.eventId || current?.id);
-  if (!incomingEventId || !currentEventId) return true;
-  return incomingEventId === currentEventId;
-}
-
-function eventContent(eventData = {}) {
-  return String(eventData?.content ?? eventData?.delta ?? eventData?.message ?? eventData?.text ?? "");
-}
-
-function isSubSessionToolEvent(eventName = "", eventData = {}) {
-  return String(eventName).includes("tool") || Boolean(
-    eventData?.toolCall || eventData?.tool_call || eventData?.toolResult || eventData?.tool_result ||
-    eventData?.toolCallId || eventData?.tool_call_id,
-  );
-}
-
 function authoritativeSubSessionMessageId(eventData = {}) {
-  return text(eventData?.messageId);
-}
-
-function hasSubSessionMessagePayload(eventName = "", eventData = {}, currentMessage = null) {
-  if (eventContent(eventData)) return true;
-  if (eventData?.message && typeof eventData.message === "object") return true;
-  if (eventData?.thinking || eventData?.toolCall || eventData?.tool_call || eventData?.toolResult || eventData?.tool_result) return true;
-  if (isSubSessionToolEvent(eventName, eventData) && hasMessageEventToolPayload(eventData)) return true;
-  if (currentMessage && text(eventData?.status || eventData?.state) && (String(eventName).includes("lifecycle") || String(eventName).includes("status"))) return true;
-  return false;
-}
-
-function normalizeSubSessionMessage(eventName = "", eventData = {}, currentMessage = null) {
-  const content = eventContent(eventData);
-  const toolEvent = isSubSessionToolEvent(eventName, eventData);
-  const role = toolEvent
-    ? (text(currentMessage?.role) || "assistant")
-    : (text(eventData?.role || currentMessage?.role) || "assistant");
-  const eventId = text(eventData?.eventId);
-  const canonicalContent = projectMessageEventContent(eventData);
-  const incrementalContent = canonicalContent.effect === MESSAGE_CONTENT_EFFECT.APPEND &&
-    canonicalContent.content === ""
-    ? content
-    : canonicalContent.content;
-  const appendDelta = canonicalContent.effect === MESSAGE_CONTENT_EFFECT.APPEND ||
-    Boolean(eventData?.delta) || String(eventName).includes("delta");
-  const replaceContent = canonicalContent.effect === MESSAGE_CONTENT_EFFECT.REPLACE;
-  const previousContent = String(currentMessage?.content || "");
-  const nextContent = replaceContent
-    ? canonicalContent.content
-    : (appendDelta
-        ? `${previousContent}${canonicalContent.effect === MESSAGE_CONTENT_EFFECT.APPEND ? incrementalContent : content}`
-        : (content || previousContent));
-  const { toolCall: canonicalToolCall, toolResult: canonicalToolResult } =
-    projectMessageEventToolFacets(eventData);
-  const status = text(eventData?.status || eventData?.state || currentMessage?.status);
-  const sequenceIdentity = resolveMessageEventSequenceIdentity(eventData);
-  return {
-    ...(currentMessage || {}),
-    ...(eventData?.message && typeof eventData.message === "object" ? eventData.message : {}),
-    id: authoritativeSubSessionMessageId(eventData) || text(currentMessage?.id),
-    messageId: authoritativeSubSessionMessageId(eventData) || text(currentMessage?.messageId),
-    role,
-    content: toolEvent && currentMessage
-      ? previousContent
-      : nextContent,
-    sessionId: text(eventData?.sessionId || currentMessage?.sessionId),
-    parentSessionId: text(eventData?.parentSessionId || currentMessage?.parentSessionId),
-    dialogProcessId: text(eventData?.dialogProcessId || currentMessage?.dialogProcessId),
-    turnScopeId: text(eventData?.turnScopeId || currentMessage?.turnScopeId),
-    workflowRunId: text(eventData?.workflowRunId || currentMessage?.workflowRunId),
-    nodeExecutionId: text(eventData?.nodeExecutionId || currentMessage?.nodeExecutionId),
-    eventName,
-    eventId,
-    revision: Number(eventData?.revision ?? currentMessage?.revision ?? 0),
-    sequence: Number(eventData?.sequence ?? eventData?.seq ?? currentMessage?.sequence ?? 0),
-    sequenceDomain: text(eventData?.sequenceDomain || currentMessage?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
-    sequenceScopeId: sequenceIdentity.sequenceScopeId || text(currentMessage?.sequenceScopeId),
-    ...(isAuthoritativeFinalContentEvent(eventData)
-      ? { finalContentSequence: Number(eventData?.sequence || 0) }
-      : {}),
-    firstSequence: Number(currentMessage?.firstSequence ?? eventData?.sequence ?? eventData?.seq ?? 0),
-    status,
-    pending: eventData?.pending ?? currentMessage?.pending,
-    createdAt: eventData?.createdAt || eventData?.timestamp || currentMessage?.createdAt || new Date().toISOString(),
-    updatedAt: eventData?.updatedAt || eventData?.timestamp || new Date().toISOString(),
-    thinking: eventData?.thinking ?? currentMessage?.thinking,
-    toolCall: canonicalToolCall ?? currentMessage?.toolCall,
-    toolResult: canonicalToolResult ?? currentMessage?.toolResult,
-    rawEvents: [...(Array.isArray(currentMessage?.rawEvents) ? currentMessage.rawEvents : []), { event: eventName, data: eventData }].slice(-50),
-  };
+  return text(resolveMessageEventPresentationId(eventData));
 }
 
 function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId = "") {
   const canonicalMessageId = text(messageId || realtime.messageId || realtime.id);
-  const realtimeOwnsFinalContent = Number(realtime?.finalContentSequence || 0) > 0;
+  const realtimeOwnsFinalContent = Number(
+    realtime?.messageEventState?.finalContentSequence || 0,
+  ) > 0;
   // Ownership is explicit and independent from arrival order. A canonical
   // replace event owns final content once committed; otherwise the persisted
   // snapshot owns canonical content. Realtime always owns event-only facets
@@ -217,10 +117,6 @@ function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId
       firstSequence: realtime.firstSequence,
       updatedAt: realtime.updatedAt,
     } : {}),
-    ...(realtime.thinking !== undefined ? { thinking: realtime.thinking } : {}),
-    ...(realtime.toolCall !== undefined ? { toolCall: realtime.toolCall } : {}),
-    ...(realtime.toolResult !== undefined ? { toolResult: realtime.toolResult } : {}),
-    ...(Array.isArray(realtime.rawEvents) ? { rawEvents: realtime.rawEvents } : {}),
   };
   return {
     ...merged,
@@ -229,7 +125,16 @@ function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId
 }
 
 function normalizeSubSessionSnapshotMessage(snapshot = {}) {
-  if (text(snapshot?.sequenceDomain) === WORKFLOW_SEQUENCE_DOMAIN.MESSAGE) return snapshot;
+  const {
+    thinking: _thinking,
+    toolCall: _toolCall,
+    toolResult: _toolResult,
+    rawEvents: _rawEvents,
+    ...canonicalSnapshot
+  } = snapshot && typeof snapshot === "object" ? snapshot : {};
+  if (text(canonicalSnapshot?.sequenceDomain) === WORKFLOW_SEQUENCE_DOMAIN.MESSAGE) {
+    return canonicalSnapshot;
+  }
   const {
     eventId: _eventId,
     sequence: _sequence,
@@ -238,12 +143,17 @@ function normalizeSubSessionSnapshotMessage(snapshot = {}) {
     sequenceDomain: _sequenceDomain,
     sequenceScopeId: _sequenceScopeId,
     ...content
-  } = snapshot && typeof snapshot === "object" ? snapshot : {};
+  } = canonicalSnapshot;
   return content;
 }
 
 function subSessionMessageIdentity(message = {}) {
-  const stableId = text(message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId);
+  const stableId = text(
+    message?.presentationMessageId ||
+    message?.messageId ||
+    message?.id ||
+    message?.additional_kwargs?.noobotMessageId,
+  );
   return stableId ? `id:${stableId}` : "";
 }
 
@@ -255,7 +165,58 @@ function subSessionMessageIdentityCandidates(message = {}) {
 
 export function createSubSessionMessageRegistry() { return { sessions: {} }; }
 
-export function createSubSessionStore({ subSessionMessageRegistry, subSessionMessageRegistryVersion }) {
+export function createSubSessionStore({
+  subSessionMessageRegistry,
+  subSessionMessageRegistryVersion,
+  applyTurnRuntimeEvent = null,
+  applyTurnTimingSnapshot = null,
+}) {
+function projectNodeStatusToTurnRuntime(eventData = {}) {
+  if (typeof applyTurnRuntimeEvent !== "function") {
+    return { applied: false, reason: "turn_runtime_unavailable" };
+  }
+  const status = text(eventData?.status || eventData?.state).toLowerCase();
+  const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
+  const turnScopeId = text(eventData?.turnScopeId);
+  if (!sessionId || !turnScopeId) return { applied: false, reason: "missing_turn_identity" };
+  const common = {
+    sessionId,
+    turnScopeId,
+    commandId: text(eventData?.commandId),
+    eventId: text(eventData?.eventId),
+    sequence: Number(eventData?.sequence || 0),
+    revision: Number(eventData?.revision || 0),
+    updatedAt: eventTime(eventData),
+    source: "workflow_node_state",
+    sourceEvent: "workflow_node_state_committed",
+  };
+  if (["running", "processing", "starting", "sending"].includes(status)) {
+    return applyTurnRuntimeEvent({
+      ...common,
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      state: "sending",
+      authoritativeSnapshot: true,
+    });
+  }
+  const terminalState = ["completed", "succeeded"].includes(status)
+    ? "completed"
+    : ["cancelled", "canceled", "stopped", "aborted"].includes(status)
+      ? "stop_completed"
+      : ["failed", "error", "expired", "timeout", "no_conversation"].includes(status)
+        ? "processing_failed"
+        : "";
+  if (!terminalState) return { applied: false, reason: "non_runtime_node_status" };
+  return applyTurnRuntimeEvent({
+    ...common,
+    type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
+    state: terminalState,
+    completionCommitId: text(eventData?.eventId || eventData?.commandId),
+    ...(terminalState === "processing_failed"
+      ? { failure: { phase: "processing", reason: status } }
+      : {}),
+  });
+}
+
 function applySubSessionLifecycleEvent(eventData = {}) {
   const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
   if (!sessionId) return { applied: false, reason: "missing_session" };
@@ -297,7 +258,21 @@ function applySubSessionLifecycleEvent(eventData = {}) {
   registry.sessions[sessionId] = nextSession;
   subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
   if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
-  return { applied: true, session: nextSession };
+  const runtimeResult = projectNodeStatusToTurnRuntime(eventData);
+  logWorkflowDiagnostics("frontend.workflowSubSession.lifecycleProjected", {
+    sessionId,
+    parentSessionId: nextSession.parentSessionId,
+    dialogProcessId: nextSession.dialogProcessId,
+    turnScopeId: nextSession.turnScopeId,
+    workflowRunId: nextSession.workflowRunId,
+    nodeExecutionId: nextSession.nodeExecutionId,
+    status: nextSession.status,
+    runtimeApplied: runtimeResult?.applied === true,
+    runtimeReason: text(runtimeResult?.reason),
+    runtimeState: text(runtimeResult?.turn?.state),
+    runtimeTerminal: text(runtimeResult?.turn?.terminal),
+  });
+  return { applied: true, session: nextSession, runtimeResult };
 }
 
 function upsertSubSessionEvent(eventName = "", eventData = {}) {
@@ -350,19 +325,61 @@ function upsertSubSessionEvent(eventName = "", eventData = {}) {
     ? messages.findIndex((message = {}) => text(message?.messageId || message?.id) === messageKey)
     : -1;
   const currentMessage = existingIndex >= 0 ? messages[existingIndex] : null;
-  let nextMessage = currentMessage;
-  const hasMessagePayload = hasSubSessionMessagePayload(projectionEventName, eventData, currentMessage);
-  if (hasMessagePayload && !messageKey) {
-    return { applied: false, reason: "missing_message_identity", current: currentSession };
+  const nextMessage = currentMessage || {
+    id: messageKey,
+    messageId: messageKey,
+    presentationMessageId: messageKey,
+    sourceMessageId: text(eventData?.messageId),
+    role: "assistant",
+    content: "",
+    sessionId,
+    parentSessionId: text(eventData?.parentSessionId),
+    dialogProcessId: text(eventData?.dialogProcessId),
+    turnScopeId: text(eventData?.turnScopeId),
+    workflowRunId: text(eventData?.workflowRunId),
+    nodeExecutionId: text(eventData?.nodeExecutionId),
+    pending: true,
+    createdAt: eventTime(eventData),
+    toolTimeline: [],
+    activityTimeline: [],
+  };
+  nextMessage.sessionId = text(nextMessage.sessionId || eventData?.sessionId);
+  nextMessage.parentSessionId = text(nextMessage.parentSessionId || eventData?.parentSessionId);
+  nextMessage.dialogProcessId = text(nextMessage.dialogProcessId || eventData?.dialogProcessId);
+  nextMessage.turnScopeId = text(nextMessage.turnScopeId || eventData?.turnScopeId);
+  nextMessage.presentationMessageId = messageKey;
+  nextMessage.sourceMessageId = text(nextMessage.sourceMessageId || eventData?.messageId);
+  nextMessage.createdAt = nextMessage.createdAt || eventTime(eventData);
+  if (typeof nextMessage.pending !== "boolean") nextMessage.pending = true;
+  if (!nextMessage.messageId) nextMessage.messageId = messageKey;
+  if (!nextMessage.id) nextMessage.id = messageKey;
+  const reduction = dispatchTurnEnvelope({
+    targetMessage: nextMessage,
+    envelope: incoming,
+    classifyRealtimeLog,
+    source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
+  });
+  if (!reduction.applied) {
+    return {
+      applied: false,
+      reason: reduction.result,
+      errors: reduction.errors || [],
+      current: currentSession,
+      message: currentMessage,
+    };
   }
-  if (hasMessagePayload) {
-    if (currentMessage && !shouldApplyOrderedEvent(currentMessage, incoming)) {
-      return { applied: false, reason: "stale", current: currentSession, message: currentMessage };
-    }
-    nextMessage = normalizeSubSessionMessage(projectionEventName, incoming, currentMessage);
-    if (existingIndex >= 0) messages[existingIndex] = nextMessage;
-    else messages.push(nextMessage);
-  }
+  nextMessage.updatedAt = eventTime(eventData);
+  nextMessage.eventId = text(eventData?.eventId);
+  nextMessage.sequence = Number(eventData?.sequence || 0);
+  nextMessage.sequenceDomain = text(eventData?.sequenceDomain);
+  nextMessage.sequenceScopeId = resolveMessageEventSequenceIdentity(eventData).sequenceScopeId;
+  nextMessage.firstSequence = Number(nextMessage.firstSequence || eventData?.sequence || 0);
+  nextMessage.status = text(eventData?.status || eventData?.state || nextMessage.status);
+  nextMessage.pending = eventData?.pending ?? nextMessage.pending;
+  nextMessage.workflowRunId = text(eventData?.workflowRunId || nextMessage.workflowRunId);
+  nextMessage.nodeExecutionId = text(eventData?.nodeExecutionId || nextMessage.nodeExecutionId);
+  if (existingIndex >= 0) messages[existingIndex] = nextMessage;
+  else messages.push(nextMessage);
   messages.sort(compareMessageEventOrder);
   const turnState = projectSubSessionTurnState(currentSession, eventData);
   const appliedIncomingSequenceIdentity = resolveMessageEventSequenceIdentity(incoming);
@@ -428,6 +445,12 @@ function upsertSubSessionEvent(eventName = "", eventData = {}) {
 function reduceSubSessionSnapshot(sessionDoc = {}) {
   const sessionId = text(sessionDoc?.sessionId || sessionDoc?.id || sessionDoc?.backendSessionId);
   if (!sessionId) return { applied: false, reason: "missing_session" };
+  const timingResult = typeof applyTurnTimingSnapshot === "function"
+    ? applyTurnTimingSnapshot({
+        sessionId,
+        turnTimings: Array.isArray(sessionDoc?.turnTimings) ? sessionDoc.turnTimings : [],
+      })
+    : { applied: false, reason: "turn_runtime_unavailable" };
   const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
   const current = registry.sessions?.[sessionId] || { sessionId, messages: [], eventsById: {}, sequence: 0 };
   const snapshotVersion = Number(sessionDoc?.snapshotVersion || sessionDoc?.sessionVersion || sessionDoc?.revision || 1);
@@ -523,7 +546,7 @@ function reduceSubSessionSnapshot(sessionDoc = {}) {
   };
   subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
   if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
-  return { applied: true, session: registry.sessions[sessionId] };
+  return { applied: true, session: registry.sessions[sessionId], timingResult };
 }
 
 function selectSubSessionMessages(sessionId = "") {

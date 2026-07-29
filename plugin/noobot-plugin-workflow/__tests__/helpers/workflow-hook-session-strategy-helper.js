@@ -162,10 +162,44 @@ export function createContextWithSharedTools(sharedTools = {}, overrides = {}) {
   });
 }
 
+export function installTurnMessageEventRuntimeFixture(context = {}) {
+  const target = context && typeof context === "object" ? context : {};
+  const existingAgentContext = target.agentContext && typeof target.agentContext === "object"
+    ? target.agentContext
+    : null;
+  const agentContext = existingAgentContext || {};
+  const execution = agentContext.execution && typeof agentContext.execution === "object"
+    ? agentContext.execution
+    : {};
+  const controllers = execution.controllers && typeof execution.controllers === "object"
+    ? execution.controllers
+    : {};
+  const runtime = controllers.runtime && typeof controllers.runtime === "object"
+    ? controllers.runtime
+    : {};
+
+  if (!existingAgentContext) target.agentContext = agentContext;
+  agentContext.execution = execution;
+  execution.controllers = controllers;
+  controllers.runtime = runtime;
+  if (typeof runtime.materializePendingCurrentTurnMessageEvents !== "function") {
+    runtime.materializePendingCurrentTurnMessageEvents = () => ({
+      activityTimeline: [],
+      toolTimeline: [],
+    });
+  }
+  return target;
+}
+
 export function getBeforeDispatch(hookManager) {
   const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
   assert.ok(beforeDispatch?.handler);
-  return beforeDispatch;
+  return {
+    ...beforeDispatch,
+    handler(context = {}) {
+      return beforeDispatch.handler(installTurnMessageEventRuntimeFixture(context));
+    },
+  };
 }
 
 export async function runWorkflowHook({ options = {}, context = {} } = {}) {

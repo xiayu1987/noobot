@@ -14,7 +14,7 @@ import {
   dedupeAttachmentRefs,
 } from "./transfer-attachment-refs.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 9;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 11;
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
 const SUMMARY_OBJECT_FIELD_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryObjectFieldChars;
@@ -127,37 +127,6 @@ function pickLightAttachments(message = {}) {
   ]);
 }
 
-function tryParseJsonContent(content = "") {
-  try {
-    return JSON.parse(String(content || ""));
-  } catch {
-    return null;
-  }
-}
-
-function resolveBaseName(filePath = "") {
-  const normalized = String(filePath || "").trim().replaceAll("\\", "/");
-  if (!normalized) return "";
-  const parts = normalized.split("/");
-  return String(parts[parts.length - 1] || "").trim();
-}
-
-function parseToolFileResult(content = "") {
-  const parsed = tryParseJsonContent(content);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  const toolName = String(parsed?.toolName || "").trim();
-  if (!["write_file"].includes(toolName)) return null;
-  if (parsed?.ok === false) return null;
-  if (toolName === "write_file" && String(parsed?.state || "").toUpperCase() !== "OK") return null;
-  const resolvedPath = String(parsed?.resolvedPath || parsed?.path || "").trim();
-  const fileName = String(parsed?.fileName || resolveBaseName(resolvedPath)).trim();
-  if (!resolvedPath || !fileName) return null;
-  const out = { toolName, resolvedPath, fileName };
-  if (typeof parsed?.isSandbox === "boolean") out.isSandbox = parsed.isSandbox;
-  else if (typeof parsed?.sandboxEnabled === "boolean") out.isSandbox = parsed.sandboxEnabled;
-  return out;
-}
-
 function pickLightObject(source = {}, allowedKeys = []) {
   if (!source || typeof source !== "object" || Array.isArray(source)) return null;
   const picked = {};
@@ -268,7 +237,7 @@ function pickPayloadNodeSession(item = {}) {
 
 function pickPluginPayloadSnapshot(payload = {}) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const picked = pickPlainFields(payload, ["status", "phase", "phaseStatus"], {
+  const picked = pickPlainFields(payload, ["workflowRunId", "status", "phase", "phaseStatus"], {
     maxStringLength: SUMMARY_SMALL_JSON_STRING_CHARS,
   }) || {};
   const semantic = pickPayloadSemantic(payload?.semantic);
@@ -276,7 +245,7 @@ function pickPluginPayloadSnapshot(payload = {}) {
   if (payload?.execution && typeof payload.execution === "object" && !Array.isArray(payload.execution)) {
     const execution = pickPlainFields(
       payload.execution,
-      ["completed", "status", "startedAt", "endedAt", "error"],
+      ["workflowRunId", "instanceId", "completed", "status", "startedAt", "endedAt", "error"],
       { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
     ) || {};
     const runs = (Array.isArray(payload.execution?.nodeAgentRuns) ? payload.execution.nodeAgentRuns : [])
@@ -384,10 +353,10 @@ function buildDisplayMessageSummary(message = {}) {
   if (role === "assistant" && (message?.chatPresentation === true || hasCanonicalActivity) && !presentationMessageId) return null;
   const summary = buildMessageSummary(message) || {};
   summary.content = typeof message?.content === "string" ? message.content : JSON.stringify(message?.content ?? "");
-  if (hasCanonicalActivity) {
+  if (hasCanonicalActivity && message?.chatPresentation !== true) {
     summary.type = "message";
     summary.chatPresentation = true;
-    if (message?.chatPresentation !== true) summary.sourceMessageType = type;
+    summary.sourceMessageType = type;
   }
   const messageUid = String(message?.messageUid || "").trim();
   const sourceMessageId = String(message?.messageId || message?.id || "").trim();
@@ -435,6 +404,7 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const sessionId = String(session?.sessionId || "").trim();
   const toolNameByCallId = new Map();
+  const canonicalArtifactsByCallId = new Map();
   const logs = [];
   let totalCount = 0;
   for (const message of messages) {
@@ -444,6 +414,33 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
     const dialogProcessId = String(message?.dialogProcessId || "").trim();
     const parentDialogProcessId = String(message?.parentDialogProcessId || "").trim();
     const turnScopeId = String(message?.turnScopeId || "").trim();
+    for (const item of Array.isArray(message?.toolTimeline) ? message.toolTimeline : []) {
+      const toolCallId = String(item?.toolCallId || "").trim();
+      const resultEvent = item?.resultEvent && typeof item.resultEvent === "object"
+        ? item.resultEvent
+        : {};
+      const eventLog = resultEvent?.log && typeof resultEvent.log === "object"
+        ? resultEvent.log
+        : {};
+      const attachments = pickLightAttachments({
+        attachments: Array.isArray(resultEvent?.attachments)
+          ? resultEvent.attachments
+          : eventLog.attachments,
+      });
+      const writtenFiles = (Array.isArray(resultEvent?.writtenFiles)
+        ? resultEvent.writtenFiles
+        : Array.isArray(eventLog?.writtenFiles)
+          ? eventLog.writtenFiles
+          : [])
+        .map((fileItem = {}) => pickLightObject(fileItem, [
+          "toolName", "resolvedPath", "relativePath", "fileName", "isSandbox",
+          "size", "mimeType", "sourceType", "recognized",
+        ]))
+        .filter(Boolean);
+      if (toolCallId && (attachments.length || writtenFiles.length)) {
+        canonicalArtifactsByCallId.set(toolCallId, { attachments, writtenFiles });
+      }
+    }
     if (type === "tool_call" || (role === "assistant" && Array.isArray(message?.tool_calls))) {
       for (const toolCall of Array.isArray(message?.tool_calls) ? message.tool_calls : []) {
         const toolCallId = String(toolCall?.id || "").trim();
@@ -456,22 +453,26 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
       const toolCallId = String(message?.tool_call_id || "").trim();
       const toolName = toolNameByCallId.get(toolCallId) || String(message?.toolName || "tool_result");
       totalCount += 1;
-      const attachments = pickLightAttachments(message);
-      const writtenFile = parseToolFileResult(message?.content || "");
-      if (!attachments.length && !writtenFile) continue;
+      const canonicalArtifacts = canonicalArtifactsByCallId.get(toolCallId) || {};
+      const attachments = dedupeAttachmentRefs([
+        ...pickLightAttachments(message),
+        ...(Array.isArray(canonicalArtifacts.attachments) ? canonicalArtifacts.attachments : []),
+      ]);
+      const writtenFiles = Array.isArray(canonicalArtifacts.writtenFiles)
+        ? canonicalArtifacts.writtenFiles
+        : [];
+      if (!attachments.length && !writtenFiles.length) continue;
       const summary = {
         event: "tool_result", type: "tool_result",
         role: "tool",
         toolName,
-        text: writtenFile
-          ? `${writtenFile.toolName} ${writtenFile.fileName}`
+        text: writtenFiles.length
+          ? `${writtenFiles[0]?.toolName || toolName} ${writtenFiles[0]?.fileName || ""}`.trim()
           : truncateText(`${toolName}`.trim(), SUMMARY_FILE_NAME_CHARS),
         ts, sessionId, depth, toolCallId, dialogProcessId, parentDialogProcessId, turnScopeId,
       };
       if (attachments.length) summary.attachments = attachments;
-      if (writtenFile) {
-        summary.writtenFiles = [{ ...writtenFile, sourceType: "tool", recognized: false }];
-      }
+      if (writtenFiles.length) summary.writtenFiles = writtenFiles;
       logs.push(summary);
     }
   }
@@ -519,6 +520,12 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
   const turnTimings = Array.isArray(session?.turnTimings) ? session.turnTimings : [];
   const turnStatuses = Array.isArray(session?.turnStatuses) ? session.turnStatuses : [];
   const sessionId = String(session?.sessionId || "").trim();
+  const lifecycle = session?.turnLifecycle && typeof session.turnLifecycle === "object"
+    ? session.turnLifecycle
+    : null;
+  const lifecycleTurns = lifecycle?.turns && typeof lifecycle.turns === "object"
+    ? lifecycle.turns
+    : {};
   const firstUserMessage = messages.find(
     (messageItem) =>
       messageItem?.injectedMessage !== true &&
@@ -582,12 +589,6 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
     (count, message) => count + (Array.isArray(message?.attachments) ? message.attachments.length : 0),
     0,
   );
-  const lifecycle = session?.turnLifecycle && typeof session.turnLifecycle === "object"
-    ? session.turnLifecycle
-    : null;
-  const lifecycleTurns = lifecycle?.turns && typeof lifecycle.turns === "object"
-    ? lifecycle.turns
-    : {};
   const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
   const terminalStates = new Set([
     "completed", "stop_completed", "action_failed", "processing_failed",

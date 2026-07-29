@@ -54,6 +54,7 @@ function newSessionHarness() {
 
 const event = (eventType, commandId, expectedRevision, extra = {}) => ({
   userId: "u1", sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1",
+  messageId: "turn-message-t1", presentationMessageId: "presentation-t1",
   eventType, commandId, expectedRevision, ...extra,
 });
 
@@ -201,6 +202,36 @@ test("command replay is idempotent and conflicting reuse is rejected", async () 
   const conflict = await h.service.applyTurnLifecycleEvent({ ...input, action: "resend" });
   assert.equal(replay.deduplicated, true);
   assert.equal(conflict.reason, "idempotency_key_reused");
+  assert.equal(h.reload().turnLifecycle.sequence, 1);
+});
+
+test("accepted Turn message identities are immutable", async () => {
+  const h = harness();
+  const accepted = await h.service.applyTurnLifecycleEvent(event(
+    TURN_EVENT.ACTION_ACCEPTED,
+    "identity-accepted",
+    0,
+    { action: "send", phase: TURN_PHASE.ACTION },
+  ));
+  assert.equal(accepted.applied, true);
+  const messageConflict = await h.service.applyTurnLifecycleEvent(event(
+    TURN_EVENT.PROCESSING_STARTED,
+    "identity-message-conflict",
+    1,
+    { phase: TURN_PHASE.PROCESSING, executionState: "sending", messageId: "other-message" },
+  ));
+  assert.equal(messageConflict.reason, "turn_message_identity_conflict");
+  const presentationConflict = await h.service.applyTurnLifecycleEvent(event(
+    TURN_EVENT.PROCESSING_STARTED,
+    "identity-presentation-conflict",
+    1,
+    {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+      presentationMessageId: "other-presentation",
+    },
+  ));
+  assert.equal(presentationConflict.reason, "turn_presentation_identity_conflict");
   assert.equal(h.reload().turnLifecycle.sequence, 1);
 });
 

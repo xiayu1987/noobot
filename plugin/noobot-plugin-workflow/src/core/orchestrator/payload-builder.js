@@ -11,6 +11,7 @@ import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 import { enrichWorkflowPayload } from "./payload-enrichment.js";
 
 export async function buildFinalWorkflowPayload({
+  workflowRunId = "",
   options = {},
   ctx = {},
   sourceText = "",
@@ -27,6 +28,7 @@ export async function buildFinalWorkflowPayload({
   throwIfWorkflowAborted(ctx);
 
   const workflowPayload = buildWorkflowOrchestrationPayload({
+    workflowRunId,
     ctx,
     options,
     sourceText,

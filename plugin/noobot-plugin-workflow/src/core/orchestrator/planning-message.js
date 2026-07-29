@@ -46,6 +46,7 @@ export async function prepareWorkflowPlanningMessage({
   planningNodeSessions = [],
 } = {}) {
   const planningWorkflowPayload = buildWorkflowOrchestrationPayload({
+    workflowRunId,
     ctx,
     options,
     sourceText,
@@ -57,7 +58,6 @@ export async function prepareWorkflowPlanningMessage({
     retryMeta,
   });
   attachPlanningDialog(planningWorkflowPayload, ctx, planningPersistResult);
-  planningWorkflowPayload.workflowRunId = workflowRunId;
   planningWorkflowPayload.nodeSessions = planningNodeSessions;
   planningWorkflowPayload.attachments = [];
   const workflowMessage = await appendWorkflowPlanningMessage({

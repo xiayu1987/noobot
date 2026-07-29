@@ -135,6 +135,7 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
     }
   }
   if (event.dialogProcessId && !targetMessage.dialogProcessId) targetMessage.dialogProcessId = event.dialogProcessId;
+  targetMessage.hasFirstStreamEvent = true;
   state.lastSequence = sequence;
   state.consumedEventIds = [...state.consumedEventIds, event.eventId].slice(-1000);
   syncMessageEventAggregateState(targetMessage);

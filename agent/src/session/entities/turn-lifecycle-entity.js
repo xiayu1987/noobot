@@ -38,6 +38,7 @@ export function normalizeTurnLifecycleEntity(source = {}) {
     if (!turnScopeId) continue;
     turns[turnScopeId] = {
       turnScopeId,
+      messageId: clean(value.messageId),
       presentationMessageId: clean(value.presentationMessageId),
       executionId: clean(value.executionId) || `agent:${turnScopeId}`,
       executionKind: clean(value.executionKind) || "agent",
@@ -160,6 +161,20 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
   const requestedPresentationMessageId = clean(
     input.presentationMessageId || current?.presentationMessageId,
   );
+  const requestedMessageId = clean(input.messageId || current?.messageId);
+  if (!requestedMessageId || !requestedPresentationMessageId) {
+    return { applied: false, reason: "turn_message_identity_incomplete", lifecycle };
+  }
+  if (current?.messageId && clean(input.messageId) && clean(input.messageId) !== current.messageId) {
+    return { applied: false, reason: "turn_message_identity_conflict", lifecycle };
+  }
+  if (
+    current?.presentationMessageId &&
+    clean(input.presentationMessageId) &&
+    clean(input.presentationMessageId) !== current.presentationMessageId
+  ) {
+    return { applied: false, reason: "turn_presentation_identity_conflict", lifecycle };
+  }
   const requestHash = JSON.stringify({
     eventType,
     turnScopeId,
@@ -169,6 +184,7 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
     startedAt: clean(input.startedAt),
     finishedAt: clean(input.finishedAt),
     presentationMessageId: requestedPresentationMessageId,
+    messageId: requestedMessageId,
     ...requestedExecutionIdentity,
   });
   const receipt = lifecycle.commandReceipts.find((item) => item.commandId === commandId && item.eventType === eventType);
@@ -220,6 +236,7 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
   const turn = {
     ...(current || {}),
     turnScopeId,
+    messageId: requestedMessageId,
     presentationMessageId: requestedPresentationMessageId,
     ...requestedExecutionIdentity,
     dialogProcessId: clean(input.dialogProcessId || current?.dialogProcessId),

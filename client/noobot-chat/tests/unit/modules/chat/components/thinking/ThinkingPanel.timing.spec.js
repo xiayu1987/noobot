@@ -49,6 +49,7 @@ describe("ThinkingPanel runtime timing", () => {
     const wrapper = mountThinkingPanel(thinkingMessage({ pending: false }), {
       runtime: runtime({ running: true, phase: "processing", startedAt: "2026-06-22T10:00:00.000Z" }),
     });
+    expect(getTurnUiState(thinkingMessage()).thinkingOpenNames).toEqual(["thinking-panel"]);
     expect(wrapper.text()).toContain("00:12");
     expect(wrapper.find(".thinking-realtime-shell").classes()).toContain("is-running");
   });

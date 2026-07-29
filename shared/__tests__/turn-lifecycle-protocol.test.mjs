@@ -22,6 +22,7 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
     commandId: "cmd-1",
     sessionId: "session-1",
     turnScopeId: "turn-1",
+    messageId: "turn-message-1",
     presentationMessageId: "assistant-1",
     revision: 2,
     sequence: 2,
@@ -30,6 +31,7 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
   });
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
   assert.equal(envelope.presentationMessageId, "assistant-1");
+  assert.equal(envelope.messageId, "turn-message-1");
 });
 
 test("turn lifecycle envelope preserves parent identity without leaking mutation intents", () => {
@@ -40,6 +42,8 @@ test("turn lifecycle envelope preserves parent identity without leaking mutation
     sessionId: "child-session",
     parentSessionId: "parent-session",
     turnScopeId: "child-turn",
+    messageId: "child-turn-message",
+    presentationMessageId: "child-presentation",
     revision: 1,
     sequence: 1,
     phase: TURN_PHASE.ACTION,
@@ -61,7 +65,13 @@ test("turn lifecycle envelope rejects missing identity and invalid revision", ()
     sequence: 1,
   }));
   assert.equal(result.valid, false);
-  assert.deepEqual(result.errors, ["missing_session_id", "missing_turn_scope_id", "invalid_revision"]);
+  assert.deepEqual(result.errors, [
+    "missing_session_id",
+    "missing_turn_scope_id",
+    "missing_message_id",
+    "missing_presentation_message_id",
+    "invalid_revision",
+  ]);
 });
 
 test("only authoritative processing/sending is stoppable", () => {

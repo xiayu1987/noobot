@@ -7,7 +7,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import {
+  buildSessionDisplaySummary,
+  SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
+} from "../../src/session/session-summary-builders.js";
 
 const now = () => "2026-07-10T00:00:00.000Z";
 
@@ -70,7 +73,7 @@ test("summary projects an authoritative lifecycle snapshot for refresh replay", 
   }, { now });
 
   const summary = buildSessionDisplaySummary(session);
-  assert.equal(summary.schemaVersion, 9);
+  assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
   assert.equal(summary.turnLifecycleSnapshot.eventType, "turn.snapshot");
   assert.equal(summary.turnLifecycleSnapshot.sessionId, "s-lifecycle");
   assert.equal(summary.turnLifecycleSnapshot.sequence, 2);
