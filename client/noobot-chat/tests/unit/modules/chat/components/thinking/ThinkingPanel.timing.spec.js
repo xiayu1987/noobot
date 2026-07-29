@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 import { buildViewMessage } from "../../../../../../src/modules/chat/model/messageModel.js";
+import {
+  clearTurnUiState,
+  getTurnUiState,
+  setTurnThinkingOpenNames,
+} from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
 
 function runtime(overrides = {}) {
   return {
@@ -85,6 +90,46 @@ describe("ThinkingPanel runtime timing", () => {
     await nextTick();
     expect(wrapper.text()).toContain("00:07");
     expect(wrapper.find(".thinking-realtime-shell").classes()).not.toContain("is-running");
+  });
+
+  it("keeps the expanded Turn UI state through a non-terminal refresh transition", async () => {
+    const message = thinkingMessage({ pending: true });
+    clearTurnUiState(message);
+    const wrapper = mountThinkingPanel(message, {
+      runtime: runtime({ running: true, phase: "processing" }),
+    });
+    setTurnThinkingOpenNames(message, ["thinking-panel"]);
+
+    await wrapper.setProps({
+      runtime: runtime({ running: false, terminal: null, phase: "hydrating" }),
+    });
+    await nextTick();
+    expect(getTurnUiState(message).thinkingOpenNames).toEqual(["thinking-panel"]);
+
+    await wrapper.setProps({
+      runtime: runtime({ running: true, terminal: null, phase: "processing" }),
+    });
+    await nextTick();
+    expect(getTurnUiState(message).thinkingOpenNames).toEqual(["thinking-panel"]);
+    wrapper.unmount();
+    clearTurnUiState(message);
+  });
+
+  it("collapses the expanded Turn UI state only after an authoritative terminal", async () => {
+    const message = thinkingMessage({ turnScopeId: "turn-terminal" });
+    clearTurnUiState(message);
+    const wrapper = mountThinkingPanel(message, {
+      runtime: runtime({ running: true, phase: "processing" }),
+    });
+    setTurnThinkingOpenNames(message, ["thinking-panel"]);
+
+    await wrapper.setProps({
+      runtime: runtime({ running: false, terminal: "completed", phase: "completed" }),
+    });
+    await nextTick();
+    expect(getTurnUiState(message).thinkingOpenNames).toEqual([]);
+    wrapper.unmount();
+    clearTurnUiState(message);
   });
 
   it("shows an unknown duration when Runtime Store has no timestamps", () => {
