@@ -26,6 +26,7 @@ vi.mock("../../../../../../src/modules/chat/components/message/ChatMessageItem.v
       props: {
         messageItem: { type: Object, required: true },
         allMessages: { type: Array, default: () => [] },
+        currentTurn: { type: Boolean, default: false },
       },
       setup(props) {
         onVueMounted(() => chatMessageItemMock.mounted?.());
@@ -58,6 +59,7 @@ function mountPanel(props = {}, options = {}) {
     props: {
       messageItem: { type: Object, required: true },
       allMessages: { type: Array, default: () => [] },
+      currentTurn: { type: Boolean, default: false },
     },
     setup(itemProps) {
       return () => {
@@ -115,6 +117,34 @@ describe("ChatMessageListPanel", () => {
       },
     });
     expect(wrapper.find(".el-skeleton-stub").exists()).toBe(false);
+  });
+
+  it("marks only messages owned by the latest assistant turn as current", () => {
+    const projections = [];
+    chatMessageItemMock.render = (itemProps) => projections.push({
+      turnScopeId: itemProps.messageItem?.turnScopeId,
+      currentTurn: itemProps.currentTurn,
+    });
+
+    mountPanel({
+      activeSession: {
+        id: "session-current",
+        messages: [
+          { role: RoleEnum.USER, content: "old", sessionId: "session-current", turnScopeId: "turn-old" },
+          { role: RoleEnum.ASSISTANT, content: "old answer", sessionId: "session-current", turnScopeId: "turn-old" },
+          { role: RoleEnum.USER, content: "new", sessionId: "session-current", turnScopeId: "turn-current" },
+          { role: RoleEnum.ASSISTANT, content: "new answer", sessionId: "session-current", turnScopeId: "turn-current" },
+        ],
+      },
+    }, { preserveChatMessageItemMock: true });
+
+    const assistantProjections = projections.filter((item) =>
+      ["turn-old", "turn-current"].includes(item.turnScopeId),
+    );
+    expect(assistantProjections).toEqual(expect.arrayContaining([
+      { turnScopeId: "turn-old", currentTurn: false },
+      { turnScopeId: "turn-current", currentTurn: true },
+    ]));
   });
 
   it("message item key remains stable when only content changes", async () => {

@@ -18,6 +18,7 @@ export function getTurnUiState(value = {}) {
   if (!states[key]) {
     states[key] = reactive({
       thinkingOpenNames: [],
+      assistantContentExpanded: null,
       expandedDetailLogKeys: [],
       selectedToolKey: "",
       scrollTop: 0,
@@ -30,6 +31,11 @@ export function getTurnUiState(value = {}) {
 export function setTurnThinkingOpenNames(value = {}, names = []) {
   const state = getTurnUiState(value);
   if (state) state.thinkingOpenNames = Array.isArray(names) ? [...names] : [];
+}
+
+export function setTurnAssistantContentExpanded(value = {}, expanded = false) {
+  const state = getTurnUiState(value);
+  if (state) state.assistantContentExpanded = expanded === true;
 }
 
 export function toggleTurnDetailKey(value = {}, detailKey = "") {

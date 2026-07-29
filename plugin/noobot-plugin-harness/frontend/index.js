@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { ThinkingPanel } from "noobot-chat/plugin-api/chat-ui";
-import MessageWrittenFiles from "./components/MessageWrittenFiles.vue";
-import MessageAttachments from "./components/MessageAttachments.vue";
 import HarnessModelExtension from "./components/HarnessModelExtension.vue";
 import { createThinkingDetailService } from "./services/thinkingDetailService.js";
 
@@ -59,57 +57,6 @@ export function registerFrontendPlugin(ctx = {}) {
               context.onOpenThinkingDetails(payload);
             }
           },
-        }),
-  });
-  contribute(points.MESSAGE_CARD_POST, {
-        id: "message-written-files",
-        capability: "message.panel.assets",
-        slot: "post",
-        priority: 10,
-        suppressDefaultAssets: true,
-        component: MessageWrittenFiles,
-        when: (context = {}) => context?.messageItem?.role === "assistant",
-        resolveProps: (context = {}) => ({
-          writtenFiles: Array.isArray(context?.writtenFiles) ? context.writtenFiles : [],
-        }),
-        resolveListeners: (context = {}) => ({
-          preview:
-            typeof context?.onOpenFilePreview === "function" ? context.onOpenFilePreview : null,
-          download:
-            typeof context?.onDownloadFile === "function" ? context.onDownloadFile : null,
-        }),
-  });
-  contribute(points.MESSAGE_CARD_POST, {
-        id: "message-attachments",
-        capability: "message.panel.assets",
-        slot: "post",
-        priority: 20,
-        suppressDefaultAssets: true,
-        component: MessageAttachments,
-        when: () => true,
-        resolveProps: (context = {}) => ({
-          attachments: Array.isArray(context?.displayedAttachments)
-            ? context.displayedAttachments
-            : [],
-          isImageMime: context?.isImageMime,
-          canPreviewAttachment: context?.canPreviewAttachment,
-          canPreviewParsedResult: context?.canPreviewParsedResult,
-          formatFileSize: context?.formatFileSize,
-          userId: String(context?.userId || ""),
-        }),
-        resolveListeners: (context = {}) => ({
-          preview:
-            typeof context?.onOpenAttachmentPreview === "function"
-              ? context.onOpenAttachmentPreview
-              : null,
-          "preview-resolved":
-            typeof context?.onOpenResolvedAttachmentPreview === "function"
-              ? context.onOpenResolvedAttachmentPreview
-              : null,
-          download:
-            typeof context?.onDownloadAttachment === "function"
-              ? context.onDownloadAttachment
-              : null,
         }),
   });
 }

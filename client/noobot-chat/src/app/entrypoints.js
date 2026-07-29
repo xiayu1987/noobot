@@ -39,6 +39,7 @@ import {
   ElTabs,
   ElTag,
   ElTree,
+  ElTooltip,
   ElUpload,
 } from "element-plus";
 import "element-plus/dist/index.css";
@@ -79,6 +80,7 @@ const ELEMENT_PLUS_COMPONENTS = [
   ElTabs,
   ElTag,
   ElTree,
+  ElTooltip,
   ElUpload,
 ];
 

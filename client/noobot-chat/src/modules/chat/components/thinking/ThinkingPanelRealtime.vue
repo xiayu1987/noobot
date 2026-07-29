@@ -10,7 +10,6 @@ import {
   BaseMetaLabel,
   BaseNoteBlock,
   BasePillButton,
-  BaseSectionHeader,
   BaseTabPanelBody,
   BaseThinkingLogLine,
   BaseThinkingPanelShell,
@@ -37,9 +36,31 @@ const runningEmptyHintKey = computed(() =>
     ? "message.analyzingRealtimeLog"
     : "message.waitingRealtimeLog",
 );
+const executionLogSignature = computed(() => {
+  const logs = Array.isArray(props.executionLogs) ? props.executionLogs : [];
+  const last = logs.at(-1) || {};
+  return [
+    logs.length,
+    last.eventId || last.id || "",
+    last.sequence ?? last.seq ?? "",
+    last.toolCallId || last.tool_call_id || "",
+    String(last.text || "").length,
+  ].join("|");
+});
+function executionLogKey(logItem = {}, logIndex = 0) {
+  const eventId = String(logItem.eventId || logItem.id || "").trim();
+  if (eventId) return `event:${eventId}`;
+  const toolCallId = String(logItem.toolCallId || logItem.tool_call_id || "").trim();
+  const event = String(logItem.event || logItem.type || "log").trim();
+  const sequence = logItem.sequence ?? logItem.seq ?? "";
+  return toolCallId || sequence !== ""
+    ? `${event}:${toolCallId}:${sequence}`
+    : `${event}:${String(logItem.timestamp || logItem.ts || "")}:${logIndex}`;
+}
 watch(
-  () => props.executionLogs,
-  (executionLogs) => {
+  executionLogSignature,
+  () => {
+    const executionLogs = props.executionLogs;
     logToolLogWindowDebug("frontend.toolLogWindow.rendererReceived", {
       sessionId: String(props.messageItem?.sessionId || ""),
       dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
@@ -50,7 +71,7 @@ watch(
       received: summarizeToolLogWindow(executionLogs),
     });
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 );
 </script>
 <template>
@@ -61,19 +82,15 @@ watch(
     class="thinking-realtime-shell"
     :class="{ 'is-running': isRunning }"
   >
-    <template #title
-      ><BaseSectionHeader
-        :title="translate('message.thinkingExpand')"
-        class="thinking-title-row"
-        ><template #extra
-          ><span class="thinking-elapsed noobot-flat-chip">{{
-            translate("message.thinkingElapsed", {
-              duration: thinkingDurationLabel,
-            })
-          }}</span></template
-        ></BaseSectionHeader
-      ></template
-    >
+    <template #title>
+      <div class="thinking-title-row">
+        <span class="thinking-elapsed noobot-flat-chip">{{
+          translate("message.thinkingElapsed", {
+            duration: thinkingDurationLabel,
+          })
+        }}</span>
+      </div>
+    </template>
     <BaseTabPanelBody class="thinking-realtime-body">
       <div v-if="latestPluginAnalysisLog" class="thinking-analysis-block">
         <BaseMetaLabel
@@ -90,7 +107,7 @@ watch(
       <div class="thinking-realtime-log-stream">
         <div
           v-for="(logItem, logIndex) in executionLogs"
-          :key="`realtime-${logIndex}`"
+          :key="executionLogKey(logItem, logIndex)"
         >
           <BaseThinkingLogLine
             :event-text="logItem.type || logItem.event"
@@ -123,27 +140,23 @@ watch(
 
 <style scoped>
 .thinking-title-row {
+  display: flex;
+  align-items: center;
   width: 100%;
-}
-.thinking-title-row :deep(.base-section-header__title) {
-  color: var(--noobot-thinking-header);
-  font-weight: 600;
 }
 
 .thinking-realtime-shell.is-running {
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 42%, var(--noobot-panel-border));
-  background: color-mix(in srgb, var(--el-color-primary) 6%, var(--noobot-thinking-bg));
+  border: none;
+  background: transparent;
   box-shadow: var(--noobot-thinking-running-shadow);
   animation: thinking-running-card-glow 2.4s ease-in-out infinite;
 }
 
 @keyframes thinking-running-card-glow {
   0%, 100% {
-    border-color: color-mix(in srgb, var(--el-color-primary) 36%, var(--noobot-panel-border));
     box-shadow: 0 3px 12px color-mix(in srgb, var(--el-color-primary) 14%, transparent), 0 0 6px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
   }
   50% {
-    border-color: color-mix(in srgb, var(--el-color-primary) 54%, var(--noobot-panel-border));
     box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 22%, transparent), 0 0 12px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
   }
 }

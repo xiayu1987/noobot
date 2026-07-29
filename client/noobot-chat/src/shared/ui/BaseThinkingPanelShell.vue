@@ -40,7 +40,7 @@ const collapseValue = computed({
 .base-thinking-collapse {
   border: none;
   margin-bottom: var(--noobot-space-md);
-  background: var(--noobot-thinking-bg);
+  background: transparent;
   border-radius: var(--noobot-radius-xs);
   overflow: hidden;
 }
@@ -50,9 +50,15 @@ const collapseValue = computed({
   line-height: 36px;
   background: transparent;
   border-bottom: none;
-  padding: 0 var(--noobot-space-md);
+  padding: 0 0 0 var(--noobot-space-xs);
   font-size: var(--noobot-msg-caption-font-size);
   color: var(--noobot-thinking-header);
+}
+
+.base-thinking-collapse :deep(.el-collapse-item__arrow) {
+  order: -1;
+  margin: 0 var(--noobot-space-xs) 0 0;
+  font-size: var(--noobot-msg-disclosure-icon-size);
 }
 
 .base-thinking-collapse :deep(.el-collapse-item__wrap) {

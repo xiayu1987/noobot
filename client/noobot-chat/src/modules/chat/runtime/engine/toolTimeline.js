@@ -125,7 +125,7 @@ export function selectToolTimelineLogs(message = {}, { completedOnly = false } =
       });
     }
   }
-  return logs;
+  return logs.sort(compareTimelineFacts);
 }
 
 export function selectCompletedToolArtifacts(message = {}) {

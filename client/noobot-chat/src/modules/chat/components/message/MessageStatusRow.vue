@@ -61,27 +61,23 @@ const stepView = computed(() => {
   max-width: 100%;
   margin: 0 0 var(--noobot-space-md);
   padding: 12px var(--noobot-space-md) 10px;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 72%, transparent);
+  border: none;
   border-radius: var(--noobot-radius-xs);
   color: var(--noobot-text-secondary);
-  background: var(--noobot-thinking-bg);
+  background: transparent;
   overflow: hidden;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
 .message-status-steps.is-running {
-  border-color: color-mix(in srgb, var(--el-color-primary) 42%, var(--noobot-panel-border));
-  background: color-mix(in srgb, var(--el-color-primary) 6%, var(--noobot-thinking-bg));
-  box-shadow: 0 3px 12px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+  background: transparent;
   animation: running-card-glow 2.4s ease-in-out infinite;
 }
 .message-status-steps.is-error {
-  border-color: color-mix(in srgb, var(--noobot-status-error) 32%, var(--noobot-panel-border));
-  background: color-mix(in srgb, var(--noobot-status-error) 5%, var(--noobot-thinking-bg));
+  background: transparent;
 }
 .message-status-steps.is-warning {
-  border-color: color-mix(in srgb, var(--noobot-status-warning) 32%, var(--noobot-panel-border));
-  background: color-mix(in srgb, var(--noobot-status-warning) 5%, var(--noobot-thinking-bg));
+  background: transparent;
 }
 
 .message-status-steps :deep(.el-step__icon) {
@@ -175,10 +171,10 @@ const stepView = computed(() => {
 
 @keyframes running-card-glow {
   0%, 100% {
-    border-color: color-mix(in srgb, var(--el-color-primary) 34%, var(--noobot-panel-border));
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
   }
   50% {
-    border-color: color-mix(in srgb, var(--el-color-primary) 52%, var(--noobot-panel-border));
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 24%, transparent);
   }
 }
 

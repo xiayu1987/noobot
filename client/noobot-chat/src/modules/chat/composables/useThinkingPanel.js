@@ -121,6 +121,9 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getRealtimeLogs(messageItem = {}) {
+    if (messageItem === props.messageItem) {
+      return currentTimelineProjection.value.visibleLogs;
+    }
     return getAllRealtimeLogs(messageItem)
       .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
       .filter((logItem) => !isMainModelContentLog(logItem))
@@ -130,20 +133,62 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getAllRealtimeLogs(messageItem = {}) {
+    if (messageItem === props.messageItem) {
+      return currentTimelineProjection.value.allLogs;
+    }
+    return buildTimelineProjection(messageItem).allLogs;
+  }
+
+  function mergeOrderedTimelineLogs(activityLogs = [], toolLogs = []) {
+    const merged = [];
+    let activityIndex = 0;
+    let toolIndex = 0;
+    while (activityIndex < activityLogs.length && toolIndex < toolLogs.length) {
+      if (compareTimelineFacts(activityLogs[activityIndex], toolLogs[toolIndex]) <= 0) {
+        merged.push(activityLogs[activityIndex]);
+        activityIndex += 1;
+      } else {
+        merged.push(toolLogs[toolIndex]);
+        toolIndex += 1;
+      }
+    }
+    if (activityIndex < activityLogs.length) merged.push(...activityLogs.slice(activityIndex));
+    if (toolIndex < toolLogs.length) merged.push(...toolLogs.slice(toolIndex));
+    return merged;
+  }
+
+  function buildTimelineProjection(messageItem = {}) {
     const canonicalMessage = timelineMessage(messageItem);
     const activityLogs = selectActivityTimelineLogs(canonicalMessage);
-    const timelineLogs = selectToolTimelineLogs(canonicalMessage);
-    if (activityLogs.length > 0 || timelineLogs.length > 0) {
-      return [...activityLogs, ...timelineLogs]
-        .map((logItem, sourceIndex) => ({ logItem, sourceIndex }))
-        .sort((left, right) => {
-          return compareTimelineFacts(left.logItem, right.logItem) ||
-            left.sourceIndex - right.sourceIndex;
-        })
-        .map(({ logItem }) => logItem);
+    const toolLogs = selectToolTimelineLogs(canonicalMessage);
+    const allLogs = mergeOrderedTimelineLogs(activityLogs, toolLogs);
+    const visibleLogs = allLogs
+      .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
+      .filter((logItem) => !isMainModelContentLog(logItem))
+      .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
+      .filter(Boolean)
+      .slice(-EXECUTION_LOG_DISPLAY_LIMIT);
+    let latestGuidance = null;
+    let latestModelAnalysis = null;
+    for (let index = activityLogs.length - 1; index >= 0; index -= 1) {
+      const logItem = activityLogs[index];
+      if (!latestGuidance && isGuidanceAnalysisResponseLog(logItem)) latestGuidance = logItem;
+      if (!latestModelAnalysis && isMainModelContentLog(logItem)) latestModelAnalysis = logItem;
+      if (latestGuidance && latestModelAnalysis) break;
     }
-    return [];
+    return {
+      activityLogs,
+      toolLogs,
+      allLogs,
+      visibleLogs,
+      latestGuidance,
+      latestModelAnalysis,
+    };
   }
+
+  const currentTimelineProjection = computed(() =>
+    buildTimelineProjection(props.messageItem),
+  );
 
   function isFreshPendingAssistant(messageItem = {}) {
     return (
@@ -244,6 +289,11 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getLatestMainModelContentLog(messageItem = {}) {
+    if (messageItem === props.messageItem) {
+      const logItem = currentTimelineProjection.value.latestModelAnalysis;
+      const output = getMainModelContentLogOutput(logItem || {});
+      if (output) return { ...logItem, output };
+    }
     const logs = [
       ...getAllRealtimeLogs(messageItem),
       ...getAllCompletedLogs(messageItem),
@@ -260,6 +310,11 @@ export function useThinkingPanel(props, emit) {
   }
 
   function getLatestPluginAnalysisLog(messageItem = {}) {
+    if (messageItem === props.messageItem) {
+      const logItem = currentTimelineProjection.value.latestGuidance;
+      const output = getPluginAnalysisLogOutput(logItem || {});
+      if (output) return { ...logItem, output };
+    }
     const logs = [
       ...getAllRealtimeLogs(messageItem),
       ...getAllCompletedLogs(messageItem),
@@ -364,11 +419,13 @@ export function useThinkingPanel(props, emit) {
   });
 
   function summarizeAnalysisProjection(messageItem = {}) {
-    const activityLogs = selectActivityTimelineLogs(timelineMessage(messageItem));
-    const latestGuidance = [...activityLogs].reverse().find(isGuidanceAnalysisResponseLog);
-    const latestModelAnalysis = [...activityLogs].reverse().find(isMainModelContentLog);
+    const projection = messageItem === props.messageItem
+      ? currentTimelineProjection.value
+      : buildTimelineProjection(messageItem);
+    const latestGuidance = projection.latestGuidance;
+    const latestModelAnalysis = projection.latestModelAnalysis;
     return {
-      activityTimelineCount: activityLogs.length,
+      activityTimelineCount: projection.activityLogs.length,
       latestGuidanceEventId: String(latestGuidance?.eventId || ""),
       latestGuidanceOutputLength: getPluginAnalysisLogOutput(latestGuidance || {}).length,
       latestModelAnalysisEventId: String(latestModelAnalysis?.eventId || ""),
@@ -377,40 +434,61 @@ export function useThinkingPanel(props, emit) {
   }
 
   watch(
-    () => ({
-      identity: thinkingReplayScope(props.messageItem),
-      running: getRuntimeView(props.messageItem).running === true,
-      pending: props.messageItem?.pending === true,
-      source: getExecutionLogs(props.messageItem).length > 0 ? "live" : "detail-fallback",
-      visibleLogs: currentExecutionLogs.value.map(summarizeRealtimeLog),
-      analysis: summarizeAnalysisProjection(props.messageItem),
-    }),
-    (projection) => {
+    () => {
+      const timeline = currentTimelineProjection.value;
+      const lastCandidate = timeline.allLogs.at(-1) || {};
+      const lastVisible = currentExecutionLogs.value.at(-1) || {};
+      const analysis = summarizeAnalysisProjection(props.messageItem);
+      return [
+        getMessageSessionId(props.messageItem),
+        getMessageDialogProcessId(props.messageItem),
+        getMessageTurnScopeId(props.messageItem),
+        getRuntimeView(props.messageItem).running === true,
+        props.messageItem?.pending === true,
+        timeline.allLogs.length,
+        lastCandidate.eventId || lastCandidate.id || "",
+        lastCandidate.sequence ?? lastCandidate.seq ?? "",
+        currentExecutionLogs.value.length,
+        lastVisible.eventId || lastVisible.id || "",
+        lastVisible.sequence ?? lastVisible.seq ?? "",
+        analysis.latestGuidanceEventId,
+        analysis.latestGuidanceOutputLength,
+        analysis.latestModelAnalysisEventId,
+        analysis.latestModelAnalysisOutputLength,
+      ].join("|");
+    },
+    () => {
+      const identity = thinkingReplayScope(props.messageItem);
+      const running = getRuntimeView(props.messageItem).running === true;
+      const pending = props.messageItem?.pending === true;
+      const timeline = currentTimelineProjection.value;
+      const selectedLogs = currentExecutionLogs.value;
+      const source = timeline.visibleLogs.length > 0 ? "live" : "detail-fallback";
+      const analysis = summarizeAnalysisProjection(props.messageItem);
       logThinkingReplayDebug("frontend.thinkingReplay.displayProjectionChanged", {
-        ...projection.identity,
-        running: projection.running,
-        pending: projection.pending,
-        source: projection.source,
-        visibleLogCount: projection.visibleLogs.length,
-        visibleLogs: projection.visibleLogs.slice(-10),
-        ...projection.analysis,
+        ...identity,
+        running,
+        pending,
+        source,
+        visibleLogCount: selectedLogs.length,
+        visibleLogs: selectedLogs.slice(-10).map(summarizeRealtimeLog),
+        ...analysis,
       });
-      const candidateLogs = getAllRealtimeLogs(props.messageItem);
       logToolLogWindowDebug("frontend.toolLogWindow.executionWindowSelected", {
-        ...projection.identity,
-        running: projection.running,
-        pending: projection.pending,
-        source: projection.source,
+        ...identity,
+        running,
+        pending,
+        source,
         displayLimit: EXECUTION_LOG_DISPLAY_LIMIT,
-        activityTimelineCount: selectActivityTimelineLogs(timelineMessage(props.messageItem)).length,
-        toolTimelineEntryCount: selectToolTimelineCount(timelineMessage(props.messageItem)),
-        candidateCount: candidateLogs.length,
-        candidates: summarizeToolLogWindow(candidateLogs),
-        selectedCount: currentExecutionLogs.value.length,
-        selected: summarizeToolLogWindow(currentExecutionLogs.value),
+        activityTimelineCount: timeline.activityLogs.length,
+        toolTimelineEntryCount: timeline.toolLogs.length,
+        candidateCount: timeline.allLogs.length,
+        candidates: summarizeToolLogWindow(timeline.allLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT)),
+        selectedCount: selectedLogs.length,
+        selected: summarizeToolLogWindow(selectedLogs),
       });
     },
-    { immediate: true, deep: true },
+    { immediate: true },
   );
 
   const thinkingDetailLoadKey = computed(() => {
