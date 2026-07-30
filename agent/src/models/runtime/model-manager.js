@@ -5,6 +5,7 @@
  */
 import { emitEvent } from "../../events/index.js";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
+import { createLlmDeltaVisibilityFilter } from "../../events/llm-filter.js";
 import {
   createChatModel,
   createChatModelByName,
@@ -85,12 +86,18 @@ export function resolveCurrentModelInfo(modelState = {}) {
 
 export function createStreamingCallbacks(eventListener = null, runtime = {}) {
   if (!eventListener?.onEvent) return undefined;
+  const visibilityFilter = createLlmDeltaVisibilityFilter();
+  const emitVisibleDelta = (value = "") => {
+    const text = String(value || "");
+    if (!text) return null;
+    return emitMessageEvent(eventListener, runtime, "llm_delta", { text });
+  };
   return [
     {
-      handleLLMNewToken: (token) =>
-        emitMessageEvent(eventListener, runtime, "llm_delta", {
-          text: String(token || ""),
-        }),
+      handleLLMNewToken: (token) => emitVisibleDelta(
+        visibilityFilter.push(String(token || "")),
+      ),
+      handleLLMEnd: () => emitVisibleDelta(visibilityFilter.flush()),
     },
   ];
 }

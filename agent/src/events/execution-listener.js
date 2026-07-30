@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { createLlmDeltaVisibilityFilter } from "./llm-filter.js";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
 import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
@@ -35,7 +34,6 @@ export function createExecutionEventListener({
   upstream = null,
 }) {
   const dialogProcessId = resolveDialogProcessIdFromContext(upstream);
-  const llmDeltaVisibilityFilter = createLlmDeltaVisibilityFilter();
   const defaults = { dialogProcessId, sessionId, parentSessionId, turnScopeId };
 
   return {
@@ -45,19 +43,10 @@ export function createExecutionEventListener({
       const ts = evt?.ts || new Date().toISOString();
 
       if (event === "llm_delta") {
-        const normalizedData = data?.subAgentCall
-          ? { ...data }
-          : {
-              ...data,
-              text: llmDeltaVisibilityFilter.push(String(data?.text || "")),
-            };
-        if (!normalizedData?.subAgentCall && !String(normalizedData?.text || "")) {
-          return;
-        }
         try {
           upstream?.onEvent?.({
             event,
-            data: enrichEventData(normalizedData, defaults),
+            data: enrichEventData(data, defaults),
             ts,
           });
         } catch {
