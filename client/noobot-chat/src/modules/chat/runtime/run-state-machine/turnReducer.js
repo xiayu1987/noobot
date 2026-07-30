@@ -5,7 +5,7 @@
  */
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
 import { normalizeSessionRunEvent } from "./eventNormalization.js";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/authoritative-state/contracts";
 
 export const TURN_TRANSITION_REASON = Object.freeze({
   APPLIED: "applied",

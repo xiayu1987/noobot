@@ -8,8 +8,8 @@ import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from
 import { dedupeAttachments, normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import { resolveSessionVersion } from "./anchor-utils.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
-import { normalizeTurnLifecycleEntity, transitionTurnLifecycle, isTerminalTurnLifecycleState, projectTurnLifecycleTiming } from "../../entities/turn-lifecycle-entity.js";
-import { createTurnLifecycleSnapshot, validateSessionProvisionIntent } from "@noobot/shared/turn-lifecycle-protocol";
+import { normalizeTurnLifecycleEntity, transitionTurnLifecycle, isTerminalTurnLifecycleState, projectTurnLifecycleTiming } from "@noobot/authoritative-state/domain";
+import { createTurnLifecycleSnapshot, validateSessionProvisionIntent } from "@noobot/authoritative-state/contracts";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 
 export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessionId = "", persistenceContext = null, commandId = "", knownSequence, terminalLimit = 10 } = {}) {

@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { createTerminalResolutionCoordinator } from "../../../../../../src/modules/chat/runtime/terminalResolutionCoordinator.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "../../../../../../../../shared/turn-lifecycle-protocol.mjs";
+import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 import {
   applyTurnRuntimeEvent,
   applyTurnTerminalResolution,

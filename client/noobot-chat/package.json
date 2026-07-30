@@ -28,6 +28,7 @@
     "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:frontend-structure && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
   },
   "dependencies": {
+    "@noobot/authoritative-state": "file:../../authoritative-state",
     "@noobot/client-shared": "file:../shared",
     "@noobot/shared": "file:../../shared",
     "@element-plus/icons-vue": "^2.3.2",

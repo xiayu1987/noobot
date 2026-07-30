@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { startServerWithWs, closeServer, stopChatWs } from "./chat-websocket-server.test-helpers.js";
-import { transitionTurnLifecycle } from "../../../agent/src/session/entities/turn-lifecycle-entity.js";
+import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
 
 test("chat-websocket-server: stop persists and emits the user_stopped turnScopeId", async () => {
   let capturedStopPayload = null;

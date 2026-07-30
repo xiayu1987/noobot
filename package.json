@@ -3,6 +3,7 @@
   "version": "4.1.4",
   "private": true,
   "workspaces": [
+    "authoritative-state",
     "service",
     "agent",
     "agent-proxy",

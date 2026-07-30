@@ -5,8 +5,8 @@
  */
 import { normalizeSelectedConnectors } from "../entities/session-entity.js";
 import { isSessionDisplaySummaryPayload } from "../session-summary-builders.js";
-import { normalizeTurnLifecycleEntity, isTerminalTurnLifecycleState, projectTurnLifecycleTiming } from "../entities/turn-lifecycle-entity.js";
-import { createTurnTerminalResolution } from "@noobot/shared/turn-lifecycle-protocol";
+import { normalizeTurnLifecycleEntity, isTerminalTurnLifecycleState, projectTurnLifecycleTiming } from "@noobot/authoritative-state/domain";
+import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 
 export class SessionCrudService {
   constructor({

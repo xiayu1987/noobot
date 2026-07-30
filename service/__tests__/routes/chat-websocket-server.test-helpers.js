@@ -9,7 +9,7 @@ import net from "node:net";
 import fs from "node:fs/promises";
 import { WebSocket } from "ws";
 import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
-import { transitionTurnLifecycle } from "../../../agent/src/session/entities/turn-lifecycle-entity.js";
+import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
 
 export async function startServerWithWs({
   runSession = async () => ({}),

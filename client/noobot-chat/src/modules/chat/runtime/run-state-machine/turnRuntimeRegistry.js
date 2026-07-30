@@ -15,7 +15,7 @@ import {
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleSnapshot,
   validateTurnTerminalResolution,
-} from "@noobot/shared/turn-lifecycle-protocol";
+} from "@noobot/authoritative-state/contracts";
 import { validateExecutionIdentity } from "@noobot/shared/execution-lifecycle-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { normalizeTurnScopeIdKey } from "../../model/messageIdentity.js";

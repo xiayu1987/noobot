@@ -46,6 +46,9 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
   hookRuntimeEvents: {
     mode: "NOOBOT_HOOK_RUNTIME_EVENTS_MODE",
   },
+  executionLogControls: {
+    sessionTurnFullDebug: "NOOBOT_RUNTIME_EVENT_SESSION_TURN_FULL_DEBUG",
+  },
 });
 
 export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
@@ -83,6 +86,13 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
   hookRuntimeEvents: {
     mode: "summary",
   },
+  executionLogControls: {
+    sessionTurnFullDebug: false,
+  },
+});
+
+export const RUNTIME_EVENTS_EXECUTION_LOG_EVENT_CONTROLS = deepFreeze({
+  session_turn_full: "sessionTurnFullDebug",
 });
 
 export const RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS = deepFreeze({
@@ -183,6 +193,44 @@ export function resolveRuntimeEventsSessionLogControls(env = process.env, overri
     result[key] = overrides[key] ?? resolveBooleanEnv(env, envs[key], defaults[key]);
   }
   return result;
+}
+
+export function resolveRuntimeEventsExecutionLogControls(env = process.env, overrides = {}) {
+  const defaults = RUNTIME_EVENTS_CONFIG_DEFAULTS.executionLogControls;
+  const envs = RUNTIME_EVENTS_CONFIG_ENVS.executionLogControls;
+  const result = {};
+  for (const key of Object.keys(defaults)) {
+    result[key] = overrides[key] ?? resolveBooleanEnv(env, envs[key], defaults[key]);
+  }
+  return result;
+}
+
+export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
+  if (event && typeof event === "object") {
+    const level = String(event?.level || "").trim().toLowerCase();
+    const category = String(event?.category || "").trim().toLowerCase();
+    const status = String(event?.status || event?.data?.status || "").trim().toLowerCase();
+    if (
+      ["warn", "error", "fatal"].includes(level)
+      || ["warn", "error", "fatal"].includes(category)
+      || ["failed", "failure", "error"].includes(status)
+      || event?.success === false
+      || event?.data?.success === false
+      || Boolean(event?.error || event?.data?.error)
+    ) {
+      return true;
+    }
+  }
+  const eventName = String(
+    typeof event === "string" ? event : event?.event || event?.name || "",
+  ).trim().toLowerCase();
+  const controlKey = RUNTIME_EVENTS_EXECUTION_LOG_EVENT_CONTROLS[eventName];
+  if (!controlKey) return true;
+  const controls = resolveRuntimeEventsExecutionLogControls(
+    options.env || process.env,
+    options.executionLogControls || options.controls || options,
+  );
+  return controls[controlKey] === true;
 }
 
 export function resolveHookRuntimeEventsMode({ runtime = {}, options = {}, env = process.env } = {}) {

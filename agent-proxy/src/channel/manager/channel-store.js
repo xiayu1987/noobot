@@ -21,7 +21,7 @@ import {
   TURN_EVENT,
   TURN_STATE,
   isAuthoritativeTurnLifecycleEnvelope,
-} from "@noobot/shared/turn-lifecycle-protocol";
+} from "@noobot/authoritative-state/contracts";
 
 const TERMINAL_TURN_EVENTS = new Set([
   TURN_EVENT.COMPLETED,

@@ -6,12 +6,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { transitionTurnLifecycle } from "../../../agent/src/session/entities/turn-lifecycle-entity.js";
+import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
 import {
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_PHASE,
-} from "@noobot/shared/turn-lifecycle-protocol";
+} from "@noobot/authoritative-state/contracts";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";

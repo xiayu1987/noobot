@@ -20,7 +20,7 @@ const files = {
   webSocketClient: "src/infrastructure/websocket/chatWebSocketClient.js",
 };
 
-const agentRoot = clientFilePath.resolve(projectRoot, "../../agent");
+const authorityRoot = clientFilePath.resolve(projectRoot, "../../authoritative-state");
 
 const protocolWriters = new Set([
   files.reducer,
@@ -192,16 +192,16 @@ describe("lifecycle architecture guard", () => {
     expect(catchBlock).not.toMatch(/markInteractionRequestHandled|clearPendingInteraction/);
   });
 
-  it("keeps the shared protocol, service entity, reducer and registry as the cross-layer lifecycle boundary", () => {
-    const sharedProtocol = readFileSync(clientFilePath.resolve(projectRoot, "../../shared/turn-lifecycle-protocol.mjs"), "utf8");
-    const serviceEntity = readFileSync(clientFilePath.resolve(agentRoot, "src/session/entities/turn-lifecycle-entity.js"), "utf8");
+  it("keeps the authority contracts, domain reducer and client projections as the lifecycle boundary", () => {
+    const authorityProtocol = readFileSync(clientFilePath.resolve(authorityRoot, "src/contracts/turn-lifecycle-protocol.mjs"), "utf8");
+    const authorityReducer = readFileSync(clientFilePath.resolve(authorityRoot, "src/domain/turn-lifecycle-entity.js"), "utf8");
     const reducer = source(files.reducer);
     const registry = source(files.registry);
     for (const symbol of ["ACTION_ACCEPTED", "PROCESSING_STARTED", "PROCESSING_COMPLETED", "STOP_ACCEPTED", "STOP_PROCESSING_COMPLETED", "COMPLETED", "STOP_COMPLETED", "FAILED"]) {
-      expect(sharedProtocol).toContain(symbol);
+      expect(authorityProtocol).toContain(symbol);
     }
-    expect(sharedProtocol).not.toMatch(/\bCANCEL(?:LED)?\s*:/);
-    expect(serviceEntity).toMatch(/finalizeIntent\?\.retryable\s*===\s*true/);
+    expect(authorityProtocol).not.toMatch(/\bCANCEL(?:LED)?\s*:/);
+    expect(authorityReducer).toMatch(/finalizeIntent\?\.retryable\s*===\s*true/);
     expect(reducer).toMatch(/isFinalTurnState\(currentState, current\)/);
     expect(registry).toMatch(/reduceTurnRuntimeEvent\(current, rawEvent\)/);
   });

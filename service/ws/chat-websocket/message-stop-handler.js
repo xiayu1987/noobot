@@ -5,7 +5,7 @@
  */
 import { findActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/authoritative-state/contracts";
 
 export function createMessageStopHandler({
   state, canonicalRunOwnerId, sendEvent, translateText, resolveBot, sessionLogConfig,

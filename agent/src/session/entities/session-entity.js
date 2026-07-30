@@ -9,7 +9,7 @@ import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { createHash } from "node:crypto";
 import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
 import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
-import { normalizeTurnLifecycleEntity } from "./turn-lifecycle-entity.js";
+import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {

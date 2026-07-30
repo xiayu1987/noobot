@@ -5,8 +5,8 @@
  */
 
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { createTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
-import { projectTurnLifecycleTiming } from "./entities/turn-lifecycle-entity.js";
+import { createTurnLifecycleSnapshot } from "@noobot/authoritative-state/contracts";
+import { projectTurnLifecycleTiming } from "@noobot/authoritative-state/domain";
 import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 import {
   collectAttachmentRefsFromTransferEnvelopes,

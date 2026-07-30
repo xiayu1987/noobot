@@ -5,7 +5,7 @@
  */
 import { createHash } from "node:crypto";
 import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
-import { isTerminalTurnLifecycleState } from "../../entities/turn-lifecycle-entity.js";
+import { isTerminalTurnLifecycleState } from "@noobot/authoritative-state/domain";
 
 function normalizeMessageUids(values = []) {
   return [...new Set((Array.isArray(values) ? values : [])
