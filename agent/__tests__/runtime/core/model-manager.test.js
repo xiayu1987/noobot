@@ -44,6 +44,38 @@ test("createStreamingCallbacks should emit llm_delta event", async () => {
   assert.equal(events[0]?.data?.text, "hello");
 });
 
+test("stream visibility filtering happens before authoritative sequence allocation", async () => {
+  const events = [];
+  const runtime = {
+    systemRuntime: {
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      messageEventStream: {
+        sequence: 0,
+        activeMessageId: "message-1",
+        activePresentationMessageId: "presentation-1",
+      },
+    },
+  };
+  const [callback] = createStreamingCallbacks({
+    onEvent(payload = {}) {
+      events.push(payload);
+    },
+  }, runtime);
+
+  await callback.handleLLMNewToken("<thi");
+  await callback.handleLLMNewToken("nk>hidden");
+  await callback.handleLLMNewToken("</think>");
+  await callback.handleLLMNewToken("visible");
+  await callback.handleLLMEnd();
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.data?.text, "visible");
+  assert.equal(events[0]?.data?.sequence, 1);
+  assert.equal(runtime.systemRuntime.messageEventStream.sequence, 1);
+});
+
 test("resolveLlmForTurn should switch model by runtimeModel and emit model_switched", () => {
   const previousApiKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "test-key";
