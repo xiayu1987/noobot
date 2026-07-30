@@ -228,3 +228,41 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
   assert.deepEqual(appendedMessages.map((item) => item.content), ["tail"]);
   assert.deepEqual(result.messages.map((item) => item.content), ["persisted-1", "persisted-2", "tail"]);
 });
+
+test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without duplicating the result", async () => {
+  const appendedMessages = [];
+  const finalizer = new SessionExecutionFinalizer({
+    session: {
+      async upsertTurnTiming() {},
+      async saveCurrentTurnTasks() {},
+      async getExecutionBundle() { return { logs: [] }; },
+    },
+    turnPersister: {
+      buildDefaultAssistantTurn: () => ({}),
+      async appendAgentMessages({ messages = [] }) { appendedMessages.push(...messages); },
+    },
+    resolveMemoryPostProcessAsyncEnabled: () => true,
+    runMemoryPostProcessFlow: async () => {},
+    upsertParentAsyncTask: () => {},
+  });
+
+  const result = await finalizer.finalizeRunSession({
+    userId: "u1",
+    sessionId: "s1",
+    persistedTurnMessageUids: ["sm_old", "sm_retained"],
+    persistedTurnMessages: [
+      { messageUid: "sm_old", role: "assistant", content: "old" },
+      { messageUid: "sm_retained", role: "tool", content: "retained" },
+    ],
+    agentResult: {
+      turnMessages: [
+        { messageUid: "sm_retained", role: "tool", content: "retained" },
+        { messageUid: "sm_tail", role: "assistant", content: "tail" },
+      ],
+      turnTasks: [],
+    },
+  });
+
+  assert.deepEqual(appendedMessages.map((message) => message.messageUid), ["sm_tail"]);
+  assert.deepEqual(result.messages.map((message) => message.messageUid), ["sm_old", "sm_retained", "sm_tail"]);
+});

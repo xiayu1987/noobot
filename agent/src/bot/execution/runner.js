@@ -561,9 +561,11 @@ export class SessionExecutionRunner {
           });
         };
         let persistCurrentTurnMessagesTail = Promise.resolve();
+        let currentTurnPersistenceBatchDepth = 0;
+        let currentTurnPersistenceRequested = false;
         const persistedCurrentTurnMessageFingerprints = new Map();
         dispatchRuntime.timelineCheckpointPersistedMessageUids = [];
-        dispatchRuntime.persistCurrentTurnMessages = () => {
+        const enqueueCurrentTurnMessagesPersistence = () => {
           const persist = async () => {
             const store = dispatchRuntime.currentTurnMessages;
             const messages = store?.toArray?.();
@@ -686,6 +688,25 @@ export class SessionExecutionRunner {
           const next = persistCurrentTurnMessagesTail.then(persist, persist);
           persistCurrentTurnMessagesTail = next.catch(() => {});
           return next;
+        };
+        dispatchRuntime.persistCurrentTurnMessages = () => {
+          if (currentTurnPersistenceBatchDepth > 0) {
+            currentTurnPersistenceRequested = true;
+            return Promise.resolve();
+          }
+          return enqueueCurrentTurnMessagesPersistence();
+        };
+        dispatchRuntime.withCurrentTurnPersistenceBatch = async (operation) => {
+          currentTurnPersistenceBatchDepth += 1;
+          try {
+            return await operation();
+          } finally {
+            currentTurnPersistenceBatchDepth -= 1;
+            if (currentTurnPersistenceBatchDepth === 0 && currentTurnPersistenceRequested) {
+              currentTurnPersistenceRequested = false;
+              await enqueueCurrentTurnMessagesPersistence();
+            }
+          }
         };
         dispatchRuntime.commitSummaryCheckpoint = (payload = {}) =>
           this.commitSummaryCheckpoint?.({

@@ -184,7 +184,18 @@ export async function commitSummaryCheckpoint({
     markedTurnMessages.length,
     Math.max(0, Number(runtime?.summaryCheckpointPersistedCount) || 0),
   );
-  const pendingMessages = markedTurnMessages.slice(persistedPrefixCount);
+  const durablyPersistedMessageUids = new Set([
+    ...(Array.isArray(runtime?.timelineCheckpointPersistedMessageUids)
+      ? runtime.timelineCheckpointPersistedMessageUids
+      : []),
+    ...(Array.isArray(runtime?.summaryCheckpointPersistedMessageUids)
+      ? runtime.summaryCheckpointPersistedMessageUids
+      : []),
+  ].map((uid) => String(uid || "").trim()).filter(Boolean));
+  const canUseDurableMessageUids = markedTurnMessages.every((message) => resolveMessageUid(message));
+  const pendingMessages = canUseDurableMessageUids
+    ? markedTurnMessages.filter((message) => !durablyPersistedMessageUids.has(resolveMessageUid(message)))
+    : markedTurnMessages.slice(persistedPrefixCount);
 
   if (pendingMessages.length) {
     await turnPersister.appendAgentMessages({
@@ -203,7 +214,11 @@ export async function commitSummaryCheckpoint({
       Math.max(0, Number(runtime?.summaryCheckpointPersistedTotal) || 0) + pendingMessages.length;
   }
 
-  const persistedMessageUids = pendingMessages.map(resolveMessageUid).filter(Boolean);
+  const newlyPersistedMessageUids = pendingMessages.map(resolveMessageUid).filter(Boolean);
+  const persistedMessageUids = markedTurnMessages
+    .map(resolveMessageUid)
+    .filter((messageUid) => durablyPersistedMessageUids.has(messageUid)
+      || newlyPersistedMessageUids.includes(messageUid));
   const summarizedMessageUids = markedTurnMessages
     .filter(isSummarized)
     .map(resolveMessageUid)
@@ -212,7 +227,7 @@ export async function commitSummaryCheckpoint({
     typeof session?.commitTurnSummaryCheckpoint === "function" &&
     Boolean(String(dialogProcessId || "").trim()) &&
     Boolean(String(turnScopeId || "").trim()) &&
-    persistedMessageUids.length === pendingMessages.length &&
+    persistedMessageUids.length === markedTurnMessages.length &&
     summarizedMessageUids.length === markedTurnMessages.filter(isSummarized).length;
   const checkpointResult = canCommitExactCheckpoint
     ? await session.commitTurnSummaryCheckpoint({

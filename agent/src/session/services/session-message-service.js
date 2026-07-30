@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { commitTurn } from "./session-message-service/commit-turn.js";
-import { appendTurn } from "./session-message-service/append-turn.js";
+import { appendTurn, appendTurns } from "./session-message-service/append-turn.js";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
 import { applyTurnLifecycleEvent, getTurnLifecycleSnapshot, upsertTurnStatus, upsertTurnTiming, stampReusedUserTurnDialogProcessId } from "./session-message-service/turn-state.js";
 import { markSessionMessagesSummarized, getSessionTurns, getSessionContextSource, getTurnSummaryCheckpointState, hasDialogProcessIdInSession } from "./session-message-service/message-queries.js";
@@ -56,6 +56,7 @@ export class SessionMessageService {
 
   async commitTurn(payload = {}) { return commitTurn.call(this, payload); }
   async appendTurn(payload = {}) { return appendTurn.call(this, payload); }
+  async appendTurns(payload = {}) { return appendTurns.call(this, payload); }
   async deleteFromMessage(payload = {}) { return deleteFromMessage.call(this, payload); }
   async replaceTurn(payload = {}) { return replaceTurn.call(this, payload); }
   async upsertTurnStatus(payload = {}) { return upsertTurnStatus.call(this, payload); }

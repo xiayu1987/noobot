@@ -90,6 +90,7 @@ const finalizedResult = await finalizeRunSession({
     0,
     Number(dispatchRuntime?.summaryCheckpointPersistedCount) || 0,
   ),
+  persistedTurnMessageUids: [...checkpointPersistedMessageUids],
   persistedTurnMessages,
   summaryCheckpointPromotionSources: Array.isArray(
     dispatchRuntime?.summaryCheckpointPromotionSources,

@@ -6,7 +6,37 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { appendTurn } from "../../src/session/services/session-message-service/append-turn.js";
+import { appendTurn, appendTurns } from "../../src/session/services/session-message-service/append-turn.js";
+
+test("appendTurns upserts an ordered message batch with one Session save", async () => {
+  const session = { currentTaskId: "", messages: [] };
+  let findCount = 0;
+  let saveCount = 0;
+  const service = {
+    now: () => "2026-07-25T00:01:00.000Z",
+    _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
+    _resolveParentSessionId: async () => "",
+    sessionRepo: {
+      findById: async () => { findCount += 1; return session; },
+      save: async () => { saveCount += 1; },
+    },
+  };
+
+  const result = await appendTurns.call(service, {
+    userId: "u1",
+    sessionId: "s1",
+    turns: [
+      { messageUid: "sm_assistant", role: "assistant", content: "tools", dialogProcessId: "dp", turnScopeId: "t" },
+      { messageUid: "sm_tool_1", role: "tool", content: "one", dialogProcessId: "dp", turnScopeId: "t" },
+      { messageUid: "sm_tool_2", role: "tool", content: "two", dialogProcessId: "dp", turnScopeId: "t" },
+    ],
+  });
+
+  assert.equal(findCount, 1);
+  assert.equal(saveCount, 1);
+  assert.deepEqual(result.map((message) => message.messageUid), ["sm_assistant", "sm_tool_1", "sm_tool_2"]);
+  assert.deepEqual(session.messages.map((message) => message.content), ["tools", "one", "two"]);
+});
 
 test("appendTurn updates an existing message with the same authoritative messageId", async () => {
   const session = {
