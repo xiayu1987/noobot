@@ -286,6 +286,9 @@ export function createSessionFacade(runtime = {}) {
     async appendTurn(payload = {}) {
       return sessionMessageService.appendTurn(payload);
     },
+    async appendTurns(payload = {}) {
+      return sessionMessageService.appendTurns(payload);
+    },
 
     async commitTurn(payload = {}) {
       return sessionMessageService.commitTurn(payload);

@@ -274,6 +274,7 @@ export class SessionTurnPersister {
     turnTimingThinkingStartedAt = thinkingStartedAt,
     turnTimingThinkingFinishedAt = thinkingFinishedAt,
     persistenceContext = null,
+    deferTurnPersistence = false,
   }) {
     const sessionAttachments = filterSessionAttachments(attachments);
     const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
@@ -381,7 +382,7 @@ export class SessionTurnPersister {
       }
     } catch {
     }
-    await this.messagePersister.appendTurn({
+    const turnPayload = {
       userId,
       sessionId,
       parentSessionId: normalizedParentSessionId,
@@ -422,8 +423,11 @@ export class SessionTurnPersister {
       turnTimingThinkingStartedAt: normalizedTurnTimingThinkingStartedAt,
       turnTimingThinkingFinishedAt: normalizedTurnTimingThinkingFinishedAt,
       persistenceContext,
-    });
+    };
+    if (deferTurnPersistence) return turnPayload;
+    await this.messagePersister.appendTurn(turnPayload);
     emitEvent(eventListener, `${role}_message_saved`, { sessionId });
+    return turnPayload;
   }
 
   async appendAgentMessages({
@@ -442,8 +446,9 @@ export class SessionTurnPersister {
     const normalizedThinkingStartedAt = normalizeIsoTime(thinkingStartedAt);
     const normalizedThinkingFinishedAt = normalizeIsoTime(thinkingFinishedAt);
     let turnTimingWritten = false;
-    for (const [index, messageItem] of messages.entries()) {
-      await this.appendSessionTurn({
+    const turnPayloads = [];
+    for (const messageItem of messages) {
+      const turnPayload = await this.appendSessionTurn({
         userId,
         sessionId,
         role: messageItem.role || MESSAGE_ROLE.ASSISTANT,
@@ -510,8 +515,21 @@ export class SessionTurnPersister {
         turnTimingThinkingFinishedAt: !turnTimingWritten ? normalizedThinkingFinishedAt : "",
         eventListener,
         persistenceContext,
+        deferTurnPersistence: true,
       });
+      turnPayloads.push(turnPayload);
       turnTimingWritten = true;
+    }
+    if (!turnPayloads.length) return;
+    await this.messagePersister.appendTurns({
+      userId,
+      sessionId,
+      parentSessionId: normalizeParentSessionId(parentSessionId),
+      turns: turnPayloads,
+      persistenceContext,
+    });
+    for (const turnPayload of turnPayloads) {
+      emitEvent(eventListener, `${turnPayload.role}_message_saved`, { sessionId });
     }
   }
 

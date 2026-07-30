@@ -8,6 +8,31 @@ import assert from "node:assert/strict";
 
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
 
+test("appendAgentMessages uses one batch persistence call when the Session supports it", async () => {
+  const batches = [];
+  let appendTurnCount = 0;
+  const persister = new SessionTurnPersister({
+    session: {
+      appendExecutionLog: async () => {},
+      appendTurn: async () => { appendTurnCount += 1; },
+      appendTurns: async (payload = {}) => { batches.push(payload); },
+    },
+  });
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [
+      { messageUid: "sm_1", role: "assistant", content: "tools" },
+      { messageUid: "sm_2", role: "tool", content: "result", tool_call_id: "call_1" },
+    ],
+  });
+
+  assert.equal(appendTurnCount, 0);
+  assert.equal(batches.length, 1);
+  assert.deepEqual(batches[0].turns.map((turn) => turn.messageUid), ["sm_1", "sm_2"]);
+});
+
 test("appendAgentMessages keeps scoped persistence identity for logs and messages", async () => {
   const executionPayloads = [];
   const turnPayloads = [];

@@ -203,6 +203,7 @@ export class SessionExecutionFinalizer {
     thinkingStartedAt = "",
     agentResult = {},
     alreadyPersistedTurnMessageCount = 0,
+    persistedTurnMessageUids = [],
     persistedTurnMessages = null,
     summaryCheckpointPromotionSources = [],
     executionStartIndex = 0,
@@ -226,8 +227,24 @@ export class SessionExecutionFinalizer {
       Math.max(0, Number(alreadyPersistedTurnMessageCount) || 0),
     );
     const hasRecoveredPersistedPrefix = Array.isArray(persistedTurnMessages);
+    const persistedUidSet = new Set((Array.isArray(persistedTurnMessageUids)
+      ? persistedTurnMessageUids
+      : [])
+      .map((uid) => String(uid || "").trim())
+      .filter(Boolean));
+    const activeMessageUids = new Set(activeTurnMessages
+      .map((message = {}) => String(message.messageUid || "").trim())
+      .filter(Boolean));
     const rawTurnMessages = hasRecoveredPersistedPrefix
-      ? [...persistedTurnMessages, ...activeTurnMessages.slice(persistedActivePrefixCount)]
+      ? persistedUidSet.size > 0
+        ? [
+            ...persistedTurnMessages.filter((message = {}) => {
+              const messageUid = String(message.messageUid || "").trim();
+              return !messageUid || !activeMessageUids.has(messageUid);
+            }),
+            ...activeTurnMessages,
+          ]
+        : [...persistedTurnMessages, ...activeTurnMessages.slice(persistedActivePrefixCount)]
       : activeTurnMessages;
     const promotionSourceCount = Array.isArray(summaryCheckpointPromotionSources)
       ? summaryCheckpointPromotionSources.length
@@ -242,9 +259,20 @@ export class SessionExecutionFinalizer {
     const persistedResultPrefixCount = hasRecoveredPersistedPrefix
       ? persistedTurnMessages.length
       : persistedActivePrefixCount;
-    const messagesToPersist = promotedMessages.slice(
-      promotionSourceCount + persistedResultPrefixCount,
-    );
+    const promotedTurnMessages = promotedMessages.slice(promotionSourceCount);
+    const originalMessagesByUid = new Map([
+      ...(Array.isArray(persistedTurnMessages) ? persistedTurnMessages : []),
+      ...activeTurnMessages,
+    ].map((message = {}) => [String(message.messageUid || "").trim(), message])
+      .filter(([messageUid]) => messageUid));
+    const messagesToPersist = persistedUidSet.size > 0
+      ? promotedTurnMessages.filter((message = {}) => {
+          const messageUid = String(message.messageUid || "").trim();
+          if (!messageUid || !persistedUidSet.has(messageUid)) return true;
+          const original = originalMessagesByUid.get(messageUid);
+          return original ? JSON.stringify(original) !== JSON.stringify(message) : false;
+        })
+      : promotedMessages.slice(promotionSourceCount + persistedResultPrefixCount);
     const thinkingFinishedAt = this.now();
 
     lifecycle?.enterPersisting?.();

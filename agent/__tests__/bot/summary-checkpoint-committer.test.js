@@ -230,3 +230,39 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
   assert.deepEqual(runtime.summaryCheckpointPersistedMessageUids, ["sm_1", "sm_2"]);
   assert.deepEqual(runtime.currentTurnMessages.toArray().map((message) => message.messageUid), ["sm_2"]);
 });
+
+test("summary checkpoint does not replay messages already persisted by the timeline checkpoint", async () => {
+  const runtime = {
+    currentTurnMessages: createCurrentTurnMessagesStore([
+      { messageUid: "sm_1", role: "assistant", content: "M1", summarized: true },
+      { messageUid: "sm_2", role: "tool", content: "M2" },
+    ]),
+    timelineCheckpointPersistedMessageUids: ["sm_1", "sm_2"],
+  };
+  let appendCount = 0;
+  let checkpointPayload = null;
+
+  const result = await commitSummaryCheckpoint({
+    session: {
+      async commitTurnSummaryCheckpoint(payload) {
+        checkpointPayload = payload;
+        return { committed: true, markedCount: 1, checkpointRevision: 1 };
+      },
+      async markSessionMessagesSummarized() { return 0; },
+    },
+    turnPersister: {
+      async appendAgentMessages() { appendCount += 1; },
+    },
+    runtime,
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "t",
+  });
+
+  assert.equal(result.committed, true);
+  assert.equal(appendCount, 0);
+  assert.deepEqual(checkpointPayload.persistedMessageUids, ["sm_1", "sm_2"]);
+  assert.deepEqual(checkpointPayload.summarizedMessageUids, ["sm_1"]);
+  assert.deepEqual(runtime.currentTurnMessages.toArray().map((message) => message.messageUid), ["sm_2"]);
+});

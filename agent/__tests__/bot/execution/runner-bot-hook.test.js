@@ -232,6 +232,55 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
   );
 });
 
+test("SessionExecutionRunner coalesces persistence requests inside one tool-result batch", async () => {
+  const checkpointPayloads = [];
+  const runtime = {
+    attachmentMetas: [],
+    currentTurnMessages: createCurrentTurnMessagesStore([]),
+  };
+  const runtimeAgentContext = { execution: { controllers: { runtime } } };
+  const runner = createRunner({
+    appendAgentMessages: async (payload = {}) => checkpointPayloads.push(payload),
+    prepareAgentTurnExecution: async () => ({
+      agentContext: runtimeAgentContext,
+      runtimeAgentContext,
+    }),
+    agentRunner: async ({ agentContext }) => {
+      const currentRuntime = agentContext.execution.controllers.runtime;
+      await currentRuntime.withCurrentTurnPersistenceBatch(async () => {
+        currentRuntime.currentTurnMessages.push({
+          messageUid: "sm_tool_1",
+          role: "tool",
+          type: "tool_result",
+          content: "one",
+        });
+        await currentRuntime.persistCurrentTurnMessages();
+        currentRuntime.currentTurnMessages.push({
+          messageUid: "sm_tool_2",
+          role: "tool",
+          type: "tool_result",
+          content: "two",
+        });
+        await currentRuntime.persistCurrentTurnMessages();
+      });
+      return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "task",
+    turnScopeId: "turn-batched-checkpoint",
+  });
+
+  assert.equal(checkpointPayloads.length, 1);
+  assert.deepEqual(
+    checkpointPayloads[0].messages.map((message) => message.messageUid),
+    ["sm_tool_1", "sm_tool_2"],
+  );
+});
+
 test("SessionExecutionRunner retries an incremental checkpoint after persistence failure", async () => {
   const attempts = [];
   const runtime = {

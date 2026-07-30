@@ -87,14 +87,21 @@ export async function processToolResults({
     loopState.taskSummaryTriggered = true;
   }
 
-  for (const toolCallResult of toolCallResults) {
-    const call = toolCallResult?.call || {};
-    const toolResultText = String(toolCallResult?.toolResultText || "");
-    const extractedAttachments = normalizeToolResultAttachments(toolCallResult, call);
+  const commitToolResults = async () => {
+    for (const toolCallResult of toolCallResults) {
+      const call = toolCallResult?.call || {};
+      const toolResultText = String(toolCallResult?.toolResultText || "");
+      const extractedAttachments = normalizeToolResultAttachments(toolCallResult, call);
 
-    await stateCommitter.pushToolResult({ call, toolResultText });
-    await stateCommitter.appendAttachments(extractedAttachments);
-    updateToolFailureState({ modelState, loopState, toolCallResult });
+      await stateCommitter.pushToolResult({ call, toolResultText });
+      await stateCommitter.appendAttachments(extractedAttachments);
+      updateToolFailureState({ modelState, loopState, toolCallResult });
+    }
+  };
+  if (typeof runtime?.withCurrentTurnPersistenceBatch === "function") {
+    await runtime.withCurrentTurnPersistenceBatch(commitToolResults);
+  } else {
+    await commitToolResults();
   }
 
   if (hasRequestHelpCall) {
