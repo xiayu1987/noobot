@@ -10,6 +10,7 @@ import {
   assistantMessage,
   activateRuntimeTurn,
   emitChannelState,
+  emitAuthorityProcessing,
 } from "../helpers/useChatEngineHarness.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
 import { BackendChannelState, FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
@@ -137,6 +138,10 @@ describe("useChatEngine.send-stream", () => {
       capturedPayload = payload;
       emitChannelState(onEvent, "local-client-turn", "", "sending", {
         turnScopeId: payload.turnScopeId,
+      });
+      emitAuthorityProcessing(onEvent, {
+        ...payload,
+        sessionId: "local-client-turn",
       });
       emitChannelState(onEvent, "local-client-turn", "", "completed");
     });
@@ -335,7 +340,7 @@ describe("useChatEngine.send-stream", () => {
     await Promise.resolve();
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.pending).toBe(true);
+    expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).not.toBe("chat.generated");
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
@@ -440,7 +445,7 @@ describe("useChatEngine.send-stream", () => {
     expect(botMessage.content).toBe("final answer");
     expect(botMessage.dialogProcessId).toBe("dp-new");
     expect(botMessage.messageEventState.consumedEventIds).toContain("evt-final-answer");
-    expect(botMessage.pending).toBe(true);
+    expect(botMessage.pending).toBe(false);
     expect(botMessage.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(sending.value).toBe(false);
   });

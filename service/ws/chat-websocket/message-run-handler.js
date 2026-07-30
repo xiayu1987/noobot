@@ -9,55 +9,48 @@ import { recordServiceWebSocketLifecycle, summarizeDebugAttachments } from "./ru
 import { isPluginDebugEnabled, resolveEffectiveRunTimeoutMs, resolveEffectiveStreamingEnabled, summarizePluginConfig } from "./run-config.js";
 import { isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
-import { createCommittedTurnLifecyclePublisher } from "./turn-lifecycle-bridge.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/authoritative-state/contracts";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { recoverOrphanedTurn } from "@noobot/authoritative-state/application";
 import { createAgentApplication } from "#agent/application";
 
 export function createMessageRunHandler({
   state, authInfo, sendEvent, translateText, normalizeLocale, normalizeRunConfig, isForbiddenUserScope,
   resolveBot, sessionLogConfig, userInteractionBridge, buildRunStateSnapshot,
-  finalizeTimeout, finalizeUserStopped, finalizeCompleted, commitTurnLifecycle,
+  finalizeTimeout, finalizeUserStopped, finalizeCompleted, commitTurnLifecycle, dispatchAuthorityEvents,
 }) {
   const canonicalRunOwnerId = String(authInfo?.userId || "").trim();
-  const publishCommittedTurnLifecycle = createCommittedTurnLifecyclePublisher({ sendEvent });
+  let pendingLifecycleCommit = null;
+  let latestAuthorityTurn = null;
   const recoverOrphanedTurnConflict = async ({ accepted = null, userId = "", sessionId = "", parentSessionId = "" } = {}) => {
-    if (accepted?.reason !== "session_action_conflict") return false;
-    const lifecycle = accepted?.lifecycle;
-    const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
-    const activeTurn = lifecycle?.turns?.[activeTurnScopeId] || null;
-    if (!activeTurnScopeId || !activeTurn) return false;
-    if (findActiveRun({ userId: canonicalRunOwnerId, sessionId, turnScopeId: activeTurnScopeId })) return false;
-    const updatedAtMs = Date.parse(String(activeTurn?.updatedAt || ""));
-    if (
-      !Number.isFinite(updatedAtMs) ||
-      Date.now() - updatedAtMs < TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs
-    ) {
-      return false;
-    }
-    const phase = Object.values(TURN_PHASE).includes(activeTurn?.phase)
-      ? activeTurn.phase
-      : TURN_PHASE.PROCESSING;
-    const failed = await commitTurnLifecycle({
-      userId,
-      sessionId,
-      parentSessionId,
-      turnScopeId: activeTurnScopeId,
-      dialogProcessId: String(activeTurn?.dialogProcessId || "").trim(),
-      commandId: `orphaned:${activeTurnScopeId}:failed:${phase}`,
-      eventType: TURN_EVENT.FAILED,
-      phase,
-      failure: {
-        phase,
-        code: "service_restart_orphaned_turn",
-        message: "active turn execution was lost after service restart",
-        retryable: false,
-      },
+    const result = await recoverOrphanedTurn({
+      conflict: accepted,
+      identity: { userId, sessionId, parentSessionId },
+      inspectExecution: ({ turnScopeId, dialogProcessId }) => ({
+        alive: Boolean(findActiveRun({
+          userId: canonicalRunOwnerId,
+          sessionId,
+          turnScopeId,
+          dialogProcessId,
+        })),
+        observedAtMs: Date.now(),
+      }),
+      commitTurnLifecycle,
     });
-    return failed?.applied === true || failed?.deduplicated === true;
+    return result.recovered === true;
   };
   const commitCurrentFailure = async (error, fallbackPhase = TURN_PHASE.ACTION) => {
-    const phase = state.currentLifecyclePhase || fallbackPhase;
+    if (pendingLifecycleCommit) {
+      try {
+        const pendingResult = await pendingLifecycleCommit;
+        if (pendingResult?.turn) latestAuthorityTurn = pendingResult.turn;
+      } catch {
+        // The failure command below remains responsible for recording the run failure.
+      }
+    }
+    const authoritativePhase = Object.values(TURN_PHASE).includes(latestAuthorityTurn?.phase)
+      ? latestAuthorityTurn.phase
+      : "";
+    const phase = authoritativePhase || state.currentLifecyclePhase || fallbackPhase;
     const commandBase = String(state.currentLifecycleCommandId || state.currentTurnScopeId || "turn").trim();
     const failed = await commitTurnLifecycle({
       userId: state.currentRunMeta?.userId || String(authInfo?.userId || "").trim(),
@@ -148,6 +141,7 @@ export function createMessageRunHandler({
     if (runningTurn && !runningTurn.abortController?.signal?.aborted) {
       state.currentRunHandle = runningTurn;
       state.currentRunTransportBinding = attachRunTransport(runningTurn, sendEvent);
+      await dispatchAuthorityEvents?.({ userId, sessionId, parentSessionId });
       sendEvent("channel_state", {
         sessionId,
         dialogProcessId: runningTurn.dialogProcessId || dialogProcessId || "",
@@ -218,6 +212,8 @@ export function createMessageRunHandler({
       error.currentVersion = accepted?.currentRevision;
       throw error;
     }
+    pendingLifecycleCommit = null;
+    latestAuthorityTurn = accepted.turn || null;
     state.currentLifecycleCommandId = commandId;
     state.currentLifecyclePhase = TURN_PHASE.ACTION;
     state.isRunning = true;
@@ -407,10 +403,7 @@ export function createMessageRunHandler({
         });
       },
       onCommittedTurnLifecycle: (committed = {}) => {
-        publishCommittedTurnLifecycle({
-          event: committed,
-          turn: committed?.turn,
-        });
+        void committed;
       },
       onRootRunning: (lifecycleData) => {
         if (processingStartedPromise) return processingStartedPromise;
@@ -434,6 +427,7 @@ export function createMessageRunHandler({
           if (!started?.applied && !started?.deduplicated) {
             throw new Error(started?.reason || "processing_start_failed");
           }
+          latestAuthorityTurn = started.turn || latestAuthorityTurn;
           state.currentLifecyclePhase = TURN_PHASE.PROCESSING;
           sendEvent("channel_state", {
             sessionId,
@@ -443,6 +437,7 @@ export function createMessageRunHandler({
           });
           return started;
         });
+        pendingLifecycleCommit = processingStartedPromise;
         void processingStartedPromise.catch((error) => {
           void recordServiceWebSocketLifecycle({
             sessionLogConfig,

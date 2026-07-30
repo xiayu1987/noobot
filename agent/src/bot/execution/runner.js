@@ -580,7 +580,7 @@ export class SessionExecutionRunner {
                 .filter(Boolean);
               return;
             }
-            await this.appendAgentMessages?.({
+            const persistedMessages = await this.appendAgentMessages?.({
               userId,
               sessionId: usedSessionId,
               parentSessionId,
@@ -596,13 +596,20 @@ export class SessionExecutionRunner {
               Array.isArray(item.activityTimeline) &&
               item.activityTimeline.length > 0);
             let durableActivityMessages = [];
-            if (activityMessages.length > 0 && typeof this.getSessionTurns === "function") {
-              const durableMessages = await this.getSessionTurns({
-                userId,
-                sessionId: usedSessionId,
-                parentSessionId,
-                persistenceContext,
-              });
+            if (activityMessages.length > 0 && (
+              Array.isArray(persistedMessages) && persistedMessages.length > 0
+              || typeof this.getSessionTurns === "function"
+            )) {
+              const durableMessages = Array.isArray(persistedMessages) && persistedMessages.length > 0
+                ? persistedMessages
+                : typeof this.getSessionTurns === "function"
+                  ? await this.getSessionTurns({
+                      userId,
+                      sessionId: usedSessionId,
+                      parentSessionId,
+                      persistenceContext,
+                    })
+                  : [];
               const durableByUid = new Map((Array.isArray(durableMessages) ? durableMessages : [])
                 .map((item = {}) => [String(item.messageUid || "").trim(), item])
                 .filter(([messageUid]) => messageUid));

@@ -15,6 +15,7 @@ import {
   sessionLogClientMock,
   wsClientMock,
 } from "./useChatSession.test-helpers.js";
+import { lifecycle } from "../runtime/run-state-machine/turnRuntimeRegistryTestFixtures.js";
 
 function turnMessages({ dialogProcessId = "dp-1", turnScopeId = "turn-1", content = "answer" } = {}) {
   return [
@@ -81,6 +82,16 @@ describe("useChatSession send/continue actions", () => {
 
     session.send();
     await nextTick();
+
+    const turnScopeId = store.turnRuntimeRegistry.sessions["s-send"].activeTurnScopeId;
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "s-send", turnScopeId,
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "s-send", turnScopeId, revision: 2, sequence: 2,
+    });
 
     expect(session.composerActionState.value.displayState).toBe("sending");
     expect(session.composerActionState.value.canStop).toBe(true);

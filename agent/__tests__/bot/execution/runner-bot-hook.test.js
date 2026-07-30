@@ -49,6 +49,7 @@ function createRunner({
   }),
   prepareTurnInput = null,
   appendAgentMessages = async () => {},
+  getSessionTurns = null,
   commitSessionTurn = null,
   stampReusedUserTurnDialogProcessId = async () => {},
   assertPersistenceContextIdentity = null,
@@ -66,6 +67,7 @@ function createRunner({
     prepareTurnInput,
     prepareAgentTurnExecution,
     appendAgentMessages,
+    getSessionTurns,
     appendSessionTurn: async () => {},
     assertPersistenceContextIdentity,
     commitSessionTurn,
@@ -100,7 +102,11 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
     execution: { controllers: { runtime } },
   };
   const runner = createRunner({
-    appendAgentMessages: async (payload = {}) => checkpointPayloads.push(payload),
+    appendAgentMessages: async (payload = {}) => {
+      checkpointPayloads.push(payload);
+      return payload.messages;
+    },
+    getSessionTurns: async () => checkpointPayloads.at(-1)?.messages || [],
     prepareAgentTurnExecution: async () => ({
       agentContext: runtimeAgentContext,
       runtimeAgentContext,

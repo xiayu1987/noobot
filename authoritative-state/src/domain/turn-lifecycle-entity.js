@@ -9,6 +9,7 @@ import {
   TURN_PHASE,
   TURN_STATE,
   deriveAuthoritativeTurnCapabilities,
+  validateTurnLifecycleEnvelope,
 } from "../contracts/turn-lifecycle-protocol.mjs";
 
 const TERMINAL_STATES = new Set([
@@ -79,16 +80,23 @@ export function normalizeTurnLifecycleEntity(source = {}) {
   }
   const commandReceipts = (Array.isArray(source?.commandReceipts) ? source.commandReceipts : [])
     .filter((item) => item && typeof item === "object" && clean(item.commandId))
-    .map((item) => ({
-      commandId: clean(item.commandId),
-      eventType: clean(item.eventType),
-      turnScopeId: clean(item.turnScopeId),
-      requestHash: clean(item.requestHash),
-      revision: integer(item.revision),
-      sequence: integer(item.sequence),
-      committedAt: clean(item.committedAt),
-    }))
-    .slice(-200);
+    .map((item) => {
+      const eventId = clean(item.eventId || item.envelope?.eventId);
+      const envelope = item.envelope && typeof item.envelope === "object" && !Array.isArray(item.envelope)
+        ? { ...item.envelope, eventId }
+        : null;
+      return {
+        commandId: clean(item.commandId),
+        eventType: clean(item.eventType),
+        turnScopeId: clean(item.turnScopeId),
+        requestHash: clean(item.requestHash),
+        revision: integer(item.revision),
+        sequence: integer(item.sequence),
+        committedAt: clean(item.committedAt),
+        eventId,
+        envelope: validateTurnLifecycleEnvelope(envelope || {}).valid ? envelope : null,
+      };
+    });
   const activeTurnScopeId = clean(source?.activeTurnScopeId);
   return {
     activeTurnScopeId: turns[activeTurnScopeId] && (
@@ -269,8 +277,17 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
   lifecycle.activeTurnScopeId = TERMINAL_STATES.has(state) && !(FINALIZE_FAILURE_STATES.has(state) && finalizeIntent?.retryable === true)
     ? ""
     : turnScopeId;
-  lifecycle.commandReceipts.push({ commandId, eventType, turnScopeId, requestHash, revision, sequence, committedAt: nowValue });
-  lifecycle.commandReceipts = lifecycle.commandReceipts.slice(-200);
+  lifecycle.commandReceipts.push({
+    commandId,
+    eventType,
+    turnScopeId,
+    requestHash,
+    revision,
+    sequence,
+    committedAt: nowValue,
+    eventId: "",
+    envelope: null,
+  });
   return { applied: true, lifecycle, turn };
 }
 

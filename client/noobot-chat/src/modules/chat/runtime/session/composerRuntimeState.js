@@ -22,7 +22,11 @@ export function createComposerRuntimeState({
     const displayState = runtimeView.displayState;
     const userStopped = turn?.terminal === "user_stopped";
     const actionLocked = runtimeView.sending === true;
-    const stopRequesting = displayState === "requesting" && turn?.action === "stop";
+    // A locally submitted stop command is interaction state, not an
+    // authoritative lifecycle transition. Keep showing the request as in
+    // flight until the command settles or an authority event supersedes it,
+    // without forcing the authoritative turn out of processing.
+    const stopRequesting = turn?.commandPending === true && turn?.pendingCommandType === "stop";
     const awaitingStopSummary = displayState === "stopping";
     return {
       sendRequesting: displayState === "requesting" && turn?.action !== "stop",

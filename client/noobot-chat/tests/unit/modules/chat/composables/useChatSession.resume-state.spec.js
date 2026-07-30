@@ -23,6 +23,7 @@ import {
   sessionLogClientMock,
   wsClientMock,
 } from "./useChatSession.test-helpers.js";
+import { lifecycle } from "../runtime/run-state-machine/turnRuntimeRegistryTestFixtures.js";
 
 function detailResponse({ sessionId, status, dialogProcessId, turnScopeId }) {
   const payload = detailPayload({ sessionId, status, dialogProcessId, turnScopeId });
@@ -328,6 +329,15 @@ describe("useChatSession summary and reconnect state", () => {
       dialogProcessId: "dp-detail-race",
       source: "test",
     });
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "local-pending", turnScopeId: "turn-detail-race", dialogProcessId: "dp-detail-race",
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "local-pending", turnScopeId: "turn-detail-race", dialogProcessId: "dp-detail-race",
+      revision: 2, sequence: 2,
+    });
     applyTurnRuntimeEvent(store.turnRuntimeRegistry, {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       sessionId: "local-pending",
@@ -491,14 +501,31 @@ describe("useChatSession summary and reconnect state", () => {
       turnStatuses: [{ status: "user_stopped", turnScopeId: "turn-stop", dialogProcessId: "dp-stop" }],
     })];
     store.activeSessionId = "s-stop";
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "s-stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop",
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "s-stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop",
+      revision: 2, sequence: 2,
+    });
     applyTurnRuntimeEvent(store.turnRuntimeRegistry, {
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId: "s-stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop", source: "test",
     });
+    lifecycle(store.turnRuntimeRegistry, {
+      sessionId: "s-stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop",
+      eventType: "turn.stop_accepted", state: "stopping", phase: "stop",
+      action: "stop", executionState: "accepted", revision: 3, sequence: 3, canStop: false,
+      commandId: "stop:turn-stop",
+    });
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop").displayState).toBe("requesting");
     const authFetch = routeAwareFetcher({
       detail: detailPayload({ sessionId: "s-stop", status: "user_stopped", dialogProcessId: "dp-stop", turnScopeId: "turn-stop" }),
-      terminal: terminalResolution({ sessionId: "s-stop", turnScopeId: "turn-stop", state: "stop_completed" }),
+      terminal: terminalResolution({
+        sessionId: "s-stop", turnScopeId: "turn-stop", state: "stop_completed", revision: 4, sequence: 4,
+      }),
     });
     const session = createChatSession({ authFetch });
 

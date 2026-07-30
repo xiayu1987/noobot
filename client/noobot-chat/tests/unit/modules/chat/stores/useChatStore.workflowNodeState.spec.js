@@ -9,6 +9,7 @@ import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStor
 import {
   selectTurnMessageRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createTurnLifecycleEnvelope } from "@noobot/authoritative-state/contracts";
 
 function applyNodeEvent(store, data) {
   return store.applyWorkflowRuntimeEvent({ event: "workflow_node_state_committed", data }, { source: "test" });
@@ -71,39 +72,85 @@ describe("useChatStore workflow node state registry", () => {
     expect(storedNode(store).status).toBe("running");
   });
 
-  it("projects child node lifecycle into the canonical Turn Runtime Registry", () => {
+  it("keeps workflow node facts isolated from the authoritative Turn Runtime Registry", () => {
     const store = useChatStore();
 
     applyNodeEvent(store, nodeEvent({ status: "running", revision: 2, sequence: 2, eventId: "evt-running" }));
-    const running = selectTurnMessageRuntime(store.turnRuntimeRegistry, {
-      sessionId: "child-session-a",
-      turnScopeId: "workflow-node:node-exec-a",
-    });
-    expect(running.running).toBe(true);
-    expect(running.state).toBe("frontend_processing");
-    expect(running.dialogProcessId).toBe("");
-
-    const timing = store.applyTurnTimingSnapshot({
-      sessionId: "child-session-a",
-      turnTimings: [{
-        turnScopeId: "workflow-node:node-exec-a",
-        dialogProcessId: "real-child-dialog",
-        thinkingStartedAt: "2026-07-19T00:00:00.000Z",
-      }],
-    });
-    expect(timing.applied).toBe(true);
     expect(selectTurnMessageRuntime(store.turnRuntimeRegistry, {
       sessionId: "child-session-a",
       turnScopeId: "workflow-node:node-exec-a",
-    }).dialogProcessId).toBe("real-child-dialog");
+    })).toMatchObject({
+      state: "",
+      running: false,
+      terminal: null,
+      seq: 0,
+    });
 
     applyNodeEvent(store, nodeEvent({ status: "succeeded", revision: 3, sequence: 3, eventId: "evt-completed" }));
-    const completed = selectTurnMessageRuntime(store.turnRuntimeRegistry, {
+    expect(selectTurnMessageRuntime(store.turnRuntimeRegistry, {
       sessionId: "child-session-a",
       turnScopeId: "workflow-node:node-exec-a",
+    })).toMatchObject({
+      state: "",
+      running: false,
+      terminal: null,
+      seq: 0,
     });
-    expect(completed.running).toBe(false);
-    expect(completed.terminal).toBe("completed");
+  });
+
+  it("projects a child Turn only from a valid Authority lifecycle envelope", () => {
+    const store = useChatStore();
+    applyNodeEvent(store, nodeEvent({ status: "running", revision: 2, sequence: 2, eventId: "evt-running" }));
+
+    const accepted = store.applyTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
+      eventType: "turn.action_accepted",
+      eventId: "authority-child-accepted",
+      commandId: "authority-child-command",
+      userId: "user-a",
+      sessionId: "child-session-a",
+      turnScopeId: "workflow-node:node-exec-a",
+      messageId: "event-message-child-a",
+      presentationMessageId: "message-child-a",
+      dialogProcessId: "real-child-dialog",
+      revision: 1,
+      sequence: 1,
+      occurredAt: "2026-07-19T00:00:01.000Z",
+      phase: "action",
+      state: "action_requesting",
+      action: "send",
+      executionState: "accepted",
+      capabilities: { actionLocked: true, canStop: false },
+    }));
+    const processing = store.applyTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
+      eventType: "turn.processing_started",
+      eventId: "authority-child-processing",
+      commandId: "authority-child-command",
+      userId: "user-a",
+      sessionId: "child-session-a",
+      turnScopeId: "workflow-node:node-exec-a",
+      messageId: "event-message-child-a",
+      presentationMessageId: "message-child-a",
+      dialogProcessId: "real-child-dialog",
+      revision: 2,
+      sequence: 2,
+      occurredAt: "2026-07-19T00:00:02.000Z",
+      phase: "processing",
+      state: "processing",
+      action: "send",
+      executionState: "processing",
+      capabilities: { actionLocked: true, canStop: true },
+    }));
+
+    expect(accepted.applied).toBe(true);
+    expect(processing.applied).toBe(true);
+    expect(selectTurnMessageRuntime(store.turnRuntimeRegistry, {
+      sessionId: "child-session-a",
+      turnScopeId: "workflow-node:node-exec-a",
+    })).toMatchObject({
+      running: true,
+      state: "frontend_processing",
+      dialogProcessId: "real-child-dialog",
+    });
   });
 
   it("applies newer sequence within the same revision and rejects sequence rollback", () => {

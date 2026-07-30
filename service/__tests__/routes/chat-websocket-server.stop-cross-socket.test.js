@@ -6,7 +6,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { startServerWithWs, closeServer } from "./chat-websocket-server.test-helpers.js";
+import {
+  startServerWithWs,
+  closeServer,
+  waitForCondition,
+} from "./chat-websocket-server.test-helpers.js";
 
 test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
   let capturedStopPayload = null;
@@ -152,7 +156,9 @@ test("chat-websocket-server: an authenticated owner cannot stop another owner's 
       });
       runWs.on("error", reject);
     });
-    while (!releaseActiveRun) await new Promise((resolve) => setTimeout(resolve, 5));
+    await waitForCondition(() => Boolean(releaseActiveRun), {
+      message: "owner isolation run did not start",
+    });
 
     const foreignStop = new WebSocket(url, { headers: { authorization: "Bearer owner-b-key" } });
     sockets.push(foreignStop);

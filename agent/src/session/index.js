@@ -314,6 +314,22 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.getTurnLifecycleSnapshot(payload);
     },
 
+    async getPendingAuthorityEvents(payload = {}) {
+      return sessionMessageService.getPendingAuthorityEvents(payload);
+    },
+
+    async recordAuthorityEventAttempt(payload = {}) {
+      return sessionMessageService.recordAuthorityEventAttempt(payload);
+    },
+
+    async acknowledgeAuthorityEvent(payload = {}) {
+      return sessionMessageService.acknowledgeAuthorityEvent(payload);
+    },
+
+    async compactAuthorityEvents(payload = {}) {
+      return sessionMessageService.compactAuthorityEvents(payload);
+    },
+
     async getExecution(payload = {}) {
       return executionReadService.getExecution(payload);
     },

@@ -56,6 +56,8 @@ test('execution log controls are centralized and suppress full successful turn d
   }
 
   assert.equal(shouldRecordRuntimeExecutionLog({ event: 'session_turn_full' }, { env: {} }), false);
+  assert.equal(shouldRecordRuntimeExecutionLog({ event: 'assistant_message_saved' }, { env: {} }), false);
+  assert.equal(shouldRecordRuntimeExecutionLog({ event: 'tool_message_saved' }, { env: {} }), false);
   assert.equal(
     shouldRecordRuntimeExecutionLog(
       { event: 'session_turn_full', category: 'error', data: { error: 'save failed' } },
@@ -73,6 +75,7 @@ test('execution log controls are centralized and suppress full successful turn d
   );
   assert.deepEqual(resolveRuntimeEventsExecutionLogControls({}), {
     sessionTurnFullDebug: false,
+    messagePersistenceSuccessDebug: false,
   });
 });
 

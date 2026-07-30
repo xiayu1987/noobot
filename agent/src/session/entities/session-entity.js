@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
 import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
+import { normalizeAuthorityEventOutbox } from "@noobot/authoritative-state/contracts";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
@@ -382,6 +383,7 @@ export function normalizeSessionEntity(
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     turnStatuses: normalizeTurnStatusesEntity(session?.turnStatuses || [], now),
     turnLifecycle: normalizeTurnLifecycleEntity(lifecycleWithLegacyTerminalStatuses(session)),
+    authorityEventOutbox: normalizeAuthorityEventOutbox(session?.authorityEventOutbox || []),
     selectedConnectors: normalizeSelectedConnectors(session?.selectedConnectors || {}),
     createdAt: String(session?.createdAt || "").trim() || nowValue,
     updatedAt: String(session?.updatedAt || "").trim() || nowValue,

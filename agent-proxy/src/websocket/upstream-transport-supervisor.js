@@ -12,9 +12,11 @@ export const UPSTREAM_TRANSPORT_PHASE = Object.freeze({
 });
 
 export class UpstreamTransportSupervisor {
-  constructor(WebSocketImpl) {
+  constructor(WebSocketImpl, { closeGraceMs = 2000 } = {}) {
     this.WebSocket = WebSocketImpl;
+    this.closeGraceMs = Math.max(0, Number(closeGraceMs) || 0);
     this.socket = null;
+    this.retiredSockets = new Map();
     this.generation = 0;
     this.phase = UPSTREAM_TRANSPORT_PHASE.IDLE;
     this.everConnected = false;
@@ -33,6 +35,7 @@ export class UpstreamTransportSupervisor {
       this.invokeHandler(handlers, "error", { socket: null, generation: this.generation, error });
       return null;
     }
+    if (previousSocket) this._retireSocket(previousSocket, 1000, "replaced");
     const generation = ++this.generation;
     this.socket = socket;
     this.handlers = handlers;
@@ -64,6 +67,7 @@ export class UpstreamTransportSupervisor {
       }
     });
     socket.on("close", (code, reason) => {
+      this._releaseRetiredSocket(socket);
       if (!this.isCurrent(socket, generation)) return;
       this.socket = null;
       this.phase = UPSTREAM_TRANSPORT_PHASE.IDLE;
@@ -75,6 +79,9 @@ export class UpstreamTransportSupervisor {
 
   adopt(socket) {
     if (this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return false;
+    if (this.socket && this.socket !== socket) {
+      this._retireSocket(this.socket, 1000, "replaced");
+    }
     this.generation += 1;
     this.socket = socket || null;
     this.handlers = null;
@@ -138,7 +145,7 @@ export class UpstreamTransportSupervisor {
     this.socket = null;
     this.handlers = null;
     this.phase = UPSTREAM_TRANSPORT_PHASE.IDLE;
-    try { socket.close(code, reason); } catch {}
+    this._retireSocket(socket, code, reason);
     this.invokeHandler(handlers, "close", { socket, generation: this.generation, code, reason, locallyInitiated: true });
     return true;
   }
@@ -151,8 +158,40 @@ export class UpstreamTransportSupervisor {
     this.socket = null;
     this.handlers = null;
     this.phase = UPSTREAM_TRANSPORT_PHASE.DISPOSED;
-    try { socket?.close?.(code, reason); } catch {}
+    this._retireSocket(socket, code, reason);
     if (socket) this.invokeHandler(handlers, "close", { socket, generation: this.generation, code, reason, locallyInitiated: true });
+  }
+
+  _retireSocket(socket, code = 1000, reason = "closed") {
+    if (!socket || this.retiredSockets.has(socket)) return false;
+    const isClosed = () => Number.isInteger(this.WebSocket.CLOSED)
+      && socket.readyState === this.WebSocket.CLOSED;
+    if (isClosed()) return false;
+    this.retiredSockets.set(socket, null);
+    try {
+      socket.close?.(code, reason);
+    } catch {
+      try { socket.terminate?.(); } catch {}
+      this._releaseRetiredSocket(socket);
+      return true;
+    }
+    if (isClosed()) {
+      this._releaseRetiredSocket(socket);
+      return true;
+    }
+    const timer = setTimeout(() => {
+      try { socket.terminate?.(); } catch {}
+      this._releaseRetiredSocket(socket);
+    }, this.closeGraceMs);
+    timer.unref?.();
+    this.retiredSockets.set(socket, timer);
+    return true;
+  }
+
+  _releaseRetiredSocket(socket) {
+    const timer = this.retiredSockets.get(socket);
+    if (timer) clearTimeout(timer);
+    this.retiredSockets.delete(socket);
   }
 
   status() {
@@ -163,6 +202,7 @@ export class UpstreamTransportSupervisor {
       readyState: this.socket?.readyState ?? this.WebSocket.CLOSED,
       everConnected: this.everConnected,
       lastSeenAtMs: this.lastSeenAtMs,
+      retiredSocketCount: this.retiredSockets.size,
     };
   }
 }

@@ -9,6 +9,7 @@ import {
   makeSession,
   assistantMessage,
   emitChannelState,
+  emitAuthorityProcessing,
 } from "../helpers/useChatEngineHarness.js";
 import {
   BackendChannelState,
@@ -21,7 +22,9 @@ import {
 
 describe("useChatEngine.resend replace turn", () => {
   it("resendMonotonicMessage continues generation after atomic replace-turn returns user-only snapshot", async () => {
-    const stream = vi.fn(async () => {});
+    const stream = vi.fn(async (payload, onEvent) => {
+      emitAuthorityProcessing(onEvent, payload);
+    });
     const deleteSessionMessagesFromApi = vi.fn();
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
       const replacementUser = { id: "msg-user-replace-success", messageId: "msg-user-replace-success", turnScopeId, role: RoleEnum.USER, content: "edited question" };
@@ -112,7 +115,9 @@ describe("useChatEngine.resend replace turn", () => {
   });
 
   it("resendMonotonicMessage sends edited attachment set to replace-turn and stream payload", async () => {
-    const stream = vi.fn(async () => {});
+    const stream = vi.fn(async (payload, onEvent) => {
+      emitAuthorityProcessing(onEvent, payload);
+    });
     const keptAttachment = { attachmentId: "kept", name: "kept.txt" };
     const removedAttachment = { attachmentId: "removed", name: "removed.txt" };
     const newAttachment = { name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" };
@@ -585,7 +590,9 @@ describe("useChatEngine.resend replace turn", () => {
   });
 
   it("resendMonotonicMessage ignores stopped assistant returned with the fresh replacement turn and continues streaming", async () => {
-    const stream = vi.fn(async () => {});
+    const stream = vi.fn(async (payload, onEvent) => {
+      emitAuthorityProcessing(onEvent, payload);
+    });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
       const replacementUser = {
         id: "msg-user-fresh-stopped-assistant",

@@ -215,7 +215,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     expect(observedMessagesAtStream[3]).toEqual(expect.objectContaining({
       role: RoleEnum.ASSISTANT,
       content: "",
-      pending: true,
+      pending: false,
       turnScopeId: observedMessagesAtStream[2].turnScopeId,
     }));
   });
@@ -266,7 +266,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", "edited answer", ""]);
     expect(activeSession.value.messages[2]).toEqual(expect.objectContaining({
       role: RoleEnum.ASSISTANT,
-      pending: true,
+      pending: false,
     }));
     expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(input.value).toBe("");

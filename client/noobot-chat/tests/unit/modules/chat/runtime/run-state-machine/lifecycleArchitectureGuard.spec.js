@@ -206,6 +206,20 @@ describe("lifecycle architecture guard", () => {
     expect(registry).toMatch(/reduceTurnRuntimeEvent\(current, rawEvent\)/);
   });
 
+  it("keeps transport and local commands out of authoritative lifecycle projection", () => {
+    const reducer = source(files.reducer);
+    const registry = source(files.registry);
+    const evaluation = source("src/modules/chat/runtime/run-state-machine/evaluation.js");
+    expect(reducer).not.toContain("current.lifecycleObserved !== true");
+    expect(reducer).not.toMatch(/backendState\s*===\s*BackendChannelState\.SENDING\)\s*return\s+FrontendRunState\.PROCESSING/);
+    expect(reducer).not.toMatch(/normalizedBackendState[\s\S]*canStop/);
+    expect(reducer).toContain("commandPending");
+    expect(reducer).toContain("transportState");
+    expect(registry).not.toMatch(/deriveTurnCapabilities\([^)]*backendState/);
+    expect(evaluation).not.toContain("deriveTurnCapabilities");
+    expect(evaluation).toContain("stateSnapshot?.canStop === true");
+  });
+
   it("keeps stop lifecycle ownership out of the websocket transport", () => {
     const transport = source(files.webSocketClient);
     const finalize = source(files.sendFinalize);

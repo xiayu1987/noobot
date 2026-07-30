@@ -131,14 +131,14 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     const assistant = assistantMessage(activeSession);
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
-    expect(assistant?.pending).toBe(true);
+    expect(assistant?.pending).toBe(false);
     expect(notify).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1200);
 
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
-    expect(assistant?.pending).toBe(true);
+    expect(assistant?.pending).toBe(false);
     expect(assistant?.statusLabel).toBe("");
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenCalledWith({

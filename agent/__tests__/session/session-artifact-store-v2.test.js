@@ -195,7 +195,7 @@ test("session artifacts group interleaved messages by logical dialog without cha
 
   const files = buildSessionArtifactFileMap(root);
   const manifest = JSON.parse(await readFile(files.session, "utf8"));
-  assert.equal(manifest.schemaVersion, 4);
+  assert.equal(manifest.schemaVersion, 5);
   assert.equal(manifest.messageIdentityVersion, 1);
   assert.deepEqual(manifest.turnOrder.map((turn) => turn.artifactOrdinal), [1, 2]);
   assert.equal(manifest.turnOrder.some((turn) => "sequence" in turn), false);
@@ -221,6 +221,24 @@ test("session artifact publication rejects duplicate persistent message UIDs", a
       ],
     },
   }), (error) => error.code === "SESSION_MESSAGE_UID_DUPLICATE");
+}));
+
+test("v5 turn journals append only changed messages and hide uncommitted tails", async () => withTemp(async (root) => {
+  const first = { role: "assistant", content: "one", turnScopeId: "active", messageUid: "m1" };
+  const second = { role: "assistant", content: "two", turnScopeId: "active", messageUid: "m2" };
+  await writeSessionArtifact({ sessionDir: root, sessionPayload: { sessionId: "journal", messages: [first] } });
+  const files = buildSessionArtifactFileMap(root);
+  let manifest = JSON.parse(await readFile(files.session, "utf8"));
+  const journal = path.join(root, manifest.turnOrder[0].file);
+  const original = await readFile(journal, "utf8");
+  await writeSessionArtifact({ sessionDir: root, sessionPayload: { sessionId: "journal", messages: [first, second] } });
+  manifest = JSON.parse(await readFile(files.session, "utf8"));
+  const appended = await readFile(journal, "utf8");
+  assert.equal(appended.startsWith(original), true);
+  assert.equal(appended.length > original.length, true);
+  await writeFile(journal, `${appended}{broken`, "utf8");
+  const visible = await readSessionArtifact({ sessionDir: root });
+  assert.deepEqual(visible.messages.map((message) => message.messageUid), ["m1", "m2"]);
 }));
 
 test("session reader reports missing and corrupted turn artifacts", async () => withTemp(async (root) => {

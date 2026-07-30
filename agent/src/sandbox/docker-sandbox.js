@@ -118,7 +118,7 @@ export function buildDockerCommand({
   const executionToken = randomUUID();
   const containerExecCommand = `'printf "%s" "$NOOBOT_SCRIPT_B64" | base64 -d | bash'`;
 
-  const createContainerCmdRaw = `docker create --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:${JSON.stringify(mountTarget)} ${dockerExtraMountArgs.join(" ")} ${JSON.stringify(image)} sleep infinity`;
+  const createContainerCmdRaw = `docker create --init --name ${JSON.stringify(containerName)} -v ${JSON.stringify(mountSource)}:${JSON.stringify(mountTarget)} ${dockerExtraMountArgs.join(" ")} ${JSON.stringify(image)} sleep infinity`;
   const createContainerCmd =
     `(${createContainerCmdRaw} >/dev/null 2>&1 || docker container inspect ${JSON.stringify(containerName)} >/dev/null 2>&1)`;
   const ensureContainerCmd = [

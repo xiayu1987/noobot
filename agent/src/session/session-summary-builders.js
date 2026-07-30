@@ -5,8 +5,7 @@
  */
 
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { createTurnLifecycleSnapshot } from "@noobot/authoritative-state/contracts";
-import { projectTurnLifecycleTiming } from "@noobot/authoritative-state/domain";
+import { createAuthoritativeTurnSnapshot } from "@noobot/authoritative-state/application";
 import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
@@ -561,25 +560,12 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
     (count, message) => count + (Array.isArray(message?.attachments) ? message.attachments.length : 0),
     0,
   );
-  const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
-  const terminalStates = new Set([
-    "completed", "stop_completed", "action_failed", "processing_failed",
-    "completion_failed", "stop_failed",
-  ]);
   const turnLifecycleSnapshot = lifecycle
-    ? createTurnLifecycleSnapshot({
+    ? createAuthoritativeTurnSnapshot({
+      lifecycle,
+      turnTimings,
       commandId: `session-summary:${sessionId}:${Number(lifecycle?.sequence || 0)}`,
       sessionId,
-      sequence: Number(lifecycle?.sequence || 0),
-      activeTurnScopeId,
-      activeTurn: lifecycleTurns[activeTurnScopeId]
-        ? { ...projectTurnLifecycleTiming(lifecycleTurns[activeTurnScopeId], turnTimings), sessionId }
-        : null,
-      recentTerminalTurns: Object.values(lifecycleTurns)
-        .filter((turn) => terminalStates.has(String(turn?.state || "").trim()))
-        .sort((left, right) => Number(right?.sequence || 0) - Number(left?.sequence || 0))
-        .slice(0, 10)
-        .map((turn) => ({ ...projectTurnLifecycleTiming(turn, turnTimings), sessionId })),
       generatedAt: String(session?.updatedAt || "").trim(),
     })
     : null;

@@ -6,7 +6,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
+import {
+  startServerWithWs,
+  closeServer,
+  callChatWs,
+  stopChatWs,
+  waitForCondition,
+} from "./chat-websocket-server.test-helpers.js";
 
 test("chat-websocket-server: stop closes run and next websocket run can start", async () => {
   let runCount = 0;
@@ -113,7 +119,9 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
       oldWs.on("open", () => { oldWs.send(JSON.stringify(payload)); resolve(); });
       oldWs.on("error", reject);
     });
-    while (!emitAfterRefresh) await new Promise((resolve) => setTimeout(resolve, 5));
+    await waitForCondition(() => Boolean(emitAfterRefresh), {
+      message: "refresh run did not start",
+    });
 
     const newWs = new WebSocket(url, { headers: { authorization: "Bearer test-key" } });
     sockets.push(newWs);

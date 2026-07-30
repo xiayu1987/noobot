@@ -34,6 +34,7 @@ export function createMessageHandler({
   finalizeAborted,
   finalizeGenericError,
   commitTurnLifecycle,
+  dispatchAuthorityEvents,
   recoverTurnFinalize,
 }) {
   const canonicalRunOwnerId = String(authInfo?.userId || "").trim();
@@ -50,7 +51,7 @@ export function createMessageHandler({
   const { handleRun, commitCurrentFailure } = createMessageRunHandler({
     state, authInfo, sendEvent, translateText, normalizeLocale, normalizeRunConfig, isForbiddenUserScope,
     resolveBot, sessionLogConfig, userInteractionBridge, buildRunStateSnapshot,
-    finalizeTimeout, finalizeUserStopped, finalizeCompleted, commitTurnLifecycle,
+    finalizeTimeout, finalizeUserStopped, finalizeCompleted, commitTurnLifecycle, dispatchAuthorityEvents,
   });
 
   return async function onMessage(rawMessage) {

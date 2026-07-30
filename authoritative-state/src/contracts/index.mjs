@@ -4,3 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "./turn-lifecycle-protocol.mjs";
+export * from "./authority-event-outbox.mjs";

@@ -3,13 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
 import { buildTurnTerminalCommand, upsertTurnStatusEntity } from "../../entities/turn-status-entity.js";
 import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { dedupeAttachments, normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import { resolveSessionVersion } from "./anchor-utils.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
-import { normalizeTurnLifecycleEntity, transitionTurnLifecycle, isTerminalTurnLifecycleState, projectTurnLifecycleTiming } from "@noobot/authoritative-state/domain";
-import { createTurnLifecycleSnapshot, validateSessionProvisionIntent } from "@noobot/authoritative-state/contracts";
+import { commitTurnLifecycle, createAuthoritativeTurnSnapshot } from "@noobot/authoritative-state/application";
+import {
+  acknowledgeAuthorityEventDelivery,
+  compactAuthorityEventOutbox,
+  listPendingAuthorityEvents,
+  recordAuthorityEventDeliveryAttempt,
+  validateSessionProvisionIntent,
+} from "@noobot/authoritative-state/contracts";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 
 export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessionId = "", persistenceContext = null, commandId = "", knownSequence, terminalLimit = 10 } = {}) {
@@ -17,25 +24,93 @@ export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessio
   const resolvedParentSessionId = await this._resolveParentSessionId(userId, sessionId, parentSessionId, persistenceContext);
   const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
   if (!session) return { found: false, reason: "session_not_found" };
-  const lifecycle = normalizeTurnLifecycleEntity(session.turnLifecycle || {});
-  const activeTurn = lifecycle.turns[lifecycle.activeTurnScopeId]
-    ? { ...projectTurnLifecycleTiming(lifecycle.turns[lifecycle.activeTurnScopeId], session.turnTimings), sessionId }
-    : null;
-  const limit = Math.max(0, Math.min(100, Number(terminalLimit) || 10));
-  const recentTerminalTurns = Object.values(lifecycle.turns)
-    .filter((turn) => isTerminalTurnLifecycleState(turn.state))
-    .sort((a, b) => Number(b.sequence) - Number(a.sequence))
-    .slice(0, limit)
-    .map((turn) => ({ ...projectTurnLifecycleTiming(turn, session.turnTimings), sessionId }));
   return {
     found: true,
-    snapshot: createTurnLifecycleSnapshot({
-      commandId, userId, sessionId, sequence: lifecycle.sequence,
-      activeTurnScopeId: lifecycle.activeTurnScopeId, activeTurn, recentTerminalTurns,
-      unchanged: knownSequence !== undefined && Number(knownSequence) === lifecycle.sequence,
+    snapshot: createAuthoritativeTurnSnapshot({
+      lifecycle: session.turnLifecycle,
+      turnTimings: session.turnTimings,
+      commandId, userId, sessionId, knownSequence, terminalLimit,
       generatedAt: this.now(),
     }),
   };
+}
+
+export async function getPendingAuthorityEvents({ userId, sessionId, parentSessionId = "", persistenceContext = null, limit = 100 } = {}) {
+  if (!userId || !sessionId) return { found: false, reason: "missing_session", events: [] };
+  const resolvedParentSessionId = await this._resolveParentSessionId(userId, sessionId, parentSessionId, persistenceContext);
+  const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
+  if (!session) return { found: false, reason: "session_not_found", events: [] };
+  return {
+    found: true,
+    events: listPendingAuthorityEvents(session.authorityEventOutbox, { limit }),
+    version: resolveSessionVersion(session),
+  };
+}
+
+export async function recordAuthorityEventAttempt({ userId, sessionId, parentSessionId = "", persistenceContext = null, eventId = "" } = {}) {
+  if (!userId || !sessionId || !eventId) return { recorded: false, reason: "missing_identity" };
+  return this._withSessionMutation(userId, sessionId, async () => {
+    const resolvedParentSessionId = await this._resolveParentSessionId(userId, sessionId, parentSessionId, persistenceContext);
+    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
+    if (!session) return { recorded: false, reason: "session_not_found" };
+    const actualVersion = resolveSessionVersion(session);
+    const result = recordAuthorityEventDeliveryAttempt(session.authorityEventOutbox, {
+      eventId,
+      attemptedAt: this.now(),
+    });
+    if (!result.found) return { recorded: false, reason: "event_not_found" };
+    session.authorityEventOutbox = result.outbox;
+    session.updatedAt = this.now();
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: actualVersion, persistenceContext });
+    return { recorded: true, event: result.outbox.find((item) => item.eventId === eventId), version: resolveSessionVersion(session) };
+  }, parentSessionId, persistenceContext);
+}
+
+export async function acknowledgeAuthorityEvent({ userId, sessionId, parentSessionId = "", persistenceContext = null, eventId = "" } = {}) {
+  if (!userId || !sessionId || !eventId) return { acknowledged: false, reason: "missing_identity" };
+  return this._withSessionMutation(userId, sessionId, async () => {
+    const resolvedParentSessionId = await this._resolveParentSessionId(userId, sessionId, parentSessionId, persistenceContext);
+    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
+    if (!session) return { acknowledged: false, reason: "session_not_found" };
+    const actualVersion = resolveSessionVersion(session);
+    const result = acknowledgeAuthorityEventDelivery(session.authorityEventOutbox, {
+      eventId,
+      deliveredAt: this.now(),
+    });
+    if (!result.found) return { acknowledged: false, reason: "event_not_found" };
+    if (!result.changed) return { acknowledged: true, deduplicated: true, version: actualVersion };
+    session.authorityEventOutbox = result.outbox;
+    session.updatedAt = this.now();
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: actualVersion, persistenceContext });
+    return { acknowledged: true, version: resolveSessionVersion(session) };
+  }, parentSessionId, persistenceContext);
+}
+
+export async function compactAuthorityEvents({
+  userId,
+  sessionId,
+  parentSessionId = "",
+  persistenceContext = null,
+  deliveredThroughSequence,
+  retainDeliveredAfter = "",
+} = {}) {
+  if (!userId || !sessionId) return { compacted: false, reason: "missing_session" };
+  return this._withSessionMutation(userId, sessionId, async () => {
+    const resolvedParentSessionId = await this._resolveParentSessionId(userId, sessionId, parentSessionId, persistenceContext);
+    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
+    if (!session) return { compacted: false, reason: "session_not_found" };
+    const actualVersion = resolveSessionVersion(session);
+    const result = compactAuthorityEventOutbox(session.authorityEventOutbox, {
+      deliveredThroughSequence,
+      retainDeliveredAfter,
+      commandReceipts: session.turnLifecycle?.commandReceipts,
+    });
+    if (result.reason || !result.compacted) return { ...result, version: actualVersion };
+    session.authorityEventOutbox = result.outbox;
+    session.updatedAt = this.now();
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: actualVersion, persistenceContext });
+    return { ...result, version: resolveSessionVersion(session) };
+  }, parentSessionId, persistenceContext);
 }
 
 export async function applyTurnLifecycleEvent({
@@ -67,56 +142,39 @@ export async function applyTurnLifecycleEvent({
     if (expectedSessionVersion !== undefined && Number(expectedSessionVersion) !== actualVersion) {
       return { applied: false, reason: "session_version_conflict", currentVersion: actualVersion };
     }
-    let turnStatus = null;
-    let lifecycleEvent = event;
-    const terminalStatus = event.terminalStatus && typeof event.terminalStatus === "object"
-      ? event.terminalStatus
-      : null;
-    if (terminalStatus) {
-      const nowValue = this.now();
-      const incoming = buildTurnTerminalCommand(terminalStatus.command, {
-        turnScopeId: event.turnScopeId,
-        dialogProcessId: event.dialogProcessId,
-        parentDialogProcessId: terminalStatus.parentDialogProcessId,
-        description: terminalStatus.description,
-        error: terminalStatus.error,
-        updatedAt: nowValue,
-      });
-      if (!incoming) return { applied: false, reason: "invalid_turn_status_command", session, version: actualVersion };
-      const statusResult = upsertTurnStatusEntity({
-        statuses: session.turnStatuses,
-        messages: session.messages,
-        incoming,
-        now: this.now,
-      });
-      turnStatus = statusResult.turnStatus;
-      if (!turnStatus) return { applied: false, reason: "invalid_turn_status", session, version: actualVersion };
-      session.turnStatuses = statusResult.statuses;
-      lifecycleEvent = {
-        ...event,
-        summaryVersion: Number(event.summaryVersion || turnStatus.version || 0),
-        completionCommitId: String(event.completionCommitId || event.commandId || "").trim(),
-        terminalStatus: turnStatus,
-      };
-    }
-    const result = transitionTurnLifecycle(session.turnLifecycle, lifecycleEvent, this.now);
+    const result = commitTurnLifecycle({
+      lifecycle: session.turnLifecycle,
+      event: { ...event, userId, sessionId, parentSessionId: resolvedParentSessionId },
+      eventOutbox: session.authorityEventOutbox,
+      createEventId: randomUUID,
+      now: this.now,
+      materializeTerminal: ({ terminalStatus }) => {
+        const incoming = buildTurnTerminalCommand(terminalStatus.command, {
+          turnScopeId: event.turnScopeId,
+          dialogProcessId: event.dialogProcessId,
+          parentDialogProcessId: terminalStatus.parentDialogProcessId,
+          description: terminalStatus.description,
+          error: terminalStatus.error,
+          updatedAt: this.now(),
+        });
+        if (!incoming) return { reason: "invalid_turn_status_command" };
+        const statusResult = upsertTurnStatusEntity({
+          statuses: session.turnStatuses,
+          messages: session.messages,
+          incoming,
+          now: this.now,
+        });
+        return statusResult.turnStatus ? { turnStatus: statusResult.turnStatus, statuses: statusResult.statuses } : { reason: "invalid_turn_status" };
+      },
+    });
     if (!result.applied) return { ...result, session, version: actualVersion };
     session.turnLifecycle = result.lifecycle;
-    const committedTurn = result.lifecycle?.turns?.[String(event.turnScopeId || "").trim()] || null;
-    if (committedTurn && isTerminalTurnLifecycleState(committedTurn.state)) {
-      const materializedStatus = turnStatus || {
-        turnScopeId: committedTurn.turnScopeId,
-        dialogProcessId: committedTurn.dialogProcessId,
-        status: committedTurn.state,
-        error: committedTurn.failure || null,
-        updatedAt: committedTurn.updatedAt,
-      };
-      committedTurn.terminalStatus = materializedStatus;
-    }
+    if (result.terminalMaterialization?.statuses) session.turnStatuses = result.terminalMaterialization.statuses;
+    session.authorityEventOutbox = result.eventOutbox;
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: actualVersion, persistenceContext });
-    return { ...result, session, turnStatus, version: resolveSessionVersion(session) };
+    return { ...result, session, turnStatus: result.terminalMaterialization?.turnStatus || null, version: resolveSessionVersion(session) };
   }, parentSessionId, persistenceContext);
 }
 
@@ -141,9 +199,16 @@ export async function provisionSessionWithInitialTurn({
     if (expectedSessionVersion !== undefined && Number(expectedSessionVersion) !== actualVersion) {
       return { applied: false, reason: "session_version_conflict", currentVersion: actualVersion };
     }
-    const result = transitionTurnLifecycle(session.turnLifecycle, event, this.now);
+    const result = commitTurnLifecycle({
+      lifecycle: session.turnLifecycle,
+      event: { ...event, userId, sessionId, parentSessionId: resolvedParentSessionId },
+      eventOutbox: session.authorityEventOutbox,
+      createEventId: randomUUID,
+      now: this.now,
+    });
     if (!result.applied) return { ...result, session: isNew ? null : session, version: actualVersion };
     session.turnLifecycle = result.lifecycle;
+    session.authorityEventOutbox = result.eventOutbox;
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     const saved = await this.sessionRepo.save(userId, session, resolvedParentSessionId, {

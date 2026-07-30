@@ -102,6 +102,7 @@ export function useReconnectReplay({
   applyExecutionChildren,
   applyExecutionTree,
   applyWorkflowRuntimeEvent: reduceWorkflowRuntimeEvent,
+  applyTurnLifecycleSnapshot,
 } = {}) {
   const reconnectReplayContext = createReconnectReplayContext();
   const {
@@ -328,6 +329,7 @@ export function useReconnectReplay({
       applySubSessionReplayMessages,
       isDeletedTurn,
       hydrateActiveSessionBeforeReplay,
+      applyTurnLifecycleSnapshot,
     });
   }
 

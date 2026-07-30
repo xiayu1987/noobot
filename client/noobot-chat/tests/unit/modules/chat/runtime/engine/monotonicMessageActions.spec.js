@@ -14,6 +14,7 @@ import {
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { lifecycle } from "../run-state-machine/turnRuntimeRegistryTestFixtures.js";
 
 function createActions({
   turnRuntimeRegistry = ref(createTurnRuntimeRegistryState()),
@@ -92,10 +93,24 @@ function createActions({
 describe("monotonicMessageActions stop-window gates", () => {
   it("does not delete messages while the session run state machine is waiting for stop completion", async () => {
     const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
+    lifecycle(turnRuntimeRegistry.value, {
+      sessionId: "s1", turnScopeId: "turn-1",
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(turnRuntimeRegistry.value, {
+      sessionId: "s1", turnScopeId: "turn-1", revision: 2, sequence: 2,
+    });
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId: "s1",
       turnScopeId: "turn-1",
+    });
+    lifecycle(turnRuntimeRegistry.value, {
+      sessionId: "s1", turnScopeId: "turn-1",
+      eventType: "turn.stop_accepted", state: "stopping", phase: "stop",
+      action: "stop", executionState: "accepted", revision: 3, sequence: 3, canStop: false,
+      commandId: "stop:turn-1",
     });
     const { actions, activeSession, userMessage, deleteSessionMessagesFromApi } = createActions({ turnRuntimeRegistry });
 

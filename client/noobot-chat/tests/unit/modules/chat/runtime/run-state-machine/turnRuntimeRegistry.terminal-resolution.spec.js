@@ -29,6 +29,7 @@ import {
 import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import {
   backendState,
+  lifecycle,
   sendStart,
   settleTerminal,
   snapshot,
@@ -155,6 +156,11 @@ import {
   it("keeps stopping after real-time user_stopped until the authoritative summary is applied", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1", seq: 1 });
+    lifecycle(registry, {
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(registry, { revision: 2, sequence: 2 });
     backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
@@ -168,6 +174,14 @@ import {
       turnScopeId: "t1",
       dialogProcessId: "dp1",
       seq: 3,
+    });
+    lifecycle(registry, {
+      eventType: "turn.stop_accepted", state: "stopping", phase: "stop", action: "stop",
+      executionState: "stopping", revision: 3, sequence: 3, canStop: false,
+    });
+    lifecycle(registry, {
+      eventType: "turn.stop_processing_completed", state: "stopping", phase: "stop", action: "stop",
+      executionState: "stopping", revision: 4, sequence: 4, canStop: false,
     });
 
     const stopped = backendState(registry, {
@@ -199,6 +213,11 @@ import {
   it("rejects stale or conflicting real-time user_stopped events", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1", seq: 5 });
+    lifecycle(registry, {
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(registry, { revision: 2, sequence: 2 });
     backendState(registry, {
       sessionId: "s1",
       turnScopeId: "t1",
@@ -283,6 +302,15 @@ import {
     expect(early).toMatchObject({ applied: false, reason: "missing_state" });
 
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+    lifecycle(registry, {
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(registry, { revision: 2, sequence: 2 });
+    lifecycle(registry, {
+      eventType: "turn.processing_completed", state: "completion_requesting", phase: "completion",
+      executionState: "completed", revision: 3, sequence: 3, canStop: false,
+    });
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 2 });
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.COMPLETED, seq: 3 });
 
@@ -302,6 +330,15 @@ import {
       dialogProcessId: "dp1",
     });
     sendStart(registry, { sessionId: "local-session", turnScopeId: "t1" });
+    lifecycle(registry, {
+      sessionId: "backend-session", eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(registry, { sessionId: "backend-session", revision: 2, sequence: 2 });
+    lifecycle(registry, {
+      sessionId: "backend-session", eventType: "turn.processing_completed", state: "completion_requesting", phase: "completion",
+      executionState: "completed", revision: 3, sequence: 3, canStop: false,
+    });
     backendState(registry, { sessionId: "backend-session", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 2 });
     backendState(registry, { sessionId: "backend-session", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.COMPLETED, seq: 3 });
 
@@ -371,6 +408,17 @@ import {
     applyTurnRuntimeEvent(registry, confirmation);
     applyTurnRuntimeEvent(registry, confirmation);
     sendStart(registry, { sessionId: "s1", turnScopeId: "new" });
+    lifecycle(registry, {
+      sessionId: "s1", turnScopeId: "new", dialogProcessId: "new-dp",
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(registry, { sessionId: "s1", turnScopeId: "new", dialogProcessId: "new-dp", revision: 2, sequence: 2 });
+    lifecycle(registry, {
+      sessionId: "s1", turnScopeId: "new", dialogProcessId: "new-dp",
+      eventType: "turn.processing_completed", state: "completion_requesting", phase: "completion",
+      executionState: "completed", revision: 3, sequence: 3, canStop: false,
+    });
     backendState(registry, { sessionId: "s1", turnScopeId: "new", dialogProcessId: "new-dp", state: BackendChannelState.SENDING, seq: 2 });
     backendState(registry, { sessionId: "s1", turnScopeId: "new", dialogProcessId: "new-dp", state: BackendChannelState.COMPLETED, seq: 3 });
 

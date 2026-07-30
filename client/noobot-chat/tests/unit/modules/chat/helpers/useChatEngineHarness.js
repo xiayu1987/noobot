@@ -5,6 +5,7 @@
  */
 import { computed, ref } from "vue";
 import { vi } from "vitest";
+import { createTurnLifecycleEnvelope } from "@noobot/authoritative-state/contracts";
 import { useChatEngine } from "../../../../../src/modules/chat/composables/useChatEngine.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
 import {
@@ -13,6 +14,7 @@ import {
 } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
+  applyTurnLifecycleEnvelope,
   applyTurnRuntimeEvent,
   createTurnRuntimeRegistryState,
   resolveSessionTurnRuntime,
@@ -284,6 +286,12 @@ export const activateRuntimeTurn = ({
   sessionId,
   turnScopeId,
   dialogProcessId = "",
+  userId = "u-1",
+  commandId = `send:${turnScopeId}`,
+  messageId = `event-message:${turnScopeId}`,
+  presentationMessageId = `message:${turnScopeId}`,
+  revision = 1,
+  sequence = 1,
 } = {}) => {
   const registry = turnRuntimeRegistry.value;
   applyTurnRuntimeEvent(registry, {
@@ -291,13 +299,42 @@ export const activateRuntimeTurn = ({
     sessionId,
     turnScopeId,
   });
-  applyTurnRuntimeEvent(registry, {
-    type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+  applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+    eventType: "turn.action_accepted",
+    eventId: `accepted:${sessionId}:${turnScopeId}:${revision}`,
+    commandId,
+    userId,
     sessionId,
     turnScopeId,
+    messageId,
+    presentationMessageId,
     dialogProcessId,
-    state: BackendChannelState.SENDING,
-  });
+    revision,
+    sequence,
+    phase: "action",
+    state: "action_requesting",
+    action: "send",
+    executionState: "accepted",
+    capabilities: { actionLocked: true, canStop: false },
+  }));
+  applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+    eventType: "turn.processing_started",
+    eventId: `processing:${sessionId}:${turnScopeId}:${revision + 1}`,
+    commandId,
+    userId,
+    sessionId,
+    turnScopeId,
+    messageId,
+    presentationMessageId,
+    dialogProcessId,
+    revision: revision + 1,
+    sequence: sequence + 1,
+    phase: "processing",
+    state: "processing",
+    action: "send",
+    executionState: "sending",
+    capabilities: { actionLocked: true, canStop: true },
+  }));
   turnRuntimeRegistry.value = { ...registry };
 };
 
@@ -314,4 +351,52 @@ export const emitChannelState = (onEvent, sessionId, dialogProcessId, state, dat
     event: StreamEventEnum.CHANNEL_STATE,
     data: { sessionId, dialogProcessId, state, ...turnScopePatch, ...data },
   });
+};
+
+export const emitAuthorityProcessing = (onEvent, {
+  sessionId,
+  turnScopeId,
+  dialogProcessId = "",
+  userId = "u-1",
+  commandId = `send:${turnScopeId}`,
+  messageId = `event-message:${turnScopeId}`,
+  presentationMessageId = `message:${turnScopeId}`,
+} = {}) => {
+  const emit = (data) => onEvent({ event: StreamEventEnum.TURN_LIFECYCLE, data });
+  emit(createTurnLifecycleEnvelope({
+    eventType: "turn.action_accepted",
+    eventId: `accepted:${sessionId}:${turnScopeId}`,
+    commandId,
+    userId,
+    sessionId,
+    turnScopeId,
+    messageId,
+    presentationMessageId,
+    dialogProcessId,
+    revision: 1,
+    sequence: 1,
+    phase: "action",
+    state: "action_requesting",
+    action: "send",
+    executionState: "accepted",
+    capabilities: { actionLocked: true, canStop: false },
+  }));
+  emit(createTurnLifecycleEnvelope({
+    eventType: "turn.processing_started",
+    eventId: `processing:${sessionId}:${turnScopeId}`,
+    commandId,
+    userId,
+    sessionId,
+    turnScopeId,
+    messageId,
+    presentationMessageId,
+    dialogProcessId,
+    revision: 2,
+    sequence: 2,
+    phase: "processing",
+    state: "processing",
+    action: "send",
+    executionState: "sending",
+    capabilities: { actionLocked: true, canStop: true },
+  }));
 };

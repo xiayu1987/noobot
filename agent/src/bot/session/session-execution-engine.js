@@ -584,7 +584,7 @@ export class SessionExecutionEngine {
     eventListener,
     persistenceContext = null,
   }) {
-    await this.turnPersister.appendAgentMessages({
+    return this.turnPersister.appendAgentMessages({
       userId,
       sessionId,
       parentSessionId,
@@ -611,6 +611,18 @@ export class SessionExecutionEngine {
 
   async getTurnLifecycleSnapshot(payload = {}) {
     return this.session?.getTurnLifecycleSnapshot?.(payload);
+  }
+
+  async getPendingAuthorityEvents(payload = {}) {
+    return this.session?.getPendingAuthorityEvents?.(payload);
+  }
+
+  async recordAuthorityEventAttempt(payload = {}) {
+    return this.session?.recordAuthorityEventAttempt?.(payload);
+  }
+
+  async acknowledgeAuthorityEvent(payload = {}) {
+    return this.session?.acknowledgeAuthorityEvent?.(payload);
   }
 
   async getExecution(payload = {}) {

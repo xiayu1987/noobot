@@ -18,6 +18,12 @@ import {
 } from "../sessionRunStateMachine.js";
 import { normalizeTurnMeta } from "../../model/messageIdentity.js";
 import { normalizeReplayCacheKey } from "./replayCache.js";
+import { validateTurnLifecycleSnapshot } from "@noobot/authoritative-state/contracts";
+
+function hasValidTurnLifecycleSnapshot(sessionEntry = {}) {
+  const snapshot = sessionEntry?.turnLifecycleSnapshot;
+  return Boolean(snapshot && typeof snapshot === "object" && validateTurnLifecycleSnapshot(snapshot).valid);
+}
 
 function resolveAuthoritativeConversationStates(sessionEntry = {}) {
   const sessionId = _trimStr(sessionEntry?.sessionId);
@@ -43,7 +49,7 @@ function hasValidCurrentRun(sessionEntry = {}) {
 }
 
 function requiresSessionReconciliation(sessionEntry = {}) {
-  if (hasValidCurrentRun(sessionEntry)) return false;
+  if (hasValidCurrentRun(sessionEntry) || hasValidTurnLifecycleSnapshot(sessionEntry)) return false;
   return Boolean(
     sessionEntry?.hasRunningTask === true ||
     (Array.isArray(sessionEntry?.conversationStates) && sessionEntry.conversationStates.length) ||
@@ -106,6 +112,7 @@ export async function applyReconnectDataReplay({
   applySubSessionReplayMessages,
   isDeletedTurn,
   hydrateActiveSessionBeforeReplay,
+  applyTurnLifecycleSnapshot,
 } = {}) {
   const receivedSessions = Array.isArray(reconnectData?.sessions)
     ? reconnectData.sessions
@@ -120,6 +127,11 @@ export async function applyReconnectDataReplay({
       hasRunningTask: sessionEntry?.hasRunningTask === true,
       reason: "invalid_current_run",
     });
+  }
+  for (const sessionEntry of reconnectSessions) {
+    const snapshot = sessionEntry?.turnLifecycleSnapshot;
+    if (!snapshot || typeof snapshot !== "object") continue;
+    applyTurnLifecycleSnapshot?.(snapshot);
   }
   const recoverableSessionId = findRecoverableReconnectSessionId(reconnectSessions);
   const applyReconnectRunState = () => applyRunStateEvents?.(

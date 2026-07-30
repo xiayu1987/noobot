@@ -7,9 +7,10 @@ import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { createTerminalResolutionCoordinator } from "../../../../../../src/modules/chat/runtime/terminalResolutionCoordinator.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 import {
   applyTurnRuntimeEvent,
+  applyTurnLifecycleEnvelope,
   applyTurnTerminalResolution,
   createTurnRuntimeRegistryState,
   selectSessionTurnRuntime,
@@ -197,15 +198,22 @@ describe("terminalResolutionCoordinator", () => {
       dialogProcessId: "dp-1",
       source: "test",
     });
-    applyTurnRuntimeEvent(registry, {
-      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      sessionId: "s-1",
-      turnScopeId: "t-1",
-      dialogProcessId: "dp-1",
-      state: BackendChannelState.SENDING,
-      seq: 2,
-      source: "test",
-    });
+    applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+      eventType: "turn.action_accepted", eventId: "event-t-1-accepted",
+      commandId: "command-t-1", userId: "u-1", sessionId: "s-1", turnScopeId: "t-1",
+      messageId: "event-message-t-1", presentationMessageId: "message-t-1",
+      dialogProcessId: "dp-1", revision: 1, sequence: 1,
+      phase: "action", state: "action_requesting", action: "send", executionState: "accepted",
+      capabilities: { actionLocked: true, canStop: false },
+    }));
+    applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+      eventType: "turn.processing_started", eventId: "event-t-1-processing",
+      commandId: "command-t-1", userId: "u-1", sessionId: "s-1", turnScopeId: "t-1",
+      messageId: "event-message-t-1", presentationMessageId: "message-t-1",
+      dialogProcessId: "dp-1", revision: 2, sequence: 2,
+      phase: "processing", state: "processing", action: "send", executionState: "sending",
+      capabilities: { actionLocked: true, canStop: true },
+    }));
     expect(selectSessionTurnRuntime(registry, "s-1")).toMatchObject({
       sending: true,
       canStop: true,
@@ -222,7 +230,7 @@ describe("terminalResolutionCoordinator", () => {
         dialogProcessId: "dp-1",
         state: "completed",
         phase: "completion",
-        revision: 2,
+        revision: 3,
         sequence: 3,
         completionCommitId: "commit-2",
         summaryVersion: 2,

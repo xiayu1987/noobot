@@ -177,7 +177,10 @@ hasChannel(channelKey) {
 }
 
 deleteChannel(channelKey) {
-  this.channelStore.delete(String(channelKey || "").trim());
+  const normalizedChannelKey = String(channelKey || "").trim();
+  const channel = this.channelStore.get(normalizedChannelKey);
+  channel?.transport?.dispose?.(1000, "channel_deleted");
+  this.channelStore.delete(normalizedChannelKey);
 }
 
 get channelCount() {

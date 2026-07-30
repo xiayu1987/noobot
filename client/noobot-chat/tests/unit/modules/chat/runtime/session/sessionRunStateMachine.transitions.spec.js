@@ -18,7 +18,7 @@ import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/authoritative-state/
 
 const identity = { sessionId: "s1", turnScopeId: "turn-1", dialogProcessId: "dp-1" };
 const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
-const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING };
+const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
 const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
 const stopAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_ACCEPTED, phase: TURN_PHASE.ACTION, action: "stop" };
 const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
@@ -51,8 +51,9 @@ describe("turn runtime interaction lifecycle", () => {
     SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING,
   ])("starts %s as a new identity-bound action request", (type) => {
     const next = apply(null, { type });
-    expect(next).toMatchObject({ ...identity, state: FrontendRunState.ACTION_REQUESTING });
-    expect(deriveTurnCapabilities(next.state, next)).toMatchObject({ sending: true, canStop: false });
+    expect(next).toMatchObject({ ...identity, commandPending: true, pendingCommandType: "action" });
+    expect(next.state).toBeUndefined();
+    expect(deriveTurnCapabilities(next.state, next)).toMatchObject({ sending: false, canStop: false });
   });
 
   it("enters processing only after an authoritative lifecycle fact", () => {
@@ -71,8 +72,8 @@ describe("turn runtime interaction lifecycle", () => {
         state,
       });
       expect(result).toMatchObject({ applied: true });
-      expect(requesting.state).toBe(FrontendRunState.ACTION_REQUESTING);
-      expect(deriveTurnCapabilities(requesting.state, requesting)).toMatchObject({
+      expect(result.next.state).toBe(FrontendRunState.ACTION_REQUESTING);
+      expect(deriveTurnCapabilities(result.next.state, result.next)).toMatchObject({
         sending: true,
         canStop: false,
       });
@@ -81,6 +82,7 @@ describe("turn runtime interaction lifecycle", () => {
 
   it("keeps a completion notification locked until Terminal Resolution settles it", () => {
     let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
+    turn = apply(turn, actionAccepted);
     turn = apply(turn, processingStarted);
     turn = apply(turn, processingCompleted);
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
@@ -93,10 +95,12 @@ describe("turn runtime interaction lifecycle", () => {
 
   it("keeps stop in action-requesting until backend confirms stopping", () => {
     let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
+    turn = apply(turn, actionAccepted);
     turn = apply(turn, processingStarted);
     turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
-    expect(turn).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "stop" });
-    expect(deriveTurnCapabilities(turn.state, turn)).toMatchObject({ sending: true, canStop: false });
+    expect(turn).toMatchObject({ state: FrontendRunState.PROCESSING, commandPending: true, pendingCommandType: "stop", action: "stop" });
+    turn = apply(turn, stopAccepted);
+    expect(turn).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "stop", commandPending: false });
     turn = apply(turn, stopProcessingCompleted);
     expect(turn.state).toBe(FrontendRunState.USER_STOPPING);
     turn = apply(turn, terminalResolved(TURN_STATE.STOP_COMPLETED));
@@ -105,17 +109,19 @@ describe("turn runtime interaction lifecycle", () => {
 
   it("correlates local and authoritative stop facts through the action command", () => {
     let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
+    turn = apply(turn, actionAccepted);
     turn = apply(turn, processingStarted);
     turn = apply(turn, {
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       commandId: "stop:turn-1",
     });
     expect(turn).toMatchObject({
-      state: FrontendRunState.ACTION_REQUESTING,
+      state: FrontendRunState.PROCESSING,
       action: "stop",
       commandId: "stop:turn-1",
       actionCommandId: "stop:turn-1",
       lifecycleEventType: TURN_EVENT.PROCESSING_STARTED,
+      commandPending: true,
     });
 
     turn = apply(turn, { ...stopAccepted, commandId: "stop:turn-1" });
@@ -140,7 +146,7 @@ describe("turn runtime interaction lifecycle", () => {
   });
 
   it("settles failures only from an authoritative Terminal Resolution", () => {
-    const requesting = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
+    const requesting = apply(apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED }), actionAccepted);
     expect(apply(requesting, terminalResolved(TURN_STATE.ACTION_FAILED)).state).toBe(FrontendRunState.ACTION_REQUEST_ERROR);
 
     const processing = apply(requesting, processingStarted);
@@ -149,7 +155,8 @@ describe("turn runtime interaction lifecycle", () => {
     const completing = apply(processing, processingCompleted);
     expect(apply(completing, terminalResolved(TURN_STATE.COMPLETION_FAILED)).state).toBe(FrontendRunState.COMPLETION_ERROR);
 
-    const stopRequesting = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
+    const stopPending = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
+    const stopRequesting = apply(stopPending, stopAccepted);
     const stopping = apply(stopRequesting, stopProcessingCompleted);
     expect(apply(stopping, terminalResolved(TURN_STATE.STOP_FAILED)).state).toBe(FrontendRunState.STOP_ERROR);
   });
@@ -161,16 +168,19 @@ describe("turn runtime interaction lifecycle", () => {
     [TURN_PHASE.STOP, FrontendRunState.STOP_ERROR],
   ])("maps authoritative %s failures to their phase terminal", (phase, expectedState) => {
     const currentByPhase = {
-      [TURN_PHASE.ACTION]: apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED }),
-      [TURN_PHASE.PROCESSING]: apply(apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED }), processingStarted),
+      [TURN_PHASE.ACTION]: apply(apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED }), actionAccepted),
+      [TURN_PHASE.PROCESSING]: apply(apply(apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED }), actionAccepted), processingStarted),
       [TURN_PHASE.COMPLETION]: apply(
-        apply(apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED }), processingStarted),
+        apply(apply(apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED }), actionAccepted), processingStarted),
         processingCompleted,
       ),
       [TURN_PHASE.STOP]: apply(
         apply(
-          apply(apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED }), processingStarted),
-          { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED },
+          apply(
+            apply(apply(apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED }), actionAccepted), processingStarted),
+            { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED },
+          ),
+          stopAccepted,
         ),
         stopProcessingCompleted,
       ),
@@ -256,7 +266,11 @@ describe("turn runtime interaction lifecycle", () => {
       type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       state: FrontendRunState.CANCELLED,
     });
-    expect(result).toMatchObject({ applied: true, next: { state: FrontendRunState.PROCESSING, terminal: null } });
+    expect(result).toMatchObject({
+      applied: true,
+      next: { state: FrontendRunState.PROCESSING, transportState: FrontendRunState.CANCELLED },
+    });
+    expect(result.next.terminal).toBeUndefined();
   });
 
   it.each([
@@ -290,13 +304,14 @@ describe("turn runtime interaction lifecycle", () => {
       reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION,
     });
     expect(reduceTurnRuntimeEvent(requesting, { ...identity, type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING, seq: 1 })).toMatchObject({
-      applied: false,
-      reason: TURN_TRANSITION_REASON.STALE_SEQUENCE,
+      applied: true,
+      next: { transportState: BackendChannelState.SENDING, transportSeq: 1 },
     });
 
-    let completed = apply(requesting, { ...processingStarted, seq: 3 });
-    completed = apply(completed, { ...processingCompleted, seq: 4 });
-    completed = apply(completed, { ...authoritativeCompleted, seq: 5 });
+    let completed = apply(requesting, { ...actionAccepted, seq: 3 });
+    completed = apply(completed, { ...processingStarted, seq: 4 });
+    completed = apply(completed, { ...processingCompleted, seq: 5 });
+    completed = apply(completed, { ...authoritativeCompleted, seq: 6 });
     completed = apply(completed, terminalResolved(TURN_STATE.COMPLETED, { revision: 6, sequence: 6 }));
     expect(reduceTurnRuntimeEvent(completed, { ...identity, type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, state: BackendChannelState.SENDING, seq: 7 })).toMatchObject({
       applied: false,
