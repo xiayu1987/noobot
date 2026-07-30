@@ -2,7 +2,7 @@
   "id": "workflow",
   "pluginKey": "workflow",
   "name": "noobot-plugin-workflow",
-  "version": "4.1.3",
+  "version": "4.1.4",
   "capabilities": [
     "agent.workflow",
     "service.after_session_delete",
