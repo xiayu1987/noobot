@@ -14,7 +14,7 @@ import {
   reduceTurnRuntimeEvent,
   TURN_TRANSITION_REASON,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/authoritative-state/contracts";
 
 const identity = { sessionId: "s1", turnScopeId: "turn-1", dialogProcessId: "dp-1" };
 const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };

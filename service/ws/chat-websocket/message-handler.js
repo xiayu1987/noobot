@@ -7,7 +7,7 @@ import { unregisterActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { resetRunState } from "./connection-state.js";
-import { TURN_COMMAND, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_COMMAND, TURN_PHASE } from "@noobot/authoritative-state/contracts";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { createMessageQueryHandlers } from "./message-query-handlers.js";
 import { createMessageStopHandler } from "./message-stop-handler.js";

@@ -6,7 +6,7 @@
 import {
   EXECUTION_KIND,
   normalizeExecutionIdentity,
-} from "./execution-lifecycle-protocol.mjs";
+} from "@noobot/shared/execution-lifecycle-protocol";
 
 export const TURN_LIFECYCLE_PROTOCOL_VERSION = 2;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";

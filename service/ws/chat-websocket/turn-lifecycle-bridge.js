@@ -8,7 +8,7 @@ import {
   TURN_LIFECYCLE_WIRE_EVENT,
   createTurnLifecycleEnvelope,
   deriveAuthoritativeTurnCapabilities,
-} from "@noobot/shared/turn-lifecycle-protocol";
+} from "@noobot/authoritative-state/contracts";
 
 const clean = (value) => String(value || "").trim();
 

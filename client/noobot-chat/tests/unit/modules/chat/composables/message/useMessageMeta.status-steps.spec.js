@@ -10,7 +10,7 @@ import { useMessageMeta } from "../../../../../../src/modules/chat/composables/m
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
 import { applyTurnRuntimeEvent, applyTurnTerminalResolution } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "../../../../../../../../shared/turn-lifecycle-protocol.mjs";
+import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 
 function applyEvent(store, event) {
   applyTurnRuntimeEvent(store.turnRuntimeRegistry, event);

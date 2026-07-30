@@ -8,7 +8,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { applyTurnTerminalResolution } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { createTurnTerminalResolution } from "../../../../../../../shared/turn-lifecycle-protocol.mjs";
+import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 import {
   createChatSession,
   createSessionFixture,

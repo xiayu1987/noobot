@@ -14,7 +14,7 @@ import {
 import { BackendChannelState, FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { applyTurnTerminalResolution } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { createTurnTerminalResolution } from "../../../../../../../shared/turn-lifecycle-protocol.mjs";
+import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 import {
   RoleEnum,
   StreamEventEnum,

@@ -10,7 +10,7 @@ import { isPluginDebugEnabled, resolveEffectiveRunTimeoutMs, resolveEffectiveStr
 import { isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
 import { createCommittedTurnLifecyclePublisher } from "./turn-lifecycle-bridge.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/authoritative-state/contracts";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createAgentApplication } from "#agent/application";
 

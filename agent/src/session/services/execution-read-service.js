@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildExecutionTree, normalizeExecutionIdentity } from "@noobot/shared/execution-lifecycle-protocol";
-import { deriveAuthoritativeTurnCapabilities } from "@noobot/shared/turn-lifecycle-protocol";
-import { normalizeTurnLifecycleEntity, projectTurnLifecycleTiming } from "../entities/turn-lifecycle-entity.js";
+import { deriveAuthoritativeTurnCapabilities } from "@noobot/authoritative-state/contracts";
+import { normalizeTurnLifecycleEntity, projectTurnLifecycleTiming } from "@noobot/authoritative-state/domain";
 
 const clean = (value) => String(value || "").trim();
 

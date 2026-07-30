@@ -4,10 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { shouldRecordRuntimeExecutionLog } from "@noobot/shared/runtime-events-config";
+
 export class ExecutionLogService {
-  constructor({ executionRepo, sessionRepo } = {}) {
+  constructor({ executionRepo, sessionRepo, runtimeEventsConfig = {} } = {}) {
     this.executionRepo = executionRepo;
     this.sessionRepo = sessionRepo;
+    this.runtimeEventsConfig = runtimeEventsConfig;
   }
 
   async _resolveParentSessionId(userId, sessionId, parentSessionId = "", persistenceContext = null) {
@@ -51,6 +54,9 @@ export class ExecutionLogService {
     parentSessionId = "",
     persistenceContext = null,
   }) {
+    if (!shouldRecordRuntimeExecutionLog({ event, category, type, data }, this.runtimeEventsConfig)) {
+      return { appended: false, skipped: true, reason: "runtime_event_policy" };
+    }
     const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
       sessionId,
@@ -64,5 +70,6 @@ export class ExecutionLogService {
       resolvedParentSessionId,
       persistenceContext,
     );
+    return { appended: true, skipped: false };
   }
 }

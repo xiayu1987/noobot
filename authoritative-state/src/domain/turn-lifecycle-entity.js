@@ -9,7 +9,7 @@ import {
   TURN_PHASE,
   TURN_STATE,
   deriveAuthoritativeTurnCapabilities,
-} from "@noobot/shared/turn-lifecycle-protocol";
+} from "../contracts/turn-lifecycle-protocol.mjs";
 
 const TERMINAL_STATES = new Set([
   TURN_STATE.COMPLETED,

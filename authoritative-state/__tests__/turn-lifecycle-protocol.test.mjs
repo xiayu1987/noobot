@@ -13,7 +13,7 @@ import {
   deriveAuthoritativeTurnCapabilities,
   validateTurnLifecycleEnvelope,
   validateSessionProvisionIntent,
-} from "../turn-lifecycle-protocol.mjs";
+} from "../src/contracts/turn-lifecycle-protocol.mjs";
 
 test("turn lifecycle envelope requires stable identity and monotonic coordinates", () => {
   const envelope = createTurnLifecycleEnvelope({

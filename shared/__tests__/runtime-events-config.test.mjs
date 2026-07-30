@@ -8,15 +8,18 @@ import assert from 'node:assert/strict';
 import {
   RUNTIME_EVENTS_CONFIG_DEFAULTS,
   RUNTIME_EVENTS_CONFIG_ENVS,
+  RUNTIME_EVENTS_EXECUTION_LOG_EVENT_CONTROLS,
   RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS,
   RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES,
   isHookRuntimeEventVerboseEnabled,
   resolveHookRuntimeEventsMode,
   resolveRuntimeEventsMaxArchives,
   resolveRuntimeEventsMaxFileBytes,
+  resolveRuntimeEventsExecutionLogControls,
   resolveRuntimeEventsRetentionDays,
   resolveRuntimeEventsSessionLogControls,
   resolveRuntimeEventsStorageConfig,
+  shouldRecordRuntimeExecutionLog,
 } from '../runtime-events-config.mjs';
 
 test('session log registries reference controls with defaults and environment keys', () => {
@@ -44,6 +47,33 @@ test('session log registries reference controls with defaults and environment ke
 
 test('runtime-events storage config uses shared defaults', () => {
   assert.deepEqual(resolveRuntimeEventsStorageConfig({}), RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents);
+});
+
+test('execution log controls are centralized and suppress full successful turn diagnostics by default', () => {
+  for (const controlKey of Object.values(RUNTIME_EVENTS_EXECUTION_LOG_EVENT_CONTROLS)) {
+    assert.equal(typeof RUNTIME_EVENTS_CONFIG_DEFAULTS.executionLogControls[controlKey], 'boolean');
+    assert.equal(typeof RUNTIME_EVENTS_CONFIG_ENVS.executionLogControls[controlKey], 'string');
+  }
+
+  assert.equal(shouldRecordRuntimeExecutionLog({ event: 'session_turn_full' }, { env: {} }), false);
+  assert.equal(
+    shouldRecordRuntimeExecutionLog(
+      { event: 'session_turn_full', category: 'error', data: { error: 'save failed' } },
+      { env: {} },
+    ),
+    true,
+  );
+  assert.equal(shouldRecordRuntimeExecutionLog({ event: 'workflow_failed' }, { env: {} }), true);
+  assert.equal(
+    shouldRecordRuntimeExecutionLog(
+      { event: 'session_turn_full' },
+      { env: { [RUNTIME_EVENTS_CONFIG_ENVS.executionLogControls.sessionTurnFullDebug]: 'on' } },
+    ),
+    true,
+  );
+  assert.deepEqual(resolveRuntimeEventsExecutionLogControls({}), {
+    sessionTurnFullDebug: false,
+  });
 });
 
 test('runtime-events storage config falls back on invalid values', () => {

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/authoritative-state/contracts";
 
 const RECOVERABLE_FINALIZE_STATES = new Set([
   "completion_requesting",

@@ -8,7 +8,7 @@ import {
   buildAbortErrorMessage,
   buildStoppedPartialAssistant,
 } from "./stop-lifecycle.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/shared/turn-lifecycle-protocol";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/authoritative-state/contracts";
 
 export function snapshotRunState({
   runMeta = null,
