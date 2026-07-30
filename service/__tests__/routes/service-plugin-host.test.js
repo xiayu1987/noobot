@@ -59,3 +59,23 @@ test("service plugin host ignores plugins without the route capability", async (
   assert.deepEqual(result, []);
   assert.equal(called, false);
 });
+
+test("service plugin host loads routes from the configured plugin root", async () => {
+  const calls = [];
+  const pluginRootDir = "/packaged/backend/plugin";
+  const host = createServicePluginHost({
+    pluginRootDir,
+    loadPluginRuntime: async (options) => {
+      calls.push(options);
+      return { registry: new Map() };
+    },
+  });
+
+  await host.registerServiceRoutes({ get() {} }, { ports: {} });
+
+  assert.deepEqual(calls, [{
+    requiredApiVersion: "1",
+    runtimeSurface: "service",
+    pluginRootDir,
+  }]);
+});

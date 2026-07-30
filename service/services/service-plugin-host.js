@@ -60,14 +60,23 @@ function supportsServiceEvent(manifest = {}, eventName = "") {
   return manifestSupportsCapability(manifest, serviceCapability);
 }
 
-export function createServicePluginHost({ loadPluginRuntime = getNoobotPluginRuntime } = {}) {
-  const loadedDynamicPluginsPromise = loadPluginRuntime(dynamicPluginRuntimeOptions).catch(
+export function createServicePluginHost({
+  loadPluginRuntime = getNoobotPluginRuntime,
+  pluginRootDir = "",
+} = {}) {
+  const runtimeOptions = {
+    ...dynamicPluginRuntimeOptions,
+    ...(String(pluginRootDir || "").trim()
+      ? { pluginRootDir: String(pluginRootDir).trim() }
+      : {}),
+  };
+  const loadedDynamicPluginsPromise = loadPluginRuntime(runtimeOptions).catch(
     () => EMPTY_DYNAMIC_PLUGIN_RUNTIME,
   );
 
   async function resolveLoadedPlugins({ refresh = false } = {}) {
     if (refresh) {
-      return refreshNoobotPluginRuntime(dynamicPluginRuntimeOptions).catch(
+      return refreshNoobotPluginRuntime(runtimeOptions).catch(
         () => EMPTY_DYNAMIC_PLUGIN_RUNTIME,
       );
     }
