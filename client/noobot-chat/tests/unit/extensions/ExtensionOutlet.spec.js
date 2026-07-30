@@ -46,4 +46,39 @@ describe("ExtensionOutlet reactive context", () => {
     expect(wrapper.get("[data-testid='version']").text()).toBe("2");
     expect(wrapper.findComponent(Child).vm).toBe(initialChild);
   });
+
+  it("filters contributions by stable include and exclude ids", async () => {
+    const Child = defineComponent({
+      props: { label: String },
+      setup(props) {
+        return () => h("span", { "data-testid": props.label }, props.label);
+      },
+    });
+    contributeExtension(TEST_POINT, {
+      id: "thinking-panel",
+      component: Child,
+      resolveProps: () => ({ label: "thinking" }),
+    });
+    contributeExtension(TEST_POINT, {
+      id: "other-panel",
+      component: Child,
+      resolveProps: () => ({ label: "other" }),
+    });
+
+    const wrapper = mount(ExtensionOutlet, {
+      props: {
+        point: TEST_POINT,
+        includeContributionIds: ["thinking-panel"],
+      },
+    });
+    expect(wrapper.find("[data-testid='thinking']").exists()).toBe(true);
+    expect(wrapper.find("[data-testid='other']").exists()).toBe(false);
+
+    await wrapper.setProps({
+      includeContributionIds: null,
+      excludeContributionIds: ["thinking-panel"],
+    });
+    expect(wrapper.find("[data-testid='thinking']").exists()).toBe(false);
+    expect(wrapper.find("[data-testid='other']").exists()).toBe(true);
+  });
 });

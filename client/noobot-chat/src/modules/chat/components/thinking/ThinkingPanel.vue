@@ -25,7 +25,7 @@ const props = defineProps({
   formatFileSize: { type: Function, default: null },
   isImageMime: { type: Function, default: null },
 });
-const emit = defineEmits(["open-thinking-details"]);
+const emit = defineEmits(["open-thinking-details", "panel-visibility-change"]);
 const { translate } = useLocale();
 const panel = useThinkingPanel(props, emit);
 const thinkingOpenNames = computed(() => getTurnUiState(props.messageItem)?.thinkingOpenNames || []);
@@ -34,6 +34,8 @@ const thinkingIdentity = computed(() => [
   normalizeTurnScopeIdKey(props.messageItem?.turnScopeId),
   String(props.messageItem?.dialogProcessId || props.messageItem?.id || props.messageItem?.messageId || "").trim(),
 ].join("::"));
+const panelVisible = computed(() => Boolean(panel.hasThinking.value || panel.loadedThinkingDetail.value));
+watch(panelVisible, (visible) => emit("panel-visibility-change", visible), { immediate: true });
 watch(thinkingIdentity, () => {
   if (props.messageItem?.role !== "assistant") return;
   getTurnUiState(props.messageItem);

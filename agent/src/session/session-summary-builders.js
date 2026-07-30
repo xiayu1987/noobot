@@ -7,6 +7,7 @@
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { createTurnLifecycleSnapshot } from "@noobot/shared/turn-lifecycle-protocol";
 import { projectTurnLifecycleTiming } from "./entities/turn-lifecycle-entity.js";
+import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
   compactAttachmentRef,
@@ -14,7 +15,7 @@ import {
   dedupeAttachmentRefs,
 } from "./transfer-attachment-refs.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 11;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 12;
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
 const SUMMARY_OBJECT_FIELD_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryObjectFieldChars;
@@ -479,42 +480,6 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
   return { logs, totalCount };
 }
 
-function collectMessageCorrelationKeys(message = {}) {
-  const keys = [];
-  for (const key of ["turnScopeId", "dialogProcessId", "parentDialogProcessId"]) {
-    const value = String(message?.[key] || "").trim();
-    if (value && !keys.includes(value)) keys.push(value);
-  }
-  return keys;
-}
-
-function countMessageThinkingDetails(message = {}) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) return 0;
-  return (Array.isArray(message?.activityTimeline) ? message.activityTimeline.length : 0) +
-    (Array.isArray(message?.toolTimeline) ? message.toolTimeline.length : 0);
-}
-
-function buildThinkingDetailCountsByCorrelationKey(messages = []) {
-  const counts = new Map();
-  for (const message of messages) {
-    if (message?.injectedMessage !== true) continue;
-    const count = countMessageThinkingDetails(message);
-    if (!count) continue;
-    for (const key of collectMessageCorrelationKeys(message)) {
-      counts.set(key, (counts.get(key) || 0) + count);
-    }
-  }
-  return counts;
-}
-
-function resolveThinkingDetailCountForDisplayMessage(message = {}, countsByKey = new Map()) {
-  let count = countMessageThinkingDetails(message);
-  for (const key of collectMessageCorrelationKeys(message)) {
-    count += countsByKey.get(key) || 0;
-  }
-  return count;
-}
-
 export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const turnTimings = Array.isArray(session?.turnTimings) ? session.turnTimings : [];
@@ -533,17 +498,24 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
       String(messageItem?.content || "").trim(),
   );
   const customTitle = String(session?.customTitle || "").trim();
-  const thinkingDetailCountsByKey = buildThinkingDetailCountsByCorrelationKey(messages);
   const projectedDisplayMessages = messages
     .map((message) => {
       const summary = buildDisplayMessageSummary(message);
-      if (!summary) return null;
-      if (String(message?.role || "").trim() === "assistant") {
-        const thinkingDetailCount = resolveThinkingDetailCountForDisplayMessage(message, thinkingDetailCountsByKey);
-        if (thinkingDetailCount > 0) {
-          summary.hasThinkingDetails = true;
-          summary.thinkingDetailCount = thinkingDetailCount;
-        }
+      if (!summary || String(message?.role || "").trim() !== "assistant") return summary;
+      const projectedMessage = projectThinkingTimeline(messages, message).projectedRootMessage;
+      const activityTimeline = pickLightActivityTimeline(projectedMessage);
+      const toolTimeline = pickLightToolTimeline(projectedMessage);
+      if (activityTimeline.length) summary.activityTimeline = activityTimeline;
+      else delete summary.activityTimeline;
+      if (toolTimeline.length) summary.toolTimeline = toolTimeline;
+      else delete summary.toolTimeline;
+      const thinkingDetailCount = activityTimeline.length + toolTimeline.length;
+      if (thinkingDetailCount > 0) {
+        summary.thinkingDetailCount = thinkingDetailCount;
+        summary.hasThinkingDetails = true;
+      } else {
+        delete summary.thinkingDetailCount;
+        delete summary.hasThinkingDetails;
       }
       return summary;
     })

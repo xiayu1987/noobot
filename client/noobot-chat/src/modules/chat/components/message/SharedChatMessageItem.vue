@@ -148,6 +148,17 @@ const preMessageCardRenderers = computed(() =>
 const postMessageCardRenderers = computed(() =>
   resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST, { messageItem: props.messageItem }),
 );
+const thinkingPanelContributionIds = Object.freeze(["thinking-panel"]);
+const hasThinkingPanelContribution = computed(() =>
+  preMessageCardRenderers.value.some((renderer = {}) => renderer.id === "thinking-panel"),
+);
+const thinkingPanelVisible = ref(false);
+const statusStepRunning = computed(() => Boolean(
+  statusStepState.value && !["completed", "stopped", "error"].includes(statusStepState.value),
+));
+const unifiedRuntimePanelsRunning = computed(() =>
+  statusStepRunning.value && thinkingPanelVisible.value,
+);
 const showMessageTypeTag = computed(() => !(
   getMessageRole(props.messageItem) === "assistant" &&
   String(props.messageItem?.type || "").trim().toLowerCase() === "message" &&
@@ -284,6 +295,10 @@ function handleOpenThinkingDetails(payload = {}) {
   });
 }
 
+function handleThinkingPanelVisibility(visible) {
+  thinkingPanelVisible.value = visible === true;
+}
+
 async function handleCopyAssistantMessageRich() {
   await onCopyMessageMarkdownRich({
     textContent: props.messageItem.content,
@@ -309,13 +324,34 @@ function toggleAssistantContent() {
     :hide-header="hideHeader"
   >
     <BaseMessageTypeTag v-if="showMessageTypeTag" :type="messageItem.type" />
-    <MessageStatusRow
-      v-if="getMessageRole(messageItem) === 'assistant' && statusStepState"
-      :status-step-state="statusStepState"
-    />
+    <div
+      v-if="getMessageRole(messageItem) === 'assistant' && (statusStepState || hasThinkingPanelContribution)"
+      class="message-runtime-panels"
+      :class="{
+        'has-status-steps': Boolean(statusStepState),
+        'has-thinking-panel': thinkingPanelVisible,
+        'is-running': unifiedRuntimePanelsRunning,
+      }"
+    >
+      <MessageStatusRow
+        v-if="statusStepState"
+        :status-step-state="statusStepState"
+      />
+      <ExtensionOutlet
+        v-if="hasThinkingPanelContribution"
+        :point="EXTENSION_POINTS.MESSAGE_CARD_PRE"
+        :context="extensionRendererContext"
+        :include-contribution-ids="thinkingPanelContributionIds"
+        :extra-listeners="{
+          openThinkingDetails: handleOpenThinkingDetails,
+          panelVisibilityChange: handleThinkingPanelVisibility,
+        }"
+      />
+    </div>
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_CARD_PRE"
       :context="extensionRendererContext"
+      :exclude-contribution-ids="thinkingPanelContributionIds"
       :extra-listeners="{ openThinkingDetails: handleOpenThinkingDetails }"
     />
 
@@ -442,3 +478,31 @@ function toggleAssistantContent() {
     />
   </el-dialog>
 </template>
+
+<style scoped>
+.message-runtime-panels {
+  box-sizing: border-box;
+  width: 100%;
+  border-radius: var(--noobot-radius-xs);
+  background: transparent;
+}
+
+.message-runtime-panels.is-running {
+  animation: message-runtime-panels-glow 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-runtime-panels.is-running {
+    animation: none;
+  }
+}
+
+@keyframes message-runtime-panels-glow {
+  0%, 100% {
+    box-shadow: 0 3px 12px color-mix(in srgb, var(--el-color-primary) 14%, transparent), 0 0 6px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+  }
+  50% {
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 22%, transparent), 0 0 12px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+  }
+}
+</style>

@@ -178,6 +178,7 @@ export async function createAppDependencies({
     getBot: () => bot,
     openVSCodeService,
     buildHttpModuleDependencies: () => ({
+      pluginRootDir: String(startupContext?.paths?.pluginRootDir || "").trim(),
       bot,
       openVSCodeService,
       globalConfigProvider: () => globalConfig,

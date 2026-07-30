@@ -44,6 +44,7 @@ export async function registerHttpModules(
     workspaceRootPath,
     handleChat,
     translateText,
+    pluginRootDir,
   } = {},
 ) {
   const workspaceService = {
@@ -134,7 +135,7 @@ export async function registerHttpModules(
     translateText,
   });
 
-  await createServicePluginHost().registerServiceRoutes(app, {
+  await createServicePluginHost({ pluginRootDir }).registerServiceRoutes(app, {
     translateText,
     ports: createPluginServicePorts({ bot, translateText }),
   });

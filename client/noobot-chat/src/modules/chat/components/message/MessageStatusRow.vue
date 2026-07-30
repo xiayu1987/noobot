@@ -59,7 +59,7 @@ const stepView = computed(() => {
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
-  margin: 0 0 var(--noobot-space-md);
+  margin: 0;
   padding: 12px var(--noobot-space-md) 10px;
   border: none;
   border-radius: var(--noobot-radius-xs);
@@ -71,7 +71,6 @@ const stepView = computed(() => {
 
 .message-status-steps.is-running {
   background: transparent;
-  animation: running-card-glow 2.4s ease-in-out infinite;
 }
 .message-status-steps.is-error {
   background: transparent;
@@ -166,22 +165,6 @@ const stepView = computed(() => {
   100% {
     box-shadow: 0 0 12px 4px color-mix(in srgb, var(--el-color-primary) 80%, transparent);
     transform: scale(1.42);
-  }
-}
-
-@keyframes running-card-glow {
-  0%, 100% {
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
-  }
-  50% {
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 24%, transparent);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .message-status-steps.is-running,
-  .message-status-steps.is-running :deep(.el-step__head.is-process .el-step__icon) {
-    animation: none;
   }
 }
 
