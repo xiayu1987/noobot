@@ -5,7 +5,7 @@
  */
 import { normalizeSelectedConnectors } from "../entities/session-entity.js";
 import { isSessionDisplaySummaryPayload } from "../session-summary-builders.js";
-import { normalizeTurnLifecycleEntity, isTerminalTurnLifecycleState, projectTurnLifecycleTiming } from "@noobot/authoritative-state/domain";
+import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
 import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 
 export class SessionCrudService {
@@ -140,22 +140,12 @@ export class SessionCrudService {
     if (!bundle.exists || !bundle.session) {
       return createTurnTerminalResolution({ commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "session_not_found" });
     }
-    const session = bundle.session;
-    const lifecycle = normalizeTurnLifecycleEntity(session.turnLifecycle || {});
-    const lifecycleTurn = lifecycle.turns[normalizedTurnScopeId] || null;
-    const turn = lifecycleTurn
-      ? { ...projectTurnLifecycleTiming(lifecycleTurn, session.turnTimings), sessionId: normalizedSessionId }
-      : null;
-    if (!turn) return createTurnTerminalResolution({ commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "turn_not_found", retryable: true, retryAfterMs: 250 });
-    if (!isTerminalTurnLifecycleState(turn.state)) {
-      return createTurnTerminalResolution({ commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "turn_not_terminal", retryable: true, retryAfterMs: 250, turn });
-    }
-    if (!turn.terminalStatus) {
-      return createTurnTerminalResolution({ commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "terminal_status_not_ready", retryable: true, retryAfterMs: 250, turn });
-    }
-    return createTurnTerminalResolution({
-      commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId,
-      resolved: true, turn,
+    return resolveAuthoritativeTurnTerminal({
+      lifecycle: bundle.session.turnLifecycle,
+      turnTimings: bundle.session.turnTimings,
+      commandId: normalizedCommandId,
+      sessionId: normalizedSessionId,
+      turnScopeId: normalizedTurnScopeId,
     });
   }
 

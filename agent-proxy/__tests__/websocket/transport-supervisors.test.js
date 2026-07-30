@@ -39,6 +39,36 @@ test("upstream supervisor ignores close callbacks from a replaced generation", (
   assert.equal(supervisor.status().phase, "connecting");
 });
 
+test("upstream supervisor terminates a replaced socket that never completes close", async () => {
+  class HangingWebSocket extends EventEmitter {
+    static OPEN = 1;
+    static CLOSED = 3;
+    constructor() {
+      super();
+      this.readyState = HangingWebSocket.OPEN;
+      this.closeCalls = 0;
+      this.terminateCalls = 0;
+    }
+    close() { this.closeCalls += 1; }
+    terminate() {
+      this.terminateCalls += 1;
+      this.readyState = HangingWebSocket.CLOSED;
+      this.emit("close", 1006, "terminated");
+    }
+  }
+  const supervisor = new UpstreamTransportSupervisor(HangingWebSocket, { closeGraceMs: 5 });
+  const first = supervisor.connect("ws://first");
+  const second = supervisor.connect("ws://second");
+
+  assert.equal(first.socket.closeCalls, 1);
+  assert.equal(supervisor.socket, second.socket);
+  assert.equal(supervisor.status().retiredSocketCount, 1);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(first.socket.terminateCalls, 1);
+  assert.equal(supervisor.status().retiredSocketCount, 0);
+  assert.equal(supervisor.socket, second.socket);
+});
+
 test("downstream registry finalizes error and close only once", () => {
   let finalized = 0;
   const socket = { __agentProxySocketId: "connection-1" };

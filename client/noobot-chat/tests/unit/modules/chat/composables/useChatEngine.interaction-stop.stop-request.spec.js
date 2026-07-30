@@ -18,7 +18,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     const stream = vi.fn(() => new Promise((resolve) => {
       releaseStream = resolve;
     }));
-    const { engine, sending, canStop } = createHarness({
+    const { engine, sending, canStop, activeTurnRuntime, turnRuntimeRegistry } = createHarness({
       sessionId: "local-active-stop",
       stream,
     });
@@ -27,6 +27,14 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     await Promise.resolve();
 
     expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(false);
+
+    activateRuntimeTurn({
+      turnRuntimeRegistry,
+      sessionId: "local-active-stop",
+      turnScopeId: activeTurnRuntime.value.turnScopeId,
+      dialogProcessId: "dp-local-active-stop",
+    });
     expect(canStop.value).toBe(true);
 
     releaseStream();

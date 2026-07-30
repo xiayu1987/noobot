@@ -588,7 +588,6 @@ export class FileSystemSessionRepository {
         if (!persistenceContext) {
           await this.upsertSessionSummary(userId, payload);
         }
-        await this.writeSessionDisplaySummary(userId, payload, { persistenceContext });
       }
       return true;
     }, persistenceContext);
@@ -701,10 +700,6 @@ export class FileSystemSessionRepository {
             throw rebuildError;
           }
         }
-        // The display summary is a durable projection of the same canonical
-        // session messages. Keep it in the save boundary so a reconnect or
-        // refresh cannot observe a stale projection while the turn is live.
-        await this.writeSessionDisplaySummary(userId, payload, { persistenceContext });
         return true;
       },
       persistenceContext,

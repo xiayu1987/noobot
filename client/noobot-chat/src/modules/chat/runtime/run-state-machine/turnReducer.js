@@ -57,25 +57,15 @@ export function isFinalTurnState(state = "", turn = {}) {
   return FINAL_STATES.has(normalized);
 }
 
-export function deriveTurnCapabilities(state = "", { backendState = "", finalizeIntent = null } = {}) {
+export function deriveTurnCapabilities(state = "", { canStop = false, finalizeIntent = null } = {}) {
   const normalized = text(state);
-  const normalizedBackendState = text(backendState);
   const actionLocked = Boolean(normalized) && !isFinalTurnState(normalized, { finalizeIntent });
   return {
     actionLocked,
     sending: actionLocked,
-    canStop: normalized === FrontendRunState.PROCESSING &&
-      normalizedBackendState === BackendChannelState.SENDING,
+    canStop: normalized === FrontendRunState.PROCESSING && canStop === true,
     terminal: isFinalTurnState(normalized, { finalizeIntent }),
   };
-}
-
-function failureStateFor(current = {}) {
-  const state = text(current.state);
-  if (state === FrontendRunState.FRONTEND_COMPLETION_REQUESTING) return FrontendRunState.COMPLETION_ERROR;
-  if (state === FrontendRunState.USER_STOPPING) return FrontendRunState.STOP_ERROR;
-  if (state === FrontendRunState.PROCESSING) return FrontendRunState.PROCESSING_ERROR;
-  return FrontendRunState.ACTION_REQUEST_ERROR;
 }
 
 function targetState(current = {}, event = {}) {
@@ -92,8 +82,6 @@ function targetState(current = {}, event = {}) {
     }[terminalState] || currentState;
   }
 
-  const backendState = text(event.backendState || event.raw?.state || event.state);
-
   if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
     const lifecycleType = text(event.eventType);
     if (lifecycleType === TURN_EVENT.ACTION_ACCEPTED || lifecycleType === TURN_EVENT.STOP_ACCEPTED) {
@@ -109,38 +97,83 @@ function targetState(current = {}, event = {}) {
     }
   }
 
-  if ([
+  return currentState;
+}
+
+function reduceInteractionProjection(current = {}, event = {}) {
+  const isTransport = [
+    SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+    SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+  ].includes(event.type);
+  const isActionStart = ACTION_START_EVENTS.has(event.type);
+  const isStopStart = STOP_REQUEST_EVENTS.has(event.type);
+  const isCompletionStart = event.type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED;
+  const isSettled = [
+    SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_SETTLED,
+    SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_SETTLED,
+    SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_SETTLED,
+    SESSION_RUN_EVENT.LOCAL_USER_STOP_PENDING_CLEARED,
+  ].includes(event.type);
+  const isLocalFailure = [
     SESSION_RUN_EVENT.LOCAL_FAILURE,
     SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED,
     SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
-  ].includes(event.type)) return currentState;
-  if (ACTION_START_EVENTS.has(event.type)) return FrontendRunState.ACTION_REQUESTING;
-  if (STOP_REQUEST_EVENTS.has(event.type)) return FrontendRunState.ACTION_REQUESTING;
-  if (event.type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED) {
-    return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
+  ].includes(event.type);
+  if (!isTransport && !isActionStart && !isStopStart && !isCompletionStart &&
+      !isSettled && !isLocalFailure && event.type !== SESSION_RUN_EVENT.LOCAL_RESET) return null;
+  const currentSessionId = text(current.sessionId);
+  const currentTurnScopeId = text(current.turnScopeId);
+  if ((currentSessionId && event.sessionId && currentSessionId !== text(event.sessionId)) ||
+      (currentTurnScopeId && event.turnScopeId && currentTurnScopeId !== text(event.turnScopeId))) {
+    return { applied: false, reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION, current, event };
   }
-  if ([SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE].includes(event.type)) {
-    if ([
-      BackendChannelState.SENDING,
-      BackendChannelState.RECONNECTING,
-      BackendChannelState.INTERACTION_PENDING,
-    ].includes(backendState) && currentState === FrontendRunState.PROCESSING) {
-      return FrontendRunState.PROCESSING;
-    }
-    if (current.lifecycleObserved !== true) {
-      if (backendState === FrontendRunState.CANCELLED) return FrontendRunState.CANCELLED;
-      if (backendState === BackendChannelState.SENDING) return FrontendRunState.PROCESSING;
-      if (backendState === BackendChannelState.COMPLETED) return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
-      if (backendState === BackendChannelState.USER_STOPPED || backendState === BackendChannelState.STOPPING) {
-        return FrontendRunState.USER_STOPPING;
-      }
-      if ([BackendChannelState.ERROR, BackendChannelState.EXPIRED, BackendChannelState.NO_CONVERSATION].includes(backendState)) {
-        return failureStateFor(current);
-      }
-    }
-    return currentState;
+  if (!current.state && current.commandPending !== true && !isActionStart) {
+    return { applied: false, reason: TURN_TRANSITION_REASON.MISSING_STATE, current: null, event };
   }
-  return text(event.state) || currentState;
+  if (isActionStart && current.commandPending === true) {
+    return { applied: false, reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION, current, event };
+  }
+  const incomingTransportSeq = Number(event.transportSeq || event.seq || 0);
+  if (isTransport && incomingTransportSeq > 0 &&
+      Number(current.transportSeq || 0) > incomingTransportSeq) {
+    return { applied: false, reason: TURN_TRANSITION_REASON.STALE_SEQUENCE, current, event };
+  }
+  if (isStopStart && current.canStop !== true) {
+    return { applied: false, reason: TURN_TRANSITION_REASON.STOP_NOT_ALLOWED, current, event };
+  }
+  const transportState = isTransport ? text(event.backendState || event.state) : text(current.transportState);
+  const transportFailed = isTransport && [
+    BackendChannelState.ERROR,
+    BackendChannelState.EXPIRED,
+    BackendChannelState.NO_CONVERSATION,
+  ].includes(transportState);
+  const commandPending = event.type === SESSION_RUN_EVENT.LOCAL_RESET || isSettled || isLocalFailure
+    ? false
+    : (isActionStart || isStopStart || isCompletionStart ? true : current.commandPending === true);
+  return {
+    applied: true,
+    reason: TURN_TRANSITION_REASON.APPLIED,
+    event,
+    next: {
+      ...current,
+      commandPending,
+      pendingCommandId: commandPending ? text(event.commandId || current.pendingCommandId) : "",
+      pendingCommandType: commandPending
+        ? (isStopStart ? "stop" : isCompletionStart ? "completion" : text(current.pendingCommandType || "action"))
+        : "",
+      transportState,
+      transportSeq: isTransport
+        ? Math.max(Number(current.transportSeq || 0), incomingTransportSeq)
+        : Number(current.transportSeq || 0),
+      reconnecting: transportState === BackendChannelState.RECONNECTING,
+      lastTransportError: transportFailed ? transportState : text(current.lastTransportError),
+      action: isStopStart ? "stop" : text(current.action || event.action || "send"),
+      commandId: text(event.commandId || current.commandId),
+      actionCommandId: isActionStart || isStopStart
+        ? text(event.commandId || current.actionCommandId)
+        : text(current.actionCommandId),
+    },
+  };
 }
 
 function isAllowed(current = {}, event = {}, nextState = "") {
@@ -174,7 +207,11 @@ function isAllowed(current = {}, event = {}, nextState = "") {
     }
   }
   if (nextState === FrontendRunState.ACTION_REQUESTING) {
-    return STOP_REQUEST_EVENTS.has(event.type) && currentState === FrontendRunState.PROCESSING;
+    return currentState === FrontendRunState.PROCESSING && (
+      STOP_REQUEST_EVENTS.has(event.type) ||
+      (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
+        text(event.eventType) === TURN_EVENT.STOP_ACCEPTED)
+    );
   }
   if (nextState === FrontendRunState.PROCESSING) {
     return currentState === FrontendRunState.ACTION_REQUESTING && text(current.action) !== "stop";
@@ -205,13 +242,13 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   const transportSeq = isTransportProjection
     ? Number(event.transportSeq || event.seq || 0)
     : Number(event.transportSeq || 0);
-  const eventSeq = isTransportProjection
-    ? (current?.lifecycleObserved === true ? 0 : transportSeq)
-    : Number(event.lifecycleSeq || event.seq || 0);
+  const eventSeq = Number(event.lifecycleSeq || event.seq || 0);
   const eventRevision = Number(event.revision || 0);
   if (current && isFinalTurnState(current.state, current)) {
     return { applied: false, reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED, current, event };
   }
+  const interaction = reduceInteractionProjection(current || {}, event);
+  if (interaction) return interaction;
   if (current && current.terminalResolved === true &&
       event.type !== SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return { applied: false, reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED, current, event };
@@ -230,10 +267,6 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   if (current && eventRevision > 0 && Number(current.revision || 0) >= eventRevision &&
       !isFirstSameRevisionTerminalResolution) {
     return { applied: false, reason: TURN_TRANSITION_REASON.STALE_REVISION, current, event };
-  }
-  if (current && STOP_REQUEST_EVENTS.has(event.type) &&
-    !deriveTurnCapabilities(current.state, { backendState: current.backendState }).canStop) {
-    return { applied: false, reason: TURN_TRANSITION_REASON.STOP_NOT_ALLOWED, current, event };
   }
   const authoritativeCommit = event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
     ? { completionCommitId: text(event.completionCommitId), summaryVersion: Number(event.summaryVersion || 0), revision: eventRevision }
@@ -270,7 +303,7 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   }
   const backendState = text(event.backendState || current?.backendState);
   const capabilities = deriveTurnCapabilities(state, {
-    backendState,
+    canStop: event.raw?.capabilities?.canStop === true,
     finalizeIntent: candidate.finalizeIntent,
   });
   const terminal = state === FrontendRunState.FRONTEND_COMPLETED
@@ -309,6 +342,9 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
       revision: Math.max(Number(current?.revision || 0), eventRevision),
       lifecycleObserved: current?.lifecycleObserved === true ||
         [SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, SESSION_RUN_EVENT.TERMINAL_RESOLVED].includes(event.type),
+      commandPending: false,
+      pendingCommandId: "",
+      pendingCommandType: "",
       authoritativeCompletionCommit: authoritativeCommit,
       authority: event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
         ? event.authority

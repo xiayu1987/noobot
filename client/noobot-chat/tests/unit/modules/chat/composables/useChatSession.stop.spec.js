@@ -16,17 +16,74 @@ import { nextTick, ref } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { logResendDebug, setResendDebugLogSink } from "../../../../../src/modules/debug/loggers/resendDebugLogger.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { createTurnLifecycleEnvelope } from "@noobot/authoritative-state/contracts";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { applyTurnRuntimeEvent, selectSessionTurnRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import {
+  applyTurnLifecycleEnvelope,
+  applyTurnRuntimeEvent,
+  selectSessionTurnRuntime,
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 function applyRuntimeEvent(store, event) {
   const registry = store.turnRuntimeRegistry;
   const result = applyTurnRuntimeEvent(registry, event);
   if (result?.applied) store.turnRuntimeRegistry = { ...registry };
   return result;
+}
+
+function applyLifecycle(store, {
+  eventType,
+  sessionId,
+  turnScopeId,
+  dialogProcessId,
+  revision,
+  phase,
+  state,
+  action = "send",
+  executionState,
+  canStop = false,
+}) {
+  const registry = store.turnRuntimeRegistry;
+  const result = applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+    eventType,
+    eventId: `${eventType}:${sessionId}:${turnScopeId}:${revision}`,
+    commandId: `${action}:${turnScopeId}`,
+    userId: "u-1",
+    sessionId,
+    turnScopeId,
+    dialogProcessId,
+    messageId: `event-message:${turnScopeId}`,
+    presentationMessageId: `message:${turnScopeId}`,
+    revision,
+    sequence: revision,
+    phase,
+    state,
+    action,
+    executionState,
+    capabilities: { actionLocked: true, canStop },
+  }));
+  if (result?.applied) store.turnRuntimeRegistry = { ...registry };
+  return result;
+}
+
+function activateAuthorityTurn(store, sessionId, turnScopeId, dialogProcessId) {
+  applyRuntimeEvent(store, {
+    type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+    sessionId,
+    turnScopeId,
+    source: "test",
+  });
+  applyLifecycle(store, {
+    eventType: "turn.action_accepted", sessionId, turnScopeId, dialogProcessId,
+    revision: 1, phase: "action", state: "action_requesting", executionState: "accepted",
+  });
+  applyLifecycle(store, {
+    eventType: "turn.processing_started", sessionId, turnScopeId, dialogProcessId,
+    revision: 2, phase: "processing", state: "processing", executionState: "sending", canStop: true,
+  });
 }
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
@@ -64,22 +121,7 @@ describe("useChatSession reconnect replay", () => {
       messageCount: 2,
     })];
     store.activeSessionId = "s-stop-request";
-    applyRuntimeEvent(store, {
-        type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
-        sessionId: "s-stop-request",
-        turnScopeId: "turn-stop",
-        source: "test",
-
-    });
-    applyRuntimeEvent(store, {
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: BackendChannelState.SENDING,
-        sessionId: "s-stop-request",
-        turnScopeId: "turn-stop",
-        dialogProcessId: "dp-stop",
-        source: "test",
-
-    });
+    activateAuthorityTurn(store, "s-stop-request", "turn-stop", "dp-stop");
     wsClientMock.requestStop.mockReturnValue(true);
 
     const session = createChatSession();
@@ -91,7 +133,7 @@ describe("useChatSession reconnect replay", () => {
     expect(wsClientMock.requestStop).toHaveBeenCalledTimes(1);
     expect(session.composerActionState.value.stopRequesting).toBe(true);
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-request")).toMatchObject({
-      displayState: "requesting",
+      displayState: "stopping",
       sending: true,
       canStop: false,
     });
@@ -100,14 +142,15 @@ describe("useChatSession reconnect replay", () => {
     expect(duplicateStop).toBe(false);
     expect(wsClientMock.requestStop).toHaveBeenCalledTimes(1);
 
-    applyRuntimeEvent(store, {
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: "user_stopped",
-        sessionId: "s-stop-request",
-        turnScopeId: "turn-stop",
-        dialogProcessId: "dp-stop",
-        source: "test",
-
+    applyLifecycle(store, {
+      eventType: "turn.stop_accepted", sessionId: "s-stop-request", turnScopeId: "turn-stop",
+      dialogProcessId: "dp-stop", revision: 3, phase: "stop", state: "stopping",
+      action: "stop", executionState: "stopping",
+    });
+    applyLifecycle(store, {
+      eventType: "turn.stop_processing_completed", sessionId: "s-stop-request", turnScopeId: "turn-stop",
+      dialogProcessId: "dp-stop", revision: 4, phase: "stop", state: "stopping",
+      action: "stop", executionState: "stopping",
     });
     await nextTick();
 
@@ -145,22 +188,7 @@ describe("useChatSession reconnect replay", () => {
       messageCount: 2,
     })];
     store.activeSessionId = "s-stop-error";
-    applyRuntimeEvent(store, {
-        type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
-        sessionId: "s-stop-error",
-        turnScopeId: "turn-stop-error",
-        source: "test",
-
-    });
-    applyRuntimeEvent(store, {
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: BackendChannelState.SENDING,
-        sessionId: "s-stop-error",
-        turnScopeId: "turn-stop-error",
-        dialogProcessId: "dp-stop-error",
-        source: "test",
-
-    });
+    activateAuthorityTurn(store, "s-stop-error", "turn-stop-error", "dp-stop-error");
     const stopError = new Error("conversation not found");
     stopError.response = { status: 404 };
     wsClientMock.requestStop.mockImplementationOnce(() => {
@@ -172,13 +200,14 @@ describe("useChatSession reconnect replay", () => {
     await nextTick();
 
     expect(requested).toBe(false);
-    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-error").displayState).toBe("send");
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-error").displayState).toBe("sending");
     expect(session.composerActionState.value.stopRequesting).toBe(false);
     expect(session.composerActionState.value.awaitingBackendStop).toBe(false);
-    expect(session.composerActionState.value.canStartNewSend).toBe(true);
-    expect(session.composerActionState.value.canRetryMessage).toBe(true);
-    expect(session.composerActionState.value.canDeleteMessage).toBe(true);
-    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-error").sending).toBe(false);
+    expect(session.composerActionState.value.canStop).toBe(true);
+    expect(session.composerActionState.value.canStartNewSend).toBe(false);
+    expect(session.composerActionState.value.canRetryMessage).toBe(false);
+    expect(session.composerActionState.value.canDeleteMessage).toBe(false);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-error").sending).toBe(true);
   });
 
   it("releases stop gates when stop request asynchronously rejects with a backend-style 404/409 error", async () => {
@@ -201,22 +230,7 @@ describe("useChatSession reconnect replay", () => {
       messageCount: 2,
     })];
     store.activeSessionId = "s-stop-async-error";
-    applyRuntimeEvent(store, {
-        type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
-        sessionId: "s-stop-async-error",
-        turnScopeId: "turn-stop-async-error",
-        source: "test",
-
-    });
-    applyRuntimeEvent(store, {
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state: BackendChannelState.SENDING,
-        sessionId: "s-stop-async-error",
-        turnScopeId: "turn-stop-async-error",
-        dialogProcessId: "dp-stop-async-error",
-        source: "test",
-
-    });
+    activateAuthorityTurn(store, "s-stop-async-error", "turn-stop-async-error", "dp-stop-async-error");
     const stopError = new Error("conversation conflict");
     stopError.response = { status: 409 };
     wsClientMock.requestStop.mockRejectedValueOnce(stopError);
@@ -226,12 +240,13 @@ describe("useChatSession reconnect replay", () => {
     await nextTick();
 
     expect(requested).toBe(false);
-    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-async-error").displayState).toBe("send");
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-async-error").displayState).toBe("sending");
     expect(session.composerActionState.value.stopRequesting).toBe(false);
     expect(session.composerActionState.value.awaitingBackendStop).toBe(false);
-    expect(session.composerActionState.value.canStartNewSend).toBe(true);
-    expect(session.composerActionState.value.canRetryMessage).toBe(true);
-    expect(session.composerActionState.value.canDeleteMessage).toBe(true);
-    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-async-error").sending).toBe(false);
+    expect(session.composerActionState.value.canStop).toBe(true);
+    expect(session.composerActionState.value.canStartNewSend).toBe(false);
+    expect(session.composerActionState.value.canRetryMessage).toBe(false);
+    expect(session.composerActionState.value.canDeleteMessage).toBe(false);
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop-async-error").sending).toBe(true);
   });
 });

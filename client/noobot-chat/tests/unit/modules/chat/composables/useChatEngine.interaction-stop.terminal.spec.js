@@ -271,7 +271,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(assistant?.statusLabel).toBe("");
-    expect(assistant?.pending).toBe(true);
+    expect(assistant?.pending).toBe(false);
     expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, "local-flight").sending).toBe(true);
   });
 
@@ -353,7 +353,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(deps.terminalResolutionFetcher).toHaveBeenCalledTimes(1);
     expect(sending.value).toBe(false);
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.pending).toBe(true);
+    expect(assistant?.pending).toBe(false);
     expect(assistant?.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(assistant?.statusLabelKey || assistant?.statusLabel).not.toBe("chat.generated");
   });

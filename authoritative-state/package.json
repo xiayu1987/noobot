@@ -6,6 +6,7 @@
   "description": "Noobot authoritative lifecycle contracts and domain state machine",
   "exports": {
     ".": "./src/index.js",
+    "./application": "./src/application/index.js",
     "./contracts": "./src/contracts/index.mjs",
     "./domain": "./src/domain/index.js",
     "./package.json": "./package.json"

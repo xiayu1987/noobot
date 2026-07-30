@@ -19,7 +19,10 @@ import {
   SESSION_RUN_EVENT,
   clearRememberedStopRequests,
 } from "../sessionRunStateMachine.js";
-import { selectTurnMessageRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import {
+  resolveSessionTurnRuntime,
+  selectTurnMessageRuntime,
+} from "../run-state-machine/turnRuntimeRegistry.js";
 import { normalizeTurnMeta } from "../../model/messageIdentity.js";
 import { normalizeTimePair } from "../../model/timeFields.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -180,11 +183,20 @@ export async function applyReconnectChannelState({
     targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
   }));
   if (isInFlightConversationState(state)) {
+    const existingTurn = resolveSessionTurnRuntime(
+      turnRuntimeRegistry?.value || turnRuntimeRegistry,
+      sessionId,
+      turnScopeId,
+    );
     const existingTurnRuntime = selectTurnMessageRuntime(
       turnRuntimeRegistry?.value || turnRuntimeRegistry,
       { sessionId, turnScopeId },
     );
+    const authoritativeLifecycleObserved =
+      existingTurn?.lifecycleObserved === true ||
+      existingTurn?.lifecycleSnapshotObserved === true;
     if (
+      !authoritativeLifecycleObserved &&
       !existingTurnRuntime?.state &&
       sessionId &&
       turnScopeId &&

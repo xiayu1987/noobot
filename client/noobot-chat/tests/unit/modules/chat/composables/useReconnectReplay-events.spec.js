@@ -329,7 +329,12 @@ describe("useReconnectReplay", () => {
     );
     expect(refs.sending.value).toBe(false);
     expect(assistant?.statusLabelKey).toBeUndefined();
-    expect(assistant?.channelState).toBeUndefined();
+    expect(assistant?.channelState).toMatchObject({
+      state: BackendChannelState.STOPPING,
+      sessionId: "s-1",
+      dialogProcessId: "dp-stop",
+      seq: 12,
+    });
     expect(assistant?.pending).toBe(true);
   });
 

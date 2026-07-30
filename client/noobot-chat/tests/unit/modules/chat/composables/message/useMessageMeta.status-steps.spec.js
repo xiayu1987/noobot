@@ -8,12 +8,53 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref } from "vue";
 import { useMessageMeta } from "../../../../../../src/modules/chat/composables/message/useMessageMeta.js";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
-import { applyTurnRuntimeEvent, applyTurnTerminalResolution } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { applyTurnLifecycleEnvelope, applyTurnRuntimeEvent, applyTurnTerminalResolution } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 
 function applyEvent(store, event) {
   applyTurnRuntimeEvent(store.turnRuntimeRegistry, event);
+}
+
+function applyLifecycle(store, {
+  eventType,
+  sessionId,
+  turnScopeId,
+  revision,
+  phase,
+  state,
+  action = "send",
+  executionState,
+  canStop = false,
+}) {
+  return applyTurnLifecycleEnvelope(store.turnRuntimeRegistry, createTurnLifecycleEnvelope({
+    eventType,
+    eventId: `${eventType}:${sessionId}:${turnScopeId}:${revision}`,
+    commandId: `${action}:${turnScopeId}`,
+    userId: "u-1",
+    sessionId,
+    turnScopeId,
+    messageId: `event-message:${turnScopeId}`,
+    presentationMessageId: `message:${turnScopeId}`,
+    revision,
+    sequence: revision,
+    phase,
+    state,
+    action,
+    executionState,
+    capabilities: { actionLocked: true, canStop },
+  }));
+}
+
+function startAuthorityProcessing(store, sessionId, turnScopeId) {
+  applyLifecycle(store, {
+    eventType: "turn.action_accepted", sessionId, turnScopeId, revision: 1,
+    phase: "action", state: "action_requesting", executionState: "accepted",
+  });
+  applyLifecycle(store, {
+    eventType: "turn.processing_started", sessionId, turnScopeId, revision: 2,
+    phase: "processing", state: "processing", executionState: "sending", canStop: true,
+  });
 }
 
 function settleTurn(store, { sessionId, turnScopeId, state }) {
@@ -58,6 +99,7 @@ describe("useMessageMeta status steps", () => {
       sessionId: "session-1",
       turnScopeId: "turn-1",
     });
+    startAuthorityProcessing(store, "session-1", "turn-1");
     await nextTick();
     expect(statusStepState.value).toBe("sending");
 
@@ -67,16 +109,14 @@ describe("useMessageMeta status steps", () => {
       turnScopeId: "turn-1",
     });
     await nextTick();
-    expect(statusStepState.value).toBe("requesting");
+    expect(statusStepState.value).toBe("stopping");
 
-    applyEvent(store, {
-      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      state: "user_stopped",
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
+    applyLifecycle(store, {
+      eventType: "turn.stop_accepted", sessionId: "session-1", turnScopeId: "turn-1",
+      revision: 3, phase: "stop", state: "stopping", action: "stop", executionState: "stopping",
     });
     await nextTick();
-    expect(statusStepState.value).toBe("stopping");
+    expect(statusStepState.value).toBe("requesting");
 
     settleTurn(store, { sessionId: "session-1", turnScopeId: "turn-1", state: "stop_completed" });
     await nextTick();
@@ -99,6 +139,7 @@ describe("useMessageMeta status steps", () => {
       sessionId: "session-a",
       turnScopeId: "turn-a",
     });
+    startAuthorityProcessing(store, "session-a", "turn-a");
     applyEvent(store, {
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
       sessionId: "session-b",
@@ -213,6 +254,7 @@ describe("useMessageMeta status steps", () => {
       sessionId: "child-session",
       turnScopeId: "workflow-node:child",
     });
+    startAuthorityProcessing(store, "child-session", "workflow-node:child");
     const { statusStepState } = useMessageMeta({ getMessageItem: () => message });
     await nextTick();
     expect(statusStepState.value).toBe("sending");

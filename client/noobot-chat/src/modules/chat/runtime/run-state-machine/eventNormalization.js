@@ -5,44 +5,22 @@
  */
 import { normalizeTurnMeta } from "../../model/messageIdentity.js";
 import { nowMs } from "../../model/timeFields.js";
-import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
+import { SESSION_RUN_EVENT } from "./constants.js";
 import { normalizeState, trim } from "./normalize.js";
-
-const LOCAL_EVENT_STATE_BY_TYPE = Object.freeze({
-  [SESSION_RUN_EVENT.LOCAL_SEND_STARTED]: FrontendRunState.ACTION_REQUESTING,
-  [SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED]: FrontendRunState.ACTION_REQUESTING,
-  [SESSION_RUN_EVENT.LOCAL_RESEND_STARTED]: FrontendRunState.ACTION_REQUESTING,
-  [SESSION_RUN_EVENT.LOCAL_RESEND_REPLACING_TURN]: FrontendRunState.ACTION_REQUESTING,
-  [SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING]: FrontendRunState.ACTION_REQUESTING,
-  [SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED]: FrontendRunState.FRONTEND_COMPLETED,
-  [SESSION_RUN_EVENT.LOCAL_RESEND_FAILED]: FrontendRunState.ACTION_REQUEST_ERROR,
-  [SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED]: FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-  [SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED]: FrontendRunState.COMPLETION_ERROR,
-  [SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED]: FrontendRunState.USER_STOPPING,
-  [SESSION_RUN_EVENT.LOCAL_RESET]: FrontendRunState.IDLE,
-});
 
 export const TURN_RUNTIME_AUTHORITY = Object.freeze({
   NONE: "none",
-  BACKEND_TERMINAL_OBSERVED: "backend_terminal_observed",
   AUTHORITATIVE_DETAIL_APPLIED: "authoritative_detail_applied",
   AUTHORITATIVE_DETAIL_FAILED: "authoritative_detail_failed",
 });
 
-function resolveRuntimeAuthority(type, wireState, rawEvent = {}) {
+function resolveRuntimeAuthority(type, rawEvent = {}) {
   if (rawEvent?.authority) return trim(rawEvent.authority);
   if (type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_APPLIED;
   }
   if (type === SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_FAILED) {
     return TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_FAILED;
-  }
-  if (
-    [SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-      SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE].includes(type) &&
-    wireState === BackendChannelState.COMPLETED
-  ) {
-    return TURN_RUNTIME_AUTHORITY.BACKEND_TERMINAL_OBSERVED;
   }
   return TURN_RUNTIME_AUTHORITY.NONE;
 }
@@ -63,24 +41,13 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
   const turnMeta = normalizeTurnMeta(rawEvent);
   const type = trim(rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE);
   const wireState = normalizeState(rawEvent?.state);
-  let state = type === SESSION_RUN_EVENT.LOCAL_FAILURE
+  const state = type === SESSION_RUN_EVENT.LOCAL_FAILURE
     ? normalizeState(rawEvent?.failureState)
     : wireState;
   const isBackendStateEvent = [
     SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
     SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
   ].includes(type);
-  if (isBackendStateEvent && wireState === BackendChannelState.USER_STOPPED) {
-    state = FrontendRunState.USER_STOPPING;
-  }
-  if (isBackendStateEvent && wireState === BackendChannelState.STOPPING) {
-    state = FrontendRunState.USER_STOPPING;
-  }
-  if (!state) {
-    state = type === SESSION_RUN_EVENT.LOCAL_FAILURE
-      ? normalizeState(rawEvent?.failureState) || BackendChannelState.ERROR
-      : LOCAL_EVENT_STATE_BY_TYPE[type] || "";
-  }
   const timestamp = normalizeTimestamp(rawEvent);
   const rawSequence = Number(rawEvent?.sequence || rawEvent?.seq || 0);
   const isLifecycleEvent = type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE ||
@@ -102,7 +69,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
       : trim(rawEvent?.dialogProcessId),
     turnScopeId: turnMeta.turnScopeId,
     source: trim(rawEvent?.source || type),
-    authority: resolveRuntimeAuthority(type, wireState, rawEvent),
+    authority: resolveRuntimeAuthority(type, rawEvent),
     authoritativeSnapshot: rawEvent?.authoritativeSnapshot === true,
     sourceEvent: trim(rawEvent?.sourceEvent),
     seq: rawSequence,

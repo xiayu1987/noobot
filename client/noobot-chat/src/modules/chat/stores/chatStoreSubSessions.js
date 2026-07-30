@@ -15,7 +15,6 @@ import {
   dispatchTurnEnvelope,
   TURN_PROJECTION_SOURCE,
 } from "../runtime/engine/turnProjectionStore.js";
-import { SESSION_RUN_EVENT } from "../runtime/run-state-machine/constants.js";
 
 function text(value) { return String(value || "").trim(); }
 
@@ -168,55 +167,8 @@ export function createSubSessionMessageRegistry() { return { sessions: {} }; }
 export function createSubSessionStore({
   subSessionMessageRegistry,
   subSessionMessageRegistryVersion,
-  applyTurnRuntimeEvent = null,
   applyTurnTimingSnapshot = null,
 }) {
-function projectNodeStatusToTurnRuntime(eventData = {}) {
-  if (typeof applyTurnRuntimeEvent !== "function") {
-    return { applied: false, reason: "turn_runtime_unavailable" };
-  }
-  const status = text(eventData?.status || eventData?.state).toLowerCase();
-  const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
-  const turnScopeId = text(eventData?.turnScopeId);
-  if (!sessionId || !turnScopeId) return { applied: false, reason: "missing_turn_identity" };
-  const common = {
-    sessionId,
-    turnScopeId,
-    commandId: text(eventData?.commandId),
-    eventId: text(eventData?.eventId),
-    sequence: Number(eventData?.sequence || 0),
-    revision: Number(eventData?.revision || 0),
-    updatedAt: eventTime(eventData),
-    source: "workflow_node_state",
-    sourceEvent: "workflow_node_state_committed",
-  };
-  if (["running", "processing", "starting", "sending"].includes(status)) {
-    return applyTurnRuntimeEvent({
-      ...common,
-      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-      state: "sending",
-      authoritativeSnapshot: true,
-    });
-  }
-  const terminalState = ["completed", "succeeded"].includes(status)
-    ? "completed"
-    : ["cancelled", "canceled", "stopped", "aborted"].includes(status)
-      ? "stop_completed"
-      : ["failed", "error", "expired", "timeout", "no_conversation"].includes(status)
-        ? "processing_failed"
-        : "";
-  if (!terminalState) return { applied: false, reason: "non_runtime_node_status" };
-  return applyTurnRuntimeEvent({
-    ...common,
-    type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
-    state: terminalState,
-    completionCommitId: text(eventData?.eventId || eventData?.commandId),
-    ...(terminalState === "processing_failed"
-      ? { failure: { phase: "processing", reason: status } }
-      : {}),
-  });
-}
-
 function applySubSessionLifecycleEvent(eventData = {}) {
   const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
   if (!sessionId) return { applied: false, reason: "missing_session" };
@@ -258,7 +210,6 @@ function applySubSessionLifecycleEvent(eventData = {}) {
   registry.sessions[sessionId] = nextSession;
   subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
   if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
-  const runtimeResult = projectNodeStatusToTurnRuntime(eventData);
   logWorkflowDiagnostics("frontend.workflowSubSession.lifecycleProjected", () => ({
     sessionId,
     parentSessionId: nextSession.parentSessionId,
@@ -267,12 +218,8 @@ function applySubSessionLifecycleEvent(eventData = {}) {
     workflowRunId: nextSession.workflowRunId,
     nodeExecutionId: nextSession.nodeExecutionId,
     status: nextSession.status,
-    runtimeApplied: runtimeResult?.applied === true,
-    runtimeReason: text(runtimeResult?.reason),
-    runtimeState: text(runtimeResult?.turn?.state),
-    runtimeTerminal: text(runtimeResult?.turn?.terminal),
   }));
-  return { applied: true, session: nextSession, runtimeResult };
+  return { applied: true, session: nextSession };
 }
 
 function upsertSubSessionEvent(eventName = "", eventData = {}) {

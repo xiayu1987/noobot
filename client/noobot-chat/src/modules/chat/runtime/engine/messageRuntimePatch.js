@@ -96,6 +96,20 @@ export function applyRunStateMessageRuntimePatch({
     const sameTurn = stateSnapshot.turnScopeId && messageTurnScopeId === stateSnapshot.turnScopeId;
     const sameDialog = stateSnapshot.dialogProcessId && messageDialogProcessId === stateSnapshot.dialogProcessId;
     if (stateSnapshot.turnScopeId ? !sameTurn : !sameDialog) return;
+    // Channel state is an independent transport-level message fact. Apply it
+    // after the lifecycle-derived presentation patch so that a generic
+    // message cleanup cannot overwrite the transport event being projected.
+    const transportPatch = event?.type === "backend_channel_state" && event?.state
+      ? {
+          channelState: {
+            state: event.state,
+            sessionId: event.sessionId || stateSnapshot.sessionId,
+            turnScopeId: event.turnScopeId || stateSnapshot.turnScopeId,
+            dialogProcessId: event.dialogProcessId || stateSnapshot.dialogProcessId,
+            seq: event.seq,
+          },
+        }
+      : null;
     const effect = resolveSessionRunMessageRuntimePatch({
       stateSnapshot,
       messageItem: message,
@@ -111,10 +125,10 @@ export function applyRunStateMessageRuntimePatch({
       patchChannelState: effect?.patch?.channelState?.state || "",
       clearRuntimeMark: effect?.patch?.clearRuntimeMark === true,
     }));
-    if (effect?.action !== SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE) return;
+    const effectPatchesMessage = effect?.action === SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE;
     const turnScopeId = getMessageTurnScopeId(message);
-    const timingPatch = effect.patch || {};
-    if (turnScopeId && (timingPatch.thinkingStartedAt || timingPatch.thinkingFinishedAt)) {
+    const timingPatch = effectPatchesMessage ? (effect.patch || {}) : {};
+    if (effectPatchesMessage && turnScopeId && (timingPatch.thinkingStartedAt || timingPatch.thinkingFinishedAt)) {
       const canonicalTiming = mergeCanonicalTurnTiming(session, turnScopeId);
       const existingTiming = canonicalTiming;
       const projectedTiming = {};
@@ -138,6 +152,7 @@ export function applyRunStateMessageRuntimePatch({
         },
       };
     }
-    applyRunStateMessagePatch(message, effect.patch);
+    if (effectPatchesMessage) applyRunStateMessagePatch(message, effect.patch);
+    if (transportPatch) applyRunStateMessagePatch(message, transportPatch);
   });
 }

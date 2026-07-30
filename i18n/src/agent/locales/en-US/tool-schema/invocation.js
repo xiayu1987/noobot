@@ -105,7 +105,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
       "executionMode": {
         "key": "tools.script.fieldExecutionMode",
-        "text": "Execution mode: foreground (default) returns stdout/stderr directly; background runs under tool management, saves stdout/stderr as attachments, and returns attachment paths. In background mode, do not add &/nohup/disown inside the command."
+        "text": "Execution mode: foreground (default) waits for completion and returns stdout/stderr directly; background also waits for completion, but keeps stdout/stderr under tool management and returns them as attachments afterward. Background does not return early; do not add &/nohup/disown inside the command."
       },
       "includeLineNumbers": {
         "key": "tools.script.fieldIncludeLineNumbers",

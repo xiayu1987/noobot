@@ -5,7 +5,6 @@
  */
 import { FrontendRunState } from "./constants.js";
 import { normalizeState } from "./normalize.js";
-import { deriveTurnCapabilities } from "./turnReducer.js";
 
 export function isTerminalSessionRunState(state = "") {
   return normalizeState(state) === FrontendRunState.IDLE;
@@ -35,9 +34,7 @@ export function evaluateSessionRunState(stateSnapshot = {}) {
     stopRequesting: state === FrontendRunState.USER_STOPPING,
     stopPendingUntilBackendReady: false,
   };
-  const backendCanStop = deriveTurnCapabilities(state, {
-    backendState: stateSnapshot?.backendState,
-  }).canStop;
+  const backendCanStop = stateSnapshot?.canStop === true;
   const awaitingBackendStop = state === FrontendRunState.USER_STOPPING;
   const actionLocked = state !== FrontendRunState.IDLE;
   const canStartNewSend = !actionLocked;

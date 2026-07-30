@@ -6,13 +6,14 @@
 import { describe, expect, it } from "vitest";
 import {
   applyTurnRuntimeEvent,
+  applyTurnLifecycleEnvelope,
   applyTurnTerminalResolution,
   createTurnRuntimeRegistryState,
   removeSessionRuntime,
   resolveTurnRuntimeByScope,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 
 function event(registry, type, sessionId, turnScopeId, dialogProcessId, extra = {}) {
   return applyTurnRuntimeEvent(registry, { type, sessionId, turnScopeId, dialogProcessId, ...extra });
@@ -20,10 +21,24 @@ function event(registry, type, sessionId, turnScopeId, dialogProcessId, extra = 
 
 function start(registry, sessionId, turnScopeId, dialogProcessId, seq = 1) {
   event(registry, SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED, sessionId, turnScopeId, "", { seq });
-  event(registry, SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId, turnScopeId, dialogProcessId, {
-    state: BackendChannelState.SENDING,
-    seq: seq + 1,
-  });
+  applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+    eventType: "turn.action_accepted", eventId: `accepted-${sessionId}-${turnScopeId}`,
+    commandId: `command-${sessionId}-${turnScopeId}`, userId: "u1", sessionId, turnScopeId,
+    messageId: `event-message-${sessionId}-${turnScopeId}`,
+    presentationMessageId: `message-${sessionId}-${turnScopeId}`,
+    dialogProcessId, revision: seq, sequence: seq,
+    phase: "action", state: "action_requesting", action: "send", executionState: "accepted",
+    capabilities: { actionLocked: true, canStop: false },
+  }));
+  applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+    eventType: "turn.processing_started", eventId: `start-${sessionId}-${turnScopeId}`,
+    commandId: `command-${sessionId}-${turnScopeId}`, userId: "u1", sessionId, turnScopeId,
+    messageId: `event-message-${sessionId}-${turnScopeId}`,
+    presentationMessageId: `message-${sessionId}-${turnScopeId}`,
+    dialogProcessId, revision: seq + 1, sequence: seq + 1,
+    phase: "processing", state: "processing", action: "send", executionState: "sending",
+    capabilities: { actionLocked: true, canStop: true },
+  }));
 }
 
 let resolutionSequence = 0;
@@ -86,15 +101,20 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
     start(registry, "main", "main-turn", "dp-main");
     start(registry, "child", "child-turn", "dp-child");
 
-    const mismatched = event(registry, SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, "main", "main-turn", "dp-child", {
-      state: BackendChannelState.COMPLETED,
-      seq: 99,
-    });
+    const mismatched = applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+      eventType: "turn.processing_started", eventId: "mismatched-main-processing",
+      commandId: "command-main-main-turn", userId: "u1", sessionId: "main", turnScopeId: "main-turn",
+      messageId: "event-message-main-main-turn", presentationMessageId: "message-main-main-turn",
+      dialogProcessId: "dp-child", revision: 3, sequence: 3,
+      phase: "processing", state: "processing", action: "send", executionState: "sending",
+      capabilities: { actionLocked: true, canStop: true },
+    }));
     expect(mismatched).toMatchObject({ applied: false, reason: "dialog_process_identity_conflict" });
 
     expect(settle(registry, "child", "child-turn", "stop_completed").applied).toBe(true);
     expect(turn(registry, "child", "child-turn")?.terminal).toBe("user_stopped");
-    expect(turn(registry, "main", "main-turn")).toMatchObject({ state: "frontend_processing", terminal: null });
+    expect(turn(registry, "main", "main-turn")).toMatchObject({ state: "frontend_processing" });
+    expect(turn(registry, "main", "main-turn")?.terminal).toBeNull();
 
     const stale = event(registry, SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, "main", "child-turn", "dp-child", {
       state: BackendChannelState.ERROR,
@@ -120,10 +140,15 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
     const registry = createTurnRuntimeRegistryState();
     start(registry, "main", "main-turn", "dp-main");
     event(registry, SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED, "child-local", "child-turn", "", { seq: 1 });
-    event(registry, SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, "child-canonical", "child-turn", "dp-child", {
-      state: BackendChannelState.SENDING,
-      seq: 2,
-    });
+    applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+      eventType: "turn.processing_started", eventId: "start-child-canonical-child-turn",
+      commandId: "command-child-canonical-child-turn", userId: "u1",
+      sessionId: "child-canonical", turnScopeId: "child-turn",
+      messageId: "event-message-child-turn", presentationMessageId: "message-child-turn",
+      dialogProcessId: "dp-child", revision: 2, sequence: 2,
+      phase: "processing", state: "processing", action: "send", executionState: "sending",
+      capabilities: { actionLocked: true, canStop: true },
+    }));
 
     expect(turn(registry, "child-local", "child-turn")?.sessionId).toBe("child-canonical");
     expect(turn(registry, "child-canonical", "child-turn")).toBeTruthy();

@@ -18,6 +18,7 @@ import {
 import { createConnectionState } from "./chat-websocket/connection-state.js";
 import { createMessageHandler } from "./chat-websocket/message-handler.js";
 import { createTurnLifecycleBridge } from "./chat-websocket/turn-lifecycle-bridge.js";
+import { createAuthorityEventDispatcher } from "./chat-websocket/authority-event-dispatcher.js";
 import { recoverTurnFinalize } from "./chat-websocket/finalize-recovery.js";
 import {
   detachRunTransport,
@@ -130,7 +131,7 @@ export function registerChatWebSocketServer(
           sessionId: data?.sessionId, dialogProcessId: data?.dialogProcessId,
           turnScopeId: data?.turnScopeId,
         });
-        return;
+        return false;
       }
       eventSequence += 1;
       const enrichedData = {
@@ -154,6 +155,7 @@ export function registerChatWebSocketServer(
           dialogProcessId: enrichedData.dialogProcessId,
           turnScopeId: enrichedData.turnScopeId,
         });
+        return true;
       } catch (error) {
         void recordServiceWebSocketSendFailure({
           sessionLogConfig,
@@ -164,6 +166,7 @@ export function registerChatWebSocketServer(
           turnScopeId: enrichedData.turnScopeId,
           error,
         });
+        return false;
       }
     };
 
@@ -181,7 +184,8 @@ export function registerChatWebSocketServer(
       webSocket.close(1011, errorCode);
     };
 
-    const commitTurnLifecycle = createTurnLifecycleBridge({ resolveBot, sendEvent });
+    const dispatchAuthorityEvents = createAuthorityEventDispatcher({ resolveBot, sendEvent });
+    const commitTurnLifecycle = createTurnLifecycleBridge({ resolveBot, dispatchAuthorityEvents });
     const recoverPersistedTurnFinalize = (request = {}) => recoverTurnFinalize({
       ...request,
       bot: resolveBot(),
@@ -244,6 +248,7 @@ export function registerChatWebSocketServer(
       finalizeAborted,
       finalizeGenericError,
       commitTurnLifecycle,
+      dispatchAuthorityEvents,
       recoverTurnFinalize: recoverPersistedTurnFinalize,
     });
     webSocket.on("message", (rawMessage) => {

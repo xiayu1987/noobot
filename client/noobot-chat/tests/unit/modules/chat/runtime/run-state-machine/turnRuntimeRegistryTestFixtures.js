@@ -5,16 +5,45 @@
  */
 import {
   applyTurnRuntimeEvent,
+  applyTurnLifecycleEnvelope,
   applyTurnTerminalResolution,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 
 export function sendStart(registry, { sessionId, turnScopeId, seq = 1 }) {
   return applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED, sessionId, turnScopeId, seq });
 }
 export function backendState(registry, { sessionId, turnScopeId, dialogProcessId, state, seq }) {
   return applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId, turnScopeId, dialogProcessId, state, seq });
+}
+
+let lifecycleSequence = 0;
+export function lifecycle(registry, {
+  sessionId = "s1", turnScopeId = "t1", dialogProcessId = "dp1",
+  eventType = "turn.processing_started", state = "processing", phase = "processing",
+  executionState = "sending", revision = 2, sequence = 2, canStop = state === "processing",
+  action = "send", commandId = "command-1",
+} = {}) {
+  lifecycleSequence += 1;
+  return applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
+    eventType,
+    eventId: `event-${turnScopeId}-${lifecycleSequence}`,
+    commandId,
+    userId: "u1",
+    sessionId,
+    turnScopeId,
+    messageId: `msg-event-${turnScopeId}`,
+    presentationMessageId: `msg-${turnScopeId}`,
+    dialogProcessId,
+    revision,
+    sequence,
+    phase,
+    state,
+    action,
+    executionState,
+    capabilities: { actionLocked: true, canStop },
+  }));
 }
 
 let terminalResolutionSequence = 0;

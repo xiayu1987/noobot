@@ -29,7 +29,7 @@ cleanupExpiredChannels() {
         this.requestChannelMap.delete(requestId);
       }
     }
-    this.channelStore.delete(channelKey);
+    this.deleteChannel(channelKey);
   }
   for (const [apiKey, identityItem] of this.apiKeyIdentityStore.entries()) {
     const updatedAtMs = Number(identityItem?.updatedAtMs || 0);

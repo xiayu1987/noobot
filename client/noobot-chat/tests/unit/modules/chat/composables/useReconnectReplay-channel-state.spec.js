@@ -21,6 +21,39 @@ import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runt
 import {
   scheduleMissingInteractionPayloadFailure,
 } from "../../../../../src/modules/chat/runtime/reconnect/channelStateReplay.js";
+import {
+  createTurnLifecycleSnapshot,
+  TURN_STATE,
+} from "@noobot/authoritative-state/contracts";
+
+function createProcessingSnapshot({
+  sessionId = "s-1",
+  dialogProcessId,
+  turnScopeId,
+  sequence = 1,
+  messageId = `message-${turnScopeId}`,
+} = {}) {
+  return createTurnLifecycleSnapshot({
+    commandId: `snapshot-${turnScopeId}`,
+    sessionId,
+    sequence,
+    activeTurnScopeId: turnScopeId,
+    activeTurn: {
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      messageId,
+      presentationMessageId: messageId,
+      commandId: `processing-${turnScopeId}`,
+      action: "send",
+      state: TURN_STATE.PROCESSING,
+      phase: "processing",
+      executionState: BackendChannelState.SENDING,
+      revision: 2,
+      sequence,
+    },
+  });
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -128,7 +161,11 @@ describe("useReconnectReplay", () => {
     });
 
     const assistant = refs.activeSession.value.messages[1];
-    expect(assistant.channelState).toBeUndefined();
+    expect(assistant.channelState).toMatchObject({
+      state: BackendChannelState.SENDING,
+      sessionId: "s-1",
+      dialogProcessId: "dp-reconnect-time",
+    });
     expect(assistant.thinkingStartedAt).toBeUndefined();
   });
 
@@ -147,6 +184,11 @@ describe("useReconnectReplay", () => {
           state: BackendChannelState.SENDING,
           seq: 4,
         },
+        turnLifecycleSnapshot: createProcessingSnapshot({
+          dialogProcessId: "dp-refresh-running",
+          turnScopeId: "turn-refresh-running",
+          sequence: 4,
+        }),
         conversationStates: [{
           sessionId: "s-1",
           dialogProcessId: "dp-refresh-running",
@@ -437,6 +479,11 @@ describe("useReconnectReplay", () => {
             state: "sending",
             seq: 9,
           },
+          turnLifecycleSnapshot: createProcessingSnapshot({
+            dialogProcessId: "dp-state",
+            turnScopeId: "turn-state",
+            sequence: 9,
+          }),
           conversationStates: [
             {
               sessionId: "s-1",
@@ -451,14 +498,12 @@ describe("useReconnectReplay", () => {
     });
 
     expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1")).toMatchObject({ sending: true, canStop: true });
-    expect(mocks.applyTurnRuntimeEvents).toHaveBeenCalledWith([
+    expect(mocks.applyTurnLifecycleSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "s-1",
-        dialogProcessId: "dp-state",
-        turnScopeId: "turn-state",
-        state: "sending",
+        activeTurnScopeId: "turn-state",
       }),
-    ]);
+    );
   });
 
   it("reconciles session detail and retries runtime snapshot when currentRun is invalid", async () => {

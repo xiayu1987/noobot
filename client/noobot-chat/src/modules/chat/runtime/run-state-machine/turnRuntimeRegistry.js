@@ -10,7 +10,7 @@ import {
   isAuthoritativeTerminalState,
 } from "./constants.js";
 import { normalizeSessionRunEvent } from "./eventNormalization.js";
-import { deriveTurnCapabilities, isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer.js";
+import { isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer.js";
 import {
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleSnapshot,
@@ -331,6 +331,11 @@ export function turnRuntimeDisplayState(turn = null) {
   if (!turn) return "send";
   if (turn.terminal === "user_stopped") return "continue";
   if (turn.terminal) return "send";
+  if (turn.commandPending === true) {
+    if (text(turn.pendingCommandType) === "stop") return "stopping";
+    if (text(turn.pendingCommandType) === "completion") return "completing";
+    return "requesting";
+  }
   const state = text(turn.state).toLowerCase();
   if ([FrontendRunState.ACTION_REQUESTING, FrontendRunState.CONTINUE_REQUESTING].includes(state)) return "requesting";
   if (state === FrontendRunState.FRONTEND_COMPLETION_REQUESTING) return "completing";
@@ -365,6 +370,12 @@ export function selectSessionTurnRuntime(registry, sessionId, turnScopeId = "") 
     actionCommandId: text(turn?.actionCommandId),
     lifecycleEventType: text(turn?.lifecycleEventType),
     lifecycleObserved: turn?.lifecycleObserved === true,
+    commandPending: turn?.commandPending === true,
+    pendingCommandId: text(turn?.pendingCommandId),
+    pendingCommandType: text(turn?.pendingCommandType),
+    transportState: text(turn?.transportState),
+    reconnecting: turn?.reconnecting === true,
+    lastTransportError: text(turn?.lastTransportError),
     displayState,
     sending: ["requesting", "sending", "completing", "stopping"].includes(displayState),
     canStop: displayState === "sending" && turn?.canStop === true,
@@ -424,7 +435,7 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
     updatedAt: turn.updatedAt || "",
     updatedAtMs: Number(turn.updatedAtMs || 0),
     terminal: turn.terminal || null,
-    running: !turn.finishedAt && !turn.terminal && [
+    running: !turn.finishedAt && !turn.terminal && (turn.commandPending === true || [
       FrontendRunState.ACTION_REQUESTING,
       FrontendRunState.PROCESSING,
       FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
@@ -432,7 +443,7 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
       BackendChannelState.SENDING,
       BackendChannelState.RECONNECTING,
       BackendChannelState.INTERACTION_PENDING,
-    ].includes(turn.state),
+    ].includes(turn.state)),
     startedAt: turn.startedAt || turn.thinkingStartedAt || "",
     finishedAt: turn.finishedAt || turn.thinkingFinishedAt || "",
   };
@@ -603,7 +614,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     backendState,
     state: transition.next.state,
     terminal,
-    canStop: deriveTurnCapabilities(transition.next.state, { backendState }).canStop,
+    canStop: transition.next.canStop === true,
     seq: transition.next.seq,
     updatedAtMs: nowMs,
     updatedAt: text(event.updatedAt || current?.updatedAt),

@@ -32,6 +32,7 @@ test("buildDockerCommand validates mounts through docker inspect template equali
   assert.match(built.cmd, /eq \.Destination \\"\/project\\"/);
   assert.match(built.cmd, /grep -Fqx "__NOOBOT_MOUNT_0__"/);
   assert.match(built.cmd, /grep -Fqx "__NOOBOT_MOUNT_1__"/);
+  assert.match(built.cmd, /docker create --init --name "noobot-script-sandbox"/);
   assert.match(built.cmd, /-e NOOBOT_EXECUTION_TOKEN=/);
   assert.match(
     built.executionToken,

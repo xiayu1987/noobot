@@ -10,6 +10,7 @@ import {
   makeSession,
   assistantMessage,
   emitChannelState,
+  emitAuthorityProcessing,
 } from "../helpers/useChatEngineHarness.js";
 import { BackendChannelState, FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
@@ -54,7 +55,10 @@ function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messag
 
 describe("useChatEngine.resend stopped state", () => {
   it("resendMonotonicMessage rejects stale stopped replacement snapshots without the new turnScopeId", async () => {
-    const stream = vi.fn(async () => {});
+    const stream = vi.fn(async (payload, onEvent) => emitAuthorityProcessing(onEvent, {
+      ...payload,
+      sessionId: "local-resend-repeat-stopped",
+    }));
     const staleStoppedUser = {
       turnScopeId: "client-turn:stopped-old",
       role: RoleEnum.USER,
@@ -80,7 +84,7 @@ describe("useChatEngine.resend stopped state", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend-stale-stopped",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },
@@ -118,7 +122,7 @@ describe("useChatEngine.resend stopped state", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "local-resend-repeat-stopped",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },
@@ -152,7 +156,7 @@ describe("useChatEngine.resend stopped state", () => {
     expect(placeholder).toEqual(expect.objectContaining({
       role: RoleEnum.ASSISTANT,
       content: "",
-      pending: true,
+      pending: false,
       turnScopeId: replacementUser.turnScopeId,
     }));
     expect(placeholder.statusLabel).toBe("");
@@ -242,9 +246,10 @@ describe("useChatEngine.resend stopped state", () => {
       const session = detail.sessions?.[0];
       if (session) activeSession.value = { ...activeSession.value, ...session };
     });
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId,
       stream,
+      terminalResolutionState: "stop_completed",
       deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
     });
     activeSession.value.messages = [
@@ -262,6 +267,11 @@ describe("useChatEngine.resend stopped state", () => {
 
     await expect(engine.resendMonotonicMessage(activeSession.value.messages[1], "first edit")).resolves.toBe(true);
     const firstStoppedAssistant = activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT);
+    settleStoppedTurn(turnRuntimeRegistry, {
+      sessionId,
+      turnScopeId: firstStoppedAssistant.turnScopeId,
+      messages: activeSession.value.messages,
+    });
     await expect(engine.resendMonotonicMessage(firstStoppedAssistant, "second edit")).resolves.toBe(true);
 
     expect(stream).toHaveBeenCalledTimes(2);
@@ -280,7 +290,10 @@ describe("useChatEngine.resend stopped state", () => {
   });
 
   it("resendMonotonicMessage keeps the second replacement turn running instead of inheriting stopped state", async () => {
-    const stream = vi.fn(async () => {});
+    const stream = vi.fn(async (payload, onEvent) => emitAuthorityProcessing(onEvent, {
+      ...payload,
+      sessionId: "local-resend-second-stopped",
+    }));
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
       const replacementUser = {
         id: `msg-user-${turnScopeId}`,
@@ -370,6 +383,10 @@ describe("useChatEngine.resend stopped state", () => {
     let streamCallCount = 0;
     const stream = vi.fn(async (payload, onEvent) => {
       streamCallCount += 1;
+      emitAuthorityProcessing(onEvent, {
+        ...payload,
+        sessionId: "local-resend-stale-stop-replay",
+      });
       if (streamCallCount === 2) {
         emitChannelState(onEvent, "local-resend-stale-stop-replay", "dp-old-stopped", "user_stopped", {
           turnScopeId: payload.turnScopeId,
@@ -435,7 +452,9 @@ describe("useChatEngine.resend stopped state", () => {
     activeSession.value.rawMessages = [...activeSession.value.messages];
 
     await expect(engine.resendMonotonicMessage(activeSession.value.messages[1], "second")).resolves.toBe(true);
-    const firstAssistant = activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT && message.pending === true);
+    const firstAssistant = activeSession.value.messages.find((message) => (
+      message.role === RoleEnum.ASSISTANT && message.turnScopeId !== "client-turn:history"
+    ));
     firstAssistant.pending = false;
     firstAssistant.statusLabel = "chat.stopped";
     firstAssistant.channelState = { state: "user_stopped", turnScopeId: firstAssistant.turnScopeId };
@@ -456,7 +475,10 @@ describe("useChatEngine.resend stopped state", () => {
   });
 
   it("resendMonotonicMessage ignores stale global run state when Registry has no active turn", async () => {
-    const stream = vi.fn(async () => {});
+    const stream = vi.fn(async (payload, onEvent) => emitAuthorityProcessing(onEvent, {
+      ...payload,
+      sessionId: "local-resend-ignore-stale-assistant",
+    }));
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
       const replacementUser = { id: `msg-user-${turnScopeId}`, messageId: `msg-user-${turnScopeId}`, turnScopeId, role: RoleEnum.USER, content: newContent };
       return {
@@ -549,7 +571,7 @@ describe("useChatEngine.resend stopped state", () => {
     expect(latestAssistant).toEqual(expect.objectContaining({
       role: RoleEnum.ASSISTANT,
       content: "",
-      pending: true,
+      pending: false,
       turnScopeId: replacementUser.turnScopeId,
       statusLabel: "",
     }));

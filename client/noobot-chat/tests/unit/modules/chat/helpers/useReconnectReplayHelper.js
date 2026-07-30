@@ -10,6 +10,7 @@ import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js
 import {
   applyTurnTerminalResolution,
   applyTurnRuntimeEvent,
+  applyTurnLifecycleSnapshot,
   createTurnRuntimeRegistryState,
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
@@ -166,6 +167,10 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       return result;
     }),
   );
+  const applyAuthoritativeTurnSnapshot = vi.fn((snapshot) => {
+    const result = applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, snapshot);
+    return result;
+  });
   const resolveTurnTerminalState = vi.fn(async () => ({
     applied: false,
     reason: "terminal_unresolved",
@@ -283,8 +288,10 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     translate: (key) => key,
     notify,
     processStore,
+    turnRuntimeRegistry,
     applyTurnRuntimeEvents,
     applyWorkflowRuntimeEvent,
+    applyTurnLifecycleSnapshot: applyAuthoritativeTurnSnapshot,
     resolveTurnTerminalState,
   });
 
@@ -322,6 +329,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       chatList,
       chatWebSocketClient,
       applyTurnRuntimeEvents,
+      applyTurnLifecycleSnapshot: applyAuthoritativeTurnSnapshot,
       applyWorkflowRuntimeEvent,
       resolveTurnTerminalState,
       applyTerminalResolution,

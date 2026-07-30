@@ -8,7 +8,7 @@ import { readFile, readdir, rm } from "node:fs/promises";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import { assertArtifactSessionWritable, buildSessionArtifactFileMap, readJsonArtifactFile, resolveArtifactMutationLockDir } from "./session-artifact-files.js";
 import { writeArtifactIndex } from "./session-artifact-execution-logs.js";
-import { resolveTurnArtifactPath } from "./session-artifact-session.js";
+import { resolveTurnArtifactPath, readRecentSessionTurns } from "./session-artifact-session.js";
 
 function diagnostic(code, message, extra = {}) {
   return { code, message, ...extra };
@@ -22,10 +22,22 @@ export async function inspectSessionArtifacts({ sessionDir = "" } = {}) {
   const referenced = new Set();
   for (const item of Array.isArray(manifest.turnOrder) ? manifest.turnOrder : []) {
     const file = typeof item === "string" ? item : item?.file;
-    try { const resolved = resolveTurnArtifactPath(sessionDir, file); referenced.add(path.basename(resolved)); await readJsonArtifactFile(resolved); result.turns.referenced += 1; }
+    try {
+      const resolved = resolveTurnArtifactPath(sessionDir, file);
+      referenced.add(path.basename(resolved));
+      if (Number(manifest.schemaVersion) === 5) {
+        const raw = await readFile(resolved);
+        if (raw.length < Number(item?.committedBytes || 0)) throw Object.assign(new Error(`turn journal is shorter than committed watermark: ${file}`), { code: "TURN_JOURNAL_TRUNCATED" });
+      } else await readJsonArtifactFile(resolved);
+      result.turns.referenced += 1;
+    }
     catch (error) { result.ok = false; result.issues.push(diagnostic(error.code || "TURN_INVALID", error.message, { file })); }
   }
-  try { for (const entry of await readdir(files.turnsDir, { withFileTypes: true })) if (entry.isFile() && entry.name.endsWith(".json") && !referenced.has(entry.name)) result.turns.orphaned.push(entry.name); }
+  if (Number(manifest.schemaVersion) === 5) {
+    try { await readRecentSessionTurns({ sessionDir, limit: manifest.turnOrder?.length || 0 }); }
+    catch (error) { result.ok = false; result.issues.push(diagnostic(error.code || "TURN_INVALID", error.message)); }
+  }
+  try { for (const entry of await readdir(files.turnsDir, { withFileTypes: true })) if (entry.isFile() && (entry.name.endsWith(".json") || entry.name.endsWith(".jsonl")) && !referenced.has(entry.name)) result.turns.orphaned.push(entry.name); }
   catch (error) { if (error.code !== "ENOENT") { result.ok = false; result.issues.push(diagnostic("TURNS_READ_FAILED", error.message)); } }
   try {
     const index = await readJsonArtifactFile(path.join(files.executionEventsDir, "index.json"), null);

@@ -520,8 +520,8 @@ export class SessionTurnPersister {
       turnPayloads.push(turnPayload);
       turnTimingWritten = true;
     }
-    if (!turnPayloads.length) return;
-    await this.messagePersister.appendTurns({
+    if (!turnPayloads.length) return [];
+    const persistedTurns = await this.messagePersister.appendTurns({
       userId,
       sessionId,
       parentSessionId: normalizeParentSessionId(parentSessionId),
@@ -531,6 +531,7 @@ export class SessionTurnPersister {
     for (const turnPayload of turnPayloads) {
       emitEvent(eventListener, `${turnPayload.role}_message_saved`, { sessionId });
     }
+    return Array.isArray(persistedTurns) ? persistedTurns : [];
   }
 
   async persistStoppedAssistantMessage({

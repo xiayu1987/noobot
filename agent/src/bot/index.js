@@ -202,6 +202,18 @@ export class BotManager {
     return this.sessionRunner.getTurnLifecycleSnapshot(payload);
   }
 
+  async getPendingAuthorityEvents(payload = {}) {
+    return this.sessionRunner.getPendingAuthorityEvents(payload);
+  }
+
+  async recordAuthorityEventAttempt(payload = {}) {
+    return this.sessionRunner.recordAuthorityEventAttempt(payload);
+  }
+
+  async acknowledgeAuthorityEvent(payload = {}) {
+    return this.sessionRunner.acknowledgeAuthorityEvent(payload);
+  }
+
   async getExecution(payload = {}) {
     return this.sessionRunner.getExecution(payload);
   }

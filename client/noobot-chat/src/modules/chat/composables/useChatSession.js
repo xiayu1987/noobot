@@ -555,6 +555,7 @@ export function useChatSession({
     applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),
     applyExecutionTree: (payload) => chatStore.applyExecutionTree(payload),
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
+    applyTurnLifecycleSnapshot: (snapshot) => chatStore.applyTurnLifecycleSnapshot(snapshot),
     applyTurnRuntimeEvents: (events = []) => {
       const sourceEvents = Array.isArray(events) ? events : [];
       return sourceEvents.map((event) => submitTurnRuntimeEvent(event));

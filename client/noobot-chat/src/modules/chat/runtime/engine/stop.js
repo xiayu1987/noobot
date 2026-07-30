@@ -122,12 +122,15 @@ export function stopSending({
   const canStop = execution
     ? execution?.capabilities?.canStop === true || execution?.canStop === true
     : turnRuntime?.canStop === true;
-  if (!turnRuntime || !canStop || turnRuntime?.terminal) {
+  const commandPending = turnRuntime?.commandPending === true;
+  if (!turnRuntime || !canStop || commandPending || turnRuntime?.terminal) {
     logStopDebug("stop.skip.turnNotStoppable", () => ({
       sessionId,
       turnScopeId: turnRuntime?.turnScopeId || "",
       dialogProcessId: turnRuntime?.dialogProcessId || "",
       state: turnRuntime?.state || "",
+      commandPending,
+      pendingCommandType: turnRuntime?.pendingCommandType || "",
       terminal: turnRuntime?.terminal || null,
     }));
     return false;

@@ -48,6 +48,7 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
   },
   executionLogControls: {
     sessionTurnFullDebug: "NOOBOT_RUNTIME_EVENT_SESSION_TURN_FULL_DEBUG",
+    messagePersistenceSuccessDebug: "NOOBOT_RUNTIME_EVENT_MESSAGE_PERSISTENCE_SUCCESS_DEBUG",
   },
 });
 
@@ -88,11 +89,14 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
   },
   executionLogControls: {
     sessionTurnFullDebug: false,
+    messagePersistenceSuccessDebug: false,
   },
 });
 
 export const RUNTIME_EVENTS_EXECUTION_LOG_EVENT_CONTROLS = deepFreeze({
   session_turn_full: "sessionTurnFullDebug",
+  assistant_message_saved: "messagePersistenceSuccessDebug",
+  tool_message_saved: "messagePersistenceSuccessDebug",
 });
 
 export const RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS = deepFreeze({

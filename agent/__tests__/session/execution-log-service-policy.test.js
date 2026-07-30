@@ -52,6 +52,25 @@ test("ExecutionLogService skips session_turn_full before resolving storage scope
   assert.equal(harness.appendedLogs.length, 0);
 });
 
+test("ExecutionLogService skips duplicate successful message persistence logs", async () => {
+  for (const event of ["assistant_message_saved", "tool_message_saved"]) {
+    const harness = createService();
+    const result = await harness.service.appendExecutionLog({
+      userId: "u1",
+      sessionId: "s1",
+      event,
+      data: { sessionId: "s1" },
+    });
+    assert.deepEqual(result, {
+      appended: false,
+      skipped: true,
+      reason: "runtime_event_policy",
+    });
+    assert.equal(harness.resolvedScopeCount, 0);
+    assert.equal(harness.appendedLogs.length, 0);
+  }
+});
+
 test("ExecutionLogService preserves ordinary and failure execution logs", async () => {
   const harness = createService();
   const result = await harness.service.appendExecutionLog({

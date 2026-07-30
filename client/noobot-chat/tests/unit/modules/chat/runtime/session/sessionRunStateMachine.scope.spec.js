@@ -16,9 +16,10 @@ import {
 import { reduceTurnRuntimeEvent, TURN_TRANSITION_REASON } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/authoritative-state/contracts";
 
-const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING };
+const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
 const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
 const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
+const stopAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_ACCEPTED, phase: TURN_PHASE.ACTION, action: "stop" };
 const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
 const terminalResolved = (state) => ({ type: SESSION_RUN_EVENT.TERMINAL_RESOLVED, state, revision: 10, sequence: 10, ...completionCommit });
@@ -48,7 +49,8 @@ describe("sessionRunStateMachine scope separation", () => {
     SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED,
   ])("retains the new Turn identity for %s", (type) => {
     const turn = apply(null, { type });
-    expect(turn).toMatchObject({ ...identity, state: FrontendRunState.ACTION_REQUESTING });
+    expect(turn).toMatchObject({ ...identity, commandPending: true, pendingCommandType: "action" });
+    expect(turn.state).toBeUndefined();
   });
 
   it("keeps processing facts scoped to their exact Turn", () => {
@@ -68,11 +70,12 @@ describe("sessionRunStateMachine scope separation", () => {
 
   it("uses distinct completion and stop phases on the same Turn", () => {
     let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    processing = apply(processing, actionAccepted);
     processing = apply(processing, processingStarted);
     const completion = apply(processing, processingCompleted);
     const stopRequest = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
     expect(completion.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
-    expect(stopRequest).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "stop" });
+    expect(stopRequest).toMatchObject({ state: FrontendRunState.PROCESSING, commandPending: true, pendingCommandType: "stop", action: "stop" });
   });
 
   it("rejects a differently scoped event instead of clearing another Turn lock", () => {
@@ -83,11 +86,13 @@ describe("sessionRunStateMachine scope separation", () => {
       type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
       sessionId: "another-session",
     })).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION });
-    expect(started.state).toBe(FrontendRunState.ACTION_REQUESTING);
+    expect(started).toMatchObject({ commandPending: true, pendingCommandType: "action" });
+    expect(started.state).toBeUndefined();
   });
 
   it("settles summaries into explicit terminal states rather than identity-free idle", () => {
     let processing = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    processing = apply(processing, actionAccepted);
     processing = apply(processing, processingStarted);
     let completion = apply(processing, processingCompleted);
     completion = apply(completion, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.COMPLETED, phase: TURN_PHASE.COMPLETION, ...completionCommit });
@@ -95,6 +100,7 @@ describe("sessionRunStateMachine scope separation", () => {
     expect(completion).toMatchObject({ ...identity, state: FrontendRunState.FRONTEND_COMPLETED });
 
     let stopping = apply(processing, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
+    stopping = apply(stopping, stopAccepted);
     stopping = apply(stopping, stopProcessingCompleted);
     stopping = apply(stopping, terminalResolved(TURN_STATE.STOP_COMPLETED));
     expect(stopping).toMatchObject({ ...identity, state: FrontendRunState.USER_STOP_COMPLETED });

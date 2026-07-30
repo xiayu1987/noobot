@@ -5,50 +5,72 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createTurnLifecycleEnvelope } from "@noobot/authoritative-state/contracts";
+import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { startServerWithWs, closeServer, callChatWs } from "./chat-websocket-server.test-helpers.js";
 
-test("chat-websocket-server publishes committed child lifecycle under the child session identity", async () => {
-  const server = await startServerWithWs({
-    runSession: async ({ eventListener }) => {
-      eventListener.onEvent({
-        event: "turn_lifecycle_committed",
-        data: {
-          userId: "u1",
-          sessionId: "child-session",
-          parentSessionId: "parent-session",
-          turnScopeId: "child-turn",
-          dialogProcessId: "child-dialog",
-          commandId: "child-command",
-          eventType: "turn.processing_started",
-          turn: {
-            turnScopeId: "child-turn",
-            dialogProcessId: "child-dialog",
-            commandId: "child-command",
-            revision: 2,
-            sequence: 2,
-            phase: "processing",
-            state: "processing",
-            action: "send",
-            executionState: "sending",
-            updatedAt: "2026-01-01T00:00:00.000Z",
-          },
-        },
-      });
-      return { sessionId: "parent-session", dialogProcessId: "parent-dialog", answer: "done", messages: [], traces: [], executionLogs: [] };
+test("authority outbox publishes child lifecycle under the persisted child session identity", async () => {
+  const envelope = createTurnLifecycleEnvelope({
+    eventId: "child-event",
+    commandId: "child-command",
+    eventType: "turn.processing_started",
+    userId: "u1",
+    sessionId: "child-session",
+    parentSessionId: "parent-session",
+    turnScopeId: "child-turn",
+    messageId: "child-message",
+    presentationMessageId: "child-message",
+    dialogProcessId: "child-dialog",
+    revision: 2,
+    sequence: 2,
+    phase: "processing",
+    state: "processing",
+    action: "send",
+    executionState: "sending",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+  });
+  const identities = [];
+  let delivered = false;
+  const bot = {
+    async getPendingAuthorityEvents(identity) {
+      identities.push(identity);
+      return { found: true, events: delivered ? [] : [{ eventId: envelope.eventId, envelope }] };
+    },
+    async recordAuthorityEventAttempt(identity) {
+      identities.push(identity);
+      return { recorded: identity.eventId === envelope.eventId };
+    },
+    async acknowledgeAuthorityEvent(identity) {
+      identities.push(identity);
+      delivered = identity.eventId === envelope.eventId;
+      return { acknowledged: delivered };
+    },
+  };
+  const events = [];
+  const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: (event, data) => {
+      events.push({ event, data });
+      return true;
     },
   });
-  try {
-    const events = await callChatWs({ port: server.address().port, payload: {
-      userId: "u1", sessionId: "parent-session", message: "hello", turnScopeId: "parent-turn",
-    } });
-    const child = events.find((item) => item?.event === "turn_lifecycle" && item?.data?.sessionId === "child-session");
-    assert.equal(child?.data?.parentSessionId, "parent-session");
-    assert.equal(child?.data?.turnScopeId, "child-turn");
-    assert.equal(child?.data?.revision, 2);
-    assert.equal(events.some((item) => item?.event === "turn_lifecycle_committed"), false);
-  } finally {
-    await closeServer(server);
-  }
+
+  const result = await dispatchAuthorityEvents({
+    userId: "u1",
+    sessionId: "child-session",
+    parentSessionId: "parent-session",
+  });
+
+  assert.deepEqual(result, { dispatched: true, delivered: 1 });
+  assert.equal(identities.every((identity) => identity.sessionId === "child-session"), true);
+  assert.equal(identities.every((identity) => identity.parentSessionId === "parent-session"), true);
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.event, "turn_lifecycle");
+  assert.equal(events[0]?.data?.sessionId, "child-session");
+  assert.equal(events[0]?.data?.parentSessionId, "parent-session");
+  assert.equal(events[0]?.data?.turnScopeId, "child-turn");
+  assert.equal(events[0]?.data?.revision, 2);
 });
 
 test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta", async () => {

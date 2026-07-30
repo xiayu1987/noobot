@@ -29,6 +29,7 @@ import {
 import { SESSION_RUN_EVENT, BackendChannelState } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import {
   backendState,
+  lifecycle,
   sendStart,
   settleTerminal,
   snapshot,
@@ -69,12 +70,25 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({ turnScopeId: "t1" });
     expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s1"))).toBe("requesting");
   });
-  it("binds backend identity and exposes stop eligibility", () => {
+  it("binds backend identity without deriving stop eligibility from transport", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 2 });
-    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({ dialogProcessId: "dp1", canStop: true });
+    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({ dialogProcessId: "dp1", canStop: false, transportState: "sending" });
     expect(registry.routeIndex.dp1).toEqual({ sessionId: "s1", turnScopeId: "t1" });
+  });
+  it("uses authoritative lifecycle capabilities for stop eligibility", () => {
+    const registry = createTurnRuntimeRegistryState();
+    sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
+    lifecycle(registry, {
+      sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1",
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1" });
+    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+      state: "frontend_processing", canStop: true, commandPending: false,
+    });
   });
   it.each([
     BackendChannelState.RECONNECTING,
@@ -112,12 +126,13 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 2 });
     const result = applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId: "s1", dialogProcessId: "dp1", state: BackendChannelState.COMPLETED, seq: 3 });
-    expect(result.turn).toMatchObject({ turnScopeId: "t1", state: "frontend_completion_requesting", terminal: null });
+    expect(result.turn).toMatchObject({ turnScopeId: "t1", transportState: "completed", commandPending: true });
+    expect(result.turn.state).toBeUndefined();
   });
   it("locks terminal turns and rejects stale or conflicting events", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1", seq: 5 });
-    expect(backendState(registry, { sessionId: "s1", turnScopeId: "t1", state: BackendChannelState.SENDING, seq: 2 }).applied).toBe(false);
+    expect(backendState(registry, { sessionId: "s1", turnScopeId: "t1", state: BackendChannelState.SENDING, seq: 2 }).applied).toBe(true);
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 6 });
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.COMPLETED, seq: 7 });
     settleTerminal(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", revision: 8, sequence: 8 });
@@ -193,9 +208,9 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       seq: 0,
     });
 
-    expect(lateSending.applied).toBe(false);
+    expect(lateSending.applied).toBe(true);
     expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
-      state: "frontend_action_requesting",
+      commandPending: true,
       canStop: false,
     });
   });
@@ -206,8 +221,8 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     sendStart(registry, { sessionId: "s2", turnScopeId: "t2" });
     backendState(registry, { sessionId: "s2", turnScopeId: "t2", state: BackendChannelState.SENDING, seq: 2 });
     backendState(registry, { sessionId: "s2", turnScopeId: "t2", state: BackendChannelState.COMPLETED, seq: 3 });
-    expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s1"))).toBe("sending");
-    expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s2"))).toBe("completing");
+    expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s1"))).toBe("requesting");
+    expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s2"))).toBe("requesting");
   });
   it("canonicalizes workflow Turn scope variants at the Store boundary", () => {
     const registry = createTurnRuntimeRegistryState();
@@ -241,6 +256,24 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       sessionId: "s2", turnScopeId: "workflow-node:shared", dialogProcessId: "dp2",
       state: BackendChannelState.SENDING, seq: 2,
     });
+    lifecycle(registry, {
+      sessionId: "s1", turnScopeId: "workflow-node_shared", dialogProcessId: "dp1",
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(registry, {
+      sessionId: "s2", turnScopeId: "workflow-node_shared", dialogProcessId: "dp2",
+      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+    });
+    lifecycle(registry, {
+      sessionId: "s1", turnScopeId: "workflow-node_shared", dialogProcessId: "dp1",
+      revision: 2, sequence: 2,
+    });
+    lifecycle(registry, {
+      sessionId: "s2", turnScopeId: "workflow-node_shared", dialogProcessId: "dp2",
+      revision: 2, sequence: 2,
+    });
 
     expect(selectTurnMessageRuntime(registry, {
       sessionId: "s1", turnScopeId: "workflow-node_shared",
@@ -255,7 +288,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", state: BackendChannelState.SENDING, seq: 2 });
 
     expect(selectSessionTurnRuntime(registry, "s1")).toMatchObject({
-      sessionId: "s1", sending: true, canStop: true, displayState: "sending",
+      sessionId: "s1", sending: true, canStop: false, displayState: "requesting",
     });
     expect(selectSessionTurnRuntime(registry, "s2")).toMatchObject({
       sessionId: "s2", sending: false, canStop: false, displayState: "send",
@@ -271,7 +304,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
 
     expect(selectTurnMessageRuntime(registry, { sessionId: "s1", turnScopeId: "t1" })).toMatchObject({
       sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1",
-      state: "frontend_processing", backendState: BackendChannelState.SENDING, seq: 2,
+      state: "", backendState: BackendChannelState.SENDING, seq: 0,
     });
     expect(selectTurnMessageRuntime(registry, { sessionId: "s1", dialogProcessId: "dp1" })).toMatchObject({ turnScopeId: "t1" });
     expect(selectTurnMessageRuntime(registry, { sessionId: "s2", turnScopeId: "t1" })).toBeNull();

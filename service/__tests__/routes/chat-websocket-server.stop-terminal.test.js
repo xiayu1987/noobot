@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { startServerWithWs, closeServer, stopChatWs } from "./chat-websocket-server.test-helpers.js";
+import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
 
 test("chat-websocket-server: stop persists and emits the user_stopped turnScopeId", async () => {
@@ -249,6 +250,8 @@ test("chat-websocket-server: stopped event and persistence backfill assistant id
 test("chat-websocket-server: idle stop persists an authoritative user_stopped terminal fact", async () => {
   let persistedStopPayload = null;
   let lifecycle = {};
+  let authorityEventOutbox = [];
+  let authorityEventSequence = 0;
   const lifecycleEvents = [];
   for (const event of [
     {
@@ -277,8 +280,16 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       runSession: async () => ({}),
       applyTurnLifecycleEvent: async (event = {}) => {
         lifecycleEvents.push(event);
-        const result = transitionTurnLifecycle(lifecycle, event);
-        if (result.applied) lifecycle = result.lifecycle;
+        const result = commitTurnLifecycle({
+          lifecycle,
+          event,
+          eventOutbox: authorityEventOutbox,
+          createEventId: () => `idle-stop-authority-event-${++authorityEventSequence}`,
+        });
+        if (result.applied) {
+          lifecycle = result.lifecycle;
+          authorityEventOutbox = result.eventOutbox;
+        }
         return result;
       },
       persistStoppedAssistantMessage: async (payload = {}) => {

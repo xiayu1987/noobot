@@ -7,7 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
+import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
+  acknowledgeAuthorityEventDelivery,
+  listPendingAuthorityEvents,
+  recordAuthorityEventDeliveryAttempt,
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_PHASE,
@@ -15,11 +19,14 @@ import {
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
+import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
 
 function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) {
   let lifecycle = {};
+  let eventOutbox = [];
+  let eventIdSequence = 0;
   const committed = [];
   const commitInputs = [];
   let runCount = 0;
@@ -30,18 +37,51 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
       if (input.terminalStatus && !persistSummary) {
         return { applied: false, reason: "summary_persistence_failed", lifecycle };
       }
-      const result = transitionTurnLifecycle(lifecycle, input.terminalStatus ? {
+      const lifecycleEvent = input.terminalStatus ? {
         ...input,
         summaryVersion: 7,
         completionCommitId: input.completionCommitId || input.commandId,
-      } : input);
+      } : input;
+      const result = commitTurnLifecycle({
+        lifecycle,
+        event: lifecycleEvent,
+        eventOutbox,
+        createEventId: () => `authority-event-${++eventIdSequence}`,
+        materializeTerminal: input.terminalStatus
+          ? () => ({
+              turnStatus: {
+                version: 7,
+                turnScopeId: input.turnScopeId,
+                dialogProcessId: input.dialogProcessId,
+                status: input.terminalStatus.command,
+              },
+            })
+          : undefined,
+      });
       if (result.applied) {
         lifecycle = result.lifecycle;
+        eventOutbox = result.eventOutbox;
         committed.push(input.eventType);
       }
       return input.terminalStatus && result.applied
         ? { ...result, turnStatus: { version: 7, status: input.terminalStatus.command } }
         : result;
+    },
+    async getPendingAuthorityEvents() {
+      return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
+    },
+    async recordAuthorityEventAttempt({ eventId } = {}) {
+      const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
+      if (result.found) eventOutbox = result.outbox;
+      return { recorded: result.found, reason: result.reason };
+    },
+    async acknowledgeAuthorityEvent({ eventId } = {}) {
+      const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+        eventId,
+        deliveredAt: new Date().toISOString(),
+      });
+      if (result.found) eventOutbox = result.outbox;
+      return { acknowledged: result.found, deduplicated: result.deduplicated, reason: result.reason };
     },
     async runSession({ sessionId, runConfig, eventListener }) {
       runCount += 1;
@@ -86,6 +126,7 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
     runCount: () => runCount,
     lastRunConfig: () => structuredClone(lastRunConfig),
     lifecycle: () => lifecycle,
+    eventOutbox: () => structuredClone(eventOutbox),
   };
 }
 
@@ -166,18 +207,52 @@ test("rejected initial provision does not start Agent execution", async () => {
   }
 });
 
-test("deduplicated lifecycle commands republish their authoritative acknowledgement", async () => {
+test("deduplicated lifecycle commands do not bypass the acknowledged authority outbox", async () => {
   const sent = [];
   let lifecycle = {};
-  const commit = createTurnLifecycleBridge({
-    resolveBot: () => ({
+  let eventOutbox = [];
+  let eventIdSequence = 0;
+  const bot = {
       applyTurnLifecycleEvent: async (event = {}) => {
-        const result = transitionTurnLifecycle(lifecycle, event);
-        if (result.applied) lifecycle = result.lifecycle;
+        const result = commitTurnLifecycle({
+          lifecycle,
+          event,
+          eventOutbox,
+          createEventId: () => `deduplicated-event-${++eventIdSequence}`,
+        });
+        if (result.applied) {
+          lifecycle = result.lifecycle;
+          eventOutbox = result.eventOutbox;
+        }
         return result;
       },
-    }),
-    sendEvent: (event, data) => sent.push({ event, data }),
+      async getPendingAuthorityEvents() {
+        return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
+      },
+      async recordAuthorityEventAttempt({ eventId } = {}) {
+        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
+        if (result.found) eventOutbox = result.outbox;
+        return { recorded: result.found, reason: result.reason };
+      },
+      async acknowledgeAuthorityEvent({ eventId } = {}) {
+        const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+          eventId,
+          deliveredAt: new Date().toISOString(),
+        });
+        if (result.found) eventOutbox = result.outbox;
+        return { acknowledged: result.found, deduplicated: result.deduplicated, reason: result.reason };
+      },
+  };
+  const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: (eventName, data) => {
+      sent.push({ event: eventName, data });
+      return true;
+    },
+  });
+  const commit = createTurnLifecycleBridge({
+    resolveBot: () => bot,
+    dispatchAuthorityEvents,
   });
   const event = {
     userId: "u1",
@@ -196,11 +271,157 @@ test("deduplicated lifecycle commands republish their authoritative acknowledgem
 
   assert.equal(first.applied, true);
   assert.equal(replay.deduplicated, true);
-  assert.equal(sent.length, 2);
-  assert.equal(sent[1]?.event, TURN_LIFECYCLE_WIRE_EVENT);
-  assert.equal(sent[1]?.data?.commandId, event.commandId);
-  assert.equal(sent[1]?.data?.revision, sent[0]?.data?.revision);
-  assert.equal(sent[1]?.data?.sequence, sent[0]?.data?.sequence);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]?.event, TURN_LIFECYCLE_WIRE_EVENT);
+  assert.equal(sent[0]?.data?.commandId, event.commandId);
+  assert.equal(sent[0]?.data?.eventId, first.envelope.eventId);
+  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 0);
+});
+
+test("authority dispatcher keeps a failed send pending and reconnect retries the same envelope once", async () => {
+  let eventOutbox = [];
+  const committed = commitTurnLifecycle({
+    lifecycle: {},
+    eventOutbox,
+    createEventId: () => "authority-event-send-retry",
+    event: {
+      userId: "u1",
+      sessionId: "s-send-retry",
+      turnScopeId: "turn-send-retry",
+      commandId: "command-send-retry",
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+      messageId: "message-send-retry",
+      presentationMessageId: "presentation-send-retry",
+    },
+  });
+  assert.equal(committed.applied, true);
+  eventOutbox = committed.eventOutbox;
+
+  const sent = [];
+  let socketAvailable = false;
+  const bot = {
+    async getPendingAuthorityEvents() {
+      return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
+    },
+    async recordAuthorityEventAttempt({ eventId } = {}) {
+      const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
+        eventId,
+        attemptedAt: new Date().toISOString(),
+      });
+      if (result.found) eventOutbox = result.outbox;
+      return { recorded: result.found, reason: result.reason };
+    },
+    async acknowledgeAuthorityEvent({ eventId } = {}) {
+      const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+        eventId,
+        deliveredAt: new Date().toISOString(),
+      });
+      if (result.found) eventOutbox = result.outbox;
+      return { acknowledged: result.found, reason: result.reason };
+    },
+  };
+  const createDispatcher = () => createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: (_eventName, envelope) => {
+      if (!socketAvailable) return false;
+      sent.push(structuredClone(envelope));
+      return true;
+    },
+  });
+
+  const failed = await createDispatcher()({ userId: "u1", sessionId: "s-send-retry" });
+  assert.deepEqual(failed, { dispatched: false, reason: "authority_event_send_failed", delivered: 0 });
+  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 1);
+  assert.equal(eventOutbox[0].delivery.attempts, 1);
+
+  socketAvailable = true;
+  const retried = await createDispatcher()({ userId: "u1", sessionId: "s-send-retry" });
+  assert.deepEqual(retried, { dispatched: true, delivered: 1 });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].eventId, "authority-event-send-retry");
+  assert.deepEqual(sent[0], committed.envelope);
+  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 0);
+
+  const afterAcknowledgement = await createDispatcher()({ userId: "u1", sessionId: "s-send-retry" });
+  assert.deepEqual(afterAcknowledgement, { dispatched: true, delivered: 0 });
+  assert.equal(sent.length, 1);
+});
+
+test("authority dispatcher leaves an event pending when acknowledgement persistence fails", async () => {
+  let eventOutbox = [];
+  const committed = commitTurnLifecycle({
+    lifecycle: {},
+    eventOutbox,
+    createEventId: () => "authority-event-ack-retry",
+    event: {
+      userId: "u1",
+      sessionId: "s-ack-retry",
+      turnScopeId: "turn-ack-retry",
+      commandId: "command-ack-retry",
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+      messageId: "message-ack-retry",
+      presentationMessageId: "presentation-ack-retry",
+    },
+  });
+  assert.equal(committed.applied, true);
+  eventOutbox = committed.eventOutbox;
+
+  let acknowledgementAvailable = false;
+  const sentEventIds = [];
+  const bot = {
+    async getPendingAuthorityEvents() {
+      return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
+    },
+    async recordAuthorityEventAttempt({ eventId } = {}) {
+      const result = recordAuthorityEventDeliveryAttempt(eventOutbox, {
+        eventId,
+        attemptedAt: new Date().toISOString(),
+      });
+      if (result.found) eventOutbox = result.outbox;
+      return { recorded: result.found, reason: result.reason };
+    },
+    async acknowledgeAuthorityEvent({ eventId } = {}) {
+      if (!acknowledgementAvailable) {
+        return { acknowledged: false, reason: "session_save_failed" };
+      }
+      const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+        eventId,
+        deliveredAt: new Date().toISOString(),
+      });
+      if (result.found) eventOutbox = result.outbox;
+      return { acknowledged: result.found, reason: result.reason };
+    },
+  };
+  const dispatch = createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: (_eventName, envelope) => {
+      sentEventIds.push(envelope.eventId);
+      return true;
+    },
+  });
+
+  const failedAcknowledgement = await dispatch({ userId: "u1", sessionId: "s-ack-retry" });
+  assert.deepEqual(failedAcknowledgement, {
+    dispatched: false,
+    reason: "session_save_failed",
+    delivered: 0,
+  });
+  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 1);
+  assert.equal(eventOutbox[0].delivery.attempts, 1);
+
+  acknowledgementAvailable = true;
+  const retry = await dispatch({ userId: "u1", sessionId: "s-ack-retry" });
+  assert.deepEqual(retry, { dispatched: true, delivered: 1 });
+  assert.deepEqual(sentEventIds, ["authority-event-ack-retry", "authority-event-ack-retry"]);
+  assert.equal(eventOutbox[0].delivery.attempts, 2);
+  assert.equal(listPendingAuthorityEvents(eventOutbox).length, 0);
+
+  await dispatch({ userId: "u1", sessionId: "s-ack-retry" });
+  assert.equal(sentEventIds.length, 2);
 });
 
 test("processing-start persistence rejection is observed while Agent execution is still active", async () => {
@@ -341,6 +562,10 @@ test("socket close terminates an accepted turn and releases the session mutex", 
       const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/chat/ws`, {
         headers: { authorization: "Bearer test-key" },
       });
+      const timer = setTimeout(() => {
+        ws.terminate();
+        reject(new Error("socket close lifecycle timeout"));
+      }, 2000);
       ws.on("open", () => ws.send(JSON.stringify(scopedPayload)));
       ws.on("message", (raw) => {
         const message = JSON.parse(String(raw || "{}"));
@@ -348,8 +573,8 @@ test("socket close terminates an accepted turn and releases the session mutex", 
           ws.close(1000, "restart");
         }
       });
-      ws.on("close", resolve);
-      ws.on("error", reject);
+      ws.on("close", () => { clearTimeout(timer); resolve(); });
+      ws.on("error", (error) => { clearTimeout(timer); reject(error); });
     });
 
     const deadline = Date.now() + 1000;

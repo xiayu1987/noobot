@@ -15,9 +15,10 @@ import {
 import { deriveTurnCapabilities, reduceTurnRuntimeEvent } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
 import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/authoritative-state/contracts";
 
-const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING };
+const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
 const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
 const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
+const stopAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_ACCEPTED, phase: TURN_PHASE.ACTION, action: "stop" };
 const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
 const terminalResolved = (state) => ({ type: SESSION_RUN_EVENT.TERMINAL_RESOLVED, state, revision: 10, sequence: 10, ...completionCommit });
@@ -48,7 +49,9 @@ describe("sessionRunStateMachine lifecycle", () => {
 
   it("keeps every lifecycle phase locked until its terminal summary", () => {
     let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
-    expect(deriveTurnCapabilities(turn.state, turn).actionLocked).toBe(true);
+    expect(turn).toMatchObject({ commandPending: true, pendingCommandType: "action" });
+    expect(turn.state).toBeUndefined();
+    turn = apply(turn, actionAccepted);
     turn = apply(turn, processingStarted);
     expect(turn.state).toBe(FrontendRunState.PROCESSING);
     turn = apply(turn, processingCompleted);
@@ -62,7 +65,8 @@ describe("sessionRunStateMachine lifecycle", () => {
 
   it("starts continue as a new identity-bound action", () => {
     const turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_CONTINUE_REQUEST_STARTED, action: "continue" });
-    expect(turn).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "continue" });
+    expect(turn).toMatchObject({ commandPending: true, pendingCommandType: "action", action: "continue" });
+    expect(turn.state).toBeUndefined();
   });
 
   it("promotes only an authoritative lifecycle fact to processing with stop capability", () => {
@@ -76,9 +80,11 @@ describe("sessionRunStateMachine lifecycle", () => {
 
   it("keeps stop locked through request, backend confirmation, and summary", () => {
     let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED });
+    turn = apply(turn, actionAccepted);
     turn = apply(turn, processingStarted);
     turn = apply(turn, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED });
-    expect(turn).toMatchObject({ state: FrontendRunState.ACTION_REQUESTING, action: "stop" });
+    expect(turn).toMatchObject({ state: FrontendRunState.PROCESSING, commandPending: true, pendingCommandType: "stop", action: "stop" });
+    turn = apply(turn, stopAccepted);
     turn = apply(turn, stopProcessingCompleted);
     expect(turn.state).toBe(FrontendRunState.USER_STOPPING);
     turn = apply(turn, terminalResolved(TURN_STATE.STOP_COMPLETED));

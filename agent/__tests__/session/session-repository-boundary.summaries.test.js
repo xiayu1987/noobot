@@ -134,6 +134,30 @@ test("session save refreshes the display projection with live activity timeline"
   });
 });
 
+test("session save writes the display summary once", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "single-summary-write" });
+    await runtime.sessionCrudService.ensureSession(userId, "single-summary-write", "");
+
+    const repository = runtime.repositories.sessionRepository;
+    const originalWriteJsonAtomic = repository.storageService.writeJsonAtomic.bind(repository.storageService);
+    let displaySummaryWrites = 0;
+    repository.storageService.writeJsonAtomic = async (filePath, payload) => {
+      if (String(filePath).endsWith(`${path.sep}session-summary.json`)) displaySummaryWrites += 1;
+      return originalWriteJsonAtomic(filePath, payload);
+    };
+    const session = await repository.findById(userId, "single-summary-write", "");
+    session.messages = [{ role: "user", content: "one durable update" }];
+
+    await repository.save(userId, session, "");
+
+    assert.equal(displaySummaryWrites, 1);
+  });
+});
+
 test("concurrent saves for different sessions preserve every sessions summary entry", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
