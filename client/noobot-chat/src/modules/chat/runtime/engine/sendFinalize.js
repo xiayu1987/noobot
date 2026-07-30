@@ -57,19 +57,19 @@ export function applyBackendStoppedState({
     ? backendStopEventData
     : null;
   if (!stopEvent) {
-    logResendDebug("sendFinalize.stopRequested.skip", { reason: "missingBackendStopConfirmation", botMessage: summarizeDebugMessage(botMessage) });
+    logResendDebug("sendFinalize.stopRequested.skip", () => ({ reason: "missingBackendStopConfirmation", botMessage: summarizeDebugMessage(botMessage) }));
     return false;
   }
   const botTurnScopeId = getMessageTurnScopeId(botMessage);
   const stopTurnScopeId = normalizeTrimmedString(stopEvent?.turnScopeId);
   const comparableBotTurnScopeId = botTurnScopeId || stopTurnScopeId;
   if (botTurnScopeId && stopTurnScopeId && botTurnScopeId !== stopTurnScopeId) {
-    logResendDebug("sendFinalize.stopRequested.skip", {
+    logResendDebug("sendFinalize.stopRequested.skip", () => ({
       reason: "turnScopeMismatch",
       stopTurnScopeId,
       botTurnScopeId: comparableBotTurnScopeId,
       botMessage: summarizeDebugMessage(botMessage),
-    });
+    }));
     return false;
   }
   const sessionId = String(
@@ -83,17 +83,17 @@ export function applyBackendStoppedState({
   const runtimeConfirmsStop = !turnRuntime || turnRuntime.action === "stop" ||
     turnRuntime.state === FrontendRunState.USER_STOPPING || turnRuntime.terminal === "user_stopped";
   if (!runtimeConfirmsStop) {
-    logResendDebug("sendFinalize.stopRequested.skip", {
+    logResendDebug("sendFinalize.stopRequested.skip", () => ({
       reason: "registryDoesNotConfirmStop",
       turnScopeId: comparableBotTurnScopeId,
       botMessage: summarizeDebugMessage(botMessage),
-    });
+    }));
     return false;
   }
-  logResendDebug("sendFinalize.stopRequested.hit", {
+  logResendDebug("sendFinalize.stopRequested.hit", () => ({
     botTurnScopeId: comparableBotTurnScopeId,
     botMessage: summarizeDebugMessage(botMessage),
-  });
+  }));
   applyConversationState(
     {
       state: BackendChannelState.USER_STOPPED,

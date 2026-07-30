@@ -29,7 +29,7 @@ export function createRuntimeEventProjector({ sessions, activeSession, turnRunti
     const result = chatStore.applyTurnRuntimeEvent(timedEvent);
     const selectedSessionId = resolveActiveSessionIdentity();
     const activeBucket = turnRuntimeRegistry.value?.sessions?.[selectedSessionId] || null;
-    logThinkingReplayDebug("frontend.lifecycle.runtimeConsumed", {
+    logThinkingReplayDebug("frontend.lifecycle.runtimeConsumed", () => ({
       sessionId: requestedSessionId || selectedSessionId,
       requestedSessionId,
       selectedSessionId,
@@ -44,7 +44,7 @@ export function createRuntimeEventProjector({ sessions, activeSession, turnRunti
       canonicalState: String(result?.turn?.state || "").trim(),
       canonicalTerminal: result?.turn?.terminal || null,
       activeBucketTurnScopeId: String(activeBucket?.activeTurnScopeId || "").trim(),
-    });
+    }));
     applyRunStateMessageRuntimePatch({
       sessions,
       activeSession,

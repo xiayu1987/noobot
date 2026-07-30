@@ -5,15 +5,16 @@
  */
 
 import { getMessageRuntimeChannelState } from "../../chat/runtime/sessionRunStateMachine.js";
+import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
 export function setResendDebugLogSink(sink = null) {
-  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+  sessionLogSink = acceptsDebugSink(sink) ? sink : null;
 }
 
 export function isResendDebugEnabled() {
-  return true;
+  return isDebugTypeEnabled(sessionLogSink, "resend");
 }
 
 export function summarizeDebugMessage(message = {}) {
@@ -65,19 +66,6 @@ export function summarizeDebugMessages(messages = [], limit = 12) {
 
 export function logResendDebug(phase, payload = {}) {
   try {
-    const entry = {
-      phase,
-      at: new Date().toISOString(),
-      ...payload,
-    };
-    sessionLogSink?.log?.({
-      category: "debug",
-      debugType: "resend",
-      event: phase,
-      sessionId: payload?.sessionId || "",
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
-      data: entry,
-    });
+    return emitLazyDebug(sessionLogSink, "resend", phase, payload);
   } catch {}
 }

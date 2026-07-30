@@ -51,6 +51,32 @@ import { dispatchAgentTurn } from "./runner/agent-dispatch.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { bindAssistantMessageEventStream } from "../../events/message-event-stream.js";
 
+function currentTurnMessageCheckpointKey(message = {}, index = 0) {
+  const messageUid = String(message?.messageUid || "").trim();
+  if (messageUid) return `uid:${messageUid}`;
+  const messageId = String(message?.messageId || message?.id || "").trim();
+  const dialogProcessId = String(message?.dialogProcessId || "").trim();
+  const turnScopeId = String(message?.turnScopeId || "").trim();
+  if (messageId) return `message:${dialogProcessId}:${turnScopeId}:${messageId}`;
+  return `index:${index}:${String(message?.role || "")}:${String(message?.tool_call_id || "")}`;
+}
+
+function currentTurnMessageCheckpointFingerprint(message = {}) {
+  try {
+    return JSON.stringify(message);
+  } catch {
+    return null;
+  }
+}
+
+function buildCurrentTurnCheckpointEntries(messages = []) {
+  return messages.map((message, index) => ({
+    key: currentTurnMessageCheckpointKey(message, index),
+    fingerprint: currentTurnMessageCheckpointFingerprint(message),
+    message,
+  }));
+}
+
 export class SessionExecutionRunner {
   constructor({
     agentRunner,
@@ -535,24 +561,35 @@ export class SessionExecutionRunner {
           });
         };
         let persistCurrentTurnMessagesTail = Promise.resolve();
+        const persistedCurrentTurnMessageFingerprints = new Map();
         dispatchRuntime.timelineCheckpointPersistedMessageUids = [];
         dispatchRuntime.persistCurrentTurnMessages = () => {
           const persist = async () => {
             const store = dispatchRuntime.currentTurnMessages;
             const messages = store?.toArray?.();
             if (!Array.isArray(messages) || !messages.length) return;
+            const checkpointEntries = buildCurrentTurnCheckpointEntries(messages);
+            const changedEntries = checkpointEntries.filter(({ key, fingerprint }) =>
+              fingerprint === null || persistedCurrentTurnMessageFingerprints.get(key) !== fingerprint);
+            const messagesToPersist = changedEntries.map(({ message }) => message);
+            if (!messagesToPersist.length) {
+              dispatchRuntime.timelineCheckpointPersistedMessageUids = messages
+                .map((item = {}) => String(item.messageUid || "").trim())
+                .filter(Boolean);
+              return;
+            }
             await this.appendAgentMessages?.({
               userId,
               sessionId: usedSessionId,
               parentSessionId,
-              messages,
+              messages: messagesToPersist,
               dialogProcessId,
               parentDialogProcessId,
               turnScopeId: resolvedTurnScopeId,
               eventListener: runtimeEventListener,
               persistenceContext,
             });
-            const activityMessages = messages.filter((item = {}) =>
+            const activityMessages = messagesToPersist.filter((item = {}) =>
               String(item.messageUid || "").trim() &&
               Array.isArray(item.activityTimeline) &&
               item.activityTimeline.length > 0);
@@ -592,6 +629,13 @@ export class SessionExecutionRunner {
                 throw error;
               }
             }
+            const currentKeys = new Set(checkpointEntries.map(({ key }) => key));
+            for (const key of persistedCurrentTurnMessageFingerprints.keys()) {
+              if (!currentKeys.has(key)) persistedCurrentTurnMessageFingerprints.delete(key);
+            }
+            for (const { key, fingerprint } of changedEntries) {
+              if (fingerprint !== null) persistedCurrentTurnMessageFingerprints.set(key, fingerprint);
+            }
             dispatchRuntime.timelineCheckpointPersistedMessageUids = messages
               .map((item = {}) => String(item.messageUid || "").trim())
               .filter(Boolean);
@@ -608,9 +652,10 @@ export class SessionExecutionRunner {
               parentDialogProcessId,
               turnScopeId: resolvedTurnScopeId,
               messageCount: messages.length,
+              persistedMessageCount: messagesToPersist.length,
               assistantCount: messages.filter((item = {}) => item.role === "assistant").length,
               toolCount: messages.filter((item = {}) => item.role === "tool").length,
-              messages: messages.map((item = {}) => ({
+              messages: messagesToPersist.map((item = {}) => ({
                 messageUid: String(item.messageUid || "").trim(),
                 messageId: String(item.messageId || item.id || "").trim(),
                 presentationMessageId: String(item.presentationMessageId || "").trim(),

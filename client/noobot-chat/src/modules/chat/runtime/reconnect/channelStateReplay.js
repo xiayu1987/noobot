@@ -171,14 +171,14 @@ export async function applyReconnectChannelState({
     transitions: transitionResults,
     });
   };
-  logResendDebug("channelStateReplay.target", {
+  logResendDebug("channelStateReplay.target", () => ({
     state,
     sessionId,
     dialogProcessId,
     turnScopeId,
     sourceEvent: _trimStr(stateData?.sourceEvent),
     targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
-  });
+  }));
   if (isInFlightConversationState(state)) {
     const existingTurnRuntime = selectTurnMessageRuntime(
       turnRuntimeRegistry?.value || turnRuntimeRegistry,

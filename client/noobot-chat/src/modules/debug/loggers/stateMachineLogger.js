@@ -8,15 +8,16 @@ import {
   getMessageRuntimeChannelState,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
 } from "../../chat/runtime/sessionRunStateMachine.js";
+import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
 export function setStateMachineDebugLogSink(sink = null) {
-  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+  sessionLogSink = acceptsDebugSink(sink) ? sink : null;
 }
 
 export function isStateMachineDebugEnabled() {
-  return true;
+  return isDebugTypeEnabled(sessionLogSink, "state-machine");
 }
 
 export function summarizeStateMachineMessage(message = {}) {
@@ -39,19 +40,6 @@ export function summarizeStateMachineMessage(message = {}) {
 
 export function logStateMachineDebug(event, payload = {}) {
   try {
-    const entry = {
-      event,
-      at: new Date().toISOString(),
-      ...payload,
-    };
-    sessionLogSink?.log?.({
-      category: "debug",
-      debugType: "state-machine",
-      event,
-      sessionId: payload?.sessionId || "",
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
-      data: entry,
-    });
+    return emitLazyDebug(sessionLogSink, "state-machine", event, payload);
   } catch {}
 }

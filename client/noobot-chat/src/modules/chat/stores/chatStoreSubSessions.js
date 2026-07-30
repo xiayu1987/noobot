@@ -259,7 +259,7 @@ function applySubSessionLifecycleEvent(eventData = {}) {
   subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
   if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
   const runtimeResult = projectNodeStatusToTurnRuntime(eventData);
-  logWorkflowDiagnostics("frontend.workflowSubSession.lifecycleProjected", {
+  logWorkflowDiagnostics("frontend.workflowSubSession.lifecycleProjected", () => ({
     sessionId,
     parentSessionId: nextSession.parentSessionId,
     dialogProcessId: nextSession.dialogProcessId,
@@ -271,7 +271,7 @@ function applySubSessionLifecycleEvent(eventData = {}) {
     runtimeReason: text(runtimeResult?.reason),
     runtimeState: text(runtimeResult?.turn?.state),
     runtimeTerminal: text(runtimeResult?.turn?.terminal),
-  });
+  }));
   return { applied: true, session: nextSession, runtimeResult };
 }
 
@@ -428,7 +428,7 @@ function upsertSubSessionEvent(eventName = "", eventData = {}) {
   registry.sessions[sessionId] = nextSession;
   subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
   if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
-  logWorkflowDiagnostics("frontend.workflowSubSession.registryCommitted", {
+  logWorkflowDiagnostics("frontend.workflowSubSession.registryCommitted", () => ({
     sessionId: text(eventData?.parentSessionId || sessionId),
     nodeSessionId: sessionId,
     dialogProcessId: text(eventData?.dialogProcessId),
@@ -438,7 +438,7 @@ function upsertSubSessionEvent(eventName = "", eventData = {}) {
     contentLength: String(nextMessage?.content || "").length,
     messageCount: messages.length,
     subSessionMessageRegistryVersion: Number(subSessionMessageRegistryVersion?.value || 0),
-  });
+  }));
   return { applied: true, session: nextSession, message: nextMessage };
 }
 

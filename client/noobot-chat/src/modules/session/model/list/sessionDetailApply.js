@@ -88,12 +88,12 @@ export function createSessionDetailApplicator({
       SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
       SESSION_DETAIL_APPLY_MODE.REPLACE,
     ].includes(applyMode);
-    logResendDebug("detail.apply.begin", {
+    logResendDebug("detail.apply.begin", () => ({
       sessionId: detail.sessionId,
       requestedPreserveCurrentMessages,
       applyMode,
       currentMessages: summarizeDebugMessages(sessionItem.messages),
-    });
+    }));
     const detailSessionId = String(detail.sessionId || "").trim();
     const deletedTurnScopeIds = [
       ...(Array.isArray(options.deletedTurnScopeIds) ? options.deletedTurnScopeIds : []),
@@ -121,7 +121,7 @@ export function createSessionDetailApplicator({
       sessionDocs.find((doc) => doc.sessionId === detail.sessionId) ||
       sessionDocs[0] ||
       {};
-    logWorkflowDiagnostics("frontend.workflowDetail.applySourceSelected", {
+    logWorkflowDiagnostics("frontend.workflowDetail.applySourceSelected", () => ({
       sessionId: detailSessionId,
       applyMode,
       preserveCurrentMessages: requestedPreserveCurrentMessages,
@@ -129,7 +129,7 @@ export function createSessionDetailApplicator({
       sessionDocCount: sessionDocs.length,
       currentCandidates: summarizeWorkflowMessages(sessionItem.messages),
       persistedCandidates: summarizeWorkflowMessages(mainSessionDoc.messages),
-    });
+    }));
     const serverSessionTitle = String(
       mainSessionDoc.title || mainSessionDoc.customTitle || detail.title || "",
     ).trim();
@@ -193,7 +193,7 @@ export function createSessionDetailApplicator({
       currentTimingsByTurnScopeId: currentTurnTimings,
       onTimingHydrated: ({ item, matchingMessage, turnScopeId, current, timing }) => {
           const timingDialogProcessId = getMessageDialogProcessId(item);
-          logReconnectTimingDebug("frontend.reconnectTiming.timingHydrated", {
+          logReconnectTimingDebug("frontend.reconnectTiming.timingHydrated", () => ({
             sessionId: detail.sessionId,
             dialogProcessId: timingDialogProcessId,
             timingTurnScopeId: getMessageTurnScopeId(item),
@@ -207,7 +207,7 @@ export function createSessionDetailApplicator({
             hydratedThinkingStartedAt: timing.thinkingStartedAt,
             hydratedThinkingFinishedAt: timing.thinkingFinishedAt,
             retained: Boolean(turnScopeId),
-          });
+          }));
       },
     });
     sessionItem.turnTimingsByTurnScopeId = detailProjection.turnTimingsByTurnScopeId;
@@ -223,7 +223,7 @@ export function createSessionDetailApplicator({
       });
     const preserveCurrentMessages =
       requestedPreserveCurrentMessages || hasCurrentInFlightTurnMissingFromDetail;
-    logResendDebug("detail.apply.mode", {
+    logResendDebug("detail.apply.mode", () => ({
       sessionId: detail.sessionId,
       requestedPreserveCurrentMessages,
       applyMode,
@@ -233,7 +233,7 @@ export function createSessionDetailApplicator({
       detailMessageCount: detailMessages.length,
       detailTurnScopeIds: Array.from(detailTurnScopeIds),
       currentMessages: summarizeDebugMessages(currentRenderedMessages),
-    });
+    }));
     if (!preserveCurrentMessages) {
       revokeMessagePreviewUrls(sessionItem.messages || []);
     }
@@ -245,7 +245,7 @@ export function createSessionDetailApplicator({
       isSameSessionIdentity(detailSessionId, activeSessionId.value);
 
     const normalizedDetailMessages = detailProjection.messages;
-    logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailSnapshotReceived", {
+    logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailSnapshotReceived", () => ({
       sessionId: detail.sessionId,
       applyMode,
       summary: isSummaryDetail,
@@ -265,20 +265,20 @@ export function createSessionDetailApplicator({
             authority: String(activity.authority || ""),
           })),
         })),
-    });
+    }));
 
     if (!preserveCurrentMessages && !shouldKeepCurrentMessagesForEmptyDetail) {
-      logResendDebug("detail.apply.replaceAll", {
+      logResendDebug("detail.apply.replaceAll", () => ({
         sessionId: detail.sessionId,
         detailMessages: summarizeDebugMessages(detailMessages),
-      });
+      }));
       sessionItem.messages = normalizedDetailMessages;
     } else if (preserveCurrentMessages) {
-      logResendDebug("detail.apply.preserve", {
+      logResendDebug("detail.apply.preserve", () => ({
         sessionId: detail.sessionId,
         detailMessages: summarizeDebugMessages(detailMessages),
         currentMessages: summarizeDebugMessages(sessionItem.messages),
-      });
+      }));
       const existingMessages = Array.isArray(sessionItem.messages) ? sessionItem.messages : [];
       mergePreservedDetailMessages(existingMessages, normalizedDetailMessages, {
         registry: turnRuntimeRegistry?.value,
@@ -306,7 +306,7 @@ export function createSessionDetailApplicator({
       sessionItem.messages = currentRenderedMessages;
     }
 
-    logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailApplied", {
+    logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailApplied", () => ({
       sessionId: detail.sessionId,
       applyMode,
       preserveCurrentMessages,
@@ -314,7 +314,7 @@ export function createSessionDetailApplicator({
       assistantMessages: sessionItem.messages
         .filter((item) => getMessageRole(item) === RoleEnum.ASSISTANT)
         .map(summarizeToolProjection),
-    });
+    }));
     onSessionDetailApplied?.({
       detail,
       sessionItem,

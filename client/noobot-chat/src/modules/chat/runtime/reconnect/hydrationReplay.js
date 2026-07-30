@@ -53,24 +53,24 @@ export async function renderActiveSessionBeforeReplay({
       const matchingSessionDoc = resolveMatchingSessionDetail(detail, backendSessionId);
       const currentActiveSessionId = sessionIdentity(activeSession?.value);
       if (!matchingSessionDoc || currentActiveSessionId !== backendSessionId) {
-        logResendDebug("hydration.detail.rejected", {
+        logResendDebug("hydration.detail.rejected", () => ({
           sessionId: backendSessionId,
           currentActiveSessionId,
           detailSessionId: sessionIdentity(detail),
           reason: !matchingSessionDoc ? "identity_mismatch_or_empty" : "active_session_changed",
-        });
+        }));
         return false;
       }
-      logResendDebug("hydration.detail.apply.before", {
+      logResendDebug("hydration.detail.apply.before", () => ({
         sessionId: backendSessionId,
         preserveCurrentMessages: true,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
-      });
+      }));
       chatList.applySessionDetail(detail, { preserveCurrentMessages: true });
-      logResendDebug("hydration.detail.apply.after", {
+      logResendDebug("hydration.detail.apply.after", () => ({
         sessionId: backendSessionId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
-      });
+      }));
       return true;
     } catch (error) {
       onError(error);

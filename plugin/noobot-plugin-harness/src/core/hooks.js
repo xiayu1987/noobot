@@ -136,6 +136,7 @@ export function createRegisterHarnessHooks(deps = {}) {
                 fsmState: traceResult?.fsmState,
                 fsmRejected: traceResult?.fsmRejected === true,
               });
+              return traceResult;
             } catch (error) {
               emitHarnessHookProgressFn(ctx, "hook_error", { point, error: safeErrorFn(error) });
               throw error;

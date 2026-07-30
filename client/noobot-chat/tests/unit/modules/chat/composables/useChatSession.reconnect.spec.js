@@ -36,6 +36,8 @@ describe("useChatSession reconnect replay", () => {
     wsClientMock.reconnect.mockResolvedValue(undefined);
     sessionLogClientMock.log.mockClear();
     sessionLogClientMock.debug.mockClear();
+    sessionLogClientMock.isEnabled.mockReset();
+    sessionLogClientMock.isEnabled.mockReturnValue(true);
     sessionLogClientMock.dispose.mockClear();
     setResendDebugLogSink(null);
     vi.unstubAllEnvs();
@@ -50,14 +52,16 @@ describe("useChatSession reconnect replay", () => {
       detail: "through-session-log-client",
     });
 
-    expect(sessionLogClientMock.log).toHaveBeenCalledWith(expect.objectContaining({
+    expect(sessionLogClientMock.debug).toHaveBeenCalledWith("resend", expect.any(Function));
+    expect(sessionLogClientMock.debug.mock.results.at(-1).value).toEqual(expect.objectContaining({
       category: "debug",
+      debugType: "resend",
       event: "resend.injected",
       sessionId: "s-log",
       dialogProcessId: "dp-log",
       turnScopeId: "ts-log",
       data: expect.objectContaining({
-        phase: "resend.injected",
+        event: "resend.injected",
         detail: "through-session-log-client",
       }),
     }));

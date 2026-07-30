@@ -30,13 +30,13 @@ export function routeTerminalStreamEvent(event, data, context) {
     }
     if (isCompletedChannelStateEvent(event, data || {}) && hasCompletableRunIdentity(data || {}, botMessage)) {
       streamState.finalDoneEventData = buildFinalDoneEventData({ data, activeSession, botMessage });
-      logStateMachineDebug("stateMachine.done.finalize.detected", {
+      logStateMachineDebug("stateMachine.done.finalize.detected", () => ({
         source: "channel_state", backendState: channelState,
         sessionId: streamState.finalDoneEventData.sessionId,
         dialogProcessId: streamState.finalDoneEventData.dialogProcessId,
         turnScopeId: streamState.finalDoneEventData.turnScopeId,
         botMessage: summarizeStateMachineMessage(botMessage),
-      });
+      }));
       startFinalDoneSessionDetailOnce("channel_state");
     }
     return true;
@@ -52,12 +52,12 @@ export function routeTerminalStreamEvent(event, data, context) {
       ...streamState.finalDoneEventData, type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
       backendState: "completed", source: "realtime_done_terminal_notification",
     });
-    logStateMachineDebug("stateMachine.done.finalize.detected", {
+    logStateMachineDebug("stateMachine.done.finalize.detected", () => ({
       source: "done_event", sessionId: streamState.finalDoneEventData.sessionId,
       dialogProcessId: streamState.finalDoneEventData.dialogProcessId,
       turnScopeId: streamState.finalDoneEventData.turnScopeId,
       botMessage: summarizeStateMachineMessage(botMessage),
-    });
+    }));
     startFinalDoneSessionDetailOnce("done_event");
     handleDoneStreamEvent({
       data, requestedTextStreaming, botMessage, activeSession, activeSessionId, clearPendingInteraction,

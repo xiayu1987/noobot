@@ -11,6 +11,7 @@ import {
   resolveSessionChannelConfig,
 } from "@noobot/runtime-events/session-channel";
 import { RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEvent } from "@noobot/runtime-events";
+import { resolveSessionLogClientPolicy } from "@noobot/runtime-events/session-log-protocol";
 import { HTTP_STATUS } from "#agent/constants";
 
 const MAX_LOG_MESSAGE_BYTES = MAX_SESSION_CHANNEL_MESSAGE_BYTES;
@@ -54,6 +55,12 @@ export async function writeSessionLogEvent(event = {}, config = resolveSessionLo
   return result;
 }
 
+function isBestEffortDebugEvent(event = {}) {
+  return event?.category === "debug"
+    || event?.level === "debug"
+    || Boolean(event?.debugType || event?.data?.debugType);
+}
+
 export async function cleanupSessionLogs(config = resolveSessionLogConfig(), now = Date.now()) {
   return cleanupSessionChannelRecords(config, now);
 }
@@ -64,7 +71,11 @@ function sendUpgradeError(socket, statusCode = HTTP_STATUS.UNAUTHORIZED, message
   socket.destroy();
 }
 
-export function registerLogWebSocketServer(server, { resolveAuthByApiKey, logConfig = resolveSessionLogConfig() } = {}) {
+export function registerLogWebSocketServer(server, {
+  resolveAuthByApiKey,
+  logConfig = resolveSessionLogConfig(),
+  writeLogEvent = writeSessionLogEvent,
+} = {}) {
   const wss = new WebSocketServer({ noServer: true });
   logDiagnostic("registered", {
     path: "/logs/ws",
@@ -93,6 +104,9 @@ export function registerLogWebSocketServer(server, { resolveAuthByApiKey, logCon
   });
   wss.on("connection", (ws, request) => {
     logDiagnostic("connected", { userId: request.auth?.userId || "" });
+    if (ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({ event: "session_log_policy", policy: resolveSessionLogClientPolicy(logConfig) }));
+    }
     ws.on("message", async (raw) => {
       try {
         if (Buffer.byteLength(raw || "") > MAX_LOG_MESSAGE_BYTES) {
@@ -104,9 +118,29 @@ export function registerLogWebSocketServer(server, { resolveAuthByApiKey, logCon
           throw new Error("log batch too large");
         }
         logDiagnostic("received", { count: events.length });
+        const reliableWrites = [];
         for (const item of events) {
-          await writeSessionLogEvent({ ...item, userId: request.auth?.userId || item.userId }, logConfig);
+          const event = { ...item, userId: request.auth?.userId || item.userId };
+          if (isBestEffortDebugEvent(event)) {
+            // Debug ACK means accepted by the collector boundary. It is never
+            // allowed to hold the browser retry window behind disk I/O.
+            void writeLogEvent(event, logConfig)
+              .then((result) => {
+                if (result?.ok === false) {
+                  logDiagnostic("debug write dropped", { errorType: result.error?.name || "Error" });
+                }
+              })
+              .catch((error) => {
+                logDiagnostic("debug write dropped", { errorType: error?.name || "Error" });
+              });
+          } else {
+            reliableWrites.push(Promise.resolve(writeLogEvent(event, logConfig)).then((result) => {
+              if (result?.ok === false) throw result.error || new Error("reliable log write failed");
+              return result;
+            }));
+          }
         }
+        await Promise.all(reliableWrites);
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: "ack", count: events.length }));
       } catch (error) {
         void writeRoutedRuntimeEvent({

@@ -91,7 +91,7 @@ describe("sessionLogWebSocketClient", () => {
     expect(client.status()).toEqual(expect.objectContaining({ queueLength: 0, inFlightLength: 0 }));
   });
 
-  it("retains queued events beyond the pressure threshold and reports overflow", async () => {
+  it("rejects reliable events beyond the bounded queue without generating recursive logs", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
@@ -105,16 +105,16 @@ describe("sessionLogWebSocketClient", () => {
 
     expect(socket.sent).toHaveLength(100);
     expect(sentBusinessRecords(socket)[0].event).toBe("message.0");
-    expect(client.status()).toMatchObject({ queueLength: 406, inFlightLength: 100, queueOverflowReported: true });
+    expect(client.status()).toMatchObject({ queueLength: 400, inFlightLength: 100, rejectedReliableCount: 5 });
 
     for (let batch = 0; batch < 5; batch += 1) {
       socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 100 }) });
     }
-    socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 6 }) });
+    socket.onmessage?.({ data: JSON.stringify({ event: "ack", count: 100 }) });
     const records = sentRecords(socket);
-    expect(records.filter((record) => record.event === "frontend.sessionLogWs.queueCapacityExceeded")).toHaveLength(1);
-    expect(sentBusinessRecords(socket)).toHaveLength(505);
-    expect(sentBusinessRecords(socket).at(-1).event).toBe("message.504");
+    expect(records.filter((record) => record.event === "frontend.sessionLogWs.queueCapacityExceeded")).toHaveLength(0);
+    expect(sentBusinessRecords(socket)).toHaveLength(500);
+    expect(sentBusinessRecords(socket).at(-1).event).toBe("message.499");
   });
 
   it("sends the next bounded batch only after the current batch is fully acknowledged", async () => {
@@ -240,10 +240,12 @@ describe("sessionLogWebSocketClient", () => {
     }));
   });
 
-  it("forwards debug logs to the log websocket so runtime-events can decide recording", async () => {
+  it("forwards only debug types enabled by the server policy", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
+    expect(client.debug({ event: "debug.trace", sessionId: "s-debug", data: { debugType: "state-machine" } })).toBe(false);
+    client.updatePolicy({ debug: { "state-machine": true } });
     expect(client.debug({ event: "debug.trace", sessionId: "s-debug", data: { debugType: "state-machine" } })).toBe(true);
     expect(MockWebSocket.instances).toHaveLength(1);
     const socket = MockWebSocket.instances[0];
@@ -257,15 +259,69 @@ describe("sessionLogWebSocketClient", () => {
     }));
   });
 
-  it("does not require a frontend debug switch to send debug logs", async () => {
+  it("does not invoke a lazy debug payload factory while its type is disabled", async () => {
     const { createSessionLogWebSocketClient } = await importClient();
     const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
 
-    expect(client.debug({ event: "debug.trace", sessionId: "s-debug" })).toBe(true);
+    const factory = vi.fn(() => ({ event: "debug.trace", sessionId: "s-debug" }));
+    expect(client.debug("state-machine", factory)).toBe(false);
+    expect(factory).not.toHaveBeenCalled();
+    expect(MockWebSocket.instances).toHaveLength(0);
+  });
+
+  it("drops queued and in-flight debug records on disconnect instead of replaying them", async () => {
+    vi.useFakeTimers();
+    const { createSessionLogWebSocketClient } = await importClient();
+    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
+    client.updatePolicy({ debug: { "state-machine": true } });
+    client.debug("state-machine", () => ({ event: "debug.first", sessionId: "s-debug" }));
     const socket = MockWebSocket.instances[0];
     socket.readyState = MockWebSocket.OPEN;
     socket.onopen?.();
+    client.debug("state-machine", () => ({ event: "debug.queued", sessionId: "s-debug" }));
 
-    expect(JSON.parse(socket.sent[0])).toEqual(expect.objectContaining({ category: "debug", event: "debug.trace", sessionId: "s-debug" }));
+    socket.readyState = MockWebSocket.CLOSED;
+    socket.onclose?.({ code: 1006, reason: "network" });
+
+    expect(client.status()).toMatchObject({
+      debugQueueLength: 0,
+      inFlightLength: 0,
+      droppedDebugCount: 2,
+      hasReconnectTimer: false,
+    });
+  });
+
+  it("drops expired debug records before a connection can send them", async () => {
+    vi.useFakeTimers();
+    const { createSessionLogWebSocketClient } = await importClient();
+    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "ws://test/logs" });
+    client.updatePolicy({ debug: { "state-machine": true }, limits: { debugTtlMs: 5 } });
+    client.debug("state-machine", () => ({ event: "debug.expired", sessionId: "s-debug" }));
+    const socket = MockWebSocket.instances[0];
+    await vi.advanceTimersByTimeAsync(6);
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+
+    expect(socket.sent).toHaveLength(0);
+    expect(client.status()).toMatchObject({ debugQueueLength: 0, droppedDebugCount: 1 });
+  });
+
+  it("enforces both debug count and byte limits", async () => {
+    const { createSessionLogWebSocketClient } = await importClient();
+    const client = createSessionLogWebSocketClient({ resolveWebSocketUrl: () => "" });
+    client.updatePolicy({
+      debug: { "state-machine": true },
+      limits: { maxDebugQueue: 1, maxDebugBytes: 10000 },
+    });
+    expect(client.debug("state-machine", () => ({ event: "debug.one", sessionId: "s-debug" }))).toBe(true);
+    expect(client.debug("state-machine", () => ({ event: "debug.two", sessionId: "s-debug" }))).toBe(false);
+    expect(client.status()).toMatchObject({ debugQueueLength: 1, droppedDebugCount: 1 });
+
+    client.updatePolicy({
+      debug: { "state-machine": true },
+      limits: { maxDebugQueue: 10, maxDebugBytes: 1 },
+    });
+    expect(client.debug("state-machine", () => ({ event: "debug.bytes", sessionId: "s-debug" }))).toBe(false);
+    expect(client.status().droppedDebugCount).toBe(2);
   });
 });

@@ -105,7 +105,7 @@ export function createChatWebSocketClient({
           const event = String(parsed?.event || "message");
           const data = parsed?.data || {};
           const hasLiveSubscriber = typeof liveEventSubscriber === "function";
-          logWorkflowDiagnostics("frontend.websocket.transportEventReceived", {
+          logWorkflowDiagnostics("frontend.websocket.transportEventReceived", () => ({
             sessionId: normalizeTrimmedString(data?.sessionId),
             dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
             turnScopeId: normalizeTrimmedString(data?.turnScopeId),
@@ -115,7 +115,7 @@ export function createChatWebSocketClient({
             reconnecting,
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,
-          });
+          }));
           if (event === "transport_ready") {
             transport.markReady(ws, { nextServerInstanceId: data?.serverInstanceId });
             return;
@@ -133,7 +133,7 @@ export function createChatWebSocketClient({
             event !== StreamEventEnum.RECONNECT_COMPLETE
           ) {
             liveEventSubscriber({ event, data });
-            logWorkflowDiagnostics("frontend.websocket.liveEventDispatched", {
+            logWorkflowDiagnostics("frontend.websocket.liveEventDispatched", () => ({
               sessionId: normalizeTrimmedString(data?.sessionId),
               dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
               turnScopeId: normalizeTrimmedString(data?.turnScopeId),
@@ -141,7 +141,7 @@ export function createChatWebSocketClient({
               transportSequence: Number(data?.seq || 0) || null,
               authoritativeSequence: Number(data?.event?.sequence || 0) || null,
               route: "transport_live_subscriber",
-            });
+            }));
           }
         } catch {}
       },
@@ -481,11 +481,11 @@ export function createChatWebSocketClient({
 
           if (event === StreamEventEnum.RECONNECT_DATA) {
             if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) {
-              logWorkflowDiagnostics("frontend.websocket.reconnectControlRejected", {
+              logWorkflowDiagnostics("frontend.websocket.reconnectControlRejected", () => ({
                 sessionId: normalizeTrimmedString(data?.sessionId || currentSessionId),
                 protocolEvent: event,
                 reason: "request_id_mismatch",
-              });
+              }));
               return;
             }
             trackReconnectData(data);
@@ -495,11 +495,11 @@ export function createChatWebSocketClient({
 
           if (event === StreamEventEnum.RECONNECT_COMPLETE) {
             if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) {
-              logWorkflowDiagnostics("frontend.websocket.reconnectControlRejected", {
+              logWorkflowDiagnostics("frontend.websocket.reconnectControlRejected", () => ({
                 sessionId: normalizeTrimmedString(data?.sessionId || currentSessionId),
                 protocolEvent: event,
                 reason: "request_id_mismatch",
-              });
+              }));
               return;
             }
             reconnecting = false;
@@ -518,7 +518,7 @@ export function createChatWebSocketClient({
 
           if (!activeStreamContext) {
             onReconnectData({ event, data });
-            logWorkflowDiagnostics("frontend.websocket.liveEventDispatched", {
+            logWorkflowDiagnostics("frontend.websocket.liveEventDispatched", () => ({
               sessionId: normalizeTrimmedString(data?.sessionId),
               dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
               turnScopeId: normalizeTrimmedString(data?.turnScopeId),
@@ -527,7 +527,7 @@ export function createChatWebSocketClient({
               authoritativeSequence: Number(data?.event?.sequence || 0) || null,
               route: "reconnect_live_subscriber",
               requestIdMatchesReconnect: normalizeTrimmedString(data?.requestId) === requestId,
-            });
+            }));
           }
           commandRequests.settle(event, data);
         } catch (error) {

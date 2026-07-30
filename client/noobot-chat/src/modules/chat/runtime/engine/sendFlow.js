@@ -129,14 +129,14 @@ export function createChatEngineSender({
         uploadCount: explicitAttachmentFiles?.length ?? uploadFiles.value.length,
       },
     });
-    logResendDebug("send.begin", {
+    logResendDebug("send.begin", () => ({
       sessionId,
       turnScopeId,
       reuseExistingUserTurn,
       allowDuringResend: options?.allowDuringResend === true,
       ...runtimeView(),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
-    });
+    }));
     const turnStartedAtMs = Date.now();
     const thinkingStartedAt = new Date(turnStartedAtMs).toISOString();
     applyRunStateEvent?.({
@@ -171,7 +171,7 @@ export function createChatEngineSender({
       userAttachments: explicitUserAttachments,
       turnStartedAtMs,
     });
-    logResendDebug("send.prepare.after", {
+    logResendDebug("send.prepare.after", () => ({
       sessionId,
       turnScopeId,
       explicitUserAttachments: summarizeDebugAttachments(explicitUserAttachments),
@@ -179,7 +179,7 @@ export function createChatEngineSender({
       filesToSend: summarizeDebugAttachments(filesToSend),
       botMessage: summarizeDebugMessage(botMsg),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
-    });
+    }));
 
     let lastStreamErrorEventData = null;
     let finalDoneEventData = null;
@@ -228,7 +228,7 @@ export function createChatEngineSender({
           reuseExistingUserTurn: payload?.reuseExistingUserTurn === true,
         },
       });
-      logResendDebug("send.stream.before", {
+      logResendDebug("send.stream.before", () => ({
         sessionId,
         turnScopeId,
         payloadTurnScopeId: payload?.turnScopeId,
@@ -241,7 +241,7 @@ export function createChatEngineSender({
         botMessage: summarizeDebugMessage(botMsg),
         botThinkingStartedAt: botMsg?.thinkingStartedAt || "",
         payloadThinkingStartedAt: payload?.config?.thinkingStartedAt || "",
-      });
+      }));
       let locatedSendingStartedMessage = false;
       const locateSendingStartedMessageOnce = () => {
         if (locatedSendingStartedMessage) return;
@@ -299,14 +299,14 @@ export function createChatEngineSender({
         }
         throw streamError;
       }
-      logStateMachineDebug("stateMachine.stream.resolved", {
+      logStateMachineDebug("stateMachine.stream.resolved", () => ({
         hasFinalDoneEventData: Boolean(finalDoneEventData),
         hasFinalDoneDetailPromise: Boolean(doneTurnFinalizer.promise),
         sessionId: finalDoneEventData?.sessionId || "",
         dialogProcessId: finalDoneEventData?.dialogProcessId || "",
         turnScopeId: finalDoneEventData?.turnScopeId || turnScopeId,
         botMessage: summarizeStateMachineMessage(botMsg),
-      });
+      }));
       logSessionEvent({
         category: "message",
         event: "send.resolved",
@@ -338,14 +338,14 @@ export function createChatEngineSender({
         applyConversationState,
         backendStopEventData: finalUserStopEventData,
       });
-      logResendDebug("send.stopCheck", {
+      logResendDebug("send.stopCheck", () => ({
         turnScopeId,
         userStoppedByFinalEvent,
         userStoppedByUserStopRequest,
         finalUserStopEventData,
         hasFinalDoneEventData: Boolean(finalDoneEventData),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
-      });
+      }));
       if (userStoppedByFinalEvent || userStoppedByUserStopRequest) {
         if (userStoppedByFinalEvent && !userStoppedByUserStopRequest) {
           applyBackendStoppedState({
@@ -376,17 +376,17 @@ export function createChatEngineSender({
         });
         locateDoneMessage?.();
         finalizePendingResendOperation?.({ finalOnly: true });
-        logResendDebug("send.stopReturn", {
+        logResendDebug("send.stopReturn", () => ({
           turnScopeId,
           ...runtimeView(),
           messages: summarizeDebugMessages(activeSession?.value?.messages),
-        });
+        }));
         return true;
       }
-      logResendDebug("send.doneReturn", {
+      logResendDebug("send.doneReturn", () => ({
         turnScopeId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
-      });
+      }));
       return true;
     } catch (error) {
       if (
@@ -397,10 +397,10 @@ export function createChatEngineSender({
           applyConversationState,
         })
       ) {
-        logResendDebug("send.catch.stopRequested", {
+        logResendDebug("send.catch.stopRequested", () => ({
           turnScopeId,
           messages: summarizeDebugMessages(activeSession?.value?.messages),
-        });
+        }));
         locateDoneMessage?.();
         finalizePendingResendOperation?.({ finalOnly: true });
         return false;
@@ -417,11 +417,11 @@ export function createChatEngineSender({
           translate,
         });
       }
-      logResendDebug("send.catch.error", {
+      logResendDebug("send.catch.error", () => ({
         turnScopeId,
         error: String(error?.message || error || ""),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
-      });
+      }));
       logSessionEvent({
         category: "message",
         level: "error",
@@ -449,11 +449,11 @@ export function createChatEngineSender({
       });
       return false;
     } finally {
-      logResendDebug("send.cleanup", {
+      logResendDebug("send.cleanup", () => ({
         turnScopeId,
         ...runtimeView(),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
-      });
+      }));
       logSessionEvent({
         category: "message",
         event: "send.cleanup",

@@ -14,8 +14,8 @@ describe("toolLogWindowDebugLogger", () => {
   afterEach(() => setToolLogWindowDebugLogSink(null));
 
   it("routes a bounded structured record to its dedicated debug type", () => {
-    const log = vi.fn();
-    setToolLogWindowDebugLogSink({ log });
+    const debug = vi.fn((debugType, factory) => factory());
+    setToolLogWindowDebugLogSink({ debug, isEnabled: () => true });
 
     logToolLogWindowDebug("frontend.toolLogWindow.rendererReceived", {
       sessionId: "session-1",
@@ -24,7 +24,8 @@ describe("toolLogWindowDebugLogger", () => {
       selectedCount: 10,
     });
 
-    expect(log).toHaveBeenCalledWith(expect.objectContaining({
+    expect(debug).toHaveBeenCalledWith("tool-log-window", expect.any(Function));
+    expect(debug.mock.results[0].value).toEqual(expect.objectContaining({
       category: "debug",
       level: "debug",
       debugType: "tool-log-window",
@@ -34,6 +35,16 @@ describe("toolLogWindowDebugLogger", () => {
         selectedCount: 10,
       }),
     }));
+  });
+
+  it("does not construct a lazy payload when the policy disables the type", () => {
+    const factory = vi.fn(() => ({ selectedCount: 10 }));
+    const debug = vi.fn();
+    setToolLogWindowDebugLogSink({ debug, isEnabled: () => false });
+
+    expect(logToolLogWindowDebug("frontend.toolLogWindow.disabled", factory)).toBe(false);
+    expect(factory).not.toHaveBeenCalled();
+    expect(debug).not.toHaveBeenCalled();
   });
 
   it("caps content previews without losing ordering identity", () => {

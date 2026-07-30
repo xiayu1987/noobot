@@ -77,8 +77,8 @@ function projection(messageValue) {
 
 describe("turnProjectionStore convergence", () => {
   it("logs canonical envelope identity and payload presence at the shared reducer boundary", () => {
-    const log = vi.fn();
-    setThinkingReplayDebugLogSink({ log });
+    const debug = vi.fn((debugType, factory) => factory());
+    setThinkingReplayDebugLogSink({ debug, isEnabled: () => true });
     const event = envelope({
       envelopeVersion: 2,
       envelopeKind: "noobot.message_event",
@@ -100,7 +100,8 @@ describe("turnProjectionStore convergence", () => {
       source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
     }).applied).toBe(true);
 
-    expect(log).toHaveBeenCalledWith(expect.objectContaining({
+    expect(debug).toHaveBeenCalledWith("thinking-replay", expect.any(Function));
+    expect(debug.mock.results[0].value).toEqual(expect.objectContaining({
       event: "frontend.turnProjection.envelopeObserved",
       data: expect.objectContaining({
         source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,

@@ -26,7 +26,7 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
   }
   if (!workflowRunId || !nodeExecutionId) {
     const result = { applied: false, reason: "missing_identity" };
-    logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", {
+    logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", () => ({
       sessionId: text(eventData?.parentSessionId || eventData?.sessionId),
       nodeSessionId: text(eventData?.sessionId),
       parentSessionId: text(eventData?.parentSessionId),
@@ -36,7 +36,7 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
       nodeExecutionId,
       reason: result.reason,
       dataKeys: Object.keys(eventData || {}).sort(),
-    });
+    }));
     return result;
   }
   const registry = workflowNodeStateRegistry.value || createWorkflowNodeStateRegistry();
@@ -57,7 +57,7 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
   }
   if (!shouldApplyWorkflowNodeStateEvent(current, eventData)) {
     const result = { applied: false, reason: "stale", current };
-    logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", {
+    logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", () => ({
       sessionId: text(eventData?.parentSessionId || eventData?.sessionId),
       nodeSessionId: text(eventData?.sessionId || current?.sessionId),
       parentSessionId: text(eventData?.parentSessionId || current?.parentSessionId),
@@ -68,7 +68,7 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
       reason: result.reason,
       incomingRevision: Number(eventData?.revision || 0),
       currentRevision: Number(current?.revision || 0),
-    });
+    }));
     return result;
   }
   const authoritativeStatus = text(eventData?.status || eventData?.stepStatus || current?.status || current?.stepStatus);
@@ -100,7 +100,7 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
       sessionId: childSessionId,
       state: next.status,
     });
-    logWorkflowDiagnostics("frontend.workflowStore.nodeSessionStatusApplied", {
+    logWorkflowDiagnostics("frontend.workflowStore.nodeSessionStatusApplied", () => ({
       sessionId: childSessionId,
       parentSessionId: next.parentSessionId,
       dialogProcessId: next.dialogProcessId,
@@ -111,9 +111,9 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
       applied: lifecycleResult?.applied === true,
       reason: text(lifecycleResult?.reason),
       messageCount: lifecycleResult?.session?.messages?.length || 0,
-    });
+    }));
   }
-  logWorkflowDiagnostics("frontend.workflowStore.nodeStateApplied", {
+  logWorkflowDiagnostics("frontend.workflowStore.nodeStateApplied", () => ({
     sessionId: text(next.parentSessionId || next.sessionId),
     nodeSessionId: next.sessionId,
     parentSessionId: next.parentSessionId,
@@ -126,7 +126,7 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
     sequence: next.sequence,
     workflowCount: Object.keys(registry.workflows).length,
     nodeCount: Object.keys(workflow.nodes).length,
-  });
+  }));
   return { applied: true, node: next };
 }
 
@@ -139,7 +139,7 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
   }
   if (!workflowRunId || !nodeSessions.length) {
     const result = { applied: false, reason: "missing_planning_nodes" };
-    logWorkflowDiagnostics("frontend.workflowStore.planningRejected", {
+    logWorkflowDiagnostics("frontend.workflowStore.planningRejected", () => ({
       sessionId: text(eventData?.sessionId),
       dialogProcessId: text(eventData?.dialogProcessId),
       turnScopeId: text(eventData?.turnScopeId),
@@ -147,7 +147,7 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
       nodeSessionCount: nodeSessions.length,
       reason: result.reason,
       dataKeys: Object.keys(eventData || {}).sort(),
-    });
+    }));
     return result;
   }
   const registry = workflowNodeStateRegistry.value || createWorkflowNodeStateRegistry();
@@ -179,7 +179,7 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
     applied: results.some((result) => result?.applied === true),
     results,
   };
-  logWorkflowDiagnostics("frontend.workflowStore.planningApplied", {
+  logWorkflowDiagnostics("frontend.workflowStore.planningApplied", () => ({
     sessionId: text(eventData?.sessionId),
     dialogProcessId: text(eventData?.dialogProcessId),
     turnScopeId: text(eventData?.turnScopeId),
@@ -188,7 +188,7 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
     appliedNodeCount: results.filter((item) => item?.applied === true).length,
     applied: result.applied,
     workflowCount: Object.keys(registry.workflows).length,
-  });
+  }));
   return result;
 }
 
@@ -196,7 +196,7 @@ function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
   const canonical = normalizeWorkflowRuntimeEvent(record, { source });
   if (!canonical.valid) {
     const result = { applied: false, reason: canonical.errors[0] || "invalid_runtime_event", canonical };
-    logWorkflowDiagnostics("frontend.workflowStore.runtimeEventRejected", {
+    logWorkflowDiagnostics("frontend.workflowStore.runtimeEventRejected", () => ({
       sessionId: text(canonical?.data?.parentSessionId || canonical?.data?.sessionId),
       dialogProcessId: text(canonical?.data?.dialogProcessId),
       turnScopeId: text(canonical?.data?.turnScopeId),
@@ -208,7 +208,7 @@ function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
       authoritativeSequence: canonical.sequence,
       transportSequence: canonical.transportSequence,
       reason: result.reason,
-    });
+    }));
     return result;
   }
   let result;
@@ -223,7 +223,7 @@ function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
   } else {
     result = { applied: false, reason: "unsupported_event" };
   }
-  logWorkflowDiagnostics("frontend.workflowStore.runtimeEventReduced", {
+  logWorkflowDiagnostics("frontend.workflowStore.runtimeEventReduced", () => ({
     sessionId: text(canonical?.data?.parentSessionId || canonical?.data?.sessionId),
     dialogProcessId: text(canonical?.data?.dialogProcessId),
     turnScopeId: text(canonical?.data?.turnScopeId),
@@ -236,7 +236,7 @@ function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
     transportSequence: canonical.transportSequence,
     applied: result?.applied === true,
     reason: text(result?.reason),
-  });
+  }));
   return { ...(result || {}), canonical };
 }
   return { applyWorkflowRuntimeEvent };

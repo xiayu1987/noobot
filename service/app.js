@@ -28,6 +28,7 @@ import { buildWorkspaceTree } from "./services/workspace-tree-service.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
+  flushJsonLineBatches,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
 
@@ -107,17 +108,24 @@ function stopManagedOpenVSCodeInstances() {
   openVSCodeService?.stopLifecycleManager?.({ stopInstances: true });
 }
 
-process.once("SIGINT", () => {
-  stopManagedOpenVSCodeInstances();
-  process.exit(0);
-});
+let shuttingDown = false;
+let httpServer;
 
-process.once("SIGTERM", () => {
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   stopManagedOpenVSCodeInstances();
-  process.exit(0);
-});
+  if (httpServer?.listening) {
+    await new Promise((resolve) => httpServer.close(() => resolve()));
+  }
+  await flushJsonLineBatches();
+  process.exit(signal === "SIGINT" ? 130 : 143);
+}
 
-startHttpServer({
+process.once("SIGINT", () => void shutdown("SIGINT"));
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
+
+httpServer = startHttpServer({
   app,
   getBot,
   resolveRequestLocale,

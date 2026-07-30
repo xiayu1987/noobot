@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 import {
   RUNTIME_EVENTS_CONFIG_DEFAULTS,
   RUNTIME_EVENTS_CONFIG_ENVS,
+  RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS,
+  RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES,
   isHookRuntimeEventVerboseEnabled,
   resolveHookRuntimeEventsMode,
   resolveRuntimeEventsMaxArchives,
@@ -16,6 +18,29 @@ import {
   resolveRuntimeEventsSessionLogControls,
   resolveRuntimeEventsStorageConfig,
 } from '../runtime-events-config.mjs';
+
+test('session log registries reference controls with defaults and environment keys', () => {
+  const registeredControlKeys = [
+    ...Object.values(RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS),
+    ...Object.values(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)
+      .map((descriptor) => descriptor.controlKey),
+  ];
+  for (const controlKey of registeredControlKeys) {
+    assert.equal(
+      typeof RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls[controlKey],
+      'boolean',
+      `${controlKey} should have a boolean default`,
+    );
+    assert.equal(
+      typeof RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls[controlKey],
+      'string',
+      `${controlKey} should have an environment key`,
+    );
+  }
+  for (const [debugType, descriptor] of Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)) {
+    assert.equal(typeof descriptor.exposeToClient, 'boolean', `${debugType} should declare client exposure`);
+  }
+});
 
 test('runtime-events storage config uses shared defaults', () => {
   assert.deepEqual(resolveRuntimeEventsStorageConfig({}), RUNTIME_EVENTS_CONFIG_DEFAULTS.runtimeEvents);

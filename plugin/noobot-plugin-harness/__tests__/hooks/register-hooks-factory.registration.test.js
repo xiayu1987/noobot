@@ -91,7 +91,8 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
   assert.equal(handlers.get("before_llm_call")?.opts?.id, `${plugin.name}.trace.before_llm_call`);
   assert.equal(handlers.get("after_turn")?.opts?.id, `${plugin.name}.flush.after_turn`);
 
-  await handlers.get("before_llm_call").handler({ userId: "u1" });
+  const traceResult = await handlers.get("before_llm_call").handler({ userId: "u1" });
+  assert.deepEqual(traceResult, { fsmState: "planning", fsmRejected: false });
   await handlers.get("after_turn").handler();
 
   assert.deepEqual(

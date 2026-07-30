@@ -267,9 +267,19 @@ function resolveRendererContext() {
 }
 
 const extensionRendererContext = computed(() => {
-  const context = resolveRendererContext();
-  const sessions = context.subSessionMessageRegistry?.sessions || {};
-  logWorkflowDiagnostics("frontend.workflowRender.extensionContextProjected", {
+  return resolveRendererContext();
+});
+const extensionContextDiagnosticsSignature = computed(() => [
+  String(props.messageItem?.sessionId || ""),
+  String(props.messageItem?.dialogProcessId || ""),
+  String(props.messageItem?.turnScopeId || ""),
+  Number(chatStore.subSessionMessageRegistryVersion || 0),
+].join("|"));
+watch(extensionContextDiagnosticsSignature, () => {
+  logWorkflowDiagnostics("frontend.workflowRender.extensionContextProjected", () => {
+    const context = extensionRendererContext.value;
+    const sessions = context.subSessionMessageRegistry?.sessions || {};
+    return {
     sessionId: String(props.messageItem?.sessionId || ""),
     dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
     turnScopeId: String(props.messageItem?.turnScopeId || ""),
@@ -282,9 +292,9 @@ const extensionRendererContext = computed(() => {
         contentLength: String(message?.content || "").length,
       })),
     })),
+    };
   });
-  return context;
-});
+}, { flush: "post" });
 
 function handleOpenThinkingDetails(payload = {}) {
   emit("open-thinking-details", {

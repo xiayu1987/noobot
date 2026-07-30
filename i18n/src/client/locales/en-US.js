@@ -240,6 +240,7 @@ export const enUSMessages = {
     "ai": "AI",
     "tool": "Tool",
     "generating": "Generating...",
+    "generatedFile": "Generated",
     "generatedFiles": "Generated Files ({count})",
     "recognizedFile": "Auto-detected",
     "downloadFile": "Download {name}",

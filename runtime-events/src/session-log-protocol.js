@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveRuntimeEventsSessionLogControls } from "@noobot/shared/runtime-events-config";
+import {
+  RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS,
+  RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES,
+  resolveRuntimeEventsSessionLogControls,
+} from "@noobot/shared/runtime-events-config";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { normalizeOptionalSessionId } from "./session-id.js";
 
 export const SESSION_LOG_CATEGORIES = Object.freeze([
@@ -29,35 +35,12 @@ export const SESSION_LOG_DEFAULT_CATEGORY = "system";
 export const SESSION_LOG_AGENT_PROXY_DEFAULT_CATEGORY = "agent-proxy";
 export const SESSION_LOG_ALL_TYPES = "*";
 
-export const SESSION_LOG_CONTROL_KEYS = Object.freeze({
-  state: "stateLog",
-  message: "messageLog",
-  interaction: "interactionLog",
-  transport: "transportLog",
-  "agent-proxy": "agentProxyLog",
-  system: "systemLog",
-  "frontend-lifecycle": "frontendLifecycleLog",
-  "agent-proxy-http": "agentProxyHttpLog",
-  "agent-proxy-websocket": "agentProxyWebSocketLog",
-  "agent-proxy-route": "agentProxyRouteLog",
-  "backend-websocket": "backendWebSocketLog",
-  "backend-lifecycle": "backendLifecycleLog",
-});
+export const SESSION_LOG_CONTROL_KEYS = RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS;
 
-export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze({
-  "state-machine": "stateMachineDebug",
-  resend: "resendDebug",
-  stop: "stopDebug",
-  "session-log-ws": "sessionLogWsDebug",
-  "stop-continue": "frontendStopContinueDebug",
-  "reconnect-timing": "frontendReconnectTimingDebug",
-  "thinking-replay": "frontendThinkingReplayDebug",
-  "timeline-pipeline": "timelinePipelineDebug",
-  "tool-log-window": "frontendToolLogWindowDebug",
-  "terminal-resolution": "frontendTerminalResolutionDebug",
-  "agent-proxy-route": "agentProxyRouteDebug",
-  "workflow-diagnostics": "workflowDiagnosticsDebug",
-});
+export const SESSION_LOG_DEBUG_CONTROL_KEYS = Object.freeze(Object.fromEntries(
+  Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)
+    .map(([debugType, descriptor]) => [debugType, descriptor.controlKey]),
+));
 
 export const SESSION_LOG_RECORD_FIELDS = Object.freeze([
   "ts",
@@ -94,6 +77,22 @@ export function isSessionLogDebugCategory(category) {
 
 export function resolveSessionLogControlConfig(options = {}) {
   return resolveRuntimeEventsSessionLogControls(options.env || process.env, options.sessionLogControls || options.controls || options);
+}
+
+export function resolveSessionLogClientPolicy(options = {}) {
+  const controls = resolveSessionLogControlConfig(options);
+  return {
+    debug: Object.fromEntries(
+      Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)
+        .filter(([, descriptor]) => descriptor.exposeToClient === true)
+        .map(([debugType, descriptor]) => [debugType, controls[descriptor.controlKey] === true]),
+    ),
+    limits: {
+      maxDebugQueue: QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueSize,
+      maxDebugBytes: QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueBytes,
+      debugTtlMs: TIME_THRESHOLDS.client.sessionLogDebugTtlMs,
+    },
+  };
 }
 
 export function isSessionLogDebugEvent(event = {}) {

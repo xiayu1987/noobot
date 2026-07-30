@@ -555,13 +555,13 @@ export function useReconnectReplay({
     const botMessage = turnScopeId
       ? findAssistantMessageByTurnScopeId(turnScopeId)
       : null;
-    logWorkflowDiagnostics("frontend.workflowReplay.doneFinalDetailStarted", {
+    logWorkflowDiagnostics("frontend.workflowReplay.doneFinalDetailStarted", () => ({
       sessionId,
       dialogProcessId: String(eventData?.dialogProcessId || "").trim(),
       turnScopeId,
       assistantFound: Boolean(botMessage),
       doneMessageCount: Array.isArray(eventData?.messages) ? eventData.messages.length : 0,
-    });
+    }));
     const applied = await finalizeDoneTurnPresentation({
       activeSession,
       activeSessionId,
@@ -581,7 +581,7 @@ export function useReconnectReplay({
       logSessionEvent: (payload) => sessionLogWebSocketClient?.log?.(payload),
       completionSource: "reconnectDone",
     });
-    logWorkflowDiagnostics("frontend.workflowReplay.doneFinalDetailFinished", {
+    logWorkflowDiagnostics("frontend.workflowReplay.doneFinalDetailFinished", () => ({
       sessionId,
       dialogProcessId: String(eventData?.dialogProcessId || "").trim(),
       turnScopeId,
@@ -589,7 +589,7 @@ export function useReconnectReplay({
       activeMessageCount: Array.isArray(activeSession.value?.messages)
         ? activeSession.value.messages.length
         : 0,
-    });
+    }));
     return applied;
   }
 

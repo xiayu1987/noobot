@@ -12,17 +12,20 @@ export function setWorkflowDiagnosticsLogSink(sink = null) {
 
 export function logWorkflowDiagnostics(event, payload = {}) {
   try {
-    sessionLogSink?.log?.({
+    if (!sessionLogSink?.isEnabled?.("workflow-diagnostics")) return false;
+    return sessionLogSink.debug?.("workflow-diagnostics", () => {
+      const resolvedPayload = typeof payload === "function" ? payload() : payload;
+      return {
       category: "debug",
       level: "debug",
       debugType: "workflow-diagnostics",
       event,
-      sessionId: payload?.sessionId || "",
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
-      data: { event, at: new Date().toISOString(), ...payload },
-    });
-  } catch {}
+      sessionId: resolvedPayload?.sessionId || "",
+      dialogProcessId: resolvedPayload?.dialogProcessId || "",
+      turnScopeId: resolvedPayload?.turnScopeId || "",
+      data: { event, at: new Date().toISOString(), ...resolvedPayload },
+    }; });
+  } catch { return false; }
 }
 
 export function summarizeWorkflowMessage(message = {}, index = -1) {
@@ -53,9 +56,11 @@ export function summarizeWorkflowMessage(message = {}, index = -1) {
   };
 }
 
-export function summarizeWorkflowMessages(messages = []) {
-  return (Array.isArray(messages) ? messages : [])
-    .map((message, index) => summarizeWorkflowMessage(message, index))
+export function summarizeWorkflowMessages(messages = [], limit = 20) {
+  const source = Array.isArray(messages) ? messages : [];
+  const start = Math.max(0, source.length - Math.max(1, Number(limit) || 20));
+  return source.slice(start)
+    .map((message, index) => summarizeWorkflowMessage(message, start + index))
     .filter((message) =>
       message.type === "workflow" ||
       message.pluginSource === "workflow-plugin" ||

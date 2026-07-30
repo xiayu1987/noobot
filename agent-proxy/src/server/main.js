@@ -34,12 +34,14 @@ import {
 } from "../http/security.js";
 import { resolveLocaleFromRequest } from "noobot-i18n/agent-proxy";
 import { writeAgentProxyHttpServerListenStartedEvent } from "../runtime-events/startup-events.js";
+import { writeAgentProxyDataPlaneMetricsEvent } from "../runtime-events/ws-runtime-events.js";
 import { DownstreamConnectionRegistry } from "../websocket/downstream-connection-registry.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 async function loadWebSocketLibrary() {
   try {
@@ -74,7 +76,6 @@ const ideHttpRateLimiter = createFixedWindowRateLimiter({
   windowMs: config.ideHttpRateLimitWindowMs,
   maxRequests: config.ideHttpRateLimitMaxRequests,
 });
-
 const frontendRoot = String(process.env.AGENT_PROXY_FRONTEND_ROOT || "").trim();
 const frontendIndexPath = frontendRoot ? path.join(frontendRoot, "index.html") : "";
 const shouldServeFrontend = Boolean(frontendRoot && fs.existsSync(frontendIndexPath));
@@ -484,6 +485,13 @@ const cleanupTimer = setInterval(() => {
 }, config.cleanupIntervalMs);
 
 cleanupTimer.unref?.();
+
+const dataPlaneMetricsTimer = setInterval(() => {
+  const metrics = channelManager.drainSuccessfulDataPlaneMetrics();
+  if (metrics) void writeAgentProxyDataPlaneMetricsEvent({ metrics });
+}, TIME_THRESHOLDS.agentProxy.dataPlaneMetricsIntervalMs);
+
+dataPlaneMetricsTimer.unref?.();
 
 const heartbeatTimer = setInterval(() => {
   downstreamConnections.sweepHeartbeat({

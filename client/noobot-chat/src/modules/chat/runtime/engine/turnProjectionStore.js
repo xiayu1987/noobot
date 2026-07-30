@@ -53,7 +53,7 @@ export function dispatchTurnEnvelope({
       authority: envelope?.authority,
       ...values,
     });
-    logThinkingReplayDebug("frontend.turnProjection.envelopeObserved", {
+    logThinkingReplayDebug("frontend.turnProjection.envelopeObserved", () => ({
       sessionId: identity.sessionId,
       dialogProcessId: identity.dialogProcessId,
       turnScopeId: identity.turnScopeId,
@@ -87,7 +87,7 @@ export function dispatchTurnEnvelope({
       toolTimelineCount: Array.isArray(targetMessage?.toolTimeline)
         ? targetMessage.toolTimeline.length
         : 0,
-    });
+    }));
     return observation;
   };
   if (!turnKey) {

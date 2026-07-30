@@ -156,7 +156,7 @@ test("message event tracing only accepts the shared authoritative envelope", () 
   assert.equal(resolveMessageEventTrace("message_event", { event: { eventId: "loose" } }, 9).protocolKind, "legacy");
 });
 
-test("broadcast records a delivery result for every subscriber", () => {
+test("broadcast only records unsuccessful delivery results", () => {
   const records = [];
   const manager = new ChannelManager({ OPEN: 1 }, {
     sessionLogClient: { log: (_apiKey, event) => records.push(event) },
@@ -180,8 +180,8 @@ test("broadcast records a delivery result for every subscriber", () => {
       item.event === "agentProxy.channel.broadcast.delivery" &&
       item.data.transportEvent === "thinking",
   );
-  assert.deepEqual(deliveries.map((item) => item.data.result).sort(), ["sent", "skipped"]);
-  assert.equal(deliveries.find((item) => item.data.result === "skipped")?.data?.dropReason, "socket_not_open");
+  assert.deepEqual(deliveries.map((item) => item.data.result), ["skipped"]);
+  assert.equal(deliveries[0]?.data?.dropReason, "socket_not_open");
   assert.ok(deliveries.every((item) => item.data.connectionId));
   assert.equal(openSocket.__agentProxyLastSequenceByChannel[channelKey], 1);
   assert.equal(closedSocket.__agentProxyLastSequenceByChannel?.[channelKey], undefined);

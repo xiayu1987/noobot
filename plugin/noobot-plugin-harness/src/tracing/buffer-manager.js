@@ -354,5 +354,6 @@ export async function traceHook(point, ctx, options, plugin = {}) {
   return {
     fsmState: fsm.state,
     fsmRejected: fsm.rejected === true,
+    fsmAttemptedState: fsm.attempted || null,
   };
 }

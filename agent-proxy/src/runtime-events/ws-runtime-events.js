@@ -49,3 +49,17 @@ export function writeAgentProxyRouteLifecycleEvent({ event, socket = null, chann
     data: { connectionId: ensureConnectionId(socket), channelStatus: String(channel?.status || ""), upstreamReadyState: channel?.upstreamSocket?.readyState ?? null, ...data },
   });
 }
+
+export function writeAgentProxyDataPlaneMetricsEvent({ metrics, workspaceRoot } = {}) {
+  if (!metrics) return Promise.resolve({ ok: true, skipped: true });
+  return writeRoutedRuntimeEvent({
+    scope: "system",
+    source: "agent-proxy",
+    channel: RUNTIME_EVENT_CHANNELS.PROCESS,
+    category: RUNTIME_EVENT_CATEGORIES.TRANSPORT,
+    level: "info",
+    event: "agentProxy.dataPlane.success.summary",
+    workspaceRoot,
+    data: metrics,
+  });
+}

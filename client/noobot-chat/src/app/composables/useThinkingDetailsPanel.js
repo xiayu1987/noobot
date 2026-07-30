@@ -179,20 +179,20 @@ export function useThinkingDetailsPanel({
       : null;
     currentFetchDetail = requestFetchDetail || fetchThinkingDetail;
     const openRequestVersion = ++detailRequestVersion;
-    logThinkingReplayDebug("frontend.thinkingReplay.detailPanelOpenResolved", {
+    logThinkingReplayDebug("frontend.thinkingReplay.detailPanelOpenResolved", () => ({
       sessionId: activeSessionId?.value,
       payload: summarizeThinkingTimeline(payloadMessageItem),
       active: summarizeThinkingTimeline(activeMessageItem || {}),
       selectedSource: activeMessageItem ? "active-session" : "payload",
       hasLocalThinkingDetails,
-    });
+    }));
     const needsFullDetail = Boolean(initialMessageItem && payload?.skipFetch !== true);
     let loadedThinkingDetail = null;
     if (needsFullDetail) {
       try {
         loadedThinkingDetail = await fetchThinkingDetailForMessage(initialMessageItem, requestFetchDetail);
         if (openRequestVersion !== detailRequestVersion) return;
-        logThinkingReplayDebug("frontend.thinkingReplay.detailPanelRequestCommitted", {
+        logThinkingReplayDebug("frontend.thinkingReplay.detailPanelRequestCommitted", () => ({
           sessionId: activeSessionId?.value,
           requested: summarizeThinkingTimeline(initialMessageItem),
           detail: summarizeThinkingTimeline(loadedThinkingDetail?.messageItem || {}),
@@ -200,7 +200,7 @@ export function useThinkingDetailsPanel({
             ? loadedThinkingDetail.allMessages.length
             : 0,
           injectedMessageCount: Number(loadedThinkingDetail?.counts?.injectedMessageCount || 0),
-        });
+        }));
       } catch (error) {
         if (openRequestVersion !== detailRequestVersion) return;
         notify?.({ type: "warning", message: error?.message || translate?.("chat.loadSessionDetailFailed") });
@@ -250,13 +250,13 @@ export function useThinkingDetailsPanel({
       if (hasCanonicalTimeline(sourceMessage)) {
         detailRequestVersion += 1;
         thinkingDetailsMessageItem.value = sourceMessage;
-        logThinkingReplayDebug("frontend.thinkingReplay.detailPanelCanonicalSynchronized", {
+        logThinkingReplayDebug("frontend.thinkingReplay.detailPanelCanonicalSynchronized", () => ({
           sessionId: activeSessionId?.value,
           source: summarizeThinkingTimeline(sourceMessage),
           preservedAllMessageCount: thinkingDetailsAllMessages.value.length,
           preservedInjectedMessageCount: thinkingDetailsAllMessages.value
             .filter((item = {}) => item?.injectedMessage === true).length,
-        });
+        }));
         return;
       }
       const requestVersion = ++detailRequestVersion;

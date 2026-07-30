@@ -128,16 +128,11 @@ test("harness FSM transition matrix (table-driven)", async () => {
       expectedCommitType: "fsm_transition",
     },
     {
-      name: "planning -> planned",
+      name: "planning -> planned from LLM tool calls",
       point: "after_llm_call",
       ctx: {
-        agentContext: {
-          payload: {
-            harness: {
-              taskChecklist: [{ index: 1, task: "拆解任务" }],
-            },
-          },
-        },
+        hasToolCalls: true,
+        calls: [{ id: "call-1", name: "read_file", args: {} }],
       },
       expectedState: "planned",
       expectedAccepted: true,

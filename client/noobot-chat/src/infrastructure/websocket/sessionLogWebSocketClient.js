@@ -17,6 +17,9 @@ import {
 
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 const MAX_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
+const DEFAULT_MAX_DEBUG_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueSize;
+const DEFAULT_MAX_DEBUG_QUEUE_BYTES = QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueBytes;
+const DEFAULT_DEBUG_TTL_MS = TIME_THRESHOLDS.client.sessionLogDebugTtlMs;
 
 function envFlag(name, fallback = false) {
   const raw = String(import.meta?.env?.[name] || "").trim().toLowerCase();
@@ -36,9 +39,20 @@ export function createSessionLogWebSocketClient({
   source = "frontend",
   refreshAuthentication = null,
 } = {}) {
-  const queue = [];
+  const reliableQueue = [];
+  const debugQueue = [];
   const inFlight = [];
-  let queueOverflowReported = false;
+  let debugQueueBytes = 0;
+  let droppedDebugCount = 0;
+  let rejectedReliableCount = 0;
+  let policy = {
+    debug: {},
+    limits: {
+      maxDebugQueue: DEFAULT_MAX_DEBUG_QUEUE_SIZE,
+      maxDebugBytes: DEFAULT_MAX_DEBUG_QUEUE_BYTES,
+      debugTtlMs: DEFAULT_DEBUG_TTL_MS,
+    },
+  };
   let disposed = false;
   const transport = createWebSocketTransportSupervisor({
     channelId: "session-log",
@@ -51,7 +65,7 @@ export function createSessionLogWebSocketClient({
 
   function scheduleReconnect() {
     if (disposed || isSuspended()) return;
-    if (!queue.length && !inFlight.length) return;
+    if (!reliableQueue.length && !debugQueue.length && !inFlight.length) return;
     transport.scheduleReconnect(() => {
       connect();
       flush();
@@ -61,7 +75,7 @@ export function createSessionLogWebSocketClient({
   function recoverAuthentication() {
     void transport.recover({
       reconnect: () => {
-        if (disposed || (!queue.length && !inFlight.length)) return;
+        if (disposed || (!reliableQueue.length && !debugQueue.length && !inFlight.length)) return;
         connect();
         flush();
       },
@@ -72,6 +86,11 @@ export function createSessionLogWebSocketClient({
   function handleDisconnect(currentSocket, event = {}, { closeSocket = false } = {}) {
     if (!transport.isCurrent(currentSocket)) return;
     const restored = restoreInFlight();
+    if (debugQueue.length) {
+      droppedDebugCount += debugQueue.length;
+      debugQueue.length = 0;
+      debugQueueBytes = 0;
+    }
     transport.noteFailure(currentSocket);
     if (closeSocket) {
       try { currentSocket?.close?.(1011, "transport_error"); } catch {}
@@ -79,18 +98,23 @@ export function createSessionLogWebSocketClient({
     logDiagnostic("disconnected", {
       code: event?.code || 0,
       reason: event?.reason || "",
-      queueLength: queue.length,
+      queueLength: reliableQueue.length + debugQueue.length,
       restored,
       reconnectAttempt: transport.status().reconnectAttempt,
     });
-    if (!disposed) recoverAuthentication();
+    if (!disposed && (reliableQueue.length || inFlight.some((entry) => entry.reliable))) {
+      recoverAuthentication();
+    }
   }
 
   function restoreInFlight() {
     if (!inFlight.length) return 0;
-    const count = inFlight.length;
-    queue.unshift(...inFlight.splice(0));
-    return count;
+    const pending = inFlight.splice(0);
+    const reliable = pending.filter((entry) => entry.reliable);
+    const dropped = pending.length - reliable.length;
+    reliableQueue.unshift(...reliable);
+    droppedDebugCount += dropped;
+    return reliable.length;
   }
 
   function handleAck(raw) {
@@ -100,10 +124,14 @@ export function createSessionLogWebSocketClient({
     } catch {
       return;
     }
+    if (parsed?.event === "session_log_policy") {
+      updatePolicy(parsed.policy);
+      return;
+    }
     if (parsed?.event !== "ack") return;
     const ackCount = Math.max(0, Math.min(Number(parsed.count || 1), inFlight.length));
     inFlight.splice(0, ackCount);
-    logDiagnostic("ack", { count: ackCount, queueLength: queue.length, inFlightLength: inFlight.length });
+    logDiagnostic("ack", { count: ackCount, queueLength: reliableQueue.length + debugQueue.length, inFlightLength: inFlight.length });
     if (!inFlight.length) flush();
   }
 
@@ -113,14 +141,14 @@ export function createSessionLogWebSocketClient({
     if (current && [WebSocket.OPEN, WebSocket.CONNECTING].includes(current.readyState)) return current;
     const attempt = transport.acquire();
     if (!attempt?.socket) {
-      logDiagnostic("connect skipped", { reason: "empty-url", queueLength: queue.length });
+      logDiagnostic("connect skipped", { reason: "empty-url", queueLength: reliableQueue.length + debugQueue.length });
       return null;
     }
     const currentSocket = attempt.socket;
-    logDiagnostic("connecting", { queueLength: queue.length, generation: attempt.generation });
+    logDiagnostic("connecting", { queueLength: reliableQueue.length + debugQueue.length, generation: attempt.generation });
     currentSocket.onopen = () => {
       if (!transport.markOpen(currentSocket) || disposed) return;
-      logDiagnostic("open", { queueLength: queue.length, inFlightLength: inFlight.length });
+      logDiagnostic("open", { queueLength: reliableQueue.length + debugQueue.length, inFlightLength: inFlight.length });
       flush();
     };
     currentSocket.onmessage = (raw) => {
@@ -144,12 +172,19 @@ export function createSessionLogWebSocketClient({
     // permits advancing the window; otherwise reconnect recovery can reorder
     // or silently discard records from an arbitrarily large in-flight set.
     if (inFlight.length) return;
-    const count = Math.min(queue.length, MAX_BATCH_SIZE);
+    const now = Date.now();
+    while (debugQueue.length && debugQueue[0].expiresAt <= now) {
+      debugQueueBytes -= debugQueue.shift().bytes;
+      droppedDebugCount += 1;
+    }
+    const sourceQueue = reliableQueue.length ? reliableQueue : debugQueue;
+    const count = Math.min(sourceQueue.length, MAX_BATCH_SIZE);
     while (inFlight.length < count) {
-      const record = queue.shift();
-      inFlight.push(record);
+      const entry = sourceQueue.shift();
+      if (!entry.reliable) debugQueueBytes -= entry.bytes;
+      inFlight.push(entry);
       try {
-        socket.send(JSON.stringify(record));
+        socket.send(JSON.stringify(entry.record));
       } catch (error) {
         logDiagnostic("send failed", { errorType: error?.name || "Error" });
         handleDisconnect(socket, { reason: "send_failed" });
@@ -160,30 +195,74 @@ export function createSessionLogWebSocketClient({
     if (count) logDiagnostic("flushed", { count, inFlightLength: inFlight.length });
   }
 
+  function debugTypeOf(event = {}) {
+    return String(event.debugType || event.data?.debugType || event.event || "").trim().toLowerCase();
+  }
+
+  function isEnabled(debugType = "") {
+    const type = String(debugType || "").trim().toLowerCase();
+    return Boolean(type && policy.debug?.[type] === true);
+  }
+
+  function updatePolicy(nextPolicy = {}) {
+    if (!nextPolicy || typeof nextPolicy !== "object") return false;
+    policy = {
+      debug: nextPolicy.debug && typeof nextPolicy.debug === "object" ? { ...nextPolicy.debug } : {},
+      limits: {
+        maxDebugQueue: Number.isFinite(Number(nextPolicy.limits?.maxDebugQueue))
+          ? Math.max(0, Number(nextPolicy.limits.maxDebugQueue))
+          : DEFAULT_MAX_DEBUG_QUEUE_SIZE,
+        maxDebugBytes: Number.isFinite(Number(nextPolicy.limits?.maxDebugBytes))
+          ? Math.max(0, Number(nextPolicy.limits.maxDebugBytes))
+          : DEFAULT_MAX_DEBUG_QUEUE_BYTES,
+        debugTtlMs: Number.isFinite(Number(nextPolicy.limits?.debugTtlMs))
+          ? Math.max(0, Number(nextPolicy.limits.debugTtlMs))
+          : DEFAULT_DEBUG_TTL_MS,
+      },
+    };
+    for (let index = debugQueue.length - 1; index >= 0; index -= 1) {
+      if (isEnabled(debugTypeOf(debugQueue[index].record))) continue;
+      debugQueueBytes -= debugQueue[index].bytes;
+      debugQueue.splice(index, 1);
+      droppedDebugCount += 1;
+    }
+    return true;
+  }
+
   function log(event = {}) {
     if (disposed) return false;
-    const record = buildSessionLogRecord(event, {
+    const resolvedEvent = event;
+    if (!resolvedEvent || typeof resolvedEvent !== "object") return false;
+    const record = buildSessionLogRecord(resolvedEvent, {
       source,
       defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
       includeTimestamp: false,
     });
-    queue.push(record);
-    // MAX_QUEUE_SIZE is an observability threshold, not permission to erase
-    // unacknowledged diagnostics. Report pressure explicitly and retain order.
-    if (queue.length > MAX_QUEUE_SIZE && !queueOverflowReported) {
-      queueOverflowReported = true;
-      queue.push(buildSessionLogRecord({
-        category: "debug",
-        event: "frontend.sessionLogWs.queueCapacityExceeded",
-        sessionId: record.sessionId,
-        data: { threshold: MAX_QUEUE_SIZE, retainedCount: queue.length },
-      }, {
-        source,
-        defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
-        includeTimestamp: false,
-      }));
+    const isDebug = record.category === "debug" || record.level === "debug" || Boolean(record.data?.debugType);
+    if (isDebug) {
+      if (!isEnabled(debugTypeOf(record)) || reliableQueue.length || inFlight.some((entry) => entry.reliable)) {
+        droppedDebugCount += 1;
+        return false;
+      }
+      const bytes = new TextEncoder().encode(JSON.stringify(record)).length;
+      if (
+        debugQueue.length >= policy.limits.maxDebugQueue ||
+        debugQueueBytes + bytes > policy.limits.maxDebugBytes
+      ) {
+        droppedDebugCount += 1;
+        return false;
+      }
+      debugQueue.push({ record, reliable: false, bytes, expiresAt: Date.now() + policy.limits.debugTtlMs });
+      debugQueueBytes += bytes;
+    } else {
+      const reliableInFlight = inFlight.filter((entry) => entry.reliable).length;
+      if (reliableQueue.length + reliableInFlight >= MAX_QUEUE_SIZE) {
+        rejectedReliableCount += 1;
+        return false;
+      }
+      reliableQueue.push({ record, reliable: true, bytes: 0, expiresAt: Infinity });
     }
-    logDiagnostic("queued", { category: record.category, event: record.event, sessionId: record.sessionId, queueLength: queue.length });
+    logDiagnostic("queued", { category: record.category, event: record.event, sessionId: record.sessionId, queueLength: reliableQueue.length + debugQueue.length });
     connect();
     flush();
     return true;
@@ -191,9 +270,13 @@ export function createSessionLogWebSocketClient({
 
   function status() {
     return {
-      queueLength: queue.length,
+      queueLength: reliableQueue.length + debugQueue.length,
+      reliableQueueLength: reliableQueue.length,
+      debugQueueLength: debugQueue.length,
+      debugQueueBytes,
       inFlightLength: inFlight.length,
-      queueOverflowReported,
+      droppedDebugCount,
+      rejectedReliableCount,
       ...transport.status(),
       suspended: isSuspended(),
     };
@@ -209,7 +292,9 @@ export function createSessionLogWebSocketClient({
 
   function dispose() {
     disposed = true;
-    queue.length = 0;
+    reliableQueue.length = 0;
+    debugQueue.length = 0;
+    debugQueueBytes = 0;
     inFlight.length = 0;
     transport.dispose();
   }
@@ -217,7 +302,16 @@ export function createSessionLogWebSocketClient({
   return {
     connect,
     log,
-    debug: (event = {}) => log({ ...event, category: "debug" }),
+    debug: (debugTypeOrEvent = {}, factory = null) => {
+      const type = typeof debugTypeOrEvent === "string"
+        ? String(debugTypeOrEvent).trim().toLowerCase()
+        : debugTypeOf(debugTypeOrEvent);
+      if (!type || !isEnabled(type)) return false;
+      const event = typeof factory === "function" ? factory() : debugTypeOrEvent;
+      return log({ ...event, debugType: type, category: "debug" });
+    },
+    isEnabled,
+    updatePolicy,
     status,
     resume,
     dispose,

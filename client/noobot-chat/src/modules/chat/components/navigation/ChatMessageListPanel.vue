@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import ChatMessageItem from "../message/ChatMessageItem.vue";
 import { useChatStore } from "../../stores/useChatStore.js";
 import { selectTurnPresentations } from "../../runtime/engine/turnPresentation.js";
@@ -39,19 +39,27 @@ const listRef = ref(null);
 const { translate } = useLocale();
 const chatStore = useChatStore();
 const presentedMessages = computed(() => {
-  const messages = selectTurnPresentations({
+  return selectTurnPresentations({
     activeSession: props.activeSession,
     workflowRegistry: chatStore.workflowNodeStateRegistry,
     turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
   });
-  logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", {
+});
+const presentationDiagnosticsSignature = computed(() => [
+  String(props.activeSession?.backendSessionId || props.activeSession?.id || ""),
+  Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
+  presentedMessages.value.length,
+  Number(chatStore.workflowNodeStateRegistry?.version || 0),
+].join("|"));
+watch(presentationDiagnosticsSignature, () => {
+  logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", () => ({
     sessionId: String(props.activeSession?.backendSessionId || props.activeSession?.id || ""),
     sourceMessageCount: Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
     presentationMessageCount: messages.length,
-    workflowPresentations: summarizeWorkflowMessages(messages),
-  });
-  return messages;
-});
+    presentationMessageCount: presentedMessages.value.length,
+    workflowPresentations: summarizeWorkflowMessages(presentedMessages.value),
+  }));
+}, { flush: "post" });
 const messageItemSharedProps = computed(() => ({
   allMessages: presentedMessages.value,
   sessionDocs: props.activeSession?.sessionDocs || [],

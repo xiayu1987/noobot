@@ -24,12 +24,12 @@ export function createReconnectCoordinator({
     const turnScopeId = String(messageEvent.turnScopeId || data.turnScopeId || "").trim();
     const sessionId = String(messageEvent.sessionId || data.sessionId || resolveActiveSessionIdentity()).trim();
     if (isTurnRuntimeDeleted(turnRuntimeRegistry.value, { sessionId, turnScopeId })) {
-      logThinkingReplayDebug("frontend.messageEvent.deletedTurnRejected", {
+      logThinkingReplayDebug("frontend.messageEvent.deletedTurnRejected", () => ({
         sessionId,
         dialogProcessId,
         turnScopeId,
         eventType: String(messageEvent.eventType || ""),
-      });
+      }));
       return true;
     }
     const messages = Array.isArray(activeSession.value?.messages)
@@ -49,12 +49,12 @@ export function createReconnectCoordinator({
           )
         : null;
     if (!botMessage) {
-      logThinkingReplayDebug("frontend.thinkingReplay.liveProjectionTargetMissing", {
+      logThinkingReplayDebug("frontend.thinkingReplay.liveProjectionTargetMissing", () => ({
         sessionId: resolveActiveSessionIdentity(),
         dialogProcessId,
         turnScopeId,
         eventType: String(messageEvent.eventType || ""),
-      });
+      }));
       return false;
     }
     const reduction = dispatchTurnEnvelope({
@@ -63,7 +63,7 @@ export function createReconnectCoordinator({
       classifyRealtimeLog,
       source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
     });
-    logThinkingReplayDebug("frontend.messageEvent.reduced", {
+    logThinkingReplayDebug("frontend.messageEvent.reduced", () => ({
       source: "reconnect_live",
       sessionId: messageEvent.sessionId || resolveActiveSessionIdentity(),
       dialogProcessId,
@@ -74,7 +74,7 @@ export function createReconnectCoordinator({
       sequence: messageEvent.sequence ?? null,
       result: reduction.result,
       errors: reduction.errors || [],
-    });
+    }));
     return true;
   }
 
@@ -86,17 +86,17 @@ export function createReconnectCoordinator({
       pendingReconnectReplays.push(Promise.resolve(replayPromise));
     };
     const reconnectSessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "");
-    logThinkingReplayDebug("frontend.thinkingReplay.reconnectStarted", {
+    logThinkingReplayDebug("frontend.thinkingReplay.reconnectStarted", () => ({
       sessionId: reconnectSessionId,
       visibleMessageCount: Array.isArray(activeSession.value?.messages)
         ? activeSession.value.messages.length
         : 0,
-    });
+    }));
     return chatWebSocketClient.reconnect({
       currentSessionId: reconnectSessionId,
       userId: String(userId?.value || userId || ""),
       onReconnectData: (reconnectPayload) => {
-        logThinkingReplayDebug("frontend.thinkingReplay.reconnectPayloadReceived", {
+        logThinkingReplayDebug("frontend.thinkingReplay.reconnectPayloadReceived", () => ({
           sessionId: reconnectSessionId,
           protocolEvent: String(reconnectPayload?.event || "reconnect_data"),
           sessionCount: Array.isArray(reconnectPayload?.sessions) ? reconnectPayload.sessions.length : 0,
@@ -104,7 +104,7 @@ export function createReconnectCoordinator({
           dialogProcessId: String(reconnectPayload?.data?.dialogProcessId || ""),
           turnScopeId: String(reconnectPayload?.data?.turnScopeId || ""),
           dataKeys: Object.keys(reconnectPayload?.data || {}).sort(),
-        });
+        }));
         const replayPayload = async () => {
           if (reconnectPayload?.sessions) {
             await reconnectReplay.applyReconnectData(reconnectPayload);
@@ -128,7 +128,7 @@ export function createReconnectCoordinator({
         reconnectSessionId,
         resolveActiveTurnScopeIdentity(),
       );
-      logThinkingReplayDebug("frontend.thinkingReplay.reconnectReplayCommitted", {
+      logThinkingReplayDebug("frontend.thinkingReplay.reconnectReplayCommitted", () => ({
         sessionId: reconnectSessionId,
         dialogProcessId: String(replayRuntime?.dialogProcessId || ""),
         turnScopeId: String(replayRuntime?.turnScopeId || ""),
@@ -136,7 +136,7 @@ export function createReconnectCoordinator({
         backendState: String(replayRuntime?.backendState || ""),
         terminal: replayRuntime?.terminal ?? null,
         pendingReplayCount: pendingReconnectReplays.length,
-      });
+      }));
       if (typeof chatWebSocketClient.requestJson !== "function") return;
       const sessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "").trim();
       const currentTurn = resolveSessionTurnRuntime(
@@ -183,10 +183,10 @@ export function createReconnectCoordinator({
         });
       }
     }).catch((error) => {
-      logThinkingReplayDebug("frontend.thinkingReplay.reconnectFailed", {
+      logThinkingReplayDebug("frontend.thinkingReplay.reconnectFailed", () => ({
         sessionId: reconnectSessionId,
         error: String(error?.message || error || ""),
-      });
+      }));
       logSessionSystemEvent("reconnect.failed", {
         error: String(error?.message || error || ""),
       });

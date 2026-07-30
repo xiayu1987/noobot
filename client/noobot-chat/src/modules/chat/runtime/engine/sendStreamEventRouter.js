@@ -90,13 +90,13 @@ export function createSendStreamEventHandler(context) {
         outputLength: String(authoritativeEvent?.output || "").length,
       },
     });
-    logResendDebug("send.stream.event", {
+    logResendDebug("send.stream.event", () => ({
       event,
       eventTurnScopeId: data?.turnScopeId,
       eventDialogProcessId: data?.dialogProcessId,
       state: data?.state,
       botMessage: summarizeDebugMessage(botMsg),
-    });
+    }));
     if (routeRuntimeStreamEvent(event, data, {
       source: "live",
       applyWorkflowRuntimeEvent, logSessionEvent, sessionId, turnScopeId,
