@@ -119,12 +119,12 @@ export function applyReconnectEnvelopeToTargetMessage({
     const sourceMessageId = _trimStr(messageEvent?.messageId);
     const presentationMessageId = resolveMessageEventPresentationId(messageEvent);
     if (!sourceMessageId || !presentationMessageId) {
-      logWorkflowDiagnostics("frontend.workflowReplay.messageEventRejected", {
+      logWorkflowDiagnostics("frontend.workflowReplay.messageEventRejected", () => ({
         sessionId: _trimStr(messageEvent?.sessionId || eventData?.sessionId),
         dialogProcessId: _trimStr(messageEvent?.dialogProcessId || eventData?.dialogProcessId || normalizedDpId),
         turnScopeId: _trimStr(messageEvent?.turnScopeId || eventData?.turnScopeId),
         reason: !sourceMessageId ? "missing_message_id" : "missing_presentation_message_id",
-      });
+      }));
       return false;
     }
     const targetSessionId = _trimStr(messageEvent?.sessionId || eventData?.sessionId);
@@ -133,14 +133,14 @@ export function applyReconnectEnvelopeToTargetMessage({
       !canonicalTarget ||
       _trimStr(canonicalTarget?.messageId || canonicalTarget?.id) !== presentationMessageId
     ) {
-      logWorkflowDiagnostics("frontend.workflowReplay.messageEventRejected", {
+      logWorkflowDiagnostics("frontend.workflowReplay.messageEventRejected", () => ({
         sessionId: _trimStr(messageEvent?.sessionId || eventData?.sessionId),
         dialogProcessId: _trimStr(messageEvent?.dialogProcessId || eventData?.dialogProcessId || normalizedDpId),
         turnScopeId: _trimStr(messageEvent?.turnScopeId || eventData?.turnScopeId),
         messageId: sourceMessageId,
         presentationMessageId,
         reason: "target_missing",
-      });
+      }));
       return false;
     }
     const reduction = dispatchTurnEnvelope({
@@ -149,7 +149,7 @@ export function applyReconnectEnvelopeToTargetMessage({
       classifyRealtimeLog,
       source: TURN_PROJECTION_SOURCE.HISTORY_REPLAY,
     });
-    logThinkingReplayDebug("frontend.messageEvent.reduced", {
+    logThinkingReplayDebug("frontend.messageEvent.reduced", () => ({
       source: "history_replay",
       sessionId: String(messageEvent?.sessionId || eventData?.sessionId || ""),
       dialogProcessId: String(messageEvent?.dialogProcessId || eventData?.dialogProcessId || normalizedDpId),
@@ -161,7 +161,7 @@ export function applyReconnectEnvelopeToTargetMessage({
       sequence: messageEvent?.sequence ?? envelope?.sequence ?? null,
       result: reduction.result,
       errors: reduction.errors || [],
-    });
+    }));
   } else if (
     eventName === StreamEventEnum.INTERACTION_REQUEST ||
     eventName === StreamEventEnum.CONNECTOR_STATUS
@@ -174,19 +174,19 @@ export function applyReconnectEnvelopeToTargetMessage({
     eventName === StreamEventEnum.ERROR
   ) {
     terminalDialogProcessIdSet?.add?.(normalizedDpId);
-    logWorkflowDiagnostics("frontend.workflowReplay.legacyMessageMutationSkipped", {
+    logWorkflowDiagnostics("frontend.workflowReplay.legacyMessageMutationSkipped", () => ({
       dialogProcessId: _trimStr(normalizedDpId),
       turnScopeId: _trimStr(eventData?.turnScopeId),
       event: eventName,
       reason: "stable_message_id_required",
-    });
+    }));
   } else {
-    logWorkflowDiagnostics("frontend.workflowReplay.legacyMessageMutationSkipped", {
+    logWorkflowDiagnostics("frontend.workflowReplay.legacyMessageMutationSkipped", () => ({
       dialogProcessId: _trimStr(normalizedDpId),
       turnScopeId: _trimStr(eventData?.turnScopeId),
       event: eventName,
       reason: "stable_message_id_required",
-    });
+    }));
     return false;
   }
   return true;
@@ -302,7 +302,7 @@ export async function applyReconnectReplayBatchToActiveSession({
     terminalDialogProcessIdSet,
     isReconnectTerminalBatch,
   });
-  logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchPlanned", {
+  logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchPlanned", () => ({
     sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
     dialogProcessId: normalizedDpId,
     turnScopeId: normalizedTurnScopeId,
@@ -312,8 +312,8 @@ export async function applyReconnectReplayBatchToActiveSession({
     lastAppliedSeq: Number(lastAppliedSeq || 0),
     maxSequence,
     shouldSkipAfterTerminal,
-  });
-  logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchPlanned", {
+  }));
+  logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchPlanned", () => ({
     sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
     dialogProcessId: normalizedDpId,
     turnScopeId: normalizedTurnScopeId,
@@ -331,16 +331,16 @@ export async function applyReconnectReplayBatchToActiveSession({
     shouldSkipAfterTerminal,
     inputEnvelopes: _ensureArray(messages).map(summarizeReconnectEnvelope),
     replayEnvelopes: nextMessages.map(summarizeReconnectEnvelope),
-  });
+  }));
   if (!nextMessages.length) {
-    logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchIgnored", {
+    logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchIgnored", () => ({
       sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
       dialogProcessId: normalizedDpId,
       turnScopeId: normalizedTurnScopeId,
       reason: "all_envelopes_filtered_by_transport_cursor",
       lastAppliedTransportSequence: Number(lastAppliedSeq || 0),
       inputEnvelopes: _ensureArray(messages).map(summarizeReconnectEnvelope),
-    });
+    }));
     return false;
   }
   const eventKindsAtMaxSequence = Array.from(new Set(

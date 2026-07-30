@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import { zhCNMessages } from "noobot-i18n/client/locales/zh-CN";
 import { enUSMessages } from "noobot-i18n/client/locales/en-US";
@@ -58,20 +58,38 @@ export function useMessageMeta({
       String(enUSMessages?.chat?.failed || "").trim(),
       String(translate("chat.failed") || "").trim(),
     ]);
-    const result = messageItem.pending
+    return messageItem.pending
       ? translate("message.subtaskProcessing")
       : stoppedLabels.has(statusLabel)
         ? translate("message.subtaskStopped")
         : failedLabels.has(statusLabel)
           ? translate("message.subtaskFailed")
           : translate("message.subtaskDone");
-    logResendDebug("ui.messageMeta", {
-      message: summarizeDebugMessage(messageItem),
-      statusLabel,
-      subTaskStatusText: result,
-    });
-    return result;
   });
+
+  const subTaskStatusSignature = computed(() => {
+    const messageItem = getMessageItem() || {};
+    return [
+      messageItem.id || messageItem.messageId || "",
+      messageItem.pending === true ? "pending" : "settled",
+      String(messageItem.statusLabel || "").trim(),
+      subTaskStatusText.value,
+    ].join("|");
+  });
+
+  watch(
+    subTaskStatusSignature,
+    () => logResendDebug("ui.messageMeta", () => {
+      const messageItem = getMessageItem() || {};
+      const statusLabel = String(messageItem.statusLabel || "").trim();
+      return {
+        message: summarizeDebugMessage(messageItem),
+        statusLabel,
+        subTaskStatusText: subTaskStatusText.value,
+      };
+    }),
+    { immediate: true, flush: "post" },
+  );
 
   const statusStepState = computed(() => {
     const messageItem = getMessageItem() || {};

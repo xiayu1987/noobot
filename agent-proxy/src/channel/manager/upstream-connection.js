@@ -14,8 +14,6 @@ import {
 import {
   nowMs,
   buildUpstreamUrl,
-  messageEventHasContent,
-  resolveMessageEventTrace,
 } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 
@@ -137,26 +135,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         return;
       }
       const eventEnvelope = this.pushChannelEvent(channel, eventName, eventData);
-      this.logSessionEvent(channel, {
-        category: "transport",
-        event: "agentProxy.upstream.message",
-        data: {
-          channelKey: channel.key,
-          event: eventName,
-          sequence: eventEnvelope?.sequence,
-          sessionId: eventData?.sessionId,
-          dialogProcessId: eventData?.dialogProcessId,
-          turnScopeId: eventData?.turnScopeId,
-          hasContent: messageEventHasContent(eventName, eventData),
-          eventDataKeys: Object.keys(eventData || {}).sort(),
-          logType: Array.isArray(eventData?.log) ? "array" : typeof eventData?.log,
-          logEvent: String(eventData?.log?.event || eventData?.data?.log?.event || ""),
-          logKeys: Object.keys(eventData?.log || {}).sort(),
-          nestedDataKeys: Object.keys(eventData?.data || {}).sort(),
-          nestedLogKeys: Object.keys(eventData?.data?.log || {}).sort(),
-          ...resolveMessageEventTrace(eventName, eventData, eventEnvelope?.sequence),
-        },
-      });
+      this.recordSuccessfulDataPlaneOperation("upstreamMessages");
       this.broadcastChannelEvent(channel, eventEnvelope);
     } catch (error) {
       this.logSessionEvent(channel, {

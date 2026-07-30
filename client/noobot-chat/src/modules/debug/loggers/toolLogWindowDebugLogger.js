@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { acceptsDebugSink, emitLazyDebug } from "./lazyDebugSink.js";
+
 let sessionLogSink = null;
 
 const text = (value) => String(value ?? "").trim();
@@ -30,30 +32,18 @@ export function summarizeToolLogWindowItem(item = {}, index = 0) {
   };
 }
 
-export function summarizeToolLogWindow(items = []) {
-  return (Array.isArray(items) ? items : []).map(summarizeToolLogWindowItem);
+export function summarizeToolLogWindow(items = [], limit = 20) {
+  const source = Array.isArray(items) ? items : [];
+  const start = Math.max(0, source.length - Math.max(1, Number(limit) || 20));
+  return source.slice(start).map((item, index) => summarizeToolLogWindowItem(item, start + index));
 }
 
 export function setToolLogWindowDebugLogSink(sink = null) {
-  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+  sessionLogSink = acceptsDebugSink(sink) ? sink : null;
 }
 
 export function logToolLogWindowDebug(event, payload = {}) {
   try {
-    sessionLogSink?.log?.({
-      category: "debug",
-      level: "debug",
-      debugType: "tool-log-window",
-      event,
-      sessionId: payload?.sessionId || "",
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
-      data: {
-        debugType: "tool-log-window",
-        event,
-        at: new Date().toISOString(),
-        ...payload,
-      },
-    });
-  } catch {}
+    return emitLazyDebug(sessionLogSink, "tool-log-window", event, payload);
+  } catch { return false; }
 }

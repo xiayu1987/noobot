@@ -82,7 +82,7 @@ export function createSessionMessageView({
       !childWorkflowMessage;
     const summary = summarizeWorkflowMessage(messageItem);
     if (summary.type === "workflow" || summary.pluginSource === "workflow-plugin" || childWorkflowMessage) {
-      logWorkflowDiagnostics("frontend.workflowRender.messageVisibilityEvaluated", {
+      logWorkflowDiagnostics("frontend.workflowRender.messageVisibilityEvaluated", () => ({
         sessionId: String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
         dialogProcessId: summary.dialogProcessId,
         turnScopeId: summary.turnScopeId,
@@ -90,7 +90,7 @@ export function createSessionMessageView({
         shouldRender,
         childWorkflowMessage,
         message: summary,
-      });
+      }));
     }
     return shouldRender;
   }

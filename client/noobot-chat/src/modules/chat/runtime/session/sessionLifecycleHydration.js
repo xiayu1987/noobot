@@ -17,7 +17,7 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
       sessionId,
       turnTimings: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings : [],
     });
-    logThinkingReplayDebug("frontend.lifecycle.hydrateStarted", {
+    logThinkingReplayDebug("frontend.lifecycle.hydrateStarted", () => ({
       requestedSessionId: String(sessionItem?.sessionId || "").trim(),
       runtimeSessionId: sessionId,
       snapshotSessionId: String(snapshot?.sessionId || "").trim(),
@@ -27,7 +27,7 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
       turnTimingsCount: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings.length : 0,
       timingSnapshotApplied: timingResult?.applied === true,
       timingSnapshotReason: timingResult?.reason || "",
-    });
+    }));
     if (snapshot && typeof snapshot === "object") {
       const candidates = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])]
         .filter((turn) => {
@@ -43,7 +43,7 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
         });
       }
       const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
-      logThinkingReplayDebug("frontend.lifecycle.hydrateApplied", {
+      logThinkingReplayDebug("frontend.lifecycle.hydrateApplied", () => ({
         requestedSessionId: String(sessionItem?.sessionId || "").trim(),
         runtimeSessionId: sessionId,
         snapshotSessionId: String(snapshot?.sessionId || "").trim(),
@@ -53,7 +53,7 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
         candidateFinishedAt: candidates[0]?.finishedAt || "",
         resultApplied: result?.applied === true,
         resultReason: result?.reason || "",
-      });
+      }));
       if (sessionId && candidates[0]) {
         const turn = candidates[0];
         const postHydrateMetadata = {

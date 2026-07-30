@@ -25,13 +25,13 @@ export function createDoneTurnFinalizer({
   const start = (source = "") => {
     const finalDoneEventData = getFinalDoneEventData?.();
     if (!finalDoneEventData || finalDoneDetailPromise) return finalDoneDetailPromise;
-    logStateMachineDebug("stateMachine.done.finalize.before", {
+    logStateMachineDebug("stateMachine.done.finalize.before", () => ({
       source,
       sessionId: finalDoneEventData.sessionId,
       dialogProcessId: finalDoneEventData.dialogProcessId,
       turnScopeId: finalDoneEventData.turnScopeId,
       botMessage: summarizeStateMachineMessage(botMessage),
-    });
+    }));
     finalDoneDetailPromise = finalizeDoneTurnPresentation({
       activeSession,
       activeSessionId,
@@ -45,28 +45,28 @@ export function createDoneTurnFinalizer({
       logSessionEvent,
       completionSource: "realtimeDone",
     }).then((applied) => {
-      logStateMachineDebug("stateMachine.done.finalize.after", {
+      logStateMachineDebug("stateMachine.done.finalize.after", () => ({
         source,
         applied: Boolean(applied),
         sessionId: finalDoneEventData?.sessionId || "",
         dialogProcessId: finalDoneEventData?.dialogProcessId || "",
         turnScopeId: finalDoneEventData?.turnScopeId || "",
         botMessage: summarizeStateMachineMessage(botMessage),
-      });
+      }));
       if (applied) {
         locateDoneMessage?.();
         finalizePendingResendOperation?.({ finalOnly: true });
       }
       return applied;
     }).catch((error) => {
-      logStateMachineDebug("stateMachine.done.finalize.failed", {
+      logStateMachineDebug("stateMachine.done.finalize.failed", () => ({
         source,
         sessionId: finalDoneEventData?.sessionId || "",
         dialogProcessId: finalDoneEventData?.dialogProcessId || "",
         turnScopeId: finalDoneEventData?.turnScopeId || "",
         error: String(error?.message || error || ""),
         botMessage: summarizeStateMachineMessage(botMessage),
-      });
+      }));
       throw error;
     });
     return finalDoneDetailPromise;

@@ -82,6 +82,11 @@ function resolveChecklistLength(ctx = {}) {
     : 0;
 }
 
+function hasToolCalls(ctx = {}) {
+  if (Array.isArray(ctx?.calls) && ctx.calls.length > 0) return true;
+  return ctx?.hasToolCalls === true;
+}
+
 const FSM_TARGET_RULES = Object.freeze([
   {
     points: new Set([
@@ -122,7 +127,9 @@ const FSM_TARGET_RULES = Object.freeze([
       if (currentState !== HARNESS_FSM_STATES.IDLE && currentState !== HARNESS_FSM_STATES.PLANNING) {
         return null;
       }
-      return resolveChecklistLength(ctx) > 0 ? HARNESS_FSM_STATES.PLANNED : HARNESS_FSM_STATES.PLANNING;
+      return resolveChecklistLength(ctx) > 0 || hasToolCalls(ctx)
+        ? HARNESS_FSM_STATES.PLANNED
+        : HARNESS_FSM_STATES.PLANNING;
     },
   },
   {

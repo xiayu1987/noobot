@@ -10,6 +10,7 @@ import test from 'node:test';
 
 import {
   RUNTIME_EVENTS_CONFIG_ENVS,
+  RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES,
 } from '@noobot/shared/runtime-events-config';
 import {
   createRuntimeEventWriter,
@@ -26,6 +27,7 @@ import {
   getSessionLogControlKey,
   getSessionLogDebugControlKey,
   normalizeSessionLogCategory,
+  resolveSessionLogClientPolicy,
   SESSION_LOG_CATEGORIES,
   SESSION_LOG_DEBUG_CATEGORY,
   SESSION_LOG_DEFAULT_CATEGORY,
@@ -82,6 +84,29 @@ test('session log protocol exports stable categories and helpers from runtime-ev
     message: 'hello',
     data: { turnScopeId: 'turn-1' },
   });
+});
+
+test('session log client policy is derived from the shared debug registry', () => {
+  const policy = resolveSessionLogClientPolicy({
+    workflowDiagnosticsDebug: true,
+    frontendToolLogWindowDebug: true,
+    timelinePipelineDebug: true,
+  });
+
+  assert.equal(policy.debug['workflow-diagnostics'], true);
+  assert.equal(policy.debug['tool-log-window'], true);
+  assert.equal(policy.debug.resend, false);
+  assert.equal(Object.hasOwn(policy.debug, 'timeline-pipeline'), false);
+  assert.deepEqual(
+    Object.keys(policy.debug).sort(),
+    Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)
+      .filter(([, descriptor]) => descriptor.exposeToClient === true)
+      .map(([debugType]) => debugType)
+      .sort(),
+  );
+  assert.equal(policy.limits.maxDebugQueue > 0, true);
+  assert.equal(policy.limits.maxDebugBytes > 0, true);
+  assert.equal(policy.limits.debugTtlMs > 0, true);
 });
 
 test('tool log window debug uses its own file when enabled', async () => {

@@ -14,10 +14,8 @@ import {
   CONVERSATION_SOURCE_EVENT,
 } from "../../shared/constants.js";
 import {
-  messageEventHasContent,
   normalizeApiKey,
   nowMs,
-  resolveMessageEventTrace,
 } from "../../shared/utils.js";
 import {
   TURN_EVENT,
@@ -197,21 +195,7 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   if (envelope.event === CHANNEL_EVENT.TURN_LIFECYCLE) {
     this.recordTurnLifecycleEnvelope(channel, envelope.data);
   }
-  this.logSessionEvent(channel, {
-    category: "message",
-    event: "agentProxy.channel.event",
-    data: {
-      channelKey: channel.key,
-      event: envelope.event,
-      sequence: envelope.sequence,
-      sessionId: envelope.data?.sessionId,
-      dialogProcessId: envelope.data?.dialogProcessId,
-      turnScopeId: envelope.data?.turnScopeId,
-      requestId: envelope.data?.requestId,
-      hasContent: messageEventHasContent(envelope.event, envelope.data),
-      ...resolveMessageEventTrace(envelope.event, envelope.data, envelope.sequence),
-    },
-  });
+  this.recordSuccessfulDataPlaneOperation("channelEvents");
   if (String(envelope.event || "") === CHANNEL_EVENT.INTERACTION_REQUEST) {
     const requestId = String(envelope?.data?.requestId || "").trim();
     if (requestId) {

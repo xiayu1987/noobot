@@ -10,7 +10,7 @@ import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { CONVERSATION_SOURCE_EVENT, CONVERSATION_STATE } from "../../src/shared/constants.js";
 
-test("ChannelManager writes message and state logs to business session", () => {
+test("ChannelManager omits successful data-plane logs but retains state logs", () => {
   const records = [];
   const sessionLogClient = {
     log(apiKey, event) {
@@ -46,36 +46,14 @@ test("ChannelManager writes message and state logs to business session", () => {
     broadcast: false,
   });
 
-  assert.equal(records.length, 2);
-  assert.deepEqual(records.map((item) => item.apiKey), ["api-key-1", "api-key-1"]);
-
-  assert.equal(records[0].event.category, "message");
-  assert.equal(records[0].event.event, "agentProxy.channel.event");
+  assert.equal(records.length, 1);
+  assert.equal(records[0].apiKey, "api-key-1");
+  assert.equal(records[0].event.category, "state");
+  assert.equal(records[0].event.event, "agentProxy.conversation.state");
   assert.equal(records[0].event.sessionId, "session-1");
+  assert.equal(records[0].event.dialogProcessId, "dialog-1");
+  assert.equal(records[0].event.turnScopeId, "turn-1");
   assert.deepEqual(records[0].event.data, {
-    channelKey,
-    event: "message",
-    sequence: 1,
-    sessionId: "session-1",
-    dialogProcessId: "dialog-1",
-    turnScopeId: "turn-1",
-    requestId: "request-1",
-    hasContent: true,
-    protocolKind: "legacy",
-    transportEvent: "message",
-    transportSequence: 1,
-    eventId: "",
-    eventType: "",
-    messageId: "",
-    authoritativeSequence: 0,
-  });
-
-  assert.equal(records[1].event.category, "state");
-  assert.equal(records[1].event.event, "agentProxy.conversation.state");
-  assert.equal(records[1].event.sessionId, "session-1");
-  assert.equal(records[1].event.dialogProcessId, "dialog-1");
-  assert.equal(records[1].event.turnScopeId, "turn-1");
-  assert.deepEqual(records[1].event.data, {
     channelKey,
     state: CONVERSATION_STATE.SENDING,
     sourceEvent: CONVERSATION_SOURCE_EVENT.INIT,
@@ -84,7 +62,7 @@ test("ChannelManager writes message and state logs to business session", () => {
   });
 });
 
-test("ChannelManager detects content in nested authoritative message events", () => {
+test("ChannelManager counts nested authoritative message events without session logging", () => {
   const records = [];
   const manager = new ChannelManager({ OPEN: 1 }, {
     sessionLogClient: { log: (apiKey, event) => records.push({ apiKey, event }) },
@@ -105,7 +83,8 @@ test("ChannelManager detects content in nested authoritative message events", ()
     },
   });
 
-  assert.equal(records[0].event.data.hasContent, true);
+  assert.equal(records.length, 0);
+  assert.equal(manager.drainSuccessfulDataPlaneMetrics()?.channelEvents, 1);
 });
 
 test("ChannelManager falls back to session id from channel key for session logs", () => {

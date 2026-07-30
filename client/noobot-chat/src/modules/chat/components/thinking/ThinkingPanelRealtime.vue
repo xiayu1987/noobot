@@ -60,8 +60,9 @@ function executionLogKey(logItem = {}, logIndex = 0) {
 watch(
   executionLogSignature,
   () => {
-    const executionLogs = props.executionLogs;
-    logToolLogWindowDebug("frontend.toolLogWindow.rendererReceived", {
+    logToolLogWindowDebug("frontend.toolLogWindow.rendererReceived", () => {
+      const executionLogs = props.executionLogs;
+      return {
       sessionId: String(props.messageItem?.sessionId || ""),
       dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
       turnScopeId: String(props.messageItem?.turnScopeId || ""),
@@ -69,9 +70,10 @@ watch(
       declaredExecutionLogCount: props.executionLogCount,
       receivedCount: Array.isArray(executionLogs) ? executionLogs.length : 0,
       received: summarizeToolLogWindow(executionLogs),
+      };
     });
   },
-  { immediate: true },
+  { immediate: true, flush: "post" },
 );
 </script>
 <template>

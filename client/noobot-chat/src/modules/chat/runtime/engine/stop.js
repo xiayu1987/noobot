@@ -123,13 +123,13 @@ export function stopSending({
     ? execution?.capabilities?.canStop === true || execution?.canStop === true
     : turnRuntime?.canStop === true;
   if (!turnRuntime || !canStop || turnRuntime?.terminal) {
-    logStopDebug("stop.skip.turnNotStoppable", {
+    logStopDebug("stop.skip.turnNotStoppable", () => ({
       sessionId,
       turnScopeId: turnRuntime?.turnScopeId || "",
       dialogProcessId: turnRuntime?.dialogProcessId || "",
       state: turnRuntime?.state || "",
       terminal: turnRuntime?.terminal || null,
-    });
+    }));
     return false;
   }
   const expectedTurnScopeId = normalizeTrimmedString(turnRuntime.turnScopeId);
@@ -141,11 +141,11 @@ export function stopSending({
     return !expectedTurnScopeId && expectedDialogProcessId &&
       getMessageDialogProcessId(messageItem) === expectedDialogProcessId;
   });
-  logResendDebug("stop.request", {
+  logResendDebug("stop.request", () => ({
     pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
     turnRuntime,
     messages: summarizeDebugMessages(activeSession?.value?.messages),
-  });
+  }));
   const stopPayload = buildStopPayload({
     userId,
     activeSession,
@@ -154,7 +154,7 @@ export function stopSending({
     turnRuntime,
     execution,
   });
-  logStopDebug("stop.payload", {
+  logStopDebug("stop.payload", () => ({
     sessionId: stopPayload.sessionId,
     dialogProcessId: stopPayload.dialogProcessId,
     turnScopeId: stopPayload.turnScopeId,
@@ -162,11 +162,11 @@ export function stopSending({
     stopPayload,
     pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
     messages: summarizeDebugMessages(activeSession?.value?.messages),
-  });
-  logResendDebug("stop.payload", {
+  }));
+  logResendDebug("stop.payload", () => ({
     stopPayload,
     messages: summarizeDebugMessages(activeSession?.value?.messages),
-  });
+  }));
   const stopEvent = rememberStopRequestedEvent({
     sessionId: stopPayload.sessionId,
     dialogProcessId: stopPayload.dialogProcessId,

@@ -181,11 +181,11 @@ function upsertReplacementUserMessage(session, replacementUser = null) {
   delete inserted.statusLabel;
   session.messages.push(inserted);
   syncSessionMessageSummary(session);
-  logResendDebug("resend.replacementUser.insert", {
+  logResendDebug("resend.replacementUser.insert", () => ({
     turnScopeId: getMessageTurnScopeId(inserted),
     replacementUser: summarizeDebugMessage(inserted),
     messages: summarizeDebugMessages(session.messages),
-  });
+  }));
   return inserted;
 }
 
@@ -313,14 +313,14 @@ export function createResendMessageTransaction({
     activeSession,
     fetchSessionDetail,
     applySessionDetail,
-    log: (event, payload) => logResendDebug(`resend.${event}`, {
+    log: (event, payload) => logResendDebug(`resend.${event}`, () => ({
       ...payload,
       messages: summarizeDebugMessages(activeSession?.value?.messages),
-    }),
+    })),
   });
 
   async function requestReplaceTurn({ sessionId, originalSession, anchor, text, resendTurnScopeId, idempotencyKey, attempt, expectedVersion, attachments }) {
-    logResendDebug("resend.replaceTurn.request", {
+    logResendDebug("resend.replaceTurn.request", () => ({
       sessionId,
       turnScopeId: resendTurnScopeId,
       anchor,
@@ -329,7 +329,7 @@ export function createResendMessageTransaction({
       idempotencyKey,
       attachments: summarizeDebugAttachments(attachments),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
-    });
+    }));
     const result = await replaceSessionTurnApi({
       userId: userId?.value || userId,
       sessionId,
@@ -379,7 +379,7 @@ export function createResendMessageTransaction({
       : [];
     const sessionId = resolveSessionId(activeSession, activeSessionId);
     const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
-    logResendDebug("resend.attachments.resolved", {
+    logResendDebug("resend.attachments.resolved", () => ({
       sessionId,
       oldTurnScopeId: getMessageTurnScopeId(userTargetMessage),
       turnScopeId: resendTurnScopeId,
@@ -389,14 +389,14 @@ export function createResendMessageTransaction({
       attachmentFiles: { kind: Array.isArray(options?.attachmentFiles) ? "array" : "undefined", count: attachmentFiles.length },
       serializedNewAttachments: summarizeDebugAttachments(serializedNewAttachments),
       finalAttachments: summarizeDebugAttachments(finalAttachments),
-    });
-    logResendDebug("resend.begin", {
+    }));
+    logResendDebug("resend.begin", () => ({
       sessionId,
       oldTurnScopeId: getMessageTurnScopeId(userTargetMessage),
       turnScopeId: resendTurnScopeId,
       target: summarizeDebugMessage(userTargetMessage),
       messages: summarizeDebugMessages(originalSession?.messages),
-    });
+    }));
 
     if (typeof replaceSessionTurnApi !== "function") return false;
     const anchor = buildMonotonicMessageAnchor?.(userTargetMessage) || {};
@@ -441,16 +441,16 @@ export function createResendMessageTransaction({
         }),
       });
       let { result, payload, expectedVersion } = mutationResult || {};
-      logResendDebug("resend.replaceTurn.result", {
+      logResendDebug("resend.replaceTurn.result", () => ({
         sessionId,
         turnScopeId: resendTurnScopeId,
         ok: result?.ok !== false && payload?.ok !== false,
         generation: payload?.generation,
         generated: payload?.generated,
         replacement: resolveTurnScopeReplacement(payload),
-      });
+      }));
       if (result?.ok === false || payload?.ok === false) {
-        logResendDebug("resend.replaceTurn.failed", {
+        logResendDebug("resend.replaceTurn.failed", () => ({
           sessionId,
           turnScopeId: resendTurnScopeId,
           httpOk: result?.ok,
@@ -462,7 +462,7 @@ export function createResendMessageTransaction({
           payload,
           target: summarizeDebugMessage(userTargetMessage),
           messages: summarizeDebugMessages(activeSession?.value?.messages),
-        });
+        }));
         if (operation) messageOperationStore?.completeOperation(operation.opId);
         applyRunStateEvent?.({
           type: SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
@@ -484,13 +484,13 @@ export function createResendMessageTransaction({
         replacedTurnScopeIds,
         { sessionId },
       );
-      logResendDebug("resend.replacedTurns.tombstoned", {
+      logResendDebug("resend.replacedTurns.tombstoned", () => ({
         sessionId,
         turnScopeId: resendTurnScopeId,
         replacedTurnScopeIds,
         confirmedTurnScopeIds: replacementDeletion.confirmedTurnScopeIds,
         removedTurnScopeIds: replacementDeletion.removedTurnScopeIds,
-      });
+      }));
       const replacementPatch = {
         status: "reconciling",
         ...(resolveTurnScopeReplacement(payload) ? { turnScopeReplacement: resolveTurnScopeReplacement(payload) } : {}),
@@ -498,18 +498,18 @@ export function createResendMessageTransaction({
       if (operation) messageOperationStore?.updateOperation(operation.opId, replacementPatch);
       const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
       if (sessionDetail) {
-        logResendDebug("resend.detail.apply.before", {
+        logResendDebug("resend.detail.apply.before", () => ({
           sessionId,
           turnScopeId: resendTurnScopeId,
           preserveCurrentMessages: true,
           messages: summarizeDebugMessages(activeSession?.value?.messages),
-        });
+        }));
         applySessionDetail?.(sessionDetail, { preserveCurrentMessages: true });
-        logResendDebug("resend.detail.apply.after", {
+        logResendDebug("resend.detail.apply.after", () => ({
           sessionId,
           turnScopeId: resendTurnScopeId,
           messages: summarizeDebugMessages(activeSession?.value?.messages),
-        });
+        }));
       }
       if (operation) applyResendReconcile(messageOperationStore?.getOperation(operation.opId) || operation, { finalOnly: true });
       const replacementUserMessage = upsertReplacementUserMessage(
@@ -547,20 +547,20 @@ export function createResendMessageTransaction({
         keepTurnScopeId: resendTurnScopeId,
       });
       const prunedStopped = pruneStoppedAssistantSnapshotsForTurn(activeSession?.value, resendTurnScopeId);
-      logResendDebug("resend.prune.after", {
+      logResendDebug("resend.prune.after", () => ({
         sessionId,
         turnScopeId: resendTurnScopeId,
         replacementUser: summarizeDebugMessage(replacementUserMessage),
         prunedStopped,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
-      });
+      }));
       if (payload?.generation === "completed" || payload?.generated === true) {
-        logResendDebug("resend.completedWithoutStream", {
+        logResendDebug("resend.completedWithoutStream", () => ({
           sessionId,
           turnScopeId: resendTurnScopeId,
           generation: payload?.generation,
           generated: payload?.generated,
-        });
+        }));
         if (operation) messageOperationStore?.completeOperation(operation.opId);
         applyRunStateEvent?.({
           type: SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED,
@@ -579,12 +579,12 @@ export function createResendMessageTransaction({
         source: "resend_transaction",
       });
       input.value = text;
-      logResendDebug("resend.send.before", {
+      logResendDebug("resend.send.before", () => ({
         sessionId,
         turnScopeId: resendTurnScopeId,
         finalAttachments: summarizeDebugAttachments(replacementUserMessage.attachments),
         messages: summarizeDebugMessages(activeSession?.value?.messages),
-      });
+      }));
       const sent = await send?.({
         messageText: text,
         reuseExistingUserTurn: true,
@@ -595,12 +595,12 @@ export function createResendMessageTransaction({
         userAttachments: replacementUserMessage.attachments,
         transportAttachments: replacementUserMessage.attachments,
       });
-      logResendDebug("resend.send.after", {
+      logResendDebug("resend.send.after", () => ({
         sessionId,
         turnScopeId: resendTurnScopeId,
         sent,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
-      });
+      }));
       if (!sent) {
         if (operation) messageOperationStore?.completeOperation(operation.opId);
         applyRunStateEvent?.({

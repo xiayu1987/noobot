@@ -418,7 +418,7 @@ function logDisplayedAttachmentsSummary({
   canUseAssociatedTurnArtifacts = false,
   freshPendingAssistant = false,
 } = {}) {
-  logStateMachineDebug("messageFiles.attachments.displayed", {
+  logStateMachineDebug("messageFiles.attachments.displayed", () => ({
     messageId: messageItem?.id || messageItem?.messageId || "",
     sessionId: getMessageSessionId(messageItem),
     dialogProcessId: getMessageDialogProcessId(messageItem),
@@ -431,7 +431,7 @@ function logDisplayedAttachmentsSummary({
     displayedAttachmentsCount,
     canUseAssociatedTurnArtifacts,
     isFreshPendingAssistant: freshPendingAssistant,
-  });
+  }));
 }
 
 export function useMessageFiles({

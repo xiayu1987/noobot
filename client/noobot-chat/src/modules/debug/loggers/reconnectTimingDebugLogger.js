@@ -4,23 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { acceptsDebugSink, emitLazyDebug } from "./lazyDebugSink.js";
+
 let sessionLogSink = null;
 
 export function setReconnectTimingDebugLogSink(sink = null) {
-  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+  sessionLogSink = acceptsDebugSink(sink) ? sink : null;
 }
 
 export function logReconnectTimingDebug(event, payload = {}) {
   try {
-    sessionLogSink?.log?.({
-      category: "debug",
-      level: "debug",
-      debugType: "reconnect-timing",
-      event,
-      sessionId: payload?.sessionId || "",
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
-      data: { event, at: new Date().toISOString(), ...payload },
-    });
+    return emitLazyDebug(sessionLogSink, "reconnect-timing", event, payload);
   } catch {}
 }

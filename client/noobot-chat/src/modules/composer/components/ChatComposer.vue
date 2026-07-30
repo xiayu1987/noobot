@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { ArrowDown } from "@element-plus/icons-vue";
 import ConnectorSelectorPanel from "./ConnectorSelectorPanel.vue";
 import ComposerAttachmentToolbar from "./ComposerAttachmentToolbar.vue";
@@ -95,7 +95,7 @@ const {
   onScenarioSelect,
 } = useComposerOptions(props, emit, translate);
 
-const sendDisabled = computed(() => {
+const sendDisabledState = computed(() => {
   const inputLength = String(props.modelValue || "").trim().length;
   const noInput = !inputLength && !attachmentCount.value;
   const disconnected = !props.connected;
@@ -110,19 +110,36 @@ const sendDisabled = computed(() => {
       : blockedByMessageState
         ? "lastMessageInFlight"
         : "";
-  logResendDebug("ui.sendDisabled", {
-    disabled,
-    disabledReason,
+  return { disabled, disabledReason, inputLength, attachmentCount: attachmentCount.value };
+});
+const sendDisabled = computed(() => sendDisabledState.value.disabled);
+const sendDisabledSignature = computed(() => {
+  const state = sendDisabledState.value;
+  return [
+    state.disabled,
+    state.disabledReason,
+    props.connected,
+    props.sending,
+    Boolean(props.composerActionState?.userStopped),
+    props.canStop,
+    props.interactionActive,
+    state.inputLength,
+    state.attachmentCount,
+  ].join("|");
+});
+
+watch(
+  sendDisabledSignature,
+  () => logResendDebug("ui.sendDisabled", () => ({
+    ...sendDisabledState.value,
     connected: props.connected,
     sending: props.sending,
     userStopped: Boolean(props.composerActionState?.userStopped),
     canStop: props.canStop,
     interactionActive: props.interactionActive,
-    inputLength,
-    attachmentCount: attachmentCount.value,
-  });
-  return disabled;
-});
+  })),
+  { immediate: true, flush: "post" },
+);
 
 function emitAppendUploads(files = []) {
   if (captureActionsDisabled.value) return;

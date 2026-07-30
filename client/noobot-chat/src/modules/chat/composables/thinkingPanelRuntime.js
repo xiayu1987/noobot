@@ -43,7 +43,7 @@ export function useThinkingRuntime(props, getRuntimeView) {
       now: nowTick.value,
       running: runtimeView.running,
     });
-    logReconnectTimingDebug("frontend.reconnectTiming.durationResolved", {
+    logReconnectTimingDebug("frontend.reconnectTiming.durationResolved", () => ({
       sessionId: getMessageSessionId(messageItem),
       dialogProcessId: getMessageDialogProcessId(messageItem),
       turnScopeId,
@@ -58,7 +58,7 @@ export function useThinkingRuntime(props, getRuntimeView) {
       finishedAtMs: finishedAt,
       nowMs: nowTick.value,
       durationMs,
-    });
+    }));
     return durationMs;
   }
 
@@ -112,7 +112,7 @@ export function useThinkingRuntime(props, getRuntimeView) {
       if (!signature || signature === lastRenderRuntimeSignature) return;
       lastRenderRuntimeSignature = signature;
       const runtime = getRuntimeView(props.messageItem);
-      logThinkingReplayDebug("frontend.render.thinkingRuntimeConsumed", {
+      logThinkingReplayDebug("frontend.render.thinkingRuntimeConsumed", () => ({
         sessionId: getMessageSessionId(props.messageItem),
         dialogProcessId: getMessageDialogProcessId(props.messageItem),
         turnScopeId: getMessageTurnScopeId(props.messageItem),
@@ -123,7 +123,7 @@ export function useThinkingRuntime(props, getRuntimeView) {
         finishedAt: runtime.finishedAt || "",
         pending: props.messageItem?.pending === true,
         messageRole: getMessageRole(props.messageItem),
-      });
+      }));
     },
     { immediate: true },
   );

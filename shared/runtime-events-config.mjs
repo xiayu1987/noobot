@@ -85,6 +85,36 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
   },
 });
 
+export const RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS = deepFreeze({
+  state: "stateLog",
+  message: "messageLog",
+  interaction: "interactionLog",
+  transport: "transportLog",
+  "agent-proxy": "agentProxyLog",
+  system: "systemLog",
+  "frontend-lifecycle": "frontendLifecycleLog",
+  "agent-proxy-http": "agentProxyHttpLog",
+  "agent-proxy-websocket": "agentProxyWebSocketLog",
+  "agent-proxy-route": "agentProxyRouteLog",
+  "backend-websocket": "backendWebSocketLog",
+  "backend-lifecycle": "backendLifecycleLog",
+});
+
+export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
+  "state-machine": { controlKey: "stateMachineDebug", exposeToClient: true },
+  resend: { controlKey: "resendDebug", exposeToClient: true },
+  stop: { controlKey: "stopDebug", exposeToClient: true },
+  "session-log-ws": { controlKey: "sessionLogWsDebug", exposeToClient: false },
+  "stop-continue": { controlKey: "frontendStopContinueDebug", exposeToClient: true },
+  "reconnect-timing": { controlKey: "frontendReconnectTimingDebug", exposeToClient: true },
+  "thinking-replay": { controlKey: "frontendThinkingReplayDebug", exposeToClient: true },
+  "timeline-pipeline": { controlKey: "timelinePipelineDebug", exposeToClient: false },
+  "tool-log-window": { controlKey: "frontendToolLogWindowDebug", exposeToClient: true },
+  "terminal-resolution": { controlKey: "frontendTerminalResolutionDebug", exposeToClient: true },
+  "agent-proxy-route": { controlKey: "agentProxyRouteDebug", exposeToClient: false },
+  "workflow-diagnostics": { controlKey: "workflowDiagnosticsDebug", exposeToClient: true },
+});
+
 export const HOOK_RUNTIME_EVENT_VERBOSE_VALUES = deepFreeze([
   "verbose",
   "trace",

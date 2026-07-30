@@ -154,7 +154,7 @@ export function useChatSession({
     if (!normalizedSessionId || !normalizedTurnScopeId) return;
     const key = `${normalizedSessionId}::${normalizedTurnScopeId}`;
     const resolutionMetadata = { ...metadata };
-    logThinkingReplayDebug("frontend.lifecycle.terminalDiscoveryScheduled", {
+    logThinkingReplayDebug("frontend.lifecycle.terminalDiscoveryScheduled", () => ({
       sessionId: normalizedSessionId,
       turnScopeId: normalizedTurnScopeId,
       source: resolutionMetadata.source || "",
@@ -165,7 +165,7 @@ export function useChatSession({
       startedAt: resolutionMetadata.startedAt || "",
       finishedAt: resolutionMetadata.finishedAt || "",
       resolverReady: Boolean(resolveDiscoveredTerminalTurn),
-    });
+    }));
     if (resolveDiscoveredTerminalTurn) {
       void resolveDiscoveredTerminalTurn(normalizedSessionId, normalizedTurnScopeId, resolutionMetadata);
       return;

@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, onErrorCaptured } from "vue";
+import { computed, onErrorCaptured, watch } from "vue";
 import {
   resolveExtensionListeners,
   resolveExtensionPoint,
@@ -32,9 +32,9 @@ const contributions = computed(() => {
     const id = String(contribution.id || "").trim();
     return (!includedIds || includedIds.has(id)) && !excludedIds.has(id);
   });
-  emit("resolved", resolved);
   return resolved;
 });
+watch(contributions, (resolved) => emit("resolved", resolved), { flush: "post" });
 
 // Resolve contribution props inside a computed projection so changes to the
 // host context are propagated to an already mounted extension component.
@@ -42,15 +42,6 @@ const contributions = computed(() => {
 // could therefore leave child props stale after Store-only updates.
 const resolvedContributions = computed(() => contributions.value.map((contribution) => {
   const componentProps = { ...props.extraProps, ...resolveExtensionProps(contribution, props.context) };
-  if (contribution?.id === "workflow-card") {
-    props.context?.logWorkflowDiagnostics?.("frontend.workflowRender.extensionPropsResolved", {
-      sessionId: String(props.context?.messageItem?.sessionId || ""),
-      dialogProcessId: String(props.context?.messageItem?.dialogProcessId || ""),
-      turnScopeId: String(props.context?.messageItem?.turnScopeId || ""),
-      contributionId: contribution.id,
-      subSessionMessageRegistryVersion: Number(componentProps.subSessionMessageRegistryVersion || 0),
-    });
-  }
   return {
     contribution,
     componentProps,
@@ -60,6 +51,22 @@ const resolvedContributions = computed(() => contributions.value.map((contributi
     },
   };
 }));
+const contributionDiagnosticsSignature = computed(() => resolvedContributions.value.map((entry) => [
+  entry.contribution?.id || "",
+  Number(entry.componentProps?.subSessionMessageRegistryVersion || 0),
+].join(":" )).join("|"));
+watch(contributionDiagnosticsSignature, () => {
+  for (const entry of resolvedContributions.value) {
+    if (entry.contribution?.id !== "workflow-card") continue;
+    props.context?.logWorkflowDiagnostics?.("frontend.workflowRender.extensionPropsResolved", () => ({
+      sessionId: String(props.context?.messageItem?.sessionId || ""),
+      dialogProcessId: String(props.context?.messageItem?.dialogProcessId || ""),
+      turnScopeId: String(props.context?.messageItem?.turnScopeId || ""),
+      contributionId: entry.contribution.id,
+      subSessionMessageRegistryVersion: Number(entry.componentProps.subSessionMessageRegistryVersion || 0),
+    }));
+  }
+}, { flush: "post" });
 
 onErrorCaptured((error, instance, info) => {
   emit("extension-error", { point: props.point, error, instance, info });

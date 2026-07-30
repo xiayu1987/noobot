@@ -240,6 +240,7 @@ export const zhCNMessages = {
     "ai": "AI",
     "tool": "工具",
     "generating": "生成中...",
+    "generatedFile": "已生成",
     "generatedFiles": "已生成文件 ({count})",
     "recognizedFile": "自动识别",
     "downloadFile": "下载 {name}",

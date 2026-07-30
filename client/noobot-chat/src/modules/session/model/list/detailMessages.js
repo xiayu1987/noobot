@@ -348,22 +348,22 @@ export function mergePreservedDetailMessages(
         dialogProcessId: getMessageDialogProcessId(existingMessage),
       });
       const registryConfirmsInFlight = existingRuntime?.source && existingRuntime.running === true;
-      logResendDebug("detail.merge.match", {
+      logResendDebug("detail.merge.match", () => ({
         identity: detailIdentity,
         existingIndex,
         existing: summarizeDebugMessage(existingMessage),
         detail: summarizeDebugMessage(detailMessageItem),
-      });
+      }));
       if (
         registryConfirmsInFlight &&
         isTerminalStopAssistantDetail(detailMessageItem)
       ) {
-        logResendDebug("detail.merge.skipStoppedOverInFlight", {
+        logResendDebug("detail.merge.skipStoppedOverInFlight", () => ({
           identity: detailIdentity,
           existingIndex,
           existing: summarizeDebugMessage(existingMessage),
           detail: summarizeDebugMessage(detailMessageItem),
-        });
+        }));
         continue;
       }
       const keepInlineEditingContent = isInlineEditingUserMessage(existingMessage);
@@ -385,12 +385,12 @@ export function mergePreservedDetailMessages(
         ? snapshotFrozenAssistantDisplayFields(existingMessage)
         : null;
       Object.assign(existingMessage, detailMessageItem);
-      logResendDebug("detail.merge.assign", {
+      logResendDebug("detail.merge.assign", () => ({
         identity: detailIdentity,
         existingIndex,
         before: summarizeDebugMessage({ ...existingMessage, ...detailMessageItem }),
         detail: summarizeDebugMessage(detailMessageItem),
-      });
+      }));
       if (keepInlineEditingContent) {
         existingMessage.content = inlineEditingContent;
         existingMessage.__monotonicEditing = true;
@@ -409,7 +409,7 @@ export function mergePreservedDetailMessages(
       restoreFrozenAssistantDisplayFields(existingMessage, frozenAssistantDisplayFields);
       const attachmentsAfter = getMessageAttachments(existingMessage);
       const completedToolLogAttachmentsAfter = countCompletedToolLogAttachments(existingMessage);
-      logStateMachineDebug("detailApply.merge.runtimeAndAttachments", {
+      logStateMachineDebug("detailApply.merge.runtimeAndAttachments", () => ({
         identity: detailIdentity,
         existingIndex,
         message: summarizeStateMachineMessage(existingMessage),
@@ -422,7 +422,7 @@ export function mergePreservedDetailMessages(
         completedToolLogAttachmentsCountBefore: completedToolLogAttachmentsBefore,
         completedToolLogAttachmentsCountDetail: completedToolLogAttachmentsDetail,
         completedToolLogAttachmentsCountAfter: completedToolLogAttachmentsAfter,
-      });
+      }));
       existingMessage.pending = false;
       restoreRunningThinkingState();
       continue;
@@ -433,7 +433,7 @@ export function mergePreservedDetailMessages(
     ) {
       existingMessages.push(detailMessageItem);
     } else {
-      logStateMachineDebug("detailApply.merge.notAppended", {
+      logStateMachineDebug("detailApply.merge.notAppended", () => ({
         identity: detailIdentity,
         detail: summarizeStateMachineMessage(detailMessageItem),
         attachmentsCountDetail: getMessageAttachments(detailMessageItem).length,
@@ -444,7 +444,7 @@ export function mergePreservedDetailMessages(
           detailMessageItem,
           { registry, sessionId },
         ),
-      });
+      }));
     }
   }
 }

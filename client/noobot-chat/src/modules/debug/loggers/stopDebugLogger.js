@@ -8,34 +8,22 @@ import {
   summarizeDebugMessage,
   summarizeDebugMessages,
 } from "./resendDebugLogger.js";
+import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
 export function setStopDebugLogSink(sink = null) {
-  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+  sessionLogSink = acceptsDebugSink(sink) ? sink : null;
 }
 
 export function isStopDebugEnabled() {
-  return true;
+  return isDebugTypeEnabled(sessionLogSink, "stop");
 }
 
 export { summarizeDebugMessage, summarizeDebugMessages };
 
 export function logStopDebug(phase, payload = {}) {
   try {
-    const entry = {
-      phase,
-      at: new Date().toISOString(),
-      ...payload,
-    };
-    sessionLogSink?.log?.({
-      category: "debug",
-      debugType: "stop",
-      event: phase,
-      sessionId: payload?.sessionId || "",
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
-      data: entry,
-    });
+    return emitLazyDebug(sessionLogSink, "stop", phase, payload);
   } catch {}
 }

@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
+
 let sessionLogSink = null;
 
 export function setStopContinueDebugLogSink(sink = null) {
-  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+  sessionLogSink = acceptsDebugSink(sink) ? sink : null;
 }
 
 function pickComposerActionState(value = {}) {
@@ -32,30 +34,18 @@ export function summarizeStopContinueRunState(state = {}) {
 
 export function logStopContinueDebug(event, payload = {}) {
   try {
-    sessionLogSink?.log?.({
-      category: "debug",
-      level: "debug",
-      debugType: "stop-continue",
-      event,
-      sessionId: payload?.sessionId || payload?.runState?.sessionId || "",
-      dialogProcessId: payload?.dialogProcessId || payload?.runState?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || payload?.runState?.turnScopeId || "",
-      data: {
-        event,
-        at: new Date().toISOString(),
-        ...payload,
-      },
-    });
+    return emitLazyDebug(sessionLogSink, "stop-continue", event, payload);
   } catch {}
 }
 
 export function logContinueResumeIdentitySelection({ runState = {}, selected = {}, options = {} } = {}) {
+  if (!isDebugTypeEnabled(sessionLogSink, "stop-continue")) return false;
   const currentDialog = String(runState?.dialogProcessId || "");
   const currentTurn = String(runState?.turnScopeId || "");
   const resumeDialogProcessId = String(selected?.resumeDialogProcessId || "");
   const resumeTurnScopeId = String(selected?.resumeTurnScopeId || "");
   const explicitSource = String(options?.resumeIdentitySource || "");
-  logStopContinueDebug("frontend.stopContinue.continueResumeIdentitySelected", {
+  logStopContinueDebug("frontend.stopContinue.continueResumeIdentitySelected", () => ({
     sessionId: runState?.sessionId || "",
     dialogProcessId: currentDialog,
     turnScopeId: currentTurn,
@@ -64,11 +54,12 @@ export function logContinueResumeIdentitySelection({ runState = {}, selected = {
     resumeTurnScopeId,
     resumeIdentitySource: explicitSource || (resumeDialogProcessId && resumeTurnScopeId ? "turn_status" : "missing_turn_status_identity"),
     hasOptionResumeIdentity: Boolean(options?.resumeDialogProcessId || options?.resumeTurnScopeId),
-  });
+  }));
 }
 
 export function logStopButtonEvaluation({ previousState = {}, nextState = {}, event = {}, evaluation = {}, changed = false } = {}) {
-  logStopContinueDebug("frontend.stopContinue.stopButtonEvaluated", {
+  if (!isDebugTypeEnabled(sessionLogSink, "stop-continue")) return false;
+  logStopContinueDebug("frontend.stopContinue.stopButtonEvaluated", () => ({
     sessionId: nextState?.sessionId || previousState?.sessionId || event?.sessionId || "",
     dialogProcessId: nextState?.dialogProcessId || event?.dialogProcessId || "",
     turnScopeId: nextState?.turnScopeId || event?.turnScopeId || "",
@@ -82,5 +73,5 @@ export function logStopButtonEvaluation({ previousState = {}, nextState = {}, ev
     stopInFlight: Boolean(evaluation?.stopInFlight),
     stopButtonHiddenReason: evaluation?.canStop ? "" : "backend_not_stoppable_and_no_pending_request",
     changed: Boolean(changed),
-  });
+  }));
 }

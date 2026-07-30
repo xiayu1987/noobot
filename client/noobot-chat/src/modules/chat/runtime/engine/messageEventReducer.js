@@ -95,14 +95,14 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   } else {
     const log = classifyRealtimeLog?.(event);
     if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.eventType)) {
-      logToolLogWindowDebug("frontend.toolLogWindow.messageEventClassified", {
+      logToolLogWindowDebug("frontend.toolLogWindow.messageEventClassified", () => ({
         sessionId: text(event.sessionId || targetMessage.sessionId),
         dialogProcessId: text(event.dialogProcessId || targetMessage.dialogProcessId),
         turnScopeId: text(event.turnScopeId || targetMessage.turnScopeId),
         envelope: summarizeToolLogWindowItem(event),
         classified: log ? summarizeToolLogWindowItem(log) : null,
         previousLastSequence: lastSequence,
-      });
+      }));
     }
     targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event, log);
     targetMessage.activityTimeline = reduceActivityTimeline(
@@ -124,14 +124,14 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
           },
     );
     if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.eventType)) {
-      logToolLogWindowDebug("frontend.toolLogWindow.messageEventTimelineReduced", {
+      logToolLogWindowDebug("frontend.toolLogWindow.messageEventTimelineReduced", () => ({
         sessionId: text(event.sessionId || targetMessage.sessionId),
         dialogProcessId: text(event.dialogProcessId || targetMessage.dialogProcessId),
         turnScopeId: text(event.turnScopeId || targetMessage.turnScopeId),
         appliedSequence: sequence,
         timelineEntryCount: targetMessage.toolTimeline?.length || 0,
         timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(targetMessage)),
-      });
+      }));
     }
   }
   if (event.dialogProcessId && !targetMessage.dialogProcessId) targetMessage.dialogProcessId = event.dialogProcessId;

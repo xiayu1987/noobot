@@ -65,11 +65,11 @@ export async function refreshFinalSessionDetail({
   );
 
   if (!doneSessionId) {
-    logStateMachineDebug("stateMachine.detailRequest.skip", {
+    logStateMachineDebug("stateMachine.detailRequest.skip", () => ({
       reason: "missing_done_session_id",
       activeSessionId: activeSessionId?.value || "",
       botMessage: summarizeFinalizeMessage(botMessage),
-    });
+    }));
     return false;
   }
 
@@ -80,10 +80,10 @@ export async function refreshFinalSessionDetail({
   };
 
   try {
-    logStateMachineDebug("stateMachine.detailRequest.start", {
+    logStateMachineDebug("stateMachine.detailRequest.start", () => ({
       ...completionEventScope,
       botMessage: summarizeFinalizeMessage(botMessage),
-    });
+    }));
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_REQUEST_STARTED,
       ...completionEventScope,
@@ -141,11 +141,11 @@ export async function refreshFinalSessionDetail({
         })),
       },
     });
-    logStateMachineDebug("detailApply.fetch.success", {
+    logStateMachineDebug("detailApply.fetch.success", () => ({
       ...completionEventScope,
       detailMessageCount: detailMessages.length,
       sessionDocsCount: sessionDocs.length,
-    });
+    }));
     const shouldPreserveCurrentMessages =
       typeof preserveCurrentMessages === "boolean"
         ? preserveCurrentMessages
@@ -163,38 +163,38 @@ export async function refreshFinalSessionDetail({
       normalizeTrimmedString(messageItem?.turnScopeId) === completionEventScope.turnScopeId,
     );
     if (!activeSessionMatches || !targetTurnStillExists) {
-      logStateMachineDebug("stateMachine.detailApply.ignored_stale", {
+      logStateMachineDebug("stateMachine.detailApply.ignored_stale", () => ({
         ...completionEventScope,
         reason: activeSessionMatches ? "turn_removed" : "session_changed",
         activeSessionId: activeSessionId?.value || "",
-      });
+      }));
       return false;
     }
 
-    logStateMachineDebug("detailApply.apply.start", {
+    logStateMachineDebug("detailApply.apply.start", () => ({
       ...completionEventScope,
       preserveCurrentMessages: shouldPreserveCurrentMessages,
       detailMessageCount: detailMessages.length,
       botMessage: summarizeFinalizeMessage(botMessage),
-    });
+    }));
     applySessionDetail(detail, {
       preserveCurrentMessages: shouldPreserveCurrentMessages,
       scrollToBottom: false,
     });
-    logStateMachineDebug("detailApply.apply.success", {
+    logStateMachineDebug("detailApply.apply.success", () => ({
       ...completionEventScope,
       preserveCurrentMessages: shouldPreserveCurrentMessages,
       detailMessageCount: detailMessages.length,
       botMessage: summarizeFinalizeMessage(botMessage),
-    });
+    }));
     await refreshSessionConnectorsAsync?.(activeSession?.value?.id || doneSessionId);
     return true;
   } catch (loadDetailError) {
-    logStateMachineDebug("stateMachine.detailRequest.failed", {
+    logStateMachineDebug("stateMachine.detailRequest.failed", () => ({
       ...completionEventScope,
       error: String(loadDetailError?.message || loadDetailError || ""),
       botMessage: summarizeFinalizeMessage(botMessage),
-    });
+    }));
     const currentMessages = Array.isArray(activeSession?.value?.messages)
       ? activeSession.value.messages
       : [];
@@ -211,11 +211,11 @@ export async function refreshFinalSessionDetail({
       Boolean(currentMessage)
     );
     if (!isCurrentCompletion) {
-      logStateMachineDebug("stateMachine.detailRequest.failed.ignored_stale", {
+      logStateMachineDebug("stateMachine.detailRequest.failed.ignored_stale", () => ({
         ...completionEventScope,
         activeSessionId: activeSessionId?.value || "",
         botMessage: summarizeFinalizeMessage(botMessage),
-      });
+      }));
       return false;
     }
     if (currentMessage) {
@@ -310,11 +310,11 @@ export async function finalizeStoppedSessionDetail({
       normalizeTrimmedString(messageItem?.turnScopeId) === scope.turnScopeId,
     );
     if (!activeSessionMatches || !targetTurnStillExists) {
-      logStateMachineDebug("stateMachine.stoppedDetail.ignored_stale", {
+      logStateMachineDebug("stateMachine.stoppedDetail.ignored_stale", () => ({
         ...scope,
         activeSessionId: activeSessionId?.value || "",
         reason: activeSessionMatches ? "turn_removed" : "session_changed",
-      });
+      }));
       return false;
     }
     applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });

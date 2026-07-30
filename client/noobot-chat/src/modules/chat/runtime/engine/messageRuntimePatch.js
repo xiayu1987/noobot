@@ -55,7 +55,7 @@ export function applyRunStateMessagePatch(message, patch = {}) {
     delete message[SESSION_RUN_MESSAGE_RUNTIME_MARK];
     delete message.runtimeMark;
   }
-  logStateMachineDebug("stateMachine.messageRuntimePatch.apply", {
+  logStateMachineDebug("stateMachine.messageRuntimePatch.apply", () => ({
     message: summarizeStateMachineMessage(message),
     pending: message?.pending === true,
     channelState: message?.channelState?.state || "",
@@ -64,7 +64,7 @@ export function applyRunStateMessagePatch(message, patch = {}) {
     patchChannelState: patch?.channelState?.state || "",
     patchPending: patch?.pending,
     statusLabelKey: patch?.statusLabelKey || "",
-  });
+  }));
 }
 
 export function applyRunStateMessageRuntimePatch({
@@ -101,7 +101,7 @@ export function applyRunStateMessageRuntimePatch({
       messageItem: message,
       activeSession: session,
     });
-    logStateMachineDebug("stateMachine.messageRuntimePatch.effect", {
+    logStateMachineDebug("stateMachine.messageRuntimePatch.effect", () => ({
       runState: stateSnapshot.state || "",
       eventType: stateSnapshot.sourceEvent || "",
       message: summarizeStateMachineMessage(message),
@@ -110,7 +110,7 @@ export function applyRunStateMessageRuntimePatch({
       effectReason: effect?.reason || "",
       patchChannelState: effect?.patch?.channelState?.state || "",
       clearRuntimeMark: effect?.patch?.clearRuntimeMark === true,
-    });
+    }));
     if (effect?.action !== SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE) return;
     const turnScopeId = getMessageTurnScopeId(message);
     const timingPatch = effect.patch || {};

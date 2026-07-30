@@ -8,3 +8,4 @@ export * from './schema.js';
 export * from './paths.js';
 export * from './writer.js';
 export * from './session-deletion-guard.js';
+export { flushJsonLineBatches } from './transports/jsonl.js';

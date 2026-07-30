@@ -197,7 +197,7 @@ test("upstream close without authoritative event does not synthesize a turn term
   assert.equal(listEvents(client, "error").length, 0);
 });
 
-test("upstream message log detects nested authoritative content", () => {
+test("successful upstream messages bypass session logs and retain data-plane metrics", () => {
   FakeUpstreamWebSocket.instances = [];
   const records = [];
   const manager = new ChannelManager(FakeUpstreamWebSocket, {
@@ -208,6 +208,8 @@ test("upstream message log detects nested authoritative content", () => {
     { userId: "user-1", sessionId: "session-upstream-content" },
   );
   channel.apiKey = "api-key-1";
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, client);
 
   manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
@@ -233,10 +235,17 @@ test("upstream message log detects nested authoritative content", () => {
     },
   }));
 
-  const upstreamRecord = records.find(({ event }) => event.event === "agentProxy.upstream.message");
-  assert.ok(upstreamRecord);
-  assert.equal(upstreamRecord.event.data.hasContent, true);
-  assert.equal(upstreamRecord.event.data.messageId, "message-1");
+  assert.equal(records.length, 0);
+  assert.equal(client.sentEvents.at(-1)?.event, "message_event");
+  const windowStartedAtMs = manager.successfulDataPlaneMetrics.windowStartedAtMs;
+  assert.deepEqual(manager.drainSuccessfulDataPlaneMetrics(200), {
+    windowStartedAtMs,
+    windowEndedAtMs: 200,
+    upstreamMessages: 1,
+    channelEvents: 1,
+    broadcasts: 1,
+    deliveries: 1,
+  });
 });
 
 test("upstream close reason user_stopped is transport metadata, not confirmation", () => {

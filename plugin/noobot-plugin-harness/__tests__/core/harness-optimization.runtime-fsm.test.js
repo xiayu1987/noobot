@@ -215,10 +215,16 @@ test("inferFsmTarget uses rule table consistently", () => {
     { agentContext: { payload: { harness: { taskChecklist: [{ task: "x" }] } } } },
     HARNESS_FSM_STATES.PLANNING,
   );
+  const toolCallsToPlanned = inferFsmTarget(
+    HARNESS_HOOK_POINTS.AFTER_LLM_CALL,
+    { hasToolCalls: true, calls: [{ name: "read_file" }] },
+    HARNESS_FSM_STATES.PLANNING,
+  );
   const toFailed = inferFsmTarget(HARNESS_HOOK_POINTS.ON_ERROR, {}, HARNESS_FSM_STATES.EXECUTING);
 
   assert.equal(toPlanning, HARNESS_FSM_STATES.PLANNING);
   assert.equal(toPlanned, HARNESS_FSM_STATES.PLANNED);
+  assert.equal(toolCallsToPlanned, HARNESS_FSM_STATES.PLANNED);
   assert.equal(toFailed, HARNESS_FSM_STATES.FAILED);
 });
 

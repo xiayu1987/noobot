@@ -12,6 +12,9 @@ import path from "node:path";
 import { WebSocket } from "ws";
 import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
 import {
+  flushJsonLineBatches,
+} from "@noobot/runtime-events";
+import {
   cleanupSessionLogs,
   registerLogWebSocketServer,
   resolveSessionLogConfig,
@@ -38,14 +41,21 @@ async function closeLogServer(server, registered) {
   await new Promise((resolve) => server.close(resolve));
 }
 
-function sendLogWs({ port, payload, pathName = "/logs/ws", apiKey = "test-key" } = {}) {
+function sendLogWs({
+  port,
+  payload,
+  pathName = "/logs/ws",
+  apiKey = "test-key",
+  terminalEvents = ["ack", "error"],
+} = {}) {
   return new Promise((resolve, reject) => {
     const messages = [];
     const ws = new WebSocket(`ws://127.0.0.1:${port}${pathName}?apikey=${encodeURIComponent(apiKey)}`);
     ws.on("open", () => ws.send(typeof payload === "string" ? payload : JSON.stringify(payload || {})));
     ws.on("message", (raw) => {
-      messages.push(JSON.parse(String(raw || "{}")));
-      ws.close();
+      const message = JSON.parse(String(raw || "{}"));
+      messages.push(message);
+      if (terminalEvents.includes(message.event)) ws.close();
     });
     ws.on("close", () => resolve(messages));
     ws.on("error", reject);
@@ -62,12 +72,99 @@ test("log-websocket-server: writes session logs by category", async () => {
       port,
       payload: { source: "client", category: "state", event: "state.changed", sessionId: "s1", data: { state: "sending" } },
     });
-    assert.equal(messages[0]?.event, "ack");
+    assert.equal(messages[0]?.event, "session_log_policy");
+    assert.equal(messages.at(-1)?.event, "ack");
     const content = await fs.readFile(path.join(logRoot, "s1", "state.jsonl"), "utf8");
     const record = JSON.parse(content.trim());
     assert.equal(record.sessionId, "s1");
     assert.equal(record.category, "state");
     assert.equal(record.event, "state.changed");
+  } finally {
+    await closeLogServer(server, registered);
+    await fs.rm(logRoot, { recursive: true, force: true });
+  }
+});
+
+test("log-websocket-server: announces the effective client policy before ACK", async () => {
+  const logRoot = await withTempLogDir();
+  const { server, registered } = await startLogServer({
+    logConfig: {
+      logRoot,
+      retentionMs: 60000,
+      cleanupIntervalMs: 60000,
+      workflowDiagnosticsDebug: true,
+    },
+  });
+  try {
+    const { port } = server.address();
+    const messages = await sendLogWs({
+      port,
+      payload: { source: "client", category: "state", event: "state.policy", sessionId: "s-policy" },
+    });
+    assert.deepEqual(messages.map(({ event }) => event), ["session_log_policy", "ack"]);
+    assert.equal(messages[0].policy.debug["workflow-diagnostics"], true);
+    assert.equal(messages[0].policy.limits.maxDebugQueue > 0, true);
+    assert.equal(messages[0].policy.limits.maxDebugBytes > 0, true);
+    assert.equal(messages[0].policy.limits.debugTtlMs > 0, true);
+  } finally {
+    await closeLogServer(server, registered);
+    await fs.rm(logRoot, { recursive: true, force: true });
+  }
+});
+
+test("log-websocket-server: mixed batches ACK after reliable writes without waiting for debug", async () => {
+  const logRoot = await withTempLogDir();
+  let releaseDebug;
+  const pendingDebug = new Promise((resolve) => { releaseDebug = resolve; });
+  const writes = [];
+  const server = createServer((_req, res) => res.end("not-found"));
+  const registered = registerLogWebSocketServer(server, {
+    resolveAuthByApiKey: () => ({ userId: "u1" }),
+    logConfig: { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000, frontendToolLogWindowDebug: true },
+    writeLogEvent: async (event) => {
+      writes.push(event);
+      if (event.category === "debug") return pendingDebug;
+      return { ok: true };
+    },
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const messages = await sendLogWs({
+      port: server.address().port,
+      payload: {
+        events: [
+          { category: "debug", debugType: "tool-log-window", event: "debug.pending", sessionId: "s-mixed" },
+          { category: "state", event: "state.reliable", sessionId: "s-mixed" },
+        ],
+      },
+    });
+    assert.equal(messages.at(-1)?.event, "ack");
+    assert.equal(messages.at(-1)?.count, 2);
+    assert.deepEqual(writes.map(({ event }) => event), ["debug.pending", "state.reliable"]);
+  } finally {
+    releaseDebug({ ok: true });
+    await closeLogServer(server, registered);
+    await fs.rm(logRoot, { recursive: true, force: true });
+  }
+});
+
+test("log-websocket-server: reliable write failures return error and never ACK", async () => {
+  const logRoot = await withTempLogDir();
+  const server = createServer((_req, res) => res.end("not-found"));
+  const registered = registerLogWebSocketServer(server, {
+    resolveAuthByApiKey: () => ({ userId: "u1" }),
+    logConfig: { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000 },
+    writeLogEvent: async () => ({ ok: false, error: new Error("simulated reliable failure") }),
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const messages = await sendLogWs({
+      port: server.address().port,
+      payload: { category: "state", event: "state.failed", sessionId: "s-failed" },
+    });
+    assert.deepEqual(messages.map(({ event }) => event), ["session_log_policy", "error"]);
+    assert.equal(messages.some(({ event }) => event === "ack"), false);
+    assert.equal(messages.at(-1).error, "simulated reliable failure");
   } finally {
     await closeLogServer(server, registered);
     await fs.rm(logRoot, { recursive: true, force: true });
@@ -97,7 +194,9 @@ test("log-websocket-server: writes tool log window debug to its dedicated file",
         data: { debugType: "tool-log-window", selectedCount: 10 },
       },
     });
-    assert.equal(messages[0]?.event, "ack");
+    assert.equal(messages[0]?.event, "session_log_policy");
+    assert.equal(messages.at(-1)?.event, "ack");
+    await flushJsonLineBatches();
     const file = path.join(logRoot, "s-tool-window", "debug-tool-log-window.jsonl");
     const record = JSON.parse((await fs.readFile(file, "utf8")).trim());
     assert.equal(record.event, "frontend.toolLogWindow.rendererReceived");
@@ -175,7 +274,8 @@ test("log-websocket-server: works when chat websocket server is registered first
       port,
       payload: { source: "client", category: "system", event: "system.log", sessionId: "combined-s1" },
     });
-    assert.equal(messages[0]?.event, "ack");
+    assert.equal(messages[0]?.event, "session_log_policy");
+    assert.equal(messages.at(-1)?.event, "ack");
     const content = await fs.readFile(path.join(logRoot, "combined-s1", "system.jsonl"), "utf8");
     assert.equal(JSON.parse(content.trim()).event, "system.log");
   } finally {
@@ -215,9 +315,9 @@ test("log-websocket-server: rejects too large payload and batch", async () => {
   try {
     const { port } = server.address();
     const tooLarge = await sendLogWs({ port, payload: "x".repeat(256 * 1024 + 1) });
-    assert.equal(tooLarge[0]?.event, "error");
+    assert.equal(tooLarge.at(-1)?.event, "error");
     const tooMany = await sendLogWs({ port, payload: { events: Array.from({ length: 101 }, (_, i) => ({ sessionId: "s1", event: `e${i}` })) } });
-    assert.equal(tooMany[0]?.event, "error");
+    assert.equal(tooMany.at(-1)?.event, "error");
   } finally {
     await closeLogServer(server, registered);
     await fs.rm(logRoot, { recursive: true, force: true });

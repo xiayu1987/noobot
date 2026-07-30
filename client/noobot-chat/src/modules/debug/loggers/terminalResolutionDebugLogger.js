@@ -4,24 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { acceptsDebugSink, emitLazyDebug } from "./lazyDebugSink.js";
+
 let sessionLogSink = null;
 
 export function setTerminalResolutionDebugLogSink(sink = null) {
-  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+  sessionLogSink = acceptsDebugSink(sink) ? sink : null;
 }
 
 export function logTerminalResolutionDebug(event, payload = {}) {
   try {
-    sessionLogSink?.log?.({
-      category: "debug",
-      level: "debug",
-      debugType: "terminal-resolution",
-      event,
-      sessionId: payload?.sessionId || "",
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
-      data: { event, at: new Date().toISOString(), ...payload },
-    });
+    return emitLazyDebug(sessionLogSink, "terminal-resolution", event, payload);
   } catch {
   }
 }

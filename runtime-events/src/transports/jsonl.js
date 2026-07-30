@@ -7,8 +7,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const DEFAULT_CLEANUP_INTERVAL_MS = 60 * 1000;
+const DEFAULT_BATCH_FLUSH_MS = 50;
+const DEFAULT_BATCH_MAX_RECORDS = 100;
 const MAX_CACHED_FILES = 512;
 const appendQueues = new Map();
+const pendingBatches = new Map();
 const directoryPromises = new Map();
 const activeFileStates = new Map();
 const cleanupTimes = new Map();
@@ -118,6 +121,78 @@ function enqueueAppend(file, operation) {
   });
 }
 
+function sameBatchOptions(left = {}, right = {}) {
+  return resolveMaxFileBytes(left) === resolveMaxFileBytes(right)
+    && resolveNonNegativeInteger(left.retentionDays) === resolveNonNegativeInteger(right.retentionDays)
+    && resolveNonNegativeInteger(left.maxArchives) === resolveNonNegativeInteger(right.maxArchives)
+    && resolveCleanupIntervalMs(left) === resolveCleanupIntervalMs(right);
+}
+
+async function appendLineBatch(file, entries = []) {
+  if (!entries.length) return;
+  await ensureDirectory(path.dirname(file));
+  const options = entries[0].options;
+  const payload = entries.map((entry) => entry.line).join('');
+  let rotatedFile = null;
+  try {
+    // Rotation is deliberately evaluated at the batch boundary. This keeps a
+    // batch in one file and avoids stat/rename checks for every record.
+    rotatedFile = await rotateIfNeeded(file, payload, options);
+    await fs.appendFile(file, payload, 'utf8');
+    const state = activeFileStates.get(file);
+    if (state) {
+      state.bytes += Buffer.byteLength(payload, 'utf8');
+      state.exists = true;
+    }
+  } catch (error) {
+    activeFileStates.delete(file);
+    throw error;
+  }
+  let cleanup = { deletedFiles: [] };
+  if (shouldCleanup(file, rotatedFile, options)) {
+    try {
+      cleanup = await cleanupArchives(file, options);
+      cacheSet(cleanupTimes, file, Date.now());
+    } catch {
+      cleanup = { deletedFiles: [], error: true };
+    }
+  }
+  const result = {
+    ok: true,
+    file,
+    rotatedFile,
+    deletedFiles: cleanup.deletedFiles,
+    cleanupError: Boolean(cleanup.error),
+  };
+  for (const entry of entries) entry.resolve(result);
+}
+
+function flushPendingBatch(file) {
+  const batch = pendingBatches.get(file);
+  if (!batch || batch.flushing) return batch?.flushPromise || Promise.resolve();
+  pendingBatches.delete(file);
+  batch.flushing = true;
+  if (batch.timer) clearTimeout(batch.timer);
+  batch.flushPromise = enqueueAppend(file, async () => {
+    let start = 0;
+    while (start < batch.entries.length) {
+      let end = start + 1;
+      while (
+        end < batch.entries.length
+        && sameBatchOptions(batch.entries[start].options, batch.entries[end].options)
+      ) end += 1;
+      const group = batch.entries.slice(start, end);
+      try {
+        await appendLineBatch(file, group);
+      } catch (error) {
+        for (const entry of group) entry.reject(error);
+      }
+      start = end;
+    }
+  });
+  return batch.flushPromise;
+}
+
 function isArchiveForActiveFile(activeFile, candidate) {
   const active = path.parse(activeFile);
   const parsed = path.parse(candidate);
@@ -174,32 +249,22 @@ async function cleanupArchives(file, options = {}) {
   return { deletedFiles };
 }
 
-export async function appendJsonLine(file, record, options = {}) {
+export function appendJsonLine(file, record, options = {}) {
   const line = `${JSON.stringify(record)}\n`;
-  return enqueueAppend(file, async () => {
-    await ensureDirectory(path.dirname(file));
-    let rotatedFile = null;
-    try {
-      rotatedFile = await rotateIfNeeded(file, line, options);
-      await fs.appendFile(file, line, 'utf8');
-      const state = activeFileStates.get(file);
-      if (state) {
-        state.bytes += Buffer.byteLength(line, 'utf8');
-        state.exists = true;
-      }
-    } catch (error) {
-      activeFileStates.delete(file);
-      throw error;
+  return new Promise((resolve, reject) => {
+    let batch = pendingBatches.get(file);
+    if (!batch) {
+      batch = { entries: [], timer: null, flushing: false, flushPromise: null };
+      pendingBatches.set(file, batch);
+      batch.timer = setTimeout(() => flushPendingBatch(file), DEFAULT_BATCH_FLUSH_MS);
+      batch.timer.unref?.();
     }
-    let cleanup = { deletedFiles: [] };
-    if (shouldCleanup(file, rotatedFile, options)) {
-      try {
-        cleanup = await cleanupArchives(file, options);
-        cacheSet(cleanupTimes, file, Date.now());
-      } catch {
-        cleanup = { deletedFiles: [], error: true };
-      }
-    }
-    return { ok: true, file, rotatedFile, deletedFiles: cleanup.deletedFiles, cleanupError: Boolean(cleanup.error) };
+    batch.entries.push({ line, options, resolve, reject });
+    if (batch.entries.length >= DEFAULT_BATCH_MAX_RECORDS) void flushPendingBatch(file);
   });
+}
+
+export async function flushJsonLineBatches() {
+  await Promise.all(Array.from(pendingBatches.keys(), (file) => flushPendingBatch(file)));
+  await Promise.all(Array.from(appendQueues.values(), (pending) => pending.catch(() => {})));
 }

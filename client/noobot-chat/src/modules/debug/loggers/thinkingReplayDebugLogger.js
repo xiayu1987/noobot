@@ -4,23 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { acceptsDebugSink, emitLazyDebug } from "./lazyDebugSink.js";
+
 let sessionLogSink = null;
 
 export function setThinkingReplayDebugLogSink(sink = null) {
-  sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
+  sessionLogSink = acceptsDebugSink(sink) ? sink : null;
 }
 
 export function logThinkingReplayDebug(event, payload = {}) {
   try {
-    sessionLogSink?.log?.({
-      category: "debug",
-      level: "debug",
-      debugType: "timeline-pipeline",
-      event,
-      sessionId: payload?.sessionId || "",
-      dialogProcessId: payload?.dialogProcessId || "",
-      turnScopeId: payload?.turnScopeId || "",
-      data: { event, at: new Date().toISOString(), ...payload },
-    });
+    return emitLazyDebug(sessionLogSink, "thinking-replay", event, payload);
   } catch {}
 }

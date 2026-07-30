@@ -14,6 +14,7 @@ import {
 import { warnAgentContextCompatFieldOnce } from "../../../src/context/compatibility-deprecation.js";
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
 import { createBotDispatchHandled } from "@noobot/shared/bot-dispatch-protocol";
+import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
 
 function createRunner({
   botHookManager = createBotHookManager(),
@@ -152,6 +153,120 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
       }],
     },
   );
+});
+
+test("SessionExecutionRunner checkpoints only new or changed current-turn messages", async () => {
+  const checkpointPayloads = [];
+  const events = [];
+  const runtime = {
+    attachmentMetas: [],
+    currentTurnMessages: createCurrentTurnMessagesStore([
+      {
+        messageUid: "sm_assistant",
+        role: "assistant",
+        type: "message",
+        content: "analysis",
+        activityTimeline: [{ eventId: "activity-1" }],
+      },
+      {
+        messageUid: "sm_tool_1",
+        role: "tool",
+        type: "tool_result",
+        content: "result-1",
+        tool_call_id: "call-1",
+      },
+    ]),
+  };
+  const runtimeAgentContext = { execution: { controllers: { runtime } } };
+  const runner = createRunner({
+    appendAgentMessages: async (payload = {}) => checkpointPayloads.push(payload),
+    prepareAgentTurnExecution: async () => ({
+      agentContext: runtimeAgentContext,
+      runtimeAgentContext,
+    }),
+    agentRunner: async ({ agentContext }) => {
+      const currentRuntime = agentContext.execution.controllers.runtime;
+      await currentRuntime.persistCurrentTurnMessages();
+      await currentRuntime.persistCurrentTurnMessages();
+      currentRuntime.currentTurnMessages.push({
+        messageUid: "sm_tool_2",
+        role: "tool",
+        type: "tool_result",
+        content: "result-2",
+        tool_call_id: "call-2",
+      });
+      await currentRuntime.persistCurrentTurnMessages();
+      currentRuntime.currentTurnMessages.updateWhere(
+        { activityTimeline: [{ eventId: "activity-1" }, { eventId: "activity-2" }] },
+        (message) => message.messageUid === "sm_assistant",
+      );
+      await currentRuntime.persistCurrentTurnMessages();
+      return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "task",
+    turnScopeId: "turn-incremental-checkpoint",
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+
+  assert.deepEqual(
+    checkpointPayloads.map((payload) => payload.messages.map((message) => message.messageUid)),
+    [["sm_assistant", "sm_tool_1"], ["sm_tool_2"], ["sm_assistant"]],
+  );
+  assert.deepEqual(runtime.timelineCheckpointPersistedMessageUids, [
+    "sm_assistant",
+    "sm_tool_1",
+    "sm_tool_2",
+  ]);
+  const checkpointEvents = events.filter((event) => event?.event === "timeline_checkpoint_persisted");
+  assert.equal(checkpointEvents.length, 3);
+  assert.equal(checkpointEvents.at(-1)?.data?.messageCount, 3);
+  assert.equal(checkpointEvents.at(-1)?.data?.persistedMessageCount, 1);
+  assert.deepEqual(
+    checkpointEvents.at(-1)?.data?.messages?.map((message) => message.messageUid),
+    ["sm_assistant"],
+  );
+});
+
+test("SessionExecutionRunner retries an incremental checkpoint after persistence failure", async () => {
+  const attempts = [];
+  const runtime = {
+    attachmentMetas: [],
+    currentTurnMessages: createCurrentTurnMessagesStore([
+      { messageUid: "sm_retry", role: "tool", type: "tool_result", content: "retry" },
+    ]),
+  };
+  const runtimeAgentContext = { execution: { controllers: { runtime } } };
+  const runner = createRunner({
+    appendAgentMessages: async ({ messages = [] } = {}) => {
+      attempts.push(messages.map((message) => message.messageUid));
+      if (attempts.length === 1) throw new Error("checkpoint unavailable");
+    },
+    prepareAgentTurnExecution: async () => ({
+      agentContext: runtimeAgentContext,
+      runtimeAgentContext,
+    }),
+    agentRunner: async ({ agentContext }) => {
+      const currentRuntime = agentContext.execution.controllers.runtime;
+      await assert.rejects(currentRuntime.persistCurrentTurnMessages(), /checkpoint unavailable/);
+      await currentRuntime.persistCurrentTurnMessages();
+      return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "task",
+    turnScopeId: "turn-checkpoint-retry",
+  });
+
+  assert.deepEqual(attempts, [["sm_retry"], ["sm_retry"]]);
+  assert.deepEqual(runtime.timelineCheckpointPersistedMessageUids, ["sm_retry"]);
 });
 
 test("SessionExecutionRunner validates scoped persistence identity before execution", async () => {

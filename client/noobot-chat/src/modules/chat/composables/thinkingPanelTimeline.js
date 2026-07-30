@@ -359,7 +359,7 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
       const analysis = summarizeAnalysisProjection(props.messageItem);
       const projectedAtMs = Date.now();
       const projectedAt = new Date(projectedAtMs).toISOString();
-      logThinkingReplayDebug("frontend.thinkingReplay.displayProjectionChanged", {
+      logThinkingReplayDebug("frontend.thinkingReplay.displayProjectionChanged", () => ({
         ...identity,
         running,
         pending,
@@ -376,8 +376,8 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
           analysis.latestModelAnalysisTimestamp,
           projectedAtMs,
         ),
-      });
-      logToolLogWindowDebug("frontend.toolLogWindow.executionWindowSelected", {
+      }));
+      logToolLogWindowDebug("frontend.toolLogWindow.executionWindowSelected", () => ({
         ...identity,
         running,
         pending,
@@ -389,7 +389,7 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
         candidates: summarizeToolLogWindow(timeline.allLogs.slice(-EXECUTION_LOG_DISPLAY_LIMIT)),
         selectedCount: selectedLogs.length,
         selected: summarizeToolLogWindow(selectedLogs),
-      });
+      }));
     },
     { immediate: true },
   );
@@ -413,23 +413,23 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
       const cached = getCachedThinkingDetail(identity);
       if (cached && !refreshDetail) {
         loadedThinkingDetail.value = { ...cached, __thinkingDetailIdentity: identity };
-        logThinkingReplayDebug("frontend.thinkingReplay.detailCacheCommitted", {
+        logThinkingReplayDebug("frontend.thinkingReplay.detailCacheCommitted", () => ({
           ...thinkingReplayScope(messageItem),
           key,
           identity,
           detail: summarizeThinkingMessage(cached?.messageItem || {}),
-        });
+        }));
         return;
       }
       try {
         thinkingDetailLoadingKey.value = key;
-        logThinkingReplayDebug("frontend.thinkingReplay.detailRequestStarted", {
+        logThinkingReplayDebug("frontend.thinkingReplay.detailRequestStarted", () => ({
           ...thinkingReplayScope(messageItem),
           key,
           identity,
           runtime: getRuntimeView(messageItem),
           message: summarizeThinkingMessage(messageItem),
-        });
+        }));
         const detail = await loadThinkingDetail({
           userId: props.userId,
           sessionId: identity.sessionId,
@@ -440,26 +440,26 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
           refresh: refreshDetail,
         });
         if (!detail) {
-          logThinkingReplayDebug("frontend.thinkingReplay.detailRequestEmpty", {
+          logThinkingReplayDebug("frontend.thinkingReplay.detailRequestEmpty", () => ({
             ...thinkingReplayScope(messageItem), key, identity,
-          });
+          }));
           return;
         }
         loadedThinkingDetail.value = { ...detail, __thinkingDetailIdentity: identity };
-        logThinkingReplayDebug("frontend.thinkingReplay.detailCommitted", {
+        logThinkingReplayDebug("frontend.thinkingReplay.detailCommitted", () => ({
           ...thinkingReplayScope(messageItem),
           key,
           identity,
           detail: summarizeThinkingMessage(detail?.messageItem || {}),
-        });
+        }));
       } catch (error) {
-        logThinkingReplayDebug("frontend.thinkingReplay.detailRequestFailed", {
+        logThinkingReplayDebug("frontend.thinkingReplay.detailRequestFailed", () => ({
           ...thinkingReplayScope(messageItem),
           key,
           identity,
           errorName: String(error?.name || ""),
           errorMessage: String(error?.message || error || ""),
-        });
+        }));
       } finally {
         if (thinkingDetailLoadingKey.value === key) {
           thinkingDetailLoadingKey.value = "";
@@ -506,7 +506,7 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
       result = true;
       reason = "completed-tools";
     }
-    logThinkingReplayDebug("frontend.thinkingReplay.visibilityEvaluated", {
+    logThinkingReplayDebug("frontend.thinkingReplay.visibilityEvaluated", () => ({
       ...thinkingReplayScope(messageItem),
       variant: String(props.variant || "panel"),
       result,
@@ -519,7 +519,7 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
       detail: summarizeThinkingMessage(thinkingDetail?.messageItem || {}),
       currentExecutionLogCount: currentExecutionLogs.value.length,
       currentExecutionLogs: currentExecutionLogs.value.slice(-10).map(summarizeRealtimeLog),
-    });
+    }));
     return result;
   }
 

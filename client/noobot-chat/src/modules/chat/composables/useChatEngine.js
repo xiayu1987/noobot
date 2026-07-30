@@ -116,10 +116,10 @@ export function useChatEngine({
     const turnScopeId = String(response?.turnScopeId || "").trim();
     const terminalStatus = response?.turn?.terminalStatus || response?.materialization?.terminalStatus;
     if (!sessionId || !turnScopeId || !terminalStatus || typeof terminalStatus !== "object") {
-      logTerminalResolutionDebug("frontend.terminalResolution.rejected", {
+      logTerminalResolutionDebug("frontend.terminalResolution.rejected", () => ({
         sessionId, turnScopeId, reason: "invalid_terminal_status",
         responseResolved: response?.resolved, hasTerminalStatus: Boolean(terminalStatus),
-      });
+      }));
       return { applied: false, reason: "invalid_terminal_status" };
     }
     try {
@@ -127,18 +127,18 @@ export function useChatEngine({
       const result = applyTurnTerminalResolution(nextRegistry, response);
       if (result?.applied !== true) {
         const current = result?.current || selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
-        logTerminalResolutionDebug("frontend.terminalResolution.reducerRejected", {
+        logTerminalResolutionDebug("frontend.terminalResolution.reducerRejected", () => ({
           sessionId, turnScopeId, reason: result?.reason || "unknown",
           currentRevision: Number(current?.revision || 0), currentSequence: Number(current?.seq || 0),
           terminalResolved: current?.terminalResolved === true,
           responseRevision: Number(response?.turn?.revision || response?.revision || 0),
           responseSequence: Number(response?.turn?.sequence || response?.sequence || 0),
-        });
+        }));
       }
       if (result?.applied) {
         turnRuntimeRegistry.value = nextRegistry;
         const projected = selectSessionTurnRuntime(nextRegistry, sessionId, turnScopeId);
-        logTerminalResolutionDebug("frontend.terminalResolution.applied", {
+        logTerminalResolutionDebug("frontend.terminalResolution.applied", () => ({
           sessionId,
           turnScopeId,
           responseState: response?.turn?.state || "",
@@ -151,7 +151,7 @@ export function useChatEngine({
           projectedSending: projected?.sending === true,
           projectedTerminal: projected?.terminal || null,
           activeTurnScopeId: nextRegistry?.sessions?.[sessionId]?.activeTurnScopeId || "",
-        });
+        }));
         if (!runtimeEventsAlreadyProjected) {
           applyRunStateMessageRuntimePatch({
             sessions,
@@ -178,14 +178,14 @@ export function useChatEngine({
       "frontend.terminalResolution.discovery", details,
     ),
     onUnresolved: (details = {}) => logTerminalResolutionDebug(
-      "frontend.terminalResolution.unresolved", {
+      "frontend.terminalResolution.unresolved", () => ({
         ...details,
         responseResolved: details?.response?.resolved === true,
         responseRetryable: details?.response?.retryable === true,
         responseReason: details?.response?.reason || "",
         responseRevision: Number(details?.response?.turn?.revision || details?.response?.revision || 0),
         responseSequence: Number(details?.response?.turn?.sequence || details?.response?.sequence || 0),
-      },
+      }),
     ),
   });
   const applyRunStateEvent = (event) => {
@@ -197,13 +197,13 @@ export function useChatEngine({
       turnResult?.turn?.sessionId || event?.sessionId || "",
       turnResult?.turn?.turnScopeId || event?.turnScopeId || "",
     );
-    logStateMachineDebug("stateMachine.event", {
+    logStateMachineDebug("stateMachine.event", () => ({
       eventType: event?.type || "",
       sessionId: event?.sessionId || "",
       dialogProcessId: event?.dialogProcessId || "",
       turnScopeId: event?.turnScopeId || "",
       toState: runtime.displayState,
-    });
+    }));
     sessionLogWebSocketClient?.log?.({
       category: "state",
       event: "stateMachine.event",
@@ -216,13 +216,13 @@ export function useChatEngine({
         toState: runtime.displayState,
       },
     });
-    logStateMachineDebug("stateMachine.transition", {
+    logStateMachineDebug("stateMachine.transition", () => ({
       eventType: event?.type || "",
       toState: runtime.displayState,
       sending: runtime.sending,
       canStop: runtime.canStop,
       messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
-    });
+    }));
     sessionLogWebSocketClient?.log?.({
       category: "state",
       event: "stateMachine.transition",

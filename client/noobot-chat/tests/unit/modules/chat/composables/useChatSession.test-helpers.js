@@ -14,7 +14,10 @@ export const wsClientMock = {
 };
 
 export const sessionLogClientMock = {
-  log: vi.fn(() => true), debug: vi.fn(() => true), dispose: vi.fn(),
+  log: vi.fn(() => true),
+  debug: vi.fn((debugType, factory) => factory()),
+  isEnabled: vi.fn(() => true),
+  dispose: vi.fn(),
 };
 
 export function createSessionFixture(overrides = {}) {

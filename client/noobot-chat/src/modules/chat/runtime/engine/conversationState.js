@@ -368,7 +368,7 @@ export function createChatEngineConversationState({
       turnScopeId,
       dialogProcessId,
     });
-    logResendDebug("conversationState.target", {
+    logResendDebug("conversationState.target", () => ({
       state,
       sessionId,
       dialogProcessId,
@@ -376,7 +376,7 @@ export function createChatEngineConversationState({
       fallbackTurnScopeId,
       botMessage: summarizeDebugMessage(botMessage),
       targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
-    });
+    }));
     const channelStateView = {
       ...(targetAssistantMessage?.channelState &&
       typeof targetAssistantMessage.channelState === "object" &&
@@ -402,14 +402,14 @@ export function createChatEngineConversationState({
     }
     if (isInFlightConversationState(state)) {
       if (isTerminalAssistantMessage(targetAssistantMessage)) {
-        logResendDebug("conversationState.inFlight.skipFinalized", {
+        logResendDebug("conversationState.inFlight.skipFinalized", () => ({
           state,
           sessionId,
           dialogProcessId,
           turnScopeId,
           sourceEvent: String(statePayload?.sourceEvent || "").trim(),
           targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
-        });
+        }));
         return;
       }
       applyRunStateEvent?.({
@@ -509,10 +509,10 @@ export function createChatEngineConversationState({
       clearPendingInteraction();
       return;
     }
-    logResendDebug("conversationState.terminal.dispatched", {
+    logResendDebug("conversationState.terminal.dispatched", () => ({
       state, sessionId, dialogProcessId, turnScopeId,
       target: summarizeDebugMessage(targetAssistantMessage),
-    });
+    }));
   }
 
   function applyConversationStateFromEvent(

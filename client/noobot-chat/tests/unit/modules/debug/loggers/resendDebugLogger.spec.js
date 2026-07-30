@@ -18,13 +18,14 @@ describe("resendDebugLogger", () => {
   });
 
   it("writes resend debug events to the session log sink for runtime-events filtering", () => {
-    const sink = { log: vi.fn() };
+    const sink = { debug: vi.fn((debugType, factory) => factory()), isEnabled: () => true };
     setResendDebugLogSink(sink);
 
     expect(isResendDebugEnabled()).toBe(true);
     logResendDebug("resend.disabled", { sessionId: "s-1" });
 
-    expect(sink.log).toHaveBeenCalledWith(expect.objectContaining({
+    expect(sink.debug).toHaveBeenCalledWith("resend", expect.any(Function));
+    expect(sink.debug.mock.results[0].value).toEqual(expect.objectContaining({
       category: "debug",
       debugType: "resend",
       event: "resend.disabled",
@@ -32,8 +33,8 @@ describe("resendDebugLogger", () => {
     }));
   });
 
-  it("does not require a frontend resend debug switch to write to the injected session log sink", () => {
-    const sink = { log: vi.fn() };
+  it("constructs lazy resend details only when the authoritative policy enables them", () => {
+    const sink = { debug: vi.fn((debugType, factory) => factory()), isEnabled: () => true };
     setResendDebugLogSink(sink);
 
     logResendDebug("resend.trace", {
@@ -43,15 +44,15 @@ describe("resendDebugLogger", () => {
       detail: "payload",
     });
 
-    expect(sink.log).toHaveBeenCalledTimes(1);
-    expect(sink.log).toHaveBeenCalledWith(expect.objectContaining({
+    expect(sink.debug).toHaveBeenCalledTimes(1);
+    expect(sink.debug.mock.results[0].value).toEqual(expect.objectContaining({
       category: "debug",
       event: "resend.trace",
       sessionId: "s-1",
       dialogProcessId: "dp-1",
       turnScopeId: "ts-1",
       data: expect.objectContaining({
-        phase: "resend.trace",
+        event: "resend.trace",
         sessionId: "s-1",
         dialogProcessId: "dp-1",
         turnScopeId: "ts-1",
@@ -59,5 +60,16 @@ describe("resendDebugLogger", () => {
         at: expect.any(String),
       }),
     }));
+  });
+
+  it("does not construct a lazy payload when resend diagnostics are disabled", () => {
+    const payload = vi.fn(() => ({ sessionId: "s-1" }));
+    const sink = { debug: vi.fn(), isEnabled: () => false };
+    setResendDebugLogSink(sink);
+
+    expect(isResendDebugEnabled()).toBe(false);
+    expect(logResendDebug("resend.disabled", payload)).toBe(false);
+    expect(payload).not.toHaveBeenCalled();
+    expect(sink.debug).not.toHaveBeenCalled();
   });
 });

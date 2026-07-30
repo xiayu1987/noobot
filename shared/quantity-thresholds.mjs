@@ -90,5 +90,9 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
     maxBatchSize: 100,
 
     maxQueueSize: 500,
+
+    maxDebugQueueSize: 100,
+
+    maxDebugQueueBytes: 1024 * 1024,
   },
 });
