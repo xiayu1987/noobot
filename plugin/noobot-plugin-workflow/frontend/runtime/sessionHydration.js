@@ -40,6 +40,7 @@ export function workflowPlanningEventFromMessage(message = {}, fallbackSessionId
     sessionId: text(payload?.planningDialog?.sessionId || fallbackSessionId),
     dialogProcessId: text(payload?.planningDialog?.dialogProcessId || message.dialogProcessId),
     turnScopeId: text(message.turnScopeId || workflowRunId),
+    presentationMessageId: text(message.presentationMessageId || message.messageId || message.id),
     semanticText: text(message.content || payload.semanticText || payload?.interaction?.semanticTextPreview),
     createdAt: message.ts || message.createdAt || "",
     nodeSessions,

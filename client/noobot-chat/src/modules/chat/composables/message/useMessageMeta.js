@@ -20,6 +20,7 @@ import { resolveStatusStepPresentation } from "../../model/messagePresentation.j
 
 export function useMessageMeta({
   getMessageItem = () => ({}),
+  getRuntimeView = null,
 } = {}) {
   const { translate } = useLocale();
   const { turnRuntimeRegistry } = storeToRefs(useChatStore());
@@ -97,6 +98,15 @@ export function useMessageMeta({
     const turnRuntime = resolveTurnRuntimeByScope(turnRuntimeRegistry.value, turnScopeId, {
       sessionId: String(messageItem?.sessionId || messageItem?.session_id || "").trim(),
     });
+    const projectedRuntime = typeof getRuntimeView === "function" ? getRuntimeView(messageItem) : null;
+    if (projectedRuntime && projectedRuntime.running === true && !projectedRuntime.terminal) {
+      return resolveStatusStepPresentation({
+        turnRuntime: projectedRuntime,
+        runtimeDisplayState: projectedRuntime.state || "sending",
+        projectedState: messageItem?.projectedStatusStepState,
+        persistedState: messageItem?.persistedStatusStepState,
+      }).displayState || "sending";
+    }
     return resolveStatusStepPresentation({
       turnRuntime,
       runtimeDisplayState: turnRuntime ? turnRuntimeDisplayState(turnRuntime) : "",

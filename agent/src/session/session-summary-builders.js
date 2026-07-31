@@ -14,7 +14,8 @@ import {
   dedupeAttachmentRefs,
 } from "./transfer-attachment-refs.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 12;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 13;
+export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
 const SUMMARY_OBJECT_FIELD_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryObjectFieldChars;
@@ -400,6 +401,36 @@ function buildDisplayMessageSummary(message = {}) {
   return compactMessageSummary(summary);
 }
 
+function buildActiveTurnPresentation(lifecycle = null, sessionId = "") {
+  const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
+  if (!activeTurnScopeId) return null;
+  const activeTurn = lifecycle?.turns?.[activeTurnScopeId];
+  if (!activeTurn || typeof activeTurn !== "object" || Array.isArray(activeTurn)) {
+    throw new TypeError("active Turn presentation invariant failed: turn_missing");
+  }
+  if (String(activeTurn.turnScopeId || "").trim() !== activeTurnScopeId) {
+    throw new TypeError("active Turn presentation invariant failed: turn_scope_mismatch");
+  }
+  const presentationMessageId = String(activeTurn.presentationMessageId || "").trim();
+  if (!presentationMessageId) {
+    throw new TypeError("active Turn presentation invariant failed: presentation_message_id_missing");
+  }
+  return {
+    id: presentationMessageId,
+    messageId: presentationMessageId,
+    presentationMessageId,
+    role: "assistant",
+    type: "message",
+    content: "",
+    sessionId,
+    turnScopeId: activeTurnScopeId,
+    dialogProcessId: String(activeTurn.dialogProcessId || "").trim(),
+    chatPresentation: true,
+    turnPlaceholder: true,
+    ts: String(activeTurn.updatedAt || activeTurn.startedAt || activeTurn.createdAt || "").trim(),
+  };
+}
+
 function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const sessionId = String(session?.sessionId || "").trim();
@@ -519,6 +550,34 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
       return summary;
     })
     .filter(Boolean);
+  const activeTurnPresentation = buildActiveTurnPresentation(lifecycle, sessionId);
+  if (activeTurnPresentation) {
+    const presentationMessageId = activeTurnPresentation.presentationMessageId;
+    const existingPresentation = projectedDisplayMessages.find((message) => (
+      String(message?.presentationMessageId || message?.messageId || message?.id || "").trim() ===
+      presentationMessageId
+    ));
+    if (existingPresentation && String(existingPresentation?.role || "").trim() !== "assistant") {
+      throw new TypeError("active Turn presentation invariant failed: presentation_role_conflict");
+    }
+    if (
+      existingPresentation &&
+      String(existingPresentation?.turnScopeId || "").trim() !== activeTurnPresentation.turnScopeId
+    ) {
+      throw new TypeError("active Turn presentation invariant failed: presentation_turn_scope_conflict");
+    }
+    if (!existingPresentation) {
+      const owningUserIndex = projectedDisplayMessages.findLastIndex((message) => (
+        String(message?.role || "").trim() === "user" &&
+        String(message?.turnScopeId || "").trim() === activeTurnPresentation.turnScopeId
+      ));
+      projectedDisplayMessages.splice(
+        owningUserIndex >= 0 ? owningUserIndex + 1 : projectedDisplayMessages.length,
+        0,
+        activeTurnPresentation,
+      );
+    }
+  }
   const displayMessageByIdentity = new Map();
   for (const message of projectedDisplayMessages) {
     const identity = String(message?.presentationMessageId || message?.messageId || message?.id || "").trim();

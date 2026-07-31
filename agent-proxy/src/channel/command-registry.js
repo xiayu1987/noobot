@@ -54,8 +54,9 @@ export class CommandRegistry {
   cancelRequester(requester) {
     let cancelled = 0;
     for (const [commandId, record] of this.commands.entries()) {
-      if (record.requester !== requester) continue;
+      if (record.requester !== requester && record.requester?.socket !== requester) continue;
       this.commands.delete(commandId);
+      record.requester?.resolve?.({ ok: false, reason: "requester_disconnected" });
       cancelled += 1;
     }
     return cancelled;

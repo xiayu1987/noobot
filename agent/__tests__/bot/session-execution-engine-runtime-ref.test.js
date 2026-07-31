@@ -48,12 +48,18 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
       return { ok: true };
     },
   };
+  let lifecycleSequence = 0;
   const engine = new SessionExecutionEngine({
     workspaceService: { getWorkspacePath: () => "/tmp" },
     configService: { async loadUserConfig() { return {}; } },
     session: {
       createScopedPersistenceContext() {
         return Object.freeze({ marker: "scoped" });
+      },
+      async applyTurnLifecycleEvent(payload = {}) {
+        lifecycleSequence += 1;
+        const envelope = { ...payload, revision: lifecycleSequence, sequence: lifecycleSequence };
+        return { applied: true, envelope, turn: envelope };
       },
     },
   });

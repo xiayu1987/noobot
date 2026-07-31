@@ -7,8 +7,9 @@ import {
   EXECUTION_KIND,
   normalizeExecutionIdentity,
 } from "@noobot/shared/execution-lifecycle-protocol";
+import { canonicalizeTurnScopeId } from "@noobot/shared/turn-scope-identity";
 
-export const TURN_LIFECYCLE_PROTOCOL_VERSION = 2;
+export const TURN_LIFECYCLE_PROTOCOL_VERSION = 3;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";
 export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 1;
 export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";
@@ -59,6 +60,30 @@ const EVENT_VALUES = new Set(Object.values(TURN_EVENT));
 
 const clean = (value) => String(value || "").trim();
 
+export function normalizeTurnContinuationSource(source = null) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+  const normalized = {
+    turnScopeId: canonicalizeTurnScopeId(source.turnScopeId),
+    dialogProcessId: clean(source.dialogProcessId),
+  };
+  return normalized.turnScopeId && normalized.dialogProcessId
+    ? Object.freeze(normalized)
+    : null;
+}
+
+export function normalizeTurnPersistenceScope(scope = null) {
+  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return null;
+  const normalized = {
+    scopeId: clean(scope.scopeId),
+    parentSessionId: clean(scope.parentSessionId),
+    relativeDir: clean(scope.relativeDir),
+    allowedRoot: clean(scope.allowedRoot),
+  };
+  return normalized.scopeId && normalized.relativeDir && normalized.allowedRoot
+    ? Object.freeze(normalized)
+    : null;
+}
+
 export function validateSessionProvisionIntent(input = {}) {
   if (input.createSessionIfAbsent === undefined || input.createSessionIfAbsent === false) {
     return { valid: true, requested: false, errors: [] };
@@ -97,7 +122,7 @@ function snapshotTurn(turn = {}) {
   });
   return {
     ...executionIdentity,
-    turnScopeId: clean(turn.turnScopeId),
+    turnScopeId: canonicalizeTurnScopeId(turn.turnScopeId),
     messageId: clean(turn.messageId),
     presentationMessageId: clean(turn.presentationMessageId),
     dialogProcessId: clean(turn.dialogProcessId),
@@ -115,6 +140,8 @@ function snapshotTurn(turn = {}) {
       : null,
     failure: turn.failure && typeof turn.failure === "object" ? turn.failure : null,
     finalizeIntent: turn.finalizeIntent && typeof turn.finalizeIntent === "object" ? turn.finalizeIntent : null,
+    continuationSource: normalizeTurnContinuationSource(turn.continuationSource),
+    continuedByTurnScopeId: canonicalizeTurnScopeId(turn.continuedByTurnScopeId),
     startedAt: clean(turn.startedAt),
     finishedAt: clean(turn.finishedAt),
     capabilities: deriveAuthoritativeTurnCapabilities(turn),
@@ -135,7 +162,7 @@ export function createTurnLifecycleSnapshot({
     userId: clean(userId),
     sessionId: clean(sessionId),
     sequence: Number(sequence || 0),
-    activeTurnScopeId: clean(activeTurnScopeId),
+    activeTurnScopeId: canonicalizeTurnScopeId(activeTurnScopeId),
     activeTurn: activeTurn ? snapshotTurn(activeTurn) : null,
     recentTerminalTurns: (Array.isArray(recentTerminalTurns) ? recentTerminalTurns : []).map(snapshotTurn),
     unchanged: unchanged === true,
@@ -158,7 +185,7 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
     if (!Number.isInteger(Number(turn.revision)) || Number(turn.revision) < 1) errors.push("invalid_turn_revision");
     if (!Number.isInteger(Number(turn.sequence)) || Number(turn.sequence) < 1) errors.push("invalid_turn_sequence");
   }
-  if (snapshot.activeTurn && clean(snapshot.activeTurnScopeId) !== clean(snapshot.activeTurn.turnScopeId)) errors.push("active_turn_identity_mismatch");
+  if (snapshot.activeTurn && canonicalizeTurnScopeId(snapshot.activeTurnScopeId) !== canonicalizeTurnScopeId(snapshot.activeTurn.turnScopeId)) errors.push("active_turn_identity_mismatch");
   return { valid: errors.length === 0, errors };
 }
 
@@ -196,6 +223,9 @@ export function createTurnLifecycleEnvelope({
   rootExecutionId = "",
   origin = {},
   stage = "",
+  persistenceScope = null,
+  continuationSource = null,
+  continuedByTurnScopeId = "",
 } = {}) {
   const executionIdentity = normalizeExecutionIdentity({
     executionId, executionKind, parentExecutionId, rootExecutionId, origin, stage,
@@ -211,7 +241,7 @@ export function createTurnLifecycleEnvelope({
     userId: clean(userId),
     sessionId: clean(sessionId),
     parentSessionId: clean(parentSessionId),
-    turnScopeId: clean(turnScopeId),
+    turnScopeId: canonicalizeTurnScopeId(turnScopeId),
     messageId: clean(messageId),
     presentationMessageId: clean(presentationMessageId),
     dialogProcessId: clean(dialogProcessId),
@@ -230,6 +260,9 @@ export function createTurnLifecycleEnvelope({
     capabilities: capabilities && typeof capabilities === "object" ? capabilities : undefined,
     failure: failure && typeof failure === "object" ? failure : undefined,
     payload: payload && typeof payload === "object" ? payload : {},
+    persistenceScope: normalizeTurnPersistenceScope(persistenceScope) || undefined,
+    continuationSource: normalizeTurnContinuationSource(continuationSource) || undefined,
+    continuedByTurnScopeId: canonicalizeTurnScopeId(continuedByTurnScopeId),
     ...executionIdentity,
   };
   return envelope;
@@ -246,6 +279,14 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   if (!clean(envelope.presentationMessageId)) errors.push("missing_presentation_message_id");
   if (!Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1) errors.push("invalid_revision");
   if (!Number.isInteger(Number(envelope.sequence)) || Number(envelope.sequence) < 1) errors.push("invalid_sequence");
+  if (envelope.persistenceScope !== undefined && !normalizeTurnPersistenceScope(envelope.persistenceScope)) {
+    errors.push("invalid_persistence_scope");
+  }
+  if (clean(envelope.eventType) === TURN_EVENT.ACTION_ACCEPTED && clean(envelope.action) === "continue") {
+    if (!normalizeTurnContinuationSource(envelope.continuationSource)) errors.push("missing_continuation_source");
+  } else if (clean(envelope.eventType) === TURN_EVENT.ACTION_ACCEPTED && envelope.continuationSource !== undefined) {
+    errors.push("unexpected_continuation_source");
+  }
   if ([TURN_EVENT.COMPLETED, TURN_EVENT.STOP_COMPLETED].includes(clean(envelope.eventType))) {
     if (!clean(envelope.completionCommitId)) errors.push("missing_completion_commit_id");
     if (!Number.isInteger(Number(envelope.summaryVersion)) || Number(envelope.summaryVersion) < 1) errors.push("invalid_completion_summary_version");
@@ -276,7 +317,7 @@ export function createTurnTerminalResolution({
   return {
     protocolVersion: TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION,
     eventType: TURN_TERMINAL_RESOLVED_EVENT,
-    commandId: clean(commandId), sessionId: clean(sessionId), turnScopeId: clean(turnScopeId),
+    commandId: clean(commandId), sessionId: clean(sessionId), turnScopeId: canonicalizeTurnScopeId(turnScopeId),
     resolved: resolved === true, retryable: retryable === true, reason: clean(reason),
     retryAfterMs: Math.max(0, Number(retryAfterMs || 0)),
     turn: resolvedTurn ? { ...snapshotTurn(resolvedTurn), sessionId: clean(resolvedTurn.sessionId || sessionId) } : null,

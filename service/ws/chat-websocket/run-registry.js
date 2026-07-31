@@ -50,8 +50,7 @@ export function isRunTransportAttached(handle = {}, binding = null) {
 export function publishRunEvent(handle = {}, eventName, data = {}) {
   const binding = handle?.transportBinding;
   if (!binding || typeof binding.send !== "function") return false;
-  binding.send(eventName, data);
-  return true;
+  return binding.send(eventName, data) === true;
 }
 
 export function unregisterActiveRun(handle = {}) {

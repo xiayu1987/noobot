@@ -7,6 +7,7 @@ export {
   commitTurnLifecycle,
   createCommittedTurnLifecycleEnvelope,
 } from "./commit-turn-lifecycle.js";
+export { commitTurnReplacement } from "./commit-turn-replacement.js";
 export {
   recoverOrphanedTurn,
   recoverTurnFinalize,

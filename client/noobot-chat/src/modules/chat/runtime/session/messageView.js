@@ -46,7 +46,7 @@ export function createSessionMessageView({
       ? targetSession.messages
       : [];
     return messages.find((message) => (
-      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
+      String(message?.messageId || "").trim() === normalizedMessageId
     )) || null;
   }
 

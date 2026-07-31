@@ -40,6 +40,7 @@ function toEntryModuleItem(item = {}, outputDir = "") {
     name: item.name,
     version: item.version,
     apiVersion: item.apiVersion,
+    capabilities: item.capabilities,
     authenticatedRoutePatterns: item.authenticatedRoutePatterns,
     entryImportPath,
   };
@@ -53,6 +54,7 @@ function buildOutputSource(entries = []) {
     name: ${JSON.stringify(item.name)},
     version: ${JSON.stringify(item.version)},
     apiVersion: ${JSON.stringify(item.apiVersion)},
+    capabilities: ${JSON.stringify(item.capabilities)},
     authenticatedRoutePatterns: ${JSON.stringify(item.authenticatedRoutePatterns)},
     loadModule: () => import(${JSON.stringify(item.entryImportPath)}),
   }`,
@@ -103,6 +105,7 @@ async function discoverFrontendPluginEntries() {
       name: String(manifest.name || "").trim(),
       version: String(manifest.version || "").trim(),
       apiVersion,
+      capabilities: Array.isArray(manifest.capabilities) ? manifest.capabilities.map(String) : [],
       authenticatedRoutePatterns: Array.isArray(frontend.authenticatedRoutePatterns)
         ? frontend.authenticatedRoutePatterns.map(String)
         : [],

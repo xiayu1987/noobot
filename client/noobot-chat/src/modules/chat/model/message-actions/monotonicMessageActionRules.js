@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { getMessageRuntimeChannelState } from "../../runtime/sessionRunStateMachine.js";
+import {
+  areTurnScopeIdsEquivalent,
+} from "../messageIdentity.js";
 function normalizeText(value = "") {
   return String(value || "").trim().toLowerCase();
 }
@@ -36,6 +39,9 @@ function getMessagePrimaryId(messageItem = {}) { return normalizeIdentityValue(m
 function getMessageDialogProcessId(messageItem = {}) { return normalizeIdentityValue(messageItem?.dialogProcessId || messageItem?.dialog_process_id || messageItem?.dialogId || messageItem?.dialog_id || messageItem?.channelState?.dialogProcessId || messageItem?.channelState?.dialog_process_id || messageItem?.channelState?.dialogId || messageItem?.channelState?.dialog_id); }
 function getMessageTurnScopeId(messageItem = {}) { return normalizeIdentityValue(messageItem?.turnScopeId || messageItem?.turn_scope_id || messageItem?.channelState?.turnScopeId || messageItem?.channelState?.turn_scope_id); }
 function getMessageSessionId(messageItem = {}) { return normalizeIdentityValue(messageItem?.sessionId || messageItem?.session_id || messageItem?.backendSessionId || messageItem?.backend_session_id || messageItem?.channelState?.sessionId || messageItem?.channelState?.session_id || messageItem?.channelState?.backendSessionId || messageItem?.channelState?.backend_session_id); }
+function sameTurnScope(left = "", right = "") {
+  return Boolean(left && right) && areTurnScopeIdsEquivalent(left, right);
+}
 
 export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {}) {
   if (targetMessage === candidateMessage) return true;
@@ -53,7 +59,7 @@ export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {})
   if (targetTurnScopeId && candidateTurnScopeId) {
     const targetSessionId = getMessageSessionId(targetMessage);
     const candidateSessionId = getMessageSessionId(candidateMessage);
-    return targetTurnScopeId === candidateTurnScopeId && (!targetSessionId || !candidateSessionId || targetSessionId === candidateSessionId);
+    return sameTurnScope(targetTurnScopeId, candidateTurnScopeId) && (!targetSessionId || !candidateSessionId || targetSessionId === candidateSessionId);
   }
   return false;
 }
@@ -96,7 +102,7 @@ export function resolveMonotonicUserTarget(messageItem = {}, allMessages = []) {
   const targetTurnScopeId = getMessageTurnScopeId(messageItem);
   if (targetTurnScopeId) {
     const targetSessionId = getMessageSessionId(messageItem);
-    const sameTurnScopeUserMessage = messages.find((item) => isUserMessage(item) && getMessageTurnScopeId(item) === targetTurnScopeId && (!targetSessionId || !getMessageSessionId(item) || targetSessionId === getMessageSessionId(item)));
+    const sameTurnScopeUserMessage = messages.find((item) => isUserMessage(item) && sameTurnScope(getMessageTurnScopeId(item), targetTurnScopeId) && (!targetSessionId || !getMessageSessionId(item) || targetSessionId === getMessageSessionId(item)));
     if (sameTurnScopeUserMessage) return sameTurnScopeUserMessage;
   }
   if (directIndex >= 0) for (let index = directIndex - 1; index >= 0; index -= 1) if (isUserMessage(messages[index])) return messages[index];
@@ -112,11 +118,25 @@ function isMonotonicSource(messageItem = {}) {
   return isTerminalTurnStatusPlaceholder(messageItem) || isMonotonicMessage(messageItem);
 }
 
+function isTerminalRuntimeState(value = "") {
+  return ["completed", "done", "user_stopped", "error", "timeout", "expired", "cancelled"]
+    .includes(normalizeText(value));
+}
+
+function hasAuthoritativeTerminalFact(messageItem = {}, context = {}) {
+  const runtimeState = context?.messageRuntime?.state || context?.messageRuntime?.backendState;
+  return Boolean(getMessageTurnScopeId(messageItem)) && isTerminalRuntimeState(runtimeState);
+}
+
 function attachTerminalSource(sourceMap, userMessage, sourceMessage) { if (isUserMessage(userMessage) && isMonotonicSource(sourceMessage) && !sourceMap.has(userMessage)) sourceMap.set(userMessage, sourceMessage); }
-function buildTerminalSourceMap(allMessages = []) {
+function buildTerminalSourceMap(allMessages = [], context = {}) {
   const messages = Array.isArray(allMessages) ? allMessages : [];
   const sourceMap = new Map();
-  for (const messageItem of messages) if (isUserMessage(messageItem) && isMonotonicSource(messageItem)) attachTerminalSource(sourceMap, messageItem, messageItem);
+  for (const messageItem of messages) {
+    if (isUserMessage(messageItem) && (isMonotonicSource(messageItem) || hasAuthoritativeTerminalFact(messageItem, context))) {
+      sourceMap.set(messageItem, messageItem);
+    }
+  }
   for (let index = 0; index < messages.length; index += 1) {
     const sourceMessage = messages[index];
     if (isUserMessage(sourceMessage) || !isMonotonicSource(sourceMessage)) continue;
@@ -128,7 +148,7 @@ function buildTerminalSourceMap(allMessages = []) {
     const sourceTurnScopeId = getMessageTurnScopeId(sourceMessage);
     if (sourceTurnScopeId) {
       const sourceSessionId = getMessageSessionId(sourceMessage);
-      const sameTurnScopeUserMessage = messages.find((item) => isUserMessage(item) && getMessageTurnScopeId(item) === sourceTurnScopeId && (!sourceSessionId || !getMessageSessionId(item) || sourceSessionId === getMessageSessionId(item)));
+      const sameTurnScopeUserMessage = messages.find((item) => isUserMessage(item) && sameTurnScope(getMessageTurnScopeId(item), sourceTurnScopeId) && (!sourceSessionId || !getMessageSessionId(item) || sourceSessionId === getMessageSessionId(item)));
       if (sameTurnScopeUserMessage) { attachTerminalSource(sourceMap, sameTurnScopeUserMessage, sourceMessage); continue; }
     }
     for (let prevIndex = index - 1; prevIndex >= 0; prevIndex -= 1) if (isUserMessage(messages[prevIndex])) { attachTerminalSource(sourceMap, messages[prevIndex], sourceMessage); break; }
@@ -136,11 +156,11 @@ function buildTerminalSourceMap(allMessages = []) {
   return sourceMap;
 }
 
-function getMonotonicSourceForUser(userMessage = {}, allMessages = []) {
+function getMonotonicSourceForUser(userMessage = {}, allMessages = [], context = {}) {
   if (!isUserMessage(userMessage)) return null;
   const messages = Array.isArray(allMessages) ? allMessages : [];
-  if (!messages.length) return isMonotonicSource(userMessage) ? userMessage : null;
-  const sourceMap = buildTerminalSourceMap(messages);
+  if (!messages.length) return isMonotonicSource(userMessage) || hasAuthoritativeTerminalFact(userMessage, context) ? userMessage : null;
+  const sourceMap = buildTerminalSourceMap(messages, context);
   const directSource = sourceMap.get(userMessage);
   if (directSource) return directSource;
   const userIndex = findMessageIndex(userMessage, messages);
@@ -179,7 +199,7 @@ export function resolveMonotonicMessageActionProps(context = {}) {
   const monotonicUserTarget = resolveMonotonicUserTarget(messageItem, allMessages);
   const canDelete = typeof context?.deleteMonotonicMessage === "function";
   const canResend = typeof context?.resendMonotonicMessage === "function";
-  const monotonicSource = getMonotonicSourceForUser(messageItem, allMessages);
+  const monotonicSource = getMonotonicSourceForUser(messageItem, allMessages, context);
   const tailOrphanUserMessage = isTailOrphanUserMessage(messageItem, allMessages);
   const latestUserMessage = isLatestUserMessage(messageItem, allMessages);
   const shouldMountOnCurrentUser = isUserMessage(messageItem) && Boolean(monotonicUserTarget) && isSameMessageIdentity(messageItem, monotonicUserTarget) && latestUserMessage && (Boolean(monotonicSource) || tailOrphanUserMessage);

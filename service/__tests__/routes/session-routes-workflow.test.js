@@ -49,6 +49,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     outputDir: workflowDir,
     sessionPayload: {
       sessionId: "node-s",
+      revision: 1,
       messages: [{ role: "assistant", content: "done" }],
     },
     taskPayload: { sessionId: "node-s", tasks: [] },
@@ -88,6 +89,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     assert.equal(payload.ok, true);
     assert.equal(payload.workflowSession.session.sessionId, "node-s");
     assert.equal(payload.workflowSession.sessionSummary.sessionId, "node-s");
+    assert.equal(payload.workflowSession.snapshotVersion, 1);
     assert.deepEqual(payload.workflowSession.executionLogs, [{ event: "x" }]);
     assert.equal("dir" in payload.workflowSession, false);
   });

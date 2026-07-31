@@ -86,18 +86,18 @@ import {
     expect(sendStart(registry, { sessionId: "s1", turnScopeId: "pruned-turn" }).applied).toBe(true);
   });
 
-  it("prunes old or excess terminal turns per session while protecting active, stopped, and referenced turns", () => {
+  it("prunes old or excess terminal turns per session while protecting continuable stopped and referenced turns", () => {
     const registry = createTurnRuntimeRegistryState();
-    const complete = (sessionId, turnScopeId, dialogProcessId, timestamp) => {
-      sendStart(registry, { sessionId, turnScopeId, seq: 1 });
-      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId, turnScopeId, dialogProcessId, state: BackendChannelState.SENDING, seq: 2, timestamp });
-      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId, turnScopeId, dialogProcessId, state: BackendChannelState.COMPLETED, seq: 3, timestamp });
-      settleTerminal(registry, { sessionId, turnScopeId, dialogProcessId, revision: 4, sequence: 4 });
+    const complete = (sessionId, turnScopeId, dialogProcessId, timestamp, sequence) => {
+      sendStart(registry, { sessionId, turnScopeId, seq: sequence - 3 });
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId, turnScopeId, dialogProcessId, state: BackendChannelState.SENDING, seq: sequence - 2, timestamp });
+      applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE, sessionId, turnScopeId, dialogProcessId, state: BackendChannelState.COMPLETED, seq: sequence - 1, timestamp });
+      settleTerminal(registry, { sessionId, turnScopeId, dialogProcessId, revision: 4, sequence });
     };
-    complete("s1", "old", "dp-old", 100);
-    complete("s1", "referenced", "dp-ref", 200);
-    complete("s1", "active", "dp-active", 300);
-    complete("s2", "other-session", "dp-other", 100);
+    complete("s1", "old", "dp-old", 100, 4);
+    complete("s1", "referenced", "dp-ref", 200, 8);
+    complete("s1", "active", "dp-active", 300, 12);
+    complete("s2", "other-session", "dp-other", 100, 4);
 
     const result = pruneTerminalTurns(registry, {
       sessionId: "s1",

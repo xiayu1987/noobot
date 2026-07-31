@@ -149,6 +149,9 @@ export async function applyTurnLifecycleEvent({
       createEventId: randomUUID,
       now: this.now,
       materializeTerminal: ({ terminalStatus }) => {
+        const currentTurnRevision = Number(
+          session.turnLifecycle?.turns?.[event.turnScopeId]?.revision || 0,
+        );
         const incoming = buildTurnTerminalCommand(terminalStatus.command, {
           turnScopeId: event.turnScopeId,
           dialogProcessId: event.dialogProcessId,
@@ -164,7 +167,11 @@ export async function applyTurnLifecycleEvent({
           incoming,
           now: this.now,
         });
-        return statusResult.turnStatus ? { turnStatus: statusResult.turnStatus, statuses: statusResult.statuses } : { reason: "invalid_turn_status" };
+        return statusResult.turnStatus ? {
+          turnStatus: statusResult.turnStatus,
+          statuses: statusResult.statuses,
+          summaryVersion: currentTurnRevision + 1,
+        } : { reason: "invalid_turn_status" };
       },
     });
     if (!result.applied) return { ...result, session, version: actualVersion };

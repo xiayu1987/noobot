@@ -38,7 +38,7 @@ test("session-routes: 会话查询异常返回 400 + 标准错误体", async () 
   registerSessionRoutes(app, {
     bot: {
       session: {
-        getSessionData: async () => {
+        getSessionDisplayData: async () => {
           throw new Error("session-read-failed");
         },
         getRootSessionId: async () => "",
@@ -92,4 +92,92 @@ test("session-routes: 插件诊断接口返回发现/加载/错误信息", async
     assert.ok(Array.isArray(payload?.plugins?.skipped));
     assert.ok(Array.isArray(payload?.plugins?.errors));
   });
+});
+
+test("session-routes: terminal resolution forwards the authoritative persistence scope", async () => {
+  const calls = [];
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        resolveTurnTerminalState: async (payload) => {
+          calls.push(payload);
+          return {
+            resolved: true,
+            sessionId: payload.sessionId,
+            turnScopeId: payload.turnScopeId,
+            turn: {
+              state: "completed",
+              executionState: "completed",
+              revision: 4,
+              sequence: 4,
+              terminalStatus: { command: "completed" },
+            },
+          };
+        },
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+  const persistenceScope = {
+    scopeId: "agent:workflow-node-a",
+    parentSessionId: "parent-session",
+    relativeDir: "runtime/workflow/session/parent-session/node-a",
+    allowedRoot: "runtime/workflow/session/parent-session",
+  };
+
+  await withTestServer(app, async (baseUrl) => {
+    const query = new URLSearchParams({
+      commandId: "terminal-command",
+      persistenceScope: JSON.stringify(persistenceScope),
+    });
+    const response = await fetch(
+      `${baseUrl}/api/internal/session/user-a/child-session/turns/turn-a/terminal?${query}`,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.resolved, true);
+  });
+
+  assert.deepEqual(calls, [{
+    userId: "user-a",
+    sessionId: "child-session",
+    turnScopeId: "turn-a",
+    commandId: "terminal-command",
+    persistenceScope,
+  }]);
+});
+
+test("session-routes: terminal resolution rejects malformed persistence scope JSON", async () => {
+  let called = false;
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        resolveTurnTerminalState: async () => {
+          called = true;
+          return { resolved: false };
+        },
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: () => "",
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/internal/session/user-a/child-session/turns/turn-a/terminal?persistenceScope=%7Bbad`,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(payload.ok, false);
+  });
+  assert.equal(called, false);
 });

@@ -14,13 +14,13 @@ import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 
 class SubscriberBroadcastMethods {
 
-attachSubscriber(channel, socket) {
+attachSubscriber(channel, socket, { sendStateSnapshot = true } = {}) {
   if (!channel || !socket) return;
   channel.subscribers.add(socket);
   socket.__agentProxyChannelKeys = socket.__agentProxyChannelKeys || new Set();
   socket.__agentProxyChannelKeys.add(channel.key);
   socket.__agentProxyActiveChannelKey = channel.key;
-  this.sendChannelStateSnapshot(channel, socket);
+  if (sendStateSnapshot) this.sendChannelStateSnapshot(channel, socket);
 }
 
 detachSocketFromAllChannels(socket) {
@@ -86,6 +86,15 @@ broadcastChannelEvent(channel, envelope) {
   const eventData = scopedEnvelope?.data || {};
   this.recordSuccessfulDataPlaneOperation("broadcasts");
   for (const subscriberSocket of channel.subscribers) {
+    const reconnectTransaction = subscriberSocket.__agentProxyReconnectTransaction;
+    if (Array.isArray(reconnectTransaction?.eventBuffer)) {
+      reconnectTransaction.eventBuffer.push({
+        channelKey: channel.key,
+        sequence: Number(envelope?.sequence || 0),
+        envelope: scopedEnvelope,
+      });
+      continue;
+    }
     const connectionId = ensureConnectionId(subscriberSocket);
     const sendResult = this.sendSocketEvent(subscriberSocket, scopedEnvelope);
     if (sendResult.result !== "sent") {
@@ -125,18 +134,23 @@ broadcastChannelState(channel, stateItem = {}) {
 
 sendChannelStateSnapshot(channel, targetSocket) {
   if (!channel || !targetSocket) return;
+  for (const envelope of this.buildChannelStateSnapshot(channel)) {
+    this.sendSocketEvent(targetSocket, envelope);
+  }
+}
+
+buildChannelStateSnapshot(channel) {
+  if (!channel) return [];
   const stateList = Array.from(channel.conversationStateByDialogProcessId.values()).sort(
     (left, right) =>
       Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
   );
-  for (const stateItem of stateList) {
-    this.sendSocketEvent(targetSocket, {
+  return stateList.map((stateItem) => ({
       event: CHANNEL_EVENT.CHANNEL_STATE,
       data: this._buildConversationStatePayload(channel, stateItem, {
         updatedAtMs: Number(stateItem?.updatedAtMs || 0),
       }),
-    });
-  }
+    }));
 }
 
 _findPendingInteractionsByDialogProcessId(channel, dialogProcessId = "") {

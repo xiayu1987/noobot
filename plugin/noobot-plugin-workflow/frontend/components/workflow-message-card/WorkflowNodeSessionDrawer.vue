@@ -29,8 +29,11 @@ const props = defineProps({
   selectedRuntimeBoxes: { type: Array, default: () => [] },
   selectedGraphDialogProcessId: { type: String, default: "" },
   displayNodeMessages: { type: Array, default: () => [] },
+  logWorkflowDiagnostics: { type: Function, default: null },
   nodeSessionAllMessages: { type: Array, default: () => [] },
   selectedNodeSessionDocs: { type: Array, default: () => [] },
+  turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
+  turnStatusesByTurnScopeId: { type: Object, default: () => ({}) },
   userId: { type: String, default: "" },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -164,6 +167,45 @@ watch(
     scrollRealtimeToBottom(force);
   },
   { flush: "post" },
+);
+
+watch(
+  () => ({
+    visible: viewerVisible.value,
+    viewerState: String(props.viewerState || ""),
+    sessionId: String(props.selectedNodeSessionId || ""),
+    executionId: String(props.selectedExecutionId || ""),
+    nodeExecutionId: String(props.selectedRuntimeNode?.nodeExecutionId || ""),
+    nodeStatus: String(props.selectedRuntimeNode?.status || props.selectedRuntimeNode?.stepStatus || ""),
+    selectedStepId: String(props.selectedRuntimeStep?.stepId || ""),
+    selectedStepStatus: String(props.selectedRuntimeStep?.status || props.selectedRuntimeStep?.stepStatus || ""),
+    runtimeBoxCount: props.selectedRuntimeBoxes.length,
+    runtimeStepCount: props.selectedRuntimeBoxes.reduce(
+      (count, box = {}) => count + (Array.isArray(box?.steps) ? box.steps.length : 0),
+      0,
+    ),
+    messageCount: props.displayNodeMessages.length,
+    runningMessageCount: props.displayNodeMessages.filter((message = {}) => message?.pending === true).length,
+    timingCount: props.displayNodeMessages.reduce(
+      (count, message = {}) => count + (Array.isArray(message?.turnTimings || message?.timings)
+        ? (message.turnTimings || message.timings).length
+        : 0),
+      0,
+    ),
+    sessionTimingCount: props.selectedNodeSessionDocs.reduce(
+      (count, session = {}) => count + (Array.isArray(session?.turnTimings) ? session.turnTimings.length : 0),
+      0,
+    ),
+    projectedTimingCount: Object.keys(props.turnTimingsByTurnScopeId || {}).length,
+    projectedTimingTurnScopeIds: Object.keys(props.turnTimingsByTurnScopeId || {}),
+    projectedStatusCount: Object.keys(props.turnStatusesByTurnScopeId || {}).length,
+    projectedStatusTurnScopeIds: Object.keys(props.turnStatusesByTurnScopeId || {}),
+  }),
+  (renderState) => {
+    if (!renderState.visible) return;
+    props.logWorkflowDiagnostics?.("frontend.workflowRender.nodeDrawerCommitted", renderState);
+  },
+  { immediate: true, flush: "post" },
 );
 
 function updateDrawerSize(event) {
@@ -307,6 +349,8 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
           :messages="displayNodeMessages"
           :all-messages="nodeSessionAllMessages"
           :session-docs="selectedNodeSessionDocs"
+          :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
+          :turn-statuses-by-turn-scope-id="turnStatusesByTurnScopeId"
           :user-id="userId"
           :render-markdown="renderMarkdown"
           :format-time="formatTime"

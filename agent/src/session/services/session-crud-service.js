@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeSelectedConnectors } from "../entities/session-entity.js";
-import { isSessionDisplaySummaryPayload } from "../session-summary-builders.js";
+import {
+  buildSessionDisplaySummary,
+  SESSION_DETAIL_MESSAGE_PROJECTION,
+  isSessionDisplaySummaryPayload,
+} from "../session-summary-builders.js";
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
 import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
 
@@ -109,36 +113,65 @@ export class SessionCrudService {
         parentSessionId: currentParentSessionId,
       });
       if (!currentBundle?.exists || !currentBundle?.session) continue;
-      sessions.push({
-        ...currentBundle.session,
-        sessionId: currentSessionId,
-        parentSessionId: currentParentSessionId,
+      const rawMessages = Array.isArray(currentBundle.session.messages)
+        ? currentBundle.session.messages
+        : [];
+      const displayProjection = buildSessionDisplaySummary(currentBundle.session, {
         depth: this.sessionTreeService
           ? await this.sessionTreeService.getSessionDepth({
             userId,
             sessionId: currentSessionId,
           })
-          : 0,
+          : this._getDepthFromTree(currentSessionId, sessionTree),
+      });
+      sessions.push({
+        ...currentBundle.session,
+        ...displayProjection,
+        sessionId: currentSessionId,
+        parentSessionId: currentParentSessionId,
+        rawMessages,
       });
     }
 
     return {
       exists: true,
       sessionId: normalizedSessionId,
+      detailMode: "full",
+      messageProjection: SESSION_DETAIL_MESSAGE_PROJECTION,
       sessions,
     };
   }
 
-  async resolveTurnTerminalState({ userId, sessionId, turnScopeId, commandId = "" }) {
+  async resolveTurnTerminalState({
+    userId, sessionId, turnScopeId, commandId = "", parentSessionId = "",
+    persistenceScope = null, persistenceContext = null,
+  }) {
     const normalizedSessionId = String(sessionId || "").trim();
     const normalizedTurnScopeId = String(turnScopeId || "").trim();
     const normalizedCommandId = String(commandId || "").trim();
     if (!userId || !normalizedSessionId || !normalizedTurnScopeId || !normalizedCommandId) {
       return createTurnTerminalResolution({ commandId: normalizedCommandId || "invalid", sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "invalid_terminal_resolution_request" });
     }
-    const bundle = await this.getSessionBundle({ userId, sessionId: normalizedSessionId });
+    const bundle = await this.getSessionBundle({
+      userId,
+      sessionId: normalizedSessionId,
+      parentSessionId: String(parentSessionId || persistenceScope?.parentSessionId || "").trim(),
+      persistenceContext,
+    });
     if (!bundle.exists || !bundle.session) {
       return createTurnTerminalResolution({ commandId: normalizedCommandId, sessionId: normalizedSessionId, turnScopeId: normalizedTurnScopeId, reason: "session_not_found" });
+    }
+    if (
+      String(bundle.session.sessionId || bundle.session.id || "").trim() !== normalizedSessionId ||
+      (persistenceScope?.parentSessionId &&
+        String(bundle.session.parentSessionId || "").trim() !== String(persistenceScope.parentSessionId).trim())
+    ) {
+      return createTurnTerminalResolution({
+        commandId: normalizedCommandId,
+        sessionId: normalizedSessionId,
+        turnScopeId: normalizedTurnScopeId,
+        reason: "persistence_scope_identity_mismatch",
+      });
     }
     return resolveAuthoritativeTurnTerminal({
       lifecycle: bundle.session.turnLifecycle,
@@ -156,7 +189,14 @@ export class SessionCrudService {
       sessionId: normalizedSessionId,
     });
     if (!sessionBundle.exists) {
-      return { exists: false, sessionId: normalizedSessionId, sessions: [], summary: true };
+      return {
+        exists: false,
+        sessionId: normalizedSessionId,
+        detailMode: "summary",
+        messageProjection: SESSION_DETAIL_MESSAGE_PROJECTION,
+        sessions: [],
+        summary: true,
+      };
     }
 
     const sessionTree = await this.treeRepo.getTree(userId);
@@ -216,6 +256,8 @@ export class SessionCrudService {
     return {
       exists: true,
       sessionId: normalizedSessionId,
+      detailMode: "summary",
+      messageProjection: SESSION_DETAIL_MESSAGE_PROJECTION,
       summary: true,
       sessions,
     };

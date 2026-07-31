@@ -16,7 +16,15 @@ function applyNodeEvent(store, data) {
 }
 
 function applyPlanningEvent(store, data) {
-  return store.applyWorkflowRuntimeEvent({ event: "workflow_planning_message_prepared", data }, { source: "test" });
+  return store.applyWorkflowRuntimeEvent({
+    event: "workflow_planning_message_prepared",
+    data: {
+      sessionId: "parent-session",
+      turnScopeId: "parent-turn-a",
+      presentationMessageId: "assistant-presentation-a",
+      ...data,
+    },
+  }, { source: "test" });
 }
 
 function nodeEvent(overrides = {}) {
@@ -357,7 +365,7 @@ describe("useChatStore workflow node state registry", () => {
 
     expect(applyPlanningEvent(store, { workflowRunId: "", nodeSessions: [nodeEvent()] })).toMatchObject({
       applied: false,
-      reason: "missing_planning_nodes",
+      reason: "missing_planning_workflow_run",
     });
     expect(applyPlanningEvent(store, { workflowRunId: "workflow-run-a", nodeSessions: [] })).toMatchObject({
       applied: false,

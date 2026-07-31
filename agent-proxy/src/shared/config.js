@@ -160,6 +160,12 @@ export const config = {
     11 * 60 * 1000,
     5000,
   ),
+  reconnectSnapshotTimeoutMs: envTimeMs(
+    "AGENT_PROXY_RECONNECT_SNAPSHOT_TIMEOUT_MS",
+    "reconnectSnapshotTimeoutMs",
+    TIME_THRESHOLDS.agentProxy.reconnectSnapshotTimeoutMs,
+    1000,
+  ),
   httpUpstreamTimeoutMs: envTimeMs(
     "AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS",
     "httpUpstreamTimeoutMs",

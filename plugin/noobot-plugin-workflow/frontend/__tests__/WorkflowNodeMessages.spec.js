@@ -48,4 +48,63 @@ describe("workflow node message projection", () => {
     }));
     wrapper.unmount();
   });
+
+  it("projects one assistant conversation and keeps tool results out of message bubbles", async () => {
+    const selectedNodeMessages = ref([
+      { id: "user-1", role: "user", content: "inspect", sessionId: "child-session", turnScopeId: "turn-1" },
+      {
+        id: "assistant-1",
+        presentationMessageId: "assistant-presentation-1",
+        role: "assistant",
+        type: "tool_call",
+        content: "",
+        toolTimeline: [{ event: "tool_call", toolCallId: "call-1" }],
+        sessionId: "child-session",
+        turnScopeId: "turn-1",
+      },
+      {
+        id: "tool-1",
+        role: "tool",
+        type: "tool_result",
+        content: "result 1",
+        sessionId: "child-session",
+        turnScopeId: "turn-1",
+      },
+      {
+        id: "assistant-2",
+        presentationMessageId: "assistant-presentation-1",
+        role: "assistant",
+        type: "tool_call",
+        content: "",
+        toolTimeline: [{ event: "tool_result", toolCallId: "call-1" }],
+        sessionId: "child-session",
+        turnScopeId: "turn-1",
+      },
+    ]);
+    let messages;
+    const wrapper = mount(defineComponent({
+      setup() {
+        messages = useWorkflowNodeMessages({
+          props: {
+            userId: "user-1",
+            isImageMime: vi.fn(() => false),
+            logWorkflowDiagnostics: vi.fn(),
+          },
+          selectedNode: ref({ sessionId: "child-session" }),
+          selectedRuntimeNode: ref(null),
+          selectedNodeMessages,
+          selectedNodeRawMessages: ref([]),
+          selectedNodeSessionSummary: ref({ sessionId: "child-session" }),
+          selectedNodeSessionId: ref("child-session"),
+        });
+        return () => h("div");
+      },
+    }));
+
+    await nextTick();
+    expect(messages.displayNodeMessages.value.map((item) => item.role)).toEqual(["user", "assistant"]);
+    expect(messages.displayNodeMessages.value[1].toolTimeline.length).toBeGreaterThan(0);
+    expect(messages.displayNodeMessages.value.some((item) => item.role === "tool")).toBe(false);
+    wrapper.unmount();
+  });
 });

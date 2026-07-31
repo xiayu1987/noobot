@@ -4,11 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
-import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
 import { resolveSessionVersion, createMessageAnchorMatcher, resolveUserTurnStartIndex, clearReplacementUserRuntimeState, resolveTurnScopeId, uniqueValues } from "./anchor-utils.js";
 import { createRequestHash, assertIdempotencyRequestMatches, findMutationReceipt, rememberMutationReceipt, normalizeExpectedVersion } from "./idempotency-guards.js";
-import { pruneSessionTurnTimings, pruneSessionTurnStatuses, buildTurnScopeReplacement } from "./turn-timing.js";
+import { pruneSessionTurnTimings, pruneSessionTurnStatuses } from "./turn-timing.js";
+import {
+  assertTurnReplacementMaterialization,
+  createTurnReplacementCommit,
+} from "@noobot/shared/turn-replacement-protocol";
+import { commitTurnReplacement } from "@noobot/authoritative-state/application";
 
 export async function deleteFromMessage({
     userId,
@@ -27,13 +31,13 @@ export async function deleteFromMessage({
     }
     const matcher = createMessageAnchorMatcher(anchor);
     const normalizedExpectedVersion = normalizeExpectedVersion(expectedVersion);
-    const normalizedIdempotencyKey = String(idempotencyKey || "").trim();
-    const requestHash = createRequestHash({ operation: "delete_from", anchor });
     if (!matcher) {
       const error = new Error("message anchor is required");
       error.statusCode = 400;
       throw error;
     }
+    const normalizedIdempotencyKey = String(idempotencyKey || "").trim();
+    const requestHash = createRequestHash({ operation: "delete_from", anchor });
     return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
@@ -125,19 +129,30 @@ export async function replaceTurn({
     }
     const matcher = createMessageAnchorMatcher(anchor);
     const normalizedExpectedVersion = normalizeExpectedVersion(expectedVersion);
-    const normalizedIdempotencyKey = String(idempotencyKey || "").trim();
-    const requestHash = createRequestHash({
-      operation: "replace_turn",
-      anchor,
-      newContent: normalizedNewContent,
-      turnScopeId: String(turnScopeId || "").trim(),
-      attachmentIds: (Array.isArray(attachments) ? attachments : []).map((item) => String(item?.attachmentId || "").trim()),
-    });
     if (!matcher) {
       const error = new Error("message anchor is required");
       error.statusCode = 400;
       throw error;
     }
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
+    if (!normalizedTurnScopeId) {
+      const error = new Error("turnScopeId is required");
+      error.statusCode = 400;
+      throw error;
+    }
+    const normalizedIdempotencyKey = String(idempotencyKey || "").trim();
+    if (!normalizedIdempotencyKey) {
+      const error = new Error("idempotencyKey is required");
+      error.statusCode = 400;
+      throw error;
+    }
+    const requestHash = createRequestHash({
+      operation: "replace_turn",
+      anchor,
+      newContent: normalizedNewContent,
+      turnScopeId: normalizedTurnScopeId,
+      attachmentIds: (Array.isArray(attachments) ? attachments : []).map((item) => String(item?.attachmentId || "").trim()),
+    });
     return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this._resolveParentSessionId(
       userId,
@@ -159,7 +174,7 @@ export async function replaceTurn({
     const replay = findMutationReceipt(session, "replace_turn", normalizedIdempotencyKey);
     if (replay) {
       assertIdempotencyRequestMatches(replay.requestHash, requestHash);
-      return { session, ...replay.result, version: resolveSessionVersion(session), committedVersion: replay.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: true };
+      return { session, ...replay.result, deduplicated: true };
     }
     const currentVersion = resolveSessionVersion(session);
     if (normalizedExpectedVersion !== null) {
@@ -181,12 +196,6 @@ export async function replaceTurn({
     const turnStartIndex = resolveUserTurnStartIndex(messages, anchorIndex);
     const replacedMessages = messages.slice(turnStartIndex);
     const replacedUserMessage = messages[turnStartIndex] || messages[anchorIndex] || {};
-    const normalizedTurnScopeId = String(turnScopeId || "").trim();
-    if (!normalizedTurnScopeId) {
-      const error = new Error("turnScopeId is required");
-      error.statusCode = 400;
-      throw error;
-    }
     const nextVersion = currentVersion + 1;
     const nowValue = this.now();
     const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage || {});
@@ -220,47 +229,38 @@ export async function replaceTurn({
     session.updatedAt = nowValue;
     session.version = nextVersion;
     session.revision = nextVersion;
-    const turnScopeReplacement = buildTurnScopeReplacement({
-      replacedMessages,
-      replacementMessages: [newMessage],
-      replacementUserMessage: newMessage,
+    const replacementUserMessageId = String(newMessage.messageId || "").trim();
+    const turnReplacement = createTurnReplacementCommit({
+      commandId: normalizedIdempotencyKey,
+      sessionId,
+      committedVersion: session.version,
+      replacedTurnScopeIds: uniqueValues(replacedMessages.map(resolveTurnScopeId)),
+      replacementTurnScopeId: normalizedTurnScopeId,
+      replacementUserMessageId,
+      committedAt: nowValue,
     });
-    const result = {
-      replacedTurn: {
-        anchorIndex,
-        turnStartIndex,
-        deletedCount: replacedMessages.length,
-        messages: replacedMessages,
-      },
-      newTurn: {
-        turnScopeId: newMessage.turnScopeId || "",
-        dialogProcessId: resolveMessageDialogProcessId(newMessage),
-        message: newMessage,
-      },
-      turnScopeReplacement,
-      anchorIndex,
-      turnStartIndex,
-      deletedCount: replacedMessages.length,
-    };
-    if (normalizedIdempotencyKey) {
-      const receiptResult = {
-        newTurn: result.newTurn,
-        turnScopeReplacement,
-        anchorIndex,
-        turnStartIndex,
-        deletedCount: replacedMessages.length,
-      };
-      rememberMutationReceipt(session, {
-        operation: "replace_turn",
-        idempotencyKey: normalizedIdempotencyKey,
-        version: session.version,
-        requestHash,
-        result: receiptResult,
-        committedAt: nowValue,
-      });
+    const lifecycleReplacement = commitTurnReplacement({
+      lifecycle: session.turnLifecycle,
+      eventOutbox: session.authorityEventOutbox,
+      replacement: turnReplacement,
+    });
+    if (!lifecycleReplacement.applied && !lifecycleReplacement.deduplicated) {
+      throw new Error(`turn replacement lifecycle commit failed: ${lifecycleReplacement.reason}`);
     }
+    session.turnLifecycle = lifecycleReplacement.lifecycle;
+    session.authorityEventOutbox = lifecycleReplacement.eventOutbox;
+    const result = { turnReplacement };
+    rememberMutationReceipt(session, {
+      operation: "replace_turn",
+      idempotencyKey: normalizedIdempotencyKey,
+      version: session.version,
+      requestHash,
+      result,
+      committedAt: nowValue,
+    });
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
+    assertTurnReplacementMaterialization({ commit: turnReplacement, session });
     await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion, persistenceContext });
-    return { session, ...result, version: session.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: false };
+    return { session, ...result, deduplicated: false };
     }, parentSessionId, persistenceContext);
   }

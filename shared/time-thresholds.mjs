@@ -49,6 +49,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     hookTimeoutMs: TIME_TIERS.hookMs,
     pendingStopTtlMs: TIME_TIERS.standardCommandMs,
     transientLlmRetryBaseDelayMs: TIME_TIERS.fastProbeMs,
+    authorityOutboxDeliveredRetentionMs: TIME_TIERS.fiveMinutesMs,
   },
 
   async: {
@@ -90,6 +91,7 @@ export const TIME_THRESHOLDS = deepFreeze({
     webSocketHeartbeatIntervalMs: TIME_TIERS.standardCommandMs,
     webSocketHeartbeatTimeoutMs: TIME_TIERS.startupMs,
     dataPlaneMetricsIntervalMs: 10000,
+    reconnectSnapshotTimeoutMs: TIME_TIERS.quickInspectMs,
   },
 
   capability: {

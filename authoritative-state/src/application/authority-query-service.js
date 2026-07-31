@@ -107,6 +107,8 @@ export function projectAuthoritativeExecution(turn = {}, session = {}) {
     summaryVersion: Number(timedTurn.summaryVersion || 0),
     capabilities: deriveAuthoritativeTurnCapabilities(timedTurn),
     failure: timedTurn.failure && typeof timedTurn.failure === "object" ? { ...timedTurn.failure } : null,
+    continuationSource: timedTurn.continuationSource || null,
+    continuedByTurnScopeId: clean(timedTurn.continuedByTurnScopeId),
     startedAt: clean(timedTurn.startedAt),
     finishedAt: clean(timedTurn.finishedAt),
     createdAt: clean(timedTurn.createdAt),

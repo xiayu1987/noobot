@@ -31,6 +31,24 @@ test("command registry cancels requester commands and expires routes", () => {
   assert.equal(registry.routes.has("interaction-1"), false);
 });
 
+test("command registry cancels reconnect snapshot commands by nested socket requester", () => {
+  const registry = new CommandRegistry();
+  const socket = {};
+  let resolution = null;
+  registry.register("snapshot-reconnect", {
+    channelKey: "channel-1",
+    commandType: "turn_snapshot",
+    requester: {
+      socket,
+      resolve: (result) => { resolution = result; },
+    },
+  });
+
+  assert.equal(registry.cancelRequester(socket), 1);
+  assert.deepEqual(resolution, { ok: false, reason: "requester_disconnected" });
+  assert.equal(registry.get("snapshot-reconnect"), null);
+});
+
 test("subscriber delivery closes a slow consumer at the backpressure boundary", () => {
   const manager = new ChannelManager({ OPEN: 1, CLOSED: 3 });
   let closeReason = "";

@@ -65,6 +65,10 @@ export function registerServiceRoutes(app, context = {}) {
       throw error;
     }
     const { session, sessionSummary, task, execution, executionLogs = [], meta, childSessionId } = snapshot;
+    const snapshotVersion = Number(sessionSummary?.revision || 0);
+    if (!Number.isInteger(snapshotVersion) || snapshotVersion <= 0) {
+      throw new Error("workflow session snapshot is missing an authoritative revision");
+    }
     const restoredExecutionLogs = executionLogs;
     const hasMoreExecutionLogs = Boolean(executionPage && restoredExecutionLogs.length > executionPage.limit);
     const responseExecutionLogs = executionPage
@@ -85,6 +89,7 @@ export function registerServiceRoutes(app, context = {}) {
       sessionId: String(sessionId || "").trim(),
       dialogProcessId: String(dialogProcessId || "").trim(),
       workflowSession: {
+        snapshotVersion,
         session,
         sessionSummary,
         task,

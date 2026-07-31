@@ -8,6 +8,7 @@ import {
   createHarness,
   activateRuntimeTurn,
   makeSession,
+  makeTurnReplacementResponse,
   assistantMessage,
   emitChannelState,
   emitAuthorityProcessing,
@@ -100,7 +101,7 @@ describe("useChatEngine.resend stopped state", () => {
 
   it("resendMonotonicMessage can repeatedly replace a stopped turn and append a fresh assistant placeholder", async () => {
     const stream = vi.fn(async () => {});
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor, expectedVersion }) => {
       const replacementUser = {
         id: `msg-user-${turnScopeId}`,
         messageId: `msg-user-${turnScopeId}`,
@@ -109,14 +110,13 @@ describe("useChatEngine.resend stopped state", () => {
         content: newContent,
         dialogProcessId: "",
       };
-      return {
-        ok: true,
-        newTurn: replacementUser,
-        session: makeSession("local-resend-repeat-stopped", {
-          messages: [replacementUser],
-          rawMessages: [replacementUser],
-        }),
-      };
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-repeat-stopped",
+        version: Number(expectedVersion || 0) + 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+      });
     });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
@@ -191,7 +191,7 @@ describe("useChatEngine.resend stopped state", () => {
         },
       });
     });
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor, expectedVersion }) => {
       const replacementUser = {
         id: `msg-user-${turnScopeId}`,
         messageId: `msg-user-${turnScopeId}`,
@@ -200,14 +200,13 @@ describe("useChatEngine.resend stopped state", () => {
         turnScopeId,
         dialogProcessId: "",
       };
-      return {
-        ok: true,
-        newTurn: replacementUser,
-        session: makeSession(sessionId, {
-          messages: [replacementUser],
-          rawMessages: [replacementUser],
-        }),
-      };
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId,
+        version: Number(expectedVersion || 0) + 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+      });
     });
     const fetchSessionDetail = vi.fn(async () => {
       const stopped = stoppedTurns[stoppedTurns.length - 1];
@@ -294,7 +293,7 @@ describe("useChatEngine.resend stopped state", () => {
       ...payload,
       sessionId: "local-resend-second-stopped",
     }));
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor, expectedVersion }) => {
       const replacementUser = {
         id: `msg-user-${turnScopeId}`,
         messageId: `msg-user-${turnScopeId}`,
@@ -303,14 +302,13 @@ describe("useChatEngine.resend stopped state", () => {
         content: newContent,
         dialogProcessId: "",
       };
-      return {
-        ok: true,
-        newTurn: replacementUser,
-        session: makeSession("local-resend-second-stopped", {
-          messages: [replacementUser],
-          rawMessages: [replacementUser],
-        }),
-      };
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-second-stopped",
+        version: Number(expectedVersion || 0) + 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+      });
     });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
@@ -393,7 +391,7 @@ describe("useChatEngine.resend stopped state", () => {
         });
       }
     });
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor, expectedVersion }) => {
       const replacementUser = {
         id: `msg-user-${turnScopeId}`,
         messageId: `msg-user-${turnScopeId}`,
@@ -402,11 +400,7 @@ describe("useChatEngine.resend stopped state", () => {
         content: newContent,
         dialogProcessId: "",
       };
-      return {
-        ok: true,
-        newTurn: replacementUser,
-        session: makeSession("local-resend-stale-stop-replay", {
-          messages: [
+      const messages = [
             {
               turnScopeId: "client-turn:history",
               role: RoleEnum.USER,
@@ -424,10 +418,15 @@ describe("useChatEngine.resend stopped state", () => {
               channelState: { state: "user_stopped", dialogProcessId: "dp-old-stopped", turnScopeId: "client-turn:history" },
             },
             replacementUser,
-          ],
-          rawMessages: [replacementUser],
-        }),
-      };
+          ];
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-stale-stop-replay",
+        version: Number(expectedVersion || 0) + 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+        messages,
+      });
     });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
@@ -479,21 +478,24 @@ describe("useChatEngine.resend stopped state", () => {
       ...payload,
       sessionId: "local-resend-ignore-stale-assistant",
     }));
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor, expectedVersion }) => {
       const replacementUser = { id: `msg-user-${turnScopeId}`, messageId: `msg-user-${turnScopeId}`, turnScopeId, role: RoleEnum.USER, content: newContent };
-      return {
-      ok: true,
-      newTurn: replacementUser,
-      session: makeSession("local-resend-state-mismatch", {
-        messages: [replacementUser],
-        rawMessages: [replacementUser],
-      }),
-    };
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-state-mismatch",
+        version: Number(expectedVersion || 0) + 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+      });
+    });
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
     });
     const { engine, activeSession, activeTurnRuntime, sending, canStop, deps } = createHarness({
       sessionId: "local-resend-state-mismatch",
       stream,
-      deps: { replaceSessionTurnApi },
+      deps: { replaceSessionTurnApi, applySessionDetail },
     });
     const stoppedUser = {
       turnScopeId: "client-turn:old-stopped",
@@ -529,7 +531,7 @@ describe("useChatEngine.resend stopped state", () => {
       statusLabel: "chat.stopped",
       stopState: "user_stopped",
     };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor, expectedVersion }) => {
       const replacementUser = {
         id: `msg-user-${turnScopeId}`,
         messageId: `msg-user-${turnScopeId}`,
@@ -537,14 +539,13 @@ describe("useChatEngine.resend stopped state", () => {
         role: RoleEnum.USER,
         content: newContent,
       };
-      return {
-        ok: true,
-        newTurn: replacementUser,
-        session: makeSession("local-resend-ignore-stale-assistant", {
-          messages: [replacementUser, staleStoppedAssistant],
-          rawMessages: [replacementUser, staleStoppedAssistant],
-        }),
-      };
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-ignore-stale-assistant",
+        version: Number(expectedVersion || 0) + 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+      });
     });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};

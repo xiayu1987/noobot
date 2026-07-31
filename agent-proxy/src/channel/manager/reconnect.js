@@ -18,7 +18,7 @@ import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runt
 
 class ReconnectMethods {
 
-handleReconnect(socket, payload = {}) {
+async handleReconnect(socket, payload = {}) {
   const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
   const lastReceivedTurnScopeIdMap = payload?.lastReceivedTurnScopeIdMap || {};
   const currentSessionId = String(payload?.currentSessionId || "").trim();
@@ -64,6 +64,9 @@ handleReconnect(socket, payload = {}) {
   const sessionsMap = new Map();
   const expiredDialogProcessIds = [];
   const channelsBySessionId = new Map();
+  const snapshotRequests = [];
+  const reconnectTransaction = { eventBuffer: [], channelStateBaseline: [] };
+  socket.__agentProxyReconnectTransaction = reconnectTransaction;
 
   for (const channelKey of reconnectChannelKeys) {
     const channel = this.channelStore.get(channelKey);
@@ -104,7 +107,19 @@ handleReconnect(socket, payload = {}) {
         .at(0);
       const commandId = `proxy-snapshot:${channelSessionId}:${nowMs()}`;
       snapshotChannel.pendingSnapshotRequests ||= new Map();
-      snapshotChannel.pendingSnapshotRequests.set(commandId, socket);
+      const snapshotPromise = new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          snapshotChannel.pendingSnapshotRequests.delete(commandId);
+          resolve({ ok: false, reason: "snapshot_timeout" });
+        }, config.reconnectSnapshotTimeoutMs);
+        snapshotChannel.pendingSnapshotRequests.set(commandId, {
+          socket,
+          resolve: (result) => {
+            clearTimeout(timeout);
+            resolve(result);
+          },
+        });
+      });
       const forwarded = this.forwardToUpstream(snapshotChannel, {
         action: "turn.snapshot.get",
         commandType: "turn.snapshot.get",
@@ -113,7 +128,17 @@ handleReconnect(socket, payload = {}) {
         sessionId: channelSessionId,
         knownSequence: knownLifecycleSequence,
       });
-      if (!forwarded) snapshotChannel.pendingSnapshotRequests.delete(commandId);
+      if (!forwarded) {
+        const pendingRequest = snapshotChannel.pendingSnapshotRequests.get(commandId);
+        snapshotChannel.pendingSnapshotRequests.delete(commandId);
+        pendingRequest?.resolve?.({ ok: false, reason: "snapshot_forward_failed" });
+      }
+      snapshotRequests.push({
+        sessionId: channelSessionId,
+        channel: snapshotChannel,
+        commandId,
+        promise: snapshotPromise,
+      });
     }
   }
 
@@ -124,7 +149,10 @@ handleReconnect(socket, payload = {}) {
     const channelSessionId = this._extractSessionIdFromChannelKey(channelKey);
     if (!channelSessionId) continue;
 
-    this.attachSubscriber(channel, socket);
+    this.attachSubscriber(channel, socket, { sendStateSnapshot: false });
+    reconnectTransaction.channelStateBaseline.push(
+      ...this.buildChannelStateSnapshot(channel),
+    );
 
     const sessionEntry = sessionsMap.get(channelSessionId);
     const stateByDialogProcessId = new Map(
@@ -195,7 +223,15 @@ handleReconnect(socket, payload = {}) {
         CONVERSATION_STATE.USER_STOPPED,
         CONVERSATION_STATE.ERROR,
       ].includes(conversationState);
-      if (lastSeq <= 0 && (channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED || conversationIsTerminal)) {
+      const dialogHasPendingInteraction = this._findPendingInteractionsByDialogProcessId(
+        channel,
+        dpId,
+      ).length > 0;
+      if (
+        lastSeq <= 0 &&
+        !dialogHasPendingInteraction &&
+        (channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED || conversationIsTerminal)
+      ) {
         this.logSessionEvent(channel, {
           category: "transport",
           event: "agentProxy.reconnect.replay.skipped",
@@ -269,26 +305,24 @@ handleReconnect(socket, payload = {}) {
           .map((envelope) => String(envelope?.data?.requestId || "").trim())
           .filter(Boolean),
       );
-      const pendingInteractionEvents = channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED
-        ? []
-        : Array.from(channel.pendingInteractionRequests.values())
-            .filter((envelope) => {
-              const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
-              const envelopeTurnScopeId = String(envelope?.data?.turnScopeId || "").trim();
-              const requestId = String(envelope?.data?.requestId || "").trim();
-              const matchesRun =
-                !reconnectTurnScopeId ||
-                !envelopeTurnScopeId ||
-                envelopeTurnScopeId === reconnectTurnScopeId;
-              return envDpId === dpId && matchesRun && requestId && !missingRequestIds.has(requestId);
-            })
-            .map((envelope) => ({
-              ...envelope,
-              data: {
-                ...(envelope?.data || {}),
-                __agentProxyPendingInteraction: true,
-              },
-            }));
+      const pendingInteractionEvents = Array.from(channel.pendingInteractionRequests.values())
+        .filter((envelope) => {
+          const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
+          const envelopeTurnScopeId = String(envelope?.data?.turnScopeId || "").trim();
+          const requestId = String(envelope?.data?.requestId || "").trim();
+          const matchesRun =
+            !reconnectTurnScopeId ||
+            !envelopeTurnScopeId ||
+            envelopeTurnScopeId === reconnectTurnScopeId;
+          return envDpId === dpId && matchesRun && requestId && !missingRequestIds.has(requestId);
+        })
+        .map((envelope) => ({
+          ...envelope,
+          data: {
+            ...(envelope?.data || {}),
+            __agentProxyPendingInteraction: true,
+          },
+        }));
       const replayEvents = [...missingEvents, ...pendingInteractionEvents].sort((left, right) => {
         const leftSeq = Number(left?.data?.seq || left?.sequence || 0);
         const rightSeq = Number(right?.data?.seq || right?.sequence || 0);
@@ -366,6 +400,38 @@ handleReconnect(socket, payload = {}) {
   const sessions = Array.from(sessionsMap.values());
   const cacheExpired = expiredDialogProcessIds.length > 0;
 
+  const snapshotResults = snapshotRequests.length
+    ? await Promise.all(snapshotRequests.map(async (request) => ({
+        ...request,
+        result: await request.promise,
+      })))
+    : [];
+  if (socket.__agentProxyReconnectTransaction !== reconnectTransaction) return;
+  for (const { sessionId, channel, commandId, result } of snapshotResults) {
+    const sessionEntry = sessionsMap.get(sessionId);
+    if (result?.ok === true && result.snapshot) {
+      sessionEntry.turnLifecycleSnapshot = result.snapshot;
+      this.logSessionEvent(channel, {
+        category: "transport",
+        event: "agentProxy.reconnect.snapshot.resolved",
+        data: {
+          sessionId,
+          commandId,
+          snapshotSequence: Number(result.snapshot?.sequence || 0),
+          activeTurnScopeId: String(result.snapshot?.activeTurnScopeId || "").trim(),
+        },
+      });
+      continue;
+    }
+    const snapshotFailureReason = String(result?.reason || "snapshot_failed");
+    this.logSessionEvent(channel, {
+      category: "transport",
+      level: "warn",
+      event: "agentProxy.reconnect.snapshot.failed",
+      data: { sessionId, commandId, reason: snapshotFailureReason },
+    });
+  }
+
   this.sendSocketEvent(socket, {
     event: CHANNEL_EVENT.RECONNECT_DATA,
     data: {
@@ -379,6 +445,22 @@ handleReconnect(socket, payload = {}) {
       requestId,
     },
   });
+
+  for (const envelope of reconnectTransaction.channelStateBaseline) {
+    this.sendSocketEvent(socket, envelope);
+  }
+  const bufferedEvents = reconnectTransaction.eventBuffer;
+  socket.__agentProxyReconnectTransaction = null;
+  for (const bufferedEvent of bufferedEvents) {
+    const envelope = bufferedEvent?.envelope;
+    if (!envelope) continue;
+    const sendResult = this.sendSocketEvent(socket, envelope);
+    if (sendResult.result !== "sent") continue;
+    socket.__agentProxyLastSequenceByChannel ||= {};
+    socket.__agentProxyLastSequenceByChannel[bufferedEvent.channelKey] = Number(
+      bufferedEvent.sequence || 0,
+    );
+  }
 
   this.sendSocketEvent(socket, {
     event: CHANNEL_EVENT.RECONNECT_COMPLETE,

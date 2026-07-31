@@ -47,7 +47,30 @@ function baseSession(overrides = {}) {
 }
 
 test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot without old tail", async () => {
-  const { service, saved } = createService({ initialSession: baseSession() });
+  const { service, saved } = createService({ initialSession: baseSession({
+    turnLifecycle: {
+      activeTurnScopeId: "",
+      sequence: 8,
+      turns: {
+        "scope-keep": {
+          turnScopeId: "scope-keep", messageId: "source-keep", presentationMessageId: "presentation-keep",
+          state: "completed", phase: "completion", revision: 4, sequence: 4,
+        },
+        "scope-old": {
+          turnScopeId: "scope-old", messageId: "source-old", presentationMessageId: "presentation-old",
+          state: "stop_completed", phase: "stop", revision: 4, sequence: 6,
+        },
+        "scope-tail": {
+          turnScopeId: "scope-tail", messageId: "source-tail", presentationMessageId: "presentation-tail",
+          state: "stop_completed", phase: "stop", revision: 4, sequence: 8,
+        },
+      },
+      commandReceipts: [
+        { commandId: "keep-receipt", eventType: "turn.completed", turnScopeId: "scope-keep", requestHash: "keep" },
+        { commandId: "old-receipt", eventType: "turn.stop_completed", turnScopeId: "scope-old", requestHash: "old" },
+      ],
+    },
+  }) });
 
   const result = await service.replaceTurn({
     userId: "u1",
@@ -59,20 +82,17 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
     idempotencyKey: "idem-1",
   });
 
-  assert.equal(result.deletedCount, 3);
-  assert.equal(result.anchorIndex, 1);
-  assert.equal(result.turnStartIndex, 1);
-  assert.equal(result.version, 3);
-  assert.equal(result.idempotencyKey, "idem-1");
-  assert.equal(result.replaceTurnResult, undefined);
-  assert.equal(result.turnReplacement, undefined);
-  assert.deepEqual(result.turnScopeReplacement, {
+  assert.deepEqual(Object.keys(result).sort(), ["deduplicated", "session", "turnReplacement"]);
+  assert.deepEqual(result.turnReplacement, {
+    protocolVersion: 1,
+    eventType: "turn.replaced",
+    commandId: "idem-1",
+    sessionId: "s1",
+    committedVersion: 3,
     replacedTurnScopeIds: ["scope-old", "scope-tail"],
     replacementTurnScopeId: "turn-scope-new",
-    replacementTurnScopeIds: ["turn-scope-new"],
-    replacedDialogProcessIds: ["dp-old"],
-    replacementDialogProcessId: "",
-    replacementDialogProcessIds: [],
+    replacementUserMessageId: saved[0].messages[1].messageId,
+    committedAt: "2026-06-22T00:00:00.000Z",
   });
   assert.equal(saved.length, 1);
   assert.deepEqual(saved[0].messages.map((message) => message.content), ["keep", "edited"]);
@@ -86,6 +106,11 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   assert.equal(saved[0].version, 3);
   assert.equal(saved[0].revision, 3);
   assert.equal(saved[0].updatedAt, "2026-06-22T00:00:00.000Z");
+  assert.deepEqual(Object.keys(saved[0].turnLifecycle.turns), ["scope-keep"]);
+  assert.deepEqual(saved[0].turnLifecycle.commandReceipts.map((item) => item.turnScopeId), ["scope-keep"]);
+  assert.equal(saved[0].turnLifecycle.sequence, 9);
+  assert.equal(saved[0].turnLifecycle.replacedTurns["scope-old"].replacementTurnScopeId, "turn-scope-new");
+  assert.equal(saved[0].turnLifecycle.replacedTurns["scope-tail"].replacementTurnScopeId, "turn-scope-new");
 });
 
 test("SessionMessageService.replaceTurn cleans only the owning session turn statuses", async () => {
@@ -115,6 +140,7 @@ test("SessionMessageService.replaceTurn cleans only the owning session turn stat
     anchor: { turnScopeId: "scope-old" },
     newContent: "edited",
     turnScopeId: "scope-new",
+    idempotencyKey: "replace-statuses",
   });
 
   assert.deepEqual(
@@ -154,6 +180,7 @@ test("SessionMessageService.replaceTurn preserves rich attachment fields when pa
     anchor: { turnScopeId: "scope-old" },
     newContent: "edited",
     turnScopeId: "scope-new",
+    idempotencyKey: "replace-rich-attachment",
     attachments: [{ name: "report.docx", mimeType: richAttachment.mimeType, size: 123 }],
   });
 
@@ -190,6 +217,7 @@ test("SessionMessageService.replaceTurn does not merge same-name attachments wit
     anchor: { turnScopeId: "scope-old" },
     newContent: "edited",
     turnScopeId: "scope-new",
+    idempotencyKey: "replace-attachment-identity",
     attachments: [incomingAttachment],
   });
 
@@ -277,7 +305,7 @@ test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
     ] }),
   });
   await assert.rejects(
-    tsService.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { ts: "ts-assistant" }, newContent: "by ts" }),
+    tsService.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { ts: "ts-assistant" }, newContent: "by ts", turnScopeId: "scope-new", idempotencyKey: "replace-ts" }),
     (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
   );
   assert.equal(tsSaved.length, 0);
@@ -298,6 +326,8 @@ test("SessionMessageService.replaceTurn rejects dialogId compatibility anchors",
       sessionId: "s1",
       anchor: { dialogId: "dp-compat" },
       newContent: "edited compat",
+      turnScopeId: "scope-new",
+      idempotencyKey: "replace-dialog-id",
     }),
     (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
   );
@@ -308,11 +338,11 @@ test("SessionMessageService.replaceTurn rejects conflicts and missing anchors wi
   const { service, saved } = createService({ initialSession: baseSession({ version: 5, revision: 5 }) });
 
   await assert.rejects(
-    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit", expectedVersion: 4 }),
+    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit", turnScopeId: "scope-new", idempotencyKey: "replace-conflict", expectedVersion: 4 }),
     (error) => error?.statusCode === 409 && error?.currentVersion === 5,
   );
   await assert.rejects(
-    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "missing" }, newContent: "edit" }),
+    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "missing" }, newContent: "edit", turnScopeId: "scope-new", idempotencyKey: "replace-missing" }),
     (error) => error?.statusCode === 404 && /anchor not found/.test(error.message),
   );
   assert.equal(saved.length, 0);
@@ -326,12 +356,16 @@ test("SessionMessageService.replaceTurn validates required payload", async () =>
     (error) => error?.statusCode === 400 && /newContent is required/.test(error.message),
   );
   await assert.rejects(
-    service.replaceTurn({ userId: "u1", sessionId: "s1", newContent: "edit" }),
+    service.replaceTurn({ userId: "u1", sessionId: "s1", newContent: "edit", turnScopeId: "scope-new", idempotencyKey: "replace-no-anchor" }),
     (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
   );
   await assert.rejects(
-    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit" }),
+    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit", idempotencyKey: "replace-no-scope" }),
     (error) => error?.statusCode === 400 && /turnScopeId is required/.test(error.message),
+  );
+  await assert.rejects(
+    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit", turnScopeId: "scope-new" }),
+    (error) => error?.statusCode === 400 && /idempotencyKey is required/.test(error.message),
   );
   assert.equal(saved.length, 0);
 });

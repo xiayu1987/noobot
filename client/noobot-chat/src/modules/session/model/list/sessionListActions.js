@@ -44,7 +44,6 @@ export function createSessionListActions({
   async function selectSession(sessionId, options = {}) {
     const {
       force = false,
-      preserveCurrentMessages = false,
       requireFresh = false,
       shouldNavigateToLastMessage = options.navigateToLastMessage !== false,
       silent = false,
@@ -70,7 +69,6 @@ export function createSessionListActions({
         sessionItem: target,
         mainSessionDoc: Array.isArray(target.sessionDocs) ? target.sessionDocs[0] || {} : {},
         normalizedDetailMessages: Array.isArray(target.messages) ? target.messages : [],
-        preserveCurrentMessages: true,
       });
       refreshSessionConnectorsAsync(targetPrimaryId);
       if (shouldNavigateToLastMessage) navigateToLastMessage?.();
@@ -88,10 +86,6 @@ export function createSessionListActions({
       });
       if (detail) {
         applySessionDetail(detail, {
-          preserveCurrentMessages:
-            Boolean(preserveCurrentMessages) &&
-            Array.isArray(target?.messages) &&
-            target.messages.length > 0,
           navigateToLastMessage: shouldNavigateToLastMessage,
         });
       }
@@ -106,7 +100,6 @@ export function createSessionListActions({
   async function fetchSessions(preferredActiveId = "", options = {}) {
     const {
       silent = false,
-      preserveCurrentMessages = true,
       shouldNavigateToLastMessage = options.navigateToLastMessage !== false,
       forceCurrentSessionRerender = false,
     } = options;
@@ -173,16 +166,9 @@ export function createSessionListActions({
       }
       const keepActive = Boolean(prevActiveId && findSessionByAnyIdInList(sessions.value, prevActiveId));
       const nextId = keepActive ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId) : sessions.value[0].id;
-      const existingNextSession = existingSessionsById.get(String(prevActiveId || "")) || existingSessionsById.get(String(nextId || ""));
       await selectSession(nextId, {
         force: true,
         silent,
-        preserveCurrentMessages:
-          preserveCurrentMessages &&
-          !forceCurrentSessionRerender &&
-          Boolean(existingNextSession) &&
-          Array.isArray(existingNextSession?.messages) &&
-          existingNextSession.messages.length > 0,
         navigateToLastMessage: shouldNavigateToLastMessage,
         requireFresh: forceCurrentSessionRerender,
       });
@@ -224,7 +210,7 @@ export function createSessionListActions({
     if (!res.ok || !data.ok) {
       throw new Error(data.error || translate("common.renameSessionFailed"));
     }
-    await fetchSessions(targetSessionId, { preserveCurrentMessages: true });
+    await fetchSessions(targetSessionId);
     return true;
   }
 

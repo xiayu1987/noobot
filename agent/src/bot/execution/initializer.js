@@ -25,6 +25,7 @@ export class SessionExecutionInitializer {
     parentSessionId = "",
     caller = CALLER_ROLE.USER,
     eventListener = null,
+    dialogProcessId = "",
     turnScopeId = "",
     thinkingStartedAt = "",
     persistenceContext = null,
@@ -41,7 +42,7 @@ export class SessionExecutionInitializer {
       });
     }
 
-    const dialogProcessId = uuidv4();
+    const resolvedDialogProcessId = String(dialogProcessId || "").trim() || uuidv4();
     const sessionBundle = await this.session.getSessionBundle({
       userId,
       sessionId: usedSessionId,
@@ -65,7 +66,7 @@ export class SessionExecutionInitializer {
       sessionId: usedSessionId,
       parentSessionId,
       turnScopeId,
-      dialogProcessId,
+      dialogProcessId: resolvedDialogProcessId,
       thinkingStartedAt,
       persistenceContext,
     });
@@ -84,7 +85,7 @@ export class SessionExecutionInitializer {
       sessionId: usedSessionId,
       parentSessionId,
       turnScopeId,
-      upstream: { ...upstreamListener, dialogProcessId },
+      upstream: { ...upstreamListener, dialogProcessId: resolvedDialogProcessId },
     });
 
     emitEvent(runtimeEventListener, "session_starting", {
@@ -100,7 +101,7 @@ export class SessionExecutionInitializer {
 
     return {
       usedSessionId,
-      dialogProcessId,
+      dialogProcessId: resolvedDialogProcessId,
       sessionLoadState,
       userConfig,
       currentSessionModelAlias: String(sessionBundle?.session?.modelAlias || "").trim(),

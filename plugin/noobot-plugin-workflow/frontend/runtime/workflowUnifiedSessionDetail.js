@@ -28,6 +28,19 @@ const TERMINAL_EXECUTION_STATES = new Set([
   "user_stopped", "expired", "timeout", "no_conversation",
 ]);
 
+export function isTerminalExecutionProjection(execution = {}) {
+  if (!execution || typeof execution !== "object") return false;
+  if (execution.terminal === true || execution?.lifecycle?.terminal === true) return true;
+  return [
+    execution.state,
+    execution.status,
+    execution.executionState,
+    execution?.lifecycle?.state,
+    execution?.lifecycle?.status,
+    execution?.lifecycle?.executionState,
+  ].some((state) => TERMINAL_EXECUTION_STATES.has(text(state).toLowerCase()));
+}
+
 function resolveProjectionState(...values) {
   const states = values.map((value) => text(value).toLowerCase()).filter(Boolean);
   return states.find((state) => TERMINAL_EXECUTION_STATES.has(state)) || states[0] || "";
@@ -67,7 +80,10 @@ export function createRunningAssistantPlaceholderViewModel(messages = [], {
 export function mergeUnifiedSessionDetail(base = {}, incoming = {}) {
   const merged = mergeCanonicalSessionDetail(contentOnly(base), contentOnly(incoming));
   const messages = Array.isArray(merged.messages) ? merged.messages : [];
-  const rawMessages = Array.isArray(merged.rawMessages) ? merged.rawMessages : [];
+  const rawMessages = mergeCanonicalSessionDetail(
+    { sessionId: text(base.sessionId), messages: Array.isArray(base.rawMessages) ? base.rawMessages : [] },
+    { sessionId: text(incoming.sessionId), messages: Array.isArray(incoming.rawMessages) ? incoming.rawMessages : [] },
+  ).messages;
   return {
     ...contentOnly(merged),
     messages,

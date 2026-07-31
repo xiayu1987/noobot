@@ -5,11 +5,20 @@
   "version": "4.1.4",
   "capabilities": [
     "agent.workflow",
+    "agent.execution_intent",
     "service.after_session_delete",
     "service.http_routes",
-    "bot.register"
+    "bot.register",
+    "frontend.runtime_projection"
   ],
   "runtimeOptions": {
+    "agent.execution_intent": {
+      "executionKind": "workflow",
+      "executionIdPrefix": "workflow",
+      "originType": "workflow",
+      "originIdKey": "workflowRunId",
+      "stage": "planning"
+    },
     "service.after_session_delete": {
       "enabled": true,
       "mode": "on",

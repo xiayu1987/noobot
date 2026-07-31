@@ -181,7 +181,8 @@ startOrJoinChannel({ socket, payload, connectionApiKey, connectionLocale }) {
     channel?.transport?.socket?.readyState === this.WebSocket.OPEN;
   const isActiveChannelStatus =
     channel.activity.phase === CHANNEL_STATUS.RUNNING ||
-    channel.transport.phase === CHANNEL_STATUS.CONNECTING;
+    channel.transport.phase === CHANNEL_STATUS.CONNECTING ||
+    channel.pendingInteractionRequests.size > 0;
   const keepExistingRun = isActiveChannelStatus && hasReusableUpstream;
   const shouldStartNewRun = !keepExistingRun;
 

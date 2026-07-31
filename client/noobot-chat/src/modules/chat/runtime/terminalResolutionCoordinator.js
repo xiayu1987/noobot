@@ -82,10 +82,14 @@ export function createTerminalResolutionCoordinator({
   onDiscovery = () => {},
   maxRetries = 3,
   onUnresolved = () => {},
+  onTrace = () => {},
 } = {}) {
   const entries = new Map();
   let requestSequence = 0;
   let disposed = false;
+  const trace = (event, details) => {
+    try { onTrace(event, details); } catch {}
+  };
 
   const getEntry = (key) => {
     let entry = entries.get(key);
@@ -93,6 +97,7 @@ export function createTerminalResolutionCoordinator({
       entry = {
         sessionId: "",
         turnScopeId: "",
+        persistenceScope: null,
         inFlight: null,
         timer: null,
         targetVersion: {},
@@ -113,12 +118,21 @@ export function createTerminalResolutionCoordinator({
   const resolve = (sessionId, turnScopeId, options = {}) => {
     const session = clean(sessionId);
     const scope = clean(turnScopeId);
-    if (!session || !scope) return Promise.resolve({ applied: false, reason: "missing_turn_identity" });
-    if (disposed) return Promise.resolve({ applied: false, reason: "terminal_resolution_disposed" });
+    if (!session || !scope) {
+      trace("stateMachine.terminal.skipped", { sessionId: session, turnScopeId: scope, reason: "missing_turn_identity" });
+      return Promise.resolve({ applied: false, reason: "missing_turn_identity" });
+    }
+    if (disposed) {
+      trace("stateMachine.terminal.skipped", { sessionId: session, turnScopeId: scope, reason: "terminal_resolution_disposed" });
+      return Promise.resolve({ applied: false, reason: "terminal_resolution_disposed" });
+    }
     const key = keyOf(userId, session, scope);
     const entry = getEntry(key);
     entry.sessionId = session;
     entry.turnScopeId = scope;
+    if (options.persistenceScope && typeof options.persistenceScope === "object") {
+      entry.persistenceScope = options.persistenceScope;
+    }
     const requestedVersion = versionOf(options);
     onDiscovery({
       sessionId: session, turnScopeId: scope, source: options.source || "unknown",
@@ -134,7 +148,10 @@ export function createTerminalResolutionCoordinator({
       entry.cooldownResult = null;
     }
 
-    if (entry.cooldownUntil > Date.now()) return Promise.resolve(entry.cooldownResult);
+    if (entry.cooldownUntil > Date.now()) {
+      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "cooldown", reason: entry.cooldownResult?.reason || "" });
+      return Promise.resolve(entry.cooldownResult);
+    }
     if (entry.cooldownUntil) {
       entry.cooldownUntil = 0;
       entry.cooldownResult = null;
@@ -150,33 +167,59 @@ export function createTerminalResolutionCoordinator({
         entry.resolvedResult = reapplied;
         return Promise.resolve(reapplied);
       }
+      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "resolved", applied: entry.resolvedResult?.applied === true, reason: entry.resolvedResult?.reason || "" });
       return Promise.resolve(entry.resolvedResult);
     }
     const exhaustedComparison = compareVersion(requestedVersion, entry.exhaustedVersion || {});
     if (entry.exhaustedResult && exhaustedComparison !== null && exhaustedComparison <= 0) {
+      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "exhausted", reason: entry.exhaustedResult?.reason || "" });
       return Promise.resolve(entry.exhaustedResult);
     }
-    if (entry.inFlight) return entry.inFlight;
-    if (entry.timer) return entry.timer.promise;
+    if (entry.inFlight) {
+      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "in_flight" });
+      return entry.inFlight;
+    }
+    if (entry.timer) {
+      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "retry_timer" });
+      return entry.timer.promise;
+    }
 
     const retry = Number(options.retry || 0);
     const commandId = clean(options.commandId) ||
       `terminal-resolution:${Date.now().toString(36)}:${(++requestSequence).toString(36)}`;
     const generation = ++entry.generation;
 
+    trace("stateMachine.terminal.fetch.start", {
+      sessionId: session, turnScopeId: scope, source: options.source || "unknown", retry,
+      revision: Number(requestedVersion.revision || 0), sequence: Number(requestedVersion.sequence || 0),
+    });
     const request = Promise.resolve()
       .then(() => resolveTurnTerminalStateApi({
         userId: valueOf(userId),
         sessionId: session,
         turnScopeId: scope,
         commandId,
+        persistenceScope: entry.persistenceScope,
       }, { fetcher }))
       .then((response) => {
+        trace("stateMachine.terminal.fetch.result", {
+          sessionId: session, turnScopeId: scope, resolved: response?.resolved === true,
+          retryable: response?.retryable === true, reason: response?.reason || "",
+          revision: Number(response?.turn?.revision || response?.revision || 0),
+          sequence: Number(response?.turn?.sequence || response?.sequence || 0),
+          terminalState: response?.turn?.state || "",
+        });
         if (response?.resolved === true) {
           const result = applyTurnTerminalResolution?.(response) || {
             applied: false,
             reason: "resolution_apply_unavailable",
           };
+          trace("stateMachine.terminal.apply", {
+            sessionId: session, turnScopeId: scope, applied: result?.applied === true,
+            retryable: result?.retryable === true, reason: result?.reason || "",
+            state: result?.turn?.displayState || result?.turn?.state || "",
+            terminal: result?.turn?.terminal || null,
+          });
           if (generation === entry.generation) {
             entry.resolvedVersion = versionOf(response);
             entry.resolvedResult = result;
@@ -205,6 +248,7 @@ export function createTerminalResolutionCoordinator({
         onUnresolved({ sessionId: session, turnScopeId: scope, response, retry });
         if (response?.retryable === true && retry < maxRetries && !disposed) {
           const delay = Math.max(0, Number(response.retryAfterMs || 250));
+          trace("stateMachine.terminal.retry", { sessionId: session, turnScopeId: scope, retry: retry + 1, delayMs: delay });
           let timerId;
           const retryPromise = new Promise((resolveRetry) => {
             timerId = setTimeout(() => {
@@ -238,6 +282,10 @@ export function createTerminalResolutionCoordinator({
           retryAfterMs,
           error,
         };
+        trace("stateMachine.terminal.fetch.failed", {
+          sessionId: session, turnScopeId: scope, status,
+          reason: result.reason, retryAfterMs,
+        });
         if (generation === entry.generation) {
           entry.cooldownUntil = Date.now() + (status === 429 ? retryAfterMs : 1000);
           entry.cooldownResult = result;
@@ -257,6 +305,7 @@ export function createTerminalResolutionCoordinator({
       commandId: event.commandId || "",
       source: "realtime_notification",
       ...versionOf(event.raw || event),
+      persistenceScope: event.persistenceScope || event.raw?.persistenceScope || null,
     });
   };
 

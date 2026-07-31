@@ -30,6 +30,7 @@
   "dependencies": {
     "@noobot/authoritative-state": "file:../../authoritative-state",
     "@noobot/client-shared": "file:../shared",
+    "@noobot/plugin-runtime": "file:../../plugin-runtime",
     "@noobot/shared": "file:../../shared",
     "@element-plus/icons-vue": "^2.3.2",
     "element-plus": "^2.14.3",

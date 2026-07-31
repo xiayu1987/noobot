@@ -92,7 +92,6 @@ export function buildChatPayload({
       ...(normalizedResumeDialogProcessId ? { resumeDialogProcessId: normalizedResumeDialogProcessId } : {}),
       ...(normalizedResumeTurnScopeId ? {
         resumeTurnScopeId: normalizedResumeTurnScopeId,
-        stoppedTurnScopeId: normalizedResumeTurnScopeId,
       } : {}),
       ...(reuseExistingUserTurn ? {
         reuseExistingUserTurn: true,

@@ -5,7 +5,7 @@
  */
 import { isSameTurnStatus } from "../../entities/turn-status-entity.js";
 import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
-import { normalizeAnchorValue, resolveTurnScopeId, uniqueValues } from "./anchor-utils.js";
+import { normalizeAnchorValue } from "./anchor-utils.js";
 
 export function resolveTurnTimingKey(item = {}) {
   return normalizeAnchorValue(item?.turnScopeId) || resolveMessageDialogProcessId(item);
@@ -45,26 +45,4 @@ export function pruneSessionTurnStatuses(session = {}) {
   const messages = Array.isArray(session.messages) ? session.messages : [];
   session.turnStatuses = (Array.isArray(session.turnStatuses) ? session.turnStatuses : [])
     .filter((status) => messages.some((message) => isSameTurnStatus(status, message)));
-}
-
-export function buildTurnScopeReplacement({
-  replacedMessages = [],
-  replacementMessages = [],
-  replacementUserMessage = {},
-} = {}) {
-  const pickTurnScopeIds = (messages = []) => uniqueValues(messages.map(resolveTurnScopeId));
-  const pickDialogProcessIds = (messages = []) => uniqueValues(messages.map(resolveMessageDialogProcessId));
-  const replacedDialogProcessIds = pickDialogProcessIds(replacedMessages);
-  const replacementDialogProcessIds = pickDialogProcessIds(replacementMessages)
-    .filter((dialogProcessId) => !replacedDialogProcessIds.includes(dialogProcessId));
-  return {
-    replacedTurnScopeIds: pickTurnScopeIds(replacedMessages),
-    replacementTurnScopeId: resolveTurnScopeId(replacementUserMessage) ||
-      pickTurnScopeIds(replacementMessages)[0] ||
-      "",
-    replacementTurnScopeIds: pickTurnScopeIds(replacementMessages),
-    replacedDialogProcessIds,
-    replacementDialogProcessId: replacementDialogProcessIds[0] || "",
-    replacementDialogProcessIds,
-  };
 }

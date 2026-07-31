@@ -16,14 +16,21 @@ import { createDoneTurnFinalizer } from "./sendDoneFinalizer.js";
 import { createSendStreamEventHandler } from "./sendStreamEventRouter.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
-import { selectSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import {
+  resolveSessionTurnRuntime,
+  selectSessionTurnRuntime,
+} from "../run-state-machine/turnRuntimeRegistry.js";
 import {
   logResendDebug,
   summarizeDebugAttachments,
   summarizeDebugMessage,
   summarizeDebugMessages,
 } from "../../../debug/loggers/resendDebugLogger.js";
-import { logStateMachineDebug, summarizeStateMachineMessage } from "../../../debug/loggers/stateMachineLogger.js";
+import {
+  logStateMachineDebug,
+  summarizeStateMachineMessage,
+  summarizeStateMachineTurn,
+} from "../../../debug/loggers/stateMachineLogger.js";
 import {
   createAssistantMessageId,
   createUserMessageId,
@@ -109,7 +116,7 @@ export function createChatEngineSender({
     const requestedUserMessageId = normalizeTrimmedString(options?.userMessageId);
     if (reuseExistingUserTurn) {
       const existingUserMessage = (activeSession.value?.messages || []).find((message) => (
-        normalizeTrimmedString(message?.messageId || message?.id) === requestedUserMessageId
+        normalizeTrimmedString(message?.messageId) === requestedUserMessageId
       ));
       if (!requestedUserMessageId || !existingUserMessage) return false;
     }
@@ -171,6 +178,18 @@ export function createChatEngineSender({
       userAttachments: explicitUserAttachments,
       turnStartedAtMs,
     });
+    logStateMachineDebug("stateMachine.send.presentationCreated", () => ({
+      sessionId,
+      turnScopeId,
+      reuseExistingUserTurn,
+      requestedUserMessageId: userMessageId,
+      requestedPresentationMessageId: assistantMessageId,
+      userMessage: summarizeStateMachineMessage(userMessage),
+      assistantMessage: summarizeStateMachineMessage(botMsg),
+      messages: (Array.isArray(activeSession?.value?.messages)
+        ? activeSession.value.messages
+        : []).map(summarizeStateMachineMessage),
+    }));
     logResendDebug("send.prepare.after", () => ({
       sessionId,
       turnScopeId,
@@ -225,14 +244,14 @@ export function createChatEngineSender({
         data: {
           requestedTextStreaming,
           attachmentCount: attachments.length,
-          reuseExistingUserTurn: payload?.reuseExistingUserTurn === true,
+          reuseExistingUserTurn: payload?.config?.reuseExistingUserTurn === true,
         },
       });
       logResendDebug("send.stream.before", () => ({
         sessionId,
         turnScopeId,
         payloadTurnScopeId: payload?.turnScopeId,
-        reuseExistingUserTurn: payload?.reuseExistingUserTurn,
+        reuseExistingUserTurn: payload?.config?.reuseExistingUserTurn === true,
         explicitUserAttachments: summarizeDebugAttachments(explicitUserAttachments),
         explicitTransportAttachments: summarizeDebugAttachments(explicitTransportAttachments),
         filesToSend: summarizeDebugAttachments(filesToSend),
@@ -294,7 +313,7 @@ export function createChatEngineSender({
             reuseRecentlyLoaded: false,
           }).catch(() => null);
           if (detail) {
-            applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
+            applySessionDetail(detail, { scrollToBottom: false });
           }
         }
         throw streamError;
@@ -405,18 +424,16 @@ export function createChatEngineSender({
         finalizePendingResendOperation?.({ finalOnly: true });
         return false;
       }
-      if (!(options?.allowDuringResend === true && options?.reuseExistingUserTurn === true)) {
-        applySendErrorState({
-          error,
-          errorEventData: lastStreamErrorEventData || error?.data || null,
-          activeSession,
-          botMessage: botMsg,
-          applyConversationState,
-          clearPendingInteraction,
-          notify,
-          translate,
-        });
-      }
+      applySendErrorState({
+        error,
+        errorEventData: lastStreamErrorEventData || error?.data || null,
+        activeSession,
+        botMessage: botMsg,
+        applyConversationState,
+        clearPendingInteraction,
+        notify,
+        translate,
+      });
       logResendDebug("send.catch.error", () => ({
         turnScopeId,
         error: String(error?.message || error || ""),
@@ -464,6 +481,20 @@ export function createChatEngineSender({
       finalizeSendCleanup({
         pendingInteractionRequest,
         interactionSubmitting,
+      });
+      logStateMachineDebug("stateMachine.send.cleanup", () => {
+        const messages = Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : [];
+        const runtime = runtimeView();
+        const turn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
+        return {
+          sessionId,
+          turnScopeId,
+          runtime: summarizeStateMachineTurn(turn, runtime),
+          pendingMessageCount: messages.filter((message) => message?.pending === true).length,
+          messageCount: messages.length,
+          interactionPending: Boolean(pendingInteractionRequest?.value),
+          interactionSubmitting: interactionSubmitting?.value === true,
+        };
       });
     }
   };

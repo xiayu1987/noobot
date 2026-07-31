@@ -15,10 +15,6 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
 } from "../../../chat/model/messageIdentity.js";
-import {
-  buildWorkflowMessageSignature,
-  mergePreservedDetailMessages,
-} from "./detailMessages.js";
 import { buildSessionDetailProjection } from "./sessionDetailProjection.js";
 import { mergeCanonicalSessionDetail } from "../../../chat/model/sessionDetailMerge.js";
 import { promoteSessionTurnUiStates } from "../../../chat/runtime/engine/turnUiStore.js";
@@ -38,22 +34,15 @@ import {
   confirmTurnRuntimeDeletion,
   isTurnRuntimeDeleted,
 } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import {
-  SESSION_DETAIL_APPLY_MODE,
-  hasInFlightAssistantMissingFromDetail,
-  isAuthoritativeSessionDetailApplyMode,
-  normalizeSessionDetailApplyMode,
-} from "../../../chat/runtime/engine/messageStateGuards.js";
+import { normalizeSessionDetailApplyMode } from "../../../chat/runtime/engine/messageStateGuards.js";
 
 export function createSessionDetailApplicator({
   sessions,
   activeSessionId,
   turnRuntimeRegistry,
   makeViewMessage,
-  foldMessagesForView,
   sessionTitleFromMessages,
   navigateToLastMessage,
-  isSameSessionIdentity,
   onSessionDetailApplied = null,
 } = {}) {
   function pruneMessagesFromConfirmedDeletes(messages = [], sessionId = "") {
@@ -80,17 +69,8 @@ export function createSessionDetailApplicator({
     const sessionItem = findSessionByAnyIdInList(sessions.value, detail.sessionId);
     if (!sessionItem) return;
     const applyMode = normalizeSessionDetailApplyMode(options.mode);
-    const requestedPreserveCurrentMessages =
-      applyMode === SESSION_DETAIL_APPLY_MODE.MERGE_PRESERVE_IN_FLIGHT ||
-      Boolean(options.preserveCurrentMessages);
-    const shouldPreserveMissingInFlight = ![
-      SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-      SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
-      SESSION_DETAIL_APPLY_MODE.REPLACE,
-    ].includes(applyMode);
     logResendDebug("detail.apply.begin", () => ({
       sessionId: detail.sessionId,
-      requestedPreserveCurrentMessages,
       applyMode,
       currentMessages: summarizeDebugMessages(sessionItem.messages),
     }));
@@ -124,7 +104,6 @@ export function createSessionDetailApplicator({
     logWorkflowDiagnostics("frontend.workflowDetail.applySourceSelected", () => ({
       sessionId: detailSessionId,
       applyMode,
-      preserveCurrentMessages: requestedPreserveCurrentMessages,
       selectedSessionDocId: String(mainSessionDoc?.sessionId || ""),
       sessionDocCount: sessionDocs.length,
       currentCandidates: summarizeWorkflowMessages(sessionItem.messages),
@@ -133,16 +112,13 @@ export function createSessionDetailApplicator({
     const serverSessionTitle = String(
       mainSessionDoc.title || mainSessionDoc.customTitle || detail.title || "",
     ).trim();
-    const isSummaryDetail = detail?.summary === true;
+    const hasMessageSnapshot = Array.isArray(mainSessionDoc.messages);
     sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
     sessionItem.currentTaskStatus = "idle";
     applyLatestSessionVersion(sessionItem, mainSessionDoc);
     sessionItem.createdAt = mainSessionDoc.createdAt || sessionItem.createdAt;
     sessionItem.updatedAt = mainSessionDoc.updatedAt || sessionItem.updatedAt;
 
-    const currentRenderedMessages = Array.isArray(sessionItem.messages)
-      ? sessionItem.messages
-      : [];
     const canonicalDetail = mergeCanonicalSessionDetail(
       {
         sessionId: detailSessionId,
@@ -157,13 +133,11 @@ export function createSessionDetailApplicator({
         turnTimings: mainSessionDoc.turnTimings,
       },
       {
-        replaceFields: isAuthoritativeSessionDetailApplyMode(applyMode)
-          ? [
-            ...(Array.isArray(mainSessionDoc.messages) ? ["messages"] : []),
-            ...(Array.isArray(mainSessionDoc.turnStatuses) || Array.isArray(detail?.turnStatuses) ? ["turnStatuses"] : []),
-            ...(Array.isArray(mainSessionDoc.turnTimings) || Array.isArray(detail?.turnTimings) ? ["turnTimings"] : []),
-          ]
-          : [],
+        replaceFields: [
+          ...(Array.isArray(mainSessionDoc.messages) ? ["messages"] : []),
+          ...(Array.isArray(mainSessionDoc.turnStatuses) || Array.isArray(detail?.turnStatuses) ? ["turnStatuses"] : []),
+          ...(Array.isArray(mainSessionDoc.turnTimings) || Array.isArray(detail?.turnTimings) ? ["turnTimings"] : []),
+        ],
       },
     );
     const detailMessages = pruneMessagesFromConfirmedDeletes(canonicalDetail.messages, detailSessionId);
@@ -182,14 +156,14 @@ export function createSessionDetailApplicator({
     canonicalDetail.turnStatuses = turnStatuses;
     sessionItem.turnStatuses = turnStatuses.map((item) => ({ ...item }));
     sessionItem.turnTimings = turnTimings.map((item) => ({ ...item }));
-    sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
+    if (hasMessageSnapshot) {
+      sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
+    }
     const currentTurnTimings = sessionItem.turnTimingsByTurnScopeId || {};
     const detailProjection = buildSessionDetailProjection({
       sessionDetail: canonicalDetail,
       sessionDocs,
       makeViewMessage,
-      foldMessagesForView,
-      isSummaryDetail,
       currentTimingsByTurnScopeId: currentTurnTimings,
       onTimingHydrated: ({ item, matchingMessage, turnScopeId, current, timing }) => {
           const timingDialogProcessId = getMessageDialogProcessId(item);
@@ -211,45 +185,25 @@ export function createSessionDetailApplicator({
       },
     });
     sessionItem.turnTimingsByTurnScopeId = detailProjection.turnTimingsByTurnScopeId;
-    const detailTurnScopeIds = new Set(
-      detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
-    );
-    const hasCurrentInFlightTurnMissingFromDetail = shouldPreserveMissingInFlight &&
-      hasInFlightAssistantMissingFromDetail({
-        currentMessages: currentRenderedMessages,
-        detailMessages,
-        registry: turnRuntimeRegistry?.value,
-        sessionId: detailSessionId,
-      });
-    const preserveCurrentMessages =
-      requestedPreserveCurrentMessages || hasCurrentInFlightTurnMissingFromDetail;
     logResendDebug("detail.apply.mode", () => ({
       sessionId: detail.sessionId,
-      requestedPreserveCurrentMessages,
       applyMode,
-      shouldPreserveMissingInFlight,
-      hasCurrentInFlightTurnMissingFromDetail,
-      preserveCurrentMessages,
+      authority: "session_detail",
+      hasMessageSnapshot,
       detailMessageCount: detailMessages.length,
-      detailTurnScopeIds: Array.from(detailTurnScopeIds),
-      currentMessages: summarizeDebugMessages(currentRenderedMessages),
+      detailTurnScopeIds: [...new Set(
+        detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
+      )],
     }));
-    if (!preserveCurrentMessages) {
-      revokeMessagePreviewUrls(sessionItem.messages || []);
-    }
-    const shouldKeepCurrentMessagesForEmptyDetail =
-      shouldPreserveMissingInFlight &&
-      !preserveCurrentMessages &&
-      currentRenderedMessages.length > 0 &&
-      detailMessages.length === 0 &&
-      isSameSessionIdentity(detailSessionId, activeSessionId.value);
+    if (hasMessageSnapshot) revokeMessagePreviewUrls(sessionItem.messages || []);
 
-    const normalizedDetailMessages = detailProjection.messages;
+    const normalizedDetailMessages = hasMessageSnapshot
+      ? detailProjection.messages
+      : sessionItem.messages;
     logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailSnapshotReceived", () => ({
       sessionId: detail.sessionId,
       applyMode,
-      summary: isSummaryDetail,
-      preserveCurrentMessages,
+      detailMode: String(detail?.detailMode || (detail?.summary === true ? "summary" : "")),
       rawMessageCount: Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages.length : 0,
       normalizedMessageCount: normalizedDetailMessages.length,
       assistantMessages: normalizedDetailMessages
@@ -267,49 +221,17 @@ export function createSessionDetailApplicator({
         })),
     }));
 
-    if (!preserveCurrentMessages && !shouldKeepCurrentMessagesForEmptyDetail) {
+    if (hasMessageSnapshot) {
       logResendDebug("detail.apply.replaceAll", () => ({
         sessionId: detail.sessionId,
         detailMessages: summarizeDebugMessages(detailMessages),
       }));
       sessionItem.messages = normalizedDetailMessages;
-    } else if (preserveCurrentMessages) {
-      logResendDebug("detail.apply.preserve", () => ({
-        sessionId: detail.sessionId,
-        detailMessages: summarizeDebugMessages(detailMessages),
-        currentMessages: summarizeDebugMessages(sessionItem.messages),
-      }));
-      const existingMessages = Array.isArray(sessionItem.messages) ? sessionItem.messages : [];
-      mergePreservedDetailMessages(existingMessages, normalizedDetailMessages, {
-        registry: turnRuntimeRegistry?.value,
-        sessionId: detailSessionId,
-      });
-      const workflowMessages = normalizedDetailMessages.filter(
-        (messageItem) =>
-          getMessageRole(messageItem) === RoleEnum.ASSISTANT &&
-          messageItem?.workflowMessage === true,
-      );
-      if (workflowMessages.length) {
-        const existingWorkflowSignatures = new Set(
-          existingMessages
-            .filter((messageItem) => messageItem?.workflowMessage === true)
-            .map((messageItem) => buildWorkflowMessageSignature(messageItem)),
-        );
-        for (const workflowMessageItem of workflowMessages) {
-          const signature = buildWorkflowMessageSignature(workflowMessageItem);
-          if (!signature || existingWorkflowSignatures.has(signature)) continue;
-          existingMessages.push(workflowMessageItem);
-          existingWorkflowSignatures.add(signature);
-        }
-      }
-    } else {
-      sessionItem.messages = currentRenderedMessages;
     }
 
     logThinkingReplayDebug("frontend.thinkingReplay.sessionDetailApplied", () => ({
       sessionId: detail.sessionId,
       applyMode,
-      preserveCurrentMessages,
       renderedMessageCount: sessionItem.messages.length,
       assistantMessages: sessionItem.messages
         .filter((item) => getMessageRole(item) === RoleEnum.ASSISTANT)
@@ -320,22 +242,17 @@ export function createSessionDetailApplicator({
       sessionItem,
       mainSessionDoc,
       normalizedDetailMessages,
-      preserveCurrentMessages,
     });
     sessionItem.messageCount = sessionItem.messages.length;
     sessionItem.lastMessage = findVisibleLastMessage(sessionItem.messages);
 
-    if (!preserveCurrentMessages) {
-      sessionItem.title = serverSessionTitle || sessionTitleFromMessages(
-        sessionItem.messages,
-        sessionItem.title || detail.sessionId.slice(0, 8),
-      );
-      const shouldNavigateToLastMessage =
-        options.navigateToLastMessage !== false && options.scrollToBottom !== false;
-      if (shouldNavigateToLastMessage) navigateToLastMessage?.();
-    } else if (serverSessionTitle) {
-      sessionItem.title = serverSessionTitle;
-    }
+    sessionItem.title = serverSessionTitle || sessionTitleFromMessages(
+      sessionItem.messages,
+      sessionItem.title || detail.sessionId.slice(0, 8),
+    );
+    const shouldNavigateToLastMessage =
+      options.navigateToLastMessage !== false && options.scrollToBottom !== false;
+    if (shouldNavigateToLastMessage) navigateToLastMessage?.();
   }
 
   return { applySessionDetail };

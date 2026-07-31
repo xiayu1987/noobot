@@ -99,6 +99,7 @@ ensureChannel(channelKey = "", startPayload = {}) {
     eventJournal,
     lifecycleWindowsBySessionId: new Map(),
     pendingSnapshotRequests: this.commandRegistry.createMapFacade(normalizedChannelKey, "turn_snapshot"),
+    pendingExecutionRequests: this.commandRegistry.createMapFacade(normalizedChannelKey, "execution_query"),
     pendingInteractionRequests: new Map(),
     upstreamClosed: false,
     ownerApiKey: "",
@@ -393,12 +394,14 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
     channel.retention.terminalStatus = "";
     channel.retention.cleanupAfterMs = 0;
   } else if ([CONVERSATION_STATE.COMPLETED, CONVERSATION_STATE.USER_STOPPED, CONVERSATION_STATE.ERROR].includes(nextState)) {
-    channel.activity.phase = CHANNEL_STATUS.IDLE;
-    channel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
-    channel.retention.terminalStatus = nextState === CONVERSATION_STATE.COMPLETED
-      ? CHANNEL_STATUS.DONE
-      : nextState;
-    channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
+    const channelSessionId = this._extractSessionIdFromChannelKey(channel.key);
+    const eventOwnsChannel = !sessionId || sessionId === channelSessionId;
+    if (eventOwnsChannel) {
+      this.markChannelTerminal(
+        channel,
+        nextState === CONVERSATION_STATE.COMPLETED ? CHANNEL_STATUS.DONE : nextState,
+      );
+    }
   }
   this.updateConversationState(channel, {
     dialogProcessId,
@@ -408,6 +411,7 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
     seq,
     createdAtMs,
     sessionId,
+    requestId: String(eventData?.requestId || "").trim(),
   });
 }
 

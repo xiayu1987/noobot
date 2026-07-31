@@ -112,6 +112,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     runConfig: {
       locale: "zh-CN",
       streaming: false,
+      turnScopeId: "root-turn-1",
       presentationMessageId: "assistant-presentation-1",
     },
     agentContext: {
@@ -169,6 +170,11 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(savedArtifactText.includes("[Harness-Review]"), false);
   assert.equal(planningPersistCalls.length, 1);
   assert.equal(eventLogCalls.length > 0, true);
+  const planningRuntimeEvent = eventLogCalls.find(
+    (call = {}) => call?.event?.event === "workflow_planning_message_prepared",
+  )?.event;
+  assert.equal(planningRuntimeEvent?.turnScopeId, "root-turn-1");
+  assert.equal(planningRuntimeEvent?.presentationMessageId, "assistant-presentation-1");
   assert.equal(planningPersistCalls[0]?.relativeDir, "runtime/workflow/planning/s1/d1");
   assert.equal(planningPersistCalls[0]?.fileName, "planning.json");
 
@@ -184,7 +190,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   );
   assert.equal(String(subCall?.message || "").trim(), "请输出：节点A执行完成");
   assert.equal(subCall?.runConfigPatch?.streaming, false);
-  assert.match(String(subCall?.runConfigPatch?.turnScopeId || ""), /^workflow-node:wf_run_/);
+  assert.match(String(subCall?.runConfigPatch?.turnScopeId || ""), /^workflow-node:root-turn-1_/);
   assert.equal(subCall?.strategy?.turnScopeId, subCall?.runConfigPatch?.turnScopeId);
   assert.equal(subCall?.metadata?.turnScopeId, subCall?.runConfigPatch?.turnScopeId);
   assert.equal(typeof subCall?.eventListener?.onEvent, "function");

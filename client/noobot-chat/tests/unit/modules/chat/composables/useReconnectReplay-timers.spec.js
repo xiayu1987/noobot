@@ -31,7 +31,6 @@ describe("useReconnectReplay", () => {
 
     expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", {
       silent: true,
-      preserveCurrentMessages: true,
     });
     expect(api.__test.replayCache["s-2"]).toBeUndefined();
   });
@@ -51,7 +50,6 @@ describe("useReconnectReplay", () => {
 
     expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", {
       silent: true,
-      preserveCurrentMessages: true,
     });
   });
 

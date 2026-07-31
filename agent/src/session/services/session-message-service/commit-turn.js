@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
-import { isSameTurnStatus } from "../../entities/turn-status-entity.js";
 import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { dedupeAttachments, assertCanonicalAttachments } from "./attachment-helpers.js";
 import { resolveSessionVersion } from "./anchor-utils.js";
@@ -58,13 +57,29 @@ export async function commitTurn({
       const resumeDialog = String(resumeDialogProcessId || "").trim();
       const resumeScope = String(resumeTurnScopeId || "").trim();
       if (normalizedAction === "continue") {
-        const sourceMessage = messages.find((item) => String(item?.turnScopeId || "") === resumeScope && resolveMessageDialogProcessId(item) === resumeDialog);
-        const stopped = (Array.isArray(session.turnStatuses) ? session.turnStatuses : []).find((item) => isSameTurnStatus(item, { turnScopeId: resumeScope, dialogProcessId: resumeDialog }) && item?.status === "user_stopped");
-        if (!resumeDialog || !resumeScope || !sourceMessage || !stopped) {
-          const error = new Error("continue source is not a stopped turn in this session"); error.statusCode = 409; error.errorCode = "INVALID_CONTINUE_SOURCE"; throw error;
+        const lifecycle = session.turnLifecycle && typeof session.turnLifecycle === "object"
+          ? session.turnLifecycle
+          : {};
+        const sourceTurn = lifecycle.turns?.[resumeScope];
+        const continuingTurn = lifecycle.turns?.[normalizedTurnScopeId];
+        const continuationSource = continuingTurn?.continuationSource;
+        const authorityMatches = Boolean(
+          resumeDialog &&
+          resumeScope &&
+          sourceTurn?.state === "stop_completed" &&
+          sourceTurn?.executionState === "user_stopped" &&
+          sourceTurn?.dialogProcessId === resumeDialog &&
+          sourceTurn?.continuedByTurnScopeId === normalizedTurnScopeId &&
+          continuingTurn?.action === "continue" &&
+          continuationSource?.turnScopeId === resumeScope &&
+          continuationSource?.dialogProcessId === resumeDialog
+        );
+        if (!authorityMatches) {
+          const error = new Error("continue command does not match authoritative Turn relation");
+          error.statusCode = 409;
+          error.errorCode = "CONTINUE_AUTHORITY_MISMATCH";
+          throw error;
         }
-        const consumed = messages.find((item) => item?.turnCommit?.action === "continue" && item?.turnCommit?.resumeTurnScopeId === resumeScope && item?.turnCommit?.resumeDialogProcessId === resumeDialog);
-        if (consumed) { const error = new Error("stopped turn has already been continued"); error.statusCode = 409; error.errorCode = "CONTINUE_SOURCE_CONSUMED"; throw error; }
       }
       const nowValue = this.now();
       assertCanonicalAttachments(attachments, sessionId);

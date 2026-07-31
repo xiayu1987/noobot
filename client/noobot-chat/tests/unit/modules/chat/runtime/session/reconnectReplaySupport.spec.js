@@ -90,7 +90,6 @@ describe("reconnectReplay support modules", () => {
     expect(replayCache).toEqual({});
     expect(fetchSessions).toHaveBeenCalledWith("s-1", {
       silent: true,
-      preserveCurrentMessages: true,
     });
     vi.useRealTimers();
   });
@@ -112,7 +111,7 @@ describe("reconnectReplay support modules", () => {
       reuseRecentlyLoaded: false,
       allowLoadedSnapshot: false,
     });
-    expect(applySessionDetail).toHaveBeenCalledWith(detail, { preserveCurrentMessages: true });
+    expect(applySessionDetail).toHaveBeenCalledWith(detail);
   });
 
   it.each([

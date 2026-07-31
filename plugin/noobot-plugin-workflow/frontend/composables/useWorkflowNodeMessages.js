@@ -125,7 +125,10 @@ export function useWorkflowNodeMessages({
   function summarizeMessage(messageItem = {}) {
     return {
       id: String(messageItem?.id || messageItem?.messageId || "").trim(),
+      messageUid: String(messageItem?.messageUid || "").trim(),
+      presentationMessageId: String(messageItem?.presentationMessageId || "").trim(),
       role: String(messageItem?.role || "").trim(),
+      type: String(messageItem?.type || "").trim(),
       sessionId: String(messageItem?.sessionId || "").trim(),
       dialogProcessId: String(messageItem?.dialogProcessId || "").trim(),
       turnScopeId: String(messageItem?.turnScopeId || "").trim(),
@@ -134,6 +137,7 @@ export function useWorkflowNodeMessages({
       rawEventCount: Array.isArray(messageItem?.rawEvents) ? messageItem.rawEvents.length : 0,
       activityTimelineCount: Array.isArray(messageItem?.activityTimeline) ? messageItem.activityTimeline.length : 0,
       toolTimelineCount: Array.isArray(messageItem?.toolTimeline) ? messageItem.toolTimeline.length : 0,
+      toolCallCount: Array.isArray(messageItem?.tool_calls) ? messageItem.tool_calls.length : 0,
     };
   }
 
@@ -203,6 +207,8 @@ export function useWorkflowNodeMessages({
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,
     displayNodeMessages,
+    turnTimingsByTurnScopeId: computed(() => selectedNodeProjection.value.turnTimingsByTurnScopeId || {}),
+    turnStatusesByTurnScopeId: computed(() => selectedNodeProjection.value.turnStatusesByTurnScopeId || {}),
     nodeSessionAllMessages,
     selectedRuntimeBoxes,
   };

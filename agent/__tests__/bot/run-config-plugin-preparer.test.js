@@ -395,6 +395,58 @@ test("RunConfigPluginPreparer resolves bot plugin options via generic runtime se
   assert.equal(options.semanticMode, "inline");
 });
 
+test("RunConfigPluginPreparer resolves declared workflow execution identity before dispatch", () => {
+  const loadedDynamicPlugins = {
+    registry: new Map([["workflow", {
+      manifest: {
+        id: "workflow",
+        pluginKey: "workflow",
+        capabilities: [PLUGIN_CAPABILITY.BOT_REGISTER, "agent.execution_intent"],
+        runtimeOptions: {
+          "agent.execution_intent": {
+            executionKind: "workflow",
+            executionIdPrefix: "workflow",
+            originType: "workflow",
+            originIdKey: "workflowRunId",
+            stage: "planning",
+          },
+        },
+      },
+      registerNoobotPlugin() {},
+    }]]),
+  };
+  const preparer = createPreparer({
+    loadedDynamicPlugins,
+    pluginRuntime: {
+      botPluginKey: "workflow",
+      botPluginSelectors: new Set(["workflow"]),
+    },
+  });
+  const intent = preparer.resolveExecutionIntent({
+    runConfig: { selectedPlugins: ["workflow"] },
+    turnScopeId: "client-turn-1",
+  });
+  assert.deepEqual(intent, {
+    executionId: "workflow:client-turn-1",
+    executionKind: "workflow",
+    parentExecutionId: "",
+    rootExecutionId: "workflow:client-turn-1",
+    origin: { type: "workflow", workflowRunId: "workflow:client-turn-1" },
+    stage: "planning",
+  });
+  assert.deepEqual(preparer.resolveExecutionIntent({
+    runConfig: {},
+    turnScopeId: "client-turn-2",
+  }), {
+    executionId: "agent:client-turn-2",
+    executionKind: "agent",
+    parentExecutionId: "",
+    rootExecutionId: "agent:client-turn-2",
+    origin: {},
+    stage: "",
+  });
+});
+
 test("RunConfigPluginPreparer applies bot plugin model config by generic plugin key", () => {
   const preparer = createPreparer({
     pluginRuntime: {

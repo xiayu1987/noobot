@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { canonicalizeTurnScopeId } from "./turn-scope-identity.mjs";
 
 export const EXECUTION_KIND = Object.freeze({
   AGENT: "agent",
@@ -23,7 +24,8 @@ export const EXECUTION_QUERY_COMMAND = Object.freeze({
 const clean = (value) => String(value || "").trim();
 
 export function deriveAgentExecutionId({ executionId = "", turnScopeId = "" } = {}) {
-  return clean(executionId) || (clean(turnScopeId) ? `agent:${clean(turnScopeId)}` : "");
+  const canonicalTurnScopeId = canonicalizeTurnScopeId(turnScopeId);
+  return clean(executionId) || (canonicalTurnScopeId ? `agent:${canonicalTurnScopeId}` : "");
 }
 
 export function normalizeExecutionIdentity(source = {}) {
@@ -39,7 +41,7 @@ export function normalizeExecutionIdentity(source = {}) {
     rootExecutionId: clean(source.rootExecutionId) || (parentExecutionId ? clean(source.rootExecutionId) : executionId),
     sessionId: clean(source.sessionId),
     parentSessionId: clean(source.parentSessionId),
-    turnScopeId: clean(source.turnScopeId),
+    turnScopeId: canonicalizeTurnScopeId(source.turnScopeId),
     dialogProcessId: clean(source.dialogProcessId),
     stage: clean(source.stage),
     origin: source.origin && typeof source.origin === "object" ? { ...source.origin } : {},

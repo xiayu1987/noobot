@@ -9,6 +9,7 @@ import { getMessageDialogProcessId, getMessageRole } from "../../model/messageId
 import { getMessageAttachments } from "../../model/messageModel.js";
 import { countCompletedToolAttachments } from "./toolTimeline.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
+import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
@@ -50,7 +51,6 @@ export async function refreshFinalSessionDetail({
   applyAssistantFailureState,
   applyRunStateEvent,
   refreshSessionConnectorsAsync,
-  preserveCurrentMessages,
   logSessionEvent,
 } = {}) {
   const doneSessionId = resolveFinalizeSessionId({
@@ -146,12 +146,6 @@ export async function refreshFinalSessionDetail({
       detailMessageCount: detailMessages.length,
       sessionDocsCount: sessionDocs.length,
     }));
-    const shouldPreserveCurrentMessages =
-      typeof preserveCurrentMessages === "boolean"
-        ? preserveCurrentMessages
-        : String(doneSessionId || "") === String(activeSession?.value?.backendSessionId || "") &&
-          String(activeSession?.value?.id || "") === String(activeSessionId?.value || "");
-
     const currentSession = activeSession?.value;
     const currentMessages = Array.isArray(currentSession?.messages)
       ? currentSession.messages
@@ -173,18 +167,23 @@ export async function refreshFinalSessionDetail({
 
     logStateMachineDebug("detailApply.apply.start", () => ({
       ...completionEventScope,
-      preserveCurrentMessages: shouldPreserveCurrentMessages,
+      applyMode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
       detailMessageCount: detailMessages.length,
+      currentMessages: currentMessages.map(summarizeFinalizeMessage),
+      detailMessages: detailMessages.map(summarizeFinalizeMessage),
       botMessage: summarizeFinalizeMessage(botMessage),
     }));
     applySessionDetail(detail, {
-      preserveCurrentMessages: shouldPreserveCurrentMessages,
+      mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
       scrollToBottom: false,
     });
     logStateMachineDebug("detailApply.apply.success", () => ({
       ...completionEventScope,
-      preserveCurrentMessages: shouldPreserveCurrentMessages,
+      applyMode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
       detailMessageCount: detailMessages.length,
+      renderedMessages: (Array.isArray(activeSession?.value?.messages)
+        ? activeSession.value.messages
+        : []).map(summarizeFinalizeMessage),
       botMessage: summarizeFinalizeMessage(botMessage),
     }));
     await refreshSessionConnectorsAsync?.(activeSession?.value?.id || doneSessionId);
@@ -317,7 +316,10 @@ export async function finalizeStoppedSessionDetail({
       }));
       return false;
     }
-    applySessionDetail(detail, { preserveCurrentMessages: true, scrollToBottom: false });
+    applySessionDetail(detail, {
+      mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
+      scrollToBottom: false,
+    });
     return true;
   } catch (error) {
     return false;

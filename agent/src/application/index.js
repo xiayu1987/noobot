@@ -34,10 +34,14 @@ function requireMethod(target, methodName) {
  */
 export function createAgentApplication({ runtime } = {}) {
   const runSession = requireMethod(runtime, "runSession");
+  const resolveExecutionIntent = requireMethod(runtime, "resolveExecutionIntent");
 
   return Object.freeze({
     async run(input = {}) {
       return runSession(input);
+    },
+    async resolveExecutionIntent(input = {}) {
+      return resolveExecutionIntent(input);
     },
   });
 }

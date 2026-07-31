@@ -144,73 +144,6 @@ describe("useChatEngine.session-detail", () => {
     expect(sessionTitleFromMessages).not.toHaveBeenCalled();
   });
 
-  it("applySessionDetail preserves a fresh in-flight turn even when caller requests replacement", () => {
-    const staleStoppedTurnScopeId = "turn-stopped-old";
-    const freshTurnScopeId = "client-turn:fresh-apply";
-    const activeSession = {
-      id: "s-apply-preserve",
-      sessionId: "s-apply-preserve",
-      backendSessionId: "s-apply-preserve",
-      title: "current",
-      messages: [
-        { id: "msg-user-fresh-apply", messageId: "msg-user-fresh-apply", role: RoleEnum.USER, content: "edited again", turnScopeId: freshTurnScopeId },
-        {
-          id: "msg-assistant-fresh-apply",
-          messageId: "msg-assistant-fresh-apply",
-          role: RoleEnum.ASSISTANT,
-          content: "",
-          turnScopeId: freshTurnScopeId,
-          dialogProcessId: "dp-fresh-apply",
-          pending: true,
-          channelState: { state: "sending", turnScopeId: freshTurnScopeId },
-        },
-      ],
-    };
-    const activeSessionId = ref("s-apply-preserve");
-    const sessions = ref([activeSession]);
-    const { applySessionDetail } = createSessionDetailApplicator({
-      sessions,
-      activeSessionId,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
-      sessionTitleFromMessages: () => "title",
-      applyCompletedToolLogsToMessages: vi.fn(),
-      scrollBottom: vi.fn(),
-      isSameSessionIdentity: (a, b) => String(a) === String(b),
-    });
-
-    applySessionDetail({
-      sessionId: "s-apply-preserve",
-      sessions: [{
-        sessionId: "s-apply-preserve",
-        messages: [
-          { id: "msg-user-old-apply", messageId: "msg-user-old-apply", role: RoleEnum.USER, content: "old stopped", turnScopeId: staleStoppedTurnScopeId },
-          {
-            id: "msg-assistant-old-apply",
-            messageId: "msg-assistant-old-apply",
-            role: RoleEnum.ASSISTANT,
-            content: "已停止",
-            turnScopeId: staleStoppedTurnScopeId,
-            dialogProcessId: "dp-old-apply",
-            statusLabel: "chat.stopped",
-          },
-        ],
-      }],
-    }, { preserveCurrentMessages: false });
-
-    expect(activeSession.messages).toHaveLength(3);
-    expect(activeSession.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({ role: RoleEnum.USER, content: "edited again", turnScopeId: freshTurnScopeId }),
-      expect.objectContaining({
-        role: RoleEnum.ASSISTANT,
-        turnScopeId: freshTurnScopeId,
-        pending: true,
-      }),
-    ]));
-    expect(activeSession.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({ role: RoleEnum.ASSISTANT, turnScopeId: staleStoppedTurnScopeId }),
-    ]));
-  });
 
   it("applySessionDetail does not roll back a newer local session version", () => {
     const activeSession = {
@@ -380,7 +313,7 @@ describe("useChatEngine.session-detail", () => {
           },
         ],
       }],
-    }, { preserveCurrentMessages: true });
+    });
 
     const assistant = activeSession.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stale-stopped",
@@ -396,71 +329,6 @@ describe("useChatEngine.session-detail", () => {
     expect(activeSession.turnStatuses).toEqual([
       expect.objectContaining({ status: "user_stopped", turnScopeId: freshTurnScopeId }),
     ]);
-  });
-
-  it("applySessionDetail does not let a legacy user_stopped status override a still-running registry turn", () => {
-    const turnScopeId = "client-turn:fresh-running-scope";
-    const sessionId = "s-apply-running-legacy-stop";
-    const activeSession = {
-      id: sessionId,
-      sessionId,
-      backendSessionId: sessionId,
-      title: "current",
-      messages: [{
-        role: RoleEnum.ASSISTANT,
-        content: "",
-        turnScopeId,
-        pending: true,
-        channelState: { state: "sending", turnScopeId },
-      }],
-    };
-    const sessions = ref([activeSession]);
-    const registry = createTurnRuntimeRegistryState();
-    applyTurnRuntimeEvent(registry, {
-      type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
-      sessionId,
-      turnScopeId,
-      seq: 1,
-    });
-    applyTurnRuntimeEvent(registry, {
-      type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-      sessionId,
-      turnScopeId,
-      state: BackendChannelState.SENDING,
-      seq: 2,
-    });
-    expect(selectTurnMessageRuntime(registry, { sessionId, turnScopeId }))
-      .toMatchObject({ running: true, terminal: null });
-    const { applySessionDetail } = createSessionDetailApplicator({
-      sessions,
-      activeSessionId: ref(sessionId),
-      turnRuntimeRegistry: ref(registry),
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
-      sessionTitleFromMessages: () => "title",
-      applyCompletedToolLogsToMessages: vi.fn(),
-      scrollBottom: vi.fn(),
-      isSameSessionIdentity: (a, b) => String(a) === String(b),
-    });
-
-    applySessionDetail({
-      sessionId,
-      sessions: [{
-        sessionId,
-        turnStatuses: [{ status: "user_stopped", turnScopeId }],
-        messages: [{
-          role: RoleEnum.ASSISTANT,
-          content: "已停止",
-          turnScopeId,
-          pending: false,
-          statusLabel: "chat.stopped",
-        }],
-      }],
-    }, { preserveCurrentMessages: true });
-
-    const assistant = activeSession.messages.find((message) => message.turnScopeId === turnScopeId);
-    expect(assistant.pending).toBe(true);
-    expect(assistant.channelState).toEqual({ state: "sending", turnScopeId });
   });
 
   it("applySessionDetail still merges completed detail into an in-flight assistant with the same turnScopeId", () => {
@@ -517,7 +385,7 @@ describe("useChatEngine.session-detail", () => {
           },
         ],
       }],
-    }, { preserveCurrentMessages: true });
+    });
 
     const assistant = activeSession.messages.find((message) => message.role === RoleEnum.ASSISTANT);
     expect(assistant).toEqual(expect.objectContaining({
@@ -556,11 +424,154 @@ describe("useChatEngine.session-detail", () => {
         sessionId: `s-apply-${mode}`,
         messages: [],
       }],
-    }, { mode, preserveCurrentMessages: false });
+    }, { mode });
 
     expect(activeSession.messages).toEqual([]);
     expect(activeSession.messageCount).toBe(0);
     expect(activeSession.lastMessage).toBe(null);
+  });
+
+  it("keeps the canonical active assistant when full detail follows summary hydration", () => {
+    const sessionId = "s-refresh-after-second-resend";
+    const turnScopeId = "client-turn:second-resend-active";
+    const presentationMessageId = "msg_second_resend_active";
+    const canonicalMessages = [
+      {
+        id: "user_second_resend_active",
+        messageId: "user_second_resend_active",
+        role: RoleEnum.USER,
+        content: "question",
+        turnScopeId,
+      },
+      {
+        id: presentationMessageId,
+        messageId: presentationMessageId,
+        presentationMessageId,
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        turnScopeId,
+        dialogProcessId: "dp-second-resend-active",
+        chatPresentation: true,
+        turnPlaceholder: true,
+      },
+    ];
+    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({ sessionId });
+
+    applySessionDetail({
+      sessionId,
+      summary: true,
+      sessions: [{ sessionId, messages: canonicalMessages }],
+    });
+    applySessionDetail({
+      sessionId,
+      detailMode: "full",
+      sessions: [{
+        sessionId,
+        messages: canonicalMessages,
+        rawMessages: [canonicalMessages[0]],
+      }],
+    });
+
+    expect(activeSession.messages).toHaveLength(2);
+    expect(activeSession.messages[1]).toEqual(expect.objectContaining({
+      messageId: presentationMessageId,
+      presentationMessageId,
+      turnScopeId,
+      turnPlaceholder: true,
+    }));
+    expect(activeSession.sessionDocs[0].rawMessages).toHaveLength(1);
+  });
+
+  it("finalize-run replaces second-resend presentation state with the authoritative snapshot", () => {
+    const sessionId = "s-second-resend-finalize";
+    const turnScopeId = "client-turn:second-resend";
+    const presentationMessageId = "msg_second_resend";
+    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
+      sessionId,
+      messages: [
+        {
+          id: "user_second_resend",
+          messageId: "user_second_resend",
+          role: RoleEnum.USER,
+          content: "question",
+          turnScopeId,
+        },
+        {
+          id: "msg_previous_resend",
+          messageId: "msg_previous_resend",
+          role: RoleEnum.ASSISTANT,
+          content: "stale answer",
+          turnScopeId: "client-turn:previous-resend",
+          pending: false,
+        },
+        {
+          id: presentationMessageId,
+          messageId: presentationMessageId,
+          role: RoleEnum.ASSISTANT,
+          content: "",
+          turnScopeId,
+          dialogProcessId: "dp-second-resend",
+          pending: true,
+        },
+      ],
+    });
+    activeSession.detailMessages = [
+      {
+        id: "user_previous_resend",
+        messageId: "user_previous_resend",
+        role: RoleEnum.USER,
+        content: "question",
+        turnScopeId: "client-turn:previous-resend",
+      },
+      {
+        id: "msg_previous_resend",
+        messageId: "msg_previous_resend",
+        role: RoleEnum.ASSISTANT,
+        content: "stale answer",
+        turnScopeId: "client-turn:previous-resend",
+      },
+    ];
+
+    applySessionDetail({
+      sessionId,
+      sessions: [{
+        sessionId,
+        messages: [
+          {
+            id: "user_second_resend",
+            messageId: "user_second_resend",
+            role: RoleEnum.USER,
+            content: "question",
+            turnScopeId,
+          },
+          {
+            id: presentationMessageId,
+            messageId: presentationMessageId,
+            presentationMessageId,
+            sourceMessageId: "model_source_second_resend",
+            role: RoleEnum.ASSISTANT,
+            content: "authoritative answer",
+            turnScopeId,
+            dialogProcessId: "dp-second-resend",
+            pending: false,
+          },
+        ],
+      }],
+    }, { mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN });
+
+    expect(activeSession.messages).toHaveLength(2);
+    expect(activeSession.detailMessages).toHaveLength(2);
+    expect(activeSession.messages.filter((message) => message.role === RoleEnum.ASSISTANT)).toEqual([
+      expect.objectContaining({
+        id: presentationMessageId,
+        messageId: presentationMessageId,
+        presentationMessageId,
+        sourceMessageId: "model_source_second_resend",
+        content: "authoritative answer",
+        pending: false,
+      }),
+    ]);
+    expect(activeSession.messages.some((message) => message.messageId === "msg_previous_resend")).toBe(false);
   });
 
   it("delete-confirmed replaces stale pre-resend detail history with an authoritative empty response", () => {
@@ -590,7 +601,6 @@ describe("useChatEngine.session-detail", () => {
       }],
     }, {
       mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-      preserveCurrentMessages: false,
       deleteFromTurnScopeId: deletedTurnScopeId,
     });
 
@@ -600,36 +610,4 @@ describe("useChatEngine.session-detail", () => {
     expect(activeSession.turnTimings).toEqual([]);
   });
 
-  it("applySessionDetail merge-preserve-inflight mode keeps missing in-flight assistant during background refresh", () => {
-    const turnScopeId = "client-turn:background-preserve";
-    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
-      sessionId: "s-apply-background-preserve",
-      messages: [
-        { role: RoleEnum.USER, content: "question", turnScopeId },
-        {
-          role: RoleEnum.ASSISTANT,
-          content: "streaming",
-          turnScopeId,
-          dialogProcessId: "dp-background-preserve",
-          pending: true,
-          channelState: { state: "sending", turnScopeId },
-        },
-      ],
-    });
-
-    applySessionDetail({
-      sessionId: "s-apply-background-preserve",
-      sessions: [{
-        sessionId: "s-apply-background-preserve",
-        messages: [],
-      }],
-    }, { mode: SESSION_DETAIL_APPLY_MODE.MERGE_PRESERVE_IN_FLIGHT });
-
-    expect(activeSession.messages).toHaveLength(2);
-    expect(activeSession.messages[1]).toEqual(expect.objectContaining({
-      role: RoleEnum.ASSISTANT,
-      turnScopeId,
-      pending: true,
-    }));
-  });
 });

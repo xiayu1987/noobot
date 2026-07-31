@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createHarness,
   makeSession,
+  makeTurnReplacementResponse,
   assistantMessage,
   emitChannelState,
 } from "../helpers/useChatEngineHarness.js";
@@ -44,7 +45,6 @@ describe("useChatEngine.resend failure rollback", () => {
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value.messages).toEqual([first, target]);
-    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
   });
 
   it("resendMonotonicMessage fails without fallback when replace-turn throws an HTTP 404 error", async () => {
@@ -78,7 +78,6 @@ describe("useChatEngine.resend failure rollback", () => {
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
-    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
   });
 
   it("resendMonotonicMessage rolls back and does not fallback when replace-turn fails with conflict", async () => {
@@ -106,29 +105,63 @@ describe("useChatEngine.resend failure rollback", () => {
     expect(activeSession.value.messages).toEqual([first, target]);
     expect(activeSession.value.messageCount).toBe(2);
     expect(activeSession.value.lastMessage).toStrictEqual(target);
-    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(input.value).toBe("draft before conflict");
   });
 
-  it("resendMonotonicMessage rejects reused dialogId snapshots without the new turnScopeId", async () => {
+  it("resendMonotonicMessage rejects a replacement committed for another command", async () => {
+    const stream = vi.fn(async () => {});
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, anchor }) => {
+      const replacementUser = {
+        messageId: "replacement-user-wrong-command",
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: "edited",
+      };
+      return makeTurnReplacementResponse({
+        commandId: "another-resend-command",
+        sessionId: "local-resend-command-mismatch",
+        version: 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+      });
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "local-resend-command-mismatch",
+      stream,
+      deps: { replaceSessionTurnApi },
+    });
+    const oldUser = { turnScopeId: "turn-old", role: RoleEnum.USER, content: "old" };
+    const oldAssistant = { turnScopeId: "turn-old", role: RoleEnum.ASSISTANT, content: "answer" };
+    activeSession.value.messages = [oldUser, oldAssistant];
+    activeSession.value.rawMessages = [oldUser, oldAssistant];
+
+    await expect(engine.resendMonotonicMessage(oldAssistant, "edited")).resolves.toBe(false);
+
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([oldUser, oldAssistant]);
+  });
+
+  it("resendMonotonicMessage rejects a committed snapshot that still materializes the replaced scope", async () => {
     const staleFirst = { turnScopeId: "scope-old", dialogId: "dp-reused", role: RoleEnum.USER, content: "repeat" };
     const staleTarget = { turnScopeId: "scope-old", dialogId: "dp-reused", role: RoleEnum.ASSISTANT, content: "old answer" };
-    const editedUser = { turnScopeId: "scope-new", dialogId: "dp-reused", role: RoleEnum.USER, content: "repeat" };
-    const editedAssistant = { turnScopeId: "scope-new", dialogId: "dp-reused", role: RoleEnum.ASSISTANT, content: "new answer" };
     const stream = vi.fn(async () => {});
     const deleteSessionMessagesFromApi = vi.fn();
-    const replaceSessionTurnApi = vi.fn(async () => ({
-      ok: true,
-      turnScopeReplacement: {
-        replacedTurnScopeIds: ["scope-old"],
-        replacementTurnScopeId: "scope-new",
-        replacementTurnScopeIds: ["scope-new"],
-      },
-      session: makeSession("local-resend-replace-reused-dialog", {
-        messages: [staleFirst, staleTarget, editedUser, editedAssistant],
-        rawMessages: [staleFirst, staleTarget, editedUser, editedAssistant],
-      }),
-    }));
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
+      const replacementUser = {
+        messageId: "replacement-user",
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: "repeat",
+      };
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-replace-reused-dialog",
+        version: 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+        messages: [staleFirst, staleTarget, replacementUser],
+      });
+    });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value.messages = [...(mainSession.messages || [])];
@@ -148,23 +181,21 @@ describe("useChatEngine.resend failure rollback", () => {
     expect(stream).not.toHaveBeenCalled();
     expect(activeSession.value.messages.map((message) => message.content)).toEqual(["repeat", "old answer"]);
     expect(activeSession.value.messages.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
-    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
   });
 
-  it("resendMonotonicMessage rolls back cascade deletion when send fails", async () => {
+  it("resendMonotonicMessage keeps the committed replacement when generation fails", async () => {
     const stream = vi.fn(async () => {
       throw new Error("network failed");
     });
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
       const replacementUser = { id: "m-new", messageId: "m-new", turnScopeId, role: RoleEnum.USER, content: "edited retry text" };
-      return {
-        ok: true,
-        newTurn: replacementUser,
-        session: makeSession("local-resend-send-fail", {
-          messages: [replacementUser],
-          rawMessages: [replacementUser],
-        }),
-      };
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-send-fail",
+        version: 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+      });
     });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
@@ -187,11 +218,17 @@ describe("useChatEngine.resend failure rollback", () => {
     await expect(engine.resendMonotonicMessage(target, "edited retry text")).resolves.toBe(false);
   
     expect(stream).toHaveBeenCalledTimes(1);
-    expect(activeSession.value.messages).toEqual([first, target]);
-    expect(activeSession.value.messageCount).toBe(2);
-    expect(activeSession.value.lastMessage).toStrictEqual(target);
-    expect(activeSession.value.updatedAt).toBe("before");
-    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
-    expect(input.value).toBe("draft before resend");
+    expect(activeSession.value.messages[0]).toEqual(expect.objectContaining({
+      messageId: "m-new",
+      role: RoleEnum.USER,
+      content: "edited retry text",
+    }));
+    expect(activeSession.value.messages.some((message) => message === first || message === target)).toBe(false);
+    expect(activeSession.value.messages.at(-1)).toEqual(expect.objectContaining({
+      role: RoleEnum.ASSISTANT,
+      error: expect.any(String),
+      pending: false,
+    }));
+    expect(input.value).toBe("edited retry text");
   });
 });

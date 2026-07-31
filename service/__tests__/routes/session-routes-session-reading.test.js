@@ -71,6 +71,7 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
           return {
             exists: true,
             sessionId: "s1",
+            messageProjection: "canonical-presentation",
             summary: true,
             sessions: [{
               sessionId: "s1",
@@ -91,17 +92,24 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
           return {
             exists: true,
             sessionId: "s1",
+            detailMode: "full",
+            messageProjection: "canonical-presentation",
             sessions: [{
               sessionId: "s1",
               messages: [{
                 id: "a1",
                 role: "assistant",
-                content: "full answer",
+                content: "summary answer",
+                hasThinkingDetails: true,
+                thinkingDetailCount: 2,
+              }],
+              sessionDocs: [{ id: "doc-1" }],
+              rawMessages: [{
+                role: "assistant",
+                content: "raw",
                 realtimeLogs: [{ event: "thinking", text: "full thinking" }],
                 injectedMessage: true,
               }],
-              sessionDocs: [{ id: "doc-1" }],
-              rawMessages: [{ role: "assistant", content: "raw" }],
             }],
           };
         },
@@ -123,6 +131,7 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.summary, true);
+    assert.equal(payload.messageProjection, "canonical-presentation");
     assert.equal(summaryCalled, true);
     assert.equal(fullCalled, false);
     assert.equal(payload.sessions[0].messages[0].hasThinkingDetails, true);
@@ -135,9 +144,13 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(fullCalled, true);
-    assert.equal(payload.sessions[0].messages[0].realtimeLogs.length, 1);
+    assert.equal(payload.detailMode, "full");
+    assert.equal(payload.messageProjection, "canonical-presentation");
+    assert.equal(payload.sessions[0].messages[0].content, "summary answer");
+    assert.equal("realtimeLogs" in payload.sessions[0].messages[0], false);
     assert.equal(payload.sessions[0].sessionDocs.length, 1);
     assert.equal(payload.sessions[0].rawMessages.length, 1);
+    assert.equal(payload.sessions[0].rawMessages[0].realtimeLogs.length, 1);
   });
 });
 
@@ -151,7 +164,8 @@ test("session-routes: session detail rebuilds running workflow projection from p
       data: {
         sessionId: "s-workflow",
         dialogProcessId: "dialog-1",
-        turnScopeId: "",
+        turnScopeId: "client-turn:one",
+        presentationMessageId: "assistant-presentation-one",
         workflowRunId: "client-turn:one",
         semanticText: "WORKFLOW_DSL/1",
         nodeSessions: [{ nodeExecutionId: "node-1", stepStatus: "ready" }],
@@ -197,6 +211,10 @@ test("session-routes: session detail rebuilds running workflow projection from p
     assert.equal(response.status, 200);
     assert.equal(payload.workflowRuntimeEvents.length, 3);
     assert.equal(payload.workflowRuntimeEvents[0].data.turnScopeId, "client-turn:one");
+    assert.equal(
+      payload.workflowRuntimeEvents[0].data.presentationMessageId,
+      "assistant-presentation-one",
+    );
     assert.equal(payload.workflowRuntimeEvents[0].sequenceDomain, "workflow-planning");
     assert.equal(payload.workflowRuntimeEvents[1].data.status, "running");
     assert.equal(payload.workflowRuntimeEvents[2].data.status, "succeeded");
@@ -217,6 +235,7 @@ test("session-routes: deleted Turn audit events are not returned as workflow UI 
         sessionId: "s-deleted-workflow",
         dialogProcessId: "dialog-deleted",
         turnScopeId: "turn-deleted",
+        presentationMessageId: "assistant-deleted",
         workflowRunId: "workflow-deleted",
         nodeSessions: [{ nodeExecutionId: "node-deleted" }],
       },

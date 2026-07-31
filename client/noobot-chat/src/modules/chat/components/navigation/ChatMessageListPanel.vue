@@ -9,6 +9,10 @@ import ChatMessageItem from "../message/ChatMessageItem.vue";
 import { useChatStore } from "../../stores/useChatStore.js";
 import { selectTurnPresentations } from "../../runtime/engine/turnPresentation.js";
 import { logWorkflowDiagnostics, summarizeWorkflowMessages } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import {
+  logStateMachineDebug,
+  summarizeStateMachineMessage,
+} from "../../../debug/loggers/stateMachineLogger.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 import {
   getMessageSessionId,
@@ -55,7 +59,6 @@ watch(presentationDiagnosticsSignature, () => {
   logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", () => ({
     sessionId: String(props.activeSession?.backendSessionId || props.activeSession?.id || ""),
     sourceMessageCount: Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
-    presentationMessageCount: messages.length,
     presentationMessageCount: presentedMessages.value.length,
     workflowPresentations: summarizeWorkflowMessages(presentedMessages.value),
   }));
@@ -109,6 +112,28 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
     .join("|");
 }
 
+const renderedMessages = computed(() => presentedMessages.value
+  .map((messageItem, sourceIndex) => ({
+    messageItem,
+    sourceIndex,
+    renderKey: getMessageRenderKey(messageItem, sourceIndex),
+  }))
+  .filter(({ messageItem }) => props.shouldRenderMessageInChat(messageItem)));
+const renderDiagnosticsSignature = computed(() => JSON.stringify(renderedMessages.value.map((entry) => ({
+  ...summarizeStateMachineMessage(entry.messageItem),
+  sourceIndex: entry.sourceIndex,
+  renderKey: entry.renderKey,
+}))));
+watch(renderDiagnosticsSignature, (signature) => {
+  logStateMachineDebug("stateMachine.presentation.renderList.committed", () => ({
+    sessionId: String(props.activeSession?.backendSessionId || props.activeSession?.id || ""),
+    sourceMessageCount: Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
+    presentationMessageCount: presentedMessages.value.length,
+    renderedMessageCount: renderedMessages.value.length,
+    messages: JSON.parse(signature),
+  }));
+}, { immediate: true, flush: "post" });
+
 function getMessageAnchorId(messageItem = {}, messageIndex = 0) {
   return `chat-message-${getMessageRenderKey(messageItem, messageIndex)
     .replace(/[^a-zA-Z0-9_-]/g, "-")}`;
@@ -155,14 +180,13 @@ defineExpose({
         </div>
 
         <template
-          v-for="(messageItem, messageIndex) in presentedMessages"
-          :key="getMessageRenderKey(messageItem, messageIndex)"
+          v-for="({ messageItem, sourceIndex, renderKey }) in renderedMessages"
+          :key="renderKey"
         >
           <div
-            v-if="shouldRenderMessageInChat(messageItem)"
-            :id="getMessageAnchorId(messageItem, messageIndex)"
+            :id="getMessageAnchorId(messageItem, sourceIndex)"
             class="chat-message-anchor"
-            :data-chat-message-anchor="getMessageAnchorId(messageItem, messageIndex)"
+            :data-chat-message-anchor="getMessageAnchorId(messageItem, sourceIndex)"
           >
             <ChatMessageItem
               v-bind="messageItemSharedProps"

@@ -72,7 +72,7 @@ export function createSessionVersionManager({
       ...logContext,
       version: getVersion(),
     });
-    applySessionDetail(detail, { preserveCurrentMessages: true });
+    applySessionDetail(detail);
     const nextVersion = getVersion();
     const changed = isNewerSessionVersion(nextVersion, previousVersion);
     log?.("versionConflict.detail.apply.after", {

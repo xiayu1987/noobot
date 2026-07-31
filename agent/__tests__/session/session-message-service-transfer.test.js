@@ -277,6 +277,7 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
     anchor: { turnScopeId: "turn-old" },
     newContent: "new",
     turnScopeId: "turn-new",
+    idempotencyKey: "replace-turn-timing",
   });
 
   assert.equal(saved.length, 1);

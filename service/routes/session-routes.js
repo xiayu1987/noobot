@@ -69,7 +69,8 @@ async function readWorkflowRuntimeProjection({ bot = null, userId = "", sessionI
           ...data,
           sessionId: String(data?.sessionId || normalizedSessionId).trim(),
           dialogProcessId: String(data?.dialogProcessId || "").trim(),
-          turnScopeId: String(data?.turnScopeId || workflowRunId).trim(),
+          turnScopeId: String(data?.turnScopeId || "").trim(),
+          presentationMessageId: String(data?.presentationMessageId || "").trim(),
           semanticText: String(data?.semanticText || ""),
           createdAt: data?.createdAt || data?.ts || record?.ts || "",
         },
@@ -230,7 +231,7 @@ export function registerSessionRoutes(
       const mode = String(req.query?.mode || "summary").trim().toLowerCase();
       const readSessionData = mode === "full"
         ? bot.session.getSessionData.bind(bot.session)
-        : (bot.session.getSessionDisplayData || bot.session.getSessionData).bind(bot.session);
+        : bot.session.getSessionDisplayData.bind(bot.session);
       const result = await readSessionData({
         userId,
         sessionId,
@@ -269,6 +270,9 @@ export function registerSessionRoutes(
               ? doc.turnOrder.reduce((count, item = {}) => count + Math.max(0, Number(item.messageCount || 0)), 0)
               : 0,
             summaryMessageCount: Array.isArray(doc.messages) ? doc.messages.length : 0,
+            rawMessageCount: Array.isArray(doc.rawMessages) ? doc.rawMessages.length : 0,
+            messageProjection: String(result?.messageProjection || "").trim(),
+            schemaVersion: Number(doc.schemaVersion || 0),
             summaryStatsMessageCount: Number(doc.stats?.messageCount || 0),
             summaryStatsDisplayMessageCount: Number(doc.stats?.displayMessageCount || 0),
             summaryAssistantCount: Array.isArray(doc.messages)
@@ -277,6 +281,10 @@ export function registerSessionRoutes(
             summaryAssistantActivityCount: Array.isArray(doc.messages)
               ? doc.messages.reduce((count, message = {}) => count + (Array.isArray(message.activityTimeline) ? message.activityTimeline.length : 0), 0)
               : 0,
+            activeTurnScopeId: String(doc.turnLifecycleSnapshot?.activeTurn?.turnScopeId || "").trim(),
+            activePresentationMessageId: String(
+              doc.turnLifecycleSnapshot?.activeTurn?.presentationMessageId || "",
+            ).trim(),
           })),
           messages: sessionDocs.flatMap((doc = {}) =>
             (Array.isArray(doc.messages) ? doc.messages : []).map((message = {}) => ({
@@ -288,6 +296,7 @@ export function registerSessionRoutes(
               role: String(message.role || "").trim(),
               type: String(message.type || "").trim(),
               chatPresentation: message.chatPresentation,
+              turnPlaceholder: message.turnPlaceholder === true,
               contentLength: typeof message.content === "string" ? message.content.length : 0,
               activityTimelineCount: Array.isArray(message.activityTimeline) ? message.activityTimeline.length : 0,
               toolTimelineCount: Array.isArray(message.toolTimeline) ? message.toolTimeline.length : 0,
@@ -327,8 +336,11 @@ export function registerSessionRoutes(
   const resolveTurnTerminalHandler = jsonRoute(async (req, res) => {
     const { userId, sessionId, turnScopeId } = req.params;
     const commandId = String(req.query?.commandId || "").trim() || crypto.randomUUID();
+    const persistenceScope = req.query?.persistenceScope
+      ? JSON.parse(String(req.query.persistenceScope))
+      : null;
     const resolution = await bot.session.resolveTurnTerminalState({
-      userId, sessionId, turnScopeId, commandId,
+      userId, sessionId, turnScopeId, commandId, persistenceScope,
     });
     void writeRoutedRuntimeEvent({
       scope: "session",
@@ -355,6 +367,7 @@ export function registerSessionRoutes(
         startedAt: String(resolution?.turn?.startedAt || "").trim(),
         finishedAt: String(resolution?.turn?.finishedAt || "").trim(),
         hasTerminalStatus: Boolean(resolution?.turn?.terminalStatus),
+        persistenceScopeId: String(persistenceScope?.scopeId || "").trim(),
       },
     });
     res.json({ ok: true, ...resolution });
@@ -473,6 +486,37 @@ export function registerSessionRoutes(
         ? bot.replaceSessionTurn.bind(bot)
         : bot.session.replaceTurn.bind(bot.session);
       const result = await replaceSessionTurn(payload);
+      const lifecycle = result?.session?.turnLifecycle || {};
+      const replacedTurns = lifecycle?.replacedTurns && typeof lifecycle.replacedTurns === "object"
+        ? lifecycle.replacedTurns
+        : {};
+      void writeRoutedRuntimeEvent({
+        scope: "session",
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+        level: "debug",
+        debugType: "state-machine",
+        event: "service.turnReplacement.authorityCommitted",
+        userId: String(userId || "").trim(),
+        sessionId: String(sessionId || "").trim(),
+        turnScopeId: String(result?.turnReplacement?.replacementTurnScopeId || "").trim(),
+        data: {
+          commandId: String(result?.turnReplacement?.commandId || "").trim(),
+          committedVersion: Number(result?.turnReplacement?.committedVersion || 0),
+          lifecycleSequence: Number(lifecycle?.sequence || 0),
+          activeTurnScopeId: String(lifecycle?.activeTurnScopeId || "").trim(),
+          remainingTurnScopeIds: Object.keys(lifecycle?.turns || {}).sort(),
+          replacedTurnScopeIds: (result?.turnReplacement?.replacedTurnScopeIds || []).map(
+            (value) => String(value || "").trim(),
+          ).filter(Boolean),
+          tombstonedTurnScopeIds: Object.keys(replacedTurns).sort(),
+          authorityOutboxCount: Array.isArray(result?.session?.authorityEventOutbox)
+            ? result.session.authorityEventOutbox.length
+            : 0,
+          deduplicated: result?.deduplicated === true,
+        },
+      });
       res.json({ ok: true, ...result });
     });
 

@@ -16,7 +16,7 @@ function isWorkflowNodeTerminalStatus(value) {
 }
 function shouldApplyWorkflowNodeStateEvent(current,incoming){ if(!current)return true; const c=compareWorkflowRuntimeFacts(incoming,current,{defaultDomain:WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE}); if(!c.comparable)return false; if(c.order!==0)return c.order>0; return text(incoming.eventId)===text(current.eventId); }
 export function createWorkflowNodeStateRegistry(){ return {workflows:{},viewerStates:{}}; }
-export function createWorkflowStore({ workflowNodeStateRegistry, applySubSessionLifecycleEvent, reduceSubSessionMessageEvent, reduceSubSessionSnapshot }) {
+export function createWorkflowStore({ workflowNodeStateRegistry, applySubSessionLifecycleEvent, reduceSubSessionMessageEvent, reduceSubSessionSnapshot, removeSubSessionsByWorkflowRunIds }) {
 function upsertWorkflowNodeStateEvent(eventData = {}) {
   const workflowRunId = text(eventData?.workflowRunId);
   const nodeExecutionId = text(eventData?.nodeExecutionId);
@@ -159,6 +159,9 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
     sessionId: text(currentWorkflow.sessionId || eventData?.sessionId),
     dialogProcessId: text(currentWorkflow.dialogProcessId || eventData?.dialogProcessId),
     turnScopeId: text(currentWorkflow.turnScopeId || eventData?.turnScopeId),
+    presentationMessageId: text(
+      currentWorkflow.presentationMessageId || eventData?.presentationMessageId,
+    ),
     semanticText: text(eventData?.semanticText || currentWorkflow.semanticText),
     plannedAt: eventData?.createdAt || currentWorkflow.plannedAt || new Date().toISOString(),
   };
@@ -192,7 +195,7 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
   return result;
 }
 
-function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
+  function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
   const canonical = normalizeWorkflowRuntimeEvent(record, { source });
   if (!canonical.valid) {
     const result = { applied: false, reason: canonical.errors[0] || "invalid_runtime_event", canonical };
@@ -238,6 +241,44 @@ function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
     reason: text(result?.reason),
   }));
   return { ...(result || {}), canonical };
-}
-  return { applyWorkflowRuntimeEvent };
+  }
+  function removeWorkflowOwnersForReplacedTurns({ parentSessionId = "", replacedTurnScopeIds = [] } = {}) {
+    const expectedParentSessionId = text(parentSessionId);
+    const replacedScopes = new Set(
+      (Array.isArray(replacedTurnScopeIds) ? replacedTurnScopeIds : []).map(text).filter(Boolean),
+    );
+    if (!expectedParentSessionId || !replacedScopes.size) {
+      return { removedWorkflowRunIds: [], removedSessionIds: [] };
+    }
+    const registry = workflowNodeStateRegistry.value || createWorkflowNodeStateRegistry();
+    const workflows = { ...(registry.workflows || {}) };
+    const removedWorkflowRunIds = [];
+    for (const [workflowRunId, workflow = {}] of Object.entries(workflows)) {
+      const ownsParent = text(workflow.sessionId) === expectedParentSessionId ||
+        Object.values(workflow.nodes || {}).some((node = {}) => text(node.parentSessionId) === expectedParentSessionId);
+      if (!ownsParent) continue;
+      const ownsReplacedTurn = replacedScopes.has(text(workflow.turnScopeId));
+      if (!ownsReplacedTurn) continue;
+      delete workflows[workflowRunId];
+      removedWorkflowRunIds.push(workflowRunId);
+    }
+    if (removedWorkflowRunIds.length) {
+      workflowNodeStateRegistry.value = { ...registry, workflows };
+    }
+    const subSessionResult = removeSubSessionsByWorkflowRunIds?.(
+      removedWorkflowRunIds,
+      { parentSessionId: expectedParentSessionId },
+    ) || { removedSessionIds: [] };
+    logWorkflowDiagnostics("frontend.workflowStore.replacedOwnersRemoved", () => ({
+      sessionId: expectedParentSessionId,
+      replacedTurnScopeIds: [...replacedScopes],
+      removedWorkflowRunIds,
+      removedSessionIds: subSessionResult.removedSessionIds || [],
+    }));
+    return {
+      removedWorkflowRunIds,
+      removedSessionIds: subSessionResult.removedSessionIds || [],
+    };
+  }
+  return { applyWorkflowRuntimeEvent, removeWorkflowOwnersForReplacedTurns };
 }

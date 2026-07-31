@@ -162,12 +162,43 @@ test("expectedVersion accepts missing, zero and integer strings but rejects unsa
   assert.equal((await stringZero.service.commitTurn({ userId: "u1", sessionId: "s1", content: "x", turnScopeId: "tz", idempotencyKey: "iz", expectedVersion: "0" })).version, 1);
 });
 
-test("continue identity round-trips and a stopped source can only be consumed once", async () => {
-  const h = harness({ version: 4, revision: 4, messages: [{ role: "user", content: "old", turnScopeId: "old", dialogProcessId: "dp-old" }], turnStatuses: [{ turnScopeId: "old", dialogProcessId: "dp-old", status: "user_stopped" }] });
+test("continue identity round-trips only when it matches the authoritative continuation relation", async () => {
+  const h = harness({
+    version: 4,
+    revision: 4,
+    messages: [{ role: "user", content: "old", turnScopeId: "old", dialogProcessId: "dp-old" }],
+    turnLifecycle: {
+      sequence: 6,
+      activeTurnScopeId: "new",
+      turns: {
+        old: {
+          turnScopeId: "old",
+          dialogProcessId: "dp-old",
+          state: "stop_completed",
+          executionState: "user_stopped",
+          continuedByTurnScopeId: "new",
+          revision: 5,
+          sequence: 5,
+        },
+        new: {
+          turnScopeId: "new",
+          dialogProcessId: "dp-new",
+          action: "continue",
+          state: "action_requesting",
+          continuationSource: { turnScopeId: "old", dialogProcessId: "dp-old" },
+          revision: 1,
+          sequence: 6,
+        },
+      },
+    },
+  });
   const result = await h.service.commitTurn({ userId: "u1", sessionId: "s1", action: "continue", content: "continue", turnScopeId: "new", dialogProcessId: "dp-new", idempotencyKey: "continue-1", expectedVersion: 4, resumeTurnScopeId: "old", resumeDialogProcessId: "dp-old", attachments: [canonical("continued")] });
   assert.equal(result.userMessage.turnCommit.resumeTurnScopeId, "old");
   assert.equal(result.userMessage.turnCommit.resumeDialogProcessId, "dp-old");
-  await assert.rejects(h.service.commitTurn({ userId: "u1", sessionId: "s1", action: "continue", content: "again", turnScopeId: "new2", idempotencyKey: "continue-2", expectedVersion: 5, resumeTurnScopeId: "old", resumeDialogProcessId: "dp-old" }), (e) => e.errorCode === "CONTINUE_SOURCE_CONSUMED");
+  await assert.rejects(
+    h.service.commitTurn({ userId: "u1", sessionId: "s1", action: "continue", content: "again", turnScopeId: "new2", idempotencyKey: "continue-2", expectedVersion: 5, resumeTurnScopeId: "old", resumeDialogProcessId: "dp-old" }),
+    (error) => error.errorCode === "CONTINUE_AUTHORITY_MISMATCH",
+  );
 });
 
 test("internal append, status and summarization use mutation lock without changing public version", async () => {
@@ -359,10 +390,11 @@ test("replaceTurn replays a committed receipt after the original anchor is gone"
   };
   const committed = await h.service.replaceTurn(input);
   const replay = await h.service.replaceTurn(input);
-  assert.equal(committed.version, 5);
-  assert.equal(replay.version, 5);
+  assert.equal(committed.session.version, 5);
+  assert.equal(replay.session.version, 5);
   assert.equal(replay.deduplicated, true);
-  assert.equal(replay.newTurn.turnScopeId, "replacement");
+  assert.equal(replay.turnReplacement.replacementTurnScopeId, "replacement");
+  assert.equal(replay.turnReplacement.commandId, "replace-once");
   assert.deepEqual(h.get().messages.map((message) => message.content), ["new"]);
 });
 

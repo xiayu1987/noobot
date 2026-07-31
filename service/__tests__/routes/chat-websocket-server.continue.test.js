@@ -7,6 +7,28 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
 
+function stoppedLifecycle({ sessionId = "s1", turnScopeId = "turn-stopped", dialogProcessId = "dp-stopped" } = {}) {
+  return {
+    sequence: 5,
+    activeTurnScopeId: "",
+    turns: {
+      [turnScopeId]: {
+        sessionId,
+        turnScopeId,
+        dialogProcessId,
+        messageId: `message-${turnScopeId}`,
+        presentationMessageId: `presentation-${turnScopeId}`,
+        action: "stop",
+        state: "stop_completed",
+        phase: "stop",
+        executionState: "user_stopped",
+        revision: 5,
+        sequence: 5,
+      },
+    },
+  };
+}
+
 test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async () => {
   let capturedPayload = null;
   const server = await startServerWithWs({
@@ -45,6 +67,7 @@ test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async (
 test("chat-websocket-server: continue action passes stopped snapshot identity and emits sending", async () => {
   let capturedPayload = null;
   const server = await startServerWithWs({
+    initialTurnLifecycle: stoppedLifecycle(),
     runSession: async (payload) => {
       capturedPayload = payload;
       return {
@@ -86,6 +109,61 @@ test("chat-websocket-server: continue action passes stopped snapshot identity an
     assert.equal(sendingEvent?.data?.resumeDialogProcessId, "dp-stopped");
     assert.equal(sendingEvent?.data?.resumeTurnScopeId, "turn-stopped");
     assert.equal(sendingEvent?.data?.turnScopeId, "turn-new");
+    const acceptedEvent = events.find((item) =>
+      item?.event === "turn_lifecycle" && item?.data?.eventType === "turn.action_accepted");
+    assert.deepEqual(acceptedEvent?.data?.continuationSource, {
+      dialogProcessId: "dp-stopped",
+      turnScopeId: "turn-stopped",
+    });
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("chat-websocket-server: a consumed stopped source is rejected before a second Agent run", async () => {
+  let runSessionCalls = 0;
+  const server = await startServerWithWs({
+    initialTurnLifecycle: stoppedLifecycle(),
+    runSession: async () => {
+      runSessionCalls += 1;
+      return {
+        sessionId: "s1",
+        dialogProcessId: "dp-new",
+        answer: "continued",
+        messages: [],
+        traces: [],
+        executionLogs: [],
+      };
+    },
+  });
+  try {
+    const { port } = server.address();
+    const continuePayload = {
+      action: "continue",
+      userId: "u1",
+      sessionId: "s1",
+      message: "continue",
+      config: {
+        resumeDialogProcessId: "dp-stopped",
+        resumeTurnScopeId: "turn-stopped",
+      },
+    };
+    await callChatWs({ port, payload: { ...continuePayload, turnScopeId: "turn-new" } });
+    const rejectedEvents = await callChatWs({
+      port,
+      payload: { ...continuePayload, turnScopeId: "turn-new-2" },
+    });
+
+    assert.equal(runSessionCalls, 1);
+    const errorEvent = rejectedEvents.find((item) => item?.event === "error");
+    assert.equal(errorEvent?.data?.error, "continue_source_consumed");
+    assert.equal(
+      rejectedEvents.some((item) =>
+        item?.event === "turn_lifecycle" &&
+        item?.data?.turnScopeId === "turn-new-2" &&
+        item?.data?.eventType === "turn.action_accepted"),
+      false,
+    );
   } finally {
     await closeServer(server);
   }
@@ -164,6 +242,7 @@ test("chat-websocket-server: continue action does not fallback to current dialog
 test("chat-websocket-server: stop during continue request keeps stopping and ends user_stopped", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
+    initialTurnLifecycle: stoppedLifecycle({ sessionId: "s-continue-stop" }),
     bot: {
       persistStoppedAssistantMessage: async (payload = {}) => {
         capturedStopPayload = payload;

@@ -14,6 +14,7 @@ import {
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 
 describe("useChatEngine.interaction-stop: terminal", () => {
   it("applies the real refresh terminal payload atomically when discovery races snapshot hydration", async () => {
@@ -54,7 +55,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const first = engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
     await vi.waitFor(() => expect(releaseResponse).toBeTypeOf("function"));
     expect(applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, {
-      protocolVersion: 2,
+      protocolVersion: 3,
       eventType: "turn.snapshot",
       commandId: "snapshot-refresh",
       userId: "u-1",
@@ -86,7 +87,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(second).toMatchObject({ applied: true });
     expect(terminalResolutionFetcher).toHaveBeenCalledTimes(1);
     expect(sessions.value[0]).toMatchObject({ backendSessionId: sessionId });
-    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId)).toMatchObject({
+    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId)).toMatchObject({
       terminal: "completed",
       sending: false,
       canStop: false,
@@ -439,7 +440,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       requireFresh: true,
     }));
     expect(applySessionDetail).toHaveBeenCalledWith({ sessionId: "s-error", messages: [] }, {
-      preserveCurrentMessages: true,
+      mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
       scrollToBottom: false,
     });
     expect(deps.clearPendingInteraction).toHaveBeenCalled();

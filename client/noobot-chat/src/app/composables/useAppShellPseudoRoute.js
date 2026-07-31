@@ -84,7 +84,6 @@ export function useAppShellPseudoRoute({
       await handleSelectSession(targetSessionId, {
         fromHistory: true,
         force: true,
-        preserveCurrentMessages: true,
         silent: true,
       });
     }

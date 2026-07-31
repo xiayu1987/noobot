@@ -92,6 +92,8 @@ const {
   semanticPreviewCollapsible,
   selectedNodeSessionDocs,
   displayNodeMessages,
+  turnTimingsByTurnScopeId,
+  turnStatusesByTurnScopeId,
   nodeSessionAllMessages,
   selectedRuntimeBoxes,
   handleOpenThinkingDetails,
@@ -139,6 +141,8 @@ const {
     :selected-runtime-boxes="selectedRuntimeBoxes"
     :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
     :display-node-messages="displayNodeMessages"
+    :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
+    :turn-statuses-by-turn-scope-id="turnStatusesByTurnScopeId"
     :node-session-all-messages="nodeSessionAllMessages"
     :selected-node-session-docs="selectedNodeSessionDocs"
     :user-id="userId"
@@ -151,6 +155,7 @@ const {
     :resolve-status-class="resolveStatusClass"
     :resolve-status-label="resolveStatusLabel"
     :step-has-session="stepHasSession"
+    :log-workflow-diagnostics="logWorkflowDiagnostics"
     @runtime-step-click="handleRuntimeStepClick"
     @execution-select="selectExecution"
     @open-thinking-details="handleOpenThinkingDetails"

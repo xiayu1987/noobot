@@ -159,11 +159,16 @@ export async function getSessionDetailApi(
 }
 
 export async function resolveTurnTerminalStateApi(
-  { userId = "", sessionId = "", turnScopeId = "", commandId = "" },
+  { userId = "", sessionId = "", turnScopeId = "", commandId = "", persistenceScope = null },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
-  const query = commandId ? `?commandId=${encodeURIComponent(commandId)}` : "";
+  const queryParams = [];
+  if (commandId) queryParams.push(`commandId=${encodeURIComponent(commandId)}`);
+  if (persistenceScope && typeof persistenceScope === "object") {
+    queryParams.push(`persistenceScope=${encodeURIComponent(JSON.stringify(persistenceScope))}`);
+  }
+  const query = queryParams.length ? `?${queryParams.join("&")}` : "";
   const response = await runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnScopeId)}/terminal${query}`,
   );

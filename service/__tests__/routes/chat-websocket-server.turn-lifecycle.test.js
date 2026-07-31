@@ -20,6 +20,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
+import { attachRunTransport, publishRunEvent } from "../../ws/chat-websocket/run-registry.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
 
@@ -32,6 +33,17 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
   let runCount = 0;
   let lastRunConfig = null;
   const bot = {
+    async resolveExecutionIntent({ turnScopeId = "", runConfig = {} } = {}) {
+      const executionId = String(runConfig?.executionId || `agent:${turnScopeId}`).trim();
+      return {
+        executionId,
+        executionKind: String(runConfig?.executionKind || "agent").trim(),
+        parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+        rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
+        origin: runConfig?.origin && typeof runConfig.origin === "object" ? runConfig.origin : {},
+        stage: String(runConfig?.stage || "").trim(),
+      };
+    },
     async applyTurnLifecycleEvent(input) {
       commitInputs.push(structuredClone(input));
       if (input.terminalStatus && !persistSummary) {
@@ -142,6 +154,14 @@ const payload = {
   },
 };
 
+test("run event publishing reports the actual transport send result", () => {
+  const handle = {};
+  attachRunTransport(handle, () => false);
+  assert.equal(publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-1" }), false);
+  attachRunTransport(handle, () => true);
+  assert.equal(publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-2" }), true);
+});
+
 test("authoritative lifecycle follows accepted -> running -> processed -> summary completed", async () => {
   const authoritative = createAuthoritativeBot();
   const server = await startServerWithWs({ bot: authoritative.bot });
@@ -164,17 +184,57 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     const inputs = authoritative.commitInputs();
     assert.equal(inputs[0].createSessionIfAbsent, true);
     assert.equal(inputs[0].action, "send");
-    assert.equal(inputs[0].startedAt, payload.config.thinkingStartedAt);
-    assert.equal(turn.startedAt, payload.config.thinkingStartedAt);
+    const authoritativeStartedAt = inputs[0].startedAt;
+    assert.equal(Number.isNaN(Date.parse(authoritativeStartedAt)), false);
+    assert.notEqual(authoritativeStartedAt, payload.config.thinkingStartedAt);
+    assert.equal(turn.startedAt, authoritativeStartedAt);
+    assert.equal(authoritative.lastRunConfig().thinkingStartedAt, authoritativeStartedAt);
     assert.equal(turn.messageId, authoritative.lastRunConfig().messageId);
     assert.equal(turn.presentationMessageId, authoritative.lastRunConfig().presentationMessageId);
     const completedEnvelope = events.find((item) =>
       item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.COMPLETED);
-    assert.equal(completedEnvelope.data.startedAt, payload.config.thinkingStartedAt);
+    assert.equal(completedEnvelope.data.startedAt, authoritativeStartedAt);
     assert.equal(completedEnvelope.data.messageId, turn.messageId);
     assert.equal(completedEnvelope.data.presentationMessageId, turn.presentationMessageId);
     assert.equal(Boolean(completedEnvelope.data.finishedAt), true);
     assert.equal(inputs.slice(1).some((input) => "createSessionIfAbsent" in input), false);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("declared workflow execution identity is stable from acceptance through completion", async () => {
+  const authoritative = createAuthoritativeBot();
+  authoritative.bot.resolveExecutionIntent = async ({ turnScopeId = "" } = {}) => ({
+    executionId: `workflow:${turnScopeId}`,
+    executionKind: "workflow",
+    parentExecutionId: "",
+    rootExecutionId: `workflow:${turnScopeId}`,
+    origin: { type: "workflow", workflowRunId: `workflow:${turnScopeId}` },
+    stage: "planning",
+  });
+  const server = await startServerWithWs({ bot: authoritative.bot });
+  try {
+    await callChatWs({
+      port: server.address().port,
+      payload: {
+        ...payload,
+        sessionId: "s-workflow-identity",
+        turnScopeId: "turn-workflow-identity",
+        commandId: "command-workflow-identity",
+        config: { ...payload.config, turnScopeId: "turn-workflow-identity" },
+      },
+    });
+    const envelopes = authoritative.eventOutbox().map((item) => item.envelope);
+    assert.equal(envelopes.length, 4);
+    for (const envelope of envelopes) {
+      assert.equal(envelope.executionId, "workflow:turn-workflow-identity");
+      assert.equal(envelope.executionKind, "workflow");
+    }
+    const turn = authoritative.lifecycle().turns["turn-workflow-identity"];
+    assert.equal(turn.executionId, "workflow:turn-workflow-identity");
+    assert.equal(turn.executionKind, "workflow");
+    assert.equal(turn.revision, 4);
   } finally {
     await closeServer(server);
   }
@@ -347,6 +407,123 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   const afterAcknowledgement = await createDispatcher()({ userId: "u1", sessionId: "s-send-retry" });
   assert.deepEqual(afterAcknowledgement, { dispatched: true, delivered: 0 });
   assert.equal(sent.length, 1);
+});
+
+test("authority dispatcher preserves the child persistence context across every outbox operation", async () => {
+  const persistenceContext = Object.freeze({
+    parentSessionId: "root-session",
+    workflowRunId: "workflow-run-1",
+    nodeExecutionId: "node-execution-1",
+  });
+  const calls = [];
+  let pending = true;
+  const envelope = {
+    eventId: "authority-event-child-context",
+    sequence: 9,
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+  };
+  const bot = {
+    async getPendingAuthorityEvents(input) {
+      calls.push({ method: "get", input });
+      return { found: true, events: pending ? [{ eventId: envelope.eventId, envelope }] : [] };
+    },
+    async recordAuthorityEventAttempt(input) {
+      calls.push({ method: "attempt", input });
+      return { recorded: true };
+    },
+    async acknowledgeAuthorityEvent(input) {
+      calls.push({ method: "acknowledge", input });
+      pending = false;
+      return { acknowledged: true };
+    },
+    async compactAuthorityEvents(input) {
+      calls.push({ method: "compact", input });
+      return { compacted: true };
+    },
+  };
+  const dispatch = createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: () => true,
+  });
+
+  const result = await dispatch({
+    userId: "u1",
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+    persistenceContext,
+    limit: 25,
+  });
+
+  assert.deepEqual(result, { dispatched: true, delivered: 1 });
+  assert.deepEqual(calls.map(({ method }) => method), ["get", "attempt", "acknowledge", "get", "compact"]);
+  for (const { input } of calls) {
+    assert.equal(input.persistenceContext, persistenceContext);
+    assert.equal(input.sessionId, "child-session");
+    assert.equal(input.parentSessionId, "root-session");
+  }
+  assert.equal(calls[0].input.limit, 25);
+  assert.equal(calls[1].input.eventId, envelope.eventId);
+  assert.equal(calls[2].input.eventId, envelope.eventId);
+  assert.equal(calls[4].input.deliveredThroughSequence, 9);
+  assert.equal(
+    Date.now() - Date.parse(calls[4].input.retainDeliveredAfter) >=
+      TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
+    true,
+  );
+});
+
+test("authority dispatcher coalesces concurrent drains for the same scoped Session", async () => {
+  let pending = true;
+  let releaseSend;
+  const sendBarrier = new Promise((resolve) => { releaseSend = resolve; });
+  const calls = { get: 0, attempt: 0, acknowledge: 0, send: 0 };
+  const envelope = {
+    eventId: "authority-event-single-flight",
+    sequence: 3,
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+  };
+  const bot = {
+    async getPendingAuthorityEvents() {
+      calls.get += 1;
+      return { found: true, events: pending ? [{ eventId: envelope.eventId, envelope }] : [] };
+    },
+    async recordAuthorityEventAttempt() {
+      calls.attempt += 1;
+      return { recorded: true };
+    },
+    async acknowledgeAuthorityEvent() {
+      calls.acknowledge += 1;
+      pending = false;
+      return { acknowledged: true };
+    },
+  };
+  const dispatch = createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: async () => {
+      calls.send += 1;
+      await sendBarrier;
+      return true;
+    },
+  });
+  const persistenceContext = { scopeId: "agent:child-turn" };
+  const payload = {
+    userId: "u1",
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+    persistenceContext,
+  };
+
+  const first = dispatch(payload);
+  const second = dispatch(payload);
+  assert.equal(first, second);
+  releaseSend();
+  assert.deepEqual(await Promise.all([first, second]), [
+    { dispatched: true, delivered: 1 },
+    { dispatched: true, delivered: 1 },
+  ]);
+  assert.deepEqual(calls, { get: 2, attempt: 1, acknowledge: 1, send: 1 });
 });
 
 test("authority dispatcher leaves an event pending when acknowledgement persistence fails", async () => {

@@ -149,7 +149,7 @@ export function mergeAttachmentSnapshot(existing = [], snapshot = []) {
 
 export function flattenSessionMessages(sessionDocs = []) {
   return (Array.isArray(sessionDocs) ? sessionDocs : []).flatMap((sessionDoc) =>
-    Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [],
+    Array.isArray(sessionDoc?.rawMessages) ? sessionDoc.rawMessages : [],
   );
 }
 

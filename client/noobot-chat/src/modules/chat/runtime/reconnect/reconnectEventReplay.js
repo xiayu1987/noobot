@@ -9,6 +9,11 @@ import { normalizeReplayCacheKey } from "./replayCache.js";
 import { _trimStr } from "./utils.js";
 import { normalizeTurnTransportEnvelope } from "../engine/turnTransportEnvelope.js";
 import { routeRuntimeStreamEvent } from "../../../../extensions/runtime-stream-router.js";
+import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import {
+  logStateMachineDebug,
+  summarizeTurnLifecycleSnapshot,
+} from "../../../debug/loggers/stateMachineLogger.js";
 
 export async function applyReconnectEventReplay({
   event: incomingEvent,
@@ -26,7 +31,6 @@ export async function applyReconnectEventReplay({
   applyExecutionChildren,
   applyExecutionTree,
   applyWorkflowRuntimeEvent,
-  applySubSessionReplayMessages,
   finalizeDoneTurnPresentation,
   isDeletedTurn,
 } = {}) {
@@ -39,26 +43,25 @@ export async function applyReconnectEventReplay({
   const data = normalizedTransportEnvelope.data;
   const replaySessionId = _trimStr(data?.sessionId || data?.messageEvent?.sessionId);
   const replayTurnScopeId = _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId);
+  logStateMachineDebug("stateMachine.reconnect.event.received", () => ({
+    sessionId: replaySessionId,
+    turnScopeId: replayTurnScopeId,
+    protocolEvent: replayEvent,
+    dialogProcessId: _trimStr(data?.dialogProcessId || data?.messageEvent?.dialogProcessId),
+    commandId: _trimStr(data?.commandId),
+    transportSequence: Number(data?.seq || 0),
+    lifecycleSequence: Number(data?.sequence || data?.messageEvent?.sequence || 0),
+    channelState: _trimStr(data?.state || data?.channelState),
+  }));
   if (isDeletedTurn?.({ sessionId: replaySessionId, turnScopeId: replayTurnScopeId }) === true) {
     return { applied: false, reason: "deleted_turn_tombstoned" };
-  }
-  if (replayEvent === "subagent_message_event" || data?.route?.scope === "sub_session") {
-    return applySubSessionReplayMessages?.([{ event: replayEvent, data }], {
-      rootSessionId: _trimStr(
-        data?.route?.rootSessionId ||
-        data?.route?.parentSessionId ||
-        data?.rootSessionId ||
-        data?.parentSessionId,
-      ),
-      dialogProcessId: _trimStr(data?.dialogProcessId),
-      turnScopeId: replayTurnScopeId,
-    }) || { applied: false, reason: "sub_session_projection_unavailable" };
   }
   let runtimeResult = null;
   const runtimeRouted = routeRuntimeStreamEvent(replayEvent, data, {
     source: "reconnect",
+    logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
     applyWorkflowRuntimeEvent: (record, options) => {
-      runtimeResult = applyWorkflowRuntimeEvent?.(record?.event || replayEvent, record?.data || data, options);
+      runtimeResult = applyWorkflowRuntimeEvent?.(record, options);
       return runtimeResult;
     },
   });
@@ -67,7 +70,22 @@ export async function applyReconnectEventReplay({
   if (replayEvent === StreamEventEnum.EXECUTION_CHILDREN) return applyExecutionChildren?.(data || {});
   if (replayEvent === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(data || {});
   if (replayEvent === StreamEventEnum.TURN_SNAPSHOT) {
-    return applyTurnLifecycleSnapshot?.(data || {});
+    logStateMachineDebug("stateMachine.reconnect.eventSnapshot.before", () => ({
+      ...summarizeTurnLifecycleSnapshot(data),
+      commandId: _trimStr(data?.commandId),
+      transportSequence: Number(data?.seq || 0),
+    }));
+    const result = applyTurnLifecycleSnapshot?.(data || {});
+    logStateMachineDebug("stateMachine.reconnect.eventSnapshot.after", () => ({
+      ...summarizeTurnLifecycleSnapshot(data),
+      commandId: _trimStr(data?.commandId),
+      transportSequence: Number(data?.seq || 0),
+      applied: result?.applied === true,
+      reason: result?.reason || "",
+      errorCount: Array.isArray(result?.errors) ? result.errors.length : 0,
+      resultingActiveTurnScopeId: _trimStr(result?.bucket?.activeTurnScopeId),
+    }));
+    return result;
   }
   if (replayEvent === StreamEventEnum.TURN_LIFECYCLE) {
     return applyTurnLifecycleEnvelope?.(data || {});
@@ -89,6 +107,17 @@ export async function applyReconnectEventReplay({
       sessionId && turnScopeId && terminalStates.has(state)
         ? hasAuthoritativeCurrentRun?.({ sessionId, turnScopeId }) === true
         : stateData.authoritativeSnapshot === true;
+    logStateMachineDebug("stateMachine.reconnect.eventChannel.routed", () => ({
+      sessionId,
+      turnScopeId,
+      dialogProcessId: _trimStr(stateData.dialogProcessId),
+      channelState: state,
+      sourceEvent: _trimStr(stateData.sourceEvent),
+      authoritativeSnapshot,
+      pendingInteractionCount: Array.isArray(stateData.pendingInteractions)
+        ? stateData.pendingInteractions.length
+        : stateData.pendingInteraction ? 1 : 0,
+    }));
     return applyChannelState({
       ...stateData,
       ...(terminalStates.has(state) ? { authoritativeSnapshot } : {}),

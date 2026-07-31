@@ -69,7 +69,7 @@ function createUseChatListFixture(overrides = {}) {
 }
 
 describe("useChatList", () => {
-  it("fetchSessions keeps current session object/message references and uses splice update", async () => {
+  it("fetchSessions keeps the session object while applying the authoritative detail messages", async () => {
     const fixture = createUseChatListFixture();
     const { api, refs, mocks } = fixture;
     const existingMessages = [{ role: RoleEnum.USER, content: "local" }];
@@ -124,12 +124,12 @@ describe("useChatList", () => {
 
     await api.fetchSessions("local-1", {
       silent: true,
-      preserveCurrentMessages: true,
     });
 
     expect(refs.sessions.value).toBe(sessionsArrayRef);
     expect(refs.sessions.value[0]).toBe(existingSessionRef);
-    expect(refs.sessions.value[0].messages).toBe(existingMessagesRef);
+    expect(refs.sessions.value[0].messages).not.toBe(existingMessagesRef);
+    expect(refs.sessions.value[0].messages).toEqual([]);
     expect(refs.activeSessionId.value).toBe("backend-1");
   });
 
@@ -163,7 +163,7 @@ describe("useChatList", () => {
     });
 
     expect(fixture.refs.loadingSessions.value).toBe(false);
-    await fixture.api.fetchSessions("", { silent: true, preserveCurrentMessages: true });
+    await fixture.api.fetchSessions("", { silent: true });
     expect(getSessionsApi).toHaveBeenCalledTimes(1);
     expect(fixture.refs.loadingSessions.value).toBe(false);
   });
@@ -223,7 +223,6 @@ describe("useChatList", () => {
 
     await api.fetchSessions("", {
       forceCurrentSessionRerender: true,
-      preserveCurrentMessages: false,
     });
 
     expect(mocks.getSessionDetailApi).toHaveBeenCalledTimes(1);
@@ -304,323 +303,6 @@ describe("useChatList", () => {
     expect(detail.sessionId).toBe("s-loaded");
     expect(detail.sessions).toBe(refs.sessions.value[0].sessionDocs);
     expect(getSessionDetailApi).not.toHaveBeenCalled();
-  });
-
-  it("applySessionDetail with preserveCurrentMessages keeps current rendered messages", () => {
-    const { api, refs } = createUseChatListFixture();
-    const originalMessages = [{ role: RoleEnum.ASSISTANT, content: "pending local" }];
-    const session = {
-      id: "local-3",
-      backendSessionId: "backend-3",
-      title: "session",
-      isLocal: true,
-      loaded: false,
-      messages: originalMessages,
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      createdAt: "2026-05-14T00:00:00.000Z",
-      updatedAt: "2026-05-14T00:00:00.000Z",
-      currentTaskId: "",
-      currentTaskStatus: "idle",
-      messageCount: 1,
-      lastMessage: originalMessages[0],
-    };
-    refs.sessions.value.push(session);
-    refs.activeSessionId.value = "local-3";
-
-    api.applySessionDetail(
-      {
-        sessionId: "backend-3",
-        sessions: [
-          {
-            sessionId: "backend-3",
-            currentTaskId: "",
-            createdAt: "2026-05-14T00:00:00.000Z",
-            updatedAt: "2026-05-14T00:02:00.000Z",
-            messages: [{ role: RoleEnum.ASSISTANT, content: "server snapshot" }],
-          },
-        ],
-      },
-      { preserveCurrentMessages: true },
-    );
-
-    expect(session.id).toBe("backend-3");
-    expect(refs.activeSessionId.value).toBe("backend-3");
-    expect(session.messages).toBe(originalMessages);
-    expect(session.messages[0].content).toBe("pending local");
-  });
-
-  it("applySessionDetail with preserveCurrentMessages replaces matching local user instead of duplicating it", () => {
-    const { api, refs } = createUseChatListFixture();
-    const localUserMessage = {
-      id: "edited-user",
-      messageId: "edited-user",
-      role: RoleEnum.USER,
-      content: "edited question",
-      pending: true,
-    };
-    const localAssistantMessage = {
-      id: "edited-assistant",
-      messageId: "edited-assistant",
-      role: RoleEnum.ASSISTANT,
-      content: "pending answer",
-      dialogProcessId: "dp-edited",
-      pending: true,
-    };
-    const session = {
-      id: "local-edited",
-      backendSessionId: "backend-edited",
-      title: "session",
-      isLocal: true,
-      loaded: true,
-      messages: [localUserMessage, localAssistantMessage],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      createdAt: "2026-05-14T00:00:00.000Z",
-      updatedAt: "2026-05-14T00:00:00.000Z",
-      currentTaskId: "",
-      currentTaskStatus: "idle",
-      messageCount: 2,
-      lastMessage: localAssistantMessage,
-    };
-    refs.sessions.value.push(session);
-    refs.activeSessionId.value = "local-edited";
-
-    api.applySessionDetail(
-      {
-        sessionId: "backend-edited",
-        sessions: [
-          {
-            sessionId: "backend-edited",
-            currentTaskId: "",
-            createdAt: "2026-05-14T00:00:00.000Z",
-            updatedAt: "2026-05-14T00:02:00.000Z",
-            messages: [
-              {
-                id: "edited-user",
-                messageId: "edited-user",
-                role: RoleEnum.USER,
-                content: "edited question",
-                dialogProcessId: "dp-edited",
-              },
-              {
-                id: "edited-assistant",
-                messageId: "edited-assistant",
-                role: RoleEnum.ASSISTANT,
-                content: "final answer",
-                dialogProcessId: "dp-edited",
-              },
-            ],
-          },
-        ],
-      },
-      { preserveCurrentMessages: true },
-    );
-
-    const userMessages = session.messages.filter((message) => message.role === RoleEnum.USER);
-    expect(userMessages).toHaveLength(1);
-    expect(userMessages[0]).toBe(localUserMessage);
-    expect(userMessages[0].dialogProcessId).toBe("dp-edited");
-    expect(userMessages[0].pending).toBe(false);
-    expect(session.messages).toHaveLength(2);
-    expect(session.messages[1]).toBe(localAssistantMessage);
-    expect(session.messages[1].content).toBe("final answer");
-    expect(session.messageCount).toBe(2);
-  });
-
-  it("applySessionDetail reuses a turn placeholder for the completed assistant reply", () => {
-    const { api, refs } = createUseChatListFixture();
-    const turnScopeId = "client-turn:completed-placeholder";
-    const userMessage = {
-      id: "completed-user",
-      messageId: "completed-user",
-      role: RoleEnum.USER,
-      content: "question",
-      turnScopeId,
-    };
-    const placeholder = {
-      id: "completed-assistant",
-      messageId: "completed-assistant",
-      role: RoleEnum.ASSISTANT,
-      content: "",
-      turnScopeId,
-      turnPlaceholder: true,
-      placeholder: true,
-      pending: true,
-    };
-    const session = {
-      id: "local-completed-placeholder",
-      backendSessionId: "backend-completed-placeholder",
-      title: "session",
-      isLocal: true,
-      loaded: true,
-      messages: [userMessage, placeholder],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      createdAt: "2026-05-14T00:00:00.000Z",
-      updatedAt: "2026-05-14T00:00:00.000Z",
-      currentTaskId: "",
-      currentTaskStatus: "idle",
-      messageCount: 2,
-      lastMessage: placeholder,
-    };
-    refs.sessions.value.push(session);
-    refs.activeSessionId.value = session.id;
-
-    api.applySessionDetail({
-      sessionId: session.backendSessionId,
-      sessions: [{
-        sessionId: session.backendSessionId,
-        messages: [
-          {
-            id: "completed-user", messageId: "completed-user",
-            role: RoleEnum.USER, content: "question", turnScopeId, dialogProcessId: "dp-completed",
-          },
-          {
-            id: "completed-assistant", messageId: "completed-assistant",
-            role: RoleEnum.ASSISTANT, content: "final answer", turnScopeId, dialogProcessId: "dp-completed",
-          },
-        ],
-      }],
-    }, { preserveCurrentMessages: true });
-
-    const assistantMessages = session.messages.filter((message) => message.role === RoleEnum.ASSISTANT);
-    expect(assistantMessages).toHaveLength(1);
-    expect(assistantMessages[0]).toBe(placeholder);
-    expect(assistantMessages[0]).toEqual(expect.objectContaining({
-      content: "final answer",
-      dialogProcessId: "dp-completed",
-      pending: false,
-    }));
-  });
-
-  it("applySessionDetail preserves one inline editing user message when stop refresh returns original content", () => {
-    const { api, refs } = createUseChatListFixture();
-    const editingUserMessage = {
-      id: "editing-user",
-      messageId: "editing-user",
-      role: RoleEnum.USER,
-      content: "draft edited question",
-      __monotonicEditing: true,
-    };
-    const stoppedAssistantMessage = {
-      id: "editing-assistant",
-      messageId: "editing-assistant",
-      role: RoleEnum.ASSISTANT,
-      content: "partial answer",
-      dialogProcessId: "dp-editing-stop",
-      pending: false,
-      statusLabel: "chat.stopped",
-    };
-    const session = {
-      id: "local-editing-stop",
-      backendSessionId: "backend-editing-stop",
-      title: "session",
-      isLocal: true,
-      loaded: true,
-      messages: [editingUserMessage, stoppedAssistantMessage],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      createdAt: "2026-05-14T00:00:00.000Z",
-      updatedAt: "2026-05-14T00:00:00.000Z",
-      currentTaskId: "",
-      currentTaskStatus: "idle",
-      messageCount: 2,
-      lastMessage: stoppedAssistantMessage,
-    };
-    refs.sessions.value.push(session);
-    refs.activeSessionId.value = "local-editing-stop";
-
-    api.applySessionDetail(
-      {
-        sessionId: "backend-editing-stop",
-        sessions: [
-          {
-            sessionId: "backend-editing-stop",
-            currentTaskId: "",
-            createdAt: "2026-05-14T00:00:00.000Z",
-            updatedAt: "2026-05-14T00:02:00.000Z",
-            messages: [
-              {
-                id: "editing-user",
-                messageId: "editing-user",
-                role: RoleEnum.USER,
-                content: "original question",
-                dialogProcessId: "dp-editing-stop",
-              },
-              {
-                id: "editing-assistant",
-                messageId: "editing-assistant",
-                role: RoleEnum.ASSISTANT,
-                content: "stopped answer",
-                dialogProcessId: "dp-editing-stop",
-              },
-            ],
-          },
-        ],
-      },
-      { preserveCurrentMessages: true },
-    );
-
-    const userMessages = session.messages.filter((message) => message.role === RoleEnum.USER);
-    expect(userMessages).toHaveLength(1);
-    expect(userMessages[0]).toBe(editingUserMessage);
-    expect(userMessages[0].content).toBe("draft edited question");
-    expect(userMessages[0].__monotonicEditing).toBe(true);
-    expect(userMessages[0].dialogProcessId).toBe("dp-editing-stop");
-    expect(session.messages).toHaveLength(2);
-    expect(session.messages[1]).toBe(stoppedAssistantMessage);
-    expect(session.messages[1].content).toBe("stopped answer");
-  });
-
-  it("applySessionDetail keeps active messages when backend detail is briefly empty", () => {
-    const { api, refs } = createUseChatListFixture();
-    const currentMessages = [
-      { role: RoleEnum.USER, content: "hello" },
-      { role: RoleEnum.ASSISTANT, content: "final answer", dialogProcessId: "dp-1" },
-    ];
-    const session = {
-      id: "local-empty-detail",
-      backendSessionId: "backend-empty-detail",
-      title: "session",
-      isLocal: true,
-      loaded: false,
-      messages: currentMessages,
-      rawMessages: currentMessages,
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      createdAt: "2026-05-14T00:00:00.000Z",
-      updatedAt: "2026-05-14T00:00:00.000Z",
-      currentTaskId: "",
-      currentTaskStatus: "idle",
-      messageCount: currentMessages.length,
-      lastMessage: currentMessages[currentMessages.length - 1],
-    };
-    refs.sessions.value.push(session);
-    refs.activeSessionId.value = "local-empty-detail";
-
-    api.applySessionDetail({
-      sessionId: "backend-empty-detail",
-      sessions: [
-        {
-          sessionId: "backend-empty-detail",
-          currentTaskId: "",
-          createdAt: "2026-05-14T00:00:00.000Z",
-          updatedAt: "2026-05-14T00:02:00.000Z",
-          messages: [],
-        },
-      ],
-    });
-
-    expect(session.id).toBe("backend-empty-detail");
-    expect(refs.activeSessionId.value).toBe("backend-empty-detail");
-    expect(session.messages).toBe(currentMessages);
-    expect(session.messageCount).toBe(2);
-    expect(session.lastMessage).toBe(currentMessages[1]);
   });
 
   it("applySessionDetail can skip scrolling when session detail is restored on reload", () => {

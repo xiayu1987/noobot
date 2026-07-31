@@ -22,6 +22,7 @@ import {
   scheduleMissingInteractionPayloadFailure,
 } from "../../../../../src/modules/chat/runtime/reconnect/channelStateReplay.js";
 import {
+  createTurnLifecycleEnvelope,
   createTurnLifecycleSnapshot,
   TURN_STATE,
 } from "@noobot/authoritative-state/contracts";
@@ -208,6 +209,60 @@ describe("useReconnectReplay", () => {
       sending: true,
       canStop: true,
       turnScopeId: "turn-refresh-running",
+    });
+  });
+
+  it("restores stop capability from reconnect lifecycleEvents without requiring a snapshot", async () => {
+    const { api, refs } = createFixture();
+    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }];
+    const lifecycleEnvelope = (eventType, revision, state, phase, executionState, canStop) =>
+      createTurnLifecycleEnvelope({
+        eventType,
+        eventId: `event-refresh-lifecycle-${revision}`,
+        commandId: "command-refresh-lifecycle",
+        userId: "user-1",
+        sessionId: "s-1",
+        dialogProcessId: "dp-refresh-lifecycle",
+        turnScopeId: "turn-refresh-lifecycle",
+        messageId: "message-refresh-lifecycle",
+        presentationMessageId: "message-refresh-lifecycle",
+        action: "send",
+        revision,
+        sequence: revision,
+        state,
+        phase,
+        executionState,
+        capabilities: { actionLocked: true, canStop },
+      });
+
+    await api.applyReconnectData({
+      sessions: [{
+        sessionId: "s-1",
+        hasRunningTask: true,
+        currentRun: {
+          sessionId: "s-1",
+          dialogProcessId: "dp-refresh-lifecycle",
+          turnScopeId: "turn-refresh-lifecycle",
+          state: BackendChannelState.SENDING,
+          seq: 25,
+        },
+        lifecycleEvents: [
+          { event: StreamEventEnum.TURN_LIFECYCLE, data: lifecycleEnvelope(
+            "turn.action_accepted", 1, "action_requesting", "action", "accepted", false,
+          ) },
+          { event: StreamEventEnum.TURN_LIFECYCLE, data: lifecycleEnvelope(
+            "turn.processing_started", 2, "processing", "processing", "sending", true,
+          ) },
+        ],
+        dialogProcesses: [],
+      }],
+    });
+
+    expect(selectSessionTurnRuntime(refs.turnRuntimeRegistry.value, "s-1")).toMatchObject({
+      turnScopeId: "turn-refresh-lifecycle",
+      displayState: "sending",
+      sending: true,
+      canStop: true,
     });
   });
 
@@ -525,7 +580,7 @@ describe("useReconnectReplay", () => {
     });
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalledWith(
       expect.any(Object),
-      { preserveCurrentMessages: false, scrollToBottom: false },
+      { scrollToBottom: false },
     );
     expect(mocks.chatWebSocketClient.reconnect).toHaveBeenCalledWith(
       expect.objectContaining({ currentSessionId: "s-1" }),

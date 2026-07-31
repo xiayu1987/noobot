@@ -113,7 +113,7 @@ describe("useChatSession summary and reconnect state", () => {
       id: "s-snapshot", backendSessionId: "s-snapshot",
       turnStatuses: [{ status: "processing", turnScopeId: "t-snapshot", dialogProcessId: "dp-snapshot" }],
       turnLifecycleSnapshot: {
-        protocolVersion: 2, eventType: "turn.snapshot", commandId: "summary:s-snapshot:2",
+        protocolVersion: 3, eventType: "turn.snapshot", commandId: "summary:s-snapshot:2",
         userId: "", sessionId: "s-snapshot", sequence: 2, activeTurnScopeId: "",
         activeTurn: null, unchanged: false, generatedAt: "2026-07-10T00:00:00.000Z",
         recentTerminalTurns: [{
@@ -134,11 +134,10 @@ describe("useChatSession summary and reconnect state", () => {
     await nextTick();
     await vi.waitFor(() => expect(store.turnRuntimeRegistry.sessions["s-snapshot"].turns["t-snapshot"].terminal).toBe("completed"));
 
-    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-snapshot")).toMatchObject({
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-snapshot", "t-snapshot")).toMatchObject({
       sending: false,
       displayState: "send",
     });
-    expect(store.turnRuntimeRegistry.sessions["s-snapshot"].protocolVersion).toBe(2);
     expect(store.turnRuntimeRegistry.sessions["s-snapshot"].turns["t-snapshot"].terminal).toBe("completed");
   });
 
@@ -148,7 +147,7 @@ describe("useChatSession summary and reconnect state", () => {
       id: "local-refresh-shell",
       backendSessionId: "s-late-identity",
       turnLifecycleSnapshot: {
-        protocolVersion: 2,
+        protocolVersion: 3,
         eventType: "turn.snapshot",
         commandId: "summary:s-late-identity:2",
         userId: "",
@@ -202,7 +201,7 @@ describe("useChatSession summary and reconnect state", () => {
       id: sessionId,
       backendSessionId: sessionId,
       turnLifecycleSnapshot: {
-        protocolVersion: 2,
+        protocolVersion: 3,
         eventType: "turn.snapshot",
         commandId: "summary:s-active-refresh:4",
         sessionId,
@@ -271,7 +270,7 @@ describe("useChatSession summary and reconnect state", () => {
       caller: "user",
       messages: [],
       turnLifecycleSnapshot: {
-        protocolVersion: 2,
+        protocolVersion: 3,
         eventType: "turn.snapshot",
         commandId: "summary:s-async-refresh:4",
         sessionId: "s-async-refresh",
@@ -380,7 +379,7 @@ describe("useChatSession summary and reconnect state", () => {
 
     await session.handleReconnect();
     expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
-    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race")).toMatchObject({
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race")).toMatchObject({
       sending: false,
       canStop: false,
       terminal: "completed",
@@ -393,11 +392,11 @@ describe("useChatSession summary and reconnect state", () => {
     }));
     await session.selectSession("s-detail-race", { force: true });
     await vi.waitFor(() => expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race").sending,
+      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race").sending,
     ).toBe(false));
 
     expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
-    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race")).toMatchObject({
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race")).toMatchObject({
       sending: false,
       canStop: false,
       terminal: "completed",
@@ -430,17 +429,17 @@ describe("useChatSession summary and reconnect state", () => {
 
     await session.handleReconnect();
     await vi.waitFor(() => expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race").terminal,
+      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race", turnScopeId).terminal,
     ).toBe("completed"));
     expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
 
     await session.selectSession("s-processing-race", { force: true });
     await vi.waitFor(() => expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race").terminal,
+      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race", turnScopeId).terminal,
     ).toBe("completed"));
 
     expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
-    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race")).toMatchObject({
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race", turnScopeId)).toMatchObject({
       sending: false,
       canStop: false,
       terminal: "completed",

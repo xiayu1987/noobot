@@ -104,7 +104,10 @@ export function createRunEventListener({
         "";
       if (eventName === "turn_lifecycle_committed") {
         if (typeof onCommittedTurnLifecycle === "function") {
-          onCommittedTurnLifecycle(eventData);
+          return onCommittedTurnLifecycle(
+            eventData?.envelope || eventData,
+            { persistenceContext: eventData?.persistenceContext || null },
+          );
         }
         return;
       }

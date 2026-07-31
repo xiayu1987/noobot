@@ -9,6 +9,7 @@ import {
   TURN_PHASE,
   TURN_STATE,
   deriveAuthoritativeTurnCapabilities,
+  normalizeTurnContinuationSource,
   validateTurnLifecycleEnvelope,
 } from "../contracts/turn-lifecycle-protocol.mjs";
 
@@ -72,10 +73,34 @@ export function normalizeTurnLifecycleEntity(source = {}) {
             updatedAt: clean(value.finalizeIntent.updatedAt),
           }
         : null,
+      continuationSource: normalizeTurnContinuationSource(value.continuationSource),
+      continuedByTurnScopeId: clean(value.continuedByTurnScopeId),
       startedAt: clean(value.startedAt),
       finishedAt: clean(value.finishedAt),
       createdAt: clean(value.createdAt),
       updatedAt: clean(value.updatedAt),
+    };
+  }
+  const replacedTurns = {};
+  for (const [key, value] of Object.entries(source?.replacedTurns || {})) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const turnScopeId = clean(value.turnScopeId || key);
+    const replacementTurnScopeId = clean(value.replacementTurnScopeId);
+    const commandId = clean(value.commandId);
+    if (!turnScopeId || !replacementTurnScopeId || !commandId) continue;
+    replacedTurns[turnScopeId] = {
+      turnScopeId,
+      replacementTurnScopeId,
+      replacementUserMessageId: clean(value.replacementUserMessageId),
+      commandId,
+      committedVersion: integer(value.committedVersion),
+      replacedTurnScopeIds: [...new Set(
+        (Array.isArray(value.replacedTurnScopeIds) ? value.replacedTurnScopeIds : [turnScopeId])
+          .map(clean)
+          .filter(Boolean),
+      )],
+      sequence: integer(value.sequence),
+      committedAt: clean(value.committedAt),
     };
   }
   const commandReceipts = (Array.isArray(source?.commandReceipts) ? source.commandReceipts : [])
@@ -105,8 +130,13 @@ export function normalizeTurnLifecycleEntity(source = {}) {
     )
       ? activeTurnScopeId
       : "",
-    sequence: Math.max(integer(source?.sequence), ...Object.values(turns).map((turn) => turn.sequence)),
+    sequence: Math.max(
+      integer(source?.sequence),
+      ...Object.values(turns).map((turn) => turn.sequence),
+      ...Object.values(replacedTurns).map((turn) => turn.sequence),
+    ),
     turns,
+    replacedTurns,
     commandReceipts,
   };
 }
@@ -154,6 +184,14 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
   const eventType = clean(input.eventType);
   const phase = clean(input.phase);
   if (!turnScopeId || !commandId || !eventType) return { applied: false, reason: "invalid_lifecycle_identity", lifecycle };
+  if (lifecycle.replacedTurns[turnScopeId]) {
+    return {
+      applied: false,
+      reason: "turn_replaced",
+      replacement: lifecycle.replacedTurns[turnScopeId],
+      lifecycle,
+    };
+  }
 
   const current = lifecycle.turns[turnScopeId] || null;
   const requestedExecutionIdentity = {
@@ -170,6 +208,12 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
     input.presentationMessageId || current?.presentationMessageId,
   );
   const requestedMessageId = clean(input.messageId || current?.messageId);
+  const requestedAction = eventType === TURN_EVENT.STOP_ACCEPTED
+    ? "stop"
+    : clean(input.action || current?.action);
+  const requestedContinuationSource = normalizeTurnContinuationSource(
+    input.continuationSource || current?.continuationSource,
+  );
   if (!requestedMessageId || !requestedPresentationMessageId) {
     return { applied: false, reason: "turn_message_identity_incomplete", lifecycle };
   }
@@ -193,6 +237,7 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
     finishedAt: clean(input.finishedAt),
     presentationMessageId: requestedPresentationMessageId,
     messageId: requestedMessageId,
+    continuationSource: requestedContinuationSource,
     ...requestedExecutionIdentity,
   });
   const receipt = lifecycle.commandReceipts.find((item) => item.commandId === commandId && item.eventType === eventType);
@@ -201,11 +246,47 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
     return { applied: false, deduplicated: true, reason: "duplicate_command", lifecycle, turn: lifecycle.turns[receipt.turnScopeId] };
   }
 
+  if (current) {
+    const immutableExecutionFields = [
+      "executionId",
+      "executionKind",
+      "parentExecutionId",
+      "rootExecutionId",
+    ];
+    const hasExecutionIdentityConflict = immutableExecutionFields.some((field) =>
+      clean(current[field]) !== clean(requestedExecutionIdentity[field]),
+    );
+    const currentOrigin = JSON.stringify(current.origin || {});
+    const requestedOrigin = JSON.stringify(requestedExecutionIdentity.origin || {});
+    if (hasExecutionIdentityConflict || currentOrigin !== requestedOrigin) {
+      return { applied: false, reason: "execution_identity_conflict", lifecycle };
+    }
+  }
+
   if (input.expectedRevision !== undefined && Number(input.expectedRevision) !== Number(current?.revision || 0)) {
     return { applied: false, reason: "turn_revision_conflict", currentRevision: Number(current?.revision || 0), lifecycle };
   }
   if (eventType === TURN_EVENT.ACTION_ACCEPTED && lifecycle.activeTurnScopeId && lifecycle.activeTurnScopeId !== turnScopeId) {
     return { applied: false, reason: "session_action_conflict", lifecycle };
+  }
+  if (eventType === TURN_EVENT.ACTION_ACCEPTED && requestedAction === "continue") {
+    if (!requestedContinuationSource) {
+      return { applied: false, reason: "continue_source_identity_incomplete", lifecycle };
+    }
+    const sourceTurn = lifecycle.turns[requestedContinuationSource.turnScopeId];
+    if (
+      !sourceTurn ||
+      sourceTurn.dialogProcessId !== requestedContinuationSource.dialogProcessId ||
+      sourceTurn.state !== TURN_STATE.STOP_COMPLETED ||
+      sourceTurn.executionState !== "user_stopped"
+    ) {
+      return { applied: false, reason: "continue_source_not_stopped", lifecycle };
+    }
+    if (sourceTurn.continuedByTurnScopeId) {
+      return { applied: false, reason: "continue_source_consumed", lifecycle };
+    }
+  } else if (eventType === TURN_EVENT.ACTION_ACCEPTED && requestedContinuationSource) {
+    return { applied: false, reason: "unexpected_continuation_source", lifecycle };
   }
   if (eventType === TURN_EVENT.STOP_ACCEPTED && !deriveAuthoritativeTurnCapabilities(current || {}).canStop) {
     return { applied: false, reason: "stop_not_allowed", lifecycle };
@@ -217,7 +298,7 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
   const nowValue = now();
   const revision = Number(current?.revision || 0) + 1;
   const sequence = lifecycle.sequence + 1;
-  const action = eventType === TURN_EVENT.STOP_ACCEPTED ? "stop" : clean(input.action || current?.action);
+  const action = requestedAction;
   const isFinalizePending = eventType === TURN_EVENT.PROCESSING_COMPLETED || eventType === TURN_EVENT.STOP_PROCESSING_COMPLETED;
   const isFinalizeFailure = eventType === TURN_EVENT.FAILED && (phase === TURN_PHASE.COMPLETION || phase === TURN_PHASE.STOP);
   const finalizeType = phase === TURN_PHASE.STOP || eventType === TURN_EVENT.STOP_PROCESSING_COMPLETED ? "stop" : "completion";
@@ -265,6 +346,8 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
       : current?.terminalStatus || null,
     failure: eventType === TURN_EVENT.FAILED ? { ...(input.failure || {}), phase } : null,
     finalizeIntent,
+    continuationSource: requestedContinuationSource,
+    continuedByTurnScopeId: clean(current?.continuedByTurnScopeId),
     startedAt: clean(input.startedAt || current?.startedAt) || clean(current?.createdAt) || nowValue,
     finishedAt: TERMINAL_STATES.has(state)
       ? clean(input.finishedAt) || nowValue
@@ -272,6 +355,9 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
     createdAt: clean(current?.createdAt) || nowValue,
     updatedAt: nowValue,
   };
+  if (eventType === TURN_EVENT.ACTION_ACCEPTED && action === "continue") {
+    lifecycle.turns[requestedContinuationSource.turnScopeId].continuedByTurnScopeId = turnScopeId;
+  }
   lifecycle.turns[turnScopeId] = turn;
   lifecycle.sequence = sequence;
   lifecycle.activeTurnScopeId = TERMINAL_STATES.has(state) && !(FINALIZE_FAILURE_STATES.has(state) && finalizeIntent?.retryable === true)

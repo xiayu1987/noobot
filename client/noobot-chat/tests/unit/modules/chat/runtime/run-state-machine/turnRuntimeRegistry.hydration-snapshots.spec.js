@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, it, expect } from "vitest";
+import { nextTick, ref } from "vue";
 import {
   createTurnRuntimeRegistryState,
   confirmTurnRuntimeDeletion,
   applyTurnRuntimeEvent,
   resolveSessionTurnRuntime,
   resolveLatestStoppedTurn,
+  resolveLatestContinuableStoppedTurn,
   resolveTurnRuntimeByScope,
   removeTurnRuntime,
   removeSessionRuntime,
@@ -33,6 +35,8 @@ import {
   settleTerminal,
   snapshot,
 } from "./turnRuntimeRegistryTestFixtures.js";
+import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
+import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
 
 describe("turnRuntimeRegistry: hydration and snapshots", () => {
   it("hydrates every persisted turn timing without creating lifecycle authority", () => {
@@ -109,9 +113,222 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     }));
     expect(result.applied).toBe(true);
     expect(registry.routeIndex.dp1).toBeUndefined();
-    expect(resolveTurnRuntimeByScope(registry, "done", { sessionId: "s1" })).toBeNull();
+    expect(resolveTurnRuntimeByScope(registry, "done", { sessionId: "s1" })).toMatchObject({
+      state: "frontend_completed",
+      terminal: "completed",
+      terminalResolved: false,
+    });
     expect(settleTerminal(registry, { turnScopeId: "done", dialogProcessId: "dp-done", revision: 4, sequence: 4 }).applied).toBe(true);
-    expect(resolveTurnRuntimeByScope(registry, "done", { sessionId: "s1" })).toMatchObject({ terminal: "completed" });
+    expect(resolveTurnRuntimeByScope(registry, "done", { sessionId: "s1" })).toMatchObject({
+      terminal: "completed",
+      terminalResolved: true,
+    });
+  });
+
+  it("keeps the latest unconsumed stopped Turn when an older terminal resolves late", () => {
+    const registry = createTurnRuntimeRegistryState();
+    const result = applyTurnLifecycleSnapshot(registry, snapshot({
+      commandId: "snapshot-continuation-chain",
+      sequence: 22,
+      activeTurn: null,
+      recentTerminalTurns: [
+        {
+          turnScopeId: "turn-b",
+          dialogProcessId: "dialog-b",
+          commandId: "turn-b:stop-completed",
+          action: "stop",
+          state: "stop_completed",
+          phase: "stop",
+          executionState: "user_stopped",
+          continuationSource: { turnScopeId: "turn-a", dialogProcessId: "dialog-a" },
+          revision: 5,
+          sequence: 22,
+          summaryVersion: 2,
+          completionCommitId: "commit-turn-b",
+          capabilities: { actionLocked: false, canStop: false },
+          finishedAt: "2026-07-31T03:18:30.000Z",
+        },
+        {
+          turnScopeId: "turn-a",
+          dialogProcessId: "dialog-a",
+          commandId: "turn-a:stop-completed",
+          action: "stop",
+          state: "stop_completed",
+          phase: "stop",
+          executionState: "user_stopped",
+          continuedByTurnScopeId: "turn-b",
+          revision: 5,
+          sequence: 17,
+          summaryVersion: 1,
+          completionCommitId: "commit-turn-a",
+          capabilities: { actionLocked: false, canStop: false },
+          finishedAt: "2026-07-31T03:17:00.000Z",
+        },
+      ],
+    }));
+
+    expect(result.applied).toBe(true);
+    expect(resolveLatestContinuableStoppedTurn(registry, "s1")?.turnScopeId).toBe("turn-b");
+    expect(registry.sessions.s1.activeTurnScopeId).toBe("");
+
+    const lateOldTerminal = settleTerminal(registry, {
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-a",
+      state: "stop_completed",
+      revision: 5,
+      sequence: 17,
+      completionCommitId: "commit-turn-a",
+      summaryVersion: 1,
+      finishedAt: "2026-07-31T03:17:00.000Z",
+    });
+    expect(lateOldTerminal.applied).toBe(true);
+    expect(resolveLatestContinuableStoppedTurn(registry, "s1")?.turnScopeId).toBe("turn-b");
+    expect(registry.sessions.s1.activeTurnScopeId).toBe("");
+    expect(resolveSessionTurnRuntime(registry, "s1")?.turnScopeId).toBe("turn-b");
+  });
+
+  it("does not let a replayed terminal Turn replace the active continuation", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnLifecycleSnapshot(registry, snapshot({
+      commandId: "snapshot-active-continuation",
+      sequence: 23,
+      activeTurnScopeId: "turn-current",
+      activeTurn: {
+        turnScopeId: "turn-current",
+        dialogProcessId: "dialog-current",
+        commandId: "turn-current:processing",
+        action: "continue",
+        state: "processing",
+        phase: "processing",
+        executionState: "sending",
+        revision: 2,
+        sequence: 23,
+        summaryVersion: 0,
+        capabilities: { actionLocked: true, canStop: true },
+        continuationSource: {
+          turnScopeId: "turn-stopped",
+          dialogProcessId: "dialog-stopped",
+        },
+      },
+      recentTerminalTurns: [{
+        turnScopeId: "turn-stopped",
+        dialogProcessId: "dialog-stopped",
+        commandId: "turn-stopped:completed",
+        action: "stop",
+        state: "stop_completed",
+        phase: "stop",
+        executionState: "user_stopped",
+        revision: 5,
+        sequence: 21,
+        summaryVersion: 1,
+        completionCommitId: "commit-turn-stopped",
+        capabilities: { actionLocked: false, canStop: false },
+      }],
+    }));
+
+    expect(settleTerminal(registry, {
+      turnScopeId: "turn-stopped",
+      dialogProcessId: "dialog-stopped",
+      state: "stop_completed",
+      revision: 5,
+      sequence: 21,
+      completionCommitId: "commit-turn-stopped",
+      summaryVersion: 1,
+    }).applied).toBe(true);
+
+    expect(registry.sessions.s1.activeTurnScopeId).toBe("turn-current");
+    expect(selectSessionTurnRuntime(registry, "s1")).toMatchObject({
+      turnScopeId: "turn-current",
+      displayState: "sending",
+      sending: true,
+      canStop: true,
+    });
+  });
+
+  it("lets a newer authoritative snapshot replace an old terminal active Turn", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnLifecycleSnapshot(registry, snapshot());
+    settleTerminal(registry, {
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      revision: 3,
+      sequence: 3,
+    });
+
+    const result = applyTurnLifecycleSnapshot(registry, snapshot({
+      commandId: "snapshot-new-active",
+      sequence: 4,
+      activeTurnScopeId: "t2",
+      activeTurn: {
+        turnScopeId: "t2",
+        dialogProcessId: "dp2",
+        commandId: "command-t2",
+        action: "send",
+        state: "processing",
+        phase: "processing",
+        executionState: "sending",
+        revision: 2,
+        sequence: 4,
+        summaryVersion: 0,
+        capabilities: { actionLocked: true, canStop: true },
+      },
+    }));
+
+    expect(result.applied).toBe(true);
+    expect(registry.sessions.s1.activeTurnScopeId).toBe("t2");
+    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({
+      turnScopeId: "t2",
+      state: "frontend_processing",
+      canStop: true,
+      lifecycleObserved: true,
+    });
+  });
+
+  it("reactively restores the stop action when a snapshot replaces an old stopped Turn", async () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnLifecycleSnapshot(registry, snapshot());
+    settleTerminal(registry, {
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+      revision: 3,
+      sequence: 3,
+    });
+    const turnRuntimeRegistry = ref(registry);
+    const store = createTurnRuntimeStoreActions(turnRuntimeRegistry);
+    const resolveActiveTurnScopeIdentity = () =>
+      turnRuntimeRegistry.value.sessions.s1?.activeTurnScopeId || "";
+    const { composerActionState } = createComposerRuntimeState({
+      turnRuntimeRegistry,
+      resolveActiveSessionIdentity: () => "s1",
+      resolveActiveTurnScopeIdentity,
+    });
+    expect(composerActionState.value.canStop).toBe(false);
+
+    store.applyTurnLifecycleSnapshot(snapshot({
+      commandId: "snapshot-current-processing",
+      sequence: 4,
+      activeTurnScopeId: "t2",
+      activeTurn: {
+        turnScopeId: "t2",
+        dialogProcessId: "dp2",
+        commandId: "command-t2",
+        action: "send",
+        state: "processing",
+        phase: "processing",
+        executionState: "sending",
+        revision: 2,
+        sequence: 4,
+        summaryVersion: 0,
+        capabilities: { actionLocked: true, canStop: true },
+      },
+    }));
+    await nextTick();
+
+    expect(resolveActiveTurnScopeIdentity()).toBe("t2");
+    expect(composerActionState.value).toMatchObject({
+      displayState: "sending",
+      canStop: true,
+    });
   });
 
   it("does not let channel state move a snapshot-owned Turn phase", () => {
