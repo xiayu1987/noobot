@@ -244,7 +244,10 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
     : Number(event.transportSeq || 0);
   const eventSeq = Number(event.lifecycleSeq || event.seq || 0);
   const eventRevision = Number(event.revision || 0);
-  if (current && isFinalTurnState(current.state, current)) {
+  const enrichesProjectedTerminal = current &&
+    event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED &&
+    current.terminalResolved !== true;
+  if (current && isFinalTurnState(current.state, current) && !enrichesProjectedTerminal) {
     return { applied: false, reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED, current, event };
   }
   const interaction = reduceInteractionProjection(current || {}, event);

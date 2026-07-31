@@ -6,6 +6,7 @@
 import { nowMs } from "../../model/timeFields.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 
 export function createComposerActions({
   composerActionState, turnRuntimeRegistry, resolveActiveSessionIdentity,
@@ -30,6 +31,24 @@ export function createComposerActions({
     const resumeTurnScopeId = String(stoppedTurn?.turnScopeId || "").trim();
     const resumeSessionId = resolveActiveSessionIdentity();
     const isContinueFromUserStopped = Boolean(stoppedTurn && resumeDialogProcessId && resumeTurnScopeId);
+    logStateMachineDebug("stateMachine.continue.source.selected", () => ({
+      sessionId: resumeSessionId,
+      selectedTurnScopeId: resumeTurnScopeId,
+      selectedDialogProcessId: resumeDialogProcessId,
+      selectedSequence: Number(stoppedTurn?.lifecycleSeq || stoppedTurn?.seq || 0),
+      selectedContinuedByTurnScopeId: String(stoppedTurn?.continuedByTurnScopeId || "").trim(),
+      candidates: Object.values(
+        turnRuntimeRegistry.value?.sessions?.[resumeSessionId]?.turns || {},
+      )
+        .filter((turn) => turn?.terminal === "user_stopped")
+        .map((turn) => ({
+          turnScopeId: String(turn?.turnScopeId || "").trim(),
+          dialogProcessId: String(turn?.dialogProcessId || "").trim(),
+          sequence: Number(turn?.lifecycleSeq || turn?.seq || 0),
+          continuedByTurnScopeId: String(turn?.continuedByTurnScopeId || "").trim(),
+          continuationSourceTurnScopeId: String(turn?.continuationSource?.turnScopeId || "").trim(),
+        })),
+    }));
     if (currentTurn?.terminal === "user_stopped" && !isContinueFromUserStopped) {
       notify?.({
         type: "warning",
@@ -48,6 +67,10 @@ export function createComposerActions({
       type: composerEventType,
       sessionId: isContinueFromUserStopped ? resumeSessionId : undefined,
       turnScopeId: continuingTurnScopeId || undefined,
+      continuationSource: isContinueFromUserStopped ? {
+        dialogProcessId: resumeDialogProcessId,
+        turnScopeId: resumeTurnScopeId,
+      } : null,
       source: "use_chat_session",
     });
     try {

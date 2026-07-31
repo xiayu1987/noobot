@@ -106,26 +106,9 @@ export function hasDialogProcessConflictForTurn({ activeSession, data = {}, botM
   });
 }
 
-function activeTurnScopeIdForSession({ activeSession, turnRuntimeRegistry, sessionId = "" } = {}) {
-  const canonicalSessionId = normalizeTrimmedString(
-    turnRuntimeRegistry?.value?.sessionAliases?.[sessionId] || sessionId,
-  );
-  const activeScope = normalizeTrimmedString(
-    turnRuntimeRegistry?.value?.sessions?.[canonicalSessionId]?.activeTurnScopeId,
-  );
-  if (activeScope) return activeScope;
-  const messages = Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : [];
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const scope = getMessageTurnScopeId(messages[index]);
-    if (scope) return scope;
-  }
-  return "";
-}
-
 export function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry } = {}) {
   const sessionId = sessionRuntimeId(activeSession?.value);
-  const turnScopeId = activeTurnScopeIdForSession({ activeSession, turnRuntimeRegistry, sessionId });
-  const turn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
+  const turn = resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
   return ["requesting", "sending", "completing", "stopping"].includes(turnRuntimeDisplayState(turn));
 }
 

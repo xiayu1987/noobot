@@ -29,6 +29,10 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
 import { createTurnObservation } from "../engine/turnObservation.js";
 import { createTurnKey } from "../engine/turnIdentity.js";
+import {
+  logStateMachineDebug,
+  summarizeStateMachineTurn,
+} from "../../../debug/loggers/stateMachineLogger.js";
 
 
 export function emitSyntheticReconnectErrorConversationState({
@@ -108,21 +112,51 @@ export async function applyReconnectChannelState({
   const forActiveSession = !sessionId || isCurrentActiveSession(sessionId);
   const timing = normalizeReconnectChannelTiming(stateData);
   if (typeof onConversationState === "function") {
-    onConversationState({
-      source: "reconnect",
-      state: _trimStr(stateData?.state),
+    logStateMachineDebug("stateMachine.reconnect.channel.conversationProjection.before", () => ({
       sessionId,
       dialogProcessId: _trimStr(stateData?.dialogProcessId),
       turnScopeId: turnMeta.turnScopeId,
-      sourceEvent: _trimStr(stateData?.sourceEvent),
-      seq: Number(stateData?.seq || 0),
-      createdAtMs: timing.createdAtMs,
-      updatedAtMs: timing.updatedAtMs,
-      createdAt: timing.createdAt,
-      updatedAt: timing.updatedAt,
-      authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
+      channelState: _trimStr(stateData?.state),
+      channelSequence: Number(stateData?.seq || stateData?.sequence || 0),
       applied: forActiveSession,
-    });
+    }));
+    try {
+      onConversationState({
+        source: "reconnect",
+        state: _trimStr(stateData?.state),
+        sessionId,
+        dialogProcessId: _trimStr(stateData?.dialogProcessId),
+        turnScopeId: turnMeta.turnScopeId,
+        sourceEvent: _trimStr(stateData?.sourceEvent),
+        seq: Number(stateData?.seq || 0),
+        createdAtMs: timing.createdAtMs,
+        updatedAtMs: timing.updatedAtMs,
+        createdAt: timing.createdAt,
+        updatedAt: timing.updatedAt,
+        authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
+        applied: forActiveSession,
+      });
+    } catch (error) {
+      logStateMachineDebug("stateMachine.reconnect.channel.conversationProjection.failed", () => ({
+        sessionId,
+        dialogProcessId: _trimStr(stateData?.dialogProcessId),
+        turnScopeId: turnMeta.turnScopeId,
+        channelState: _trimStr(stateData?.state),
+        channelSequence: Number(stateData?.seq || stateData?.sequence || 0),
+        errorType: String(error?.name || "Error"),
+        errorCode: String(error?.code || ""),
+        errorMessage: String(error?.message || error || "").slice(0, 240),
+      }));
+      throw error;
+    }
+    logStateMachineDebug("stateMachine.reconnect.channel.conversationProjection.after", () => ({
+      sessionId,
+      dialogProcessId: _trimStr(stateData?.dialogProcessId),
+      turnScopeId: turnMeta.turnScopeId,
+      channelState: _trimStr(stateData?.state),
+      channelSequence: Number(stateData?.seq || stateData?.sequence || 0),
+      applied: forActiveSession,
+    }));
   }
   if (!forActiveSession) {
     return {
@@ -152,27 +186,49 @@ export async function applyReconnectChannelState({
   const replayObservation = () => {
     const lastTransition = transitionResults.at(-1) || null;
     const transitionObservation = lastTransition?.observation || lastTransition || {};
-    return createTurnObservation({
-    requestedSessionId: sessionId,
-    canonicalSessionId: transitionObservation.canonicalSessionId || sessionId,
-    turnKey: createTurnKey({ sessionId, turnScopeId }),
-    eventId: _trimStr(stateData?.eventId),
-    sequence: Number(stateData?.seq || stateData?.sequence || 0),
-    source: "reconnect_channel_state",
-    authority: stateData?.authoritativeSnapshot === true ? "authoritative_current_run" : "none",
-    exactTurnMatched: Boolean(targetAssistantMessage),
-    pendingBefore: targetAssistantMessage?.pending === true,
-    applied: transitionResults.some((transition) => transition?.applied === true),
-    reason: transitionResults.find((transition) => transition?.applied === false)?.reason ||
-      (transitionResults.length ? "applied" :
-        (state === BackendChannelState.COMPLETED && stateData?.authoritativeSnapshot !== true
-          ? "lifecycle_authority_missing"
-          : "no_runtime_transition")),
-    aliasPromoted: transitionResults.some((transition) => transition?.aliasPromoted === true),
-    finalState: transitionObservation.finalState || transitionObservation.state || state,
-    messageEffect: transitionObservation.messageEffect || "none",
-    transitions: transitionResults,
+    const observation = createTurnObservation({
+      requestedSessionId: sessionId,
+      canonicalSessionId: transitionObservation.canonicalSessionId || sessionId,
+      turnKey: createTurnKey({ sessionId, turnScopeId }),
+      eventId: _trimStr(stateData?.eventId),
+      sequence: Number(stateData?.seq || stateData?.sequence || 0),
+      source: "reconnect_channel_state",
+      authority: stateData?.authoritativeSnapshot === true ? "authoritative_current_run" : "none",
+      exactTurnMatched: Boolean(targetAssistantMessage),
+      pendingBefore: targetAssistantMessage?.pending === true,
+      applied: transitionResults.some((transition) => transition?.applied === true),
+      reason: transitionResults.find((transition) => transition?.applied === false)?.reason ||
+        (transitionResults.length ? "applied" :
+          (state === BackendChannelState.COMPLETED && stateData?.authoritativeSnapshot !== true
+            ? "lifecycle_authority_missing"
+            : "no_runtime_transition")),
+      aliasPromoted: transitionResults.some((transition) => transition?.aliasPromoted === true),
+      finalState: transitionObservation.finalState || transitionObservation.state || state,
+      messageEffect: transitionObservation.messageEffect || "none",
+      transitions: transitionResults,
     });
+    const runtimeAfter = resolveSessionTurnRuntime(
+      turnRuntimeRegistry?.value || turnRuntimeRegistry,
+      sessionId,
+      turnScopeId,
+    );
+    logStateMachineDebug("stateMachine.reconnect.channel.after", () => ({
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      channelState: state,
+      applied: observation.applied === true,
+      reason: observation.reason || "",
+      transitionCount: transitionResults.length,
+      transitions: transitionResults.map((transition) => ({
+        phase: transition.phase || "",
+        applied: transition.applied === true,
+        reason: transition.reason || "",
+      })),
+      pendingInteractionPresent: Boolean(pendingInteractionRequest?.value),
+      runtime: summarizeStateMachineTurn(runtimeAfter),
+    }));
+    return observation;
   };
   logResendDebug("channelStateReplay.target", () => ({
     state,
@@ -181,6 +237,22 @@ export async function applyReconnectChannelState({
     turnScopeId,
     sourceEvent: _trimStr(stateData?.sourceEvent),
     targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
+  }));
+  const runtimeBefore = resolveSessionTurnRuntime(
+    turnRuntimeRegistry?.value || turnRuntimeRegistry,
+    sessionId,
+    turnScopeId,
+  );
+  logStateMachineDebug("stateMachine.reconnect.channel.before", () => ({
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    channelState: state,
+    sourceEvent: _trimStr(stateData?.sourceEvent),
+    channelSequence: Number(stateData?.seq || stateData?.sequence || 0),
+    authoritativeSnapshot: stateData?.authoritativeSnapshot === true,
+    pendingInteractionCount: normalizePendingInteractionPayloads(stateData).length,
+    runtime: summarizeStateMachineTurn(runtimeBefore),
   }));
   if (isInFlightConversationState(state)) {
     const existingTurn = resolveSessionTurnRuntime(

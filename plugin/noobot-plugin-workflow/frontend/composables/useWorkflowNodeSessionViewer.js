@@ -42,6 +42,7 @@ import { createWorkflowNodeViewTransaction } from "../runtime/workflowNodeViewTr
 import {
   buildUnifiedSessionDetail,
   hasNewProtocolNodeIdentity,
+  isTerminalExecutionProjection,
   mergeUnifiedSessionDetail,
   resolveIsolatedNodeSessionId,
   resolveNodeChildExecutionIds,
@@ -360,7 +361,11 @@ export function useWorkflowNodeSessionViewer({
       return id && values.findIndex((candidate) => text(candidate?.executionId) === id) === index;
     });
     const hasMessages = Array.isArray(detail.messages) && detail.messages.length > 0;
-    if (hasMessages || detail.execution) viewerState.value = "streaming";
+    if (detail.execution) {
+      viewerState.value = isTerminalExecutionProjection(detail.execution)
+        ? (hasMessages ? "ready" : "empty")
+        : "streaming";
+    }
     return true;
   }
 
@@ -457,7 +462,7 @@ export function useWorkflowNodeSessionViewer({
               });
               const rawMessages = Array.isArray(hydratedDetail.rawMessages)
                 ? hydratedDetail.rawMessages
-                : hydratedDetail.messages;
+                : [];
               const subSessionMergeResult = typeof applyWorkflowRuntimeEvent === "function"
                 ? applyWorkflowRuntimeEvent({
                     event: "workflow_session_snapshot_loaded",
@@ -466,7 +471,7 @@ export function useWorkflowNodeSessionViewer({
                       sessionId: sessionIdHint,
                       messages: rawMessages,
                       rawMessages,
-                      snapshotVersion: Number(hydratedDetail?.sessionVersion || hydratedDetail?.revision || 1),
+                      snapshotVersion: Number(hydratedDetail?.snapshotVersion || 0),
                     },
                   }, { source: "rest_snapshot" })
                 : null;
@@ -494,16 +499,20 @@ export function useWorkflowNodeSessionViewer({
                   dialogProcessId,
                   state: projectionState,
                 });
-              const messages = rawMessages;
-              nodeViewTransaction.replace(viewTicket, {
-                ...hydratedDetail,
-                messages,
-                rawMessages,
-                sessionSummary: {
-                  ...(hydratedDetail.sessionSummary || {}),
-                  messages,
-                },
-              });
+              if (subSessionMergeResult?.applied === true && subSessionMergeResult.session) {
+                const committedMessages = Array.isArray(subSessionMergeResult.session.messages)
+                  ? subSessionMergeResult.session.messages
+                  : [];
+                nodeViewTransaction.replace(viewTicket, {
+                  ...hydratedDetail,
+                  messages: committedMessages,
+                  rawMessages: committedMessages,
+                  sessionSummary: {
+                    ...subSessionMergeResult.session,
+                    messages: committedMessages,
+                  },
+                });
+              }
               viewerState.value = detail?.state === "empty" ? "empty" : "ready";
             }
           }
@@ -642,7 +651,7 @@ export function useWorkflowNodeSessionViewer({
         ? props.selectSessionMessages(sessionId)
         : null;
       return sessionDoc && typeof sessionDoc === "object"
-        ? { viewKey, detail: { sessionId, sessionSummary: sessionDoc, messages: sessionDoc.messages || [], rawMessages: sessionDoc.rawMessages || sessionDoc.messages || [] }, subSessionMessageRegistry, subSessionMessageRegistryVersion }
+        ? { viewKey, detail: { sessionId, sessionSummary: sessionDoc, messages: sessionDoc.messages || [], rawMessages: sessionDoc.rawMessages || [] }, subSessionMessageRegistry, subSessionMessageRegistryVersion }
         : null;
     },
     (projection) => {

@@ -5,6 +5,7 @@
  */
 import {
   buildNormalizedDetailMessages,
+  buildTurnStatusesByTurnScopeId,
   buildTurnTimingsByTurnScopeId,
 } from "./detailMessages.js";
 
@@ -12,8 +13,7 @@ export function buildSessionDetailProjection({
   sessionDetail = {},
   sessionDocs = [],
   makeViewMessage,
-  foldMessagesForView,
-  isSummaryDetail = false,
+  foldMessagesForView = null,
   currentTimingsByTurnScopeId = {},
   onTimingHydrated = null,
 } = {}) {
@@ -30,21 +30,26 @@ export function buildSessionDetailProjection({
     ? sessionDetail.turnTimings
     : Array.isArray(summary.turnTimings) ? summary.turnTimings : [];
   const sessionId = String(sessionDetail?.sessionId || summary.sessionId || "").trim();
-  const projectedMessages = buildNormalizedDetailMessages({
+  const normalizedMessages = buildNormalizedDetailMessages({
     detailMessages: messages,
     sessionDocs,
     rootSessionId: sessionId,
     turnTimings,
     turnStatuses,
     makeViewMessage,
-    foldMessagesForView,
-    isSummaryDetail,
   });
+  // A detail snapshot is a transport representation.  The display projection
+  // must use the same conversation folding contract as the live stream so
+  // tool_result records cannot become standalone assistant bubbles.
+  const projectedMessages = typeof foldMessagesForView === "function"
+    ? foldMessagesForView(normalizedMessages)
+    : normalizedMessages;
   return {
     sessionId,
     messages: projectedMessages,
     turnStatuses,
     turnTimings,
+    turnStatusesByTurnScopeId: buildTurnStatusesByTurnScopeId({ turnStatuses }),
     turnTimingsByTurnScopeId: buildTurnTimingsByTurnScopeId({
       turnTimings,
       currentTimingsByTurnScopeId,

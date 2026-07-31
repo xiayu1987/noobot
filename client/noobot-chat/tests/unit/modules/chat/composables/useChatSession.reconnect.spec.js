@@ -583,8 +583,8 @@ describe("useChatSession reconnect replay", () => {
     };
     const requestOrder = [];
     wsClientMock.requestJson.mockImplementation(async (payload) => {
-      requestOrder.push(payload.action);
-      if (payload.action === "execution.tree.get") {
+      requestOrder.push(payload.commandType);
+      if (payload.commandType === "execution.tree.get") {
         return {
           event: StreamEventEnum.EXECUTION_TREE,
           data: {
@@ -605,6 +605,16 @@ describe("useChatSession reconnect replay", () => {
     await session.handleReconnect();
 
     expect(requestOrder).toEqual(["execution.tree.get", "execution.snapshot.get"]);
+    expect(wsClientMock.requestJson).toHaveBeenNthCalledWith(1,
+      expect.objectContaining({
+        commandType: "execution.tree.get",
+      }),
+      expect.any(Object),
+    );
+    expect(wsClientMock.reconnect).toHaveBeenCalledWith(expect.objectContaining({
+      currentSessionId: "workflow-session",
+      knownLifecycleSequenceMap: { "workflow-session": 1 },
+    }));
     expect(store.turnRuntimeRegistry.executions["child-agent"]).toMatchObject(child);
     expect(store.turnRuntimeRegistry.childExecutionIdsByParentId["workflow-root"]).toEqual(["child-agent"]);
     expect(store.turnRuntimeRegistry.executions["workflow-root"]).toMatchObject({ revision: 2, sequence: 3 });

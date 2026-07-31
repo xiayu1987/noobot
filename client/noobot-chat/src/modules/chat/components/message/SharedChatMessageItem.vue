@@ -16,6 +16,8 @@ import {
   getMessageTurnScopeId,
 } from "../../model/messageIdentity.js";
 import { selectTurnMessageRuntime } from "../../runtime/run-state-machine/turnRuntimeRegistry.js";
+import { resolveTurnRuntimeView } from "../../runtime/run-state-machine/messageRuntime.js";
+import { resolvePersistedTurnFact } from "../../runtime/run-state-machine/persistedTurnFacts.js";
 import {
   getTurnUiState,
   setTurnAssistantContentExpanded,
@@ -124,18 +126,28 @@ const { writtenFiles, displayedAttachments } = useMessageFiles({
 
 const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepState } = useMessageMeta({
   getMessageItem: () => props.messageItem,
+  getRuntimeView: () => messageRuntime.value,
 });
 
 const messageMarkdownRef = ref(null);
 const { translate } = useLocale();
 const chatStore = useChatStore();
-const messageRuntime = computed(() =>
-  selectTurnMessageRuntime(chatStore.turnRuntimeRegistry, {
+const messageRuntime = computed(() => {
+  const realtimeRuntime = selectTurnMessageRuntime(chatStore.turnRuntimeRegistry, {
     sessionId: getMessageSessionId(props.messageItem),
     turnScopeId: getMessageTurnScopeId(props.messageItem),
     dialogProcessId: getMessageDialogProcessId(props.messageItem),
-  }),
-);
+  });
+  const persisted = resolvePersistedTurnFact(props.messageItem, props.sessionDocs);
+  return resolveTurnRuntimeView({
+    messageItem: props.messageItem,
+    turnTiming: persisted.timing,
+    turnStatus: persisted.status || {
+      status: props.messageItem?.persistedStatusStepState || props.messageItem?.projectedStatusStepState,
+    },
+    realtimeState: realtimeRuntime,
+  });
+});
 const assistantContentExpanded = computed(() => {
   if (getMessageRole(props.messageItem) !== "assistant") return true;
   const explicit = getTurnUiState(props.messageItem)?.assistantContentExpanded;
@@ -159,6 +171,37 @@ const statusStepRunning = computed(() => Boolean(
 const unifiedRuntimePanelsRunning = computed(() =>
   statusStepRunning.value && thinkingPanelVisible.value,
 );
+const workflowChildRenderDiagnosticsSignature = computed(() => {
+  const turnScopeId = getMessageTurnScopeId(props.messageItem);
+  const parentSessionId = String(props.messageItem?.parentSessionId || "").trim();
+  if (!parentSessionId && !turnScopeId.startsWith("workflow-node:")) return "";
+  const runtime = messageRuntime.value || {};
+  return JSON.stringify({
+    sessionId: getMessageSessionId(props.messageItem),
+    parentSessionId,
+    dialogProcessId: getMessageDialogProcessId(props.messageItem),
+    turnScopeId,
+    messageId: String(props.messageItem?.messageId || props.messageItem?.id || ""),
+    pending: props.messageItem?.pending === true,
+    statusStepState: String(statusStepState.value || ""),
+    statusStepRunning: statusStepRunning.value,
+    thinkingPanelContribution: hasThinkingPanelContribution.value,
+    thinkingPanelVisible: thinkingPanelVisible.value,
+    breathing: unifiedRuntimePanelsRunning.value,
+    runtimeState: String(runtime?.state || ""),
+    runtimeStartedAt: String(runtime?.startedAt || runtime?.thinkingStartedAt || ""),
+    runtimeFinishedAt: String(runtime?.finishedAt || runtime?.thinkingFinishedAt || ""),
+  });
+});
+watch(workflowChildRenderDiagnosticsSignature, (signature) => {
+  if (!signature) return;
+  const state = JSON.parse(signature);
+  logWorkflowDiagnostics("frontend.workflowRender.childMessageRuntimeCommitted", {
+    ...state,
+    sessionId: state.parentSessionId || state.sessionId,
+    nodeSessionId: state.sessionId,
+  });
+}, { immediate: true, flush: "post" });
 const showMessageTypeTag = computed(() => !(
   getMessageRole(props.messageItem) === "assistant" &&
   String(props.messageItem?.type || "").trim().toLowerCase() === "message" &&

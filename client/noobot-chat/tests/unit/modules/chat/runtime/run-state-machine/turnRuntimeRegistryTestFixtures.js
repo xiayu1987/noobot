@@ -108,7 +108,7 @@ export function snapshot(overrides = {}) {
     ? overrides.recentTerminalTurns
     : []).map(withMessageIdentity);
   return {
-    protocolVersion: 2, eventType: "turn.snapshot", commandId: "snapshot-1",
+    protocolVersion: 3, eventType: "turn.snapshot", commandId: "snapshot-1",
     userId: "u1", sessionId: "s1", sequence: 2,
     activeTurnScopeId: activeTurn?.turnScopeId || "", activeTurn,
     recentTerminalTurns, unchanged: false, generatedAt: "2026-01-01T00:00:02.000Z",

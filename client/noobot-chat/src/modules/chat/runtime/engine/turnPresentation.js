@@ -100,6 +100,31 @@ function terminalStatusKey(status = {}, fallbackSessionId = "") {
   );
 }
 
+function terminalStatusesFromRuntime(turnRuntimeRegistry = {}, sessionId = "") {
+  const bucket = turnRuntimeRegistry?.sessions?.[sessionId];
+  const turns = bucket?.turns && typeof bucket.turns === "object" ? bucket.turns : {};
+  return Object.values(turns)
+    .filter((turn = {}) => TERMINAL_PRESENTATION_STATES.has(text(turn?.terminal || turn?.state).toLowerCase()))
+    .map((turn = {}) => ({
+      sessionId,
+      turnScopeId: text(turn?.turnScopeId),
+      dialogProcessId: text(turn?.dialogProcessId),
+      status: text(turn?.terminal || turn?.state).toLowerCase(),
+      reason: text(turn?.reason || turn?.terminalReason),
+      description: text(turn?.description),
+      updatedAt: text(turn?.finishedAt || turn?.updatedAt),
+    }))
+    .filter((status) => Boolean(status.turnScopeId));
+}
+
+function authoritativeTurnSequence(turnRuntimeRegistry = {}, sessionId = "", turnScopeId = "") {
+  const normalizedSessionId = text(sessionId);
+  const normalizedTurnScopeId = text(turnScopeId);
+  const bucket = turnRuntimeRegistry?.sessions?.[normalizedSessionId];
+  const turn = bucket?.turns?.[normalizedTurnScopeId];
+  return Number(turn?.sequence || turn?.lifecycleSeq || 0);
+}
+
 function terminalErrorText(status = {}) {
   return text(
     typeof status?.error === "string"
@@ -159,9 +184,12 @@ export function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSess
   const workflowRunId = text(workflow?.workflowRunId);
   const sessionId = text(workflow?.sessionId || fallbackSessionId);
   const turnScopeId = text(workflow?.turnScopeId);
-  if (!workflowRunId || !sessionId || !turnScopeId) return null;
+  const presentationMessageId = text(workflow?.presentationMessageId);
+  if (!workflowRunId || !sessionId || !turnScopeId || !presentationMessageId) return null;
   return {
-    id: `workflow-live:${workflowRunId}`,
+    id: presentationMessageId,
+    messageId: presentationMessageId,
+    presentationMessageId,
     sessionId,
     role: "assistant",
     type: "workflow",
@@ -272,8 +300,12 @@ export function selectTurnPresentations({
   const activeSessionId = sessionIdFromSession(activeSession);
   const activeSessionIds = sessionIdentitySet(activeSession);
   const sourceMessages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
+  const terminalStatuses = [
+    ...(Array.isArray(activeSession?.turnStatuses) ? activeSession.turnStatuses : []),
+    ...terminalStatusesFromRuntime(turnRuntimeRegistry, activeSessionId),
+  ];
   const terminalByTurn = new Map(
-    (Array.isArray(activeSession?.turnStatuses) ? activeSession.turnStatuses : [])
+    terminalStatuses
       .map(normalizeTerminalStatus)
       .filter(Boolean)
       .map((status) => [terminalStatusKey(status, activeSessionId), status])
@@ -297,8 +329,23 @@ export function selectTurnPresentations({
     const userIndex = messagesWithTerminalPresentation.findLastIndex((message) =>
       getMessageRole(message) === "user" && messageTurnKey(message, activeSessionId) === key,
     );
+    const statusSequence = authoritativeTurnSequence(
+      turnRuntimeRegistry,
+      activeSessionId,
+      status?.turnScopeId,
+    );
+    const nextTurnIndex = statusSequence > 0
+      ? messagesWithTerminalPresentation.findIndex((message) => {
+          const messageSequence = authoritativeTurnSequence(
+            turnRuntimeRegistry,
+            activeSessionId,
+            getMessageTurnScopeId(message),
+          );
+          return messageSequence > statusSequence;
+        })
+      : -1;
     messagesWithTerminalPresentation.splice(
-      userIndex >= 0 ? userIndex + 1 : messagesWithTerminalPresentation.length,
+      userIndex >= 0 ? userIndex + 1 : nextTurnIndex >= 0 ? nextTurnIndex : messagesWithTerminalPresentation.length,
       0,
       presentation,
     );

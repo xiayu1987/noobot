@@ -9,6 +9,7 @@ import {
   confirmTurnRuntimeDeletion,
   applyTurnRuntimeEvent,
   resolveSessionTurnRuntime,
+  resolveLatestContinuableStoppedTurn,
   resolveLatestStoppedTurn,
   resolveTurnRuntimeByScope,
   removeTurnRuntime,
@@ -137,7 +138,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.COMPLETED, seq: 7 });
     settleTerminal(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", revision: 8, sequence: 8 });
     expect(backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp2", state: BackendChannelState.SENDING, seq: 7 }).applied).toBe(false);
-    expect(resolveSessionTurnRuntime(registry, "s1")).toMatchObject({ terminal: "completed", canStop: false });
+    expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({ terminal: "completed", canStop: false });
   });
 
   it("rejects an old Turn event after a newer Turn owns the same session", () => {
@@ -319,7 +320,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUESTED, sessionId: "s1", turnScopeId: "t1", seq: 3 });
     backendState(registry, { sessionId: "s1", turnScopeId: "t1", state: BackendChannelState.USER_STOPPED, seq: 4 });
     settleTerminal(registry, { sessionId: "s1", turnScopeId: "t1", state: "stop_completed", revision: 5, sequence: 5 });
-    expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s1"))).toBe("continue");
+    expect(turnRuntimeDisplayState(resolveLatestContinuableStoppedTurn(registry, "s1"))).toBe("continue");
     expect(resolveLatestStoppedTurn(registry, "s1")?.turnScopeId).toBe("t1");
   });
   it("hydrates an authoritative action request that arrives before any local Turn", () => {

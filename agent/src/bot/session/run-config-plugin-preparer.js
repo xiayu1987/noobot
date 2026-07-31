@@ -7,6 +7,7 @@ import { createAgentHookManager } from "../../extensions/hooks/index.js";
 import { createBotHookManager } from "../hook/index.js";
 import { mergeConfig } from "../../config/index.js";
 import { resolvePluginRegisterByCapability } from "../../extensions/plugins/plugin-loader.js";
+import { resolvePluginExecutionIntentDeclaration } from "@noobot/plugin-runtime";
 import { PLUGIN_CAPABILITY } from "../../extensions/plugins/capabilities.js";
 import {
   createPluginSelectorSet,
@@ -37,6 +38,21 @@ export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS =
   TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
   TIME_THRESHOLDS.capability.separateModelMinTimeoutMs;
+
+function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
+  const scopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
+  const executionId = String(runConfig?.executionId || `agent:${scopeId}`).trim();
+  return Object.freeze({
+    executionId,
+    executionKind: "agent",
+    parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+    rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
+    origin: Object.freeze(
+      runConfig?.origin && typeof runConfig.origin === "object" ? { ...runConfig.origin } : {},
+    ),
+    stage: String(runConfig?.stage || "").trim(),
+  });
+}
 
 function isPluginDebugEnabled() {
   const value = String(process.env.NOOBOT_PLUGIN_DEBUG || "").trim().toLowerCase();
@@ -110,6 +126,31 @@ export class RunConfigPluginPreparer {
       userId,
       runConfig: preparedBotHookConfig,
       userConfig,
+    });
+  }
+
+  resolveExecutionIntent({ userId = "", runConfig = {}, userConfig = {}, turnScopeId = "" } = {}) {
+    const botPluginKey = resolveBotPluginKey(this.pluginRuntime);
+    const activation = this.resolveBotPluginActivation({ userId, runConfig, userConfig });
+    if (!activation.enabled) return createAgentExecutionIntent({ runConfig, turnScopeId });
+    const declaration = resolvePluginExecutionIntentDeclaration(
+      this.loadedDynamicPlugins,
+      botPluginKey,
+    );
+    if (!declaration) return createAgentExecutionIntent({ runConfig, turnScopeId });
+    const scopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
+    const executionId = String(runConfig?.executionId || `${declaration.executionIdPrefix}:${scopeId}`).trim();
+    const rootExecutionId = String(runConfig?.rootExecutionId || executionId).trim();
+    return Object.freeze({
+      executionId,
+      executionKind: declaration.executionKind,
+      parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+      rootExecutionId,
+      origin: Object.freeze({
+        type: declaration.originType,
+        [declaration.originIdKey]: executionId,
+      }),
+      stage: declaration.stage,
     });
   }
 
@@ -241,54 +282,9 @@ export class RunConfigPluginPreparer {
 
 
   resolveBotPluginOptions({ runConfig = {}, userConfig = {} } = {}) {
-    const botPluginSelectors = resolveBotPluginSelectors(this.pluginRuntime);
-    if (isPluginExplicitlyDisabled(
-      runConfig,
-      botPluginSelectors,
-      resolveBotPluginKey(this.pluginRuntime),
-    )) {
-      return { enabled: false, mode: "off" };
-    }
-    const effectiveConfig = mergeConfig(
-      this.globalConfig || {},
-      userConfig && typeof userConfig === "object" ? userConfig : {},
-    );
-    const effectiveBotPlugin = resolvePluginOptionsFromConfig(
-      effectiveConfig,
-      botPluginSelectors,
-    );
-    if (effectiveBotPlugin?.enabled === false) return { enabled: false, mode: "off" };
-    const runBotPlugin = resolvePluginOptionsFromConfig(
-      runConfig,
-      botPluginSelectors,
-    );
-    if (runBotPlugin?.enabled === false) return { enabled: false, mode: "off" };
-    const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
-      ? runConfig.selectedPlugins
-      : [];
-    const botPluginSelected = selectedPlugins.some((item) =>
-      botPluginSelectors.has(String(item || "").trim()),
-    );
-    const normalizedEffectiveMode = String(effectiveBotPlugin?.mode ?? "off")
-      .trim()
-      .toLowerCase();
-    const normalizedRunMode = String(runBotPlugin?.mode ?? "")
-      .trim()
-      .toLowerCase();
-    const resolvedMode =
-      botPluginSelected || normalizedRunMode === "on" || normalizedEffectiveMode === "on"
-        ? "on"
-        : "off";
-    debugPluginPreparer("resolve bot plugin", {
-      selectedPlugins,
-      selectors: Array.from(botPluginSelectors || []),
-      botPluginSelected,
-      effectiveMode: effectiveBotPlugin?.mode,
-      runMode: runBotPlugin?.mode,
-      resolvedMode,
-      pluginKey: resolveBotPluginKey(this.pluginRuntime),
-    });
-    if (resolvedMode !== "on") return { enabled: false, mode: "off" };
+    const activation = this.resolveBotPluginActivation({ runConfig, userConfig });
+    if (!activation.enabled) return { enabled: false, mode: "off" };
+    const { effectiveBotPlugin, runBotPlugin } = activation;
     const options = {
       ...(effectiveBotPlugin && typeof effectiveBotPlugin === "object" ? effectiveBotPlugin : {}),
       ...(runBotPlugin && typeof runBotPlugin === "object" ? runBotPlugin : {}),
@@ -336,6 +332,61 @@ export class RunConfigPluginPreparer {
       next.botPluginEventLogger = this.createBotPluginScopedEventLogger();
     }
     return next;
+  }
+
+  resolveBotPluginActivation({ runConfig = {}, userConfig = {} } = {}) {
+    const botPluginSelectors = resolveBotPluginSelectors(this.pluginRuntime);
+    if (isPluginExplicitlyDisabled(
+      runConfig,
+      botPluginSelectors,
+      resolveBotPluginKey(this.pluginRuntime),
+    )) {
+      return { enabled: false };
+    }
+    const effectiveConfig = mergeConfig(
+      this.globalConfig || {},
+      userConfig && typeof userConfig === "object" ? userConfig : {},
+    );
+    const effectiveBotPlugin = resolvePluginOptionsFromConfig(
+      effectiveConfig,
+      botPluginSelectors,
+    );
+    if (effectiveBotPlugin?.enabled === false) return { enabled: false };
+    const runBotPlugin = resolvePluginOptionsFromConfig(
+      runConfig,
+      botPluginSelectors,
+    );
+    if (runBotPlugin?.enabled === false) return { enabled: false };
+    const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
+      ? runConfig.selectedPlugins
+      : [];
+    const botPluginSelected = selectedPlugins.some((item) =>
+      botPluginSelectors.has(String(item || "").trim()),
+    );
+    const normalizedEffectiveMode = String(effectiveBotPlugin?.mode ?? "off")
+      .trim()
+      .toLowerCase();
+    const normalizedRunMode = String(runBotPlugin?.mode ?? "")
+      .trim()
+      .toLowerCase();
+    const resolvedMode =
+      botPluginSelected || normalizedRunMode === "on" || normalizedEffectiveMode === "on"
+        ? "on"
+        : "off";
+    debugPluginPreparer("resolve bot plugin", {
+      selectedPlugins,
+      selectors: Array.from(botPluginSelectors || []),
+      botPluginSelected,
+      effectiveMode: effectiveBotPlugin?.mode,
+      runMode: runBotPlugin?.mode,
+      resolvedMode,
+      pluginKey: resolveBotPluginKey(this.pluginRuntime),
+    });
+    return {
+      enabled: resolvedMode === "on",
+      effectiveBotPlugin,
+      runBotPlugin,
+    };
   }
 
 

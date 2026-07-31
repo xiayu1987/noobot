@@ -7,6 +7,7 @@
 import { appendWorkflowPlanningMessage, emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
+import { resolveWorkflowParentRunConfig } from "../hooks/runtime.js";
 
 export function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {
   return {
@@ -70,60 +71,46 @@ export async function prepareWorkflowPlanningMessage({
     workflowPayload: planningWorkflowPayload,
     attachments: [],
   });
+  const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
+  const turnScopeId = String(ctx?.turnScopeId || parentRunConfig?.turnScopeId || "").trim();
+  const presentationMessageId = String(
+    workflowMessage?.presentationMessageId || parentRunConfig?.presentationMessageId || "",
+  ).trim();
+  const runtimeData = {
+    sessionId: String(ctx?.sessionId || "").trim(),
+    dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+    turnScopeId,
+    presentationMessageId,
+    workflowRunId,
+    sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
+    semanticText,
+    nodeSessions: planningNodeSessions,
+    sourceMessage: {
+      role: String(workflowMessage?.role || ""),
+      type: String(workflowMessage?.type || ""),
+      pluginMessage: workflowMessage?.pluginMessage === true,
+      pluginSource: String(workflowMessage?.pluginMeta?.source || ""),
+      pluginKind: String(workflowMessage?.pluginMeta?.kind || ""),
+      pluginPhase: String(workflowMessage?.pluginMeta?.phase || ""),
+      presentationMessageId,
+      workflowRunId: String(
+        workflowMessage?.pluginMeta?.payload?.workflowRunId ||
+          workflowMessage?.pluginMeta?.payload?.execution?.workflowRunId ||
+          "",
+      ),
+      contentLength: String(workflowMessage?.content || "").length,
+    },
+  };
   await emitWorkflowRuntimeEvent({
     options,
     ctx,
     event: "workflow_planning_message_prepared",
-    data: {
-      sessionId: String(ctx?.sessionId || "").trim(),
-      dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-      turnScopeId: String(ctx?.turnScopeId || "").trim(),
-      workflowRunId,
-      sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
-      semanticText,
-      nodeSessions: planningNodeSessions,
-      sourceMessage: {
-        role: String(workflowMessage?.role || ""),
-        type: String(workflowMessage?.type || ""),
-        pluginMessage: workflowMessage?.pluginMessage === true,
-        pluginSource: String(workflowMessage?.pluginMeta?.source || ""),
-        pluginKind: String(workflowMessage?.pluginMeta?.kind || ""),
-        pluginPhase: String(workflowMessage?.pluginMeta?.phase || ""),
-        workflowRunId: String(
-          workflowMessage?.pluginMeta?.payload?.workflowRunId ||
-            workflowMessage?.pluginMeta?.payload?.execution?.workflowRunId ||
-            "",
-        ),
-        contentLength: String(workflowMessage?.content || "").length,
-      },
-    },
+    data: runtimeData,
   });
   if (typeof ctx?.eventListener?.onEvent === "function") {
     await ctx.eventListener.onEvent({
       event: "workflow_planning_message_prepared",
-      data: {
-        sessionId: String(ctx?.sessionId || "").trim(),
-        dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-        turnScopeId: String(ctx?.turnScopeId || "").trim(),
-        workflowRunId,
-        sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
-        semanticText,
-        nodeSessions: planningNodeSessions,
-        sourceMessage: {
-          role: String(workflowMessage?.role || ""),
-          type: String(workflowMessage?.type || ""),
-          pluginMessage: workflowMessage?.pluginMessage === true,
-          pluginSource: String(workflowMessage?.pluginMeta?.source || ""),
-          pluginKind: String(workflowMessage?.pluginMeta?.kind || ""),
-          pluginPhase: String(workflowMessage?.pluginMeta?.phase || ""),
-          workflowRunId: String(
-            workflowMessage?.pluginMeta?.payload?.workflowRunId ||
-              workflowMessage?.pluginMeta?.payload?.execution?.workflowRunId ||
-              "",
-          ),
-          contentLength: String(workflowMessage?.content || "").length,
-        },
-      },
+      data: runtimeData,
     });
   }
 }

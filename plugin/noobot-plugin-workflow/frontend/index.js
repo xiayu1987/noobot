@@ -15,6 +15,48 @@ const WORKFLOW_PLANNING_EVENT = "workflow_planning_message_prepared";
 const SUBAGENT_MESSAGE_EVENT = "subagent_message_event";
 const WORKFLOW_MESSAGE_EVENT = "workflow_message_event";
 
+function routeWorkflowRuntimeEvent({ event, data = {}, context = {} } = {}) {
+  if (![WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT, SUBAGENT_MESSAGE_EVENT].includes(event)) return false;
+  const messageEvent = event === SUBAGENT_MESSAGE_EVENT;
+  const canonicalRecord = {
+    event: messageEvent ? WORKFLOW_MESSAGE_EVENT : event,
+    data: messageEvent ? data?.event : data,
+    transportSequence: Number(data?.seq || 0),
+  };
+  context?.logRuntimeProjectionDiagnostics?.("frontend.workflowRuntime.projectorMatched", {
+    sessionId: String(data?.route?.rootSessionId || data?.parentSessionId || data?.sessionId || context?.sessionId || ""),
+    nodeSessionId: String(canonicalRecord.data?.sessionId || ""),
+    dialogProcessId: String(canonicalRecord.data?.dialogProcessId || ""),
+    turnScopeId: String(canonicalRecord.data?.turnScopeId || context?.turnScopeId || ""),
+    workflowRunId: String(canonicalRecord.data?.workflowRunId || ""),
+    nodeExecutionId: String(canonicalRecord.data?.nodeExecutionId || ""),
+    transportEvent: event,
+    runtimeEvent: canonicalRecord.event,
+    transportSequence: canonicalRecord.transportSequence,
+    authoritativeSequence: Number(canonicalRecord.data?.sequence || 0),
+    status: String(canonicalRecord.data?.status || canonicalRecord.data?.state || ""),
+    source: String(context?.source || "live"),
+  });
+  const result = typeof context?.applyWorkflowRuntimeEvent === "function"
+    ? context.applyWorkflowRuntimeEvent(canonicalRecord, { source: context?.source || "live" })
+    : { applied: false, reason: "workflow_runtime_projection_unavailable" };
+  context?.logRuntimeProjectionDiagnostics?.("frontend.workflowRuntime.projectorReduced", {
+    sessionId: String(data?.route?.rootSessionId || data?.parentSessionId || data?.sessionId || context?.sessionId || ""),
+    nodeSessionId: String(canonicalRecord.data?.sessionId || ""),
+    dialogProcessId: String(canonicalRecord.data?.dialogProcessId || ""),
+    turnScopeId: String(canonicalRecord.data?.turnScopeId || context?.turnScopeId || ""),
+    workflowRunId: String(canonicalRecord.data?.workflowRunId || ""),
+    nodeExecutionId: String(canonicalRecord.data?.nodeExecutionId || ""),
+    runtimeEvent: canonicalRecord.event,
+    transportSequence: canonicalRecord.transportSequence,
+    applied: result?.applied === true,
+    reason: String(result?.reason || ""),
+    source: String(context?.source || "live"),
+  });
+  return true;
+}
+
+
 function requireAuthenticatedGet(get) {
   if (typeof get !== "function") {
     throw new Error("authenticated HTTP capability is required");
@@ -46,43 +88,6 @@ function createWorkflowSessionService(authenticatedGet) {
       );
     },
   });
-}
-
-function routeWorkflowRuntimeEvent({ event, data = {}, context = {} } = {}) {
-  if (![WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT, SUBAGENT_MESSAGE_EVENT].includes(event)) return false;
-  const {
-    applyWorkflowRuntimeEvent, logSessionEvent, sessionId, turnScopeId,
-  } = context;
-  const planning = event === WORKFLOW_PLANNING_EVENT;
-  const message = event === SUBAGENT_MESSAGE_EVENT;
-  logSessionEvent?.({
-    category: "debug",
-    level: "debug",
-    debugType: "workflow-diagnostics",
-    event: planning
-      ? "frontend.workflowTransport.planningReceived"
-      : "frontend.workflowTransport.nodeStateReceived",
-    sessionId: data?.parentSessionId || data?.sessionId || sessionId,
-    dialogProcessId: data?.dialogProcessId || "",
-    turnScopeId: data?.turnScopeId || turnScopeId,
-    data: {
-      workflowRunId: String(data?.workflowRunId || ""),
-      nodeExecutionId: String(data?.nodeExecutionId || ""),
-      status: String(data?.status || ""),
-      revision: Number(data?.revision || 0),
-      sequence: Number(data?.sequence || 0),
-      nodeSessionCount: Array.isArray(data?.nodeSessions) ? data.nodeSessions.length : 0,
-      semanticTextLength: String(data?.semanticText || "").length,
-      dataKeys: Object.keys(data || {}).sort(),
-    },
-  });
-  if (typeof applyWorkflowRuntimeEvent !== "function") return false;
-  applyWorkflowRuntimeEvent({
-    event: message ? WORKFLOW_MESSAGE_EVENT : event,
-    data: message ? data.event : data,
-    transportSequence: Number(data?.seq || 0),
-  }, { source: context?.source || "live" });
-  return true;
 }
 
 function isWorkflowMessageLike(messageItem = {}) {
@@ -160,12 +165,6 @@ export function registerFrontendPlugin(ctx = {}) {
             : null,
         }),
   });
-  contribute(points.RUNTIME_STREAM_ROUTE, {
-    id: "workflow-runtime-stream-route",
-    priority: 20,
-    when: ({ event } = {}) => [WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT, SUBAGENT_MESSAGE_EVENT].includes(event),
-    provide: () => [routeWorkflowRuntimeEvent],
-  });
   contribute(points.SESSION_DETAIL_HYDRATOR, {
     id: "workflow-session-detail-hydrator",
     priority: 20,
@@ -173,5 +172,11 @@ export function registerFrontendPlugin(ctx = {}) {
       ...payload,
       ...context,
     })],
+  });
+  contribute(points.RUNTIME_STREAM_ROUTE, {
+    id: "workflow-runtime-projector",
+    priority: 20,
+    when: ({ event } = {}) => [WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT, SUBAGENT_MESSAGE_EVENT].includes(event),
+    provide: () => [routeWorkflowRuntimeEvent],
   });
 }

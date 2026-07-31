@@ -83,6 +83,10 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
       : "",
     finalizeIntent: rawEvent?.finalizeIntent || rawEvent?.raw?.turn?.finalizeIntent || null,
     failure: rawEvent?.failure || rawEvent?.raw?.turn?.failure || null,
+    continuationSource: rawEvent?.continuationSource || rawEvent?.raw?.turn?.continuationSource || null,
+    continuedByTurnScopeId: trim(
+      rawEvent?.continuedByTurnScopeId || rawEvent?.raw?.turn?.continuedByTurnScopeId,
+    ),
     materialization: rawEvent?.materialization && typeof rawEvent.materialization === "object"
       ? rawEvent.materialization
       : null,

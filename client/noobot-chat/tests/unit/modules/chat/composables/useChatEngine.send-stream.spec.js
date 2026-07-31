@@ -19,6 +19,7 @@ import {
   StreamEventEnum,
 } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 
 describe("useChatEngine.send-stream", () => {
   it("uses one preallocated identity for the local user message and transport payload", async () => {
@@ -73,7 +74,7 @@ describe("useChatEngine.send-stream", () => {
       force: true,
     }));
     expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
-      preserveCurrentMessages: true,
+      scrollToBottom: false,
     }));
   });
 
@@ -560,7 +561,7 @@ describe("useChatEngine.send-stream", () => {
     const assistant = assistantMessage(activeSession);
     expect(applySessionDetail).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: "local-frontend-complete" }),
-      expect.objectContaining({ preserveCurrentMessages: true }),
+      expect.objectContaining({ mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN }),
     );
     expect(assistant?.content).toBe("normalized answer");
     expect(assistant?.attachments).toEqual([normalizedAttachment]);
@@ -607,7 +608,7 @@ describe("useChatEngine.send-stream", () => {
     const assistant = assistantMessage(activeSession);
     expect(applySessionDetail).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: "local-channel-complete" }),
-      expect.objectContaining({ preserveCurrentMessages: true }),
+      expect.objectContaining({ mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN }),
     );
     expect(assistant?.content).toBe("normalized channel answer");
     expect(assistant?.attachments).toEqual([normalizedAttachment]);

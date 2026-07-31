@@ -12,6 +12,8 @@ import {
   createScopedSubSessionEventListener,
 } from "../../src/bot/session/detached-subsession-runner.js";
 import { CALLER_ROLE } from "../../src/bot/config/constants.js";
+import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
+import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 
 function createDeps(overrides = {}) {
   const calls = {
@@ -21,6 +23,7 @@ function createDeps(overrides = {}) {
     prepareRunConfigPayload: null,
     loadedWorkspacePath: "",
     emitted: [],
+    lifecyclePayloads: [],
   };
   const deps = {
     workspaceService: {
@@ -49,6 +52,15 @@ function createDeps(overrides = {}) {
       },
     },
     session: {
+      async applyTurnLifecycleEvent(payload = {}) {
+        calls.lifecyclePayloads.push(payload);
+        const sequence = calls.lifecyclePayloads.length;
+        return {
+          applied: true,
+          envelope: { ...payload, sequence, revision: sequence },
+          turn: { ...payload, sequence, revision: sequence },
+        };
+      },
       createScopedPersistenceContext(payload = {}) {
         calls.persistencePayloads.push(payload);
         return Object.freeze({ locationResolver: { marker: payload.relativeDir }, metadataContributor: payload.metadataContributor });
@@ -167,15 +179,112 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(metadata.sessionId, "sub1");
   assert.equal(metadata.runtimePluginState.scope, "detached_sub_session");
   assert.equal(events.some((event) => event?.event === "plugin_runtime_resolved"), true);
+  assert.deepEqual(
+    calls.lifecyclePayloads.map((payload) => payload.eventType),
+    [
+      "turn.action_accepted",
+      "turn.processing_started",
+      "turn.processing_completed",
+      "turn.completed",
+    ],
+  );
+  assert.equal(
+    events.filter((event) => event?.event === "turn_lifecycle_committed").length,
+    4,
+  );
+  const completedLifecycle = calls.lifecyclePayloads.at(-1);
+  assert.deepEqual(completedLifecycle.persistenceScope, {
+    scopeId: "agent:turn-1",
+    parentSessionId: "parent1",
+    relativeDir: "runtime/workflow/session/root/node-a",
+    allowedRoot: "runtime/workflow/session",
+  });
+  assert.equal(completedLifecycle.completionCommitId, "turn-1:completed");
+  assert.deepEqual(completedLifecycle.terminalStatus, {
+    command: "completed",
+    description: "子 Agent 已正常完成",
+  });
 
   assert.equal(result.sessionId, "sub1");
   assert.equal(result.parentSessionId, "parent1");
-  assert.equal(result.dialogProcessId, "sub-dialog");
+  assert.equal(result.dialogProcessId, payload.dialogProcessId);
+  assert.match(result.dialogProcessId, /^[0-9a-f-]{36}$/);
+  assert.equal(calls.lifecyclePayloads.every((item) => item.dialogProcessId === result.dialogProcessId), true);
   assert.equal(result.persisted.version, 3);
   assert.equal(result.lifecycle.executionState, "completed");
   assert.equal(result.result.answer, "agent answer");
   assert.deepEqual(result.result.messages, [{ role: "assistant", content: "agent answer" }]);
   assert.deepEqual(result.result.turnTasks, [{ taskId: "t1" }]);
+});
+
+test("detached sub-session persists its complete authoritative lifecycle outbox", async () => {
+  let persisted = null;
+  const fixedNow = () => "2026-07-30T12:53:35.738Z";
+  const repo = {
+    async withSessionMutation(_userId, _sessionId, _context, operation) { return operation(); },
+    async resolveParentSessionId() { return "parent1"; },
+    createInitialSession({ sessionId, parentSessionId }) {
+      return normalizeSessionEntity({
+        sessionId,
+        parentSessionId,
+        version: 0,
+        revision: 0,
+        messages: [],
+      }, { now: fixedNow });
+    },
+    async findById() {
+      return persisted ? normalizeSessionEntity(structuredClone(persisted), { now: fixedNow }) : null;
+    },
+    async save(_userId, next, _context, { expectedVersion, createOnly } = {}) {
+      if (createOnly) assert.equal(persisted, null);
+      else assert.equal(expectedVersion, Number(persisted?.version ?? persisted?.revision ?? 0));
+      persisted = structuredClone(normalizeSessionEntity(next, { now: fixedNow }));
+    },
+  };
+  const messageService = new SessionMessageService({ sessionRepo: repo, now: fixedNow });
+  const { deps } = createDeps({
+    session: {
+      applyTurnLifecycleEvent: (payload) => messageService.applyTurnLifecycleEvent(payload),
+      createScopedPersistenceContext(payload = {}) {
+        return Object.freeze({
+          locationResolver: {
+            marker: payload.relativeDir,
+            async resolveSessionScope(userId, sessionId, parentSessionId) {
+              return { userId, sessionId, resolvedParentSessionId: parentSessionId };
+            },
+          },
+          metadataContributor: payload.metadataContributor,
+        });
+      },
+    },
+  });
+
+  await createDetachedSubSessionRunner({ ...deps, now: fixedNow })({
+    parentContext: createParentContext(),
+    message: "hello",
+    runConfigPatch: { turnScopeId: "turn-persisted" },
+    strategy: {
+      sessionId: "sub-persisted",
+      parentSessionId: "parent1",
+      dialogProcessId: "sub-dialog",
+    },
+  });
+
+  assert.deepEqual(
+    persisted.authorityEventOutbox.map((entry) => entry.envelope.eventType),
+    [
+      "turn.action_accepted",
+      "turn.processing_started",
+      "turn.processing_completed",
+      "turn.completed",
+    ],
+  );
+  assert.equal(persisted.turnLifecycle.turns["turn-persisted"].state, "completed");
+  assert.equal(persisted.authorityEventOutbox[3].envelope.summaryVersion >= 1, true);
+  assert.equal(
+    persisted.authorityEventOutbox[3].envelope.completionCommitId,
+    "turn-persisted:completed",
+  );
 });
 
 test("detached sub-session does not inherit parent turn transaction identity", async () => {
@@ -259,7 +368,7 @@ test("detached sub-session preserves child-owned transaction fields from its pat
 test("detached sub-session propagates main runner abort and failure contracts", async () => {
   const abortError = new Error("stopped");
   abortError.name = "AbortError";
-  const { deps } = createDeps({
+  const { calls, deps } = createDeps({
     sessionRunner: {
       async runSession() {
         throw abortError;
@@ -278,6 +387,22 @@ test("detached sub-session propagates main runner abort and failure contracts", 
     }),
     (error) => error === abortError,
   );
+  assert.deepEqual(
+    calls.lifecyclePayloads.map((payload) => payload.eventType),
+    [
+      "turn.action_accepted",
+      "turn.processing_started",
+      "turn.stop_accepted",
+      "turn.stop_processing_completed",
+      "turn.stop_completed",
+    ],
+  );
+  const stoppedLifecycle = calls.lifecyclePayloads.at(-1);
+  assert.equal(stoppedLifecycle.completionCommitId, "sub1:stop-completed");
+  assert.deepEqual(stoppedLifecycle.terminalStatus, {
+    command: "user_stopped",
+    description: "子 Agent 已停止",
+  });
 });
 
 test("detached terminal receipt adapts persisted Agent success and failure states", () => {

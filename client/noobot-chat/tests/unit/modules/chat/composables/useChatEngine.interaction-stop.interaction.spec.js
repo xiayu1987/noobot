@@ -40,7 +40,6 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     expect(refreshSessionsAsync).toHaveBeenCalledTimes(1);
     expect(refreshSessionsAsync).toHaveBeenCalledWith("local-expired", {
       silent: true,
-      preserveCurrentMessages: true,
     });
     vi.useRealTimers();
   });

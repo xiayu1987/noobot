@@ -19,6 +19,7 @@ import {
 export async function startServerWithWs({
   runSession = async () => ({}),
   bot = null,
+  initialTurnLifecycle = {},
   sessionLogConfig = undefined,
   resolveAuthByApiKey = () => ({ userId: "primary-user" }),
   isForbiddenUserScope = () => false,
@@ -29,7 +30,7 @@ export async function startServerWithWs({
   });
 
   const suppliedBot = bot || { runSession };
-  let turnLifecycle = {};
+  let turnLifecycle = structuredClone(initialTurnLifecycle);
   let authorityEventOutbox = [];
   let authorityEventSequence = 0;
   const materializeTerminal = ({ terminalStatus = {}, event = {} } = {}) => {
@@ -53,6 +54,17 @@ export async function startServerWithWs({
   };
   const testBot = {
     ...suppliedBot,
+    resolveExecutionIntent: suppliedBot.resolveExecutionIntent || (async ({ turnScopeId = "", runConfig = {} } = {}) => {
+      const executionId = String(runConfig?.executionId || `agent:${turnScopeId}`).trim();
+      return {
+        executionId,
+        executionKind: String(runConfig?.executionKind || "agent").trim(),
+        parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+        rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
+        origin: {},
+        stage: "",
+      };
+    }),
     applyTurnLifecycleEvent: suppliedBot.applyTurnLifecycleEvent || (async (event = {}) => {
       const result = commitTurnLifecycle({
         lifecycle: turnLifecycle,

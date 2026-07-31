@@ -54,7 +54,11 @@ import {
   isAuthoritativeTerminalState,
   isLegacyTerminalDiscoveryState,
 } from "../runtime/sessionRunStateMachine.js";
-import { setStateMachineDebugLogSink } from "../../debug/loggers/stateMachineLogger.js";
+import {
+  logStateMachineDebug,
+  setStateMachineDebugLogSink,
+  summarizeStateMachineTurn,
+} from "../../debug/loggers/stateMachineLogger.js";
 import { setResendDebugLogSink } from "../../debug/loggers/resendDebugLogger.js";
 import { setStopDebugLogSink } from "../../debug/loggers/stopDebugLogger.js";
 import { setStopContinueDebugLogSink } from "../../debug/loggers/stopContinueDebugLogger.js";
@@ -139,11 +143,9 @@ export function useChatSession({
     const canonicalSessionId = String(
       turnRuntimeRegistry.value?.sessionAliases?.[sessionId] || sessionId,
     ).trim();
-    const activeScope = String(
-      turnRuntimeRegistry.value?.sessions?.[canonicalSessionId]?.activeTurnScopeId || "",
+    return String(
+      resolveSessionTurnRuntime(turnRuntimeRegistry.value, canonicalSessionId)?.turnScopeId || "",
     ).trim();
-    if (activeScope) return activeScope;
-    return "";
   }
 
 
@@ -360,13 +362,31 @@ export function useChatSession({
       if (!signature || signature === lastComposerRenderSignature) return;
       lastComposerRenderSignature = signature;
       const state = composerActionState.value || {};
+      const selectedSessionId = resolveActiveSessionIdentity();
+      const selectedTurnScopeId = resolveActiveTurnScopeIdentity();
+      const selectedTurn = resolveSessionTurnRuntime(
+        turnRuntimeRegistry.value,
+        selectedSessionId,
+        selectedTurnScopeId,
+      );
+      logStateMachineDebug("stateMachine.composer.consumed", () => ({
+        sessionId: selectedSessionId,
+        turnScopeId: selectedTurnScopeId,
+        runtime: summarizeStateMachineTurn(selectedTurn, state),
+        displayState: state.displayState || "",
+        sending: activeSessionSending.value === true,
+        canStop: state.canStop === true,
+        stopButtonVisible: state.canStop === true,
+        stopRequesting: state.stopRequesting === true,
+        primaryAction: state.primaryAction || "",
+      }));
       sessionLogWebSocketClient.log({
         category: "debug",
         level: "debug",
         debugType: "workflow-diagnostics",
         event: "frontend.render.composerRuntimeConsumed",
-        sessionId: resolveActiveSessionIdentity(),
-        turnScopeId: resolveActiveTurnScopeIdentity(),
+        sessionId: selectedSessionId,
+        turnScopeId: selectedTurnScopeId,
         data: {
           event: "frontend.render.composerRuntimeConsumed",
           selectedSessionId: resolveActiveSessionIdentity(),
@@ -451,7 +471,6 @@ export function useChatSession({
     renameSessionApi,
     deleteSessionMessagesFromApi,
     makeViewMessage,
-    foldMessagesForView,
     navigateToLastMessage,
     refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     clearUploads,
@@ -509,8 +528,10 @@ export function useChatSession({
     chatWebSocketClient,
     sessionLogWebSocketClient,
     applyTurnRuntimeEvent: submitTurnRuntimeEvent,
+    projectAppliedTurnRuntime: chatStore.projectAppliedTurnRuntime,
     runtimeEventsAlreadyProjected: true,
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
+    removeWorkflowOwnersForReplacedTurns: chatStore.removeWorkflowOwnersForReplacedTurns,
     ensureConnected,
     notify,
   });
@@ -530,7 +551,6 @@ export function useChatSession({
     chatWebSocketClient,
     appendMessage,
     findCanonicalMessageById,
-    upsertCanonicalAssistantMessage,
     makeViewMessage,
     foldMessagesForView,
     sessionTitleFromMessages,

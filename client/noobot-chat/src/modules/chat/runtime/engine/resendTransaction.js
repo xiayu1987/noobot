@@ -3,16 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  reconcileStaleResendMessages,
-  syncSessionMessageSummary,
-} from "./resendReconciler.js";
 import { normalizeTrimmedString } from "./utils.js";
-import {
-  getMessageRole,
-  getMessageTurnScopeId,
-} from "../../model/messageIdentity.js";
-import { getMessageRuntimeChannelState, SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
+import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
+import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { confirmTurnRuntimeDeletion } from "../run-state-machine/turnRuntimeRegistry.js";
 import {
   logResendDebug,
@@ -24,6 +17,12 @@ import { createSessionVersionManager } from "./sessionVersionManager.js";
 import { serializeAttachments } from "./attachmentSerialization.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import { nowMs } from "../../model/timeFields.js";
+import {
+  logStateMachineDebug,
+  summarizeStateMachineMessage,
+} from "../../../debug/loggers/stateMachineLogger.js";
+import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
+import { assertTurnReplacementMaterialization } from "@noobot/shared/turn-replacement-protocol";
 
 
 function normalizeAttachmentMeta(attachment = {}) {
@@ -84,74 +83,23 @@ function resolveSessionId(activeSession, activeSessionId) {
   );
 }
 
-function createSessionSnapshot(session, inputValue) {
+function createSessionDetailSnapshot(session = {}) {
   return {
-    messages: Array.isArray(session?.messages) ? [...session.messages] : null,
-    messageCount: session?.messageCount,
-    lastMessage: session?.lastMessage,
-    updatedAt: session?.updatedAt,
-    inputValue,
+    sessionId: session.sessionId,
+    sessions: [session],
   };
 }
 
-function restoreSessionSnapshot(session, snapshot) {
-  if (!session || !snapshot?.messages) return false;
-  session.messages = snapshot.messages;
-  session.messageCount = snapshot.messageCount;
-  session.lastMessage = snapshot.lastMessage;
-  session.updatedAt = snapshot.updatedAt;
-  return true;
-}
-
-function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
-  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
-  if (Array.isArray(source.sessions) && normalizeTrimmedString(source.sessionId || fallbackSessionId)) {
-    return {
-      ...source,
-      sessionId: normalizeTrimmedString(source.sessionId || fallbackSessionId),
-    };
-  }
-  const session = source.session && typeof source.session === "object" && !Array.isArray(source.session)
-    ? source.session
-    : Array.isArray(source.messages)
-      ? source
-      : null;
-  if (!session) return null;
-  const sessionId = normalizeTrimmedString(session.sessionId || source.sessionId || fallbackSessionId);
-  if (!sessionId) return null;
-  return {
-    ...source,
-    sessionId,
-    sessions: [{ ...session, sessionId: normalizeTrimmedString(session.sessionId || sessionId) }],
-  };
-}
-
-function operationSeed({ sessionId, userTargetMessage, originalCascadeStartIndex, removedMessagesBeforeResend }) {
+function operationSeed({ sessionId }) {
   return {
     type: "resend",
     sessionId,
     status: "pending",
-    anchorMessage: userTargetMessage,
-    originalStartIndex: originalCascadeStartIndex,
-    removedMessages: removedMessagesBeforeResend,
   };
-}
-
-function normalizeMessageRole(message = {}) {
-  return String(getMessageRole(message) || message?.type || "").trim().toLowerCase();
 }
 
 function getMessageText(message = {}) {
   return String(message?.content || message?.text || message?.message || "");
-}
-
-function normalizeState(value = "") {
-  return String(value || "").trim().toLowerCase();
-}
-
-function isStoppedAssistantSnapshot(message = {}) {
-  if (normalizeMessageRole(message) !== "assistant") return false;
-  return normalizeState(getMessageRuntimeChannelState(message)?.state) === "user_stopped";
 }
 
 function findReplacementUserMessageById({ session, messageId }) {
@@ -159,99 +107,8 @@ function findReplacementUserMessageById({ session, messageId }) {
   const expectedMessageId = normalizeTrimmedString(messageId);
   if (!expectedMessageId) return null;
   return messages.find((message) => (
-    normalizeTrimmedString(message?.messageId || message?.id) === expectedMessageId
+    normalizeTrimmedString(message?.messageId) === expectedMessageId
   )) || null;
-}
-
-function resolveReplacementUserMessage(payload = {}) {
-  const candidate = payload?.newTurn?.message || payload?.newTurn;
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
-  const messageId = normalizeTrimmedString(candidate?.messageId || candidate?.id);
-  if (!messageId || normalizeMessageRole(candidate) !== "user") return null;
-  return { ...candidate, id: messageId, messageId };
-}
-
-function upsertReplacementUserMessage(session, replacementUser = null) {
-  if (!session || !Array.isArray(session.messages)) return null;
-  const messageId = normalizeTrimmedString(replacementUser?.messageId || replacementUser?.id);
-  if (!messageId) return null;
-  const existing = findReplacementUserMessageById({ session, messageId });
-  if (existing) return existing;
-  const inserted = { ...replacementUser, id: messageId, messageId };
-  delete inserted.statusLabel;
-  session.messages.push(inserted);
-  syncSessionMessageSummary(session);
-  logResendDebug("resend.replacementUser.insert", () => ({
-    turnScopeId: getMessageTurnScopeId(inserted),
-    replacementUser: summarizeDebugMessage(inserted),
-    messages: summarizeDebugMessages(session.messages),
-  }));
-  return inserted;
-}
-
-function pruneLocalMessagesFromIndex(session, startIndex = -1) {
-  if (!session || startIndex < 0) return false;
-  if (Array.isArray(session.messages)) {
-    session.messages = session.messages.slice(0, startIndex);
-  }
-  syncSessionMessageSummary(session);
-  return true;
-}
-
-function pruneReplacedTurnMessages(session, { replacement = {}, fallbackTurnScopeId = "", keepTurnScopeId = "" } = {}) {
-  if (!session) return false;
-  const replacedScopes = new Set(
-    (Array.isArray(replacement?.replacedTurnScopeIds) ? replacement.replacedTurnScopeIds : [])
-      .map(normalizeTrimmedString)
-      .filter(Boolean),
-  );
-  const fallbackScope = normalizeTrimmedString(fallbackTurnScopeId);
-  const keepScope = normalizeTrimmedString(keepTurnScopeId);
-  if (fallbackScope && fallbackScope !== keepScope) replacedScopes.add(fallbackScope);
-  if (!replacedScopes.size) return false;
-  const prune = (messages) => Array.isArray(messages)
-    ? messages.filter((message) => {
-      const scope = getMessageTurnScopeId(message);
-      return !scope || scope === keepScope || !replacedScopes.has(scope);
-    })
-    : messages;
-  const nextMessages = prune(session.messages);
-  const changed = nextMessages !== session.messages;
-  if (Array.isArray(nextMessages)) session.messages = nextMessages;
-  if (changed) syncSessionMessageSummary(session);
-  return changed;
-}
-
-function pruneStoppedAssistantSnapshotsForTurn(session, turnScopeId = "") {
-  if (!session) return false;
-  const keepScope = normalizeTrimmedString(turnScopeId);
-  if (!keepScope) return false;
-  const prune = (messages) => Array.isArray(messages)
-    ? messages.filter((message) => {
-      if (getMessageTurnScopeId(message) !== keepScope) return true;
-      return !isStoppedAssistantSnapshot(message);
-    })
-    : messages;
-  const nextMessages = prune(session.messages);
-  const changed = nextMessages !== session.messages;
-  if (Array.isArray(nextMessages)) session.messages = nextMessages;
-  if (changed) syncSessionMessageSummary(session);
-  return changed;
-}
-
-function resolveTurnScopeReplacement(payload = {}) {
-  return payload?.turnScopeReplacement && typeof payload.turnScopeReplacement === "object" && !Array.isArray(payload.turnScopeReplacement)
-    ? payload.turnScopeReplacement
-    : null;
-}
-
-function collectReplacedTurnScopeIds(payload = {}, fallbackTurnScopeId = "", keepTurnScopeId = "") {
-  const replacement = resolveTurnScopeReplacement(payload);
-  const keepScope = normalizeTrimmedString(keepTurnScopeId);
-  return [...new Set([
-    ...(Array.isArray(replacement?.replacedTurnScopeIds) ? replacement.replacedTurnScopeIds : []),
-    fallbackTurnScopeId,
-  ].map(normalizeTrimmedString).filter((scope) => scope && scope !== keepScope))];
 }
 
 function createTurnScopeId() {
@@ -267,8 +124,6 @@ export function createResendMessageTransaction({
   applySessionDetail,
   authFetch,
   buildMonotonicMessageAnchor,
-  clearPendingInteraction,
-  findMessageCascadeStartIndex,
   input,
   messageOperationStore,
   prepareMonotonicMessageAction,
@@ -278,34 +133,14 @@ export function createResendMessageTransaction({
   send,
   userId,
   turnRuntimeRegistry,
+  removeWorkflowOwnersForReplacedTurns,
 } = {}) {
-  function applyResendReconcile(operation, options = {}) {
-    const session = activeSession?.value;
-    const result = reconcileStaleResendMessages(session, operation, options);
-    if (result.changed) {
-      syncSessionMessageSummary(session);
-      clearPendingInteraction?.();
-    }
-    return result.changed;
-  }
-
-  function pruneStaleMessagesAfterResend(anchorMessage = {}, originalStartIndex = -1, removedMessages = [], options = {}) {
-    return applyResendReconcile({
-      anchorMessage,
-      originalStartIndex,
-      removedMessages,
-    }, options);
-  }
-
-  function finalizePendingResendOperation({ finalOnly = true } = {}) {
+  function finalizePendingResendOperation() {
     const sessionId = resolveSessionId(activeSession, activeSessionId);
     const operation = messageOperationStore?.getActiveOperation(sessionId, "resend")
       || messageOperationStore?.getLatestOperation("resend");
     if (!operation) return false;
-    messageOperationStore?.updateOperation(operation.opId, { status: "reconciling" });
-    const updatedOperation = messageOperationStore?.getOperation(operation.opId) || operation;
-    applyResendReconcile(updatedOperation, { finalOnly });
-    messageOperationStore?.completeOperation(updatedOperation.opId);
+    messageOperationStore?.completeOperation(operation.opId);
     return true;
   }
 
@@ -372,11 +207,7 @@ export function createResendMessageTransaction({
       .map((attachment) => toPendingDisplayAttachment(attachment))
       .filter(Boolean);
     const finalAttachments = mergeAttachmentMetas(keptAttachments, serializedNewAttachments);
-    const snapshot = createSessionSnapshot(originalSession, input?.value);
-    const originalCascadeStartIndex = findMessageCascadeStartIndex?.(userTargetMessage) ?? -1;
-    const removedMessagesBeforeResend = Array.isArray(originalSession?.messages) && originalCascadeStartIndex >= 0
-      ? originalSession.messages.slice(originalCascadeStartIndex)
-      : [];
+    const originalInputValue = input?.value;
     const sessionId = resolveSessionId(activeSession, activeSessionId);
     const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
     logResendDebug("resend.attachments.resolved", () => ({
@@ -402,12 +233,10 @@ export function createResendMessageTransaction({
     const anchor = buildMonotonicMessageAnchor?.(userTargetMessage) || {};
     if (!normalizeTrimmedString(anchor.turnScopeId)) return false;
 
-    const operation = messageOperationStore?.registerOperation(operationSeed({
-      sessionId,
-      userTargetMessage,
-      originalCascadeStartIndex,
-      removedMessagesBeforeResend,
-    }));
+    const operation = messageOperationStore?.registerOperation(operationSeed({ sessionId }));
+    if (!normalizeTrimmedString(operation?.opId)) {
+      throw new TypeError("resend command registration failed: missing_command_id");
+    }
     const oldTurnScopeId = getMessageTurnScopeId(userTargetMessage);
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
@@ -421,6 +250,7 @@ export function createResendMessageTransaction({
       turnScopeId: resendTurnScopeId,
       source: "resend_transaction",
     });
+    let replacementCommitted = false;
     try {
       const mutationResult = await sessionVersionManager.runVersionedMutation({
         refreshOptions: {
@@ -447,7 +277,7 @@ export function createResendMessageTransaction({
         ok: result?.ok !== false && payload?.ok !== false,
         generation: payload?.generation,
         generated: payload?.generated,
-        replacement: resolveTurnScopeReplacement(payload),
+        replacement: payload?.turnReplacement || null,
       }));
       if (result?.ok === false || payload?.ok === false) {
         logResendDebug("resend.replaceTurn.failed", () => ({
@@ -470,107 +300,88 @@ export function createResendMessageTransaction({
           turnScopeId: resendTurnScopeId,
           source: "resend_transaction",
         });
-        restoreSessionSnapshot(activeSession?.value, snapshot);
-        input.value = snapshot.inputValue;
+        input.value = originalInputValue;
         return false;
       }
-      const replacedTurnScopeIds = collectReplacedTurnScopeIds(
-        payload,
-        oldTurnScopeId,
-        resendTurnScopeId,
-      );
+      const materialization = assertTurnReplacementMaterialization({
+        commit: payload?.turnReplacement,
+        session: payload?.session,
+      });
+      const turnReplacement = materialization.commit;
+      if (turnReplacement.commandId !== operation.opId) {
+        throw new TypeError("invalid turn replacement commit: command_id_mismatch");
+      }
+      if (turnReplacement.replacementTurnScopeId !== resendTurnScopeId) {
+        throw new TypeError("invalid turn replacement commit: requested_scope_mismatch");
+      }
+      if (!turnReplacement.replacedTurnScopeIds.includes(oldTurnScopeId)) {
+        throw new TypeError("invalid turn replacement commit: replaced_scope_mismatch");
+      }
+      replacementCommitted = true;
+      const replacedTurnScopeIds = [...turnReplacement.replacedTurnScopeIds];
       const replacementDeletion = confirmTurnRuntimeDeletion(
         turnRuntimeRegistry?.value || turnRuntimeRegistry,
         replacedTurnScopeIds,
         { sessionId },
       );
+      const workflowOwnerDeletion = removeWorkflowOwnersForReplacedTurns?.({
+        parentSessionId: sessionId,
+        replacedTurnScopeIds,
+      }) || { removedWorkflowRunIds: [], removedSessionIds: [] };
       logResendDebug("resend.replacedTurns.tombstoned", () => ({
         sessionId,
         turnScopeId: resendTurnScopeId,
         replacedTurnScopeIds,
         confirmedTurnScopeIds: replacementDeletion.confirmedTurnScopeIds,
         removedTurnScopeIds: replacementDeletion.removedTurnScopeIds,
+        removedWorkflowRunIds: workflowOwnerDeletion.removedWorkflowRunIds,
+        removedSubSessionIds: workflowOwnerDeletion.removedSessionIds,
       }));
-      const replacementPatch = {
-        status: "reconciling",
-        ...(resolveTurnScopeReplacement(payload) ? { turnScopeReplacement: resolveTurnScopeReplacement(payload) } : {}),
-      };
-      if (operation) messageOperationStore?.updateOperation(operation.opId, replacementPatch);
-      const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
-      if (sessionDetail) {
-        logResendDebug("resend.detail.apply.before", () => ({
-          sessionId,
-          turnScopeId: resendTurnScopeId,
-          preserveCurrentMessages: true,
-          messages: summarizeDebugMessages(activeSession?.value?.messages),
-        }));
-        applySessionDetail?.(sessionDetail, { preserveCurrentMessages: true });
-        logResendDebug("resend.detail.apply.after", () => ({
-          sessionId,
-          turnScopeId: resendTurnScopeId,
-          messages: summarizeDebugMessages(activeSession?.value?.messages),
-        }));
-      }
-      if (operation) applyResendReconcile(messageOperationStore?.getOperation(operation.opId) || operation, { finalOnly: true });
-      const replacementUserMessage = upsertReplacementUserMessage(
-        activeSession?.value,
-        resolveReplacementUserMessage(payload),
-      );
+      if (operation) messageOperationStore?.updateOperation(operation.opId, {
+        status: "materializing",
+        turnReplacement,
+      });
+      const sessionDetail = createSessionDetailSnapshot(materialization.session);
+      logResendDebug("resend.detail.apply.before", () => ({
+        sessionId,
+        turnScopeId: resendTurnScopeId,
+        mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+        messages: summarizeDebugMessages(activeSession?.value?.messages),
+      }));
+      applySessionDetail?.(sessionDetail, {
+        mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+        deletedTurnScopeIds: replacedTurnScopeIds,
+      });
+      const replacementUserMessage = findReplacementUserMessageById({
+        session: activeSession?.value,
+        messageId: turnReplacement.replacementUserMessageId,
+      });
       if (!replacementUserMessage) {
-        if (operation) messageOperationStore?.completeOperation(operation.opId);
-        applyRunStateEvent?.({
-          type: SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
-          sessionId,
-          turnScopeId: resendTurnScopeId,
-          source: "resend_transaction",
-        });
-        restoreSessionSnapshot(activeSession?.value, snapshot);
-        input.value = snapshot.inputValue;
-        return false;
+        throw new TypeError("invalid turn replacement projection: replacement_user_missing");
       }
+      logStateMachineDebug("stateMachine.resend.materializationCommitted", () => ({
+        sessionId,
+        turnScopeId: resendTurnScopeId,
+        committedVersion: turnReplacement.committedVersion,
+        replacedTurnScopeIds,
+        replacementUser: summarizeStateMachineMessage(replacementUserMessage),
+        messages: (activeSession?.value?.messages || []).map(summarizeStateMachineMessage),
+      }));
+      logResendDebug("resend.detail.apply.after", () => ({
+        sessionId,
+        turnScopeId: resendTurnScopeId,
+        messages: summarizeDebugMessages(activeSession?.value?.messages),
+      }));
       const persistedAttachments = dedupeAttachmentMetas(replacementUserMessage.attachments || []);
       const attachmentsForDisplay = mergeAttachmentMetas(
         persistedAttachments,
         pendingDisplayAttachments,
       );
-      replacementUserMessage.content = text;
       replacementUserMessage.attachments = mergeAttachmentMetas(
         attachmentsForDisplay,
         persistedAttachments,
       );
-      if ("text" in replacementUserMessage) replacementUserMessage.text = text;
-      if ("message" in replacementUserMessage) replacementUserMessage.message = text;
       delete replacementUserMessage.statusLabel;
-      pruneReplacedTurnMessages(activeSession?.value, {
-        replacement: resolveTurnScopeReplacement(payload),
-        fallbackTurnScopeId: getMessageTurnScopeId(userTargetMessage),
-        keepTurnScopeId: resendTurnScopeId,
-      });
-      const prunedStopped = pruneStoppedAssistantSnapshotsForTurn(activeSession?.value, resendTurnScopeId);
-      logResendDebug("resend.prune.after", () => ({
-        sessionId,
-        turnScopeId: resendTurnScopeId,
-        replacementUser: summarizeDebugMessage(replacementUserMessage),
-        prunedStopped,
-        messages: summarizeDebugMessages(activeSession?.value?.messages),
-      }));
-      if (payload?.generation === "completed" || payload?.generated === true) {
-        logResendDebug("resend.completedWithoutStream", () => ({
-          sessionId,
-          turnScopeId: resendTurnScopeId,
-          generation: payload?.generation,
-          generated: payload?.generated,
-        }));
-        if (operation) messageOperationStore?.completeOperation(operation.opId);
-        applyRunStateEvent?.({
-          type: SESSION_RUN_EVENT.LOCAL_RESEND_COMPLETED,
-          sessionId,
-          turnScopeId: resendTurnScopeId,
-          source: "resend_transaction",
-        });
-        input.value = "";
-        return true;
-      }
       if (operation) messageOperationStore?.updateOperation(operation.opId, { status: "sending" });
       applyRunStateEvent?.({
         type: SESSION_RUN_EVENT.LOCAL_RESEND_STREAMING,
@@ -588,7 +399,7 @@ export function createResendMessageTransaction({
       const sent = await send?.({
         messageText: text,
         reuseExistingUserTurn: true,
-        userMessageId: normalizeTrimmedString(replacementUserMessage?.messageId || replacementUserMessage?.id),
+        userMessageId: normalizeTrimmedString(replacementUserMessage?.messageId),
         turnScopeId: resendTurnScopeId,
         allowDuringResend: true,
         attachmentFiles: [],
@@ -609,31 +420,36 @@ export function createResendMessageTransaction({
           turnScopeId: resendTurnScopeId,
           source: "resend_transaction",
         });
-        restoreSessionSnapshot(activeSession?.value, snapshot);
-        input.value = snapshot.inputValue;
+        input.value = text;
         return false;
       }
       if (operation && messageOperationStore?.getOperation(operation.opId)) {
         messageOperationStore.completeOperation(operation.opId);
       }
       return true;
-    } catch {
+    } catch (error) {
       if (operation) messageOperationStore?.completeOperation(operation.opId);
+      logStateMachineDebug("stateMachine.resend.failed", () => ({
+        sessionId,
+        turnScopeId: resendTurnScopeId,
+        replacementCommitted,
+        errorType: String(error?.name || "Error"),
+        errorMessage: String(error?.message || error || "").slice(0, 240),
+        messages: (activeSession?.value?.messages || []).map(summarizeStateMachineMessage),
+      }));
       applyRunStateEvent?.({
         type: SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
         sessionId,
         turnScopeId: resendTurnScopeId,
         source: "resend_transaction",
       });
-      restoreSessionSnapshot(activeSession?.value, snapshot);
-      input.value = snapshot.inputValue;
+      input.value = replacementCommitted ? text : originalInputValue;
       return false;
     }
   }
 
   return {
     finalizePendingResendOperation,
-    pruneStaleMessagesAfterResend,
     resendMonotonicMessage,
   };
 }

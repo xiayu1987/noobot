@@ -63,10 +63,9 @@ export async function renderActiveSessionBeforeReplay({
       }
       logResendDebug("hydration.detail.apply.before", () => ({
         sessionId: backendSessionId,
-        preserveCurrentMessages: true,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       }));
-      chatList.applySessionDetail(detail, { preserveCurrentMessages: true });
+      chatList.applySessionDetail(detail);
       logResendDebug("hydration.detail.apply.after", () => ({
         sessionId: backendSessionId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
@@ -82,4 +81,3 @@ export async function renderActiveSessionBeforeReplay({
   setReplayHydrationPromise(hydrationPromise);
   return hydrationPromise;
 }
-

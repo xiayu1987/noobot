@@ -12,10 +12,15 @@ import { stopSending as requestStopSending } from "../runtime/engine/stop.js";
 import { createMonotonicMessageActions } from "../runtime/engine/monotonicMessageActions.js";
 import { createChatEngineSender } from "../runtime/engine/sendFlow.js";
 import { createPendingMessageOperationStore } from "../runtime/engine/messageOperationStore.js";
-import { logStateMachineDebug } from "../../debug/loggers/stateMachineLogger.js";
+import {
+  logStateMachineDebug,
+  summarizeStateMachineEvent,
+  summarizeStateMachineTurn,
+} from "../../debug/loggers/stateMachineLogger.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
   applyTurnTerminalResolution,
+  resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
@@ -74,6 +79,7 @@ export function useChatEngine({
   sessions,
   turnRuntimeRegistry,
   applyTurnRuntimeEvent,
+  projectAppliedTurnRuntime,
   input,
   uploadFiles,
   clearUploads,
@@ -102,6 +108,7 @@ export function useChatEngine({
   chatWebSocketClient,
   sessionLogWebSocketClient,
   applyWorkflowRuntimeEvent,
+  removeWorkflowOwnersForReplacedTurns,
   ensureConnected,
   notify = () => {},
   processStore = null,
@@ -138,6 +145,7 @@ export function useChatEngine({
       if (result?.applied) {
         turnRuntimeRegistry.value = nextRegistry;
         const projected = selectSessionTurnRuntime(nextRegistry, sessionId, turnScopeId);
+        projectAppliedTurnRuntime?.(projected);
         logTerminalResolutionDebug("frontend.terminalResolution.applied", () => ({
           sessionId,
           turnScopeId,
@@ -187,22 +195,55 @@ export function useChatEngine({
         responseSequence: Number(details?.response?.turn?.sequence || details?.response?.sequence || 0),
       }),
     ),
+    onTrace: (event, details = {}) => logStateMachineDebug(event, details),
   });
   const applyRunStateEvent = (event) => {
+    const eventSummary = summarizeStateMachineEvent(event);
+    const before = selectSessionTurnRuntime(
+      turnRuntimeRegistry?.value,
+      eventSummary.sessionId,
+      eventSummary.turnScopeId,
+    );
+    const beforeTurn = resolveSessionTurnRuntime(
+      turnRuntimeRegistry?.value,
+      eventSummary.sessionId,
+      eventSummary.turnScopeId,
+    );
+    logStateMachineDebug("stateMachine.dispatch", () => ({
+      ...eventSummary,
+      before: summarizeStateMachineTurn(beforeTurn, before),
+      activeSessionId: activeSessionId?.value || "",
+    }));
     const terminalResolution = terminalResolutionCoordinator.observe(event);
-    if (terminalResolution) return terminalResolution;
+    if (terminalResolution) {
+      logStateMachineDebug("stateMachine.reducer.skipped", () => ({
+        ...eventSummary,
+        reason: "terminal_resolution_owned",
+        before: summarizeStateMachineTurn(beforeTurn, before),
+      }));
+      logStateMachineDebug("stateMachine.terminal.scheduled", () => ({
+        ...eventSummary,
+        before: summarizeStateMachineTurn(beforeTurn, before),
+      }));
+      return terminalResolution;
+    }
     const turnResult = applyTurnRuntimeEvent?.(event);
     const runtime = selectSessionTurnRuntime(
       turnRuntimeRegistry?.value,
       turnResult?.turn?.sessionId || event?.sessionId || "",
       turnResult?.turn?.turnScopeId || event?.turnScopeId || "",
     );
-    logStateMachineDebug("stateMachine.event", () => ({
-      eventType: event?.type || "",
-      sessionId: event?.sessionId || "",
-      dialogProcessId: event?.dialogProcessId || "",
-      turnScopeId: event?.turnScopeId || "",
-      toState: runtime.displayState,
+    logStateMachineDebug("stateMachine.reducer.decision", () => ({
+      ...eventSummary,
+      applied: turnResult?.applied === true,
+      reason: turnResult?.reason || "",
+      aliasPromoted: turnResult?.aliasPromoted === true,
+      requestedSessionId: turnResult?.requestedSessionId || "",
+      canonicalSessionId: turnResult?.canonicalSessionId || "",
+      identityMatched: !String(turnResult?.reason || "").includes("identity_conflict"),
+      stateChanged: String(before?.displayState || before?.state || "") !== String(runtime?.displayState || runtime?.state || ""),
+      before: summarizeStateMachineTurn(beforeTurn, before),
+      after: summarizeStateMachineTurn(turnResult?.turn, runtime),
     }));
     sessionLogWebSocketClient?.log?.({
       category: "state",
@@ -372,6 +413,9 @@ export function useChatEngine({
     monotonicActionStopTimeoutMs,
     monotonicActionStopPollIntervalMs,
     appendMessage,
+    removeWorkflowOwnersForReplacedTurns,
+    invalidateTerminalResolution: (sessionId, turnScopeId) =>
+      terminalResolutionCoordinator.invalidate(sessionId, turnScopeId),
   });
   const {
     prepareMonotonicMessageAction,

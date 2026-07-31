@@ -94,6 +94,67 @@ export function contributeExtension(point = "", contribution = {}) {
   return true;
 }
 
+export function listExtensionContributions(point = "") {
+  const extensionPoint = normalizeString(point);
+  const entries = extensionPoint
+    ? contributionsByPoint.get(extensionPoint) || []
+    : [...contributionsByPoint.values()].flat();
+  return entries.map((entry) => ({
+    id: entry.id,
+    pluginId: entry.pluginId,
+    point: entry.point,
+    priority: entry.priority,
+    enabled: entry.enabled !== false,
+    hasProvider: typeof entry.provide === "function",
+  }));
+}
+
+export function replacePluginExtensions(pluginId = "", contributions = []) {
+  const normalizedPluginId = normalizeString(pluginId);
+  if (!normalizedPluginId) throw new Error("plugin id is required");
+  const staged = Array.isArray(contributions) ? contributions : [];
+  const seen = new Set();
+  for (const item of staged) {
+    const point = normalizeString(item?.point);
+    const id = normalizeString(item?.contribution?.id);
+    if (!KNOWN_EXTENSION_POINTS.has(point)) throw new Error(`unknown extension point "${point}"`);
+    if (!id) throw new Error(`extension contribution id is required for "${point}"`);
+    const key = `${point}:${id}`;
+    if (seen.has(key)) throw new Error(`extension contribution "${id}" duplicated at "${point}"`);
+    seen.add(key);
+  }
+
+  const nextByPoint = new Map();
+  for (const [point, entries] of contributionsByPoint) {
+    const retained = entries.filter((entry) => entry.pluginId !== normalizedPluginId);
+    if (retained.length) nextByPoint.set(point, retained);
+  }
+  for (const item of staged) {
+    const point = normalizeString(item.point);
+    const contribution = item.contribution || {};
+    const entries = nextByPoint.get(point) || [];
+    if (entries.some((entry) => entry.id === normalizeString(contribution.id))) {
+      throw new Error(`extension contribution "${contribution.id}" duplicated at "${point}"`);
+    }
+    entries.push({
+      ...contribution,
+      id: normalizeString(contribution.id),
+      pluginId: normalizedPluginId,
+      point,
+      priority: Number.isFinite(Number(contribution?.priority)) ? Number(contribution.priority) : 100,
+      enabled: typeof contribution?.enabled === "function" ? contribution.enabled : contribution?.enabled !== false,
+      exclusiveGroup: normalizeString(contribution?.exclusiveGroup),
+      when: typeof contribution?.when === "function" ? contribution.when : () => true,
+      resolveProps: typeof contribution?.resolveProps === "function" ? contribution.resolveProps : () => ({}),
+      resolveListeners: typeof contribution?.resolveListeners === "function" ? contribution.resolveListeners : () => ({}),
+    });
+    nextByPoint.set(point, entries);
+  }
+  contributionsByPoint.clear();
+  for (const [point, entries] of nextByPoint) contributionsByPoint.set(point, entries);
+  return listExtensionContributions().filter((entry) => entry.pluginId === normalizedPluginId);
+}
+
 export function resolveExtensionPoint(point = "", context = {}) {
   const extensionPoint = normalizeString(point);
   const entries = contributionsByPoint.get(extensionPoint) || [];
@@ -133,8 +194,8 @@ export function removePluginExtensions(pluginId = "") {
   }
 }
 
-export function provideExtensionValues(point = "", context = {}) {
-  return resolveExtensionPoint(point, context).flatMap((entry) => {
+export function provideResolvedExtensionValues(entries = [], context = {}) {
+  return (Array.isArray(entries) ? entries : []).flatMap((entry) => {
     if (typeof entry.provide !== "function") return [];
     try {
       const value = entry.provide(context);
@@ -144,6 +205,10 @@ export function provideExtensionValues(point = "", context = {}) {
       return [];
     }
   });
+}
+
+export function provideExtensionValues(point = "", context = {}) {
+  return provideResolvedExtensionValues(resolveExtensionPoint(point, context), context);
 }
 
 export function clearExtensionRegistry() {

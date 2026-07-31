@@ -114,7 +114,7 @@ import {
         canStop: false,
       },
     });
-    expect(selectSessionTurnRuntime(registry, "s-refresh")).toMatchObject({
+    expect(selectSessionTurnRuntime(registry, "s-refresh", terminalTurn.turnScopeId)).toMatchObject({
       sending: false,
       canStop: false,
       terminal: "completed",

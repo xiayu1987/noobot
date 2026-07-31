@@ -30,7 +30,7 @@ export function hydrateExecutionSessionDetail(detail = {}, {
   return {
     ...(detail && typeof detail === "object" ? detail : {}),
     messages,
-    rawMessages: Array.isArray(detail?.rawMessages) ? detail.rawMessages : messages,
+    rawMessages: Array.isArray(detail?.rawMessages) ? detail.rawMessages : [],
     sessionSummary: {
       ...sessionSummaryWithoutMutableRuntime(detail?.sessionSummary),
       messages,
@@ -109,6 +109,10 @@ export async function fetchExecutionSessionDetail({
     const session = workflowSession.session && typeof workflowSession.session === "object" && !Array.isArray(workflowSession.session)
       ? workflowSession.session
       : {};
+    const snapshotVersion = Number(workflowSession.snapshotVersion || 0);
+    if (!Number.isInteger(snapshotVersion) || snapshotVersion <= 0) {
+      throw new TypeError("workflowSession.snapshotVersion must be a positive integer");
+    }
     const sessionSummary = workflowSession.sessionSummary && typeof workflowSession.sessionSummary === "object" && !Array.isArray(workflowSession.sessionSummary)
       ? workflowSession.sessionSummary
       : {};
@@ -126,21 +130,21 @@ export async function fetchExecutionSessionDetail({
     }
     const messages = Array.isArray(sessionSummary.messages)
       ? sessionSummary.messages
-      : Array.isArray(session.messages)
-        ? session.messages
-        : [];
+      : [];
+    const rawMessages = Array.isArray(session.messages) ? session.messages : [];
     const executionLogs = Array.isArray(workflowSession.executionLogs)
       ? workflowSession.executionLogs
       : [];
     const detail = {
       state: messages.length ? "ready" : "empty",
       sessionId: String(sessionSummary.sessionId || session.sessionId || session.id || normalizedSessionId).trim(),
+      snapshotVersion,
       sessionSummary: {
         ...sessionSummaryWithoutMutableRuntime(session),
         ...sessionSummaryWithoutMutableRuntime(sessionSummary),
       },
       messages,
-      rawMessages: messages,
+      rawMessages,
       executionLogs,
     };
     props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.normalizationCompleted", {
@@ -187,6 +191,7 @@ export function normalizeWorkflowNodeSessionDetail(payload = {}) {
       ? payload.workflowSession.sessionSummary
       : null;
   return {
+    snapshotVersion: Number(payload?.workflowSession?.snapshotVersion || 0),
     session,
     sessionSummary,
     sessionId: String(

@@ -5,7 +5,36 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createTurnReplacementCommit } from "@noobot/shared/turn-replacement-protocol";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+
+function createReplaceTurnResult(payload, {
+  version,
+  replacedTurnScopeIds,
+  replacementUserMessageId,
+} = {}) {
+  const replacementUser = {
+    role: "user",
+    messageId: replacementUserMessageId,
+    turnScopeId: payload.turnScopeId,
+  };
+  return {
+    session: {
+      sessionId: payload.sessionId,
+      version,
+      messages: [replacementUser],
+    },
+    turnReplacement: createTurnReplacementCommit({
+      commandId: payload.idempotencyKey,
+      sessionId: payload.sessionId,
+      committedVersion: version,
+      replacedTurnScopeIds,
+      replacementTurnScopeId: payload.turnScopeId,
+      replacementUserMessageId,
+      committedAt: "2026-07-31T00:00:00.000Z",
+    }),
+  };
+}
 
 test("session-routes: delete-from 路由透传请求体并返回后端快照", async () => {
   const calls = [];
@@ -191,12 +220,11 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
         getAllSessionsData: async () => [],
         replaceTurn: async (payload) => {
           calls.push(payload);
-          return {
-            session: { sessionId: payload.sessionId, messages: [{ turnScopeId: "scope-new" }], version: 4 },
-            replacedTurn: { deletedCount: 2 },
-            newTurn: { turnScopeId: "scope-new" },
+          return createReplaceTurnResult(payload, {
             version: 4,
-          };
+            replacedTurnScopeIds: ["scope-old"],
+            replacementUserMessageId: "replacement-user-1",
+          });
         },
       },
       getAttachmentById: async () => null,
@@ -223,7 +251,8 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
-    assert.equal(payload.newTurn.turnScopeId, "scope-new");
+    assert.equal(payload.turnReplacement.replacementTurnScopeId, "turn-scope-replace");
+    assert.equal(payload.turnReplacement.replacementUserMessageId, "replacement-user-1");
     assert.deepEqual(calls[0], {
       userId: "u1",
       sessionId: "s1",
@@ -249,11 +278,11 @@ test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
         getAllSessionsData: async () => [],
         replaceTurn: async (payload) => {
           calls.push(payload);
-          return {
-            session: { sessionId: payload.sessionId, messages: [], version: 5 },
-            newTurn: { turnScopeId: "client-turn:api-new" },
+          return createReplaceTurnResult(payload, {
             version: 5,
-          };
+            replacedTurnScopeIds: ["client-turn:api"],
+            replacementUserMessageId: "replacement-user-2",
+          });
         },
       },
       getAttachmentById: async () => null,
@@ -271,7 +300,9 @@ test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
       body: JSON.stringify({
         anchor: { turnScopeId: "client-turn:api" },
         newContent: "edited content",
+        turnScopeId: "client-turn:api-new",
         expectedVersion: 2,
+        idempotencyKey: "replace-api-command",
       }),
     });
     const payload = await response.json();

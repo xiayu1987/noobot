@@ -34,18 +34,32 @@ closeUpstreamChannel(
 }
 
 markChannelTerminal(channel, terminalStatus = CHANNEL_STATUS.DONE) {
-  if (!channel) return;
+  if (!channel) return false;
+  if (channel.pendingInteractionRequests.size) {
+    this.logSessionEvent(channel, {
+      category: "state",
+      level: "warn",
+      event: "agentProxy.channel.terminal.rejected",
+      data: {
+        channelKey: channel.key,
+        status: String(terminalStatus || CHANNEL_STATUS.DONE).trim(),
+        reason: "pending_interaction",
+        pendingRequestIds: Array.from(channel.pendingInteractionRequests.keys()),
+      },
+    });
+    return false;
+  }
   channel.activity.phase = CHANNEL_STATUS.IDLE;
   channel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
   channel.retention.terminalStatus = String(terminalStatus || CHANNEL_STATUS.DONE).trim();
   channel.updatedAtMs = nowMs();
   channel.retention.cleanupAfterMs = nowMs() + config.channelRetentionMs;
-  channel.pendingInteractionRequests.clear();
   this.logSessionEvent(channel, {
     category: "state",
     event: "agentProxy.channel.terminal",
     data: { channelKey: channel.key, status: channel.retention.terminalStatus, cleanupAfterMs: channel.retention.cleanupAfterMs },
   });
+  return true;
 }
 
 connectUpstreamChannel(channel, apiKey = "", locale = "") {
@@ -130,9 +144,33 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
         if (requester) {
           channel.pendingSnapshotRequests.delete(commandId);
-          this.sendSocketEvent(requester, { event: eventName, data: eventData });
+          if (typeof requester?.resolve === "function") {
+            requester.resolve({ ok: true, snapshot: eventData });
+          } else {
+            this.sendSocketEvent(requester, { event: eventName, data: eventData });
+          }
         }
         return;
+      }
+      const commandId = String(eventData?.commandId || "").trim();
+      const executionRequester = commandId
+        ? channel.pendingExecutionRequests?.get(commandId)
+        : null;
+      if (executionRequester) {
+        channel.pendingExecutionRequests.delete(commandId);
+        this.sendSocketEvent(executionRequester, { event: eventName, data: eventData });
+        return;
+      }
+      if (eventName === CHANNEL_EVENT.ERROR) {
+        const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
+        if (typeof requester?.resolve === "function") {
+          channel.pendingSnapshotRequests.delete(commandId);
+          requester.resolve({
+            ok: false,
+            reason: String(eventData?.errorCode || eventData?.error || "snapshot_failed"),
+          });
+          return;
+        }
       }
       const eventEnvelope = this.pushChannelEvent(channel, eventName, eventData);
       this.recordSuccessfulDataPlaneOperation("upstreamMessages");

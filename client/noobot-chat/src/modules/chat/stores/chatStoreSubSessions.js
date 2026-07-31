@@ -11,6 +11,8 @@ import {
 import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import { classifyRealtimeLog } from "../runtime/engine/realtimeLogClassifier.js";
+import { canonicalizeTurnScopeId, normalizeTurnScopeIdKey } from "../model/messageIdentity.js";
+import { applyRunStateMessageRuntimePatch } from "../runtime/engine/messageRuntimePatch.js";
 import {
   dispatchTurnEnvelope,
   TURN_PROJECTION_SOURCE,
@@ -25,6 +27,81 @@ const SUB_SESSION_TERMINAL_STATUSES = new Set([
 
 function isSubSessionTerminalStatus(value) {
   return SUB_SESSION_TERMINAL_STATUSES.has(text(value).toLowerCase());
+}
+
+function turnScopeKey(value) {
+  return normalizeTurnScopeIdKey(text(value));
+}
+
+function canonicalTurnScopeId(currentValue = "", incomingValue = "") {
+  return canonicalizeTurnScopeId(currentValue || incomingValue);
+}
+
+function mergeSubSessionTurnStatuses(currentStatuses = [], snapshotStatuses = []) {
+  const merged = new Map();
+  for (const item of Array.isArray(currentStatuses) ? currentStatuses : []) {
+    const turnScopeId = text(item?.turnScopeId);
+    const key = turnScopeKey(turnScopeId);
+    if (key) merged.set(key, { ...item });
+  }
+  for (const snapshot of Array.isArray(snapshotStatuses) ? snapshotStatuses : []) {
+    const turnScopeId = text(snapshot?.turnScopeId);
+    const key = turnScopeKey(turnScopeId);
+    if (!key) continue;
+    const current = merged.get(key) || {};
+    const currentStatus = text(current?.status || current?.state);
+    const snapshotStatus = text(snapshot?.status || snapshot?.state);
+    merged.set(key, {
+      ...current,
+      ...snapshot,
+      turnScopeId: canonicalTurnScopeId(current?.turnScopeId, turnScopeId),
+      status: isSubSessionTerminalStatus(currentStatus) && !isSubSessionTerminalStatus(snapshotStatus)
+        ? currentStatus
+        : (snapshotStatus || currentStatus),
+    });
+  }
+  return [...merged.values()];
+}
+
+function mergeSubSessionTurnTimings(currentTimings = [], snapshotTimings = []) {
+  const merged = new Map();
+  for (const item of Array.isArray(currentTimings) ? currentTimings : []) {
+    const turnScopeId = text(item?.turnScopeId);
+    const key = turnScopeKey(turnScopeId);
+    if (key) merged.set(key, { ...item });
+  }
+  for (const snapshot of Array.isArray(snapshotTimings) ? snapshotTimings : []) {
+    const turnScopeId = text(snapshot?.turnScopeId);
+    const key = turnScopeKey(turnScopeId);
+    if (!key) continue;
+    const current = merged.get(key) || {};
+    merged.set(key, {
+      ...current,
+      ...snapshot,
+      turnScopeId: canonicalTurnScopeId(current?.turnScopeId, turnScopeId),
+      thinkingStartedAt: current.thinkingStartedAt || snapshot?.thinkingStartedAt || null,
+      thinkingFinishedAt: current.thinkingFinishedAt || snapshot?.thinkingFinishedAt || null,
+    });
+  }
+  return [...merged.values()];
+}
+
+function auditSubSessionTurnFacts(turnStatuses = [], turnTimings = []) {
+  const timingByTurnScope = new Map(
+    (Array.isArray(turnTimings) ? turnTimings : [])
+      .map((timing = {}) => [turnScopeKey(timing?.turnScopeId), timing])
+      .filter(([key]) => Boolean(key)),
+  );
+  const errors = [];
+  for (const status of Array.isArray(turnStatuses) ? turnStatuses : []) {
+    const key = turnScopeKey(status?.turnScopeId);
+    if (!key || !isSubSessionTerminalStatus(status?.status || status?.state)) continue;
+    const timing = timingByTurnScope.get(key);
+    if (!text(timing?.thinkingFinishedAt)) {
+      errors.push({ code: "terminal_turn_missing_finished_at", turnScopeId: canonicalizeTurnScopeId(status?.turnScopeId) });
+    }
+  }
+  return errors;
 }
 
 function eventTime(eventData = {}) {
@@ -59,12 +136,16 @@ function projectSubSessionTurnState(currentSession = {}, eventData = {}) {
   const status = text(eventData?.status || eventData?.state).toLowerCase();
   const terminal = isSubSessionTerminalStatus(status);
   const timestamp = eventTime(eventData);
+  const authoritativeStartedAt = text(eventData?.startedAt || eventData?.thinkingStartedAt);
+  const authoritativeFinishedAt = text(eventData?.completedAt || eventData?.finishedAt);
+  const startedAt = authoritativeStartedAt || timestamp;
+  const finishedAt = authoritativeFinishedAt || (terminal ? timestamp : "");
   const turnStatuses = [...(Array.isArray(currentSession.turnStatuses) ? currentSession.turnStatuses : [])];
-  const statusIndex = turnStatuses.findIndex((item = {}) => text(item.turnScopeId) === turnScopeId);
+  const statusIndex = turnStatuses.findIndex((item = {}) => turnScopeKey(item.turnScopeId) === turnScopeKey(turnScopeId));
   const currentStatus = statusIndex >= 0 ? turnStatuses[statusIndex] : {};
   const nextStatus = {
     ...currentStatus,
-    turnScopeId,
+    turnScopeId: canonicalTurnScopeId(currentStatus.turnScopeId, turnScopeId),
     dialogProcessId: dialogProcessId || currentStatus.dialogProcessId || "",
     status: status || currentStatus.status || "sending",
     updatedAt: timestamp,
@@ -73,14 +154,16 @@ function projectSubSessionTurnState(currentSession = {}, eventData = {}) {
   else turnStatuses.push(nextStatus);
 
   const turnTimings = [...(Array.isArray(currentSession.turnTimings) ? currentSession.turnTimings : [])];
-  const timingIndex = turnTimings.findIndex((item = {}) => text(item.turnScopeId) === turnScopeId);
+  const timingIndex = turnTimings.findIndex((item = {}) => turnScopeKey(item.turnScopeId) === turnScopeKey(turnScopeId));
   const currentTiming = timingIndex >= 0 ? turnTimings[timingIndex] : {};
   const nextTiming = {
     ...currentTiming,
-    turnScopeId,
+    turnScopeId: canonicalTurnScopeId(currentTiming.turnScopeId, turnScopeId),
     dialogProcessId: dialogProcessId || currentTiming.dialogProcessId || "",
-    thinkingStartedAt: currentTiming.thinkingStartedAt || timestamp,
-    thinkingFinishedAt: terminal ? (currentTiming.thinkingFinishedAt || timestamp) : null,
+    thinkingStartedAt: authoritativeStartedAt || currentTiming.thinkingStartedAt || startedAt,
+    thinkingFinishedAt: terminal
+      ? (authoritativeFinishedAt || currentTiming.thinkingFinishedAt || finishedAt)
+      : null,
   };
   if (timingIndex >= 0) turnTimings[timingIndex] = nextTiming;
   else turnTimings.push(nextTiming);
@@ -167,6 +250,7 @@ export function createSubSessionMessageRegistry() { return { sessions: {} }; }
 export function createSubSessionStore({
   subSessionMessageRegistry,
   subSessionMessageRegistryVersion,
+  turnRuntimeRegistry,
   applyTurnTimingSnapshot = null,
 }) {
 function applySubSessionLifecycleEvent(eventData = {}) {
@@ -181,7 +265,12 @@ function applySubSessionLifecycleEvent(eventData = {}) {
     eventsById: {},
     sequence: 0,
   };
-  const turnState = projectSubSessionTurnState(currentSession, eventData);
+  const projectedStatus = text(eventData?.terminal || eventData?.status || eventData?.state);
+  const lifecycleProjection = {
+    ...eventData,
+    status: projectedStatus,
+  };
+  const turnState = projectSubSessionTurnState(currentSession, lifecycleProjection);
   const sequenceDomain = text(eventData?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
   const sequence = Number(eventData?.sequence || 0);
   const revision = Number(eventData?.revision || 0);
@@ -194,7 +283,7 @@ function applySubSessionLifecycleEvent(eventData = {}) {
     turnScopeId: text(eventData?.turnScopeId || currentSession.turnScopeId),
     workflowRunId: text(eventData?.workflowRunId || currentSession.workflowRunId),
     nodeExecutionId: text(eventData?.nodeExecutionId || currentSession.nodeExecutionId),
-    status: text(eventData?.status || eventData?.state || currentSession.status),
+    status: projectedStatus || currentSession.status,
     turnStatuses: turnState.turnStatuses,
     turnTimings: turnState.turnTimings,
     sequenceByDomain: {
@@ -207,11 +296,18 @@ function applySubSessionLifecycleEvent(eventData = {}) {
     },
     updatedAt: eventTime(eventData),
   };
+  applyRunStateMessageRuntimePatch({
+    sessions: [nextSession],
+    activeSession: nextSession,
+    turnRuntimeRegistry,
+    event: lifecycleProjection,
+  });
   registry.sessions[sessionId] = nextSession;
   subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
   if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
   logWorkflowDiagnostics("frontend.workflowSubSession.lifecycleProjected", () => ({
-    sessionId,
+    sessionId: nextSession.parentSessionId || sessionId,
+    childSessionId: sessionId,
     parentSessionId: nextSession.parentSessionId,
     dialogProcessId: nextSession.dialogProcessId,
     turnScopeId: nextSession.turnScopeId,
@@ -400,7 +496,10 @@ function reduceSubSessionSnapshot(sessionDoc = {}) {
     : { applied: false, reason: "turn_runtime_unavailable" };
   const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
   const current = registry.sessions?.[sessionId] || { sessionId, messages: [], eventsById: {}, sequence: 0 };
-  const snapshotVersion = Number(sessionDoc?.snapshotVersion || sessionDoc?.sessionVersion || sessionDoc?.revision || 1);
+  const snapshotVersion = Number(sessionDoc?.snapshotVersion || sessionDoc?.sessionVersion || sessionDoc?.revision || 0);
+  if (!Number.isInteger(snapshotVersion) || snapshotVersion <= 0) {
+    return { applied: false, reason: "invalid_snapshot_version", current };
+  }
   const appliedSnapshotVersion = Number(
     current.sequenceByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT] || 0,
   );
@@ -461,6 +560,23 @@ function reduceSubSessionSnapshot(sessionDoc = {}) {
       text(message?.messageId || message?.id || previous?.messageId || previous?.id),
     );
   }
+  const mergedTurnStatuses = mergeSubSessionTurnStatuses(
+    current.turnStatuses,
+    sessionDoc?.turnStatuses,
+  );
+  const mergedTurnTimings = mergeSubSessionTurnTimings(
+    current.turnTimings,
+    sessionDoc?.turnTimings,
+  );
+  const turnFactErrors = auditSubSessionTurnFacts(mergedTurnStatuses, mergedTurnTimings);
+  if (turnFactErrors.length) {
+    logWorkflowDiagnostics("frontend.workflowSubSession.turnFactInvariantViolated", () => ({
+      sessionId: text(sessionDoc?.parentSessionId || sessionId),
+      nodeSessionId: sessionId,
+      snapshotVersion,
+      errors: turnFactErrors,
+    }));
+  }
   registry.sessions = registry.sessions || {};
   registry.sessions[sessionId] = {
     ...current,
@@ -478,16 +594,8 @@ function reduceSubSessionSnapshot(sessionDoc = {}) {
     sequenceByScopeKey: { ...(current.sequenceByScopeKey || {}) },
     revision: Number(current.revision || 0),
     revisionByDomain: { ...(current.revisionByDomain || {}) },
-    turnStatuses: isSubSessionTerminalStatus(currentStatus)
-      ? (current.turnStatuses || [])
-      : Array.isArray(sessionDoc?.turnStatuses)
-      ? sessionDoc.turnStatuses
-      : (current.turnStatuses || []),
-    turnTimings: isSubSessionTerminalStatus(currentStatus)
-      ? (current.turnTimings || [])
-      : Array.isArray(sessionDoc?.turnTimings)
-      ? sessionDoc.turnTimings
-      : (current.turnTimings || []),
+    turnStatuses: mergedTurnStatuses,
+    turnTimings: mergedTurnTimings,
     eventsById: current.eventsById || {},
     updatedAt: new Date().toISOString(),
   };
@@ -502,10 +610,31 @@ function selectSubSessionMessages(sessionId = "") {
   return subSessionMessageRegistry.value?.sessions?.[id] || null;
 }
 
+function removeSubSessionsByWorkflowRunIds(workflowRunIds = [], { parentSessionId = "" } = {}) {
+  const owners = new Set((Array.isArray(workflowRunIds) ? workflowRunIds : []).map(text).filter(Boolean));
+  if (!owners.size) return { removedSessionIds: [] };
+  const expectedParentSessionId = text(parentSessionId);
+  const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
+  const sessions = { ...(registry.sessions || {}) };
+  const removedSessionIds = [];
+  for (const [sessionId, session = {}] of Object.entries(sessions)) {
+    if (!owners.has(text(session.workflowRunId))) continue;
+    if (expectedParentSessionId && text(session.parentSessionId) !== expectedParentSessionId) continue;
+    delete sessions[sessionId];
+    removedSessionIds.push(sessionId);
+  }
+  if (removedSessionIds.length) {
+    subSessionMessageRegistry.value = { ...registry, sessions };
+    if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
+  }
+  return { removedSessionIds };
+}
+
   return {
     applySubSessionLifecycleEvent,
     reduceSubSessionMessageEvent: upsertSubSessionEvent,
     reduceSubSessionSnapshot,
     selectSubSessionMessages,
+    removeSubSessionsByWorkflowRunIds,
   };
 }

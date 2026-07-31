@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PLUGIN_CAPABILITY } from "@noobot/plugin-runtime/contracts";
 
 const captured = vi.hoisted(() => ({ contexts: [] }));
 
@@ -47,5 +48,9 @@ describe("external frontend plugin service boundary", () => {
     expect(Object.keys(services)).toEqual(["authenticatedRequest"]);
     expect(services.attachments).toBeUndefined();
     expect(Object.isFrozen(services)).toBe(true);
+  });
+
+  it("uses the browser-safe plugin-runtime capability contract", () => {
+    expect(PLUGIN_CAPABILITY.FRONTEND_RUNTIME_PROJECTION).toBe("frontend.runtime_projection");
   });
 });

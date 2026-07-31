@@ -346,7 +346,18 @@ export function turnRuntimeDisplayState(turn = null) {
 
 export function resolveSessionTurnRuntime(registry, sessionId, turnScopeId = "") {
   const bucket = registry?.sessions?.[canonicalSessionId(registry, sessionId)];
-  const scope = turnKey(turnScopeId) || turnKey(bucket?.activeTurnScopeId);
+  const latestTurn = !turnScopeId && !bucket?.activeTurnScopeId
+    ? Object.values(bucket?.turns || {})
+      .filter((turn) => Boolean(turn?.state || turn?.terminal || turn?.commandPending))
+      .sort((left, right) => {
+        const sequenceDelta = Number(right?.lifecycleSeq || right?.seq || 0) -
+          Number(left?.lifecycleSeq || left?.seq || 0);
+        if (sequenceDelta) return sequenceDelta;
+        return Number(right?.updatedAtMs || right?.finishedAtMs || 0) -
+          Number(left?.updatedAtMs || left?.finishedAtMs || 0);
+      })[0]
+    : null;
+  const scope = turnKey(turnScopeId) || turnKey(bucket?.activeTurnScopeId) || turnKey(latestTurn?.turnScopeId);
   return scope ? bucket?.turns?.[scope] || null : null;
 }
 
@@ -456,6 +467,25 @@ export function resolveLatestStoppedTurn(registry, sessionId) {
     .sort((a, b) => Number(b.finishedAtMs || b.updatedAtMs || 0) - Number(a.finishedAtMs || a.updatedAtMs || 0))[0] || null;
 }
 
+export function resolveLatestContinuableStoppedTurn(registry, sessionId) {
+  const id = canonicalSessionId(registry, sessionId) || text(sessionId);
+  const bucket = registry?.sessions?.[id];
+  const consumedScopes = new Set(
+    Object.values(bucket?.turns || {})
+      .map((turn) => turn?.continuationSource?.turnScopeId)
+      .filter(Boolean)
+      .map(turnKey),
+  );
+  return Object.values(bucket?.turns || {})
+    .filter((turn) => turn.terminal === "user_stopped")
+    .filter((turn) => !turn.continuedByTurnScopeId && !consumedScopes.has(turnKey(turn.turnScopeId)))
+    .sort((left, right) => {
+      const sequenceDelta = Number(right.lifecycleSeq || right.seq || 0) - Number(left.lifecycleSeq || left.seq || 0);
+      if (sequenceDelta) return sequenceDelta;
+      return Number(right.finishedAtMs || right.updatedAtMs || 0) - Number(left.finishedAtMs || left.updatedAtMs || 0);
+    })[0] || null;
+}
+
 export function removeTurnRuntime(registry, turnScopeId, { sessionId = "" } = {}) {
   if (!registry) return false;
   const scope = turnKey(turnScopeId);
@@ -517,8 +547,8 @@ export function pruneTerminalTurns(registry, {
   const bucket = registry?.sessions?.[id];
   if (!bucket) return { removedTurnScopeIds: [] };
   const referenced = new Set(Array.from(referencedTurnScopeIds || [], turnKey).filter(Boolean));
-  const activeScope = text(bucket.activeTurnScopeId);
-  const latestStoppedScope = text(resolveLatestStoppedTurn(registry, id)?.turnScopeId);
+  const selectedScope = text(resolveSessionTurnRuntime(registry, id)?.turnScopeId);
+  const latestStoppedScope = text(resolveLatestContinuableStoppedTurn(registry, id)?.turnScopeId);
   const terminalTurns = Object.values(bucket.turns || {})
     .filter((turn) => Boolean(turn.terminal))
     .sort((a, b) => Number(b.finishedAtMs || b.updatedAtMs || 0) - Number(a.finishedAtMs || a.updatedAtMs || 0));
@@ -526,7 +556,7 @@ export function pruneTerminalTurns(registry, {
   let retainedUnprotectedCount = 0;
   for (const turn of terminalTurns) {
     const scope = text(turn.turnScopeId);
-    if (scope === activeScope || scope === latestStoppedScope || referenced.has(scope)) continue;
+    if (scope === selectedScope || scope === latestStoppedScope || referenced.has(scope)) continue;
     const finishedAtMs = Number(turn.finishedAtMs || turn.updatedAtMs || 0);
     const tooOld = maxAgeMs >= 0 && finishedAtMs > 0 && Number(nowMs) - finishedAtMs > maxAgeMs;
     const overCount = retainCount >= 0 && retainedUnprotectedCount >= retainCount;
@@ -639,10 +669,23 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
         : (current?.finishedAt || rawEvent?.thinkingFinishedAt || rawEvent?.finishedAt || event.updatedAt))
       : text(current?.finishedAt),
     error: terminal === "error" ? text(rawEvent?.error?.message || rawEvent?.error || rawEvent?.reason) : null,
+    continuationSource: event.continuationSource || current?.continuationSource || null,
+    continuedByTurnScopeId: text(event.continuedByTurnScopeId || current?.continuedByTurnScopeId),
   };
   const bucket = ensureSessionBucket(next, sessionId);
+  const continuationSourceScope = turnKey(turn.continuationSource?.turnScopeId);
+  if (continuationSourceScope && continuationSourceScope !== turnScopeId) {
+    const sourceTurn = bucket.turns[continuationSourceScope];
+    if (sourceTurn && sourceTurn.terminal === "user_stopped") {
+      sourceTurn.continuedByTurnScopeId = turnScopeId;
+    }
+  }
   bucket.turns[turnScopeId] = turn;
-  bucket.activeTurnScopeId = turnScopeId;
+  if (!terminal) {
+    bucket.activeTurnScopeId = turnScopeId;
+  } else if (turnKey(bucket.activeTurnScopeId) === turnScopeId) {
+    bucket.activeTurnScopeId = "";
+  }
   if (turn.dialogProcessId) next.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
   return result({ turn, applied: true, reason: transition.reason });
 }
@@ -682,6 +725,7 @@ export function applyTurnTerminalResolution(registry, response = {}) {
   return applyTurnRuntimeEvent(registry, {
     ...turn,
     type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
+    authoritativeTurnState: turn.state,
     sessionId: response.sessionId,
     turnScopeId: response.turnScopeId,
     state: turn.state,
@@ -739,7 +783,6 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
     const eventType = SNAPSHOT_STATE_EVENT[text(source.state)];
     if (!eventType) return { applied: false, reason: "invalid_snapshot_state" };
     const sourceIsTerminal = isAuthoritativeTerminalState(source.state);
-    if (sourceIsTerminal) continue;
     const phase = text(source.phase || source.failure?.phase);
     const stateMap = {
       action_requesting: FrontendRunState.ACTION_REQUESTING, processing: FrontendRunState.PROCESSING,
@@ -750,15 +793,20 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
     };
     const state = stateMap[text(source.state)];
     if (current && isFinalTurnState(current.state, current) && !isFinalTurnState(state, source)) continue;
-    const terminal = null;
-    const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, actionCommandId: text(current?.actionCommandId || (text(source.action) === "stop" && text(source.state) === "action_requesting" ? source.commandId : "")), lifecycleEventType: SNAPSHOT_STATE_EVENT[text(source.state)] || text(current?.lifecycleEventType), authoritativeCompletionCommit: current?.authoritativeCompletionCommit || null, startedAt: text(source.startedAt || source.thinkingStartedAt || current?.startedAt), finishedAt: text(current?.finishedAt), source: "turn_snapshot", lifecycleSnapshotObserved: true, lifecycleObserved: true };
+    const terminal = text(source.state) === "completed"
+      ? "completed"
+      : text(source.state) === "stop_completed"
+        ? "user_stopped"
+        : sourceIsTerminal
+          ? "error"
+          : null;
+    const preservesTerminalResolution = sourceIsTerminal && current?.terminalResolved === true &&
+      Number(current?.revision || 0) >= revision;
+    const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), lifecycleSeq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, actionCommandId: text(current?.actionCommandId || (text(source.action) === "stop" && text(source.state) === "action_requesting" ? source.commandId : "")), lifecycleEventType: SNAPSHOT_STATE_EVENT[text(source.state)] || text(current?.lifecycleEventType), authoritativeCompletionCommit: sourceIsTerminal ? { completionCommitId: text(source.completionCommitId), summaryVersion: Number(source.summaryVersion || 0), revision } : current?.authoritativeCompletionCommit || null, terminalResolved: preservesTerminalResolution || (!sourceIsTerminal && current?.terminalResolved === true), startedAt: text(source.startedAt || source.thinkingStartedAt || current?.startedAt), finishedAt: text(source.finishedAt || current?.finishedAt), finishedAtMs: sourceIsTerminal ? Number(Date.parse(source.finishedAt || source.updatedAt) || current?.finishedAtMs || 0) : Number(current?.finishedAtMs || 0), source: "turn_snapshot", lifecycleSnapshotObserved: true, lifecycleObserved: true };
     bucket.turns[turnScopeId] = turn;
     if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
   }
   const previousActiveTurnScopeId = text(bucket.activeTurnScopeId);
-  const previousActiveTurn = previousActiveTurnScopeId
-    ? bucket.turns[previousActiveTurnScopeId]
-    : null;
   const candidateSnapshotActiveScope = turnKey(snapshot.activeTurnScopeId);
   const snapshotActiveScope = isTurnRuntimeDeleted(registry, {
     sessionId,
@@ -766,11 +814,7 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   }) ? "" : candidateSnapshotActiveScope;
   const snapshotActiveState = text(snapshot.activeTurn?.state);
   const snapshotActiveIsTerminal = isAuthoritativeTerminalState(snapshotActiveState);
-  bucket.activeTurnScopeId = previousActiveTurn?.terminal
-    ? previousActiveTurnScopeId
-    : snapshotActiveIsTerminal
-      ? ""
-      : snapshotActiveScope;
+  bucket.activeTurnScopeId = snapshotActiveIsTerminal ? "" : snapshotActiveScope;
   if (!bucket.activeTurnScopeId && previousActiveTurnScopeId) {
     const previous = bucket.turns[previousActiveTurnScopeId];
     if (previous?.dialogProcessId) delete registry.routeIndex[previous.dialogProcessId];

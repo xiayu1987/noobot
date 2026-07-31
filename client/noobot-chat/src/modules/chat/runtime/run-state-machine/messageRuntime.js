@@ -165,6 +165,7 @@ export function resolveTurnRuntimeView({
     channelState,
     pending,
     running,
+    terminal,
     inFlightAssistant,
     canStopTarget,
     startedAt: turnTiming?.thinkingStartedAt || "",

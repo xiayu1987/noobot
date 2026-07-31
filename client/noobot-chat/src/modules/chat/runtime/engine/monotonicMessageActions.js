@@ -5,7 +5,7 @@
  */
 import { normalizeTrimmedString } from "./utils.js";
 import { createResendMessageTransaction } from "./resendTransaction.js";
-import { syncSessionMessageSummary } from "./resendReconciler.js";
+import { findVisibleLastMessage } from "../../model/messageModel.js";
 import { createSessionVersionManager } from "./sessionVersionManager.js";
 import {
   buildMessageAnchor,
@@ -14,7 +14,7 @@ import {
   getMessageRole,
   getMessageTurnScopeId,
 } from "../../model/messageIdentity.js";
-import { nowMs } from "../../model/timeFields.js";
+import { nowIso, nowMs } from "../../model/timeFields.js";
 import {
   SESSION_RUN_EVENT,
   FrontendRunState,
@@ -54,6 +54,13 @@ function summarizeDeleteMessages(messages = []) {
 
 function isUserMessage(message = {}) {
   return getMessageRole(message).toLowerCase() === "user";
+}
+
+function syncSessionMessageSummary(session) {
+  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  session.messageCount = messages.length;
+  session.lastMessage = findVisibleLastMessage(messages);
+  session.updatedAt = nowIso();
 }
 
 function isStoppedTurnStatusPlaceholder(message = {}) {
@@ -137,6 +144,8 @@ export function createMonotonicMessageActions({
   monotonicActionStopPollIntervalMs,
   applyRunStateEvent,
   appendMessage,
+  removeWorkflowOwnersForReplacedTurns,
+  invalidateTerminalResolution,
 }) {
   function notifyStateMismatch() {
     notify({
@@ -147,20 +156,7 @@ export function createMonotonicMessageActions({
 
   function activeTurnRuntime() {
     const sessionId = sessionRuntimeId(activeSession?.value || activeSessionId?.value);
-    const canonicalSessionId = normalizeTrimmedString(
-      turnRuntimeRegistry?.value?.sessionAliases?.[sessionId] || sessionId,
-    );
-    let turnScopeId = normalizeTrimmedString(
-      turnRuntimeRegistry?.value?.sessions?.[canonicalSessionId]?.activeTurnScopeId,
-    );
-    if (!turnScopeId) {
-      const messages = Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : [];
-      for (let index = messages.length - 1; index >= 0; index -= 1) {
-        turnScopeId = getMessageTurnScopeId(messages[index]);
-        if (turnScopeId) break;
-      }
-    }
-    return resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
+    return resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);
   }
 
   function isActiveTurnInFlight() {
@@ -279,6 +275,7 @@ export function createMonotonicMessageActions({
     session.messages = messages.slice(0, startIndex);
     const removedTurnScopeIds = new Set(removedMessages.map(getMessageTurnScopeId).filter(Boolean));
     removedTurnScopeIds.forEach((turnScopeId) => {
+      invalidateTerminalResolution?.(sessionId, turnScopeId);
       removeTurnRuntime(turnRuntimeRegistry?.value, turnScopeId, { sessionId });
       clearTurnUiState({ sessionId, turnScopeId });
     });
@@ -389,7 +386,6 @@ export function createMonotonicMessageActions({
       }));
       applySessionDetail?.(sessionDetail, {
         mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-        preserveCurrentMessages: false,
         deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
       });
       cascadeDeleteMessagesFrom(userTargetMessage);
@@ -420,8 +416,6 @@ export function createMonotonicMessageActions({
     applySessionDetail,
     authFetch,
     buildMonotonicMessageAnchor: buildMessageAnchor,
-    clearPendingInteraction,
-    findMessageCascadeStartIndex,
     input,
     messageOperationStore,
     prepareMonotonicMessageAction,
@@ -430,8 +424,8 @@ export function createMonotonicMessageActions({
     resolveMonotonicUserTarget,
     send,
     userId,
-    appendMessage,
     turnRuntimeRegistry,
+    removeWorkflowOwnersForReplacedTurns,
   });
 
   return {
@@ -440,7 +434,6 @@ export function createMonotonicMessageActions({
     cascadeDeleteMessagesFrom,
     deleteMonotonicMessage,
     resendMonotonicMessage: resendTransaction.resendMonotonicMessage,
-    pruneStaleMessagesAfterResend: resendTransaction.pruneStaleMessagesAfterResend,
     finalizePendingResendOperation: resendTransaction.finalizePendingResendOperation,
   };
 }

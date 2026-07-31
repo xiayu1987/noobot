@@ -9,6 +9,11 @@ import { shouldProjectMainSessionEvent } from "../engine/sendFlow.js";
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../engine/turnProjectionStore.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { isTurnRuntimeDeleted, resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
+import {
+  logStateMachineDebug,
+  summarizeStateMachineTurn,
+  summarizeTurnLifecycleSnapshot,
+} from "../../../debug/loggers/stateMachineLogger.js";
 
 export function createReconnectCoordinator({
   activeSession, activeSessionId, turnRuntimeRegistry, userId, chatWebSocketClient,
@@ -79,13 +84,17 @@ export function createReconnectCoordinator({
   }
 
   async function handleReconnect() {
-    const pendingReconnectReplays = [];
+    let pendingReconnectReplayCount = 0;
     let reconnectReplayQueue = Promise.resolve();
+    const reconnectReplayFailures = [];
     const directExecutionRestoreCommandIds = new Set();
-    const trackReconnectReplay = (replayPromise) => {
-      pendingReconnectReplays.push(Promise.resolve(replayPromise));
-    };
     const reconnectSessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "");
+    const knownLifecycleSequence = Number(
+      turnRuntimeRegistry.value?.sessions?.[reconnectSessionId]?.authoritativeSequence || 0,
+    );
+    const knownLifecycleSequenceMap = reconnectSessionId && knownLifecycleSequence > 0
+      ? { [reconnectSessionId]: knownLifecycleSequence }
+      : {};
     logThinkingReplayDebug("frontend.thinkingReplay.reconnectStarted", () => ({
       sessionId: reconnectSessionId,
       visibleMessageCount: Array.isArray(activeSession.value?.messages)
@@ -95,6 +104,7 @@ export function createReconnectCoordinator({
     return chatWebSocketClient.reconnect({
       currentSessionId: reconnectSessionId,
       userId: String(userId?.value || userId || ""),
+      knownLifecycleSequenceMap,
       onReconnectData: (reconnectPayload) => {
         logThinkingReplayDebug("frontend.thinkingReplay.reconnectPayloadReceived", () => ({
           sessionId: reconnectSessionId,
@@ -105,24 +115,82 @@ export function createReconnectCoordinator({
           turnScopeId: String(reconnectPayload?.data?.turnScopeId || ""),
           dataKeys: Object.keys(reconnectPayload?.data || {}).sort(),
         }));
+        const packetData = reconnectPayload?.data || {};
+        logStateMachineDebug("stateMachine.reconnect.packet.queued", () => ({
+          sessionId: String(packetData?.sessionId || reconnectSessionId),
+          dialogProcessId: String(packetData?.dialogProcessId || ""),
+          turnScopeId: String(packetData?.turnScopeId || ""),
+          protocolEvent: String(reconnectPayload?.event || (reconnectPayload?.sessions ? "reconnect_data" : "")),
+          commandId: String(packetData?.commandId || ""),
+          transportSequence: Number(packetData?.seq || 0),
+          activeTurnBefore: summarizeStateMachineTurn(resolveSessionTurnRuntime(
+            turnRuntimeRegistry.value,
+            String(packetData?.sessionId || reconnectSessionId),
+          )),
+          snapshot: reconnectPayload?.event === StreamEventEnum.TURN_SNAPSHOT
+            ? summarizeTurnLifecycleSnapshot(packetData)
+            : null,
+          reconnectSessionCount: Array.isArray(reconnectPayload?.sessions)
+            ? reconnectPayload.sessions.length
+            : 0,
+        }));
         const replayPayload = async () => {
+          let result;
           if (reconnectPayload?.sessions) {
-            await reconnectReplay.applyReconnectData(reconnectPayload);
+            result = await reconnectReplay.applyReconnectData(reconnectPayload);
           }
-          if (!(reconnectPayload?.event && reconnectPayload?.data)) return;
+          if (!(reconnectPayload?.event && reconnectPayload?.data)) return result;
           if (projectReconnectedMainSessionEvent(reconnectPayload.event, reconnectPayload.data)) {
-            return;
+            return { applied: true, reason: "main_session_message_projected" };
           }
           if (directExecutionRestoreCommandIds.has(String(reconnectPayload.data?.commandId || "").trim())) {
-            return;
+            return { applied: false, reason: "direct_execution_restore_owned" };
           }
-          await reconnectReplay.applyReconnectEvent(reconnectPayload.event, reconnectPayload.data);
+          result = await reconnectReplay.applyReconnectEvent(reconnectPayload.event, reconnectPayload.data);
+          return result;
         };
-        reconnectReplayQueue = reconnectReplayQueue.then(replayPayload, replayPayload);
-        trackReconnectReplay(reconnectReplayQueue);
+        const replayAndTrace = async () => {
+          const packetSessionId = String(packetData?.sessionId || reconnectSessionId);
+          const protocolEvent = String(
+            reconnectPayload?.event || (reconnectPayload?.sessions ? "reconnect_data" : ""),
+          );
+          try {
+            const result = await replayPayload();
+            const activeTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, packetSessionId);
+            logStateMachineDebug("stateMachine.reconnect.packet.committed", () => ({
+              sessionId: packetSessionId,
+              dialogProcessId: String(packetData?.dialogProcessId || activeTurn?.dialogProcessId || ""),
+              turnScopeId: String(packetData?.turnScopeId || activeTurn?.turnScopeId || ""),
+              protocolEvent,
+              commandId: String(packetData?.commandId || ""),
+              applied: result?.applied === true,
+              reason: result?.reason || "",
+              activeTurnAfter: summarizeStateMachineTurn(activeTurn),
+            }));
+            return result;
+          } catch (error) {
+            reconnectReplayFailures.push(error);
+            const activeTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, packetSessionId);
+            logStateMachineDebug("stateMachine.reconnect.packet.failed", () => ({
+              sessionId: packetSessionId,
+              dialogProcessId: String(packetData?.dialogProcessId || activeTurn?.dialogProcessId || ""),
+              turnScopeId: String(packetData?.turnScopeId || activeTurn?.turnScopeId || ""),
+              protocolEvent,
+              commandId: String(packetData?.commandId || ""),
+              errorType: String(error?.name || "Error"),
+              errorCode: String(error?.code || ""),
+              errorMessage: String(error?.message || error || "").slice(0, 240),
+              activeTurnAfter: summarizeStateMachineTurn(activeTurn),
+            }));
+            throw error;
+          }
+        };
+        pendingReconnectReplayCount += 1;
+        reconnectReplayQueue = reconnectReplayQueue.then(replayAndTrace, replayAndTrace);
       },
     }).then(async () => {
-      await Promise.all(pendingReconnectReplays);
+      await reconnectReplayQueue;
+      if (reconnectReplayFailures.length) throw reconnectReplayFailures[0];
       const replayRuntime = resolveSessionTurnRuntime(
         turnRuntimeRegistry.value,
         reconnectSessionId,
@@ -135,7 +203,14 @@ export function createReconnectCoordinator({
         state: String(replayRuntime?.state || ""),
         backendState: String(replayRuntime?.backendState || ""),
         terminal: replayRuntime?.terminal ?? null,
-        pendingReplayCount: pendingReconnectReplays.length,
+        pendingReplayCount: pendingReconnectReplayCount,
+      }));
+      logStateMachineDebug("stateMachine.reconnect.replay.complete", () => ({
+        sessionId: reconnectSessionId,
+        knownLifecycleSequence,
+        pendingReplayCount: pendingReconnectReplayCount,
+        replayFailureCount: reconnectReplayFailures.length,
+        activeTurnAfter: summarizeStateMachineTurn(replayRuntime),
       }));
       if (typeof chatWebSocketClient.requestJson !== "function") return;
       const sessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "").trim();
@@ -157,14 +232,42 @@ export function createReconnectCoordinator({
       const requestExecution = async (action, payload, expectedEvent) => {
         const commandId = `reconnect:${action}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
         directExecutionRestoreCommandIds.add(commandId);
+        logStateMachineDebug("stateMachine.reconnect.executionQuery.before", () => ({
+          sessionId: reconnectSessionId,
+          commandType: action,
+          commandId,
+          executionId: String(payload?.executionId || ""),
+          rootExecutionId: String(payload?.rootExecutionId || ""),
+        }));
         try {
           const response = await chatWebSocketClient.requestJson({
-            action,
+            commandType: action,
             commandId,
             userId: String(userId?.value || userId || "").trim(),
             ...payload,
           }, { expectedEvents: [expectedEvent] });
-          await reconnectReplay.applyReconnectEvent(response?.event, response?.data || {});
+          const result = await reconnectReplay.applyReconnectEvent(response?.event, response?.data || {});
+          logStateMachineDebug("stateMachine.reconnect.executionQuery.after", () => ({
+            sessionId: reconnectSessionId,
+            commandType: action,
+            commandId,
+            responseEvent: String(response?.event || ""),
+            applied: result?.applied === true,
+            reason: String(result?.reason || ""),
+          }));
+          return result;
+        } catch (error) {
+          logStateMachineDebug("stateMachine.reconnect.executionQuery.failed", () => ({
+            sessionId: reconnectSessionId,
+            commandType: action,
+            commandId,
+            executionId: String(payload?.executionId || ""),
+            rootExecutionId: String(payload?.rootExecutionId || ""),
+            errorType: String(error?.name || "Error"),
+            errorCode: String(error?.code || ""),
+            errorMessage: String(error?.message || error || "").slice(0, 240),
+          }));
+          throw error;
         } finally {
           directExecutionRestoreCommandIds.delete(commandId);
         }
@@ -175,7 +278,20 @@ export function createReconnectCoordinator({
         if (typeof chatList.fetchSessionFullDetail === "function") {
           await chatList.fetchSessionFullDetail(sessionId);
         }
+        logStateMachineDebug("stateMachine.reconnect.executionRestore.complete", () => ({
+          sessionId,
+          executionId,
+          rootExecutionId,
+        }));
       } catch (error) {
+        logStateMachineDebug("stateMachine.reconnect.executionRestore.failed", () => ({
+          sessionId,
+          executionId,
+          rootExecutionId,
+          errorType: String(error?.name || "Error"),
+          errorCode: String(error?.code || ""),
+          errorMessage: String(error?.message || error || "").slice(0, 240),
+        }));
         logSessionSystemEvent("reconnect.execution_restore_failed", {
           executionId,
           rootExecutionId,

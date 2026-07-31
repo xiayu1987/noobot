@@ -186,6 +186,10 @@ export class BotManager {
     return this.sessionRunner.runSession(payload);
   }
 
+  async resolveExecutionIntent(payload = {}) {
+    return this.sessionRunner.resolveExecutionIntent(payload);
+  }
+
   async persistStoppedAssistantMessage(payload = {}) {
     return this.sessionRunner.persistStoppedAssistantMessage(payload);
   }

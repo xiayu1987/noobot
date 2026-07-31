@@ -9,12 +9,13 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents, sortReconnectSessions } from "./channel-manager.state-consistency.test-helpers.js";
+import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/authoritative-state/contracts";
 
 function authoritativeLifecycle(fields = {}) {
   const eventType = String(fields.eventType || "").trim();
   const terminal = eventType === "turn.completed" || eventType === "turn.stop_completed";
   return {
-    protocolVersion: 2,
+    protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
     messageId: "message-1",
     presentationMessageId: "message-1",
     ...(terminal ? { completionCommitId: "commit-1", summaryVersion: 1 } : {}),
@@ -249,7 +250,7 @@ test("parent and parallel child lifecycle windows coexist without cross-session 
   assert.equal(manager.getTurnLifecycleReplay(channel, "child-a", 0).events.every((e) => e.parentSessionId === "parent-session"), true);
 });
 
-test("lifecycle replay gap requests an authoritative snapshot without inventing state", () => {
+test("lifecycle replay gap waits for the authoritative snapshot before reconnect completes", async () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const sessionId = "session-lifecycle-gap";
   const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
@@ -264,21 +265,249 @@ test("lifecycle replay gap requests an authoritative snapshot without inventing 
   });
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
-  manager.handleReconnect(client, {
+  const reconnectPromise = manager.handleReconnect(client, {
     currentSessionId: sessionId,
     knownLifecycleSequenceMap: { [sessionId]: 1 },
   });
+
+  assert.equal(forwarded.length, 1);
+  assert.equal(forwarded[0].commandType, "turn.snapshot.get");
+  assert.equal(forwarded[0].knownSequence, 1);
+  assert.equal(channel.pendingSnapshotRequests.size, 1);
+  assert.equal(getEvent(client, "reconnect_data"), null);
+  assert.equal(getEvent(client, "reconnect_complete"), null);
+
+  const commandId = forwarded[0].commandId;
+  channel.pendingSnapshotRequests.get(commandId).resolve({
+    ok: true,
+    snapshot: {
+      protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
+      eventType: "turn.snapshot",
+      commandId,
+      sessionId,
+      sequence: 3,
+      activeTurnScopeId: "t1",
+      activeTurn: {
+        turnScopeId: "t1",
+        messageId: "message-1",
+        presentationMessageId: "message-1",
+        revision: 3,
+        sequence: 3,
+        state: "processing",
+      },
+      recentTerminalTurns: [],
+    },
+  });
+  await reconnectPromise;
 
   const reconnectData = getEvent(client, "reconnect_data");
   const entry = reconnectData.data.sessions.find((item) => item.sessionId === sessionId);
   assert.equal(entry.lifecycleSnapshotRequested, true);
   assert.deepEqual(entry.lifecycleEvents, []);
-  assert.equal(forwarded.length, 1);
-  assert.equal(forwarded[0].commandType, "turn.snapshot.get");
-  assert.equal(forwarded[0].knownSequence, 1);
-  assert.equal(channel.pendingSnapshotRequests.size, 1);
+  assert.equal(entry.turnLifecycleSnapshot.commandId, commandId);
+  assert.equal(getEvent(client, "reconnect_complete")?.data?.totalSessions, 1);
   assert.equal(entry.hasRunningTask, false);
   assert.equal(entry.currentRun, null);
+});
+
+test("reconnect sends the authoritative baseline before channel state snapshots", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-baseline-order";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+    turnScopeId: "turn-baseline-order",
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  manager.pushChannelEvent(channel, "interaction_request", {
+    sessionId,
+    dialogProcessId: "dp-baseline-order",
+    turnScopeId: "turn-baseline-order",
+    requestId: "request-baseline-order",
+    seq: 3,
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  manager.handleReconnect(client, { currentSessionId: sessionId });
+
+  const eventNames = client.sentEvents.map((item) => item.event);
+  assert.ok(eventNames.indexOf("reconnect_data") >= 0);
+  assert.ok(eventNames.indexOf("channel_state") > eventNames.indexOf("reconnect_data"));
+  assert.ok(eventNames.indexOf("reconnect_complete") > eventNames.indexOf("channel_state"));
+});
+
+test("reconnect buffers live events until after the authoritative baseline", async () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-reconnect-live-buffer";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+    turnScopeId: "turn-reconnect-live-buffer",
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const forwarded = [];
+  channel.upstreamSocket = {
+    readyState: 1,
+    send: (raw) => forwarded.push(JSON.parse(String(raw || "{}"))),
+  };
+  manager.recordTurnLifecycleEnvelope(channel, {
+    eventId: "buffer-gap-3",
+    sessionId,
+    turnScopeId: "turn-reconnect-live-buffer",
+    revision: 3,
+    sequence: 3,
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  const reconnectPromise = manager.handleReconnect(client, {
+    currentSessionId: sessionId,
+    knownLifecycleSequenceMap: { [sessionId]: 1 },
+  });
+  manager.broadcastChannelEvent(channel, {
+    sequence: 4,
+    event: "delta",
+    data: {
+      sessionId,
+      dialogProcessId: "dp-reconnect-live-buffer",
+      turnScopeId: "turn-reconnect-live-buffer",
+      seq: 4,
+      text: "buffered-live-event",
+    },
+  });
+  assert.equal(getEvent(client, "delta"), null);
+
+  const commandId = forwarded[0]?.commandId;
+  const requester = channel.pendingSnapshotRequests.get(commandId);
+  requester.resolve({
+    ok: true,
+    snapshot: {
+      protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
+      eventType: "turn.snapshot",
+      commandId,
+      sessionId,
+      sequence: 3,
+      activeTurnScopeId: "turn-reconnect-live-buffer",
+      activeTurn: {
+        turnScopeId: "turn-reconnect-live-buffer",
+        messageId: "message-reconnect-live-buffer",
+        presentationMessageId: "message-reconnect-live-buffer",
+        revision: 3,
+        sequence: 3,
+        state: "processing",
+      },
+      recentTerminalTurns: [],
+    },
+  });
+  await reconnectPromise;
+
+  const eventNames = client.sentEvents.map((item) => item.event);
+  assert.ok(eventNames.indexOf("delta") > eventNames.indexOf("reconnect_data"));
+  assert.ok(eventNames.indexOf("reconnect_complete") > eventNames.indexOf("delta"));
+});
+
+test("reconnect freezes channel state before buffering newer channel events", async () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-reconnect-state-baseline";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+    turnScopeId: "turn-reconnect-state-baseline",
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const forwarded = [];
+  channel.upstreamSocket = {
+    readyState: 1,
+    send: (raw) => forwarded.push(JSON.parse(String(raw || "{}"))),
+  };
+  manager.recordTurnLifecycleEnvelope(channel, {
+    eventId: "state-baseline-gap-3",
+    sessionId,
+    turnScopeId: "turn-reconnect-state-baseline",
+    revision: 3,
+    sequence: 3,
+  });
+  manager.updateConversationState(channel, {
+    sessionId,
+    dialogProcessId: "dp-reconnect-state-baseline",
+    state: "processing",
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  const reconnectPromise = manager.handleReconnect(client, {
+    currentSessionId: sessionId,
+    knownLifecycleSequenceMap: { [sessionId]: 1 },
+  });
+
+  manager.updateConversationState(channel, {
+    sessionId,
+    dialogProcessId: "dp-reconnect-state-baseline",
+    state: "completed",
+  });
+
+  const pendingRequest = channel.pendingSnapshotRequests.get(forwarded[0]?.commandId);
+  pendingRequest.resolve({ ok: false, reason: "snapshot_unavailable" });
+  await reconnectPromise;
+
+  const channelStates = client.sentEvents.filter((item) =>
+    item.event === "channel_state" &&
+    item.data.dialogProcessId === "dp-reconnect-state-baseline");
+  assert.deepEqual(channelStates.map((item) => item.data.state), ["processing", "completed"]);
+  const eventNames = client.sentEvents.map((item) => item.event);
+  assert.ok(eventNames.indexOf("reconnect_data") < eventNames.indexOf("channel_state"));
+  assert.ok(eventNames.lastIndexOf("channel_state") < eventNames.indexOf("reconnect_complete"));
+});
+
+test("a superseded reconnect transaction cannot publish its stale baseline", async () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-reconnect-superseded";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+    turnScopeId: "turn-reconnect-superseded",
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const forwarded = [];
+  channel.upstreamSocket = {
+    readyState: 1,
+    send: (raw) => forwarded.push(JSON.parse(String(raw || "{}"))),
+  };
+  manager.recordTurnLifecycleEnvelope(channel, {
+    eventId: "superseded-gap-3",
+    sessionId,
+    turnScopeId: "turn-reconnect-superseded",
+    revision: 3,
+    sequence: 3,
+  });
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  const staleReconnect = manager.handleReconnect(client, {
+    currentSessionId: sessionId,
+    requestId: "reconnect-stale",
+    knownLifecycleSequenceMap: { [sessionId]: 1 },
+  });
+
+  await manager.handleReconnect(client, {
+    currentSessionId: sessionId,
+    requestId: "reconnect-current",
+    knownLifecycleSequenceMap: { [sessionId]: 3 },
+  });
+  const staleRequest = channel.pendingSnapshotRequests.get(forwarded[0]?.commandId);
+  staleRequest.resolve({ ok: false, reason: "snapshot_unavailable" });
+  await staleReconnect;
+
+  assert.deepEqual(
+    client.sentEvents
+      .filter((item) => item.event === "reconnect_data")
+      .map((item) => item.data.requestId),
+    ["reconnect-current"],
+  );
+  assert.deepEqual(
+    client.sentEvents
+      .filter((item) => item.event === "reconnect_complete")
+      .map((item) => item.data.requestId),
+    ["reconnect-current"],
+  );
 });
 
 test("channel_state inherits turnScopeId from start payload when upstream omits it", () => {

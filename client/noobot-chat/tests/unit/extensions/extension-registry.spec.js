@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearExtensionRegistry,
   contributeExtension,
+  replacePluginExtensions,
   provideExtensionValues,
   removePluginExtensions,
   resolveExtensionListeners,
@@ -35,6 +36,47 @@ describe("extension registry contract", () => {
     removePluginExtensions("owned");
     expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual(["other"]);
     expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST)).toEqual([]);
+  });
+
+  it("replaces all contributions owned by one plugin in a single commit", () => {
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, { id: "old-pre", pluginId: "owned" });
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_POST, { id: "old-post", pluginId: "owned" });
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, { id: "other", pluginId: "other" });
+
+    replacePluginExtensions("owned", [
+      { point: EXTENSION_POINTS.MESSAGE_CARD_POST, contribution: { id: "new-post" } },
+      { point: EXTENSION_POINTS.RUNTIME_STREAM_ROUTE, contribution: { id: "new-runtime" } },
+    ]);
+
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual(["other"]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST).map(({ id }) => id)).toEqual(["new-post"]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE).map(({ id }) => id)).toEqual(["new-runtime"]);
+  });
+
+  it("keeps the previous plugin registration when staged replacement is invalid", () => {
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, { id: "old-pre", pluginId: "owned" });
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_POST, { id: "old-post", pluginId: "owned" });
+
+    expect(() => replacePluginExtensions("owned", [
+      { point: EXTENSION_POINTS.MESSAGE_CARD_PRE, contribution: { id: "new-pre" } },
+      { point: "unknown.point", contribution: { id: "invalid" } },
+    ])).toThrow('unknown extension point "unknown.point"');
+
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual(["old-pre"]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST).map(({ id }) => id)).toEqual(["old-post"]);
+  });
+
+  it("does not alter contributions owned by other plugins during replacement", () => {
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, { id: "owned-old", pluginId: "owned" });
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, { id: "other-pre", pluginId: "other" });
+    contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_POST, { id: "other-post", pluginId: "other" });
+
+    replacePluginExtensions("owned", [
+      { point: EXTENSION_POINTS.MESSAGE_CARD_POST, contribution: { id: "owned-new" } },
+    ]);
+
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE).map(({ id }) => id)).toEqual(["other-pre"]);
+    expect(resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST).map(({ id }) => id)).toEqual(["other-post", "owned-new"]);
   });
 
   it("keeps different message actions while arbitrating duplicate capabilities", () => {

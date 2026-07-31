@@ -284,12 +284,14 @@ export class SessionExecutionEngine {
     caller = CALLER_ROLE.USER,
     parentSessionId = "",
     parentDialogProcessId = "",
+    dialogProcessId = "",
   }) {
     return this.parentAsyncTaskManager.ensureParentAsyncResultContainer({
       parentAsyncResultContainer,
       caller,
       parentSessionId,
       parentDialogProcessId,
+      dialogProcessId,
     });
   }
 
@@ -381,6 +383,18 @@ export class SessionExecutionEngine {
       userId,
       runConfig,
       userConfig,
+    });
+  }
+
+  async resolveExecutionIntent({ userId = "", runConfig = {}, turnScopeId = "" } = {}) {
+    const basePath = await this.workspaceService.ensureUserWorkspace(userId);
+    const userConfig = await this.configService.loadUserConfig(basePath);
+    const scenarioResolvedRunConfig = this._resolveScenarioRunConfig(runConfig, userConfig);
+    return this.runConfigPluginPreparer.resolveExecutionIntent({
+      userId,
+      runConfig: scenarioResolvedRunConfig,
+      userConfig,
+      turnScopeId,
     });
   }
 
@@ -753,6 +767,7 @@ export class SessionExecutionEngine {
     caller = CALLER_ROLE.USER,
     parentSessionId = "",
     parentDialogProcessId = "",
+    dialogProcessId = "",
     abortSignal = null,
     userInteractionBridge = null,
     runConfig = {},
@@ -769,6 +784,7 @@ export class SessionExecutionEngine {
       caller,
       parentSessionId,
       parentDialogProcessId,
+      dialogProcessId,
       abortSignal,
       userInteractionBridge,
       runConfig,

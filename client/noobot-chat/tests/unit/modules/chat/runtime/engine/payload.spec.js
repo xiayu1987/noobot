@@ -134,8 +134,8 @@ describe("buildChatPayload model preferences", () => {
       selectedModel: "main-model",
       resumeDialogProcessId: "dlg-stopped",
       resumeTurnScopeId: "turn-stopped",
-      stoppedTurnScopeId: "turn-stopped",
     });
+    expect(payload.config.stoppedTurnScopeId).toBeUndefined();
     expect(payload.dialogProcessId).toBeUndefined();
     expect(payload.config.reuseExistingUserTurn).toBeUndefined();
   });

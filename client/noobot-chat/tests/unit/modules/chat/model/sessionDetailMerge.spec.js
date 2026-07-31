@@ -62,4 +62,83 @@ describe("mergeCanonicalSessionDetail", () => {
     expect(replaced.messages).toEqual([]);
     expect(replaced.turnStatuses).toHaveLength(1);
   });
+
+  it("merges assistant records by presentation identity without duplicating final content", () => {
+    const realtime = {
+      id: "presentation-1",
+      messageId: "presentation-1",
+      presentationMessageId: "presentation-1",
+      role: "assistant",
+      content: "final answer",
+      pending: true,
+      turnScopeId: "turn-1",
+      toolTimeline: [{ eventId: "tool-1" }],
+    };
+    const persisted = {
+      id: "source-1",
+      messageId: "source-1",
+      messageUid: "uid-1",
+      presentationMessageId: "presentation-1",
+      role: "assistant",
+      type: "message",
+      content: "final answer",
+      pending: false,
+      turnScopeId: "turn-1",
+    };
+
+    const merged = mergeCanonicalSessionDetail(
+      { sessionId: "session-1", messages: [realtime] },
+      { sessionId: "session-1", messages: [persisted] },
+    );
+
+    expect(merged.messages).toHaveLength(1);
+    expect(merged.messages[0]).toMatchObject({
+      id: "source-1",
+      messageUid: "uid-1",
+      presentationMessageId: "presentation-1",
+      content: "final answer",
+      pending: false,
+    });
+    expect(merged.messages[0].toolTimeline).toEqual([{ eventId: "tool-1" }]);
+  });
+
+  it("does not regress a persisted assistant terminal fact when a realtime shell arrives later", () => {
+    const persisted = {
+      id: "source-1",
+      messageId: "source-1",
+      messageUid: "uid-1",
+      presentationMessageId: "presentation-1",
+      role: "assistant",
+      type: "message",
+      content: "final answer",
+      pending: false,
+      turnScopeId: "turn-1",
+    };
+    const realtime = {
+      id: "presentation-1",
+      messageId: "presentation-1",
+      presentationMessageId: "presentation-1",
+      role: "assistant",
+      content: "",
+      pending: true,
+      turnScopeId: "turn-1",
+      activityTimeline: [{ eventId: "thinking-1", text: "thinking" }],
+    };
+
+    const merged = mergeCanonicalSessionDetail(
+      { sessionId: "session-1", messages: [persisted] },
+      { sessionId: "session-1", messages: [realtime] },
+    );
+
+    expect(merged.messages).toHaveLength(1);
+    expect(merged.messages[0]).toMatchObject({
+      id: "source-1",
+      messageUid: "uid-1",
+      content: "final answer",
+      pending: false,
+    });
+    expect(merged.messages[0].activityTimeline).toEqual([
+      { eventId: "thinking-1", text: "thinking" },
+    ]);
+  });
 });

@@ -304,6 +304,55 @@ describe("noobot-chat monotonic message action rules", () => {
     expect(props.messageItem).toBe(sameUserRenderItem);
   });
 
+  it("keeps stopped actions after reload when transport and canonical turn identities differ", () => {
+    const action = getMonotonicAction();
+    const userMessage = {
+      role: "user",
+      sessionId: "session-canonical",
+      turnScopeId: "workflow-node:client-turn:stop-after-refresh",
+      content: "stop after refresh",
+    };
+    const stoppedAssistant = {
+      role: "assistant",
+      sessionId: "session-canonical",
+      turnScopeId: "workflow-node_client-turn_stop-after-refresh",
+      channelState: { state: "user_stopped" },
+      pending: false,
+    };
+    const props = action.resolveProps({
+      messageItem: { ...userMessage },
+      allMessages: [userMessage, stoppedAssistant],
+      deleteMonotonicMessage: vi.fn(),
+      resendMonotonicMessage: vi.fn(),
+    });
+
+    expect(props.visible).toBe(true);
+  });
+
+  it("projects stopped actions from authoritative runtime when the assistant shell is still empty", () => {
+    const action = getMonotonicAction();
+    const userMessage = {
+      role: "user",
+      turnScopeId: "client-turn:runtime-stop",
+      content: "stop while shell is empty",
+    };
+    const emptyAssistant = {
+      role: "assistant",
+      turnScopeId: "client-turn:runtime-stop",
+      content: "",
+      pending: false,
+    };
+    const props = action.resolveProps({
+      messageItem: userMessage,
+      allMessages: [userMessage, emptyAssistant],
+      messageRuntime: { state: "user_stopped", terminal: true },
+      deleteMonotonicMessage: vi.fn(),
+      resendMonotonicMessage: vi.fn(),
+    });
+
+    expect(props.visible).toBe(true);
+  });
+
   it("matches persisted sources by timestamp when ids are unavailable", () => {
     const action = getMonotonicAction();
     const userMessage = {

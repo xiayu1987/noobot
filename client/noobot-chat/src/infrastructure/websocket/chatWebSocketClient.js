@@ -397,7 +397,12 @@ export function createChatWebSocketClient({
     });
   }
 
-  async function reconnect({ currentSessionId = "", userId = "", onReconnectData = () => {} } = {}) {
+  async function reconnect({
+    currentSessionId = "",
+    userId = "",
+    knownLifecycleSequenceMap = {},
+    onReconnectData = () => {},
+  } = {}) {
     return new Promise((resolve, reject) => {
       if (reconnecting) {
         reject(new Error(translateText("infra.reconnectInProgress")));
@@ -465,6 +470,10 @@ export function createChatWebSocketClient({
             currentTurnScopeId: String(activeStreamContext?.scope?.turnScopeId || "").trim(),
             currentSessionId: String(currentSessionId || "").trim(),
             userId: String(userId || "").trim(),
+            knownLifecycleSequenceMap:
+              knownLifecycleSequenceMap && typeof knownLifecycleSequenceMap === "object"
+                ? knownLifecycleSequenceMap
+                : {},
           }));
         } catch (error) {
           failReconnect(error, { closeSocket: true });

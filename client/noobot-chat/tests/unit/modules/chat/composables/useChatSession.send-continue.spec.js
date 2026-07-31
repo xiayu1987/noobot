@@ -166,7 +166,6 @@ describe("useChatSession send/continue actions", () => {
     expect(payload.config).toMatchObject({
       resumeDialogProcessId: "dp-stopped",
       resumeTurnScopeId: "turn-stopped",
-      stoppedTurnScopeId: "turn-stopped",
     });
     expect(payload.config.thinkingStartedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(payload.turnScopeId).toMatch(/^client-turn:/);

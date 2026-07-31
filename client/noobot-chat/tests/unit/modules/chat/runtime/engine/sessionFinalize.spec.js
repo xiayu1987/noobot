@@ -9,6 +9,7 @@ import {
   refreshFinalSessionDetail,
 } from "../../../../../../src/modules/chat/runtime/engine/sessionFinalize.js";
 import { RoleEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
+import { SESSION_DETAIL_APPLY_MODE } from "../../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 
 describe("sessionFinalize", () => {
   it("refreshes the current session after a stopped final event", async () => {
@@ -56,14 +57,14 @@ describe("sessionFinalize", () => {
     expect(refreshed).toBe(true);
     expect(fetchSessionDetail).toHaveBeenCalledWith("backend-session");
     expect(applySessionDetail).toHaveBeenCalledWith(detail, {
-      preserveCurrentMessages: true,
+      mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
       scrollToBottom: false,
     });
     expect(activeSession.value.messages[0].executionLogTotal).toBe(1);
     expect(refreshSessionConnectorsAsync).toHaveBeenCalledWith("view-session");
   });
 
-  it("allows stopped final refresh to replace current messages", async () => {
+  it("always applies final detail as the authoritative run snapshot", async () => {
     const activeSession = {
       value: {
         id: "view-session",
@@ -106,11 +107,10 @@ describe("sessionFinalize", () => {
       },
       fetchSessionDetail,
       applySessionDetail,
-      preserveCurrentMessages: false,
     });
 
     expect(applySessionDetail).toHaveBeenCalledWith(detail, {
-      preserveCurrentMessages: false,
+      mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
       scrollToBottom: false,
     });
   });

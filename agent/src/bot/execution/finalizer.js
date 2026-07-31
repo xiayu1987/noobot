@@ -341,6 +341,7 @@ export class SessionExecutionFinalizer {
     }
 
     lifecycle?.complete?.();
+    await runtimeEventListener?.flushPersistence?.();
 
     const executionBundleTimeoutMs = this.resolveExecutionBundleTimeoutMs(userConfig);
     let executionLogs = [];

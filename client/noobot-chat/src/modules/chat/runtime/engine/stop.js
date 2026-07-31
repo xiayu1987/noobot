@@ -31,15 +31,9 @@ import {
 function resolveStopTurnScopeId({ session, turnRuntimeRegistry, preferredTurnScopeId = "" } = {}) {
   const preferred = normalizeTrimmedString(preferredTurnScopeId);
   if (preferred) return preferred;
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const scope = normalizeTrimmedString(getMessageTurnScopeId(messages[index]));
-    if (scope) return scope;
-  }
   const sessionId = sessionRuntimeId(session);
   const registry = turnRuntimeRegistry?.value || turnRuntimeRegistry;
-  const canonicalSessionId = normalizeTrimmedString(registry?.sessionAliases?.[sessionId] || sessionId);
-  return normalizeTrimmedString(registry?.sessions?.[canonicalSessionId]?.activeTurnScopeId);
+  return normalizeTrimmedString(resolveSessionTurnRuntime(registry, sessionId)?.turnScopeId);
 }
 
 function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "" } = {}) {

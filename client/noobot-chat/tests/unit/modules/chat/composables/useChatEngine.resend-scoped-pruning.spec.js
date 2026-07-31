@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createHarness,
   makeSession,
+  makeTurnReplacementResponse,
   assistantMessage,
   emitChannelState,
 } from "../helpers/useChatEngineHarness.js";
@@ -22,22 +23,21 @@ describe("useChatEngine.resend scoped pruning", () => {
     const stream = vi.fn(async () => {
       observedUserMessage = activeSession.value.messages.find((message) => message.role === RoleEnum.USER);
     });
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor }) => {
       const staleReplacementUser = {
         id: "msg-user-replace-stale",
         messageId: "msg-user-replace-stale",
         turnScopeId,
         role: RoleEnum.USER,
-        content: "original question",
+        content: newContent,
       };
-      return {
-      ok: true,
-      newTurn: staleReplacementUser,
-      session: makeSession("local-resend-replace-stale", {
-        messages: [staleReplacementUser],
-        rawMessages: [staleReplacementUser],
-      }),
-    };
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-replace-stale",
+        version: 1,
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser: staleReplacementUser,
+      });
     });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
@@ -81,28 +81,22 @@ describe("useChatEngine.resend scoped pruning", () => {
       role: RoleEnum.ASSISTANT,
       content: "old answer",
     };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
       const replacementUser = {
         id: "new-user",
+        messageId: "new-user",
         turnScopeId,
         role: RoleEnum.USER,
         content: "edited question",
       };
-      return {
-      ok: true,
-      newTurn: replacementUser,
-      turnScopeReplacement: {
-        replacedTurnScopeIds: ["client-turn:old"],
-        replacementTurnScopeId: turnScopeId,
-        replacementTurnScopeIds: [turnScopeId],
-      },
-      session: makeSession("local-resend-replace-mapping", {
-        messages: [oldUser, oldAssistant, replacementUser],
-        rawMessages: [oldUser, oldAssistant, replacementUser],
-        messageCount: 3,
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-replace-mapping",
         version: 4,
-      }),
-    };
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+        session: { messageCount: 1 },
+      });
     });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
@@ -159,22 +153,22 @@ describe("useChatEngine.resend scoped pruning", () => {
       content: "old answer",
       turnScopeId: "client-turn:old",
     };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
       const replacementUser = {
         id: "u-new",
+        messageId: "u-new",
         role: RoleEnum.USER,
         content: "same question",
         turnScopeId,
       };
-      return {
-      ok: true,
-      newTurn: replacementUser,
-      session: makeSession("local-resend-duplicate-scoped-latest", {
-        messages: [previousUser, previousAssistant, replacementUser],
-        rawMessages: [previousUser, previousAssistant, replacementUser],
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-duplicate-scoped-latest",
         version: 4,
-      }),
-    };
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+        messages: [previousUser, previousAssistant, replacementUser],
+      });
     });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
@@ -220,22 +214,18 @@ describe("useChatEngine.resend scoped pruning", () => {
     }));
   });
 
-  it("resendMonotonicMessage still generates after replace-turn snapshot unless backend marks generation completed", async () => {
+  it("resendMonotonicMessage starts generation from the user-only replace-turn snapshot", async () => {
     const stream = vi.fn(async () => {});
     const deleteSessionMessagesFromApi = vi.fn();
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
       const replacementUser = { id: "msg-user-replace-completed", messageId: "msg-user-replace-completed", turnScopeId, role: RoleEnum.USER, content: "edited question" };
-      const replacementAssistant = { turnScopeId, role: RoleEnum.ASSISTANT, content: "edited answer" };
-      return {
-      ok: true,
-      newTurn: replacementUser,
-      session: makeSession("local-resend-replace-completed", {
-        messages: [replacementUser, replacementAssistant],
-        rawMessages: [replacementUser, replacementAssistant],
-        messageCount: 2,
+      return makeTurnReplacementResponse({
+        commandId: idempotencyKey,
+        sessionId: "local-resend-replace-completed",
         version: 4,
-      }),
-    };
+        replacedTurnScopeIds: [anchor.turnScopeId],
+        replacementUser,
+      });
     });
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
@@ -263,12 +253,11 @@ describe("useChatEngine.resend scoped pruning", () => {
         reuseExistingUserTurn: true,
       }),
     }));
-    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", "edited answer", ""]);
-    expect(activeSession.value.messages[2]).toEqual(expect.objectContaining({
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", ""]);
+    expect(activeSession.value.messages[1]).toEqual(expect.objectContaining({
       role: RoleEnum.ASSISTANT,
       pending: false,
     }));
-    expect(activeSession.value).not.toHaveProperty("pendingResendStalePrune");
     expect(input.value).toBe("");
   });
 });

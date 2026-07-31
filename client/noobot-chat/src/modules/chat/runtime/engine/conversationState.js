@@ -191,7 +191,6 @@ export function createChatEngineConversationState({
       Promise.resolve(
         refreshSessionsAsync(String(activeSessionId.value || ""), {
           silent: true,
-          preserveCurrentMessages: true,
         }),
       )
         .then((ok) => {

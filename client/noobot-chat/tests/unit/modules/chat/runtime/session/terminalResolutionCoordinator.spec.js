@@ -43,6 +43,34 @@ function response({
 }
 
 describe("terminalResolutionCoordinator", () => {
+  it("traces fetch and apply decisions without exposing the terminal materialization", async () => {
+    const traces = [];
+    const fetcher = vi.fn(async () => ({
+      ...response(),
+      turn: { revision: 2, sequence: 3, state: "completed" },
+      materialization: { messages: [{ content: "private terminal body" }] },
+    }));
+    const coordinator = createTerminalResolutionCoordinator({
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: () => ({
+        applied: true,
+        turn: { state: "frontend_completed", terminal: "completed" },
+      }),
+      onTrace: (event, details) => traces.push({ event, details }),
+    });
+
+    await coordinator.resolve("s-1", "t-1", { revision: 2, sequence: 3, source: "test" });
+
+    expect(traces.map((entry) => entry.event)).toEqual([
+      "stateMachine.terminal.fetch.start",
+      "stateMachine.terminal.fetch.result",
+      "stateMachine.terminal.apply",
+    ]);
+    expect(traces[2].details).toMatchObject({ applied: true, terminal: "completed" });
+    expect(JSON.stringify(traces)).not.toContain("private terminal body");
+  });
+
   it("treats terminal notifications as query triggers and unwraps reactive user identity", async () => {
     let release;
     const fetcher = vi.fn(() => new Promise((resolve) => { release = resolve; }));
@@ -80,6 +108,33 @@ describe("terminalResolutionCoordinator", () => {
     await coordinator.resolve("s-1", "t-1");
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(apply).not.toHaveBeenCalled();
+  });
+
+  it("carries the authoritative persistence scope into terminal resolution", async () => {
+    const fetcher = vi.fn(async () => response());
+    const coordinator = createTerminalResolutionCoordinator({
+      userId: "u-1",
+      fetcher,
+      applyTurnTerminalResolution: () => ({ applied: true }),
+    });
+    const persistenceScope = {
+      scopeId: "agent:workflow-node:node-1",
+      parentSessionId: "root-session",
+      relativeDir: "runtime/workflow/session/root-session/node-1",
+      allowedRoot: "runtime/workflow/session",
+    };
+
+    await coordinator.observe({
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: "turn.completed",
+      sessionId: "s-1",
+      turnScopeId: "t-1",
+      persistenceScope,
+    });
+
+    const requestUrl = fetcher.mock.calls[0][0];
+    const encodedScope = new URL(requestUrl, "http://localhost").searchParams.get("persistenceScope");
+    expect(JSON.parse(encodedScope)).toEqual(persistenceScope);
   });
 
   it("caches an applied commit and only queries again for a newer target version", async () => {

@@ -8,6 +8,31 @@ const TERMINAL_TURN_STATES = new Set([
   "error", "expired", "timeout", "no_conversation",
 ]);
 
+function messageRole(item = {}) {
+  return text(item?.role || item?.messageRole).toLowerCase();
+}
+
+function isPersistedFinalAssistant(item = {}) {
+  return messageRole(item) === "assistant" &&
+    Boolean(text(item?.messageUid)) &&
+    text(item?.type).toLowerCase() === "message" &&
+    Boolean(text(item?.content)) &&
+    item?.pending === false;
+}
+
+function mergeListByIdentity(previous = [], incoming = []) {
+  const merged = new Map();
+  const keyOf = (item = {}, index = 0, source = "list") => text(
+    item?.eventId || item?.key || item?.toolCallId || item?.id,
+  ) || `anonymous:${source}:${index}`;
+  (Array.isArray(previous) ? previous : []).forEach((item, index) => merged.set(keyOf(item, index, "previous"), item));
+  (Array.isArray(incoming) ? incoming : []).forEach((item, index) => {
+    const key = keyOf(item, index, "incoming");
+    merged.set(key, { ...object(merged.get(key)), ...object(item) });
+  });
+  return [...merged.values()];
+}
+
 function text(value = "") {
   return String(value || "").trim();
 }
@@ -17,6 +42,17 @@ function object(value) {
 }
 
 function entityKey(item = {}, index = 0, kind = "entity") {
+  if (kind === "message") {
+    const role = messageRole(item);
+    if (role === "assistant") {
+      const presentationMessageId = text(item?.presentationMessageId);
+      if (presentationMessageId) return `assistant-presentation:${presentationMessageId}`;
+    }
+    const messageIdentity = role === "tool"
+      ? text(item?.messageUid || item?.messageId || item?.id || item?.toolCallId)
+      : text(item?.messageUid || item?.messageId || item?.id);
+    return messageIdentity ? `message:${messageIdentity}` : "";
+  }
   const stableId = text(item?.id || item?.messageId || item?.toolCallId);
   if (stableId) return `id:${stableId}`;
   // Message identity is protocol identity. Turn, dialog, role and array order
@@ -34,6 +70,20 @@ function normalizeState(value = "") {
 }
 
 function mergeEntity(previous = {}, incoming = {}, kind = "entity") {
+  if (kind === "message") {
+    const previousIsFinal = isPersistedFinalAssistant(previous);
+    const incomingIsFinal = isPersistedFinalAssistant(incoming);
+    const authoritative = previousIsFinal && !incomingIsFinal ? previous : incoming;
+    const supplemental = authoritative === previous ? incoming : previous;
+    const merged = { ...supplemental, ...authoritative };
+    for (const field of ["toolTimeline", "activityTimeline", "rawEvents"]) {
+      if (Array.isArray(previous[field]) || Array.isArray(incoming[field])) {
+        merged[field] = mergeListByIdentity(previous[field], incoming[field]);
+      }
+    }
+    if (previousIsFinal || incomingIsFinal) merged.pending = false;
+    return merged;
+  }
   if (kind !== "turnStatus") return { ...previous, ...incoming };
   const previousState = normalizeState(previous?.status || previous?.state);
   const incomingState = normalizeState(incoming?.status || incoming?.state);
@@ -88,7 +138,6 @@ export function mergeCanonicalSessionDetail(base = {}, incoming = {}, { replaceF
     { kind, replace: replacements.has(field) },
   );
   const messages = mergeField("messages", "message");
-  const rawMessages = mergeField("rawMessages", "message");
   const turnStatuses = mergeField("turnStatuses", "turnStatus");
   const turnTimings = mergeField("turnTimings", "turnTiming");
   return {
@@ -96,7 +145,6 @@ export function mergeCanonicalSessionDetail(base = {}, incoming = {}, { replaceF
     ...next,
     sessionId,
     messages,
-    rawMessages: rawMessages.length ? rawMessages : messages,
     turnStatuses,
     turnTimings,
     sessionSummary: {

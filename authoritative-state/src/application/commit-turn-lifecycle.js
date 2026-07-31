@@ -53,6 +53,9 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
     rootExecutionId: event.rootExecutionId || turn.rootExecutionId,
     origin: event.origin || turn.origin,
     stage: event.stage || turn.stage,
+    persistenceScope: event.persistenceScope,
+    continuationSource: turn.continuationSource,
+    continuedByTurnScopeId: turn.continuedByTurnScopeId,
   });
 }
 
@@ -87,7 +90,7 @@ export function commitTurnLifecycle({
     materialization = result;
     lifecycleEvent = {
       ...event,
-      summaryVersion: Number(event.summaryVersion || result.turnStatus.version || 0),
+      summaryVersion: Number(event.summaryVersion || result.summaryVersion || 0),
       completionCommitId: clean(event.completionCommitId || event.commandId),
       terminalStatus: result.turnStatus,
     };

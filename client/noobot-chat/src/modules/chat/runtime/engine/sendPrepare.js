@@ -52,7 +52,7 @@ export function prepareChatSend({
   });
   const userMessage = reuseExistingUserTurn
     ? (activeSession.value?.messages || []).find((message) => (
-      String(message?.messageId || message?.id || "").trim() === String(userMessageId || "").trim()
+      String(message?.messageId || "").trim() === String(userMessageId || "").trim()
     ))
     : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), resolvedUserAttachments, {
       id: userMessageId,

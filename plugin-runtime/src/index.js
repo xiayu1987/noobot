@@ -7,53 +7,17 @@ import path from "node:path";
 import { readdir, readFile, access } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { z } from "zod";
+import {
+  normalizePluginCapabilities,
+  PLUGIN_CAPABILITY,
+  PLUGIN_RUNTIME_SURFACE,
+  resolveCapabilityRuntimeSurface,
+} from "./contracts.mjs";
+export * from "./contracts.mjs";
 
 const MANIFEST_FILE_NAME = "manifest.json";
 const DEFAULT_REQUIRED_API_VERSION = "1";
-export const PLUGIN_RUNTIME_SURFACE = Object.freeze({
-  AGENT: "agent",
-  SERVICE: "service",
-  FRONTEND: "frontend",
-});
 const runtimeCache = new Map();
-
-export const PLUGIN_CAPABILITY = Object.freeze({
-  AGENT_REGISTER: "agent.register",
-  BOT_REGISTER: "bot.register",
-  SERVICE_HTTP_ROUTES: "service.http_routes",
-  SERVICE_AFTER_SESSION_DELETE: "service.after_session_delete",
-});
-
-export const PLUGIN_CAPABILITIES = Object.freeze(Object.values(PLUGIN_CAPABILITY));
-
-export const PLUGIN_CAPABILITY_SURFACE = Object.freeze({
-  [PLUGIN_CAPABILITY.AGENT_REGISTER]: PLUGIN_RUNTIME_SURFACE.AGENT,
-  [PLUGIN_CAPABILITY.BOT_REGISTER]: PLUGIN_RUNTIME_SURFACE.AGENT,
-  [PLUGIN_CAPABILITY.SERVICE_HTTP_ROUTES]: PLUGIN_RUNTIME_SURFACE.SERVICE,
-  [PLUGIN_CAPABILITY.SERVICE_AFTER_SESSION_DELETE]: PLUGIN_RUNTIME_SURFACE.SERVICE,
-});
-
-export function normalizePluginCapabilities(capabilities = []) {
-  return Array.from(
-    new Set(
-      (Array.isArray(capabilities) ? capabilities : [])
-        .map((item) => String(item || "").trim())
-        .filter(Boolean),
-    ),
-  );
-}
-
-export function resolveCapabilityRuntimeSurface(capability = "") {
-  const normalized = String(capability || "").trim();
-  if (!normalized) return "";
-  if (PLUGIN_CAPABILITY_SURFACE[normalized]) return PLUGIN_CAPABILITY_SURFACE[normalized];
-  if (normalized.startsWith("agent.") || normalized.startsWith("bot.")) {
-    return PLUGIN_RUNTIME_SURFACE.AGENT;
-  }
-  if (normalized.startsWith("service.")) return PLUGIN_RUNTIME_SURFACE.SERVICE;
-  if (normalized.startsWith("frontend.")) return PLUGIN_RUNTIME_SURFACE.FRONTEND;
-  return "";
-}
 
 export function validateManifestCapabilityEntries(manifest = {}) {
   const entries = manifest?.entries && typeof manifest.entries === "object" ? manifest.entries : {};
@@ -453,6 +417,44 @@ export function resolvePluginRegisterByPluginKey(
   const registerFn = typeof matched?.registerNoobotPlugin === "function" ? matched.registerNoobotPlugin : null;
   if (typeof registerFn === "function") return registerFn;
   return typeof fallbackRegister === "function" ? fallbackRegister : null;
+}
+
+export function resolveLoadedNoobotPluginByPluginKey(
+  loadedPlugins = null,
+  pluginKey = "",
+) {
+  const normalizedPluginKey = String(pluginKey || "").trim();
+  if (!normalizedPluginKey) return null;
+  return listLoadedNoobotPluginEntries(loadedPlugins).find((item = {}) => {
+    const manifestPluginKey = String(item?.manifest?.pluginKey || "").trim();
+    const pluginId = String(item?.manifest?.id || item?.pluginId || "").trim();
+    return manifestPluginKey === normalizedPluginKey || pluginId === normalizedPluginKey;
+  }) || null;
+}
+
+export function resolvePluginExecutionIntentDeclaration(
+  loadedPlugins = null,
+  pluginKey = "",
+) {
+  const plugin = resolveLoadedNoobotPluginByPluginKey(loadedPlugins, pluginKey);
+  if (!plugin || !manifestSupportsCapability(plugin.manifest, PLUGIN_CAPABILITY.AGENT_EXECUTION_INTENT)) {
+    return null;
+  }
+  const declaration = resolveManifestRuntimeOptionsByCapability(
+    plugin.manifest,
+    PLUGIN_CAPABILITY.AGENT_EXECUTION_INTENT,
+  );
+  const executionKind = String(declaration.executionKind || "").trim().toLowerCase();
+  const executionIdPrefix = String(declaration.executionIdPrefix || "").trim();
+  if (!executionKind || !executionIdPrefix) return null;
+  return Object.freeze({
+    executionKind,
+    executionIdPrefix,
+    originType: String(declaration.originType || executionKind).trim(),
+    originIdKey: String(declaration.originIdKey || "executionId").trim(),
+    stage: String(declaration.stage || "").trim(),
+    pluginKey: String(plugin?.manifest?.pluginKey || plugin?.manifest?.id || "").trim(),
+  });
 }
 
 export function resolveFirstLoadedNoobotPluginByCapability(

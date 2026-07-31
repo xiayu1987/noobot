@@ -47,7 +47,6 @@ export async function ensureReconnectSessionActive({
   if (!targetSession) {
     await chatList.fetchSessions(normalizedSessionId, {
       silent: true,
-      preserveCurrentMessages: true,
     });
   }
 
@@ -60,7 +59,6 @@ export async function ensureReconnectSessionActive({
   await chatList.selectSession(resolvedTargetSession.id, {
     force: true,
     silent: true,
-    preserveCurrentMessages: true,
   });
 
   return isCurrentActiveSession({

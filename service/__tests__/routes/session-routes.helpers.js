@@ -31,6 +31,7 @@ export function createSessionApp(options = {}) {
     bot: {
       session: {
         getSessionData: async () => ({}),
+        getSessionDisplayData: async () => ({}),
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],

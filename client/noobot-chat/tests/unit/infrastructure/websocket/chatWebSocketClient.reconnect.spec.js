@@ -21,6 +21,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-1",
       userId: "u-1",
+      knownLifecycleSequenceMap: { "s-1": 12 },
       onReconnectData: vi.fn(),
     });
 
@@ -30,6 +31,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       action: "reconnect",
       currentSessionId: "s-1",
       userId: "u-1",
+      knownLifecycleSequenceMap: { "s-1": 12 },
     });
     bootstrapSocket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0 });
     await reconnectPromise;

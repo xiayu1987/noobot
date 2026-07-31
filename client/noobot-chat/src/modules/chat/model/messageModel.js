@@ -204,6 +204,7 @@ function createMessageModel(messageItem = {}) {
   return initializeMessageEventState({
     id: messageId,
     messageId,
+    ...(presentationMessageId ? { presentationMessageId } : {}),
     ...(sourceMessageId && sourceMessageId !== messageId ? { sourceMessageId } : {}),
     turnScopeId,
     sessionId,
@@ -333,8 +334,6 @@ function foldConversationMessages(messages = [], buildView) {
       previousRole === "assistant" &&
       previousMessage?.workflowMessage !== true &&
       currentMessage?.workflowMessage !== true &&
-      previousMessage?.pending !== true &&
-      currentMessage?.pending !== true &&
       currentTurnScopeKey &&
       previousTurnScopeKey &&
       currentTurnScopeKey === previousTurnScopeKey &&
@@ -347,7 +346,9 @@ function foldConversationMessages(messages = [], buildView) {
 
     const previousContent = String(previousMessage?.content || "").trim();
     const currentContent = String(currentMessage?.content || "").trim();
-    const mergedContent = [previousContent, currentContent].filter(Boolean).join("\n\n");
+    const mergedContent = previousContent && previousContent === currentContent
+      ? previousContent
+      : [previousContent, currentContent].filter(Boolean).join("\n\n");
     previousMessage.content = mergedContent;
 
     const currentType = String(currentMessage?.type || "").trim();
@@ -375,6 +376,7 @@ function foldConversationMessages(messages = [], buildView) {
       previousMessage,
       mergeMessagePresentationFacets(previousMessage, currentMessage),
     );
+    previousMessage.pending = previousMessage.pending === true || currentMessage.pending === true;
     const currentAttachments = normalizeArray(currentMessage?.attachments);
     const previousAttachments = normalizeArray(previousMessage?.attachments);
 

@@ -16,6 +16,7 @@ import { routeRuntimeStreamEvent } from "../../../../extensions/runtime-stream-r
 import { routeCurrentTurnLifecycleEvent, routeForeignTurnLifecycleEvent } from "./turnLifecycleRouter.js";
 import { isIgnoredSubSessionEvent, routeMessageProjectionEvent } from "./messageProjectionRouter.js";
 import { routeTerminalStreamEvent } from "./terminalStreamRouter.js";
+import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 
 export function createSendStreamEventHandler(context) {
   const {
@@ -35,6 +36,12 @@ export function createSendStreamEventHandler(context) {
       source: "realtime",
     });
     const authoritativeEvent = data?.event || {};
+    const lifecycleChildSessionId = event === StreamEventEnum.TURN_LIFECYCLE
+      ? normalizeTrimmedString(data?.sessionId)
+      : "";
+    const lifecycleRootSessionId = normalizeTrimmedString(
+      data?.parentSessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId,
+    );
     const subProjectionChecks = {
       eventName: event === "subagent_message_event",
       channelKind: data?.channelKind === "message_event",
@@ -68,7 +75,9 @@ export function createSendStreamEventHandler(context) {
     logSessionEvent({
       category: event === StreamEventEnum.INTERACTION_REQUEST ? "interaction" : "transport",
       event: `stream.${event || "event"}`,
-      sessionId: authoritativeEvent?.sessionId || data?.sessionId || sessionId,
+      sessionId: lifecycleChildSessionId && lifecycleChildSessionId !== lifecycleRootSessionId
+        ? lifecycleRootSessionId
+        : (authoritativeEvent?.sessionId || data?.sessionId || sessionId),
       dialogProcessId: authoritativeEvent?.dialogProcessId || data?.dialogProcessId || normalizeTrimmedString(botMsg.dialogProcessId),
       turnScopeId: authoritativeEvent?.turnScopeId || data?.turnScopeId || turnScopeId,
       data: {
@@ -88,6 +97,12 @@ export function createSendStreamEventHandler(context) {
         authority: String(authoritativeEvent?.authority || ""),
         textLength: String(authoritativeEvent?.text || "").length,
         outputLength: String(authoritativeEvent?.output || "").length,
+        childSessionId: lifecycleChildSessionId,
+        parentSessionId: String(data?.parentSessionId || ""),
+        lifecycleEventType: String(data?.eventType || ""),
+        lifecycleRevision: Number(data?.revision || 0),
+        lifecycleSequence: Number(data?.sequence || 0),
+        lifecyclePersistenceScopeId: String(data?.persistenceScope?.scopeId || ""),
       },
     });
     logResendDebug("send.stream.event", () => ({
@@ -98,7 +113,7 @@ export function createSendStreamEventHandler(context) {
       botMessage: summarizeDebugMessage(botMsg),
     }));
     if (routeRuntimeStreamEvent(event, data, {
-      source: "live",
+      source: "live", logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
       applyWorkflowRuntimeEvent, logSessionEvent, sessionId, turnScopeId,
     })) return;
     if (routeMessageProjectionEvent(event, data, {
@@ -107,8 +122,10 @@ export function createSendStreamEventHandler(context) {
       locateSendingStartedMessageOnce, logSessionEvent, navigateOnFirstResponseOnce,
       sessionId, turnScopeId,
     })) return;
+    if (routeForeignTurnLifecycleEvent(event, data, {
+      activeSession, applyRunStateEvent, logSessionEvent, sessionId,
+    })) return;
     if (isIgnoredSubSessionEvent(event, data)) return;
-    if (routeForeignTurnLifecycleEvent(event, data, { activeSession, sessionId })) return;
     if (!isEventForCurrentTurn(data || {}, botMsg)) return;
     if (routeCurrentTurnLifecycleEvent(event, data, { activeSession, applyRunStateEvent, sessionId })) return;
     if (isUserStoppedEvent(event, data || {}) && hasDialogProcessConflictForTurn({

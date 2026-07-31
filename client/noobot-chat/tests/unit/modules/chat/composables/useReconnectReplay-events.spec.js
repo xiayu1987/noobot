@@ -177,13 +177,13 @@ describe("useReconnectReplay", () => {
       event: messageEvent,
     });
 
-    expect(result).toEqual({ applied: true, appliedCount: 1 });
+    expect(result).toEqual({ applied: true });
     expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledTimes(1);
     expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledWith(
       {
         event: "workflow_message_event",
         data: messageEvent,
-        transportSequence: 0,
+        transportSequence: 42,
       },
       { source: "reconnect" },
     );

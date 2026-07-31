@@ -3,6 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  areCanonicalTurnScopeIdsEqual,
+  canonicalizeTurnScopeId,
+  turnScopeIdentityKey,
+} from "@noobot/shared/turn-scope-identity";
 
 function trim(value = "") {
   return String(value || "").trim();
@@ -128,23 +133,17 @@ export function getMessageTurnScopeId(messageItem = {}) {
 }
 
 export function normalizeTurnScopeIdKey(value = "") {
-  const turnScopeId = trim(value);
-  if (!turnScopeId) return "";
-  const workflowPrefix = "workflow-node:";
-  if (turnScopeId.startsWith(workflowPrefix)) {
-    return `workflow-node_${turnScopeId.slice(workflowPrefix.length)}`;
-  }
-  return turnScopeId;
+  return turnScopeIdentityKey(value);
 }
+
+export { canonicalizeTurnScopeId };
 
 export function getMessageTurnScopeIdKey(messageItem = {}) {
   return normalizeTurnScopeIdKey(getMessageTurnScopeId(messageItem));
 }
 
 export function areTurnScopeIdsEquivalent(left = "", right = "") {
-  const leftKey = normalizeTurnScopeIdKey(left);
-  const rightKey = normalizeTurnScopeIdKey(right);
-  return Boolean(leftKey && rightKey && leftKey === rightKey);
+  return areCanonicalTurnScopeIdsEqual(left, right);
 }
 
 export function getMessageTurnScopeKey(messageItem = {}) {

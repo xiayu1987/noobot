@@ -157,7 +157,6 @@ function navigateToLastMessage() {
 function refreshSessionsFromSidebar() {
   return fetchSessions("", {
     forceCurrentSessionRerender: true,
-    preserveCurrentMessages: false,
   });
 }
 

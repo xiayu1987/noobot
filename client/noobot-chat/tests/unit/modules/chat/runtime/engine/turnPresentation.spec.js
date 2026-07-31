@@ -14,12 +14,14 @@ function workflow({
   workflowRunId = "workflow-a",
   sessionId = "session-a",
   turnScopeId = "turn-a",
+  presentationMessageId = "assistant-presentation-a",
   dialogProcessId = "dialog-a",
 } = {}) {
   return {
     workflowRunId,
     sessionId,
     turnScopeId,
+    presentationMessageId,
     dialogProcessId,
     semanticText: "WORKFLOW_DSL/1",
     nodes: { nodeA: { nodeExecutionId: "node-a", status: "ready" } },
@@ -37,6 +39,7 @@ function persistedWorkflow(overrides = {}) {
     role: "assistant",
     type: "workflow",
     turnScopeId: "turn-a",
+    presentationMessageId: "assistant-presentation-a",
     content: "WORKFLOW_DSL/1 persisted",
     pluginMeta: {
       source: "workflow-plugin",
@@ -59,6 +62,8 @@ describe("selectTurnPresentations", () => {
     expect(result).toHaveLength(2);
     expect(result[0]).toBe(user);
     expect(result[1]).toMatchObject({
+      id: "assistant-presentation-a",
+      presentationMessageId: "assistant-presentation-a",
       role: "assistant",
       type: "workflow",
       turnScopeId: "turn-a",
@@ -69,6 +74,7 @@ describe("selectTurnPresentations", () => {
   it("projects live workflow content onto the existing assistant shell", () => {
     const shell = {
       id: "assistant-shell-a",
+      presentationMessageId: "assistant-presentation-a",
       sessionId: "session-a",
       role: "assistant",
       type: "message",
@@ -211,6 +217,80 @@ describe("selectTurnPresentations", () => {
       content: "本轮已由用户停止\n用户停止了本轮生成\n原因：user_stop",
       turnStatusPlaceholder: true,
       toolTimeline: [{ key: "tool-a" }],
+    });
+  });
+
+  it("derives terminal presentation from the authoritative runtime when detail status has not arrived", () => {
+    const user = {
+      id: "user-runtime-stop",
+      sessionId: "session-runtime-stop",
+      role: "user",
+      turnScopeId: "turn-runtime-stop",
+      content: "stop",
+    };
+    const assistant = {
+      id: "assistant-runtime-stop",
+      sessionId: "session-runtime-stop",
+      role: "assistant",
+      turnScopeId: "turn-runtime-stop",
+      content: "",
+    };
+    const result = selectTurnPresentations({
+      activeSession: { id: "session-runtime-stop", messages: [user, assistant] },
+      turnRuntimeRegistry: {
+        sessions: {
+          "session-runtime-stop": {
+            turns: {
+              "turn-runtime-stop": {
+                turnScopeId: "turn-runtime-stop",
+                terminal: "user_stopped",
+                finishedAt: "2026-07-31T10:00:00.000Z",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result[1]).toMatchObject({
+      id: "assistant-runtime-stop",
+      status: "user_stopped",
+      turnStatusPlaceholder: true,
+    });
+  });
+
+  it("anchors an orphaned terminal Turn before the next authoritative Turn", () => {
+    const result = selectTurnPresentations({
+      activeSession: {
+        id: "session-a",
+        messages: [
+          { id: "user-next", sessionId: "session-a", role: "user", turnScopeId: "turn-next", content: "next" },
+          { id: "assistant-next", sessionId: "session-a", role: "assistant", turnScopeId: "turn-next", content: "answer" },
+        ],
+        turnStatuses: [{
+          turnScopeId: "turn-failed",
+          dialogProcessId: "dialog-failed",
+          status: "error",
+          reason: "run_error",
+          description: "failed Turn",
+        }],
+      },
+      turnRuntimeRegistry: {
+        sessions: {
+          "session-a": {
+            turns: {
+              "turn-failed": { turnScopeId: "turn-failed", sequence: 24 },
+              "turn-next": { turnScopeId: "turn-next", sequence: 29 },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.map((message) => message.turnScopeId)).toEqual(["turn-failed", "turn-next", "turn-next"]);
+    expect(result[0]).toMatchObject({
+      turnStatusPlaceholder: true,
+      status: "error",
     });
   });
 

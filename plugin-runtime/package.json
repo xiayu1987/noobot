@@ -6,6 +6,7 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
+    "./contracts": "./src/contracts.mjs",
     "./package.json": "./package.json"
   },
   "dependencies": {

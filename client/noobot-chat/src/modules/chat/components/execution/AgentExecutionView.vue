@@ -14,6 +14,8 @@ const props = defineProps({
   messages: { type: Array, default: () => [] },
   allMessages: { type: Array, default: () => [] },
   sessionDocs: { type: Array, default: () => [] },
+  turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
+  turnStatusesByTurnScopeId: { type: Object, default: () => ({}) },
   userId: { type: String, default: "" },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -73,6 +75,8 @@ function isCurrentAssistantMessage(messageItem = {}, messageIndex = 0) {
         :current-turn="isCurrentAssistantMessage(messageItem, messageIndex)"
         :all-messages="allMessages"
         :session-docs="sessionDocs"
+        :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
+        :turn-statuses-by-turn-scope-id="turnStatusesByTurnScopeId"
         :user-id="userId"
         :render-markdown="renderMarkdown"
         :format-time="formatTime"

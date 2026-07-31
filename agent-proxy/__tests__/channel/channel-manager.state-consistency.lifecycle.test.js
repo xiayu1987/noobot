@@ -10,6 +10,97 @@ import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents, FakeUpstreamWebSocket } from "./channel-manager.state-consistency.test-helpers.js";
 
+test("upstream snapshot responses resolve and release the reconnect command", async () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-snapshot-response" }),
+    { userId: "user-1", sessionId: "session-snapshot-response" },
+  );
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  let resolution = null;
+  channel.pendingSnapshotRequests.set("snapshot-command-1", {
+    resolve: (result) => { resolution = result; },
+  });
+
+  upstream.emit("message", JSON.stringify({
+    event: "turn_snapshot",
+    data: {
+      commandId: "snapshot-command-1",
+      sessionId: "session-snapshot-response",
+      sequence: 2,
+    },
+  }));
+
+  assert.deepEqual(resolution, {
+    ok: true,
+    snapshot: {
+      commandId: "snapshot-command-1",
+      sessionId: "session-snapshot-response",
+      sequence: 2,
+    },
+  });
+  assert.equal(channel.pendingSnapshotRequests.size, 0);
+});
+
+test("upstream snapshot errors resolve and release the reconnect command", () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-snapshot-error" }),
+    { userId: "user-1", sessionId: "session-snapshot-error" },
+  );
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  let resolution = null;
+  channel.pendingSnapshotRequests.set("snapshot-command-error", {
+    resolve: (result) => { resolution = result; },
+  });
+
+  upstream.emit("message", JSON.stringify({
+    event: "error",
+    data: {
+      commandId: "snapshot-command-error",
+      errorCode: "snapshot_not_found",
+    },
+  }));
+
+  assert.deepEqual(resolution, { ok: false, reason: "snapshot_not_found" });
+  assert.equal(channel.pendingSnapshotRequests.size, 0);
+});
+
+test("upstream execution query responses return only to the registered requester", () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-execution-query" }),
+    { userId: "user-1", sessionId: "session-execution-query" },
+  );
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  const requester = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  const observer = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, observer);
+  channel.pendingExecutionRequests.set("execution-query-1", requester);
+
+  upstream.emit("message", JSON.stringify({
+    event: "execution_tree",
+    data: {
+      commandId: "execution-query-1",
+      rootExecutionId: "workflow-root",
+      tree: { executions: {} },
+    },
+  }));
+
+  assert.equal(getEvent(requester, "execution_tree")?.data?.commandId, "execution-query-1");
+  assert.equal(getEvent(observer, "execution_tree"), null);
+  assert.equal(channel.pendingExecutionRequests.size, 0);
+});
+
 test("stop action should broadcast stopping state before terminal", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });

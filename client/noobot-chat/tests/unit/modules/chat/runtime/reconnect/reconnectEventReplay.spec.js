@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyReconnectEventReplay } from "../../../../../../src/modules/chat/runtime/reconnect/reconnectEventReplay.js";
 import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 import { clearExtensionRegistry, contributeExtension } from "../../../../../../src/extensions/extension-registry.js";
@@ -11,12 +11,7 @@ import { EXTENSION_POINTS } from "../../../../../../src/extensions/extension-poi
 import { registerFrontendPlugin as registerWorkflowFrontendPlugin } from "../../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
 
 describe("applyReconnectEventReplay", () => {
-  afterEach(() => clearExtensionRegistry());
-
-  it.each([
-    "workflow_planning_message_prepared",
-    "workflow_node_state_committed",
-  ])("routes %s directly to workflow runtime projection after reconnect", async (event) => {
+  beforeEach(() => {
     registerWorkflowFrontendPlugin({
       contributeExtension: (point, contribution) => contributeExtension(point, {
         ...contribution,
@@ -25,6 +20,13 @@ describe("applyReconnectEventReplay", () => {
       extensionPoints: EXTENSION_POINTS,
       services: {},
     });
+  });
+  afterEach(() => clearExtensionRegistry());
+
+  it.each([
+    "workflow_planning_message_prepared",
+    "workflow_node_state_committed",
+  ])("routes %s directly to workflow runtime projection after reconnect", async (event) => {
     const data = {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
@@ -47,11 +49,16 @@ describe("applyReconnectEventReplay", () => {
     });
 
     expect(result).toEqual({ applied: true });
-    expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith(event, data, { source: "reconnect" });
+    expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith({
+      event,
+      data,
+      transportSequence: 0,
+    }, { source: "reconnect" });
     expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
   });
 
-  it("does not activate the optional workflow runtime domain without its plugin", async () => {
+  it("does not project plugin state after the plugin-runtime projector is removed", async () => {
+    clearExtensionRegistry();
     const applyWorkflowRuntimeEvent = vi.fn();
     const applyReconnectMessagesToActiveSession = vi.fn();
     await applyReconnectEventReplay({

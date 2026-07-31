@@ -41,7 +41,7 @@ function createMockSocket() {
 }
 
 function createForwardingChannelManager({
-  targetChannel = { key: 'channel-1' },
+  targetChannel = { key: 'channel-1', upstreamSocket: { readyState: 1 } },
   hasPermission = true,
   forwardResult = true,
 } = {}) {
@@ -50,8 +50,10 @@ function createForwardingChannelManager({
     permission: [],
     forward: [],
     errors: [],
+    events: [],
   };
   return {
+    WebSocket: { OPEN: 1 },
     calls,
     resolveChannelFromSocketMessage(socket, payload) {
       calls.resolve.push({ socket, payload });
@@ -68,8 +70,33 @@ function createForwardingChannelManager({
     sendSocketError(socket, message) {
       calls.errors.push({ socket, message });
     },
+    sendSocketEvent(socket, envelope) {
+      calls.events.push({ socket, envelope });
+      return { result: 'sent', reason: '' };
+    },
   };
 }
+
+test('ws router forwards execution queries by authoritative commandType', () => {
+  const targetChannel = { key: 'channel-1', pendingExecutionRequests: new Map() };
+  const channelManager = createForwardingChannelManager({ targetChannel });
+  const socket = createMockSocket();
+  const payload = {
+    commandType: 'execution.tree.get',
+    commandId: 'execution-query-1',
+    userId: 'user-1',
+    sessionId: 'session-1',
+    rootExecutionId: 'workflow-root',
+  };
+
+  new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
+  socket.emit(CHANNEL_EVENT.MESSAGE, JSON.stringify(payload));
+
+  assert.equal(channelManager.calls.errors.length, 0);
+  assert.equal(channelManager.calls.forward.length, 1);
+  assert.deepEqual(channelManager.calls.forward[0].payload, payload);
+  assert.equal(targetChannel.pendingExecutionRequests.get('execution-query-1'), socket);
+});
 
 for (const action of ['continue', 'resume']) {
   test(`ws router forwards ${action} action to upstream`, () => {
@@ -375,7 +402,7 @@ test('ws router restarts upstream on existing channel when continue action has c
   socket.emit(CHANNEL_EVENT.MESSAGE, JSON.stringify(payload));
 
   assert.equal(channelManager.calls.errors.length, 0);
-  assert.equal(channelManager.calls.forward.length, 1);
+  assert.equal(channelManager.calls.forward.length, 0);
   assert.equal(channelManager.calls.close.length, 1);
   assert.equal(channelManager.calls.connect.length, 1);
   assert.deepEqual(targetChannel.startPayload, payload);

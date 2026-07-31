@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/authoritative-state/contracts";
 import {
   normalizeTrimmedStringList,
   resolvePluginOptionsFromConfig,
@@ -62,9 +63,7 @@ export function createDetachedSubSessionRunner({
     }
 
     const subSessionId = String(strategy?.sessionId || "").trim() || randomUUID();
-    const subDialogProcessId = String(
-      strategy?.dialogProcessId || metadata?.pluginDialogId || parentDialogProcessId || subSessionId,
-    ).trim();
+    const subDialogProcessId = randomUUID();
     const turnScopeId = String(
       runConfigPatch?.turnScopeId || strategy?.turnScopeId || metadata?.turnScopeId || "",
     ).trim();
@@ -143,6 +142,75 @@ export function createDetachedSubSessionRunner({
       }),
     });
 
+    const persistenceScope = Object.freeze({
+      scopeId: mergedRunConfig.executionId,
+      parentSessionId,
+      relativeDir,
+      allowedRoot,
+    });
+
+    const lifecycleIdentity = {
+      userId,
+      sessionId: subSessionId,
+      parentSessionId,
+      persistenceContext,
+      persistenceScope,
+      turnScopeId,
+      dialogProcessId: subDialogProcessId || subSessionId,
+      messageId: String(
+        effectiveRunConfig.messageId || `msg_event_${effectiveRunConfig.presentationMessageId}`,
+      ).trim(),
+      presentationMessageId: effectiveRunConfig.presentationMessageId,
+      executionId: mergedRunConfig.executionId,
+      executionKind: "agent",
+      parentExecutionId: mergedRunConfig.parentExecutionId,
+      rootExecutionId: mergedRunConfig.rootExecutionId,
+      origin: metadata?.origin || {},
+      stage: String(metadata?.scope || "detached_sub_session").trim(),
+    };
+    const lifecycleCommandId = String(
+      strategy?.commandId || runConfigPatch?.idempotencyKey || turnScopeId || subSessionId,
+    ).trim();
+    const commitLifecycle = async (event = {}) => {
+      if (typeof session.applyTurnLifecycleEvent !== "function") {
+        throw new Error("detached sub-session requires authoritative Turn lifecycle support");
+      }
+      const committed = await session.applyTurnLifecycleEvent({
+        ...lifecycleIdentity,
+        ...event,
+      });
+      if (!committed?.applied && !committed?.deduplicated) {
+        throw new Error(committed?.reason || "detached sub-session lifecycle commit failed");
+      }
+      if (committed?.envelope) {
+        await scopedEventListener?.onEvent?.({
+          event: "turn_lifecycle_committed",
+          data: {
+            envelope: committed.envelope,
+            persistenceContext,
+          },
+        });
+      }
+      return committed;
+    };
+
+    await commitLifecycle({
+      commandId: `${lifecycleCommandId}:accepted`,
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+      executionState: "accepted",
+      startedAt: effectiveRunConfig.thinkingStartedAt,
+      createSessionIfAbsent: true,
+      expectedRevision: 0,
+    });
+    await commitLifecycle({
+      commandId: `${lifecycleCommandId}:processing-started`,
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    });
+
     let result;
     try {
       result = await sessionRunner.runSession({
@@ -150,6 +218,7 @@ export function createDetachedSubSessionRunner({
         sessionId: subSessionId,
         parentSessionId,
         parentDialogProcessId,
+        dialogProcessId: subDialogProcessId,
         caller: CALLER_ROLE.BOT,
         message,
         attachments: Array.isArray(attachments) ? attachments : [],
@@ -163,6 +232,44 @@ export function createDetachedSubSessionRunner({
         persistenceContext,
       });
     } catch (error) {
+      if (inheritedAbortSignal?.aborted || error?.name === "AbortError") {
+        await commitLifecycle({
+          commandId: `${lifecycleCommandId}:stop-accepted`,
+          eventType: TURN_EVENT.STOP_ACCEPTED,
+          phase: TURN_PHASE.ACTION,
+          action: "stop",
+        });
+        await commitLifecycle({
+          commandId: `${lifecycleCommandId}:stop-processing-completed`,
+          eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
+          phase: TURN_PHASE.STOP,
+        });
+        const completionCommitId = `${lifecycleCommandId}:stop-completed`;
+        await commitLifecycle({
+          commandId: completionCommitId,
+          eventType: TURN_EVENT.STOP_COMPLETED,
+          phase: TURN_PHASE.STOP,
+          executionState: "user_stopped",
+          completionCommitId,
+          terminalStatus: {
+            command: "user_stopped",
+            description: "子 Agent 已停止",
+          },
+          finishedAt: String(now()).trim(),
+        });
+      } else {
+        await commitLifecycle({
+          commandId: `${lifecycleCommandId}:failed`,
+          eventType: TURN_EVENT.FAILED,
+          phase: TURN_PHASE.PROCESSING,
+          failure: {
+            phase: TURN_PHASE.PROCESSING,
+            code: String(error?.code || "detached_sub_session_failed").trim(),
+            message: String(error?.message || "detached sub-session failed"),
+            retryable: false,
+          },
+        });
+      }
       if (error && typeof error === "object" && error.lifecycle) {
         error.lifecycle = createDetachedTerminalReceipt({
           lifecycle: error.lifecycle,
@@ -173,6 +280,25 @@ export function createDetachedSubSessionRunner({
       throw error;
     }
 
+    await commitLifecycle({
+      commandId: `${lifecycleCommandId}:processing-completed`,
+      eventType: TURN_EVENT.PROCESSING_COMPLETED,
+      phase: TURN_PHASE.COMPLETION,
+    });
+    const completionCommitId = `${lifecycleCommandId}:completed`;
+    const terminalLifecycle = await commitLifecycle({
+      commandId: completionCommitId,
+      eventType: TURN_EVENT.COMPLETED,
+      phase: TURN_PHASE.COMPLETION,
+      executionState: "completed",
+      completionCommitId,
+      terminalStatus: {
+        command: "completed",
+        description: "子 Agent 已正常完成",
+      },
+      finishedAt: String(now()).trim(),
+    });
+
     const dialogProcessId = String(result?.dialogProcessId || subDialogProcessId || subSessionId).trim();
     return {
       userId,
@@ -181,7 +307,7 @@ export function createDetachedSubSessionRunner({
       dialogProcessId,
       persisted: result?.session || null,
       lifecycle: createDetachedTerminalReceipt({
-        lifecycle: result?.lifecycle,
+        lifecycle: terminalLifecycle?.turn || result?.lifecycle,
         executionId: mergedRunConfig.executionId,
       }),
       result: {

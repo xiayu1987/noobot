@@ -298,6 +298,7 @@ test("hydrates child messages when the local Execution projection has not arrive
     sessionId: "child-session-a",
     sessionSummary: { sessionId: "child-session-a", messages: [] },
     messages: [{ id: "live-child-message", content: "running" }],
+    rawMessages: [{ id: "live-child-message", content: "running" }],
   }, {
     executionId: "agent:starting",
     execution: null,
@@ -468,12 +469,23 @@ for (const state of ["processing", "completed"]) {
                 ok: true,
                 sessionId: "child-session-a",
                 workflowSession: {
+                  snapshotVersion: 1,
                   session: {
                     sessionId: "child-session-a",
                     state,
                     messages: [
                     { id: `user-${state}`, role: "user", content: `request-${state}`, turnScopeId: `turn-${state}` },
                     { id: `message-${state}`, role: "assistant", content: state, turnScopeId: `turn-${state}` },
+                    ],
+                    turnStatuses: [{ turnScopeId: `turn-${state}`, status: state === "completed" ? "completed" : "processing" }],
+                    turnTimings: [{ turnScopeId: `turn-${state}`, thinkingStartedAt: "2026-07-20T00:00:00.000Z" }],
+                  },
+                  sessionSummary: {
+                    sessionId: "child-session-a",
+                    state,
+                    messages: [
+                      { id: `user-${state}`, role: "user", content: `request-${state}`, turnScopeId: `turn-${state}` },
+                      { id: `message-${state}`, role: "assistant", content: state, turnScopeId: `turn-${state}` },
                     ],
                     turnStatuses: [{ turnScopeId: `turn-${state}`, status: state === "completed" ? "completed" : "processing" }],
                     turnTimings: [{ turnScopeId: `turn-${state}`, thinkingStartedAt: "2026-07-20T00:00:00.000Z" }],
@@ -509,7 +521,7 @@ test("classifies an unmaterialized Execution session as pending", async () => {
         getThinkingDetail: async () => null,
         getDetail: async () => ({
           ok: true,
-          async json() { return { ok: true, workflowSession: {} }; },
+          async json() { return { ok: true, workflowSession: { snapshotVersion: 1 } }; },
         }),
       },
     },
@@ -533,7 +545,7 @@ test("classifies a materialized Execution session without messages as empty", as
         getThinkingDetail: async () => null,
         getDetail: async () => ({
           ok: true,
-          async json() { return { ok: true, workflowSession: { session: { sessionId: "child-session-empty", messages: [] } } }; },
+          async json() { return { ok: true, workflowSession: { snapshotVersion: 1, session: { sessionId: "child-session-empty", messages: [] } } }; },
         }),
       },
     },

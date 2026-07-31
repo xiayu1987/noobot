@@ -31,6 +31,7 @@ function detailResponse(sessionId, content) {
     json: async () => ({
       ok: true,
       workflowSession: {
+        snapshotVersion: 1,
         session: { sessionId, messages },
         sessionSummary: { sessionId, messages },
       },
@@ -56,6 +57,7 @@ function mountViewer({
   flowNodeItems = [],
   initialSelectedNode = null,
   logWorkflowDiagnostics = null,
+  selectExecutionDetail = null,
 }) {
   const flowNodes = ref(flowNodeItems);
   const viewerProps = reactive({
@@ -64,7 +66,7 @@ function mountViewer({
       getDetail: (...args) => fetcher(...args),
       getThinkingDetail: (...args) => fetcher(...args),
     },
-    selectExecutionDetail: vi.fn(() => null),
+    selectExecutionDetail: selectExecutionDetail || vi.fn(() => null),
     selectSessionMessages: vi.fn((sessionId) => viewerProps.subSessionMessageRegistry?.sessions?.[sessionId] || null),
     subSessionMessageRegistry: { sessions: sessionDocs },
     subSessionMessageRegistryVersion: 0,
@@ -298,6 +300,7 @@ describe("workflow node session view ownership", () => {
       json: async () => ({
         ok: true,
         workflowSession: {
+          snapshotVersion: 1,
           session: { sessionId: "child-running", messages: [childUser] },
           sessionSummary: { sessionId: "child-running", messages: [childUser] },
           executionLogs: [
@@ -466,6 +469,32 @@ describe("workflow node session view ownership", () => {
       "frontend.workflowNodeDetail.liveProjectionObserved",
       expect.objectContaining({ sessionId: "session-complete-live" }),
     );
+    wrapper.unmount();
+  });
+
+  it("does not downgrade a terminal execution detail from ready to streaming", async () => {
+    const completedStep = { ...step("terminal"), status: "succeeded" };
+    const execution = {
+      executionId: completedStep.childExecutionId,
+      sessionId: completedStep.sessionId,
+      state: "completed",
+      terminal: true,
+    };
+    const { wrapper, state, viewer } = mountViewer({
+      fetcher: vi.fn(async () => detailResponse(completedStep.sessionId, "final result")),
+      sessionDocs: reactive({}),
+      runtimeNodes: [completedStep],
+      selectExecutionDetail: vi.fn(() => ({
+        execution,
+        session: { sessionId: completedStep.sessionId },
+        messages: [{ id: "final", role: "assistant", content: "final result", pending: false }],
+      })),
+    });
+
+    await viewer.openNodeSession(completedStep);
+
+    expect(state.viewerState.value).toBe("ready");
+    expect(state.selectedNodeMessages.value).toHaveLength(1);
     wrapper.unmount();
   });
 

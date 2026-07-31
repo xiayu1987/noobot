@@ -159,9 +159,11 @@ export function createMessageRunHandler({
       });
       return { rebound: true };
     }
+    const authoritativeStartedAt = new Date().toISOString();
+    normalizedRunConfig.thinkingStartedAt = authoritativeStartedAt;
     if (isContinueAction) {
       const resumeDialogProcessId = String(config?.resumeDialogProcessId || "").trim();
-      const resumeTurnScopeId = String(config?.resumeTurnScopeId || config?.stoppedTurnScopeId || "").trim();
+      const resumeTurnScopeId = String(config?.resumeTurnScopeId || "").trim();
       normalizedRunConfig.resumeFromStoppedSnapshot = true;
       normalizedRunConfig.resumeDialogProcessId = resumeDialogProcessId;
       normalizedRunConfig.resumeTurnScopeId = resumeTurnScopeId;
@@ -182,6 +184,16 @@ export function createMessageRunHandler({
       normalizedRunConfig.messageId ||
         `msg_event_${normalizedRunConfig.presentationMessageId || state.currentTurnScopeId}`,
     ).trim();
+    const activeBot = resolveBot();
+    const agentApplication = createAgentApplication({ runtime: activeBot });
+    const executionIntent = await agentApplication.resolveExecutionIntent({
+      userId,
+      sessionId,
+      parentSessionId,
+      turnScopeId: state.currentTurnScopeId,
+      runConfig: normalizedRunConfig,
+    });
+    Object.assign(normalizedRunConfig, executionIntent);
     const actionEvent = {
       userId,
       sessionId,
@@ -194,9 +206,16 @@ export function createMessageRunHandler({
       action,
       messageId: normalizedRunConfig.messageId,
       presentationMessageId: normalizedRunConfig.presentationMessageId,
-      startedAt: String(normalizedRunConfig?.thinkingStartedAt || "").trim(),
+      startedAt: authoritativeStartedAt,
       createSessionIfAbsent: action === "send",
       expectedRevision: payload?.expectedRevision ?? 0,
+      ...executionIntent,
+      ...(isContinueAction ? {
+        continuationSource: {
+          dialogProcessId: normalizedRunConfig.resumeDialogProcessId,
+          turnScopeId: normalizedRunConfig.resumeTurnScopeId,
+        },
+      } : {}),
     };
     let accepted = await commitTurnLifecycle(actionEvent);
     if (
@@ -241,7 +260,6 @@ export function createMessageRunHandler({
         },
       });
     }
-    const activeBot = resolveBot();
     const runTimeoutMs = await resolveEffectiveRunTimeoutMs({
       bot: activeBot,
       userId,
@@ -402,8 +420,13 @@ export function createMessageRunHandler({
           data: routeData,
         });
       },
-      onCommittedTurnLifecycle: (committed = {}) => {
-        void committed;
+      onCommittedTurnLifecycle: (committed = {}, { persistenceContext = null } = {}) => {
+        return dispatchAuthorityEvents?.({
+          userId: committed.userId || userId,
+          sessionId: committed.sessionId,
+          parentSessionId: committed.parentSessionId || parentSessionId,
+          persistenceContext,
+        });
       },
       onRootRunning: (lifecycleData) => {
         if (processingStartedPromise) return processingStartedPromise;
@@ -453,7 +476,6 @@ export function createMessageRunHandler({
       },
     });
 
-    const agentApplication = createAgentApplication({ runtime: activeBot });
     const result = await agentApplication.run({
       userId,
       sessionId,

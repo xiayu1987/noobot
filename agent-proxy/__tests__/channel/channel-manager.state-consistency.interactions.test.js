@@ -203,6 +203,84 @@ test("channel_state snapshot should carry pendingInteraction payload for interac
   );
 });
 
+test("workflow child terminal events cannot discard a pending interaction owned by the root channel", async () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "root-session" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "root-session",
+    turnScopeId: "root-turn",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+
+  manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-child",
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+    dialogProcessId: "child-dialog",
+    turnScopeId: "root-turn",
+    content: "confirm child action",
+    seq: 49,
+  });
+  manager.pushChannelEvent(channel, "done", {
+    sessionId: "sibling-session",
+    parentSessionId: "root-session",
+    dialogProcessId: "sibling-dialog",
+    turnScopeId: "workflow-node-turn",
+    seq: 50,
+  });
+
+  assert.equal(channel.retention.phase, "active");
+  assert.equal(channel.activity.phase, "running");
+  assert.equal(channel.pendingInteractionRequests.has("req-child"), true);
+  assert.equal(manager.markChannelTerminal(channel, "done"), false);
+  assert.equal(channel.pendingInteractionRequests.has("req-child"), true);
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  await manager.handleReconnect(client, {
+    currentSessionId: "root-session",
+    currentTurnScopeId: "root-turn",
+    lastReceivedSeqMap: { "child-dialog": 49 },
+    lastReceivedTurnScopeIdMap: { "child-dialog": "root-turn" },
+  });
+
+  const reconnectData = getEvent(client, "reconnect_data");
+  const rootSession = reconnectData?.data?.sessions?.find(
+    (item) => item?.sessionId === "root-session",
+  );
+  const childState = rootSession?.conversationStates?.find(
+    (item) => item?.dialogProcessId === "child-dialog",
+  );
+  assert.equal(childState?.state, "interaction_pending");
+  assert.equal(childState?.requestId, "req-child");
+  assert.equal(childState?.pendingInteraction?.requestId, "req-child");
+  assert.deepEqual(childState?.pendingRequestIds, ["req-child"]);
+});
+
+test("workflow child terminal state does not own root channel retention", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "root-session" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "root-session",
+  });
+  channel.status = "running";
+
+  manager.pushChannelEvent(channel, "done", {
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+    dialogProcessId: "child-dialog",
+    turnScopeId: "child-turn",
+    seq: 10,
+  });
+
+  assert.equal(channel.activity.phase, "running");
+  assert.equal(channel.retention.phase, "active");
+  assert.equal(channel.conversationStateByDialogProcessId.get("child-dialog")?.state, "completed");
+});
+
 test("interaction_response should resolve channel by pending requestId", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-resolve" });

@@ -8,6 +8,10 @@ import { classifyExecutionEvent } from "../observability/event-log/log-normalize
 import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
 
+const INTERNAL_TRANSPORT_EVENTS = new Set([
+  "turn_lifecycle_committed",
+]);
+
 function enrichEventData(rawData = {}, defaults = {}) {
   const eventData = rawData && typeof rawData === "object" ? rawData : {};
   return {
@@ -35,14 +39,24 @@ export function createExecutionEventListener({
 }) {
   const dialogProcessId = resolveDialogProcessIdFromContext(upstream);
   const defaults = { dialogProcessId, sessionId, parentSessionId, turnScopeId };
+  let persistenceTail = Promise.resolve();
+
+  const appendExecutionLog = (record) => {
+    persistenceTail = persistenceTail
+      .catch(() => {})
+      .then(() => sessionManager?.appendExecutionLog?.(record))
+      .catch(() => {});
+    return persistenceTail;
+  };
 
   return {
+    flushPersistence: () => persistenceTail,
     onEvent: (evt = {}) => {
       const event = evt?.event || "";
       const data = evt?.data || {};
       const ts = evt?.ts || new Date().toISOString();
 
-      if (event === "llm_delta") {
+      if (event === "llm_delta" || INTERNAL_TRANSPORT_EVENTS.has(event)) {
         try {
           upstream?.onEvent?.({
             event,
@@ -56,7 +70,7 @@ export function createExecutionEventListener({
 
       const { category, type } = classifyExecutionEvent(event);
       try {
-        const maybePromise = sessionManager?.appendExecutionLog?.({
+        appendExecutionLog({
           userId,
           sessionId,
           parentSessionId,
@@ -67,7 +81,6 @@ export function createExecutionEventListener({
           data,
           ts,
         });
-        if (maybePromise?.catch) maybePromise.catch(() => {});
       } catch {
       }
 

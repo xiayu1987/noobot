@@ -65,6 +65,10 @@ import {
 import { isTurnRuntimeDeleted } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { finalizeDoneTurnPresentation } from "../runtime/engine/sessionFinalize.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
+import {
+  logStateMachineDebug,
+  summarizeStateMachineMessage,
+} from "../../debug/loggers/stateMachineLogger.js";
 import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationReplay.js";
 
 export function useReconnectReplay({
@@ -76,7 +80,6 @@ export function useReconnectReplay({
   chatWebSocketClient,
   appendMessage,
   findCanonicalMessageById,
-  upsertCanonicalAssistantMessage,
   makeViewMessage,
   foldMessagesForView,
   sessionTitleFromMessages,
@@ -165,7 +168,9 @@ export function useReconnectReplay({
     return applyTurnRuntimeEvents?.(sourceEvents);
   };
 
-  const applyWorkflowRuntimeEvent = (event, data = {}) => {
+  const applyWorkflowRuntimeEvent = (record = {}, { source = "reconnect" } = {}) => {
+    const event = String(record?.event || "");
+    const data = record?.data || {};
     sessionLogWebSocketClient?.log?.({
       category: "debug",
       level: "debug",
@@ -182,11 +187,7 @@ export function useReconnectReplay({
       },
     });
     if (typeof reduceWorkflowRuntimeEvent === "function") {
-      return reduceWorkflowRuntimeEvent({
-        event,
-        data,
-        transportSequence: Number(data?.transportSequence || data?.seq || 0),
-      }, { source: "reconnect" });
+      return reduceWorkflowRuntimeEvent(record, { source });
     }
     return { applied: false, reason: "workflow_runtime_projection_unavailable" };
   };
@@ -294,7 +295,11 @@ export function useReconnectReplay({
         : null;
       if (!messageEvent) continue;
       authoritativeEventCount += 1;
-      const result = applyWorkflowRuntimeEvent("workflow_message_event", messageEvent);
+      const result = applyWorkflowRuntimeEvent({
+        event: "workflow_message_event",
+        data: messageEvent,
+        transportSequence: Number(packet?.seq || 0),
+      }, { source: "reconnect" });
       if (result?.applied === true) appliedCount += 1;
     }
     sessionLogWebSocketClient?.log?.({
@@ -329,6 +334,7 @@ export function useReconnectReplay({
       applySubSessionReplayMessages,
       isDeletedTurn,
       hydrateActiveSessionBeforeReplay,
+      applyTurnLifecycleEnvelope,
       applyTurnLifecycleSnapshot,
     });
   }
@@ -336,6 +342,16 @@ export function useReconnectReplay({
   async function hydrateActiveSessionBeforeReplay(sessionId = "", currentRun = null) {
     const requestedSessionId = String(sessionId || "").trim();
     if (!requestedSessionId || !isCurrentActiveSession(requestedSessionId)) return false;
+    const presentationMessageId = String(currentRun?.presentationMessageId || "").trim();
+    logStateMachineDebug("stateMachine.reconnect.presentationHydration.before", () => ({
+      sessionId: requestedSessionId,
+      dialogProcessId: String(currentRun?.dialogProcessId || "").trim(),
+      turnScopeId: String(currentRun?.turnScopeId || "").trim(),
+      presentationMessageId,
+      messages: (Array.isArray(activeSession.value?.messages)
+        ? activeSession.value.messages
+        : []).map(summarizeStateMachineMessage),
+    }));
     const hydrated = await renderActiveSessionBeforeReplay({
       activeSession,
       activeSessionId,
@@ -351,19 +367,27 @@ export function useReconnectReplay({
       }),
     });
     if (!isCurrentActiveSession(requestedSessionId)) return false;
-    const presentationMessageId = String(currentRun?.presentationMessageId || "").trim();
-    if (!presentationMessageId) return hydrated;
-    const existing = findCanonicalMessageById?.(requestedSessionId, presentationMessageId);
-    if (!existing) {
-      upsertCanonicalAssistantMessage?.(presentationMessageId, {
-        sessionId: requestedSessionId,
-        dialogProcessId: String(currentRun?.dialogProcessId || "").trim(),
-        turnScopeId: String(currentRun?.turnScopeId || "").trim(),
-      });
-    }
-    return Boolean(
-      findCanonicalMessageById?.(requestedSessionId, presentationMessageId),
-    );
+    const presentationMessage = presentationMessageId
+      ? findCanonicalMessageById?.(requestedSessionId, presentationMessageId)
+      : null;
+    const protocolViolation = presentationMessageId && !presentationMessage
+      ? "presentation_missing"
+      : "";
+    logStateMachineDebug("stateMachine.reconnect.presentationHydration.after", () => ({
+      sessionId: requestedSessionId,
+      dialogProcessId: String(currentRun?.dialogProcessId || "").trim(),
+      turnScopeId: String(currentRun?.turnScopeId || "").trim(),
+      presentationMessageId,
+      detailHydrated: hydrated === true,
+      presentationHydratedFromDetail: Boolean(presentationMessage),
+      presentationMaterialized: Boolean(presentationMessage),
+      protocolViolation,
+      presentationMessage: summarizeStateMachineMessage(presentationMessage),
+      messages: (Array.isArray(activeSession.value?.messages)
+        ? activeSession.value.messages
+        : []).map(summarizeStateMachineMessage),
+    }));
+    return presentationMessageId ? Boolean(presentationMessage) : hydrated;
   }
 
   async function reconcileSessionState({
@@ -382,7 +406,6 @@ export function useReconnectReplay({
       }).catch(() => null);
       if (detail) {
         chatList.applySessionDetail(detail, {
-          preserveCurrentMessages: false,
           scrollToBottom: false,
         });
         detailApplied = true;
@@ -579,7 +602,6 @@ export function useReconnectReplay({
         }),
       applyRunStateEvent,
       refreshSessionConnectorsAsync,
-      preserveCurrentMessages: true,
       logSessionEvent: (payload) => sessionLogWebSocketClient?.log?.(payload),
       completionSource: "reconnectDone",
     });
@@ -670,7 +692,6 @@ export function useReconnectReplay({
       applyExecutionChildren,
       applyExecutionTree,
       applyWorkflowRuntimeEvent,
-      applySubSessionReplayMessages,
       finalizeDoneTurnPresentation: finalizeReconnectDoneSessionDetail,
       isDeletedTurn,
     });

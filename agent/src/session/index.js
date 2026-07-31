@@ -280,7 +280,32 @@ export function createSessionFacade(runtime = {}) {
     },
 
     async resolveTurnTerminalState(payload = {}) {
-      return sessionCrudService.resolveTurnTerminalState(payload);
+      const persistenceScope = payload?.persistenceScope && typeof payload.persistenceScope === "object"
+        ? payload.persistenceScope
+        : null;
+      if (persistenceScope) {
+        const allowedRoot = String(persistenceScope.allowedRoot || "").trim().replaceAll("\\", "/");
+        const scopeId = String(persistenceScope.scopeId || "").trim();
+        if (!allowedRoot.startsWith("runtime/") || !scopeId.startsWith("agent:")) {
+          throw new Error("terminal resolution requires an Agent-owned runtime persistence scope");
+        }
+      }
+      const persistenceContext = persistenceScope
+        ? this.createScopedPersistenceContext({
+            userId: payload.userId,
+            sessionId: payload.sessionId,
+            parentSessionId: persistenceScope.parentSessionId,
+            scopeId: persistenceScope.scopeId,
+            relativeDir: persistenceScope.relativeDir,
+            allowedRoot: persistenceScope.allowedRoot,
+          })
+        : null;
+      return sessionCrudService.resolveTurnTerminalState({
+        ...payload,
+        parentSessionId: persistenceScope?.parentSessionId || payload.parentSessionId || "",
+        persistenceScope,
+        persistenceContext,
+      });
     },
 
     async appendTurn(payload = {}) {

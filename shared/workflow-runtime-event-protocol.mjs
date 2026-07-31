@@ -7,6 +7,7 @@ import {
   isMessageEventEnvelope,
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
 } from "./message-event-protocol.mjs";
+import { canonicalizeTurnScopeId } from "./turn-scope-identity.mjs";
 
 export const WORKFLOW_RUNTIME_EVENT = Object.freeze({
   PLANNING: "workflow_planning_message_prepared",
@@ -27,6 +28,15 @@ export const WORKFLOW_RUNTIME_EVENT_PROTOCOL = "noobot.workflow_runtime_event";
 export const WORKFLOW_RUNTIME_EVENT_VERSION = 1;
 
 const text = (value) => String(value || "").trim();
+
+function canonicalizeTurnScopedRecord(item = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+  const turnScopeId = canonicalizeTurnScopeId(item?.turnScopeId);
+  return {
+    ...item,
+    ...(turnScopeId ? { turnScopeId } : {}),
+  };
+}
 
 function semanticEventName(record = {}, data = {}) {
   if (isMessageEventEnvelope(data)) return WORKFLOW_RUNTIME_EVENT.MESSAGE;
@@ -55,9 +65,22 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
   if (event === WORKFLOW_RUNTIME_EVENT.MESSAGE && !isMessageEventEnvelope(data)) {
     errors.push("invalid_message_envelope");
   }
+  if (event === WORKFLOW_RUNTIME_EVENT.PLANNING) {
+    if (!text(data?.sessionId)) errors.push("missing_planning_session");
+    if (!text(data?.turnScopeId)) errors.push("missing_planning_turn_scope");
+    if (!text(data?.presentationMessageId)) errors.push("missing_planning_presentation");
+    if (!text(data?.workflowRunId)) errors.push("missing_planning_workflow_run");
+    if (!Array.isArray(data?.nodeSessions) || !data.nodeSessions.length) {
+      errors.push("missing_planning_nodes");
+    }
+  }
   if (event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
     const sessionId = text(data?.sessionId || data?.id || data?.backendSessionId);
     if (!sessionId) errors.push("missing_snapshot_session");
+    const snapshotVersion = Number(data?.snapshotVersion || data?.sessionVersion || data?.revision || 0);
+    if (!Number.isInteger(snapshotVersion) || snapshotVersion <= 0) {
+      errors.push("invalid_snapshot_version");
+    }
     const messages = Array.isArray(data?.messages) ? data.messages : [];
     if (messages.some((message = {}) => !text(message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId))) {
       errors.push("missing_snapshot_message_identity");
@@ -66,20 +89,27 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
   const sequence = event === WORKFLOW_RUNTIME_EVENT.PLANNING
     ? 0
     : event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT
-      ? Number(data?.snapshotVersion || data?.sessionVersion || data?.revision || 1)
+      ? Number(data?.snapshotVersion || data?.sessionVersion || data?.revision || 0)
       : Number(data?.sequence || 0);
   if (![WORKFLOW_RUNTIME_EVENT.PLANNING, WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT].includes(event) && (!Number.isInteger(sequence) || sequence <= 0)) {
     errors.push("invalid_authoritative_sequence");
   }
   const canonicalData = {
-    ...data,
+    ...canonicalizeTurnScopedRecord(data),
     sequenceDomain,
     ...(event === WORKFLOW_RUNTIME_EVENT.PLANNING && Array.isArray(data?.nodeSessions)
       ? {
           nodeSessions: data.nodeSessions.map((node = {}) => ({
-            ...node,
+            ...canonicalizeTurnScopedRecord(node),
             sequenceDomain: text(node?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
           })),
+        }
+      : {}),
+    ...(event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT
+      ? {
+          turnStatuses: (Array.isArray(data?.turnStatuses) ? data.turnStatuses : []).map(canonicalizeTurnScopedRecord),
+          turnTimings: (Array.isArray(data?.turnTimings) ? data.turnTimings : []).map(canonicalizeTurnScopedRecord),
+          messages: (Array.isArray(data?.messages) ? data.messages : []).map(canonicalizeTurnScopedRecord),
         }
       : {}),
   };

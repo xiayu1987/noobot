@@ -13,6 +13,23 @@ import {
   workflowRuntimeEventComparable,
 } from "../workflow-runtime-event-protocol.mjs";
 
+test("canonicalizes every turn-scoped workflow snapshot fact", () => {
+  const normalized = normalizeWorkflowRuntimeEvent({
+    event: "workflow_session_snapshot_loaded",
+    data: {
+      sessionId: "child-session",
+      snapshotVersion: 1,
+      turnStatuses: [{ turnScopeId: "workflow-node_node-1", status: "completed" }],
+      turnTimings: [{ turnScopeId: "workflow-node_node-1", thinkingStartedAt: "2026-01-01T00:00:00.000Z" }],
+      messages: [{ id: "message-1", turnScopeId: "workflow-node_node-1" }],
+    },
+  });
+  assert.equal(normalized.valid, true);
+  assert.equal(normalized.data.turnStatuses[0].turnScopeId, "workflow-node:node-1");
+  assert.equal(normalized.data.turnTimings[0].turnScopeId, "workflow-node:node-1");
+  assert.equal(normalized.data.messages[0].turnScopeId, "workflow-node:node-1");
+});
+
 test("normalizes workflow node state without borrowing transport sequence", () => {
   const event = normalizeWorkflowRuntimeEvent({
     event: "workflow_node_state_committed",
@@ -39,11 +56,47 @@ test("rejects explicit cross-domain sequence declarations", () => {
 test("planning node facts receive node-state domain while planning stays unordered", () => {
   const event = normalizeWorkflowRuntimeEvent({
     event: "workflow_planning_message_prepared",
-    data: { workflowRunId: "run-1", nodeSessions: [{ nodeExecutionId: "node-1", sequence: 1 }] },
+    data: {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      presentationMessageId: "assistant-1",
+      workflowRunId: "run-1",
+      nodeSessions: [{ nodeExecutionId: "node-1", sequence: 1 }],
+    },
   });
+  assert.equal(event.valid, true);
   assert.equal(event.sequence, 0);
   assert.equal(event.sequenceDomain, WORKFLOW_SEQUENCE_DOMAIN.PLANNING);
   assert.equal(event.data.nodeSessions[0].sequenceDomain, WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE);
+});
+
+test("rejects planning events without authoritative presentation ownership", () => {
+  const event = normalizeWorkflowRuntimeEvent({
+    event: WORKFLOW_RUNTIME_EVENT.PLANNING,
+    data: { workflowRunId: "run-1", nodeSessions: [{ nodeExecutionId: "node-1" }] },
+  });
+  assert.deepEqual(event.errors, [
+    "missing_planning_session",
+    "missing_planning_turn_scope",
+    "missing_planning_presentation",
+  ]);
+});
+
+test("requires an authoritative version for workflow session snapshots", () => {
+  const missingVersion = normalizeWorkflowRuntimeEvent({
+    event: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
+    data: { sessionId: "node-session-1", messages: [] },
+  });
+  assert.equal(missingVersion.valid, false);
+  assert.deepEqual(missingVersion.errors, ["invalid_snapshot_version"]);
+  assert.equal(missingVersion.sequence, 0);
+
+  const versioned = normalizeWorkflowRuntimeEvent({
+    event: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
+    data: { sessionId: "node-session-1", snapshotVersion: 7, messages: [] },
+  });
+  assert.equal(versioned.valid, true);
+  assert.equal(versioned.sequence, 7);
 });
 
 test("events from different sequence domains are never comparable", () => {

@@ -8,6 +8,45 @@ import assert from "node:assert/strict";
 
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
 
+test("SessionExecutionFinalizer waits for execution event durability before reading the bundle", async () => {
+  const order = [];
+  const finalizer = new SessionExecutionFinalizer({
+    session: {
+      async saveCurrentTurnTasks() {},
+      async getExecutionBundle() {
+        order.push("bundle");
+        return { logs: [] };
+      },
+    },
+    turnPersister: {
+      buildDefaultAssistantTurn: () => ({ role: "assistant", type: "message", content: "done" }),
+      async appendAgentMessages() {},
+    },
+    resolveMemoryPostProcessAsyncEnabled: () => true,
+    runMemoryPostProcessFlow: async () => {},
+    upsertParentAsyncTask: () => {},
+  });
+
+  await finalizer.finalizeRunSession({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp1",
+    agentResult: { output: "done", turnTasks: [] },
+    lifecycle: {
+      enterPersisting: () => order.push("persisting"),
+      enterMemory: () => order.push("memory"),
+      complete: () => order.push("completed"),
+    },
+    runtimeEventListener: {
+      async flushPersistence() {
+        order.push("flush");
+      },
+    },
+  });
+
+  assert.deepEqual(order.slice(-3), ["completed", "flush", "bundle"]);
+});
+
 test("SessionExecutionFinalizer promotes semantic-transfer attachments as transfer envelopes without mirror", async () => {
   const appendedMessages = [];
   const finalizer = new SessionExecutionFinalizer({

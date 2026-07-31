@@ -6,6 +6,7 @@
 import { computed, ref } from "vue";
 import { vi } from "vitest";
 import { createTurnLifecycleEnvelope } from "@noobot/authoritative-state/contracts";
+import { createTurnReplacementCommit } from "@noobot/shared/turn-replacement-protocol";
 import { useChatEngine } from "../../../../../src/modules/chat/composables/useChatEngine.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
 import {
@@ -86,6 +87,36 @@ export const makeSession = (id, overrides = {}) => ({
   updatedAt: "",
   ...overrides,
 });
+
+export function makeTurnReplacementResponse({
+  commandId,
+  sessionId,
+  version,
+  replacedTurnScopeIds,
+  replacementUser,
+  messages = [replacementUser],
+  session = {},
+}) {
+  const committedSession = {
+    ...session,
+    sessionId,
+    version,
+    messages,
+  };
+  return {
+    ok: true,
+    session: committedSession,
+    turnReplacement: createTurnReplacementCommit({
+      commandId,
+      sessionId,
+      committedVersion: version,
+      replacedTurnScopeIds,
+      replacementTurnScopeId: replacementUser.turnScopeId,
+      replacementUserMessageId: replacementUser.messageId,
+      committedAt: "2026-07-31T00:00:00.000Z",
+    }),
+  };
+}
 
 export const makeMessage = (role, content = "", attachments = []) => ({
   role,

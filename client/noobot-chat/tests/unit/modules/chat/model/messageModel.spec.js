@@ -656,6 +656,42 @@ describe("messageModel execution logs", () => {
     ]);
   });
 
+  it("folds a pending shell and persisted fragment with one presentation identity", () => {
+    const messages = foldConversationMessages([
+      {
+        messageId: "msg-chat-running",
+        presentationMessageId: "msg-chat-running",
+        role: "assistant",
+        type: "message",
+        content: "",
+        pending: true,
+        turnScopeId: "client-turn:running",
+      },
+      {
+        messageId: "msg-model-tool-call",
+        presentationMessageId: "msg-chat-running",
+        role: "assistant",
+        type: "tool_call",
+        content: "",
+        pending: false,
+        turnScopeId: "client-turn:running",
+        tool_calls: [{ id: "tool-call-1", name: "write_file" }],
+      },
+    ], buildViewMessage);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "msg-chat-running",
+      messageId: "msg-chat-running",
+      presentationMessageId: "msg-chat-running",
+      pending: true,
+      turnScopeId: "client-turn:running",
+    });
+    expect(messages[0].tool_calls).toEqual([
+      expect.objectContaining({ id: "tool-call-1", name: "write_file" }),
+    ]);
+  });
+
   it("keeps summary thinking entry fields when merging assistant messages", () => {
     const messages = foldConversationMessages([
       {
