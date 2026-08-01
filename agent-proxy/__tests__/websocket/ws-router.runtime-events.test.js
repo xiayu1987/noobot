@@ -51,6 +51,7 @@ function createForwardingChannelManager({
     forward: [],
     errors: [],
     events: [],
+    lifecycleReceipts: [],
   };
   return {
     WebSocket: { OPEN: 1 },
@@ -74,8 +75,31 @@ function createForwardingChannelManager({
       calls.events.push({ socket, envelope });
       return { result: 'sent', reason: '' };
     },
+    acknowledgeTurnLifecycleDelivery(socket, payload) {
+      calls.lifecycleReceipts.push({ socket, payload });
+      return { acknowledged: true, reason: '' };
+    },
   };
 }
+
+test('ws router settles lifecycle receipts at the downstream transport boundary', () => {
+  const channelManager = createForwardingChannelManager();
+  const socket = createMockSocket();
+  const payload = {
+    action: 'turn.lifecycle.received',
+    protocolVersion: 1,
+    eventId: 'event-1',
+    sessionId: 'session-1',
+    turnScopeId: 'turn-1',
+  };
+
+  new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
+  socket.emit(CHANNEL_EVENT.MESSAGE, JSON.stringify(payload));
+
+  assert.deepEqual(channelManager.calls.lifecycleReceipts, [{ socket, payload }]);
+  assert.equal(channelManager.calls.resolve.length, 0);
+  assert.equal(channelManager.calls.forward.length, 0);
+});
 
 test('ws router forwards execution queries by authoritative commandType', () => {
   const targetChannel = { key: 'channel-1', pendingExecutionRequests: new Map() };

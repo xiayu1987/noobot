@@ -82,7 +82,14 @@ test("broadcast event order should be identical across same-channel clients", ()
     { event: "delta", data: { sessionId: "session-1", dialogProcessId: "dp-1", seq: 2, text: "A" } },
     {
       event: "interaction_request",
-      data: { sessionId: "session-1", dialogProcessId: "dp-1", seq: 3, requestId: "req-1" },
+      data: {
+        sessionId: "session-1",
+        dialogProcessId: "dp-1",
+        turnScopeId: "turn-1",
+        seq: 3,
+        requestId: "req-1",
+        content: "confirm",
+      },
     },
     { event: "delta", data: { sessionId: "session-1", dialogProcessId: "dp-1", seq: 4, text: "B" } },
     { event: "done", data: { sessionId: "session-1", dialogProcessId: "dp-1", seq: 5 } },
@@ -95,6 +102,9 @@ test("broadcast event order should be identical across same-channel clients", ()
 
   const businessEventsA = clientA.sentEvents.filter((item) => item?.event !== "channel_state");
   const businessEventsB = clientB.sentEvents.filter((item) => item?.event !== "channel_state");
+  // All five events are valid transport events.  interaction_request is no
+  // longer silently dropped: it is validated and broadcast after its pending
+  // interaction record is registered.
   assert.equal(businessEventsA.length, eventSpecs.length);
   assert.equal(businessEventsB.length, eventSpecs.length);
   assert.deepEqual(clientA.sentEvents, clientB.sentEvents);

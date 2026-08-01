@@ -6,7 +6,6 @@
 import {
   buildNormalizedDetailMessages,
   buildTurnStatusesByTurnScopeId,
-  buildTurnTimingsByTurnScopeId,
 } from "./detailMessages.js";
 
 export function buildSessionDetailProjection({
@@ -14,8 +13,6 @@ export function buildSessionDetailProjection({
   sessionDocs = [],
   makeViewMessage,
   foldMessagesForView = null,
-  currentTimingsByTurnScopeId = {},
-  onTimingHydrated = null,
 } = {}) {
   const summary = sessionDetail?.sessionSummary && typeof sessionDetail.sessionSummary === "object"
     ? sessionDetail.sessionSummary
@@ -50,10 +47,5 @@ export function buildSessionDetailProjection({
     turnStatuses,
     turnTimings,
     turnStatusesByTurnScopeId: buildTurnStatusesByTurnScopeId({ turnStatuses }),
-    turnTimingsByTurnScopeId: buildTurnTimingsByTurnScopeId({
-      turnTimings,
-      currentTimingsByTurnScopeId,
-      onTimingHydrated,
-    }),
   };
 }

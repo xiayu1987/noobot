@@ -186,6 +186,16 @@ watch(
     ),
     messageCount: props.displayNodeMessages.length,
     runningMessageCount: props.displayNodeMessages.filter((message = {}) => message?.pending === true).length,
+    messages: props.displayNodeMessages.map((message = {}) => ({
+      messageId: String(message?.presentationMessageId || message?.messageId || message?.id || ""),
+      role: String(message?.role || ""),
+      turnScopeId: String(message?.turnScopeId || ""),
+      dialogProcessId: String(message?.dialogProcessId || ""),
+      pending: message?.pending === true,
+      channelState: String(message?.channelState?.state || message?.channelState || ""),
+      status: String(message?.status || message?.state || ""),
+      contentLength: String(message?.content || "").length,
+    })),
     timingCount: props.displayNodeMessages.reduce(
       (count, message = {}) => count + (Array.isArray(message?.turnTimings || message?.timings)
         ? (message.turnTimings || message.timings).length
@@ -200,6 +210,11 @@ watch(
     projectedTimingTurnScopeIds: Object.keys(props.turnTimingsByTurnScopeId || {}),
     projectedStatusCount: Object.keys(props.turnStatusesByTurnScopeId || {}).length,
     projectedStatusTurnScopeIds: Object.keys(props.turnStatusesByTurnScopeId || {}),
+    projectedStatuses: Object.entries(props.turnStatusesByTurnScopeId || {}).map(([turnScopeId, status = {}]) => ({
+      turnScopeId,
+      status: String(status?.status || status?.state || ""),
+      dialogProcessId: String(status?.dialogProcessId || ""),
+    })),
   }),
   (renderState) => {
     if (!renderState.visible) return;

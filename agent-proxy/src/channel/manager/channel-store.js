@@ -71,6 +71,22 @@ function latestLifecycleEntry(channels = [], sessionId = "") {
     .at(-1) || null;
 }
 
+function validateInteractionRequest(data = {}) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { valid: false, reason: "payload_not_object", missing: [] };
+  }
+  const required = ["requestId", "sessionId", "dialogProcessId", "turnScopeId"];
+  const missing = required.filter((key) => !String(data[key] || "").trim());
+  const hasPayload =
+    typeof data.content === "string" ||
+    Array.isArray(data.fields) ||
+    Boolean(String(data.interactionType || "").trim()) ||
+    (data.interactionData && typeof data.interactionData === "object" && !Array.isArray(data.interactionData));
+  if (missing.length) return { valid: false, reason: "missing_identity", missing };
+  if (!hasPayload) return { valid: false, reason: "missing_payload", missing: [] };
+  return { valid: true, reason: "", missing: [] };
+}
+
 class ChannelStoreMethods {
 
 ensureChannel(channelKey = "", startPayload = {}) {
@@ -191,9 +207,30 @@ get channelCount() {
 
 pushChannelEvent(channel, eventName = "", data = {}) {
   if (!channel) return null;
+  const normalizedEventName = String(eventName || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE;
+  if (normalizedEventName === CHANNEL_EVENT.INTERACTION_REQUEST) {
+    const validation = validateInteractionRequest(data);
+    const requestId = String(data?.requestId || "").trim();
+    if (!validation.valid || channel.pendingInteractionRequests.has(requestId) || this.requestChannelMap.has(requestId)) {
+      this.logSessionEvent(channel, {
+        category: "interaction",
+        level: "warn",
+        event: "agentProxy.interaction.rejected",
+        sessionId: data?.sessionId,
+        dialogProcessId: data?.dialogProcessId,
+        turnScopeId: data?.turnScopeId,
+        data: {
+          requestId,
+          reason: validation.valid ? "duplicate_request_id" : validation.reason,
+          missing: validation.missing,
+        },
+      });
+      return null;
+    }
+  }
   channel.updatedAtMs = nowMs();
   const envelope = channel.eventJournal.append(
-    String(eventName || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE,
+    normalizedEventName,
     data,
   );
   if (envelope.event === CHANNEL_EVENT.TURN_LIFECYCLE) {
@@ -202,12 +239,21 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   this.recordSuccessfulDataPlaneOperation("channelEvents");
   if (String(envelope.event || "") === CHANNEL_EVENT.INTERACTION_REQUEST) {
     const requestId = String(envelope?.data?.requestId || "").trim();
-    if (requestId) {
-      this.commandRegistry.registerRoute(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
-      channel.pendingInteractionRequests.set(requestId, envelope);
-    }
+    this.commandRegistry.registerRoute(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
+    channel.pendingInteractionRequests.set(requestId, envelope);
+    this.updateConversationState(channel, {
+      dialogProcessId: envelope.data.dialogProcessId,
+      turnScopeId: envelope.data.turnScopeId,
+      state: CONVERSATION_STATE.INTERACTION_PENDING,
+      sourceEvent: CHANNEL_EVENT.INTERACTION_REQUEST,
+      seq: Number(envelope.data.seq || envelope.sequence || 0),
+      sessionId: envelope.data.sessionId,
+      requestId,
+    });
   }
-  this._applyConversationStateFromEnvelope(channel, envelope);
+  if (envelope.event === CHANNEL_EVENT.TURN_LIFECYCLE) {
+    this._applyAuthoritativeConversationState(channel, envelope.data);
+  }
   return envelope;
 }
 
@@ -356,16 +402,15 @@ updateConversationState(
   return stateItem;
 }
 
-_applyConversationStateFromEnvelope(channel, envelope = {}) {
-  if (!channel || !envelope) return;
-  const eventName = String(envelope?.event || "").trim();
-  const eventData = envelope?.data || {};
+_applyAuthoritativeConversationState(channel, eventData = {}) {
+  if (!channel || !isAuthoritativeTurnLifecycleEnvelope(eventData)) return;
+  const eventName = String(eventData?.eventType || "").trim();
   const dialogProcessId = String(eventData?.dialogProcessId || "").trim();
   const turnScopeId = String(
     eventData?.turnScopeId || channel?.startPayload?.turnScopeId || "",
   ).trim();
   const sessionId = String(eventData?.sessionId || "").trim();
-  const seq = Number(eventData?.seq || envelope?.sequence || 0);
+  const seq = Number(eventData?.sequence || 0);
   const createdAtMs = Number(
     eventData?.createdAtMs ||
       eventData?.timestamp ||
@@ -373,19 +418,22 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
       0,
   );
   let nextState = "";
-  if (eventName === CHANNEL_EVENT.THINKING || eventName === CHANNEL_EVENT.DELTA) {
+  const lifecycleState = String(eventData?.state || "").trim();
+  if ([TURN_STATE.PROCESSING, TURN_STATE.COMPLETION_REQUESTING].includes(lifecycleState)) {
     nextState = CONVERSATION_STATE.SENDING;
-  } else if (eventName === CHANNEL_EVENT.INTERACTION_REQUEST) {
-    nextState = CONVERSATION_STATE.INTERACTION_PENDING;
-  } else if (eventName === CHANNEL_EVENT.DONE) {
-    nextState = CONVERSATION_STATE.COMPLETED;
-  } else if (eventName === CHANNEL_EVENT.USER_STOPPED) {
-    nextState = CONVERSATION_STATE.USER_STOPPED;
-  } else if (eventName === CHANNEL_EVENT.ERROR) {
-    if (!String(eventData?.turnScopeId || "").trim() && !String(eventData?.dialogProcessId || "").trim()) {
-      return;
-    }
-    nextState = CONVERSATION_STATE.ERROR;
+  } else if (lifecycleState === TURN_STATE.STOPPING) {
+    nextState = CONVERSATION_STATE.STOPPING;
+  } else if (TERMINAL_TURN_EVENTS.has(eventName) || TERMINAL_TURN_STATES.has(lifecycleState)) {
+    nextState = [
+      TURN_STATE.ACTION_FAILED,
+      TURN_STATE.PROCESSING_FAILED,
+      TURN_STATE.COMPLETION_FAILED,
+      TURN_STATE.STOP_FAILED,
+    ].includes(lifecycleState)
+      ? CONVERSATION_STATE.ERROR
+      : lifecycleState === TURN_STATE.STOP_COMPLETED || eventName === TURN_EVENT.STOP_COMPLETED
+        ? CONVERSATION_STATE.USER_STOPPED
+        : CONVERSATION_STATE.COMPLETED;
   }
   if (!nextState) return;
   if ([CONVERSATION_STATE.SENDING, CONVERSATION_STATE.INTERACTION_PENDING].includes(nextState)) {
@@ -412,6 +460,7 @@ _applyConversationStateFromEnvelope(channel, envelope = {}) {
     createdAtMs,
     sessionId,
     requestId: String(eventData?.requestId || "").trim(),
+    broadcast: false,
   });
 }
 

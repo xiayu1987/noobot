@@ -60,6 +60,33 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
   assert.equal(result.content, "outside\ncontent");
 });
 
+test("read_file: 越界错误不暴露宿主 allowedRoots", async () => {
+  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-scope-error-"));
+  const workspacePath = path.join(rootPath, "workspace");
+  const outsidePath = path.join(rootPath, "outside.txt");
+  await fs.mkdir(workspacePath, { recursive: true });
+  await fs.writeFile(outsidePath, "outside\n", "utf8");
+
+  const tools = createFileTool({
+    agentContext: buildAgentContext(workspacePath, "user", {
+      runtime: { globalConfig: { superAdmin: { userId: "admin" } } },
+    }),
+  });
+  const readTool = tools.find((item) => item?.name === "read_file");
+  assert.ok(readTool);
+
+  await assert.rejects(
+    () => readTool.invoke({ riskLevel: "low", filePath: outsidePath, includeLineNumbers: false }),
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+      assert.equal(error.details?.scope, "workspace");
+      assert.equal(error.details?.allowedRoots, undefined);
+      assert.equal(JSON.stringify(error).includes(rootPath), false);
+      return true;
+    },
+  );
+});
+
 test("read_file: 相对路径优先基于 directories.rootDirectory", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-root-directory-"));
   const repoPath = path.join(workspacePath, "noobot");
@@ -130,4 +157,3 @@ test("read_file: 非沙箱兼容 /project 前缀到 directories.rootDirectory", 
   assert.equal(result.ok, true);
   assert.equal(result.content, "navigator");
 });
-

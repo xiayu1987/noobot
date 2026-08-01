@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 function loadFileConfig() {
   try {
@@ -165,6 +166,18 @@ export const config = {
     "reconnectSnapshotTimeoutMs",
     TIME_THRESHOLDS.agentProxy.reconnectSnapshotTimeoutMs,
     1000,
+  ),
+  turnLifecycleReceiptTimeoutMs: envTimeMs(
+    "AGENT_PROXY_TURN_LIFECYCLE_RECEIPT_TIMEOUT_MS",
+    "turnLifecycleReceiptTimeoutMs",
+    TIME_THRESHOLDS.agentProxy.turnLifecycleReceiptTimeoutMs,
+    100,
+  ),
+  turnLifecycleDeliveryMaxAttempts: envNumber(
+    "AGENT_PROXY_TURN_LIFECYCLE_DELIVERY_MAX_ATTEMPTS",
+    "turnLifecycleDeliveryMaxAttempts",
+    TURN_THRESHOLDS.transport.turnLifecycleDeliveryMaxAttempts,
+    1,
   ),
   httpUpstreamTimeoutMs: envTimeMs(
     "AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS",

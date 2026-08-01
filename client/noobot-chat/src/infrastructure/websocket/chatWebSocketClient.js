@@ -7,6 +7,11 @@ import { StreamEventEnum } from "../../modules/chat/model/chatConstants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervisor.js";
 import { logWorkflowDiagnostics } from "../../modules/debug/loggers/workflowDiagnosticsLogger.js";
+import {
+  createTurnLifecycleReceipt,
+  TURN_LIFECYCLE_WIRE_EVENT,
+  validateTurnLifecycleEnvelope,
+} from "@noobot/authoritative-state/contracts";
 
 import { createReconnectCursorStore } from "./chatWebSocketReconnectCursor.js";
 import { createWebSocketCommandRequests } from "./chatWebSocketCommandRequests.js";
@@ -95,23 +100,65 @@ export function createChatWebSocketClient({
     return transport.current();
   }
 
+  function acknowledgeTurnLifecycleReceipt(ws, event, data = {}) {
+    if (event !== TURN_LIFECYCLE_WIRE_EVENT) return;
+    const validation = validateTurnLifecycleEnvelope(data);
+    if (!validation.valid) {
+      logWorkflowDiagnostics("frontend.websocket.lifecycleReceiptRejected", () => ({
+        sessionId: normalizeTrimmedString(data?.sessionId),
+        dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
+        turnScopeId: normalizeTrimmedString(data?.turnScopeId),
+        eventId: normalizeTrimmedString(data?.eventId),
+        reasons: validation.errors,
+      }));
+      return;
+    }
+    try {
+      ws.send(JSON.stringify(createTurnLifecycleReceipt(data)));
+    } catch (error) {
+      logWorkflowDiagnostics("frontend.websocket.lifecycleReceiptSendFailed", () => ({
+        sessionId: normalizeTrimmedString(data?.sessionId),
+        dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
+        turnScopeId: normalizeTrimmedString(data?.turnScopeId),
+        eventId: normalizeTrimmedString(data?.eventId),
+        errorType: normalizeTrimmedString(error?.name || "Error"),
+        errorMessage: normalizeTrimmedString(error?.message),
+      }));
+    }
+  }
+
+  function resolveAuthoritativeSequence(event, data = {}) {
+    return Number(
+      event === TURN_LIFECYCLE_WIRE_EVENT
+        ? data?.sequence
+        : data?.event?.sequence,
+    ) || null;
+  }
+
   function attachTransportHandlers(ws) {
     if (!ws) return null;
     registerSocketHandlers(ws, "transport", {
       open: () => transport.markOpen(ws),
       message: (messageEvent) => {
+        let parsedEvent = "";
+        let parsedData = {};
         try {
           const parsed = JSON.parse(String(messageEvent?.data || "{}"));
           const event = String(parsed?.event || "message");
           const data = parsed?.data || {};
+          parsedEvent = event;
+          parsedData = data;
           const hasLiveSubscriber = typeof liveEventSubscriber === "function";
           logWorkflowDiagnostics("frontend.websocket.transportEventReceived", () => ({
             sessionId: normalizeTrimmedString(data?.sessionId),
             dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
             turnScopeId: normalizeTrimmedString(data?.turnScopeId),
             protocolEvent: event,
+            eventId: normalizeTrimmedString(data?.eventId || data?.event?.eventId),
+            eventType: normalizeTrimmedString(data?.eventType || data?.event?.eventType),
+            parentSessionId: normalizeTrimmedString(data?.parentSessionId || data?.event?.parentSessionId),
             transportSequence: Number(data?.seq || 0) || null,
-            authoritativeSequence: Number(data?.event?.sequence || 0) || null,
+            authoritativeSequence: resolveAuthoritativeSequence(event, data),
             reconnecting,
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,
@@ -125,25 +172,64 @@ export function createChatWebSocketClient({
             removeLastReceivedSeq(data?.dialogProcessId);
           }
           commandRequests.settle(event, data);
-          if (
+          const dispatchEligible = Boolean(
             !reconnecting &&
             !activeStreamContext &&
             hasLiveSubscriber &&
             event !== StreamEventEnum.RECONNECT_DATA &&
             event !== StreamEventEnum.RECONNECT_COMPLETE
-          ) {
+          );
+          if (event === TURN_LIFECYCLE_WIRE_EVENT) {
+            logWorkflowDiagnostics("frontend.websocket.lifecycleDispatchEvaluated", () => ({
+              sessionId: normalizeTrimmedString(data?.sessionId),
+              parentSessionId: normalizeTrimmedString(data?.parentSessionId),
+              dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
+              turnScopeId: normalizeTrimmedString(data?.turnScopeId),
+              eventId: normalizeTrimmedString(data?.eventId),
+              eventType: normalizeTrimmedString(data?.eventType),
+              transportSequence: Number(data?.seq || 0) || null,
+              authoritativeSequence: Number(data?.sequence || 0) || null,
+              reconnecting,
+              activeStream: Boolean(activeStreamContext),
+              hasLiveSubscriber,
+              dispatchEligible,
+              owner: dispatchEligible
+                ? "transport_live_subscriber"
+                : reconnecting
+                  ? "reconnect_handler"
+                  : activeStreamContext
+                    ? "stream_handler"
+                    : "unowned",
+            }));
+          }
+          if (dispatchEligible) {
             liveEventSubscriber({ event, data });
+            acknowledgeTurnLifecycleReceipt(ws, event, data);
             logWorkflowDiagnostics("frontend.websocket.liveEventDispatched", () => ({
               sessionId: normalizeTrimmedString(data?.sessionId),
               dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
               turnScopeId: normalizeTrimmedString(data?.turnScopeId),
               protocolEvent: event,
               transportSequence: Number(data?.seq || 0) || null,
-              authoritativeSequence: Number(data?.event?.sequence || 0) || null,
+              authoritativeSequence: resolveAuthoritativeSequence(event, data),
               route: "transport_live_subscriber",
             }));
           }
-        } catch {}
+        } catch (error) {
+          logWorkflowDiagnostics("frontend.websocket.transportEventRejected", () => ({
+            sessionId: normalizeTrimmedString(parsedData?.sessionId),
+            parentSessionId: normalizeTrimmedString(parsedData?.parentSessionId),
+            dialogProcessId: normalizeTrimmedString(parsedData?.dialogProcessId),
+            turnScopeId: normalizeTrimmedString(parsedData?.turnScopeId),
+            protocolEvent: parsedEvent,
+            eventId: normalizeTrimmedString(parsedData?.eventId),
+            eventType: normalizeTrimmedString(parsedData?.eventType),
+            errorType: normalizeTrimmedString(error?.name || "Error"),
+            errorMessage: normalizeTrimmedString(error?.message),
+            reconnecting,
+            activeStream: Boolean(activeStreamContext),
+          }));
+        }
       },
       error: () => closeFailedSocket(ws),
       close: () => cleanupSocketRef(ws),
@@ -352,6 +438,7 @@ export function createChatWebSocketClient({
               }
             }
             onEvent({ event, data });
+            acknowledgeTurnLifecycleReceipt(streamSocket, event, data);
             const eventMatchesCurrentStream = isEventForStreamScope(data, payload);
             const eventCanSettleCurrentStream = canSettleStreamForEvent(data, payload);
             if (event === StreamEventEnum.ERROR && eventMatchesCurrentStream) {
@@ -527,6 +614,7 @@ export function createChatWebSocketClient({
 
           if (!activeStreamContext) {
             onReconnectData({ event, data });
+            acknowledgeTurnLifecycleReceipt(ws, event, data);
             logWorkflowDiagnostics("frontend.websocket.liveEventDispatched", () => ({
               sessionId: normalizeTrimmedString(data?.sessionId),
               dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),

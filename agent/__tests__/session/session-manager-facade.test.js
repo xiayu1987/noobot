@@ -149,6 +149,76 @@ test("createSessionFacade preserves scoped execution bundle fields", async () =>
   });
 });
 
+test("createSessionFacade resolves authority outbox access from the protocol persistence scope", async () => {
+  const calls = [];
+  const contexts = [];
+  const persistenceScope = {
+    scopeId: "agent:workflow-node-1",
+    parentSessionId: "root-session",
+    relativeDir: "runtime/workflow/session/root-session/workflow-node-1",
+    allowedRoot: "runtime/workflow/session",
+  };
+  const runtime = {
+    sessionTreeService: {},
+    sessionCrudService: {},
+    sessionMessageService: Object.fromEntries(
+      ["getPendingAuthorityEvents", "recordAuthorityEventAttempt", "acknowledgeAuthorityEvent", "compactAuthorityEvents"]
+        .map((method) => [method, async (payload) => {
+          calls.push({ method, payload });
+          return { ok: true };
+        }]),
+    ),
+    sessionContextService: {},
+    taskService: {},
+    executionLogService: {},
+    createScopedPersistenceContext(payload) {
+      contexts.push(payload);
+      return Object.freeze({ kind: "test-scope", locationResolver: {} });
+    },
+  };
+  const session = createSessionFacade(runtime);
+  const identity = {
+    userId: "u1",
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+    persistenceScope,
+  };
+
+  await session.getPendingAuthorityEvents(identity);
+  await session.recordAuthorityEventAttempt({ ...identity, eventId: "event-1" });
+  await session.acknowledgeAuthorityEvent({ ...identity, eventId: "event-1" });
+  await session.compactAuthorityEvents({ ...identity, deliveredThroughSequence: 4 });
+
+  assert.equal(calls.length, 4);
+  assert.equal(contexts.length, 4);
+  for (const { payload } of calls) {
+    assert.equal(payload.persistenceScope, persistenceScope);
+    assert.equal(payload.parentSessionId, "root-session");
+    assert.equal(payload.persistenceContext.kind, "test-scope");
+  }
+  assert.deepEqual(contexts[0], {
+    userId: "u1",
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+    scopeId: "agent:workflow-node-1",
+    relativeDir: "runtime/workflow/session/root-session/workflow-node-1",
+    allowedRoot: "runtime/workflow/session",
+  });
+  await expectAuthorityScopeConflict(session, persistenceScope);
+});
+
+async function expectAuthorityScopeConflict(session, persistenceScope) {
+  await assert.rejects(
+    () => session.getPendingAuthorityEvents({
+      userId: "u1",
+      sessionId: "child-session",
+      parentSessionId: "different-root",
+      persistenceScope,
+    }),
+    /parent does not match its authority protocol scope/,
+  );
+}
+
 test("createSessionFacade should delegate CRUD and connector methods to sessionCrudService", async () => {
   const captured = [];
   const session = createSessionFacade({

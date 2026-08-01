@@ -65,21 +65,6 @@ export function createChatEngineConversationState({
   const missingInteractionPayloadTimers = new Map();
   const connectorConnectedAckedRequestIds = new Set();
 
-  function finishTurnTiming(targetMessage, value = nowIso()) {
-    const turnScopeId = getMessageTurnScopeId(targetMessage);
-    const sessionItem = activeSession?.value;
-    if (!turnScopeId || !sessionItem) return;
-    const timings = sessionItem.turnTimingsByTurnScopeId || {};
-    const current = timings[turnScopeId] || {};
-    sessionItem.turnTimingsByTurnScopeId = {
-      ...timings,
-      [turnScopeId]: {
-        ...current,
-        thinkingFinishedAt: current.thinkingFinishedAt || value,
-      },
-    };
-  }
-
   function tryAutoResolveInteraction(rawRequest = {}) {
     const request = normalizeInteractionRequestPayload(rawRequest || {});
     if (!isAutoResolvedInteraction(request)) {

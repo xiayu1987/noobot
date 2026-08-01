@@ -29,15 +29,6 @@ export function normalizeStatusStepDisplayState(value = "") {
   return STATUS_STEP_DISPLAY_STATES.has(normalized) ? normalized : "";
 }
 
-function statusStepDisplayStateFromPersisted(value = "") {
-  const normalized = text(value).toLowerCase();
-  if (["user_stopped", "stopped"].includes(normalized)) return "stopped";
-  if (["error", "failed", "expired"].includes(normalized)) return "error";
-  return ["requesting", "sending", "completing", "stopping"].includes(normalized)
-    ? normalized
-    : "";
-}
-
 
 
 
@@ -47,7 +38,7 @@ export function resolveStatusStepPresentation({
   turnRuntime = null,
   runtimeDisplayState = "",
   projectedState = "",
-  persistedState = "",
+  persistedState: _persistedState = "",
 } = {}) {
   const projectedDisplayState = normalizeStatusStepDisplayState(projectedState);
   if (turnRuntime) {
@@ -71,10 +62,7 @@ export function resolveStatusStepPresentation({
   if (projectedDisplayState) {
     return { displayState: projectedDisplayState, source: "child-execution-projection" };
   }
-  const persistedDisplayState = statusStepDisplayStateFromPersisted(persistedState);
-  return persistedDisplayState
-    ? { displayState: persistedDisplayState, source: "persisted-fallback" }
-    : { displayState: "", source: "" };
+  return { displayState: "", source: "" };
 }
 
 function mergeProjectedStatusStepState(previousState = "", currentState = "") {

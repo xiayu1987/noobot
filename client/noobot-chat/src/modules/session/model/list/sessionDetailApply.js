@@ -23,7 +23,6 @@ import {
   logResendDebug,
   summarizeDebugMessages,
 } from "../../../debug/loggers/resendDebugLogger.js";
-import { logReconnectTimingDebug } from "../../../debug/loggers/reconnectTimingDebugLogger.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import {
   logWorkflowDiagnostics,
@@ -40,6 +39,7 @@ export function createSessionDetailApplicator({
   sessions,
   activeSessionId,
   turnRuntimeRegistry,
+  chatStore,
   makeViewMessage,
   sessionTitleFromMessages,
   navigateToLastMessage,
@@ -159,32 +159,15 @@ export function createSessionDetailApplicator({
     if (hasMessageSnapshot) {
       sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
     }
-    const currentTurnTimings = sessionItem.turnTimingsByTurnScopeId || {};
     const detailProjection = buildSessionDetailProjection({
       sessionDetail: canonicalDetail,
       sessionDocs,
       makeViewMessage,
-      currentTimingsByTurnScopeId: currentTurnTimings,
-      onTimingHydrated: ({ item, matchingMessage, turnScopeId, current, timing }) => {
-          const timingDialogProcessId = getMessageDialogProcessId(item);
-          logReconnectTimingDebug("frontend.reconnectTiming.timingHydrated", () => ({
-            sessionId: detail.sessionId,
-            dialogProcessId: timingDialogProcessId,
-            timingTurnScopeId: getMessageTurnScopeId(item),
-            matchingMessageTurnScopeId: getMessageTurnScopeId(matchingMessage),
-            resolvedTurnScopeId: turnScopeId,
-            timingMapKeys: Object.keys(currentTurnTimings),
-            detailThinkingStartedAt: item?.thinkingStartedAt || null,
-            detailThinkingFinishedAt: item?.thinkingFinishedAt || null,
-            previousThinkingStartedAt: current.thinkingStartedAt || null,
-            previousThinkingFinishedAt: current.thinkingFinishedAt || null,
-            hydratedThinkingStartedAt: timing.thinkingStartedAt,
-            hydratedThinkingFinishedAt: timing.thinkingFinishedAt,
-            retained: Boolean(turnScopeId),
-          }));
-      },
     });
-    sessionItem.turnTimingsByTurnScopeId = detailProjection.turnTimingsByTurnScopeId;
+    chatStore?.applyTurnTimingSnapshot?.({
+      sessionId: detailSessionId,
+      turnTimings,
+    });
     logResendDebug("detail.apply.mode", () => ({
       sessionId: detail.sessionId,
       applyMode,

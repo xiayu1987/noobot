@@ -58,14 +58,14 @@ export function createExecutionEventListener({
 
       if (event === "llm_delta" || INTERNAL_TRANSPORT_EVENTS.has(event)) {
         try {
-          upstream?.onEvent?.({
+          return upstream?.onEvent?.({
             event,
             data: enrichEventData(data, defaults),
             ts,
           });
         } catch {
+          return undefined;
         }
-        return;
       }
 
       const { category, type } = classifyExecutionEvent(event);

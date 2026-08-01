@@ -19,7 +19,7 @@ export function getTurnUiState(value = {}) {
     states[key] = reactive({
       thinkingOpenNames: [],
       assistantContentExpanded: null,
-      expandedDetailLogKeys: [],
+      expandedToolDetailKeys: [],
       selectedToolKey: "",
       scrollTop: 0,
       animationKeys: [],
@@ -41,10 +41,15 @@ export function setTurnAssistantContentExpanded(value = {}, expanded = false) {
 export function toggleTurnDetailKey(value = {}, detailKey = "") {
   const state = getTurnUiState(value);
   if (!state || !detailKey) return false;
-  state.expandedDetailLogKeys = state.expandedDetailLogKeys.includes(detailKey)
-    ? state.expandedDetailLogKeys.filter((key) => key !== detailKey)
-    : [...state.expandedDetailLogKeys, detailKey];
-  return state.expandedDetailLogKeys.includes(detailKey);
+  state.expandedToolDetailKeys = state.expandedToolDetailKeys.includes(detailKey)
+    ? state.expandedToolDetailKeys.filter((key) => key !== detailKey)
+    : [...state.expandedToolDetailKeys, detailKey];
+  return state.expandedToolDetailKeys.includes(detailKey);
+}
+
+export function isTurnDetailExpanded(value = {}, detailKey = "") {
+  if (!detailKey) return false;
+  return getTurnUiState(value)?.expandedToolDetailKeys.includes(detailKey) === true;
 }
 
 export function clearTurnUiState(value = {}) {

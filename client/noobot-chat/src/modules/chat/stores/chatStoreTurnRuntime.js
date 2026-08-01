@@ -5,17 +5,27 @@
  */
 import {
   applyExecutionChildren, applyExecutionSnapshot, applyExecutionTree,
-  applyTurnLifecycleEnvelope, applyTurnLifecycleSnapshot, applyTurnTimingSnapshot,
+  applyTurnLifecycleEnvelope, applyTurnLifecycleSnapshot, applyTurnTimingSnapshot, applyTurnTimingUpdate,
   applyTurnTerminalResolution, applyTurnRuntimeEvent, createTurnRuntimeRegistryState,
   pruneTerminalTurns,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 
-export function createTurnRuntimeStoreActions(turnRuntimeRegistry) {
+export function createTurnRuntimeStoreActions(
+  turnRuntimeRegistry,
+  { onTurnCommitted = null, onTurnEvaluated = null } = {},
+) {
   function commitTurnRuntime(reducer, ...args) {
     const registry = turnRuntimeRegistry.value || createTurnRuntimeRegistryState();
     const result = reducer(registry, ...args);
     const applied = result?.applied !== false;
     if (applied) turnRuntimeRegistry.value = { ...registry };
+    if (typeof onTurnEvaluated === "function") {
+      onTurnEvaluated({ reducer: reducer.name, input: args[0], result, applied });
+    }
+    if (applied && result?.turn && typeof onTurnCommitted === "function") {
+      const projection = onTurnCommitted(result);
+      return projection ? { ...result, subSessionEffect: projection } : result;
+    }
     return result;
   }
   return {
@@ -23,6 +33,7 @@ export function createTurnRuntimeStoreActions(turnRuntimeRegistry) {
     applyTurnLifecycleEnvelope: (value) => commitTurnRuntime(applyTurnLifecycleEnvelope, value),
     applyTurnLifecycleSnapshot: (value) => commitTurnRuntime(applyTurnLifecycleSnapshot, value),
     applyTurnTimingSnapshot: (value) => commitTurnRuntime(applyTurnTimingSnapshot, value),
+    applyTurnTimingUpdate: (value) => commitTurnRuntime(applyTurnTimingUpdate, value),
     applyTurnTerminalResolution: (value) => commitTurnRuntime(applyTurnTerminalResolution, value),
     applyExecutionSnapshot: (value) => commitTurnRuntime(applyExecutionSnapshot, value),
     applyExecutionChildren: (value) => commitTurnRuntime(applyExecutionChildren, value),

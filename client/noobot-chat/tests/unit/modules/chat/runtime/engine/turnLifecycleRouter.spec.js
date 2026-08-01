@@ -53,8 +53,16 @@ describe("foreign Turn lifecycle routing", () => {
     });
     await Promise.resolve();
 
-    expect(logSessionEvent).toHaveBeenCalledTimes(1);
-    expect(logSessionEvent.mock.calls[0][0].data).toMatchObject({
+    expect(logSessionEvent).toHaveBeenCalledTimes(2);
+    expect(logSessionEvent.mock.calls[0][0]).toMatchObject({
+      event: "frontend.authoritativeState.lifecycleRouteEvaluated",
+      data: {
+        route: "child",
+        eventSessionId: "child-session",
+        mainSessionId: "root-session",
+      },
+    });
+    expect(logSessionEvent.mock.calls[1][0].data).toMatchObject({
       applied: true,
       reason: "terminal_resolution_applied",
       terminalResolutionScheduled: true,

@@ -101,12 +101,12 @@ export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessage
   if (!assistantMessagesForDialogProcess.length) return existingMessages;
 
   for (const nextMessage of assistantMessagesForDialogProcess) {
-    const nextMessageId = _trimStr(nextMessage?.messageId || nextMessage?.id);
-    if (!nextMessageId) continue;
+    const presentationMessageId = _trimStr(nextMessage?.presentationMessageId);
+    if (!presentationMessageId) continue;
     const reusableMessage = existingMessages.find(
       (messageItem) =>
         _isAssistantRole(messageItem) &&
-        _trimStr(messageItem?.messageId || messageItem?.id) === nextMessageId,
+        _trimStr(messageItem?.presentationMessageId) === presentationMessageId,
     );
     if (!reusableMessage) continue;
     patchMessageObjectPreservingUiState(

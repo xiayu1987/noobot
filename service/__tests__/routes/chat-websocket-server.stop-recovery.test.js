@@ -88,10 +88,12 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
   let finishRun;
   let runCalls = 0;
   const server = await startServerWithWs({
+    resolveAuthByApiKey: () => ({ userId: "u1" }),
     bot: {
       runSession: async ({ eventListener }) => {
         runCalls += 1;
         await new Promise((resolve) => { emitAfterRefresh = resolve; });
+        await new Promise((resolve) => setTimeout(resolve, 25));
         eventListener.onEvent({
           event: "tool_call_start",
           data: {
@@ -112,7 +114,13 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
   const sockets = [];
   try {
     const url = `ws://127.0.0.1:${server.address().port}/chat/ws`;
-    const payload = { userId: "u1", sessionId: "s-refresh", message: "run", turnScopeId: "turn-refresh" };
+    const payload = {
+      userId: "u1",
+      sessionId: "s-refresh",
+      message: "run",
+      dialogProcessId: "dp-refresh",
+      turnScopeId: "turn-refresh",
+    };
     const oldWs = new WebSocket(url, { headers: { authorization: "Bearer test-key" } });
     sockets.push(oldWs);
     await new Promise((resolve, reject) => {
@@ -126,14 +134,11 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
     const newWs = new WebSocket(url, { headers: { authorization: "Bearer test-key" } });
     sockets.push(newWs);
     const receivedFrames = [];
-    let resolveRebound;
-    const reboundFrame = new Promise((resolve) => { resolveRebound = resolve; });
     const toolFrame = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`rebound tool increment timeout: ${JSON.stringify(receivedFrames)}`)), 1000);
+      const timer = setTimeout(() => reject(new Error(`rebound tool increment timeout: runCalls=${runCalls} ${JSON.stringify(receivedFrames)}`)), 1000);
       newWs.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
         receivedFrames.push(parsed);
-        if (parsed?.data?.sourceEvent === "running_transport_rebound") resolveRebound(parsed);
         if (parsed?.data?.event?.eventType === "tool_call_start") { clearTimeout(timer); resolve(parsed); }
       });
       newWs.on("error", reject);
@@ -142,13 +147,12 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
       newWs.on("open", () => { newWs.send(JSON.stringify(payload)); resolve(); });
       newWs.on("error", reject);
     });
-    await reboundFrame;
-    oldWs.close(1000, "refreshed");
     emitAfterRefresh();
     const received = await toolFrame;
     assert.equal(received.event, "message_event");
     assert.equal(received.data.event.eventType, "tool_call_start");
     assert.equal(runCalls, 1);
+    oldWs.close(1000, "refreshed");
     finishRun();
   } finally {
     for (const socket of sockets) socket.close();

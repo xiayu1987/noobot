@@ -20,6 +20,10 @@ import {
 } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
+import {
+  applyTurnTimingUpdate,
+  selectTurnMessageRuntime,
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 describe("useChatEngine.send-stream", () => {
   it("uses one preallocated identity for the local user message and transport payload", async () => {
@@ -27,7 +31,7 @@ describe("useChatEngine.send-stream", () => {
     const stream = vi.fn(async (payload) => {
       capturedPayload = payload;
     });
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "s-user-message-identity",
       stream,
     });
@@ -86,7 +90,7 @@ describe("useChatEngine.send-stream", () => {
         turnScopeId: payload.turnScopeId,
       });
     });
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "s-thinking-start",
       stream,
     });
@@ -95,31 +99,33 @@ describe("useChatEngine.send-stream", () => {
 
     await vi.waitFor(() => expect(assistantMessage(activeSession)?.channelState?.state).toBe(FrontendRunState.FRONTEND_COMPLETED));
     const assistant = assistantMessage(activeSession);
-    const persistedStart = activeSession.value.turnTimingsByTurnScopeId?.[assistant.turnScopeId]?.thinkingStartedAt;
-    expect(persistedStart).toEqual(expect.any(String));
-    expect(capturedPayload?.config?.thinkingStartedAt).toBe(persistedStart);
+    const runtime = selectTurnMessageRuntime(turnRuntimeRegistry.value, {
+      sessionId: "s-thinking-start",
+      turnScopeId: assistant.turnScopeId,
+    });
+    expect(runtime.startedAt).toEqual(expect.any(String));
+    expect(capturedPayload?.config?.thinkingStartedAt).toBe(runtime.startedAt);
   });
 
-  it("records a finished turn timing when completed arrives after local finalization", async () => {
+  it("does not derive authoritative finished timing from transport completion", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "s-late-completed", "dp-late-completed", "sending", {
         turnScopeId: payload.turnScopeId,
       });
-      const session = activeSession.value;
       const assistant = assistantMessage(activeSession);
       assistant.pending = false;
       assistant.channelState = { state: FrontendRunState.FRONTEND_COMPLETED };
-      session.turnTimingsByTurnScopeId = {
-        [payload.turnScopeId]: {
-          thinkingStartedAt: "2026-07-15T10:00:00.000Z",
-          thinkingFinishedAt: null,
-        },
-      };
+      applyTurnTimingUpdate(turnRuntimeRegistry.value, {
+        sessionId: "s-late-completed",
+        turnScopeId: payload.turnScopeId,
+        dialogProcessId: "dp-late-completed",
+        thinkingStartedAt: "2026-07-15T10:00:00.000Z",
+      });
       emitChannelState(onEvent, "s-late-completed", "dp-late-completed", "completed", {
         turnScopeId: payload.turnScopeId,
       });
     });
-    const { engine, activeSession } = createHarness({
+    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "s-late-completed",
       stream,
     });
@@ -127,10 +133,15 @@ describe("useChatEngine.send-stream", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    expect(activeSession.value.turnTimingsByTurnScopeId?.[assistant.turnScopeId]).toEqual({
-      thinkingStartedAt: "2026-07-15T10:00:00.000Z",
-      thinkingFinishedAt: expect.any(String),
+    const runtime = selectTurnMessageRuntime(turnRuntimeRegistry.value, {
+      sessionId: "s-late-completed",
+      turnScopeId: assistant.turnScopeId,
     });
+    expect(runtime).toMatchObject({
+      startedAt: expect.any(String),
+      finishedAt: "",
+    });
+    expect(runtime.startedAt).not.toBe("2026-07-15T10:00:00.000Z");
   });
 
   it("send carries turnScopeId through backend payload and ignores stale unscoped terminal state", async () => {
@@ -489,7 +500,7 @@ describe("useChatEngine.send-stream", () => {
         data: { sessionId: "local-time", dialogProcessId: "dp-time" },
       });
     });
-    const { engine, activeSession, sending } = createHarness({
+    const { engine, activeSession, sending, turnRuntimeRegistry } = createHarness({
       sessionId: "local-time",
       stream,
       deps: {
@@ -512,9 +523,12 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.channelState?.createdAtMs).toBeUndefined();
     expect(assistant?.thinkingStartedAt).toBeUndefined();
     expect(assistant?.thinkingFinishedAt).toBeUndefined();
-    expect(activeSession.value.turnTimingsByTurnScopeId?.[assistant?.turnScopeId]).toEqual({
-      thinkingStartedAt: messageStartedAt,
-      thinkingFinishedAt: messageStartedAt,
+    expect(selectTurnMessageRuntime(turnRuntimeRegistry.value, {
+      sessionId: "local-time",
+      turnScopeId: assistant?.turnScopeId,
+    })).toMatchObject({
+      startedAt: messageStartedAt,
+      finishedAt: "",
     });
   });
 

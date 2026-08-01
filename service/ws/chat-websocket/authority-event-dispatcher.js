@@ -15,14 +15,14 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
     userId,
     sessionId,
     parentSessionId = "",
-    persistenceContext = null,
+    persistenceScope = null,
     limit = 100,
   } = {}) => {
     const identity = {
       userId: clean(userId),
       sessionId: clean(sessionId),
       parentSessionId: clean(parentSessionId),
-      persistenceContext,
+      persistenceScope,
     };
     if (!identity.userId || !identity.sessionId) {
       return { dispatched: false, reason: "missing_session_identity", delivered: 0 };
@@ -87,14 +87,39 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
     const key = [
       clean(payload.userId),
       clean(payload.sessionId),
-      clean(payload.persistenceContext?.scopeId),
+      clean(payload.persistenceScope?.scopeId),
     ].join("::");
     const active = inFlightByScope.get(key);
-    if (active) return active;
-    const operation = drainAuthorityEvents(payload).finally(() => {
-      if (inFlightByScope.get(key) === operation) inFlightByScope.delete(key);
-    });
-    inFlightByScope.set(key, operation);
-    return operation;
+    if (active) {
+      active.dirty = true;
+      return active.promise;
+    }
+
+    const entry = { dirty: false, promise: null };
+    entry.promise = (async () => {
+      let delivered = 0;
+      try {
+        while (true) {
+          entry.dirty = false;
+          const result = await drainAuthorityEvents(payload);
+          delivered += Number(result?.delivered || 0);
+          if (result?.dispatched !== true) {
+            if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
+            return { ...result, delivered };
+          }
+          if (entry.dirty) continue;
+
+          // Delete before resolving so a later commit cannot attach to a drain
+          // which has already made its final pending-event observation.
+          if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
+          return { dispatched: true, delivered };
+        }
+      } catch (error) {
+        if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);
+        throw error;
+      }
+    })();
+    inFlightByScope.set(key, entry);
+    return entry.promise;
   };
 }

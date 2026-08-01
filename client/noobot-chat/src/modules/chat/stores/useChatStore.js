@@ -10,6 +10,8 @@ import { createTurnRuntimeStoreActions } from "./chatStoreTurnRuntime.js";
 import { createChatExecutionSelectors } from "./chatStoreExecutionSelectors.js";
 import { createSubSessionMessageRegistry, createSubSessionStore } from "./chatStoreSubSessions.js";
 import { createWorkflowStore } from "./chatStoreWorkflows.js";
+import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
+import { applyRunStateMessageRuntimePatch } from "../runtime/engine/messageRuntimePatch.js";
 
 export const useChatStore = defineStore("chat", () => {
   const input=ref(""); const uploadFiles=ref([]);
@@ -23,26 +25,72 @@ export const useChatStore = defineStore("chat", () => {
   const loadingSessions=ref(false); const loadingSessionDetail=ref(false);
   const pendingInteractionRequest=ref(null); const pendingInteractionRequests=ref([]); const interactionSubmitting=ref(false);
   const activeSession=computed(()=>sessions.value.find(item=>item.id===activeSessionId.value));
-  const turnActions=createTurnRuntimeStoreActions(turnRuntimeRegistry);
-  const subSessions=createSubSessionStore({subSessionMessageRegistry,subSessionMessageRegistryVersion,turnRuntimeRegistry,applyTurnTimingSnapshot:turnActions.applyTurnTimingSnapshot});
+  let subSessions=null;
+  const turnActions=createTurnRuntimeStoreActions(turnRuntimeRegistry, {
+    onTurnEvaluated:({reducer,input,result,applied})=>{
+      const turn=result?.turn;
+      logWorkflowDiagnostics("frontend.turnRuntime.commitEvaluated",()=>({
+        sessionId:String(turn?.parentSessionId||input?.parentSessionId||turn?.sessionId||input?.sessionId||"").trim(),
+        nodeSessionId:String(turn?.sessionId||input?.sessionId||"").trim(),
+        parentSessionId:String(turn?.parentSessionId||input?.parentSessionId||"").trim(),
+        dialogProcessId:String(turn?.dialogProcessId||input?.dialogProcessId||"").trim(),
+        turnScopeId:String(turn?.turnScopeId||input?.turnScopeId||"").trim(),
+        reducer,
+        eventType:String(input?.eventType||input?.type||"").trim(),
+        applied,
+        reason:String(result?.reason||"").trim(),
+        state:String(turn?.state||"").trim(),
+        terminal:String(turn?.terminal||"").trim(),
+      }));
+    },
+    onTurnCommitted:(result)=>{
+      const turn=result?.turn;
+      const sessionId=String(turn?.sessionId||"").trim();
+      const parentSessionId=String(turn?.parentSessionId||"").trim();
+      const mainProjection=applyRunStateMessageRuntimePatch({
+        sessions,
+        activeSession,
+        turnRuntimeRegistry,
+        event:turn,
+      });
+      const existingSubSession=Boolean(sessionId&&subSessions?.selectSubSessionMessages(sessionId));
+      logWorkflowDiagnostics("frontend.turnRuntime.commitProjectionEvaluated",()=>({
+        sessionId:parentSessionId||sessionId,
+        nodeSessionId:sessionId,
+        parentSessionId,
+        dialogProcessId:String(turn?.dialogProcessId||"").trim(),
+        turnScopeId:String(turn?.turnScopeId||"").trim(),
+        state:String(turn?.state||"").trim(),
+        terminal:String(turn?.terminal||"").trim(),
+        applied:result?.applied===true,
+        existingSubSession,
+        projectionEligible:Boolean(sessionId&&subSessions&&(existingSubSession||parentSessionId)),
+      }));
+      if(!sessionId||!subSessions)return {mainProjection};
+      if(!existingSubSession&&!parentSessionId)return {mainProjection};
+      const container=subSessions.ensureSubSessionMessageContainer(turn);
+      const runtimeProjection=subSessions.applySubSessionTurnRuntimeProjection(turn);
+      return {mainProjection,...container,runtimeProjection};
+    },
+  });
+  subSessions=createSubSessionStore({
+    subSessionMessageRegistry,
+    subSessionMessageRegistryVersion,
+    turnRuntimeRegistry,
+    // Resolve lazily: workflowStore is created below because it depends on
+    // the sub-session reducers. This keeps one selector implementation while
+    // avoiding a second workflow-state cache in the sub-session store.
+    selectWorkflowNodeState: (...args) => workflows.selectWorkflowNodeState(...args),
+    applyTurnTimingSnapshot:turnActions.applyTurnTimingSnapshot,
+  });
   const workflows=createWorkflowStore({
     workflowNodeStateRegistry,
-    applySubSessionLifecycleEvent:subSessions.applySubSessionLifecycleEvent,
+    ensureSubSessionMessageContainer:subSessions.ensureSubSessionMessageContainer,
     reduceSubSessionMessageEvent:subSessions.reduceSubSessionMessageEvent,
     reduceSubSessionSnapshot:subSessions.reduceSubSessionSnapshot,
     removeSubSessionsByWorkflowRunIds:subSessions.removeSubSessionsByWorkflowRunIds,
   });
   const executionSelectors=createChatExecutionSelectors({turnRuntimeRegistry,sessions,selectSubSessionMessages:subSessions.selectSubSessionMessages});
-  function projectAppliedTurnRuntime(turn){
-    const sessionId=String(turn?.sessionId||"").trim();
-    if(!sessionId||!subSessions.selectSubSessionMessages(sessionId)) return {applied:false,reason:"not_sub_session"};
-    return subSessions.applySubSessionLifecycleEvent(turn);
-  }
-  function applyTurnRuntimeEvent(event){
-    const result=turnActions.applyTurnRuntimeEvent(event);
-    const subSessionEffect=result?.applied===true?projectAppliedTurnRuntime(result.turn):null;
-    return {...result,subSessionEffect};
-  }
   function resetChatStore(){ input.value=""; uploadFiles.value=[]; turnRuntimeRegistry.value=createTurnRuntimeRegistryState(); workflowNodeStateRegistry.value=null; subSessionMessageRegistry.value=createSubSessionMessageRegistry(); subSessionMessageRegistryVersion.value+=1; sessions.value=[]; activeSessionId.value=""; loadingSessions.value=false; loadingSessionDetail.value=false; pendingInteractionRequest.value=null; pendingInteractionRequests.value=[]; interactionSubmitting.value=false; }
-  return { input,uploadFiles,turnRuntimeRegistry,workflowNodeStateRegistry,subSessionMessageRegistry,subSessionMessageRegistryVersion,sessions,activeSessionId,activeSession,loadingSessions,loadingSessionDetail,pendingInteractionRequest,pendingInteractionRequests,interactionSubmitting,...turnActions,applyTurnRuntimeEvent,projectAppliedTurnRuntime,...workflows,selectSubSessionMessages:subSessions.selectSubSessionMessages,...executionSelectors,resetChatStore };
+  return { input,uploadFiles,turnRuntimeRegistry,workflowNodeStateRegistry,subSessionMessageRegistry,subSessionMessageRegistryVersion,sessions,activeSessionId,activeSession,loadingSessions,loadingSessionDetail,pendingInteractionRequest,pendingInteractionRequests,interactionSubmitting,...turnActions,...workflows,selectSubSessionMessages:subSessions.selectSubSessionMessages,selectSubSessionTurnRuntime:subSessions.selectSubSessionTurnRuntime,selectSubSessionTiming:subSessions.selectSubSessionTiming,...executionSelectors,resetChatStore };
 });

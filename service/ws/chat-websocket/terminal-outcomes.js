@@ -111,7 +111,7 @@ export function createTurnFinalizer({
       eventType: TURN_EVENT.STOP_COMPLETED,
       phase: TURN_PHASE.STOP,
       completionCommitId,
-      summaryVersion: Number(turnStatus?.version || 0),
+      summaryVersion: Math.max(1, Number(turnStatus?.version || 0)),
     });
     if (!completed?.applied && !completed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_completed" });

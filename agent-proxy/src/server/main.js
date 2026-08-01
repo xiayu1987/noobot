@@ -16,6 +16,7 @@ import {
   AGENT_PROXY_ERROR,
   CHANNEL_EVENT,
 } from "../shared/constants.js";
+import { TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION } from "@noobot/authoritative-state/contracts";
 import {
   proxyHttpRequest,
   writeProxyError,
@@ -444,7 +445,7 @@ websocketServer.on("connection", (socket, request) => {
   wsRouter.handle(socket, connectionApiKey, connectionLocale);
   channelManager.sendSocketEvent(socket, {
     event: CHANNEL_EVENT.TRANSPORT_READY,
-    data: { serverInstanceId, protocolVersion: 2 },
+    data: { serverInstanceId, protocolVersion: TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION },
   });
 
   socket.on("close", () => {

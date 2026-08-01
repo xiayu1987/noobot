@@ -12,6 +12,7 @@ import { resolveMessageDialogProcessId } from "../context/session/dialog-process
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import { buildSessionArtifactFileMap, SESSION_ARTIFACT_FILE_NAMES, assertArtifactSessionWritable, readJsonArtifactFile, writeJsonArtifactFile } from "./session-artifact-files.js";
 import { appendRollingJsonlArtifactLog, readJsonlArtifactFile } from "./session-artifact-execution-logs.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 function splitSessionMessages(messages = [], dialogOrder = []) {
   const source = Array.isArray(messages) ? messages : [];
@@ -95,7 +96,7 @@ export function resolveTurnArtifactPath(sessionDir = "", file = "") {
   return resolved;
 }
 
-const TURN_JOURNAL_SCHEMA_VERSION = 5;
+const TURN_JOURNAL_SCHEMA_VERSION = TURN_THRESHOLDS.session.turnJournalSchemaVersion;
 
 function journalPath(sessionDir, turnId) {
   return path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnsDir, `${turnId}.jsonl`);

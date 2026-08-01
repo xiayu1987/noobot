@@ -75,14 +75,23 @@ export function createUserInteractionBridge({
       connectorType = "",
       interactionType = "",
       interactionData = {},
+      turnScopeId = "",
       lifecycle = "pending",
       ackMode = "manual",
       resolvedBy = "",
       notification = {},
     } = {}) => {
       const normalizedInteractionId = String(interactionId || "").trim();
+      const currentRunMeta = getCurrentRunMeta() || {};
+      const normalizedSessionId = String(sessionId || currentRunMeta.sessionId || "").trim();
+      const normalizedDialogProcessId = String(
+        dialogProcessId || currentRunMeta.dialogProcessId || "",
+      ).trim();
+      const normalizedTurnScopeId = String(
+        turnScopeId || currentRunMeta.turnScopeId || "",
+      ).trim();
       const interactionIdentityKey = normalizedInteractionId
-        ? `${String(sessionId || "").trim()}::${normalizedInteractionId}`
+        ? `${normalizedSessionId}::${normalizedInteractionId}`
         : "";
       const existingRequest = interactionIdentityKey
         ? interactionRequestsByIdentity.get(interactionIdentityKey)
@@ -98,7 +107,7 @@ export function createUserInteractionBridge({
 
       const requestId = normalizedInteractionId
         ? createHash("sha256")
-            .update(`${String(sessionId || "").trim()}:${normalizedInteractionId}`)
+            .update(`${normalizedSessionId}:${normalizedInteractionId}`)
             .digest("hex")
             .slice(0, 24)
         : randomBytes(12).toString("hex");
@@ -145,9 +154,10 @@ export function createUserInteractionBridge({
           requestId,
           content: String(content || ""),
           fields: Array.isArray(fields) ? fields : [],
-          dialogProcessId: String(dialogProcessId || ""),
+          dialogProcessId: normalizedDialogProcessId,
           requireEncryption: Boolean(requireEncryption),
-          sessionId: String(sessionId || "").trim(),
+          sessionId: normalizedSessionId,
+          turnScopeId: normalizedTurnScopeId,
           toolName: String(toolName || "").trim(),
           needConnectionInfo: Boolean(needConnectionInfo),
           connectorName: String(connectorName || "").trim(),

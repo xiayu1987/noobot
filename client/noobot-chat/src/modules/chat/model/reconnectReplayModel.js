@@ -291,14 +291,14 @@ function mergeCurrentUserMessagesIntoFoldedMessages({
 
 function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
   const nextRole = getMessageRole(nextMessage);
-  const nextTurnScopeId = getMessageTurnScopeId(nextMessage);
-  if (nextRole === RoleEnum.ASSISTANT && nextTurnScopeId) {
-    const byTurnScopeId = existingMessages.find(
+  if (nextRole === RoleEnum.ASSISTANT) {
+    const presentationMessageId = String(nextMessage?.presentationMessageId || "").trim();
+    if (!presentationMessageId) return null;
+    return existingMessages.find(
       (existingMessage) =>
         getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
-        getMessageTurnScopeId(existingMessage) === nextTurnScopeId,
-    );
-    if (byTurnScopeId) return byTurnScopeId;
+        String(existingMessage?.presentationMessageId || "").trim() === presentationMessageId,
+    ) || null;
   }
 
   const nextKey = messageCompareKey(nextMessage);

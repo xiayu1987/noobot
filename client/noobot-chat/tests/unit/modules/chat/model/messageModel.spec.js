@@ -59,7 +59,7 @@ describe("messageModel semantic transfer", () => {
 
   it("keeps turn UI state out of message projections", () => {
     expect(buildViewMessage({ role: "assistant", pending: true })).not.toHaveProperty("thinkingOpenNames");
-    expect(buildViewMessage({ role: "assistant" })).not.toHaveProperty("expandedDetailLogKeys");
+    expect(buildViewMessage({ role: "assistant" })).not.toHaveProperty("expandedToolDetailKeys");
     expect(buildViewMessage({ role: "user" })).not.toHaveProperty("thinkingOpenNames");
   });
 

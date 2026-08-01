@@ -5,6 +5,7 @@
  */
 import {
   filePath as path,
+  buildToolPathScopeErrorDetails,
   resolveToolInputPath,
   resolveToolPathPolicy,
 } from "../../../shared/utils/path-resolver.js";
@@ -239,9 +240,10 @@ async function resolveCommandFromFile({
     throw recoverableToolError("command_file_path out of allowed roots", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
-        field: "command_file_path",
-        file_path: normalizedFilePath,
-        allowed_roots: policy.allowedRoots,
+        ...buildToolPathScopeErrorDetails({
+          field: "command_file_path",
+          pathView: resolvedToolPath.view,
+        }),
       },
     });
   }
@@ -266,9 +268,10 @@ async function resolveCommandFromFile({
     throw recoverableToolError("command_file_path out of allowed roots", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
-        field: "command_file_path",
-        file_path: normalizedFilePath,
-        allowed_roots: policy.allowedRoots,
+        ...buildToolPathScopeErrorDetails({
+          field: "command_file_path",
+          pathView: resolvedToolPath.view,
+        }),
       },
     });
   }

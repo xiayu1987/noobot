@@ -57,6 +57,38 @@ function normalizeFacetMetadata(value = {}) {
   };
 }
 
+function stringifyToolDetail(value) {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value.trim();
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value || "").trim();
+  }
+}
+
+function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
+  const log = facet?.log;
+  if (!log) return null;
+  const isCall = kind === "call";
+  const canonicalDetail = isCall ? entry?.args : entry?.result;
+  return {
+    ...log,
+    eventId: text(facet.eventId),
+    event: isCall ? "tool_call" : "tool_result",
+    type: isCall ? "tool_call" : "tool_result",
+    toolCallId: text(entry.toolCallId),
+    tool: text(entry.tool),
+    ...(isCall ? { args: canonicalDetail } : { result: canonicalDetail }),
+    detailText: stringifyToolDetail(canonicalDetail),
+    sequence: sequenceOf(facet),
+    sequenceScopeId: text(facet.sequenceScopeId),
+    authority: facetAuthority(facet),
+    sequenceDomain: facetSequenceDomain(facet),
+    timelineTimestamp: text(facet.timestamp),
+  };
+}
+
 export function reduceToolTimeline(timeline = [], envelope = {}, displayLog = null) {
   if (![MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(envelope?.eventType)) {
     return Array.isArray(timeline) ? timeline : [];
@@ -103,26 +135,10 @@ export function selectToolTimelineLogs(message = {}, { completedOnly = false } =
   const logs = [];
   for (const item of timeline) {
     if (!completedOnly && item.call?.log) {
-      logs.push({
-        ...item.call.log,
-        sequence: sequenceOf(item.call) || sequenceOf(item.call.log),
-        sequenceScopeId: text(item.call.sequenceScopeId || item.call.sequenceScope),
-        authority: facetAuthority(item.call),
-        sequenceDomain: facetSequenceDomain(item.call),
-        timelineTimestamp: text(item.call.timestamp || item.call.log?.timestamp || item.call.log?.ts),
-      });
+      logs.push(projectToolTimelineLog({ entry: item, facet: item.call, kind: "call" }));
     }
     if (item.resultEvent?.log) {
-      logs.push({
-        ...item.resultEvent.log,
-        sequence: sequenceOf(item.resultEvent) || sequenceOf(item.resultEvent.log),
-        sequenceScopeId: text(item.resultEvent.sequenceScopeId || item.resultEvent.sequenceScope),
-        authority: facetAuthority(item.resultEvent),
-        sequenceDomain: facetSequenceDomain(item.resultEvent),
-        timelineTimestamp: text(
-          item.resultEvent.timestamp || item.resultEvent.log?.timestamp || item.resultEvent.log?.ts,
-        ),
-      });
+      logs.push(projectToolTimelineLog({ entry: item, facet: item.resultEvent, kind: "result" }));
     }
   }
   return logs.sort(compareTimelineFacts);

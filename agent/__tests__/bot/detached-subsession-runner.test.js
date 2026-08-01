@@ -192,6 +192,12 @@ test("detached sub-session delegates execution and persistence to the main runne
     events.filter((event) => event?.event === "turn_lifecycle_committed").length,
     4,
   );
+  assert.equal(
+    events
+      .filter((event) => event?.event === "turn_lifecycle_committed")
+      .every((event) => event.data.persistenceContext === undefined && event.data.envelope.persistenceScope),
+    true,
+  );
   const completedLifecycle = calls.lifecyclePayloads.at(-1);
   assert.deepEqual(completedLifecycle.persistenceScope, {
     scopeId: "agent:turn-1",
@@ -208,7 +214,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(result.sessionId, "sub1");
   assert.equal(result.parentSessionId, "parent1");
   assert.equal(result.dialogProcessId, payload.dialogProcessId);
-  assert.match(result.dialogProcessId, /^[0-9a-f-]{36}$/);
+  assert.equal(result.dialogProcessId, "sub-dialog");
   assert.equal(calls.lifecyclePayloads.every((item) => item.dialogProcessId === result.dialogProcessId), true);
   assert.equal(result.persisted.version, 3);
   assert.equal(result.lifecycle.executionState, "completed");
@@ -285,6 +291,50 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     persisted.authorityEventOutbox[3].envelope.completionCommitId,
     "turn-persisted:completed",
   );
+});
+
+test("detached sub-session rejects a runner result with a second dialog identity", async () => {
+  const { calls, deps } = createDeps({
+    sessionRunner: {
+      async runSession() {
+        return { output: "done", dialogProcessId: "foreign-dialog" };
+      },
+    },
+  });
+  const events = [];
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await assert.rejects(
+    runner({
+      parentContext: createParentContext(),
+      message: "hello",
+      strategy: {
+        sessionId: "sub1",
+        dialogProcessId: "authoritative-dialog",
+        executionId: "agent:turn-identity-mismatch",
+      },
+      eventListener: { onEvent: (event) => events.push(event) },
+    }),
+    (error) => (
+      error?.code === "DETACHED_DIALOG_IDENTITY_MISMATCH" &&
+      error?.lifecycle?.state === "processing_failed" &&
+      error?.lifecycle?.executionId === "agent:turn-identity-mismatch"
+    ),
+  );
+  assert.equal(
+    events.some((event) => event?.event === "detached_sub_session_identity_mismatch"),
+    true,
+  );
+  assert.equal(
+    events.some((event) => (
+      event?.event === "detached_sub_session_failure_committed" &&
+      event?.data?.errorCode === "DETACHED_DIALOG_IDENTITY_MISMATCH" &&
+      event?.data?.revision > 0
+    )),
+    true,
+  );
+  assert.equal(calls.lifecyclePayloads.at(-1)?.eventType, "turn.failed");
+  assert.equal(calls.lifecyclePayloads.at(-1)?.failure?.code, "DETACHED_DIALOG_IDENTITY_MISMATCH");
 });
 
 test("detached sub-session does not inherit parent turn transaction identity", async () => {

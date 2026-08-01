@@ -21,43 +21,6 @@ import {
 } from "../../../chat/model/messageIdentity.js";
 import { getMessageAttachments } from "../../../chat/model/messageModel.js";
 
-export function buildTurnTimingsByTurnScopeId({
-  turnTimings = [],
-  currentTimingsByTurnScopeId = {},
-  onTimingHydrated = null,
-} = {}) {
-  const currentTimings = currentTimingsByTurnScopeId && typeof currentTimingsByTurnScopeId === "object"
-    ? currentTimingsByTurnScopeId
-    : {};
-  const projectedEntries = (Array.isArray(turnTimings) ? turnTimings : [])
-    .map((item = {}) => {
-        const turnScopeId = getMessageTurnScopeId(item);
-        const turnScopeKey = normalizeTurnScopeIdKey(turnScopeId);
-        const current = currentTimings[turnScopeKey] || currentTimings[turnScopeId] || {};
-        const timing = {
-          thinkingStartedAt: item?.thinkingStartedAt || current.thinkingStartedAt || null,
-          thinkingFinishedAt: item?.thinkingFinishedAt || current.thinkingFinishedAt || null,
-        };
-        onTimingHydrated?.({
-          item,
-          matchingMessage: null,
-          turnScopeId: turnScopeKey || turnScopeId,
-          current,
-          timing,
-          retained: Boolean(turnScopeKey || turnScopeId),
-        });
-        return [turnScopeKey || turnScopeId, timing];
-      })
-    .filter(([turnScopeId]) => Boolean(turnScopeId));
-  const projectedTurnScopeIds = new Set(projectedEntries.map(([turnScopeId]) => turnScopeId));
-  for (const [turnScopeId, timing] of Object.entries(currentTimings)) {
-    const turnScopeKey = normalizeTurnScopeIdKey(turnScopeId);
-    if (projectedTurnScopeIds.has(turnScopeKey)) continue;
-    projectedEntries.push([turnScopeKey, timing]);
-  }
-  return Object.fromEntries(projectedEntries);
-}
-
 export function buildTurnStatusesByTurnScopeId({ turnStatuses = [] } = {}) {
   return Object.fromEntries(
     (Array.isArray(turnStatuses) ? turnStatuses : [])

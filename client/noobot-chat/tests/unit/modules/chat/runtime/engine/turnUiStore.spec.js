@@ -8,6 +8,7 @@ import {
   clearSessionTurnUiStates,
   clearTurnUiState,
   getTurnUiState,
+  isTurnDetailExpanded,
   promoteSessionTurnUiStates,
   setTurnThinkingOpenNames,
   setTurnAssistantContentExpanded,
@@ -33,12 +34,23 @@ describe("turnUiStore lifecycle", () => {
     expect(getTurnUiState(first)).toBe(getTurnUiState(first));
     expect(getTurnUiState(first)).toMatchObject({
       thinkingOpenNames: ["tools"],
-      expandedDetailLogKeys: ["call-1"],
+      expandedToolDetailKeys: ["call-1"],
     });
     expect(getTurnUiState(second)).toMatchObject({
       thinkingOpenNames: [],
-      expandedDetailLogKeys: [],
+      expandedToolDetailKeys: [],
     });
+  });
+
+  it("keeps canonical tool details collapsed until the user explicitly expands them", () => {
+    const first = turn("session-a", "turn-detail");
+
+    expect(isTurnDetailExpanded(first, "event:call-1")).toBe(false);
+    expect(toggleTurnDetailKey(first, "event:call-1")).toBe(true);
+    expect(isTurnDetailExpanded(first, "event:call-1")).toBe(true);
+    expect(toggleTurnDetailKey(first, "event:call-1")).toBe(false);
+    expect(isTurnDetailExpanded(first, "event:call-1")).toBe(false);
+    expect(isTurnDetailExpanded(first, "")).toBe(false);
   });
 
   it("stores assistant body expansion as turn-scoped presentation state", () => {

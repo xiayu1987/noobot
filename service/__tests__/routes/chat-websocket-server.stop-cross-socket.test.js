@@ -11,6 +11,7 @@ import {
   closeServer,
   waitForCondition,
 } from "./chat-websocket-server.test-helpers.js";
+import { TURN_EVENT } from "@noobot/authoritative-state/contracts";
 
 test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
   let capturedStopPayload = null;
@@ -64,7 +65,7 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
       })));
       ws.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
-        if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
+        if (parsed?.event === "turn_lifecycle" && parsed?.data?.eventType === TURN_EVENT.STOP_ACCEPTED) {
           clearTimeout(timer);
           ws.close(1000, "stop_ack_received");
           resolve(parsed);
@@ -72,7 +73,7 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
       });
       ws.on("error", (error) => { clearTimeout(timer); reject(error); });
     });
-    assert.equal(stopAck?.data?.sourceEvent, "stop_requested_registry");
+    assert.equal(stopAck?.data?.phase, "action");
     assert.equal(stopAck?.data?.turnScopeId, "turn-cross-stop");
 
     await new Promise((resolve, reject) => {
@@ -175,7 +176,7 @@ test("chat-websocket-server: an authenticated owner cannot stop another owner's 
       })));
       foreignStop.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
-        if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
+        if (parsed?.event === "turn_lifecycle" && parsed?.data?.eventType === TURN_EVENT.STOP_ACCEPTED) {
           clearTimeout(timer);
           resolve(parsed);
         }
@@ -183,7 +184,8 @@ test("chat-websocket-server: an authenticated owner cannot stop another owner's 
       foreignStop.on("error", (error) => { clearTimeout(timer); reject(error); });
     });
 
-    assert.equal(stopState?.data?.sourceEvent, "stop_requested_idle_persisted");
+    assert.equal(stopState?.data?.phase, "action");
+    assert.equal(stopState?.data?.turnScopeId, "turn-owner-isolation");
     await new Promise((resolve) => setTimeout(resolve, 25));
     assert.equal(activeRunAborted, false);
     releaseActiveRun();
@@ -253,7 +255,7 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
       })));
       stopWs.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
-        if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
+        if (parsed?.event === "turn_lifecycle" && parsed?.data?.eventType === TURN_EVENT.STOP_ACCEPTED) {
           clearTimeout(timer);
           resolve(parsed);
         }
@@ -261,7 +263,8 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
       stopWs.on("error", (error) => { clearTimeout(timer); reject(error); });
     });
 
-    assert.equal(stopState?.data?.sourceEvent, "stop_requested_registry");
+    assert.equal(stopState?.data?.phase, "action");
+    assert.equal(stopState?.data?.turnScopeId, "turn-owner-stop");
     const deadline = Date.now() + 1000;
     while (!aborted && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
     assert.equal(aborted, true);

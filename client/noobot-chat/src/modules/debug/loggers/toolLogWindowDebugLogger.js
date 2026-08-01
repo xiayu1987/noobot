@@ -14,6 +14,9 @@ export function summarizeToolLogWindowItem(item = {}, index = 0) {
   const content = text(
     item?.text ?? item?.output ?? item?.result ?? item?.data?.text ?? item?.data?.output,
   );
+  const args = item?.args ?? item?.arguments ?? item?.data?.args ?? item?.data?.arguments;
+  const result = item?.result ?? item?.output ?? item?.data?.result ?? item?.data?.output;
+  const detail = item?.detailText ?? item?.detail;
   return {
     index,
     event: text(item?.event),
@@ -27,6 +30,9 @@ export function summarizeToolLogWindowItem(item = {}, index = 0) {
     toolCallId: text(item?.toolCallId || item?.tool_call_id),
     tool: text(item?.tool || item?.toolName || item?.name),
     category: text(item?.category),
+    hasArgs: args !== undefined && args !== null,
+    hasResult: result !== undefined && result !== null,
+    detailLength: text(detail).length,
     textLength: content.length,
     textPreview: content.slice(0, 500),
   };

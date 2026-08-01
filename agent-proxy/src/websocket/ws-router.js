@@ -22,6 +22,7 @@ import {
 import { writeAgentProxyRouteDebugEvent } from "../runtime-events/route-debug-runtime-events.js";
 import { ensureConnectionId } from "../shared/utils.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
+import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/authoritative-state/contracts";
 
 function resolveRawMessageInfo(rawData) {
   const text = String(rawData || "");
@@ -132,6 +133,34 @@ export class WsRouter {
 
 
   _handlers = {
+    [TURN_LIFECYCLE_RECEIPT_ACTION](socket, payload) {
+      const result = this.channelManager.acknowledgeTurnLifecycleDelivery(socket, payload);
+      if (result.acknowledged) {
+        void writeAgentProxyRouteDebugEvent({
+          event: "agentProxy.route.lifecycleReceipt.accepted",
+          socket,
+          channel: result.receipt?.channel,
+          payload,
+          data: {
+            eventId: result.receipt?.eventId,
+            eventType: result.receipt?.eventType,
+            lifecycleSequence: result.receipt?.lifecycleSequence,
+            transportSequence: result.receipt?.transportSequence,
+            attempts: result.receipt?.attempts,
+          },
+        });
+        return;
+      }
+      void writeAgentProxyRouteLifecycleEvent({
+        event: "agentProxy.route.lifecycleReceipt.rejected",
+        socket,
+        data: {
+          eventIdPresent: Boolean(String(payload?.eventId || "").trim()),
+          reason: result.reason,
+        },
+      });
+    },
+
     [WS_ACTION.SNAPSHOT_GET](socket, payload) {
       const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
       if (!targetChannel) {

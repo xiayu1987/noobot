@@ -19,19 +19,12 @@ function detail(value) {
 }
 
 export function normalizeToolLog(item = {}) {
-  const event = text(item.event || item.type).toLowerCase();
-  const toolCallId = text(item.toolCallId || item.tool_call_id);
-  const detailText = detail(
-    item.detailText ?? item.content ??
-      (event === "tool_call" ? item.args : event === "tool_result" ? item.result : ""),
-  );
+  const event = text(item.event).toLowerCase();
+  const eventId = text(item.eventId);
+  const toolCallId = text(item.toolCallId);
+  const detailText = detail(item.detailText);
   const summaryText = text(item.text);
-  return { ...item, event, type: item.type || event, toolCallId, detailText, text: summaryText };
-}
-
-export function toolLogContentKey(item = {}) {
-  const log = normalizeToolLog(item);
-  return log.event === "tool_result" ? (log.detailText || log.text) : "";
+  return { ...item, eventId, event, type: event, toolCallId, detailText, text: summaryText };
 }
 
 function score(item) {
@@ -43,31 +36,18 @@ export function mergeToolLog(existing, incoming) {
   return score(incoming) > score(existing) ? incoming : existing;
 }
 
-function findMatchIndex(item, output) {
-  const content = toolLogContentKey(item);
-  for (let index = output.length - 1; index >= 0; index -= 1) {
-    const existing = output[index];
-    if (existing.event !== item.event) continue;
-    if (item.toolCallId && existing.toolCallId) {
-      if (item.toolCallId === existing.toolCallId) return index;
-      continue;
-    }
-    if (item.event === "tool_result" && content && toolLogContentKey(existing) === content) {
-      return index;
-    }
-  }
-  return -1;
-}
-
 export function deduplicateToolLogs(logs = []) {
   const output = [];
+  const indexByEventId = new Map();
   for (const raw of Array.isArray(logs) ? logs : []) {
     const item = normalizeToolLog(raw);
-    const hasIdentity = Boolean(item.toolCallId) ||
-      (item.event === "tool_result" && Boolean(toolLogContentKey(item)));
-    const index = hasIdentity ? findMatchIndex(item, output) : -1;
-    if (index === -1) output.push(item);
-    else output[index] = mergeToolLog(output[index], item);
+    const index = item.eventId ? indexByEventId.get(item.eventId) : undefined;
+    if (index === undefined) {
+      if (item.eventId) indexByEventId.set(item.eventId, output.length);
+      output.push(item);
+    } else {
+      output[index] = mergeToolLog(output[index], item);
+    }
   }
   return output;
 }

@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
+import { TURN_EVENT } from "@noobot/authoritative-state/contracts";
 
 function stoppedLifecycle({ sessionId = "s1", turnScopeId = "turn-stopped", dialogProcessId = "dp-stopped" } = {}) {
   return {
@@ -64,7 +65,7 @@ test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async (
   }
 });
 
-test("chat-websocket-server: continue action passes stopped snapshot identity and emits sending", async () => {
+test("chat-websocket-server: continue action passes stopped snapshot identity through authoritative lifecycle", async () => {
   let capturedPayload = null;
   const server = await startServerWithWs({
     initialTurnLifecycle: stoppedLifecycle(),
@@ -103,18 +104,16 @@ test("chat-websocket-server: continue action passes stopped snapshot identity an
     assert.equal(capturedPayload?.runConfig?.resumeDialogProcessId, "dp-stopped");
     assert.equal(capturedPayload?.runConfig?.resumeTurnScopeId, "turn-stopped");
     assert.equal(capturedPayload?.runConfig?.turnScopeId, "turn-new");
-    const sendingEvent = events.find((item) => item?.event === "channel_state" && item?.data?.state === "sending");
-    assert.equal(sendingEvent?.data?.sourceEvent, "continue_started");
-    assert.equal(sendingEvent?.data?.dialogProcessId || "", "");
-    assert.equal(sendingEvent?.data?.resumeDialogProcessId, "dp-stopped");
-    assert.equal(sendingEvent?.data?.resumeTurnScopeId, "turn-stopped");
-    assert.equal(sendingEvent?.data?.turnScopeId, "turn-new");
     const acceptedEvent = events.find((item) =>
-      item?.event === "turn_lifecycle" && item?.data?.eventType === "turn.action_accepted");
+      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.ACTION_ACCEPTED);
+    assert.equal(acceptedEvent?.data?.sessionId, "s1");
+    assert.equal(acceptedEvent?.data?.turnScopeId, "turn-new");
+    assert.equal(acceptedEvent?.data?.action, "continue");
     assert.deepEqual(acceptedEvent?.data?.continuationSource, {
       dialogProcessId: "dp-stopped",
       turnScopeId: "turn-stopped",
     });
+    assert.equal(events.some((item) => item?.event === "channel_state"), false);
   } finally {
     await closeServer(server);
   }
@@ -279,7 +278,11 @@ test("chat-websocket-server: stop during continue request keeps stopping and end
       },
     });
 
-    assert.equal(events.some((item) => item?.event === "channel_state" && item?.data?.state === "stopping"), true);
+    assert.equal(events.some((item) =>
+      item?.event === "turn_lifecycle" &&
+      item?.data?.eventType === TURN_EVENT.STOP_ACCEPTED &&
+      item?.data?.turnScopeId === "turn-new"), true);
+    assert.equal(events.some((item) => item?.event === "channel_state"), false);
     const stoppedEvent = events.find((item) => item?.event === "user_stopped");
     assert.equal(stoppedEvent?.data?.sessionId, "s-continue-stop");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");

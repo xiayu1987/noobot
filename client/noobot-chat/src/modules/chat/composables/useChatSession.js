@@ -528,8 +528,7 @@ export function useChatSession({
     chatWebSocketClient,
     sessionLogWebSocketClient,
     applyTurnRuntimeEvent: submitTurnRuntimeEvent,
-    projectAppliedTurnRuntime: chatStore.projectAppliedTurnRuntime,
-    runtimeEventsAlreadyProjected: true,
+    commitTurnTerminalResolution: chatStore.applyTurnTerminalResolution,
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     removeWorkflowOwnersForReplacedTurns: chatStore.removeWorkflowOwnersForReplacedTurns,
     ensureConnected,
@@ -570,16 +569,12 @@ export function useChatSession({
     sessionLogWebSocketClient,
     notify,
     processStore,
-    resolveTurnTerminalState: chatEngine.resolveTurnTerminalState,
+    dispatchAuthoritativeRunStateEvent: chatEngine.dispatchAuthoritativeRunStateEvent,
     applyExecutionSnapshot: (payload) => chatStore.applyExecutionSnapshot(payload),
     applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),
     applyExecutionTree: (payload) => chatStore.applyExecutionTree(payload),
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     applyTurnLifecycleSnapshot: (snapshot) => chatStore.applyTurnLifecycleSnapshot(snapshot),
-    applyTurnRuntimeEvents: (events = []) => {
-      const sourceEvents = Array.isArray(events) ? events : [];
-      return sourceEvents.map((event) => submitTurnRuntimeEvent(event));
-    },
   });
 
   const { sendWithComposerActionState, stopSendingWithComposerActionState } = createComposerActions({

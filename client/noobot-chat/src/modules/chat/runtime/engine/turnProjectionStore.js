@@ -25,7 +25,7 @@ export const TURN_PROJECTION_SOURCE = Object.freeze({
 
 const TURN_UI_SNAPSHOT_FIELDS = new Set([
   "thinkingOpenNames",
-  "expandedDetailLogKeys",
+  "expandedToolDetailKeys",
   "selectedToolKey",
   "scrollTop",
   "animationKeys",

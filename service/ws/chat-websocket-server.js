@@ -125,11 +125,26 @@ export function registerChatWebSocketServer(
         authoritativeEvent?.eventType || data?.eventType || data?.messageEvent?.eventType || "",
       ).trim();
       const toolFrame = eventType === "tool_call_start" || eventType === "tool_call_end";
+      const terminalLifecycle = eventName === "turn_lifecycle" && [
+        "turn.completed",
+        "turn.stop_completed",
+        "turn.failed",
+      ].includes(eventType);
       if (webSocket.readyState !== 1) {
         if (toolFrame) logConnection("service.websocket.toolFrame.dropped", {
           eventName, eventType, readyState: webSocket.readyState,
           sessionId: data?.sessionId, dialogProcessId: data?.dialogProcessId,
           turnScopeId: data?.turnScopeId,
+        });
+        if (terminalLifecycle) logConnection("service.authorityOutbox.terminalSendRejected", {
+          eventId: data?.eventId,
+          eventType,
+          sequence: Number(data?.sequence || 0),
+          sessionId: data?.sessionId,
+          parentSessionId: data?.parentSessionId,
+          dialogProcessId: data?.dialogProcessId,
+          turnScopeId: data?.turnScopeId,
+          readyState: webSocket.readyState,
         });
         return false;
       }
@@ -152,6 +167,16 @@ export function registerChatWebSocketServer(
         if (toolFrame) logConnection("service.websocket.toolFrame.sent", {
           eventName, eventType, seq: eventSequence,
           sessionId: enrichedData.sessionId,
+          dialogProcessId: enrichedData.dialogProcessId,
+          turnScopeId: enrichedData.turnScopeId,
+        });
+        if (terminalLifecycle) logConnection("service.authorityOutbox.terminalSent", {
+          eventId: enrichedData.eventId,
+          eventType,
+          lifecycleSequence: Number(enrichedData.sequence || 0),
+          transportSequence: eventSequence,
+          sessionId: enrichedData.sessionId,
+          parentSessionId: enrichedData.parentSessionId,
           dialogProcessId: enrichedData.dialogProcessId,
           turnScopeId: enrichedData.turnScopeId,
         });

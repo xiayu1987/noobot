@@ -510,7 +510,7 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
   );
 });
 
-test("channel_state inherits turnScopeId from start payload when upstream omits it", () => {
+test("data-plane events do not create channel business state from start payload", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-turn-scope" });
   const channel = manager.ensureChannel(channelKey, {
@@ -531,9 +531,8 @@ test("channel_state inherits turnScopeId from start payload when upstream omits 
     seq: 1,
   });
 
-  const channelState = listEvents(client, "channel_state").at(-1);
-  assert.equal(channelState?.data?.dialogProcessId, "dp-turn-scope");
-  assert.equal(channelState?.data?.turnScopeId, "turn-scope-1");
+  assert.equal(listEvents(client, "channel_state").length, 0);
+  assert.equal(channel.conversationStateByDialogProcessId.has("dp-turn-scope"), false);
 });
 
 
@@ -766,9 +765,7 @@ test("reconnect state should be consistent for all same-user clients across chan
       ? rawSessionEntry.conversationStates
       : [];
     assert.equal(stateList.length > 0, true);
-    if (["done", "user_stopped", "error"].includes(item.status)) {
-      assert.equal(stateList.some((stateItem) => stateItem?.state === "sending"), true);
-    }
+    assert.equal(stateList.some((stateItem) => stateItem?.state === "sending"), false);
   }
 });
 
@@ -812,7 +809,9 @@ test("reconnect should include conversationStates snapshot", () => {
   manager.pushChannelEvent(channel, "interaction_request", {
     sessionId: "session-1",
     dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
     requestId: "req-1",
+    content: "confirm",
     seq: 2,
   });
 

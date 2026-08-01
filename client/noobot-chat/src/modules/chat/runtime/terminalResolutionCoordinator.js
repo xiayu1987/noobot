@@ -192,6 +192,8 @@ export function createTerminalResolutionCoordinator({
     trace("stateMachine.terminal.fetch.start", {
       sessionId: session, turnScopeId: scope, source: options.source || "unknown", retry,
       revision: Number(requestedVersion.revision || 0), sequence: Number(requestedVersion.sequence || 0),
+      persistenceScopeId: clean(entry.persistenceScope?.scopeId),
+      persistenceParentSessionId: clean(entry.persistenceScope?.parentSessionId),
     });
     const request = Promise.resolve()
       .then(() => resolveTurnTerminalStateApi({
@@ -208,6 +210,8 @@ export function createTerminalResolutionCoordinator({
           revision: Number(response?.turn?.revision || response?.revision || 0),
           sequence: Number(response?.turn?.sequence || response?.sequence || 0),
           terminalState: response?.turn?.state || "",
+          responseSessionId: clean(response?.sessionId),
+          responseTurnScopeId: clean(response?.turnScopeId),
         });
         if (response?.resolved === true) {
           const result = applyTurnTerminalResolution?.(response) || {
@@ -219,6 +223,8 @@ export function createTerminalResolutionCoordinator({
             retryable: result?.retryable === true, reason: result?.reason || "",
             state: result?.turn?.displayState || result?.turn?.state || "",
             terminal: result?.turn?.terminal || null,
+            projectionApplied: result?.subSessionEffect?.runtimeProjection?.applied === true,
+            projectionReason: result?.subSessionEffect?.runtimeProjection?.reason || "",
           });
           if (generation === entry.generation) {
             entry.resolvedVersion = versionOf(response);

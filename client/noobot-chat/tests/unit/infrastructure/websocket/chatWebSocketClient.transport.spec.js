@@ -7,10 +7,104 @@ import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import { flushPromises, MockWebSocket, setupWebSocketTestHooks } from "./chatWebSocketClientTestFixtures.js";
+import {
+  createTurnLifecycleEnvelope,
+  TURN_EVENT,
+  TURN_PHASE,
+  TURN_STATE,
+} from "@noobot/authoritative-state/contracts";
 
 setupWebSocketTestHooks();
 
 describe("chatWebSocketClient transport lifecycle and failures", () => {
+  it("acknowledges authoritative lifecycle only after handing it to the business reducer", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onEvent = vi.fn();
+    const streamPromise = client.stream({
+      action: "chat",
+      sessionId: "session-receipt-1",
+      turnScopeId: "turn-receipt-1",
+    }, onEvent);
+    const socket = MockWebSocket.instances[0];
+    socket.sent = [];
+    const lifecycle = createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      eventId: "event-receipt-1",
+      commandId: "command-receipt-1",
+      sessionId: "session-receipt-1",
+      turnScopeId: "turn-receipt-1",
+      messageId: "message-receipt-1",
+      presentationMessageId: "assistant-receipt-1",
+      dialogProcessId: "dialog-receipt-1",
+      revision: 2,
+      sequence: 2,
+      phase: TURN_PHASE.PROCESSING,
+      state: TURN_STATE.PROCESSING,
+    });
+
+    socket.emit("turn_lifecycle", lifecycle);
+
+    expect(onEvent).toHaveBeenCalledWith({ event: "turn_lifecycle", data: lifecycle });
+    expect(socket.sent.map((raw) => JSON.parse(raw))).toEqual([
+      {
+        action: "turn.lifecycle.received",
+        protocolVersion: 1,
+        eventId: "event-receipt-1",
+        sessionId: "session-receipt-1",
+        turnScopeId: "turn-receipt-1",
+      },
+    ]);
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "session-receipt-1",
+      turnScopeId: "turn-receipt-1",
+    });
+    await streamPromise;
+  });
+
+  it("does not acknowledge malformed lifecycle data", () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const socket = client.connect();
+
+    socket.emit("turn_lifecycle", { eventId: "event-invalid" });
+
+    expect(socket.sent).toEqual([]);
+  });
+
+  it("still dispatches authoritative lifecycle when writing its receipt fails", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onEvent = vi.fn();
+    const streamPromise = client.stream({
+      action: "chat",
+      sessionId: "session-receipt-failure",
+      turnScopeId: "turn-receipt-failure",
+    }, onEvent);
+    const socket = MockWebSocket.instances[0];
+    socket.send = () => { throw new Error("receipt send failed"); };
+    const lifecycle = createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      eventId: "event-receipt-failure",
+      commandId: "command-receipt-failure",
+      sessionId: "session-receipt-failure",
+      turnScopeId: "turn-receipt-failure",
+      messageId: "message-receipt-failure",
+      presentationMessageId: "assistant-receipt-failure",
+      dialogProcessId: "dialog-receipt-failure",
+      revision: 2,
+      sequence: 2,
+      phase: TURN_PHASE.PROCESSING,
+      state: TURN_STATE.PROCESSING,
+    });
+
+    socket.emit("turn_lifecycle", lifecycle);
+
+    expect(onEvent).toHaveBeenCalledWith({ event: "turn_lifecycle", data: lifecycle });
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "session-receipt-failure",
+      turnScopeId: "turn-receipt-failure",
+    });
+    await streamPromise;
+  });
+
   it("sends userId in reconnect payload", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",

@@ -17,6 +17,11 @@ export function canonicalizeTurnScopeId(value = "") {
   return turnScopeId;
 }
 
+export function isCanonicalTurnScopeId(value = "") {
+  const normalized = text(value);
+  return Boolean(normalized) && normalized === canonicalizeTurnScopeId(normalized);
+}
+
 export function turnScopeIdentityKey(value = "") {
   const canonical = canonicalizeTurnScopeId(value);
   if (!canonical) return "";

@@ -63,7 +63,7 @@ export function createDetachedSubSessionRunner({
     }
 
     const subSessionId = String(strategy?.sessionId || "").trim() || randomUUID();
-    const subDialogProcessId = randomUUID();
+    const subDialogProcessId = String(strategy?.dialogProcessId || "").trim() || randomUUID();
     const turnScopeId = String(
       runConfigPatch?.turnScopeId || strategy?.turnScopeId || metadata?.turnScopeId || "",
     ).trim();
@@ -187,7 +187,6 @@ export function createDetachedSubSessionRunner({
           event: "turn_lifecycle_committed",
           data: {
             envelope: committed.envelope,
-            persistenceContext,
           },
         });
       }
@@ -231,7 +230,26 @@ export function createDetachedSubSessionRunner({
         parentAsyncResultContainer: null,
         persistenceContext,
       });
+      const returnedDialogProcessId = String(result?.dialogProcessId || "").trim();
+      if (returnedDialogProcessId && returnedDialogProcessId !== subDialogProcessId) {
+        const identityError = new Error(
+          "detached sub-session returned a dialogProcessId different from its authoritative turn identity",
+        );
+        identityError.code = "DETACHED_DIALOG_IDENTITY_MISMATCH";
+        emitEvent(eventListener, "detached_sub_session_identity_mismatch", {
+          userId,
+          sessionId: subSessionId,
+          parentSessionId,
+          turnScopeId,
+          executionId: mergedRunConfig.executionId,
+          authoritativeDialogProcessId: subDialogProcessId,
+          returnedDialogProcessId,
+          code: identityError.code,
+        });
+        throw identityError;
+      }
     } catch (error) {
+      let terminalLifecycle = null;
       if (inheritedAbortSignal?.aborted || error?.name === "AbortError") {
         await commitLifecycle({
           commandId: `${lifecycleCommandId}:stop-accepted`,
@@ -245,7 +263,7 @@ export function createDetachedSubSessionRunner({
           phase: TURN_PHASE.STOP,
         });
         const completionCommitId = `${lifecycleCommandId}:stop-completed`;
-        await commitLifecycle({
+        terminalLifecycle = await commitLifecycle({
           commandId: completionCommitId,
           eventType: TURN_EVENT.STOP_COMPLETED,
           phase: TURN_PHASE.STOP,
@@ -258,7 +276,7 @@ export function createDetachedSubSessionRunner({
           finishedAt: String(now()).trim(),
         });
       } else {
-        await commitLifecycle({
+        terminalLifecycle = await commitLifecycle({
           commandId: `${lifecycleCommandId}:failed`,
           eventType: TURN_EVENT.FAILED,
           phase: TURN_PHASE.PROCESSING,
@@ -270,13 +288,25 @@ export function createDetachedSubSessionRunner({
           },
         });
       }
-      if (error && typeof error === "object" && error.lifecycle) {
+      if (error && typeof error === "object") {
         error.lifecycle = createDetachedTerminalReceipt({
-          lifecycle: error.lifecycle,
+          lifecycle: terminalLifecycle?.turn || error.lifecycle,
           executionId: mergedRunConfig.executionId,
           failed: true,
         });
       }
+      emitEvent(eventListener, "detached_sub_session_failure_committed", {
+        userId,
+        sessionId: subSessionId,
+        parentSessionId,
+        dialogProcessId: subDialogProcessId,
+        turnScopeId,
+        executionId: mergedRunConfig.executionId,
+        errorCode: String(error?.code || "detached_sub_session_failed").trim(),
+        state: String(terminalLifecycle?.turn?.state || "").trim(),
+        revision: Number(terminalLifecycle?.turn?.revision || 0),
+        sequence: Number(terminalLifecycle?.turn?.sequence || 0),
+      });
       throw error;
     }
 

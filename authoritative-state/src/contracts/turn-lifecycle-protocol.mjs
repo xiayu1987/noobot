@@ -7,10 +7,13 @@ import {
   EXECUTION_KIND,
   normalizeExecutionIdentity,
 } from "@noobot/shared/execution-lifecycle-protocol";
-import { canonicalizeTurnScopeId } from "@noobot/shared/turn-scope-identity";
+import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "@noobot/shared/turn-scope-identity";
 
 export const TURN_LIFECYCLE_PROTOCOL_VERSION = 3;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";
+export const TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION = 3;
+export const TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION = 1;
+export const TURN_LIFECYCLE_RECEIPT_ACTION = "turn.lifecycle.received";
 export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 1;
 export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";
 
@@ -59,6 +62,33 @@ const STOPPABLE_STATES = new Set([TURN_STATE.PROCESSING]);
 const EVENT_VALUES = new Set(Object.values(TURN_EVENT));
 
 const clean = (value) => String(value || "").trim();
+
+export function createTurnLifecycleReceipt({
+  eventId = "",
+  sessionId = "",
+  turnScopeId = "",
+} = {}) {
+  return {
+    action: TURN_LIFECYCLE_RECEIPT_ACTION,
+    protocolVersion: TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION,
+    eventId: clean(eventId),
+    sessionId: clean(sessionId),
+    turnScopeId: canonicalizeTurnScopeId(turnScopeId),
+  };
+}
+
+export function validateTurnLifecycleReceipt(receipt = {}) {
+  const errors = [];
+  if (clean(receipt.action) !== TURN_LIFECYCLE_RECEIPT_ACTION) errors.push("invalid_action");
+  if (Number(receipt.protocolVersion) !== TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION) {
+    errors.push("unsupported_protocol_version");
+  }
+  if (!clean(receipt.eventId)) errors.push("missing_event_id");
+  if (!clean(receipt.sessionId)) errors.push("missing_session_id");
+  if (!canonicalizeTurnScopeId(receipt.turnScopeId)) errors.push("missing_turn_scope_id");
+  else if (!isCanonicalTurnScopeId(receipt.turnScopeId)) errors.push("non_canonical_turn_scope_id");
+  return { valid: errors.length === 0, errors };
+}
 
 export function normalizeTurnContinuationSource(source = null) {
   if (!source || typeof source !== "object" || Array.isArray(source)) return null;
@@ -180,6 +210,7 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
   const turns = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])].filter(Boolean);
   for (const turn of turns) {
     if (!clean(turn.turnScopeId)) errors.push("missing_turn_scope_id");
+    else if (!isCanonicalTurnScopeId(turn.turnScopeId)) errors.push("non_canonical_turn_scope_id");
     if (!clean(turn.messageId)) errors.push("missing_message_id");
     if (!clean(turn.presentationMessageId)) errors.push("missing_presentation_message_id");
     if (!Number.isInteger(Number(turn.revision)) || Number(turn.revision) < 1) errors.push("invalid_turn_revision");
@@ -275,6 +306,7 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   if (!clean(envelope.eventId)) errors.push("missing_event_id");
   if (!clean(envelope.sessionId)) errors.push("missing_session_id");
   if (!clean(envelope.turnScopeId)) errors.push("missing_turn_scope_id");
+  else if (!isCanonicalTurnScopeId(envelope.turnScopeId)) errors.push("non_canonical_turn_scope_id");
   if (!clean(envelope.messageId)) errors.push("missing_message_id");
   if (!clean(envelope.presentationMessageId)) errors.push("missing_presentation_message_id");
   if (!Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1) errors.push("invalid_revision");
