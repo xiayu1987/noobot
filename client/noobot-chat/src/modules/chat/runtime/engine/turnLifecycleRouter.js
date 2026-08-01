@@ -10,35 +10,78 @@ import { applyLatestSessionVersion, getCurrentSessionVersion, isNewerSessionVers
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
   const { activeSession, applyRunStateEvent, logSessionEvent, sessionId } = context;
-  if (event === StreamEventEnum.TURN_LIFECYCLE) {
+  const transportEvent = normalizeTrimmedString(event).toLowerCase();
+  if (transportEvent === StreamEventEnum.TURN_LIFECYCLE) {
     const eventSessionId = normalizeTrimmedString(data?.sessionId);
     const mainSessionId = normalizeTrimmedString(activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId);
+    logSessionEvent?.({
+      category: "debug",
+      level: "debug",
+      debugType: "workflow-diagnostics",
+      event: "frontend.authoritativeState.lifecycleRouteEvaluated",
+      sessionId: mainSessionId || eventSessionId,
+      dialogProcessId: data?.dialogProcessId || "",
+      turnScopeId: data?.turnScopeId || "",
+      data: {
+        route: eventSessionId && mainSessionId && eventSessionId !== mainSessionId ? "child" : "main",
+        eventSessionId,
+        mainSessionId,
+        parentSessionId: normalizeTrimmedString(data?.parentSessionId),
+        eventType: normalizeTrimmedString(data?.eventType).toLowerCase(),
+        revision: Number(data?.revision || 0),
+        sequence: Number(data?.sequence || 0),
+        hasPersistenceScope: Boolean(data?.persistenceScope?.scopeId),
+        reducerAvailable: typeof applyRunStateEvent === "function",
+      },
+    });
     if (eventSessionId && mainSessionId && eventSessionId !== mainSessionId) {
       const result = applyRunStateEvent?.({
         ...data,
         type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
         source: "turn_lifecycle",
       });
-      const logReduction = (reduction = {}) => logSessionEvent?.({
-        category: "debug",
-        level: "debug",
-        debugType: "workflow-diagnostics",
-        event: "frontend.authoritativeState.foreignTurnReduced",
-        sessionId: mainSessionId,
-        turnScopeId: data?.turnScopeId || "",
-        data: {
-          childSessionId: eventSessionId,
-          parentSessionId: data?.parentSessionId || "",
-          eventId: data?.eventId || "",
-          eventType: data?.eventType || "",
-          revision: Number(data?.revision || 0),
-          sequence: Number(data?.sequence || 0),
-          applied: reduction?.applied === true,
-          reason: reduction?.reason || "",
-          projectedStatus: reduction?.subSessionEffect?.session?.status || "",
-          terminalResolutionScheduled: ["turn.completed", "turn.stop_completed", "turn.failed"].includes(data?.eventType),
-        },
-      });
+      const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"]
+        .includes(normalizeTrimmedString(data?.eventType).toLowerCase());
+      const logReduction = (reduction = {}) => {
+        const rejected = reduction?.applied !== true;
+        const runtimeProjection = reduction?.subSessionEffect?.runtimeProjection || null;
+        const projectedSession = runtimeProjection?.session || null;
+        return logSessionEvent?.({
+          category: terminalLifecycle || rejected ? "state" : "debug",
+          level: rejected ? "warn" : (terminalLifecycle ? "info" : "debug"),
+          ...(terminalLifecycle || rejected ? {} : { debugType: "workflow-diagnostics" }),
+          event: terminalLifecycle
+            ? "frontend.authoritativeState.foreignTerminalReduced"
+            : rejected
+              ? "frontend.authoritativeState.foreignTurnRejected"
+              : "frontend.authoritativeState.foreignTurnReduced",
+          sessionId: mainSessionId,
+          dialogProcessId: data?.dialogProcessId || "",
+          turnScopeId: data?.turnScopeId || "",
+          data: {
+            childSessionId: eventSessionId,
+            parentSessionId: data?.parentSessionId || "",
+            eventId: data?.eventId || "",
+            eventType: data?.eventType || "",
+            revision: Number(data?.revision || 0),
+            sequence: Number(data?.sequence || 0),
+            applied: reduction?.applied === true,
+            reason: reduction?.reason || "",
+            projectionApplied: runtimeProjection?.applied === true,
+            projectionReason: runtimeProjection?.reason || "",
+            projectedStatus: projectedSession?.status || "",
+            projectedMessages: (Array.isArray(projectedSession?.messages) ? projectedSession.messages : [])
+              .map((message = {}) => ({
+                messageId: normalizeTrimmedString(message?.messageId || message?.id),
+                role: normalizeTrimmedString(message?.role),
+                turnScopeId: normalizeTrimmedString(message?.turnScopeId),
+                pending: message?.pending,
+                channelState: normalizeTrimmedString(message?.channelState?.state),
+              })),
+            terminalResolutionScheduled: terminalLifecycle,
+          },
+        });
+      };
       if (result && typeof result.then === "function") {
         void result.then(logReduction, (error) => logReduction({
           applied: false,
@@ -54,11 +97,24 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
 }
 
 export function routeCurrentTurnLifecycleEvent(event, data, context) {
-  const { activeSession, applyRunStateEvent, sessionId } = context;
-  if (event === StreamEventEnum.TURN_LIFECYCLE) {
-    applyRunStateEvent?.({
+  const { activeSession, applyRunStateEvent, logSessionEvent, sessionId } = context;
+  if (normalizeTrimmedString(event).toLowerCase() === StreamEventEnum.TURN_LIFECYCLE) {
+    const result = applyRunStateEvent?.({
       ...data, type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       source: "turn_lifecycle",
+    });
+    logSessionEvent?.({
+      category: "debug",
+      level: "debug",
+      debugType: "workflow-diagnostics",
+      event: "frontend.authoritativeState.mainLifecycleDispatched",
+      sessionId: normalizeTrimmedString(data?.sessionId || sessionId),
+      dialogProcessId: data?.dialogProcessId || "",
+      turnScopeId: data?.turnScopeId || "",
+      data: {
+        eventType: normalizeTrimmedString(data?.eventType).toLowerCase(),
+        asynchronous: Boolean(result && typeof result.then === "function"),
+      },
     });
     return true;
   }

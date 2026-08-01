@@ -28,6 +28,7 @@ export function createTurnLifecycleBridge({ resolveBot, dispatchAuthorityEvents 
         userId: event.userId,
         sessionId: event.sessionId,
         parentSessionId: event.parentSessionId,
+        persistenceScope: event.persistenceScope,
       })
       : { dispatched: false, reason: "authority_dispatcher_unavailable" };
     return { ...result, dispatch };

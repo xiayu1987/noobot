@@ -141,4 +141,38 @@ describe("mergeCanonicalSessionDetail", () => {
       { eventId: "thinking-1", text: "thinking" },
     ]);
   });
+
+  it("uses presentation identity when a persisted terminal assistant has no messageUid", () => {
+    const persisted = {
+      id: "presentation-2",
+      presentationMessageId: "presentation-2",
+      role: "assistant",
+      type: "message",
+      content: "completed child result",
+      pending: false,
+      turnScopeId: "workflow-node:node-2",
+    };
+    const realtime = {
+      id: "presentation-2",
+      presentationMessageId: "presentation-2",
+      role: "assistant",
+      content: "",
+      pending: true,
+      turnScopeId: "workflow-node:node-2",
+      toolTimeline: [{ eventId: "tool-2" }],
+    };
+
+    const merged = mergeCanonicalSessionDetail(
+      { sessionId: "child-session", messages: [persisted] },
+      { sessionId: "child-session", messages: [realtime] },
+    );
+
+    expect(merged.messages).toHaveLength(1);
+    expect(merged.messages[0]).toMatchObject({
+      presentationMessageId: "presentation-2",
+      content: "completed child result",
+      pending: false,
+    });
+    expect(merged.messages[0].toolTimeline).toEqual([{ eventId: "tool-2" }]);
+  });
 });

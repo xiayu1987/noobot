@@ -135,7 +135,7 @@ export function upsertTurnStatusEntity({
   now = () => new Date().toISOString(),
 } = {}) {
   const initial = normalizeTurnStatusEntity(incoming, now);
-  if (!initial) return { statuses: normalizeTurnStatusesEntity(statuses, now), turnStatus: null, changed: false };
+  if (!initial) return { statuses: normalizeTurnStatusesEntity(statuses, now), messages: Array.isArray(messages) ? messages : [], turnStatus: null, changed: false };
   const identityMessage = (Array.isArray(messages) ? messages : [])
     .find((message) => isSameTurnStatus(initial, message));
   const normalized = normalizeTurnStatusEntity({
@@ -143,22 +143,31 @@ export function upsertTurnStatusEntity({
     turnScopeId: initial.turnScopeId || text(identityMessage?.turnScopeId),
     dialogProcessId: initial.dialogProcessId || resolveMessageDialogProcessId(identityMessage),
   }, now);
-  if (!normalized) return { statuses: normalizeTurnStatusesEntity(statuses, now), turnStatus: null, changed: false };
+  if (!normalized) return { statuses: normalizeTurnStatusesEntity(statuses, now), messages: Array.isArray(messages) ? messages : [], turnStatus: null, changed: false };
+
+  // Terminal status and its assistant presentation are one persisted fact.
+  // Every consumer can therefore converge from the canonical message entity.
+  const materializedMessages = (Array.isArray(messages) ? messages : []).map((message = {}) =>
+    isSameTurnStatus(normalized, message) && text(message?.role).toLowerCase() === "assistant"
+      ? { ...message, pending: false }
+      : message,
+  );
 
   const source = normalizeTurnStatusesEntity(statuses, now);
   const index = source.findIndex((item) => isSameTurnStatus(item, normalized));
-  if (index < 0) return { statuses: [...source, normalized], turnStatus: normalized, changed: true };
+  if (index < 0) return { statuses: [...source, normalized], messages: materializedMessages, turnStatus: normalized, changed: true };
 
   const existing = source[index];
   if (existing.status !== normalized.status) {
-    return { statuses: source, turnStatus: existing, changed: false };
+    return { statuses: source, messages: materializedMessages, turnStatus: existing, changed: false };
   }
   const persisted = { ...existing, ...normalized, createdAt: existing.createdAt || normalized.createdAt };
   const next = [...source];
   next[index] = persisted;
   return {
     statuses: next,
+    messages: materializedMessages,
     turnStatus: persisted,
-    changed: JSON.stringify(existing) !== JSON.stringify(persisted),
+    changed: JSON.stringify(existing) !== JSON.stringify(persisted) || JSON.stringify(messages) !== JSON.stringify(materializedMessages),
   };
 }

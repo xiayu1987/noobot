@@ -145,34 +145,8 @@ export async function applyReconnectDataReplay({
       reason: "invalid_current_run",
     });
   }
-  for (const sessionEntry of reconnectSessions) {
-    const lifecycleEvents = (Array.isArray(sessionEntry?.lifecycleEvents)
-      ? sessionEntry.lifecycleEvents
-      : [])
-      .map((item) => item?.data && typeof item.data === "object" ? item.data : item)
-      .filter((item) => item && typeof item === "object")
-      .sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0));
-    if (!lifecycleEvents.length) continue;
-    const sessionId = _trimStr(sessionEntry?.sessionId);
-    logStateMachineDebug("stateMachine.reconnect.lifecycleReplay.before", () => ({
-      sessionId,
-      eventCount: lifecycleEvents.length,
-      firstSequence: Number(lifecycleEvents[0]?.sequence || 0),
-      lastSequence: Number(lifecycleEvents.at(-1)?.sequence || 0),
-    }));
-    const results = [];
-    for (const envelope of lifecycleEvents) {
-      const result = await applyTurnLifecycleEnvelope?.(envelope);
-      results.push(Array.isArray(result) ? result[0] : result);
-    }
-    logStateMachineDebug("stateMachine.reconnect.lifecycleReplay.after", () => ({
-      sessionId,
-      eventCount: lifecycleEvents.length,
-      appliedCount: results.filter((result) => result?.applied === true).length,
-      rejectedCount: results.filter((result) => result?.applied === false).length,
-      reasons: [...new Set(results.map((result) => String(result?.reason || "")).filter(Boolean))],
-    }));
-  }
+  // A reconnect transaction has exactly one Authority baseline. Events are a
+  // tail after that baseline, never an alternative snapshot source.
   for (const sessionEntry of reconnectSessions) {
     const snapshot = sessionEntry?.turnLifecycleSnapshot;
     if (!snapshot || typeof snapshot !== "object") continue;
@@ -188,6 +162,41 @@ export async function applyReconnectDataReplay({
       applied: result?.applied === true,
       reason: result?.reason || "",
       errorCount: Array.isArray(result?.errors) ? result.errors.length : 0,
+    }));
+  }
+  for (const sessionEntry of reconnectSessions) {
+    const snapshot = hasValidTurnLifecycleSnapshot(sessionEntry)
+      ? sessionEntry.turnLifecycleSnapshot
+      : null;
+    const snapshotSequence = Number(snapshot?.sequence || 0);
+    const lifecycleEvents = (Array.isArray(sessionEntry?.lifecycleEvents)
+      ? sessionEntry.lifecycleEvents
+      : [])
+      .map((item) => item?.data && typeof item.data === "object" ? item.data : item)
+      .filter((item) => item && typeof item === "object")
+      .filter((item) => Number(item?.sequence || 0) > snapshotSequence)
+      .sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0));
+    if (!lifecycleEvents.length) continue;
+    const sessionId = _trimStr(sessionEntry?.sessionId);
+    logStateMachineDebug("stateMachine.reconnect.lifecycleReplay.before", () => ({
+      sessionId,
+      snapshotSequence,
+      eventCount: lifecycleEvents.length,
+      firstSequence: Number(lifecycleEvents[0]?.sequence || 0),
+      lastSequence: Number(lifecycleEvents.at(-1)?.sequence || 0),
+    }));
+    const results = [];
+    for (const envelope of lifecycleEvents) {
+      const result = await applyTurnLifecycleEnvelope?.(envelope);
+      results.push(Array.isArray(result) ? result[0] : result);
+    }
+    logStateMachineDebug("stateMachine.reconnect.lifecycleReplay.after", () => ({
+      sessionId,
+      snapshotSequence,
+      eventCount: lifecycleEvents.length,
+      appliedCount: results.filter((result) => result?.applied === true).length,
+      rejectedCount: results.filter((result) => result?.applied === false).length,
+      reasons: [...new Set(results.map((result) => String(result?.reason || "")).filter(Boolean))],
     }));
   }
   const recoverableSessionId = findRecoverableReconnectSessionId(reconnectSessions);

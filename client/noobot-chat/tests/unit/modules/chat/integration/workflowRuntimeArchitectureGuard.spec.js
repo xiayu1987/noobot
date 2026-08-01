@@ -38,10 +38,37 @@ describe("workflow runtime architecture guard", () => {
   it("does not reintroduce weak message identity matching", () => {
     const merge = source("src/modules/chat/model/sessionDetailMerge.js");
     const subSessions = source("src/modules/chat/stores/chatStoreSubSessions.js");
+    const reconnectModel = source("src/modules/chat/model/reconnectReplayModel.js");
+    const reconnectReplay = source("src/modules/chat/runtime/reconnect/messageReplay.js");
+    const thinkingDetailsPanel = source("src/app/composables/useThinkingDetailsPanel.js");
+    const thinkingPresentation = source("src/modules/chat/composables/thinkingPanelPresentation.js");
+    const thinkingDetailsRenderer = source("src/modules/chat/components/thinking/ThinkingPanelDetails.vue");
+    const thinkingRealtimeRenderer = source("src/modules/chat/components/thinking/ThinkingPanelRealtime.vue");
+    const toolLogIdentity = source("src/modules/chat/model/toolLogIdentity.js");
+    const turnUiStore = source("src/modules/chat/runtime/engine/turnUiStore.js");
 
     expect(merge).not.toMatch(/(?:turnScopeId|dialogProcessId|role)\s*[+:].*(?:turnScopeId|dialogProcessId|role)/);
     expect(subSessions).not.toMatch(/findIndex\([^)]*(?:turnScopeId|dialogProcessId|role)/s);
     expect(subSessions).toMatch(/message\?\.(?:messageId|id)/);
+    expect(reconnectModel).not.toMatch(/byTurnScopeId/);
+    expect(reconnectModel).toMatch(/presentationMessageId/);
+    expect(reconnectReplay).not.toMatch(/messageItem\?\.(?:messageId|id)\).*nextMessageId/s);
+    expect(reconnectReplay).toMatch(/messageItem\?\.presentationMessageId/);
+    expect(thinkingDetailsPanel).not.toMatch(/leftTurnScopeId|leftDialogProcessId/);
+    expect(thinkingDetailsPanel).toMatch(/leftPresentationMessageId/);
+    expect(thinkingPresentation).not.toMatch(/toolLogIndex.*toolLogItem\?\.ts/s);
+    expect(thinkingPresentation).toMatch(/eventId \? `event:\$\{eventId\}`/);
+    expect(thinkingDetailsRenderer).toMatch(/:detail-text="item\.detailText"/);
+    expect(thinkingDetailsRenderer).not.toMatch(/item\.detail\s*\|\||item\.data\?\.result/);
+    expect(thinkingDetailsRenderer).not.toMatch(/item\.tool_call_id/);
+    expect(thinkingRealtimeRenderer).toMatch(/:detail-text="logItem\.detailText"/);
+    expect(thinkingRealtimeRenderer).not.toMatch(/logItem\.(?:id|seq|tool_call_id|timestamp|ts)|logIndex}`/);
+    expect(toolLogIdentity).toMatch(/detail\(item\.detailText\)/);
+    expect(toolLogIdentity).not.toMatch(/item\.content|item\.args|item\.result/);
+    expect(toolLogIdentity).not.toMatch(/toolLogContentKey|findMatchIndex/);
+    expect(toolLogIdentity).toMatch(/indexByEventId/);
+    expect(turnUiStore).toMatch(/expandedToolDetailKeys/);
+    expect(turnUiStore).not.toMatch(/expandedDetailLogKeys/);
   });
 
   it("keeps canonical workflow nodes on status without persisting stepStatus", () => {
@@ -108,6 +135,22 @@ describe("workflow runtime architecture guard", () => {
     const ignoreIndex = sendRouter.indexOf("isIgnoredSubSessionEvent(event, data)");
     expect(authorityRouteIndex).toBeGreaterThan(-1);
     expect(ignoreIndex).toBeGreaterThan(authorityRouteIndex);
+  });
+
+  it("commits every Turn mutation through the store projection gateway", () => {
+    const engine = source("src/modules/chat/composables/useChatEngine.js");
+    const session = source("src/modules/chat/composables/useChatSession.js");
+    const runtimeProjector = source("src/modules/chat/runtime/session/runtimeEventProjector.js");
+    const store = source("src/modules/chat/stores/useChatStore.js");
+    const registryImports = engine.match(
+      /import\s*\{([^}]*)\}\s*from\s*["'][^"']*turnRuntimeRegistry\.js["']/,
+    )?.[1] || "";
+
+    expect(registryImports).not.toMatch(/\bapplyTurnTerminalResolution\b/);
+    expect(engine).not.toMatch(/cloneTerminalDraft|projectAppliedTurnRuntime/);
+    expect(session).toMatch(/commitTurnTerminalResolution:\s*chatStore\.applyTurnTerminalResolution/);
+    expect(runtimeProjector).not.toMatch(/applyRunStateMessageRuntimePatch/);
+    expect(store).toMatch(/onTurnCommitted[\s\S]*applyRunStateMessageRuntimePatch/);
   });
 
   it("keeps workflow transport projection in the declared plugin-runtime capability", () => {

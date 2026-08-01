@@ -17,7 +17,6 @@ import {
 } from "../../model/messageIdentity.js";
 import { selectTurnMessageRuntime } from "../../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { resolveTurnRuntimeView } from "../../runtime/run-state-machine/messageRuntime.js";
-import { resolvePersistedTurnFact } from "../../runtime/run-state-machine/persistedTurnFacts.js";
 import {
   getTurnUiState,
   setTurnAssistantContentExpanded,
@@ -138,13 +137,15 @@ const messageRuntime = computed(() => {
     turnScopeId: getMessageTurnScopeId(props.messageItem),
     dialogProcessId: getMessageDialogProcessId(props.messageItem),
   });
-  const persisted = resolvePersistedTurnFact(props.messageItem, props.sessionDocs);
   return resolveTurnRuntimeView({
     messageItem: props.messageItem,
-    turnTiming: persisted.timing,
-    turnStatus: persisted.status || {
-      status: props.messageItem?.persistedStatusStepState || props.messageItem?.projectedStatusStepState,
-    },
+    turnTiming: realtimeRuntime
+      ? {
+        thinkingStartedAt: realtimeRuntime.startedAt,
+        thinkingFinishedAt: realtimeRuntime.finishedAt,
+      }
+      : null,
+    turnStatus: realtimeRuntime?.state ? { status: realtimeRuntime.state } : null,
     realtimeState: realtimeRuntime,
   });
 });

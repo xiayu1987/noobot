@@ -170,6 +170,7 @@ export async function applyTurnLifecycleEvent({
         return statusResult.turnStatus ? {
           turnStatus: statusResult.turnStatus,
           statuses: statusResult.statuses,
+          messages: statusResult.messages,
           summaryVersion: currentTurnRevision + 1,
         } : { reason: "invalid_turn_status" };
       },
@@ -177,6 +178,7 @@ export async function applyTurnLifecycleEvent({
     if (!result.applied) return { ...result, session, version: actualVersion };
     session.turnLifecycle = result.lifecycle;
     if (result.terminalMaterialization?.statuses) session.turnStatuses = result.terminalMaterialization.statuses;
+    if (result.terminalMaterialization?.messages) session.messages = result.terminalMaterialization.messages;
     session.authorityEventOutbox = result.eventOutbox;
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;

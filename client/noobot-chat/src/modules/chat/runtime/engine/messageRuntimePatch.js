@@ -12,7 +12,6 @@ import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
 } from "../../../debug/loggers/stateMachineLogger.js";
-import { mergeCanonicalTurnTiming } from "../run-state-machine/turnTiming.js";
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { getMessageDialogProcessId } from "../../model/messageIdentity.js";
 import { selectTurnMessageRuntime, sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
@@ -88,8 +87,17 @@ export function applyRunStateMessageRuntimePatch({
       .includes(stateSnapshot.sessionId)
       ? activeSessionValue
       : null);
+  return applyRunStateMessageRuntimePatchToSession({ session, stateSnapshot, event });
+}
+
+export function applyRunStateMessageRuntimePatchToSession({
+  session,
+  stateSnapshot,
+  event,
+} = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
-  if (!messages.length) return;
+  if (!messages.length || !stateSnapshot) return { applied: false, patchedMessageCount: 0 };
+  let patchedMessageCount = 0;
   messages.forEach((message) => {
     const messageTurnScopeId = getMessageTurnScopeId(message);
     const messageDialogProcessId = getMessageDialogProcessId(message);
@@ -126,33 +134,14 @@ export function applyRunStateMessageRuntimePatch({
       clearRuntimeMark: effect?.patch?.clearRuntimeMark === true,
     }));
     const effectPatchesMessage = effect?.action === SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE;
-    const turnScopeId = getMessageTurnScopeId(message);
-    const timingPatch = effectPatchesMessage ? (effect.patch || {}) : {};
-    if (effectPatchesMessage && turnScopeId && (timingPatch.thinkingStartedAt || timingPatch.thinkingFinishedAt)) {
-      const canonicalTiming = mergeCanonicalTurnTiming(session, turnScopeId);
-      const existingTiming = canonicalTiming;
-      const projectedTiming = {};
-      if (existingTiming.thinkingStartedAt) {
-        projectedTiming.thinkingStartedAt = existingTiming.thinkingStartedAt;
-      }
-      if (existingTiming.thinkingFinishedAt) {
-        projectedTiming.thinkingFinishedAt = existingTiming.thinkingFinishedAt;
-      }
-      if (timingPatch.thinkingStartedAt && !projectedTiming.thinkingStartedAt) {
-        projectedTiming.thinkingStartedAt = timingPatch.thinkingStartedAt;
-      }
-      if (timingPatch.thinkingFinishedAt && !projectedTiming.thinkingFinishedAt) {
-        projectedTiming.thinkingFinishedAt =
-          projectedTiming.thinkingStartedAt || timingPatch.thinkingStartedAt || timingPatch.thinkingFinishedAt;
-      }
-      session.turnTimingsByTurnScopeId = {
-        ...(session.turnTimingsByTurnScopeId || {}),
-        [turnScopeId]: {
-          ...projectedTiming,
-        },
-      };
+    if (effectPatchesMessage) {
+      applyRunStateMessagePatch(message, effect.patch);
+      patchedMessageCount += 1;
     }
-    if (effectPatchesMessage) applyRunStateMessagePatch(message, effect.patch);
-    if (transportPatch) applyRunStateMessagePatch(message, transportPatch);
+    if (transportPatch) {
+      applyRunStateMessagePatch(message, transportPatch);
+      if (!effectPatchesMessage) patchedMessageCount += 1;
+    }
   });
+  return { applied: patchedMessageCount > 0, patchedMessageCount };
 }

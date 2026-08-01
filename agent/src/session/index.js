@@ -210,6 +210,38 @@ export function createSessionFacade(runtime = {}) {
     executionLogService,
   } = services;
 
+  const bindPersistenceScope = (payload = {}) => {
+    const persistenceScope = payload?.persistenceScope && typeof payload.persistenceScope === "object"
+      ? payload.persistenceScope
+      : null;
+    if (!persistenceScope) return payload;
+    const allowedRoot = String(persistenceScope.allowedRoot || "").trim().replaceAll("\\", "/");
+    const scopeId = String(persistenceScope.scopeId || "").trim();
+    const scopeParentSessionId = String(persistenceScope.parentSessionId || "").trim();
+    const requestedParentSessionId = String(payload.parentSessionId || "").trim();
+    if (!allowedRoot.startsWith("runtime/") || !scopeId.startsWith("agent:")) {
+      throw new Error("scoped session access requires an Agent-owned runtime persistence scope");
+    }
+    if (requestedParentSessionId && requestedParentSessionId !== scopeParentSessionId) {
+      throw new Error("scoped session parent does not match its authority protocol scope");
+    }
+    if (typeof runtime.createScopedPersistenceContext !== "function") {
+      throw new Error("scoped persistence context factory is unavailable");
+    }
+    return {
+      ...payload,
+      parentSessionId: scopeParentSessionId,
+      persistenceContext: runtime.createScopedPersistenceContext({
+        userId: payload.userId,
+        sessionId: payload.sessionId,
+        parentSessionId: scopeParentSessionId,
+        scopeId: persistenceScope.scopeId,
+        relativeDir: persistenceScope.relativeDir,
+        allowedRoot: persistenceScope.allowedRoot,
+      }),
+    };
+  };
+
   return {
     createScopedPersistenceContext(payload = {}) {
       if (typeof runtime.createScopedPersistenceContext !== "function") {
@@ -280,32 +312,7 @@ export function createSessionFacade(runtime = {}) {
     },
 
     async resolveTurnTerminalState(payload = {}) {
-      const persistenceScope = payload?.persistenceScope && typeof payload.persistenceScope === "object"
-        ? payload.persistenceScope
-        : null;
-      if (persistenceScope) {
-        const allowedRoot = String(persistenceScope.allowedRoot || "").trim().replaceAll("\\", "/");
-        const scopeId = String(persistenceScope.scopeId || "").trim();
-        if (!allowedRoot.startsWith("runtime/") || !scopeId.startsWith("agent:")) {
-          throw new Error("terminal resolution requires an Agent-owned runtime persistence scope");
-        }
-      }
-      const persistenceContext = persistenceScope
-        ? this.createScopedPersistenceContext({
-            userId: payload.userId,
-            sessionId: payload.sessionId,
-            parentSessionId: persistenceScope.parentSessionId,
-            scopeId: persistenceScope.scopeId,
-            relativeDir: persistenceScope.relativeDir,
-            allowedRoot: persistenceScope.allowedRoot,
-          })
-        : null;
-      return sessionCrudService.resolveTurnTerminalState({
-        ...payload,
-        parentSessionId: persistenceScope?.parentSessionId || payload.parentSessionId || "",
-        persistenceScope,
-        persistenceContext,
-      });
+      return sessionCrudService.resolveTurnTerminalState(bindPersistenceScope(payload));
     },
 
     async appendTurn(payload = {}) {
@@ -340,19 +347,19 @@ export function createSessionFacade(runtime = {}) {
     },
 
     async getPendingAuthorityEvents(payload = {}) {
-      return sessionMessageService.getPendingAuthorityEvents(payload);
+      return sessionMessageService.getPendingAuthorityEvents(bindPersistenceScope(payload));
     },
 
     async recordAuthorityEventAttempt(payload = {}) {
-      return sessionMessageService.recordAuthorityEventAttempt(payload);
+      return sessionMessageService.recordAuthorityEventAttempt(bindPersistenceScope(payload));
     },
 
     async acknowledgeAuthorityEvent(payload = {}) {
-      return sessionMessageService.acknowledgeAuthorityEvent(payload);
+      return sessionMessageService.acknowledgeAuthorityEvent(bindPersistenceScope(payload));
     },
 
     async compactAuthorityEvents(payload = {}) {
-      return sessionMessageService.compactAuthorityEvents(payload);
+      return sessionMessageService.compactAuthorityEvents(bindPersistenceScope(payload));
     },
 
     async getExecution(payload = {}) {

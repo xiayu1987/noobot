@@ -3,9 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { getCurrentScope, onScopeDispose, toRaw } from "vue";
+import { getCurrentScope, onScopeDispose } from "vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
-import { applyRunStateMessageRuntimePatch } from "../runtime/engine/messageRuntimePatch.js";
 import { createAssistantMessageHelpers } from "../runtime/engine/assistantMessage.js";
 import { createChatEngineConversationState } from "../runtime/engine/conversationState.js";
 import { stopSending as requestStopSending } from "../runtime/engine/stop.js";
@@ -18,11 +17,7 @@ import {
   summarizeStateMachineTurn,
 } from "../../debug/loggers/stateMachineLogger.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import {
-  applyTurnTerminalResolution,
-  resolveSessionTurnRuntime,
-  selectSessionTurnRuntime,
-} from "../runtime/run-state-machine/turnRuntimeRegistry.js";
+import { resolveSessionTurnRuntime, selectSessionTurnRuntime } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
 import { logTerminalResolutionDebug } from "../../debug/loggers/terminalResolutionDebugLogger.js";
 
@@ -30,33 +25,6 @@ const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
   TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
 const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS =
   TIME_THRESHOLDS.client.monotonicActionStopPollIntervalMs;
-
-function cloneTerminalDraft(value, seen = new WeakMap()) {
-  if (value === null || typeof value !== "object") return value;
-  const raw = toRaw(value);
-  if (seen.has(raw)) return seen.get(raw);
-  if (raw instanceof Date) return new Date(raw.getTime());
-  if (raw instanceof Map) {
-    const clone = new Map();
-    seen.set(raw, clone);
-    for (const [key, item] of raw) clone.set(cloneTerminalDraft(key, seen), cloneTerminalDraft(item, seen));
-    return clone;
-  }
-  if (raw instanceof Set) {
-    const clone = new Set();
-    seen.set(raw, clone);
-    for (const item of raw) clone.add(cloneTerminalDraft(item, seen));
-    return clone;
-  }
-  const clone = Array.isArray(raw) ? [] : {};
-  seen.set(raw, clone);
-  for (const key of Reflect.ownKeys(raw)) {
-    const descriptor = Object.getOwnPropertyDescriptor(raw, key);
-    if (!descriptor?.enumerable) continue;
-    clone[key] = cloneTerminalDraft(raw[key], seen);
-  }
-  return clone;
-}
 
 export function useChatEngine({
   userId,
@@ -79,7 +47,7 @@ export function useChatEngine({
   sessions,
   turnRuntimeRegistry,
   applyTurnRuntimeEvent,
-  projectAppliedTurnRuntime,
+  commitTurnTerminalResolution,
   input,
   uploadFiles,
   clearUploads,
@@ -112,7 +80,6 @@ export function useChatEngine({
   ensureConnected,
   notify = () => {},
   processStore = null,
-  runtimeEventsAlreadyProjected = false,
   terminalResolutionFetcher,
   monotonicActionStopTimeoutMs = DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS,
   monotonicActionStopPollIntervalMs = DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS,
@@ -130,8 +97,10 @@ export function useChatEngine({
       return { applied: false, reason: "invalid_terminal_status" };
     }
     try {
-      const nextRegistry = cloneTerminalDraft(turnRuntimeRegistry?.value || {});
-      const result = applyTurnTerminalResolution(nextRegistry, response);
+      const result = commitTurnTerminalResolution?.(response) || {
+        applied: false,
+        reason: "terminal_resolution_commit_unavailable",
+      };
       if (result?.applied !== true) {
         const current = result?.current || selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
         logTerminalResolutionDebug("frontend.terminalResolution.reducerRejected", () => ({
@@ -143,9 +112,7 @@ export function useChatEngine({
         }));
       }
       if (result?.applied) {
-        turnRuntimeRegistry.value = nextRegistry;
-        const projected = selectSessionTurnRuntime(nextRegistry, sessionId, turnScopeId);
-        projectAppliedTurnRuntime?.(projected);
+        const projected = selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
         logTerminalResolutionDebug("frontend.terminalResolution.applied", () => ({
           sessionId,
           turnScopeId,
@@ -158,20 +125,8 @@ export function useChatEngine({
           projectedState: projected?.displayState || projected?.state || "",
           projectedSending: projected?.sending === true,
           projectedTerminal: projected?.terminal || null,
-          activeTurnScopeId: nextRegistry?.sessions?.[sessionId]?.activeTurnScopeId || "",
+          activeTurnScopeId: turnRuntimeRegistry?.value?.sessions?.[sessionId]?.activeTurnScopeId || "",
         }));
-        if (!runtimeEventsAlreadyProjected) {
-          applyRunStateMessageRuntimePatch({
-            sessions,
-            activeSession,
-            turnRuntimeRegistry,
-            event: {
-              ...(response?.turn || {}),
-              sessionId,
-              turnScopeId,
-            },
-          });
-        }
       }
       return result;
     } catch (error) {
@@ -278,14 +233,6 @@ export function useChatEngine({
         messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
       },
     });
-    if (!runtimeEventsAlreadyProjected) {
-      applyRunStateMessageRuntimePatch({
-        sessions,
-        activeSession,
-        turnRuntimeRegistry,
-        event: turnResult?.turn || event,
-      });
-    }
     return turnResult;
   };
   const {
@@ -441,6 +388,7 @@ export function useChatEngine({
     cascadeDeleteMessagesFrom,
     deleteMonotonicMessage,
     resendMonotonicMessage,
+    dispatchAuthoritativeRunStateEvent: applyRunStateEvent,
     resolveTurnTerminalState: terminalResolutionCoordinator.resolve,
   };
 }

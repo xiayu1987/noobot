@@ -8,13 +8,16 @@ import assert from "node:assert/strict";
 
 import { createExecutionEventListener } from "../../src/events/execution-listener.js";
 
-test("execution listener forwards internal Turn commits without serializing persistence context", () => {
+test("execution listener forwards the authoritative persistence scope and its delivery barrier", async () => {
   const persisted = [];
   const forwarded = [];
-  const persistenceContext = {
+  const persistenceScope = {
     scopeId: "agent:child-turn",
-    locationResolver: { marker: "runtime-only" },
+    parentSessionId: "parent-session",
+    relativeDir: "runtime/workflow/session/parent-session/child-turn",
+    allowedRoot: "runtime/workflow/session",
   };
+  const delivered = { dispatched: true, delivered: 1 };
   const listener = createExecutionEventListener({
     sessionManager: {
       appendExecutionLog: async (record) => persisted.push(record),
@@ -25,25 +28,28 @@ test("execution listener forwards internal Turn commits without serializing pers
     turnScopeId: "child-turn",
     upstream: {
       dialogProcessId: "child-dialog",
-      onEvent: (event) => forwarded.push(event),
+      onEvent: async (event) => {
+        forwarded.push(event);
+        return delivered;
+      },
     },
   });
 
-  listener.onEvent({
+  const result = await listener.onEvent({
     event: "turn_lifecycle_committed",
     ts: "2026-07-30T13:17:24.634Z",
     data: {
-      envelope: { eventType: "turn.completed", revision: 4 },
-      persistenceContext,
+      envelope: { eventType: "turn.completed", revision: 4, persistenceScope },
     },
   });
 
   assert.equal(persisted.length, 0);
+  assert.equal(result, delivered);
   assert.equal(forwarded.length, 1);
-  assert.equal(forwarded[0].data.persistenceContext, persistenceContext);
   assert.deepEqual(forwarded[0].data.envelope, {
     eventType: "turn.completed",
     revision: 4,
+    persistenceScope,
   });
   assert.equal(forwarded[0].data.sessionId, "child-session");
   assert.equal(forwarded[0].data.parentSessionId, "parent-session");

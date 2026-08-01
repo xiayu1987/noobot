@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   areCanonicalTurnScopeIdsEqual,
   canonicalizeTurnScopeId,
+  isCanonicalTurnScopeId,
   turnScopeIdentityKey,
 } from "../turn-scope-identity.mjs";
 
@@ -21,4 +22,9 @@ test("canonicalizes workflow node transport identities at the protocol boundary"
 test("does not rewrite ordinary turn identities", () => {
   assert.equal(canonicalizeTurnScopeId("client-turn:one:two"), "client-turn:one:two");
   assert.equal(turnScopeIdentityKey("client-turn:one:two"), "client-turn:one:two");
+});
+
+test("canonical identity validation rejects transport encoding", () => {
+  assert.equal(isCanonicalTurnScopeId("workflow-node:node-1"), true);
+  assert.equal(isCanonicalTurnScopeId("workflow-node_node-1"), false);
 });

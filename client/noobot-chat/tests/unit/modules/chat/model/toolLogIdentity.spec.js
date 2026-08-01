@@ -11,20 +11,20 @@ const result = (overrides = {}) => ({ event: "tool_result", type: "tool_result",
  describe("tool log identity", () => {
   it("keeps the readable projection for the same call id", () => {
     const logs = deduplicateToolLogs([
-      result({ toolCallId: "call-1", detailText: "ok", text: "" }),
-      result({ toolCallId: "call-1", detailText: "ok", text: "search ok" }),
+      result({ eventId: "result-1", toolCallId: "call-1", detailText: "ok", text: "" }),
+      result({ eventId: "result-1", toolCallId: "call-1", detailText: "ok", text: "search ok" }),
     ]);
     expect(logs).toHaveLength(1);
     expect(logs[0].text).toBe("search ok");
   });
 
-  it("bridges an id-less compact result to an identified full result", () => {
+  it("does not infer identity between an id-less result and a canonical event", () => {
     const logs = deduplicateToolLogs([
       result({ detailText: "same", text: "" }),
-      result({ toolCallId: "call-1", detailText: "same", text: "full" }),
+      result({ eventId: "result-1", toolCallId: "call-1", detailText: "same", text: "full" }),
     ]);
-    expect(logs).toHaveLength(1);
-    expect(logs[0].toolCallId).toBe("call-1");
+    expect(logs).toHaveLength(2);
+    expect(logs[1].toolCallId).toBe("call-1");
   });
 
   it("keeps id-less results with different content", () => {
@@ -37,8 +37,8 @@ const result = (overrides = {}) => ({ event: "tool_result", type: "tool_result",
 
   it("does not merge different call ids with identical content", () => {
     const logs = deduplicateToolLogs([
-      result({ toolCallId: "call-1", detailText: "same" }),
-      result({ toolCallId: "call-2", detailText: "same" }),
+      result({ eventId: "result-1", toolCallId: "call-1", detailText: "same" }),
+      result({ eventId: "result-2", toolCallId: "call-2", detailText: "same" }),
     ]);
     expect(logs).toHaveLength(2);
   });

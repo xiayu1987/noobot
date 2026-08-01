@@ -42,6 +42,26 @@ test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for 
   );
 });
 
+test("SessionExecutionEngine forwards the authoritative dialog identity to runtime initialization", async () => {
+  const engine = new SessionExecutionEngine({});
+  let captured = null;
+  engine.initializer = {
+    async initializeRunSessionRuntime(payload = {}) {
+      captured = payload;
+      return payload;
+    },
+  };
+
+  await engine._initializeRunSessionRuntime({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "authoritative-dialog",
+    turnScopeId: "turn-1",
+  });
+
+  assert.equal(captured.dialogProcessId, "authoritative-dialog");
+});
+
 test("detached sub-session runner inherits userInteractionBridge from parent runtime", async () => {
   const bridge = {
     async requestUserInteraction() {
@@ -67,7 +87,7 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
   engine.runner = {
     async runSession(payload = {}) {
       capturedRunSessionPayload = payload;
-      return { output: "done", dialogProcessId: "sub-dialog" };
+      return { output: "done", dialogProcessId: payload.dialogProcessId };
     },
   };
   engine._prepareRunConfig = ({ runConfig = {} } = {}) => runConfig;

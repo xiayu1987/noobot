@@ -44,6 +44,16 @@ test("turn status bridges identities through persisted messages", () => {
   assert.equal(result.statuses.length, 1);
 });
 
+test("terminal status materializes the assistant message as settled", () => {
+  const result = upsertTurnStatusEntity({
+    statuses: [],
+    messages: [{ role: "assistant", turnScopeId: "t1", pending: true }],
+    incoming: { turnScopeId: "t1", status: "completed", reason: "run_completed" },
+    now,
+  });
+  assert.equal(result.messages[0].pending, false);
+});
+
 test("same terminal status is idempotent and conflicting terminal status cannot overwrite it", () => {
   const existing = {
     turnScopeId: "t1",

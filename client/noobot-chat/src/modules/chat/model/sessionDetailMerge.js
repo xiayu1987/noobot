@@ -14,7 +14,9 @@ function messageRole(item = {}) {
 
 function isPersistedFinalAssistant(item = {}) {
   return messageRole(item) === "assistant" &&
-    Boolean(text(item?.messageUid)) &&
+    Boolean(text(
+      item?.presentationMessageId || item?.messageUid || item?.messageId || item?.id,
+    )) &&
     text(item?.type).toLowerCase() === "message" &&
     Boolean(text(item?.content)) &&
     item?.pending === false;

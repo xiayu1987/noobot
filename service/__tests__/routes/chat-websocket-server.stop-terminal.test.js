@@ -8,6 +8,12 @@ import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { startServerWithWs, closeServer, stopChatWs } from "./chat-websocket-server.test-helpers.js";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
+import {
+  TURN_EVENT,
+  acknowledgeAuthorityEventDelivery,
+  listPendingAuthorityEvents,
+  recordAuthorityEventDeliveryAttempt,
+} from "@noobot/authoritative-state/contracts";
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
 
 test("chat-websocket-server: stop persists and emits the user_stopped turnScopeId", async () => {
@@ -67,7 +73,7 @@ test("chat-websocket-server: stop persists and emits the user_stopped turnScopeI
   }
 });
 
-test("chat-websocket-server: stop emits non-terminal stopping before run settles", async () => {
+test("chat-websocket-server: stop emits authoritative acceptance before run settles", async () => {
   let resolveRun = null;
   const runWait = new Promise((resolve) => {
     resolveRun = resolve;
@@ -112,7 +118,7 @@ test("chat-websocket-server: stop emits non-terminal stopping before run settles
       });
       ws.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
-        if (parsed?.event === "channel_state" && parsed?.data?.state === "stopping") {
+        if (parsed?.event === "turn_lifecycle" && parsed?.data?.eventType === TURN_EVENT.STOP_ACCEPTED) {
           resolve(parsed);
         }
         if (parsed?.event === "user_stopped" || parsed?.event === "done") {
@@ -124,6 +130,7 @@ test("chat-websocket-server: stop emits non-terminal stopping before run settles
     });
     assert.equal(stoppingEvent?.data?.turnScopeId, "turn-slow");
     assert.equal(stoppingEvent?.data?.dialogProcessId, "dp-slow");
+    assert.equal(stoppingEvent?.data?.phase, "action");
     resolveRun();
     ws.close();
   } finally {
@@ -292,6 +299,23 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
         }
         return result;
       },
+      getPendingAuthorityEvents: async () => ({
+        found: true,
+        events: listPendingAuthorityEvents(authorityEventOutbox),
+      }),
+      recordAuthorityEventAttempt: async ({ eventId } = {}) => {
+        const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, { eventId });
+        if (result.found) authorityEventOutbox = result.outbox;
+        return { recorded: result.found };
+      },
+      acknowledgeAuthorityEvent: async ({ eventId } = {}) => {
+        const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
+          eventId,
+          deliveredAt: new Date().toISOString(),
+        });
+        if (result.found) authorityEventOutbox = result.outbox;
+        return { acknowledged: result.found };
+      },
       persistStoppedAssistantMessage: async (payload = {}) => {
         persistedStopPayload = payload;
         return {
@@ -348,10 +372,16 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       });
     });
 
-    const stoppingEvent = events.find((item) => item?.event === "channel_state" && item?.data?.state === "stopping");
-    assert.equal(stoppingEvent?.data?.turnScopeId, "turn-idle-stop");
-    assert.equal(stoppingEvent?.data?.dialogProcessId, "dp-idle-stop");
-    assert.equal(stoppingEvent?.data?.sourceEvent, "stop_requested_idle_persisted");
+    const wireLifecycleEvents = events
+      .filter((item) => item?.event === "turn_lifecycle")
+      .map((item) => item.data);
+    assert.deepEqual(
+      wireLifecycleEvents.map((item) => item.eventType),
+      [TURN_EVENT.STOP_ACCEPTED, TURN_EVENT.STOP_PROCESSING_COMPLETED, TURN_EVENT.STOP_COMPLETED],
+    );
+    assert.equal(wireLifecycleEvents.every((item) => item.turnScopeId === "turn-idle-stop"), true);
+    assert.equal(wireLifecycleEvents.every((item) => item.dialogProcessId === "dp-idle-stop"), true);
+    assert.equal(events.some((item) => item?.event === "channel_state"), false);
     const stoppedEvent = events.find((item) => item?.event === "user_stopped");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-idle-stop");
     assert.equal(stoppedEvent?.data?.turnStatus?.status, "user_stopped");

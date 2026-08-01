@@ -20,6 +20,7 @@ import { loadThinkingDetail } from "../../modules/chat/model/thinkingDetailCache
 import { selectToolTimelineCount } from "../../modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../modules/chat/runtime/engine/activityTimeline.js";
 import { logThinkingReplayDebug } from "../../modules/debug/loggers/thinkingReplayDebugLogger.js";
+import { logStateMachineDebug } from "../../modules/debug/loggers/stateMachineLogger.js";
 
 function getSessionDocsFromDetail(detail = {}) {
   if (Array.isArray(detail?.sessionDocs)) return detail.sessionDocs;
@@ -34,17 +35,18 @@ function hasCanonicalTimeline(messageItem = {}) {
 
 function isSameThinkingTurn(left = {}, right = {}) {
   if (getMessageRole(left) !== "assistant" || getMessageRole(right) !== "assistant") return false;
-  const leftTurnScopeId = getMessageTurnScopeId(left);
-  const rightTurnScopeId = getMessageTurnScopeId(right);
-  if (leftTurnScopeId || rightTurnScopeId) {
-    return Boolean(leftTurnScopeId && leftTurnScopeId === rightTurnScopeId);
-  }
-  const leftDialogProcessId = getMessageDialogProcessId(left);
-  return Boolean(leftDialogProcessId && leftDialogProcessId === getMessageDialogProcessId(right));
+  const leftPresentationMessageId = String(left?.presentationMessageId || "").trim();
+  const rightPresentationMessageId = String(right?.presentationMessageId || "").trim();
+  return Boolean(
+    leftPresentationMessageId &&
+    leftPresentationMessageId === rightPresentationMessageId
+  );
 }
 
 function summarizeThinkingTimeline(messageItem = {}) {
+  const toolTimeline = Array.isArray(messageItem?.toolTimeline) ? messageItem.toolTimeline : [];
   return {
+    presentationMessageId: String(messageItem?.presentationMessageId || "").trim(),
     dialogProcessId: getMessageDialogProcessId(messageItem),
     turnScopeId: getMessageTurnScopeId(messageItem),
     pending: messageItem?.pending === true,
@@ -52,7 +54,15 @@ function summarizeThinkingTimeline(messageItem = {}) {
     thinkingDetailCount: Number(messageItem?.thinkingDetailCount || 0),
     activityTimelineCount: selectActivityTimelineLogs(messageItem).length,
     toolTimelineCount: selectToolTimelineCount(messageItem),
+    toolTimelineDetailCount: toolTimeline.filter((entry = {}) => (
+      entry?.args !== undefined || entry?.result !== undefined
+    )).length,
   };
+}
+
+function logThinkingPanelState(event, payload = {}) {
+  logThinkingReplayDebug(event, payload);
+  logStateMachineDebug(event, payload);
 }
 
 function timelineRevision(messageItem = {}) {
@@ -179,7 +189,7 @@ export function useThinkingDetailsPanel({
       : null;
     currentFetchDetail = requestFetchDetail || fetchThinkingDetail;
     const openRequestVersion = ++detailRequestVersion;
-    logThinkingReplayDebug("frontend.thinkingReplay.detailPanelOpenResolved", () => ({
+    logThinkingPanelState("frontend.thinkingReplay.detailPanelOpenResolved", () => ({
       sessionId: activeSessionId?.value,
       payload: summarizeThinkingTimeline(payloadMessageItem),
       active: summarizeThinkingTimeline(activeMessageItem || {}),
@@ -192,7 +202,7 @@ export function useThinkingDetailsPanel({
       try {
         loadedThinkingDetail = await fetchThinkingDetailForMessage(initialMessageItem, requestFetchDetail);
         if (openRequestVersion !== detailRequestVersion) return;
-        logThinkingReplayDebug("frontend.thinkingReplay.detailPanelRequestCommitted", () => ({
+        logThinkingPanelState("frontend.thinkingReplay.detailPanelRequestCommitted", () => ({
           sessionId: activeSessionId?.value,
           requested: summarizeThinkingTimeline(initialMessageItem),
           detail: summarizeThinkingTimeline(loadedThinkingDetail?.messageItem || {}),
@@ -250,7 +260,7 @@ export function useThinkingDetailsPanel({
       if (hasCanonicalTimeline(sourceMessage)) {
         detailRequestVersion += 1;
         thinkingDetailsMessageItem.value = sourceMessage;
-        logThinkingReplayDebug("frontend.thinkingReplay.detailPanelCanonicalSynchronized", () => ({
+        logThinkingPanelState("frontend.thinkingReplay.detailPanelCanonicalSynchronized", () => ({
           sessionId: activeSessionId?.value,
           source: summarizeThinkingTimeline(sourceMessage),
           preservedAllMessageCount: thinkingDetailsAllMessages.value.length,

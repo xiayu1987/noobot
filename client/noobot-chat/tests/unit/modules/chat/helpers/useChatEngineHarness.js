@@ -17,10 +17,12 @@ import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/modul
 import {
   applyTurnLifecycleEnvelope,
   applyTurnRuntimeEvent,
+  applyTurnTerminalResolution,
   createTurnRuntimeRegistryState,
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { applyRunStateMessageRuntimePatch } from "../../../../../src/modules/chat/runtime/engine/messageRuntimePatch.js";
 
 const terminalResolutionFromUrl = (url, state = "completed", messages = []) => {
   const match = String(url).match(/\/session\/[^/]+\/([^/]+)\/turns\/([^/]+)\/terminal/);
@@ -166,7 +168,29 @@ export const createHarness = ({
   const commitTurnRuntimeEvent = (event) => {
     const registry = turnRuntimeRegistry.value;
     const result = applyTurnRuntimeEvent(registry, event);
-    if (result?.applied !== false) turnRuntimeRegistry.value = { ...registry };
+    if (result?.applied !== false) {
+      turnRuntimeRegistry.value = { ...registry };
+      applyRunStateMessageRuntimePatch({
+        sessions,
+        activeSession,
+        turnRuntimeRegistry,
+        event: result?.turn || event,
+      });
+    }
+    return result;
+  };
+  const commitTurnTerminalResolution = (response) => {
+    const registry = turnRuntimeRegistry.value;
+    const result = applyTurnTerminalResolution(registry, response);
+    if (result?.applied !== false) {
+      turnRuntimeRegistry.value = { ...registry };
+      applyRunStateMessageRuntimePatch({
+        sessions,
+        activeSession,
+        turnRuntimeRegistry,
+        event: result?.turn || response?.turn || response,
+      });
+    }
     return result;
   };
 
@@ -225,6 +249,7 @@ export const createHarness = ({
     sessions,
     turnRuntimeRegistry,
     applyTurnRuntimeEvent: commitTurnRuntimeEvent,
+    commitTurnTerminalResolution,
     input,
     uploadFiles,
     clearUploads: vi.fn(),

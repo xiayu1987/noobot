@@ -3,30 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { applyRunStateMessageRuntimePatch } from "../engine/messageRuntimePatch.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
-import { findCanonicalTurnTiming } from "../run-state-machine/turnTiming.js";
-import { sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
 
 export function createRuntimeEventProjector({ sessions, activeSession, turnRuntimeRegistry, chatStore, resolveActiveSessionIdentity }) {
   const submitTurnRuntimeEvent = (event) => {
     const requestedSessionId = String(event?.sessionId || "").trim();
     const requestedTurnScopeId = String(event?.turnScopeId || "").trim();
-    const owningSession = (Array.isArray(sessions.value) ? sessions.value : []).find(
-      (item) => sessionRuntimeId(item) === requestedSessionId,
-    );
-    const canonicalTiming = findCanonicalTurnTiming(owningSession, requestedTurnScopeId);
-    const timedEvent = canonicalTiming
-      ? {
-        ...event,
-        startedAt: canonicalTiming.thinkingStartedAt || event?.startedAt || "",
-        finishedAt: canonicalTiming.thinkingFinishedAt || event?.finishedAt || "",
-        thinkingStartedAt: canonicalTiming.thinkingStartedAt || event?.thinkingStartedAt || "",
-        thinkingFinishedAt: canonicalTiming.thinkingFinishedAt || event?.thinkingFinishedAt || "",
-        canonicalTimingObserved: true,
-      }
-      : event;
-    const result = chatStore.applyTurnRuntimeEvent(timedEvent);
+    const result = chatStore.applyTurnRuntimeEvent(event);
     const selectedSessionId = resolveActiveSessionIdentity();
     const activeBucket = turnRuntimeRegistry.value?.sessions?.[selectedSessionId] || null;
     logThinkingReplayDebug("frontend.lifecycle.runtimeConsumed", () => ({
@@ -45,12 +28,6 @@ export function createRuntimeEventProjector({ sessions, activeSession, turnRunti
       canonicalTerminal: result?.turn?.terminal || null,
       activeBucketTurnScopeId: String(activeBucket?.activeTurnScopeId || "").trim(),
     }));
-    applyRunStateMessageRuntimePatch({
-      sessions,
-      activeSession,
-      turnRuntimeRegistry,
-      event: result?.turn || event,
-    });
     return {
       ...result,
       messageEffect: {

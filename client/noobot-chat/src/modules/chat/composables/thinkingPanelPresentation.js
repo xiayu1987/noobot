@@ -7,6 +7,7 @@ import { ref } from "vue";
 import { resolveTimeMs } from "../model/timeFields.js";
 import {
   getTurnUiState,
+  isTurnDetailExpanded,
   setTurnThinkingOpenNames,
   toggleTurnDetailKey,
 } from "../runtime/engine/turnUiStore.js";
@@ -69,16 +70,16 @@ export function createThinkingPanelPresentation({
   }
 
   function getThinkingDetailItemKey(
-    groupedToolLogs,
+    _groupedToolLogs,
     toolLogItem,
-    toolLogIndex,
   ) {
-    return `${String(groupedToolLogs?.key || "")}|${toolLogIndex}|${String(toolLogItem?.ts || "")}|${String(toolLogItem?.event || "")}`;
+    const eventId = String(toolLogItem?.eventId || "").trim();
+    return eventId ? `event:${eventId}` : "";
   }
 
   function isThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
     detailExpansionTick.value;
-    return getTurnUiState(messageItem)?.expandedDetailLogKeys.includes(detailItemKey) === true;
+    return isTurnDetailExpanded(messageItem, detailItemKey);
   }
 
   function toggleThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {

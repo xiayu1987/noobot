@@ -274,6 +274,8 @@ describe("workflow runtime live/replay homomorphism", () => {
     }, { source: "live" });
 
     store.applyWorkflowRuntimeEvent(snapshotEvent({ version: 9, status: "running" }), { source: "snapshot" });
-    expect(store.selectSubSessionMessages("child-1").status).toBe("failed");
+    expect(store.selectWorkflowNodeState("child-1", "workflow-node:node-1")?.status).toBe("failed");
+    expect(store.selectSubSessionMessages("child-1")?.workflowNodeState?.status).toBe("failed");
+    expect(store.selectSubSessionMessages("child-1")?.status).toBe("");
   });
 });

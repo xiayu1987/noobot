@@ -18,7 +18,7 @@ import {
 } from "@noobot/authoritative-state/contracts";
 import { validateExecutionIdentity } from "@noobot/shared/execution-lifecycle-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { normalizeTurnScopeIdKey } from "../../model/messageIdentity.js";
+import { canonicalizeTurnScopeId } from "../../model/messageIdentity.js";
 
 export const DEFAULT_TERMINAL_RETAIN_PER_SESSION = 10;
 export const DEFAULT_TERMINAL_MAX_AGE_MS = TIME_THRESHOLDS.client.terminalTurnRetentionMs;
@@ -28,7 +28,9 @@ function text(value) {
 }
 
 function turnKey(value) {
-  return normalizeTurnScopeIdKey(value);
+  // Runtime entities carry the protocol identity.  A map key must not leak
+  // the transport/index encoding into state, logs, or UI projections.
+  return canonicalizeTurnScopeId(value);
 }
 
 export function executionTurnKey(sessionId, turnScopeId) {
@@ -374,6 +376,7 @@ export function selectSessionTurnRuntime(registry, sessionId, turnScopeId = "") 
   const displayState = turnRuntimeDisplayState(turn);
   return {
     sessionId: normalizedSessionId,
+    parentSessionId: text(turn?.parentSessionId),
     turnScopeId: text(turn?.turnScopeId),
     dialogProcessId: text(turn?.dialogProcessId),
     action: text(turn?.action),
@@ -437,6 +440,7 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
     state,
     backendState: turn.backendState || "",
     sessionId: turn.sessionId,
+    parentSessionId: turn.parentSessionId || "",
     turnScopeId: turn.turnScopeId,
     dialogProcessId: turn.dialogProcessId || "",
     source: turn.source || "",
@@ -638,6 +642,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
     ...(current || {}),
     ...transition.next,
     sessionId,
+    parentSessionId: text(rawEvent?.parentSessionId || current?.parentSessionId),
     turnScopeId,
     dialogProcessId: text(event.dialogProcessId || current?.dialogProcessId),
     action: transition.next.action,
@@ -825,6 +830,54 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   return { applied: true, bucket };
 }
 
+export function applyTurnTimingUpdate(registry, update = {}) {
+  const sessionId = text(update?.sessionId);
+  const turnScopeId = turnKey(update?.turnScopeId);
+  const dialogProcessId = text(update?.dialogProcessId);
+  const startedAt = text(update?.thinkingStartedAt || update?.startedAt);
+  const finishedAt = text(update?.thinkingFinishedAt || update?.finishedAt);
+  if (!sessionId || !turnScopeId) return { applied: false, reason: "missing_timing_identity" };
+  if (!startedAt && !finishedAt) return { applied: false, reason: "missing_timing_value" };
+  if (isTurnRuntimeDeleted(registry, { sessionId, turnScopeId })) {
+    return { applied: false, reason: "turn_runtime_deleted" };
+  }
+  const bucket = ensureSessionBucket(registry, sessionId);
+  const current = bucket.turns[turnScopeId] || {};
+  if (
+    current?.dialogProcessId && dialogProcessId &&
+    text(current.dialogProcessId) !== dialogProcessId
+  ) {
+    return { applied: false, reason: "dialog_process_identity_conflict" };
+  }
+  const nextStartedAt = text(current.startedAt || startedAt);
+  const nextFinishedAt = text(current.finishedAt || finishedAt);
+  const nextDialogProcessId = text(current.dialogProcessId || dialogProcessId);
+  const canonicalTimingObserved = update.canonical === true || current.canonicalTimingObserved === true;
+  if (
+    text(current.startedAt) === nextStartedAt &&
+    text(current.finishedAt) === nextFinishedAt &&
+    text(current.dialogProcessId) === nextDialogProcessId &&
+    current.canonicalTimingObserved === canonicalTimingObserved
+  ) {
+    return { applied: false, deduplicated: true, reason: "timing_unchanged", turn: current };
+  }
+  const turn = {
+    ...current,
+    sessionId,
+    turnScopeId,
+    dialogProcessId: nextDialogProcessId,
+    startedAt: nextStartedAt,
+    finishedAt: nextFinishedAt,
+    startedAtMs: nextStartedAt ? Date.parse(nextStartedAt) || 0 : Number(current.startedAtMs || 0),
+    finishedAtMs: nextFinishedAt ? Date.parse(nextFinishedAt) || 0 : Number(current.finishedAtMs || 0),
+    canonicalTimingObserved,
+    timingSource: text(update?.source || current.timingSource || "turn_runtime_event"),
+  };
+  bucket.turns[turnScopeId] = turn;
+  if (nextDialogProcessId) registry.routeIndex[nextDialogProcessId] = { sessionId, turnScopeId };
+  return { applied: true, bucket, turn };
+}
+
 export function applyTurnTimingSnapshot(registry, snapshot = {}) {
   const sessionId = text(snapshot?.sessionId);
   const sourceTimings = Array.isArray(snapshot?.turnTimings) ? snapshot.turnTimings : [];
@@ -843,40 +896,17 @@ export function applyTurnTimingSnapshot(registry, snapshot = {}) {
   const hydratedTurnScopeIds = [];
   for (const timing of timings) {
     if (isTurnRuntimeDeleted(registry, { sessionId, turnScopeId: timing.turnScopeId })) continue;
-    const current = bucket.turns[timing.turnScopeId] || {};
-    if (
-      current?.dialogProcessId &&
-      timing.dialogProcessId &&
-      text(current.dialogProcessId) !== timing.dialogProcessId
-    ) {
-      return { applied: false, reason: "dialog_process_identity_conflict" };
-    }
-    const startedAt = timing.startedAt || text(current.startedAt);
-    const finishedAt = timing.finishedAt || text(current.finishedAt);
-    const dialogProcessId = text(current.dialogProcessId || timing.dialogProcessId);
-    if (
-      text(current.startedAt) === startedAt &&
-      text(current.finishedAt) === finishedAt &&
-      text(current.dialogProcessId) === dialogProcessId &&
-      current.canonicalTimingObserved === true
-    ) continue;
-    const next = {
-      ...current,
+    const result = applyTurnTimingUpdate(registry, {
       sessionId,
       turnScopeId: timing.turnScopeId,
-      dialogProcessId,
-      startedAt,
-      finishedAt,
-      startedAtMs: startedAt ? Date.parse(startedAt) || 0 : Number(current.startedAtMs || 0),
-      finishedAtMs: finishedAt ? Date.parse(finishedAt) || 0 : Number(current.finishedAtMs || 0),
-      canonicalTimingObserved: true,
-      timingSource: "session_turn_timing_snapshot",
-    };
-    bucket.turns[timing.turnScopeId] = next;
-    if (dialogProcessId) {
-      registry.routeIndex[dialogProcessId] = { sessionId, turnScopeId: timing.turnScopeId };
-    }
-    hydratedTurnScopeIds.push(timing.turnScopeId);
+      dialogProcessId: timing.dialogProcessId,
+      startedAt: timing.startedAt,
+      finishedAt: timing.finishedAt,
+      canonical: true,
+      source: "session_turn_timing_snapshot",
+    });
+    if (result.reason === "dialog_process_identity_conflict") return result;
+    if (result.applied) hydratedTurnScopeIds.push(timing.turnScopeId);
   }
   return hydratedTurnScopeIds.length
     ? { applied: true, bucket, hydratedTurnScopeIds }

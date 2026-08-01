@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { computed, watch } from "vue";
 import {
   BaseEmptyHint,
   BaseMetaLabel,
@@ -11,11 +12,11 @@ import {
   BaseTabPanelBody,
   BaseThinkingLogLine,
 } from "../../../../shared/public-api/ui.js";
+import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },
   isRunning: Boolean,
-  detailLabel: { type: String, default: "" },
   groupedToolLogs: { type: Array, default: () => [] },
   injectedMessages: { type: Array, default: () => [] },
   detailCount: { type: Number, default: 0 },
@@ -25,11 +26,42 @@ const props = defineProps({
   toggleExpanded: { type: Function, required: true },
   formatInjectedTitle: { type: Function, required: true },
 });
+const rendererProjection = computed(() => (Array.isArray(props.groupedToolLogs)
+  ? props.groupedToolLogs
+  : []).flatMap((group = {}) => (Array.isArray(group.items) ? group.items : [])));
+const rendererProjectionSignature = computed(() => rendererProjection.value.map((item = {}) => [
+  item.eventId || "",
+  item.toolCallId || "",
+  item.detailText?.length || 0,
+].join(":")).join("|"));
+watch(rendererProjectionSignature, () => {
+  logStateMachineDebug("frontend.thinkingReplay.detailRendererProjected", () => ({
+    sessionId: String(props.messageItem?.sessionId || ""),
+    presentationMessageId: String(props.messageItem?.presentationMessageId || ""),
+    dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
+    turnScopeId: String(props.messageItem?.turnScopeId || ""),
+    itemCount: rendererProjection.value.length,
+    items: rendererProjection.value.slice(-32).map((item = {}, index) => {
+      const detailKey = props.getDetailKey({ key: "tool-timeline" }, item, index);
+      return {
+        eventId: String(item.eventId || ""),
+        toolCallId: String(item.toolCallId || ""),
+        event: String(item.event || ""),
+        hasArgs: item.args !== undefined,
+        hasResult: item.result !== undefined,
+        detailLength: String(item.detailText || "").length,
+        detailKey,
+        expanded: detailKey ? props.isExpanded(props.messageItem, detailKey) : false,
+      };
+    }),
+  }));
+}, { immediate: true, flush: "post" });
 </script>
 <template>
   <BaseTabPanelBody class="thinking-details-panel"
     ><el-tabs class="thinking-details-tabs"
-        ><el-tab-pane :label="detailLabel"
+        ><el-tab-pane
+          :label="translate('message.executionRecords', { count: detailCount })"
           ><BaseTabPanelBody
             class="thinking-details-scroll-body thinking-details-log-body"
             ><div
@@ -44,16 +76,16 @@ const props = defineProps({
               />
               <div
                 v-for="(item, ii) in group.items"
-                :key="`tool-log-${gi}-${ii}`"
+                :key="getDetailKey(group, item, ii)"
               >
                 <BaseThinkingLogLine
                   :indent="Number(item.indent || 0)"
                   :prefix-text="getTreePrefix(item)"
-                  :event-text="item.event || item.type"
+                  :event-text="item.event"
                   :content-text="item.text"
-                  :detail-text="item.detailText || item.detail || item.result || item.data?.result || ''"
+                  :detail-text="item.detailText"
                   :tool="true"
-                  :expandable="true"
+                  :expandable="Boolean(getDetailKey(group, item, ii) && item.detailText)"
                   :expanded="
                     isExpanded(messageItem, getDetailKey(group, item, ii))
                   "
@@ -71,7 +103,7 @@ const props = defineProps({
               " /></BaseTabPanelBody></el-tab-pane
         ><el-tab-pane
           :label="
-            translate('message.injectedMessages', {
+            translate('message.thinkingContent', {
               count: injectedMessages.length,
             })
           "

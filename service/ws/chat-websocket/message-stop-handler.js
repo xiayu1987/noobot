@@ -81,11 +81,6 @@ export function createMessageStopHandler({
         reason: "user stop action",
         stopPayload: state.currentStopPayload,
       });
-      sendEvent("channel_state", {
-        ...state.currentStopPayload,
-        state: "stopping",
-        sourceEvent: "stop_requested_registry",
-      });
       return;
     }
     if (!state.isRunning || !state.currentAbortController) {
@@ -137,7 +132,25 @@ export function createMessageStopHandler({
           ...lifecycleContext,
           commandId: `${stopCommandId}:completed`,
           eventType: TURN_EVENT.STOP_COMPLETED,
-          summaryVersion: Number(turnStatus?.version || 0),
+          completionCommitId: `${stopCommandId}:completed`,
+          summaryVersion: Math.max(1, Number(turnStatus?.version || 0)),
+        });
+        void recordServiceWebSocketLifecycle({
+          sessionLogConfig,
+          event: "service.authorityOutbox.stopCompletedCommit",
+          userId,
+          sessionId: stopPayload.sessionId,
+          dialogProcessId: stopPayload.dialogProcessId,
+          turnScopeId: stopPayload.turnScopeId,
+          data: {
+            applied: completed?.applied === true,
+            deduplicated: completed?.deduplicated === true,
+            hasEnvelope: Boolean(completed?.envelope),
+            completionCommitId: `${stopCommandId}:completed`,
+            summaryVersion: Math.max(1, Number(turnStatus?.version || 0)),
+            dispatchDelivered: Number(completed?.dispatch?.delivered || 0),
+            dispatchReason: completed?.dispatch?.reason || "",
+          },
         });
         if (!completed?.applied && !completed?.deduplicated) {
           sendEvent("error", {
@@ -150,12 +163,6 @@ export function createMessageStopHandler({
           });
           return;
         }
-        sendEvent("channel_state", {
-          ...stopPayload,
-          state: "stopping",
-          sourceEvent: "stop_requested_idle_persisted",
-          turnStatus,
-        });
         sendEvent("user_stopped", {
           ...stopPayload,
           turnStatus,
@@ -187,12 +194,6 @@ export function createMessageStopHandler({
         });
         return;
       }
-      sendEvent("channel_state", {
-        ...stopPayload,
-        state: turnStatus?.status || "stopping",
-        sourceEvent: turnStatus ? "stop_requested_terminal_exists" : "stop_requested_pending",
-        turnStatus: turnStatus || undefined,
-      });
       return;
     }
     if (state.isRunning && state.currentAbortController) {
@@ -202,11 +203,6 @@ export function createMessageStopHandler({
         stopPayload: state.currentStopPayload,
       });
     }
-    sendEvent("channel_state", {
-      ...state.currentStopPayload,
-      state: "stopping",
-      sourceEvent: "stop_requested",
-    });
   };
 
   return handleStop;

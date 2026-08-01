@@ -20,6 +20,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
+import { createRunEventListener } from "../../ws/chat-websocket/run-event-listener.js";
 import { attachRunTransport, publishRunEvent } from "../../ws/chat-websocket/run-registry.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
@@ -409,11 +410,12 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   assert.equal(sent.length, 1);
 });
 
-test("authority dispatcher preserves the child persistence context across every outbox operation", async () => {
-  const persistenceContext = Object.freeze({
+test("authority dispatcher preserves the child persistence scope across every outbox operation", async () => {
+  const persistenceScope = Object.freeze({
+    scopeId: "agent:child-turn",
     parentSessionId: "root-session",
-    workflowRunId: "workflow-run-1",
-    nodeExecutionId: "node-execution-1",
+    relativeDir: "runtime/workflow/session/root-session/child-turn",
+    allowedRoot: "runtime/workflow/session",
   });
   const calls = [];
   let pending = true;
@@ -451,14 +453,14 @@ test("authority dispatcher preserves the child persistence context across every 
     userId: "u1",
     sessionId: "child-session",
     parentSessionId: "root-session",
-    persistenceContext,
+    persistenceScope,
     limit: 25,
   });
 
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
   assert.deepEqual(calls.map(({ method }) => method), ["get", "attempt", "acknowledge", "get", "compact"]);
   for (const { input } of calls) {
-    assert.equal(input.persistenceContext, persistenceContext);
+    assert.equal(input.persistenceScope, persistenceScope);
     assert.equal(input.sessionId, "child-session");
     assert.equal(input.parentSessionId, "root-session");
   }
@@ -473,7 +475,85 @@ test("authority dispatcher preserves the child persistence context across every 
   );
 });
 
-test("authority dispatcher coalesces concurrent drains for the same scoped Session", async () => {
+test("a detached child lifecycle commit drains its complete scoped outbox to the root transport", async () => {
+  const persistenceScope = Object.freeze({
+    scopeId: "agent:workflow-node:child-turn",
+    parentSessionId: "root-session",
+    relativeDir: "runtime/workflow/session/root-session/child-turn",
+    allowedRoot: "runtime/workflow/session",
+  });
+  const eventTypes = [
+    TURN_EVENT.ACTION_ACCEPTED,
+    TURN_EVENT.PROCESSING_STARTED,
+    TURN_EVENT.PROCESSING_COMPLETED,
+    TURN_EVENT.COMPLETED,
+  ];
+  let pending = eventTypes.map((eventType, index) => ({
+    eventId: `child-authority-${index + 1}`,
+    envelope: {
+      eventId: `child-authority-${index + 1}`,
+      eventType,
+      sequence: index + 1,
+      revision: index + 1,
+      userId: "u1",
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+      turnScopeId: "workflow-node:child-turn",
+      dialogProcessId: "child-dialog",
+      persistenceScope,
+    },
+  }));
+  const calls = [];
+  const sent = [];
+  const bot = {
+    async getPendingAuthorityEvents(input) {
+      calls.push({ method: "get", input });
+      return { found: true, events: pending };
+    },
+    async recordAuthorityEventAttempt(input) {
+      calls.push({ method: "attempt", input });
+      return { recorded: pending.some((item) => item.eventId === input.eventId) };
+    },
+    async acknowledgeAuthorityEvent(input) {
+      calls.push({ method: "acknowledge", input });
+      pending = pending.filter((item) => item.eventId !== input.eventId);
+      return { acknowledged: true };
+    },
+  };
+  const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: (event, envelope) => {
+      sent.push({ event, envelope });
+      return true;
+    },
+  });
+  const listener = createRunEventListener({
+    sessionId: "root-session",
+    onCommittedTurnLifecycle: (envelope) => dispatchAuthorityEvents({
+      userId: envelope.userId,
+      sessionId: envelope.sessionId,
+      parentSessionId: envelope.parentSessionId,
+      persistenceScope: envelope.persistenceScope,
+    }),
+  });
+
+  const result = await listener.onEvent({
+    event: "turn_lifecycle_committed",
+    data: { envelope: pending.at(-1).envelope },
+  });
+
+  assert.deepEqual(result, { dispatched: true, delivered: 4 });
+  assert.deepEqual(sent.map(({ event }) => event), eventTypes.map(() => TURN_LIFECYCLE_WIRE_EVENT));
+  assert.deepEqual(sent.map(({ envelope }) => envelope.eventType), eventTypes);
+  assert.equal(sent.every(({ envelope }) => envelope.sessionId === "child-session"), true);
+  assert.equal(
+    calls.every(({ input }) => input.persistenceScope === persistenceScope),
+    true,
+  );
+  assert.equal(pending.length, 0);
+});
+
+test("authority dispatcher serializes concurrent scoped drains and performs the requested confirmation pass", async () => {
   let pending = true;
   let releaseSend;
   const sendBarrier = new Promise((resolve) => { releaseSend = resolve; });
@@ -507,12 +587,12 @@ test("authority dispatcher coalesces concurrent drains for the same scoped Sessi
       return true;
     },
   });
-  const persistenceContext = { scopeId: "agent:child-turn" };
+  const persistenceScope = { scopeId: "agent:child-turn" };
   const payload = {
     userId: "u1",
     sessionId: "child-session",
     parentSessionId: "root-session",
-    persistenceContext,
+    persistenceScope,
   };
 
   const first = dispatch(payload);
@@ -523,7 +603,81 @@ test("authority dispatcher coalesces concurrent drains for the same scoped Sessi
     { dispatched: true, delivered: 1 },
     { dispatched: true, delivered: 1 },
   ]);
-  assert.deepEqual(calls, { get: 2, attempt: 1, acknowledge: 1, send: 1 });
+  assert.deepEqual(calls, { get: 3, attempt: 1, acknowledge: 1, send: 1 });
+});
+
+test("authority dispatcher repeats a scoped drain when a lifecycle commit arrives during its final empty read", async () => {
+  let pending = [{
+    eventId: "authority-event-running",
+    envelope: {
+      eventId: "authority-event-running",
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      sequence: 1,
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+    },
+  }];
+  let releaseEmptyRead;
+  const emptyReadBarrier = new Promise((resolve) => { releaseEmptyRead = resolve; });
+  let emptyReadStarted;
+  const emptyReadObserved = new Promise((resolve) => { emptyReadStarted = resolve; });
+  let reads = 0;
+  const sent = [];
+  const bot = {
+    async getPendingAuthorityEvents() {
+      reads += 1;
+      const events = pending.slice();
+      if (reads === 2) {
+        emptyReadStarted();
+        await emptyReadBarrier;
+      }
+      return { found: true, events };
+    },
+    async recordAuthorityEventAttempt({ eventId }) {
+      return { recorded: pending.some((item) => item.eventId === eventId) };
+    },
+    async acknowledgeAuthorityEvent({ eventId }) {
+      pending = pending.filter((item) => item.eventId !== eventId);
+      return { acknowledged: true };
+    },
+  };
+  const dispatch = createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: (_eventName, envelope) => {
+      sent.push(envelope.eventId);
+      return true;
+    },
+  });
+  const payload = {
+    userId: "u1",
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+    persistenceScope: { scopeId: "agent:child-turn" },
+  };
+
+  const runningDrain = dispatch(payload);
+  await emptyReadObserved;
+  pending.push({
+    eventId: "authority-event-completed",
+    envelope: {
+      eventId: "authority-event-completed",
+      eventType: TURN_EVENT.COMPLETED,
+      sequence: 2,
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+    },
+  });
+  const terminalDrain = dispatch(payload);
+  assert.equal(terminalDrain, runningDrain);
+  releaseEmptyRead();
+
+  assert.deepEqual(await Promise.all([runningDrain, terminalDrain]), [
+    { dispatched: true, delivered: 2 },
+    { dispatched: true, delivered: 2 },
+  ]);
+  assert.deepEqual(sent, ["authority-event-running", "authority-event-completed"]);
+  assert.equal(pending.length, 0);
+  assert.equal(reads, 4);
 });
 
 test("authority dispatcher leaves an event pending when acknowledgement persistence fails", async () => {

@@ -71,6 +71,8 @@ test("reconnect should not replay resolved interaction_request", () => {
     requestId: "req-resolved",
     sessionId: "session-1",
     dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
+    content: "confirm",
     seq: 2,
   });
 
@@ -110,6 +112,8 @@ test("reconnect should replay unresolved interaction_request with pending marker
     requestId: "req-pending",
     sessionId: "session-1",
     dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
+    content: "confirm",
     seq: 2,
   });
 
@@ -297,7 +301,7 @@ test("reconnect should skip terminal channel replay when lastReceivedSeq is 0", 
   assert.deepEqual(sessionList[0]?.dialogProcesses || [], []);
 });
 
-test("reconnect should skip terminal conversation replay even when transport status remains open", () => {
+test("data-plane terminal markers remain replay data and do not become conversation authority", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-stopped" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-stopped" });
@@ -318,7 +322,11 @@ test("reconnect should skip terminal conversation replay even when transport sta
     lastReceivedSeqMap: { "dp-stopped": 0 },
   });
 
-  assert.deepEqual(listReplayMessages(getReconnectDataEvent(socket)), []);
+  assert.deepEqual(
+    listReplayMessages(getReconnectDataEvent(socket)).map((item) => item.event),
+    ["thinking", "user_stopped"],
+  );
+  assert.equal(channel.conversationStateByDialogProcessId.has("dp-stopped"), false);
 });
 
 test("reconnect should not replay a terminal error from a failed attempt", () => {

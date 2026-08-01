@@ -89,15 +89,6 @@ export function prepareChatSend({
     ? Number(turnStartedAtMs)
     : nowMs();
   const thinkingStartedAt = toIsoTime(resolvedTurnStartedAtMs);
-  if (normalizedTurnScopeId) {
-    activeSession.value.turnTimingsByTurnScopeId = {
-      ...(activeSession.value.turnTimingsByTurnScopeId || {}),
-      [normalizedTurnScopeId]: {
-        thinkingStartedAt,
-        thinkingFinishedAt: null,
-      },
-    };
-  }
   applyConversationState(
     {
       state: BackendChannelState.SENDING,

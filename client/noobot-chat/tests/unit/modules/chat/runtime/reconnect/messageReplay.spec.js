@@ -14,6 +14,7 @@ describe("messageReplay", () => {
   it("patches only the existing assistant with the same stable message id", () => {
     const pendingAssistant = {
       messageId: "message-1",
+      presentationMessageId: "message-1",
       role: "assistant",
       pending: true,
       dialogProcessId: "dp-1",
@@ -35,6 +36,7 @@ describe("messageReplay", () => {
       [
         {
           messageId: "message-1",
+          presentationMessageId: "message-1",
           role: "assistant",
           pending: false,
           dialogProcessId: "dp-1",
@@ -119,6 +121,7 @@ describe("messageReplay", () => {
     const liveToolResult = { eventId: "event-tool-result", type: "tool_result", toolCallId: "call-1" };
     const assistant = {
       messageId: "message-tool-state",
+      presentationMessageId: "message-tool-state",
       role: "assistant",
       pending: true,
       dialogProcessId: "shared-dialog",
@@ -139,6 +142,7 @@ describe("messageReplay", () => {
 
     applyFoldedMessagesForDialogProcess(activeSession, [{
       messageId: "message-tool-state",
+      presentationMessageId: "message-tool-state",
       role: "assistant",
       pending: true,
       dialogProcessId: "shared-dialog",

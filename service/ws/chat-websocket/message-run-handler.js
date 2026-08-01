@@ -142,13 +142,6 @@ export function createMessageRunHandler({
       state.currentRunHandle = runningTurn;
       state.currentRunTransportBinding = attachRunTransport(runningTurn, sendEvent);
       await dispatchAuthorityEvents?.({ userId, sessionId, parentSessionId });
-      sendEvent("channel_state", {
-        sessionId,
-        dialogProcessId: runningTurn.dialogProcessId || dialogProcessId || "",
-        turnScopeId: state.currentTurnScopeId,
-        state: "sending",
-        sourceEvent: "running_transport_rebound",
-      });
       void recordServiceWebSocketLifecycle({
         sessionLogConfig,
         event: "service.websocket.run.transportRebound",
@@ -314,27 +307,6 @@ export function createMessageRunHandler({
         stopPayload: state.currentStopPayload,
       });
     }
-    if (state.stopRequested && state.currentStopPayload) {
-      sendEvent("channel_state", {
-        ...state.currentStopPayload,
-        sessionId: state.currentStopPayload?.sessionId || state.currentRunMeta?.sessionId || "",
-        dialogProcessId:
-          state.currentStopPayload?.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
-        turnScopeId: state.currentStopPayload?.turnScopeId || state.currentRunMeta?.turnScopeId || "",
-        state: "stopping",
-        sourceEvent: "stop_requested",
-      });
-    } else if (isContinueAction) {
-      sendEvent("channel_state", {
-        sessionId: state.currentRunMeta?.sessionId || "",
-        turnScopeId: state.currentRunMeta?.turnScopeId || state.currentTurnScopeId || "",
-        state: "sending",
-        sourceEvent: "continue_started",
-        resumeDialogProcessId: normalizedRunConfig?.resumeDialogProcessId || "",
-        resumeTurnScopeId: normalizedRunConfig?.resumeTurnScopeId || "",
-      });
-    }
-
     const textStreamingEnabled = await resolveEffectiveStreamingEnabled({
       bot: activeBot,
       userId,
@@ -420,13 +392,44 @@ export function createMessageRunHandler({
           data: routeData,
         });
       },
-      onCommittedTurnLifecycle: (committed = {}, { persistenceContext = null } = {}) => {
-        return dispatchAuthorityEvents?.({
-          userId: committed.userId || userId,
-          sessionId: committed.sessionId,
-          parentSessionId: committed.parentSessionId || parentSessionId,
-          persistenceContext,
-        });
+      onCommittedTurnLifecycle: async (committed = {}) => {
+        const recordDispatchFailure = (reason = "", delivered = 0) => {
+          void recordServiceWebSocketLifecycle({
+            sessionLogConfig,
+            event: "service.authorityOutbox.dispatchFailed",
+            userId,
+            sessionId,
+            dialogProcessId: state.currentRunMeta?.dialogProcessId || "",
+            turnScopeId: committed.turnScopeId || "",
+            data: {
+              childSessionId: committed.sessionId || "",
+              parentSessionId: committed.parentSessionId || parentSessionId,
+              persistenceScopeId: committed.persistenceScope?.scopeId || "",
+              lifecycleEventType: committed.eventType || "",
+              reason,
+              delivered: Number(delivered || 0),
+            },
+          });
+        };
+        try {
+          const dispatch = await dispatchAuthorityEvents?.({
+            userId: committed.userId || userId,
+            sessionId: committed.sessionId,
+            parentSessionId: committed.parentSessionId || parentSessionId,
+            persistenceScope: committed.persistenceScope,
+          });
+          if (dispatch?.dispatched !== true) {
+            recordDispatchFailure(
+              dispatch?.reason || "authority_dispatcher_unavailable",
+              dispatch?.delivered,
+            );
+          }
+          return dispatch;
+        } catch (error) {
+          const reason = error?.message || "authority_dispatch_failed";
+          recordDispatchFailure(reason);
+          return { dispatched: false, reason, delivered: 0 };
+        }
       },
       onRootRunning: (lifecycleData) => {
         if (processingStartedPromise) return processingStartedPromise;
@@ -452,12 +455,6 @@ export function createMessageRunHandler({
           }
           latestAuthorityTurn = started.turn || latestAuthorityTurn;
           state.currentLifecyclePhase = TURN_PHASE.PROCESSING;
-          sendEvent("channel_state", {
-            sessionId,
-            turnScopeId: state.currentTurnScopeId,
-            state: "sending",
-            sourceEvent: "processing_started",
-          });
           return started;
         });
         pendingLifecycleCommit = processingStartedPromise;

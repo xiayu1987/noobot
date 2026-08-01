@@ -17,8 +17,10 @@ import {
   applyTurnRuntimeEvent,
   applyTurnTerminalResolution,
   createTurnRuntimeRegistryState,
+  applyTurnTimingSnapshot,
   selectTurnMessageRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createTurnRuntimeStoreActions } from "../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
@@ -36,6 +38,8 @@ function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages 
   };
   const activeSessionId = ref(sessionId);
   const sessions = ref([activeSession]);
+  const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
+  const chatStore = createTurnRuntimeStoreActions(turnRuntimeRegistry);
   const { applySessionDetail } = createSessionDetailApplicator({
     sessions,
     activeSessionId,
@@ -45,23 +49,28 @@ function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages 
     applyCompletedToolLogsToMessages: vi.fn(),
     scrollBottom: vi.fn(),
     isSameSessionIdentity: (a, b) => String(a) === String(b),
+    turnRuntimeRegistry,
+    chatStore,
   });
-  return { activeSession, applySessionDetail };
+  return { activeSession, applySessionDetail, turnRuntimeRegistry };
 }
 
 describe("useChatEngine.session-detail", () => {
   it("keeps a locally completed turn timing when an early detail omits its finish", () => {
     const turnScopeId = "client-turn:timing-race";
-    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
+    const { activeSession, applySessionDetail, turnRuntimeRegistry } = createApplySessionDetailHarness({
       sessionId: "s-timing-race",
       messages: [{ role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-timing-race" }],
     });
-    activeSession.turnTimingsByTurnScopeId = {
-      [turnScopeId]: {
+    applyTurnTimingSnapshot(turnRuntimeRegistry.value, {
+      sessionId: "s-timing-race",
+      turnTimings: [{
+        turnScopeId,
+        dialogProcessId: "dp-timing-race",
         thinkingStartedAt: "2026-07-15T10:00:00.000Z",
         thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
-      },
-    };
+      }],
+    });
 
     applySessionDetail({
       sessionId: "s-timing-race",
@@ -76,15 +85,15 @@ describe("useChatEngine.session-detail", () => {
       }],
     });
 
-    expect(activeSession.turnTimingsByTurnScopeId[turnScopeId]).toEqual({
-      thinkingStartedAt: "2026-07-15T10:00:00.000Z",
-      thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
+    expect(turnRuntimeRegistry.value.sessions["s-timing-race"].turns[turnScopeId]).toMatchObject({
+      startedAt: "2026-07-15T10:00:00.000Z",
+      finishedAt: "2026-07-15T10:00:05.000Z",
     });
   });
 
   it("keys a persisted timing by its canonical turnScopeId", () => {
     const turnScopeId = "client-turn:hydrated-timing";
-    const { activeSession, applySessionDetail } = createApplySessionDetailHarness({
+    const { activeSession, applySessionDetail, turnRuntimeRegistry } = createApplySessionDetailHarness({
       sessionId: "s-hydrated-timing",
     });
 
@@ -102,9 +111,9 @@ describe("useChatEngine.session-detail", () => {
       }],
     });
 
-    expect(activeSession.turnTimingsByTurnScopeId[turnScopeId]).toEqual({
-      thinkingStartedAt: "2026-07-15T10:00:00.000Z",
-      thinkingFinishedAt: "2026-07-15T10:00:05.000Z",
+    expect(turnRuntimeRegistry.value.sessions["s-hydrated-timing"].turns[turnScopeId]).toMatchObject({
+      startedAt: "2026-07-15T10:00:00.000Z",
+      finishedAt: "2026-07-15T10:00:05.000Z",
     });
   });
 

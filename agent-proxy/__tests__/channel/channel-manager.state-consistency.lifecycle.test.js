@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents, FakeUpstreamWebSocket } from "./channel-manager.state-consistency.test-helpers.js";
+import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/authoritative-state/contracts";
 
 test("upstream snapshot responses resolve and release the reconnect command", async () => {
   FakeUpstreamWebSocket.instances = [];
@@ -128,7 +129,7 @@ test("stop action should broadcast stopping state before terminal", () => {
   });
   const stateEvents = listEvents(client, "channel_state");
   assert.equal(stateEvents.some((item) => item?.data?.state === "stopping"), true);
-  assert.equal(stateEvents.some((item) => item?.data?.state === "user_stopped"), true);
+  assert.equal(stateEvents.some((item) => item?.data?.state === "user_stopped"), false);
 });
 
 test("startOrJoinChannel restarts running channel when upstream socket is not open", () => {
@@ -245,7 +246,6 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
     turnScopeId: "turn-stop",
     message: "user stop persisted",
   });
-  manager.markChannelTerminal(channel, "user_stopped");
   manager.broadcastChannelEvent(channel, stoppedEnvelope);
 
   const completedReconnectClient = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
@@ -257,7 +257,7 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   assert.equal(completedSessionEntry?.hasRunningTask, false);
   assert.equal(
     (completedSessionEntry?.conversationStates || []).some((item) => item?.state === "user_stopped"),
-    true,
+    false,
   );
 });
 
@@ -336,7 +336,52 @@ test("successful upstream messages bypass session logs and retain data-plane met
     channelEvents: 1,
     broadcasts: 1,
     deliveries: 1,
+    lifecycleReceipts: 0,
   });
+});
+
+test("authoritative lifecycle is the only live business-state protocol emitted by the proxy", () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const sessionId = "session-lifecycle-live";
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId }),
+    { userId: "user-1", sessionId },
+  );
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, client);
+  client.sentEvents = [];
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+
+  const terminal = {
+    protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
+    eventId: "terminal-live-1",
+    commandId: "terminal-live-command",
+    eventType: "turn.completed",
+    sessionId,
+    turnScopeId: "turn-lifecycle-live",
+    dialogProcessId: "dialog-lifecycle-live",
+    messageId: "message-lifecycle-live",
+    presentationMessageId: "message-lifecycle-live",
+    revision: 4,
+    sequence: 4,
+    state: "completed",
+    phase: "completion",
+    completionCommitId: "terminal-live-command",
+    summaryVersion: 4,
+  };
+  upstream.emit("message", JSON.stringify({ event: "turn_lifecycle", data: terminal }));
+
+  assert.deepEqual(listEvents(client, "turn_lifecycle").map((item) => item.data), [terminal]);
+  assert.equal(listEvents(client, "channel_state").length, 0);
+  assert.equal(
+    channel.conversationStateByDialogProcessId.get("dialog-lifecycle-live")?.state,
+    "completed",
+  );
 });
 
 test("upstream close reason user_stopped is transport metadata, not confirmation", () => {

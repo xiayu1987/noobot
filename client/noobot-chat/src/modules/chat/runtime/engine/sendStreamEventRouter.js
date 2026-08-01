@@ -112,6 +112,15 @@ export function createSendStreamEventHandler(context) {
       state: data?.state,
       botMessage: summarizeDebugMessage(botMsg),
     }));
+    // Lifecycle packets are authoritative state input. Route them before any
+    // extension or message projection so a plugin cannot consume a terminal
+    // child event before the single turn-runtime reducer sees it.
+    if (routeForeignTurnLifecycleEvent(event, data, {
+      activeSession, applyRunStateEvent, logSessionEvent, sessionId,
+    })) return;
+    if (routeCurrentTurnLifecycleEvent(event, data, {
+      activeSession, applyRunStateEvent, logSessionEvent, sessionId,
+    })) return;
     if (routeRuntimeStreamEvent(event, data, {
       source: "live", logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
       applyWorkflowRuntimeEvent, logSessionEvent, sessionId, turnScopeId,
@@ -122,12 +131,8 @@ export function createSendStreamEventHandler(context) {
       locateSendingStartedMessageOnce, logSessionEvent, navigateOnFirstResponseOnce,
       sessionId, turnScopeId,
     })) return;
-    if (routeForeignTurnLifecycleEvent(event, data, {
-      activeSession, applyRunStateEvent, logSessionEvent, sessionId,
-    })) return;
     if (isIgnoredSubSessionEvent(event, data)) return;
     if (!isEventForCurrentTurn(data || {}, botMsg)) return;
-    if (routeCurrentTurnLifecycleEvent(event, data, { activeSession, applyRunStateEvent, sessionId })) return;
     if (isUserStoppedEvent(event, data || {}) && hasDialogProcessConflictForTurn({
       activeSession,
       data: data || {},

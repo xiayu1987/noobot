@@ -19,6 +19,7 @@ import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runt
 class ReconnectMethods {
 
 async handleReconnect(socket, payload = {}) {
+  this.clearPendingLifecycleDeliveries(socket);
   const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
   const lastReceivedTurnScopeIdMap = payload?.lastReceivedTurnScopeIdMap || {};
   const currentSessionId = String(payload?.currentSessionId || "").trim();
@@ -454,8 +455,10 @@ async handleReconnect(socket, payload = {}) {
   for (const bufferedEvent of bufferedEvents) {
     const envelope = bufferedEvent?.envelope;
     if (!envelope) continue;
-    const sendResult = this.sendSocketEvent(socket, envelope);
-    if (sendResult.result !== "sent") continue;
+    const bufferedChannel = this.channelStore.get(bufferedEvent.channelKey);
+    const sendResult = this.sendChannelEvent(bufferedChannel, socket, envelope);
+    if (!["sent", "queued"].includes(sendResult.result)) continue;
+    if (envelope.event === CHANNEL_EVENT.TURN_LIFECYCLE) continue;
     socket.__agentProxyLastSequenceByChannel ||= {};
     socket.__agentProxyLastSequenceByChannel[bufferedEvent.channelKey] = Number(
       bufferedEvent.sequence || 0,

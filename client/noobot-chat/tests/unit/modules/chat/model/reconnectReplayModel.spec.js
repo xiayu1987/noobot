@@ -149,7 +149,7 @@ describe("reconnectReplayModel", () => {
       realtimeLogs: [{ id: 1 }],
       transferEnvelopes: [envelope],
       thinkingOpenNames: ["thinking-panel"],
-      expandedDetailLogKeys: ["k1"],
+      expandedToolDetailKeys: ["k1"],
       statusLabel: "pending",
     };
 
@@ -211,16 +211,33 @@ describe("reconnectReplayModel", () => {
     expect(reusable).toBeNull();
   });
 
-  it("findReusableMessageObject reuses assistant by dialogProcessId when turnScopeId is present", () => {
+  it("findReusableMessageObject reuses assistant only by presentationMessageId", () => {
     const existing = [
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", turnScopeId: "turn-1", content: "old" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", turnScopeId: "turn-2", content: "other" },
+      { role: RoleEnum.ASSISTANT, presentationMessageId: "presentation-1", dialogProcessId: "dp-1", turnScopeId: "turn-1", content: "old" },
+      { role: RoleEnum.ASSISTANT, presentationMessageId: "presentation-2", dialogProcessId: "dp-2", turnScopeId: "turn-2", content: "other" },
     ];
     const reusable = findReusableMessageObject(
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", turnScopeId: "turn-2", content: "new" },
+      { role: RoleEnum.ASSISTANT, presentationMessageId: "presentation-2", dialogProcessId: "dp-2", turnScopeId: "turn-2", content: "new" },
       existing,
     );
     expect(reusable).toBe(existing[1]);
+  });
+
+  it("findReusableMessageObject does not guess assistant identity from a shared turn", () => {
+    const existing = [{
+      role: RoleEnum.ASSISTANT,
+      presentationMessageId: "presentation-existing",
+      turnScopeId: "turn-shared",
+      toolTimeline: [{ key: "call:complete", args: { path: "README.md" } }],
+    }];
+
+    expect(findReusableMessageObject({
+      role: RoleEnum.ASSISTANT,
+      presentationMessageId: "presentation-next",
+      turnScopeId: "turn-shared",
+      toolCalls: [{ name: "read_file" }],
+    }, existing)).toBeNull();
+    expect(existing[0].toolTimeline[0].args).toEqual({ path: "README.md" });
   });
 
   it("patchMessageObjectPreservingUiState preserves authoritative thinking when a same-process snapshot omits turnScopeId", () => {

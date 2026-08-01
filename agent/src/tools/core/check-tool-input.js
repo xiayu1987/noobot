@@ -9,6 +9,7 @@ import {
   normalizePathForPlatform,
   resolveToolPathPolicy,
   resolveToolInputPath,
+  buildToolPathScopeErrorDetails,
 } from "../../shared/utils/path-resolver.js";
 import {
   getBasePathFromAgentContext,
@@ -308,13 +309,14 @@ export async function assertAndResolveUserWorkspaceFilePath({
   );
   if (!inAllowedScope) {
     throw recoverableToolError(
-      `${tCheckInput(agentContext, "pathOutOfScope")}: ${normalizedPath}`,
+      tCheckInput(agentContext, "pathOutOfScope"),
       {
         code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
         details: {
-          field: fieldName,
-          filePath: normalizedPath,
-          allowedRoots,
+          ...buildToolPathScopeErrorDetails({
+            field: fieldName,
+            pathView: resolvedToolPath.view,
+          }),
         },
       },
     );

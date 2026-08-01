@@ -177,8 +177,8 @@ describe("useChatStore sub session projection", () => {
     expect(session?.messages[0].toolTimeline).toEqual([
       expect.objectContaining({ tool: "search", result: "ok", status: "completed" }),
     ]);
-    expect(session?.turnStatuses).toEqual([expect.objectContaining({ turnScopeId: "turn-1", status: "completed" })]);
-    expect(session?.turnTimings).toEqual([expect.objectContaining({ turnScopeId: "turn-1", thinkingFinishedAt: expect.any(String) })]);
+    expect(store.selectSubSessionTurnRuntime("sub-session-1", "turn-1")).toBeNull();
+    expect(store.selectSubSessionTiming("sub-session-1", "turn-1")).toBeNull();
     expect(session?.sequence).toBe(5);
     expect(session?.revision).toBe(1);
   });
@@ -469,7 +469,8 @@ describe("useChatStore sub session projection", () => {
     expect(finalMessage).toMatchObject({ applied: true });
     expect(terminal).toMatchObject({ applied: true });
     const child = store.selectSubSessionMessages("sub-session-1");
-    expect(child).toMatchObject({ status: "succeeded" });
+    expect(child).toMatchObject({ status: "" });
+    expect(child.workflowNodeState).toMatchObject({ status: "succeeded" });
     expect(child.messages).toEqual([
       expect.objectContaining({
         messageId: "authoritative-assistant-after-node-state",
@@ -480,9 +481,6 @@ describe("useChatStore sub session projection", () => {
       "workflow-node-state": 6,
       "message-event": 1,
     });
-    expect(child.turnStatuses).toEqual([
-      expect.objectContaining({ turnScopeId: "turn-1", status: "succeeded" }),
-    ]);
   });
 
   it("merges a persisted snapshot without erasing realtime increments", () => {
@@ -568,11 +566,9 @@ describe("useChatStore sub session projection", () => {
     } });
 
     const session = store.selectSubSessionMessages("sub-session-1");
-    expect(session.status).toBe("succeeded");
-    expect(session.turnStatuses).toEqual([
-      expect.objectContaining({ turnScopeId: "turn-1", status: "succeeded" }),
-    ]);
-    expect(session.turnTimings[0].thinkingFinishedAt).toEqual(expect.any(String));
+    expect(session.status).toBe("");
+    expect(session.workflowNodeState).toMatchObject({ status: "succeeded" });
+    expect(store.selectSubSessionTurnRuntime("sub-session-1", "turn-1")).toBeNull();
   });
 
   it("does not overwrite existing realtime content when snapshot messages are empty", () => {
@@ -738,7 +734,7 @@ describe("useChatStore sub session projection", () => {
 
     expect(result.applied).toBe(true);
     expect(result).not.toHaveProperty("message");
-    expect(store.selectSubSessionMessages("sub-session-1")?.status).toBe("processing");
+    expect(store.selectSubSessionMessages("sub-session-1")?.status).toBe("");
     expect(store.selectSubSessionMessages("sub-session-1")?.messages).toEqual([]);
   });
 
@@ -758,6 +754,6 @@ describe("useChatStore sub session projection", () => {
 
     expect(store.selectSubSessionMessages("sub-session-1")?.messages).toHaveLength(1);
     expect(store.selectSubSessionMessages("sub-session-1")?.messages[0]).toMatchObject({ content: "hello" });
-    expect(store.selectSubSessionMessages("sub-session-1")?.turnStatuses[0]).toMatchObject({ status: "completed" });
+    expect(store.selectSubSessionMessages("sub-session-1")?.workflowNodeState).toMatchObject({ status: "completed" });
   });
 });

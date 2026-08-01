@@ -18,7 +18,6 @@ import {
   resolveConnectorStatusPayload,
 } from "../runtime/interactionPayload.js";
 import { mergeAttachments } from "../model/dialogProcessChain.js";
-import { terminalResolutionMetadata } from "../runtime/terminalResolutionMetadata.js";
 import {
   createReconnectInteractionEnvelopeCallbacks,
   tryAutoResolveReconnectInteraction,
@@ -99,8 +98,7 @@ export function useReconnectReplay({
   notify = () => {},
   processStore,
   turnRuntimeRegistry,
-  applyTurnRuntimeEvents,
-  resolveTurnTerminalState,
+  dispatchAuthoritativeRunStateEvent,
   applyExecutionSnapshot,
   applyExecutionChildren,
   applyExecutionTree,
@@ -121,51 +119,25 @@ export function useReconnectReplay({
   const isDeletedTurn = ({ sessionId = "", turnScopeId = "" } = {}) =>
     isTurnRuntimeDeleted(turnRuntimeRegistry?.value || turnRuntimeRegistry, { sessionId, turnScopeId });
 
-  const applyRunStateEvent = (event) => {
-    const results = applyTurnRuntimeEvents?.([event]);
-    return Array.isArray(results) ? results[0] : results;
+  const applyRunStateEvent = (event) => dispatchAuthoritativeRunStateEvent?.(event);
+  const applyTurnLifecycleEnvelope = (envelope = {}) => {
+    return dispatchAuthoritativeRunStateEvent?.({
+      ...envelope,
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      seq: Number(envelope?.sequence || 0),
+      source: "turn_lifecycle_replay",
+    });
   };
-  const terminalLifecycleEvents = new Set([
-    "turn.completed",
-    "turn.stop_completed",
-    "turn.failed",
-  ]);
   const terminalChannelStates = new Set([
     "completed",
     "user_stopped",
     "error",
     "cancelled",
   ]);
-  const requestTerminalResolution = (payload = {}) => {
-    const sessionId = String(payload?.sessionId || "").trim();
-    const turnScopeId = String(payload?.turnScopeId || payload?.messageEvent?.turnScopeId || "").trim();
-    if (!sessionId || !turnScopeId) {
-      return Promise.resolve({ applied: false, reason: "missing_turn_identity" });
-    }
-    if (typeof resolveTurnTerminalState !== "function") {
-      return Promise.resolve({ applied: false, reason: "terminal_resolution_unavailable" });
-    }
-    return resolveTurnTerminalState(sessionId, turnScopeId, {
-      ...terminalResolutionMetadata(payload),
-      source: "reconnect_replay",
-    });
-  };
-  const applyTurnLifecycleEnvelope = (envelope = {}) => {
-    const eventType = String(envelope?.eventType || envelope?.event || "").trim().toLowerCase();
-    if (terminalLifecycleEvents.has(eventType)) {
-      return requestTerminalResolution(envelope);
-    }
-    return applyTurnRuntimeEvents?.([{
-      ...envelope,
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      seq: Number(envelope?.sequence || 0),
-      source: "turn_lifecycle_replay",
-    }]);
-  };
 
   const applyRunStateEvents = (events) => {
     const sourceEvents = Array.isArray(events) ? events : [];
-    return applyTurnRuntimeEvents?.(sourceEvents);
+    return sourceEvents.map((event) => dispatchAuthoritativeRunStateEvent?.(event));
   };
 
   const applyWorkflowRuntimeEvent = (record = {}, { source = "reconnect" } = {}) => {
@@ -458,7 +430,11 @@ export function useReconnectReplay({
       return Promise.resolve({ applied: false, reason: "transient_interaction_cleared" });
     }
     if (terminalChannelStates.has(channelState)) {
-      return requestTerminalResolution(stateData);
+      return dispatchAuthoritativeRunStateEvent?.({
+        ...stateData,
+        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
+        source: "channel_state_replay",
+      });
     }
     return applyReconnectChannelState({
       stateData,

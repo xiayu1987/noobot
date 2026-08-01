@@ -40,9 +40,17 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
     }),
     BaseThinkingLogLine: defineComponent({
       name: "BaseThinkingLogLine",
-      props: ["eventText", "contentText"],
-      setup(props) {
-        return () => h("div", { class: "execution-log-line" }, props.contentText);
+      props: ["eventText", "contentText", "detailText", "tool", "expandable", "expanded"],
+      emits: ["toggle"],
+      setup(props, { emit }) {
+        return () => h("div", {
+          class: "execution-log-line",
+          "data-tool": String(props.tool === true),
+          "data-expandable": String(props.expandable === true),
+          onClick: () => emit("toggle"),
+        }, [props.contentText, props.expanded && props.detailText
+          ? h("pre", { class: "execution-log-detail" }, props.detailText)
+          : null]);
       },
     }),
     BaseSectionHeader: defineComponent({
@@ -107,7 +115,11 @@ export function mountThinkingPanel(messageItem, props = {}) {
           template: '<aside v-if="modelValue" class="thinking-detail-drawer" :data-title="title" :data-size="size"><slot /></aside>',
         },
         BaseTabPanelBody: { template: '<div class="tab-body"><slot /></div>' },
-        BaseThinkingLogLine: { props: ["eventText", "contentText"], template: '<div class="execution-log-line">{{ contentText }}</div>' },
+        BaseThinkingLogLine: {
+          props: ["eventText", "contentText", "detailText", "tool", "expandable", "expanded"],
+          emits: ["toggle"],
+          template: '<div class="execution-log-line" :data-tool="String(tool === true)" :data-expandable="String(expandable === true)" @click="$emit(\'toggle\')">{{ contentText }}<pre v-if="expanded && detailText" class="execution-log-detail">{{ detailText }}</pre></div>',
+        },
         BaseSectionHeader: { props: ["title"], template: '<header><span>{{ title }}</span><slot name="extra" /></header>' },
         BaseEmptyHint: { props: ["text"], template: '<p class="empty-hint">{{ text }}</p>' },
         BaseMetaLabel: { props: ["text"], template: '<div class="meta-label">{{ text }}</div>' },

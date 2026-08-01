@@ -27,6 +27,8 @@ describe("thinking detail model canonical timeline", () => {
       key: "call:call-detail",
       toolCallId: "call-detail",
       status: "completed",
+      args: { filePath: "notes.txt", content: "hello" },
+      result: { ok: true, filePath: "notes.txt" },
       call: {
         ...fact("call-detail", 1, "tool_call", "write_file"),
         log: {
@@ -34,7 +36,6 @@ describe("thinking detail model canonical timeline", () => {
           type: "tool_call",
           toolCallId: "call-detail",
           text: "write_file",
-          args: { filePath: "notes.txt", content: "hello" },
         },
       },
       resultEvent: {
@@ -44,7 +45,6 @@ describe("thinking detail model canonical timeline", () => {
           type: "tool_result",
           toolCallId: "call-detail",
           text: "write_file done",
-          result: { ok: true, filePath: "notes.txt" },
         },
       },
     }] } });

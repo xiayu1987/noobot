@@ -18,6 +18,7 @@ import {
   logToolLogWindowDebug,
   summarizeToolLogWindow,
 } from "../../../debug/loggers/toolLogWindowDebugLogger.js";
+import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },
@@ -29,6 +30,9 @@ const props = defineProps({
   executionLogCount: { type: Number, default: 0 },
   thinkingDetailLabel: { type: String, default: "" },
   openNames: { type: Array, default: () => [] },
+  getDetailKey: { type: Function, required: true },
+  isExpanded: { type: Function, required: true },
+  toggleExpanded: { type: Function, required: true },
 });
 const emit = defineEmits(["open-thinking-details", "collapse", "update:openNames"]);
 const runningEmptyHintKey = computed(() =>
@@ -41,21 +45,25 @@ const executionLogSignature = computed(() => {
   const last = logs.at(-1) || {};
   return [
     logs.length,
-    last.eventId || last.id || "",
-    last.sequence ?? last.seq ?? "",
-    last.toolCallId || last.tool_call_id || "",
+    last.eventId || "",
+    last.sequence ?? "",
+    last.toolCallId || "",
     String(last.text || "").length,
+    String(last.detailText || "").length,
   ].join("|");
 });
-function executionLogKey(logItem = {}, logIndex = 0) {
-  const eventId = String(logItem.eventId || logItem.id || "").trim();
-  if (eventId) return `event:${eventId}`;
-  const toolCallId = String(logItem.toolCallId || logItem.tool_call_id || "").trim();
-  const event = String(logItem.event || logItem.type || "log").trim();
-  const sequence = logItem.sequence ?? logItem.seq ?? "";
-  return toolCallId || sequence !== ""
-    ? `${event}:${toolCallId}:${sequence}`
-    : `${event}:${String(logItem.timestamp || logItem.ts || "")}:${logIndex}`;
+function executionLogKey(logItem = {}) {
+  const eventId = String(logItem.eventId || "").trim();
+  return eventId ? `event:${eventId}` : "";
+}
+function isToolLog(logItem = {}) {
+  return ["tool_call", "tool_result"].includes(String(logItem.event || "").trim());
+}
+function detailKey(logItem = {}) {
+  return isToolLog(logItem) ? props.getDetailKey({ key: "tool-timeline" }, logItem) : "";
+}
+function isExpandable(logItem = {}) {
+  return Boolean(detailKey(logItem) && String(logItem.detailText || ""));
 }
 watch(
   executionLogSignature,
@@ -72,6 +80,30 @@ watch(
       received: summarizeToolLogWindow(executionLogs),
       };
     });
+    logStateMachineDebug("frontend.thinkingReplay.realtimeRendererProjected", () => ({
+      sessionId: String(props.messageItem?.sessionId || ""),
+      presentationMessageId: String(props.messageItem?.presentationMessageId || ""),
+      dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
+      turnScopeId: String(props.messageItem?.turnScopeId || ""),
+      running: props.isRunning,
+      declaredExecutionLogCount: props.executionLogCount,
+      receivedCount: Array.isArray(props.executionLogs) ? props.executionLogs.length : 0,
+      received: summarizeToolLogWindow(props.executionLogs),
+      items: (Array.isArray(props.executionLogs) ? props.executionLogs : []).slice(-32)
+        .map((item = {}) => {
+          const key = detailKey(item);
+          const expandable = isExpandable(item);
+          return {
+            eventId: String(item.eventId || ""),
+            toolCallId: String(item.toolCallId || ""),
+            event: String(item.event || ""),
+            detailKey: key,
+            detailLength: String(item.detailText || "").length,
+            expandable,
+            expanded: expandable && props.isExpanded(props.messageItem, key),
+          };
+        }),
+    }));
   },
   { immediate: true, flush: "post" },
 );
@@ -108,12 +140,17 @@ watch(
       </div>
       <div class="thinking-realtime-log-stream">
         <div
-          v-for="(logItem, logIndex) in executionLogs"
-          :key="executionLogKey(logItem, logIndex)"
+          v-for="logItem in executionLogs"
+          :key="executionLogKey(logItem)"
         >
           <BaseThinkingLogLine
-            :event-text="logItem.type || logItem.event"
+            :event-text="logItem.event"
             :content-text="logItem.text"
+            :detail-text="logItem.detailText"
+            :tool="isToolLog(logItem)"
+            :expandable="isExpandable(logItem)"
+            :expanded="isExpanded(messageItem, detailKey(logItem))"
+            @toggle="toggleExpanded(messageItem, detailKey(logItem))"
           />
         </div>
         <BaseEmptyHint

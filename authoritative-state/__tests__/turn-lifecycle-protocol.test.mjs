@@ -10,10 +10,13 @@ import {
   TURN_PHASE,
   TURN_STATE,
   createTurnLifecycleEnvelope,
+  createTurnLifecycleReceipt,
   deriveAuthoritativeTurnCapabilities,
   validateTurnLifecycleEnvelope,
+  validateTurnLifecycleReceipt,
   validateSessionProvisionIntent,
 } from "../src/contracts/turn-lifecycle-protocol.mjs";
+
 import {
   acknowledgeAuthorityEventDelivery,
   compactAuthorityEventOutbox,
@@ -23,6 +26,30 @@ import {
 } from "../src/contracts/authority-event-outbox.mjs";
 import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
+
+test("turn lifecycle receipt identifies one authoritative delivery without carrying state", () => {
+  const receipt = createTurnLifecycleReceipt({
+    eventId: "evt-receipt-1",
+    sessionId: "session-receipt-1",
+    turnScopeId: "turn-receipt-1",
+  });
+  assert.deepEqual(validateTurnLifecycleReceipt(receipt), { valid: true, errors: [] });
+  assert.deepEqual(Object.keys(receipt).sort(), [
+    "action",
+    "eventId",
+    "protocolVersion",
+    "sessionId",
+    "turnScopeId",
+  ]);
+  assert.equal(validateTurnLifecycleReceipt({ ...receipt, eventId: "" }).valid, false);
+  assert.deepEqual(
+    validateTurnLifecycleReceipt({
+      ...receipt,
+      turnScopeId: "workflow-node_workflow_client-turn_1",
+    }).errors,
+    ["non_canonical_turn_scope_id"],
+  );
+});
 
 test("turn lifecycle envelope requires stable identity and monotonic coordinates", () => {
   const envelope = createTurnLifecycleEnvelope({

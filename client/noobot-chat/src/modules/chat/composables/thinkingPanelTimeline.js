@@ -15,6 +15,7 @@ import {
 import { sanitizeExecutionLogForDisplay } from "../runtime/engine/utils.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { logThinkingReplayDebug } from "../../debug/loggers/thinkingReplayDebugLogger.js";
+import { logStateMachineDebug } from "../../debug/loggers/stateMachineLogger.js";
 import {
   logToolLogWindowDebug,
   summarizeToolLogWindow,
@@ -390,6 +391,17 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
         selectedCount: selectedLogs.length,
         selected: summarizeToolLogWindow(selectedLogs),
       }));
+      logStateMachineDebug("frontend.thinkingReplay.timelineProjected", () => ({
+        ...identity,
+        presentationMessageId: String(props.messageItem?.presentationMessageId || ""),
+        running,
+        pending,
+        source,
+        activityTimelineCount: timeline.activityLogs.length,
+        toolTimelineLogCount: timeline.toolLogs.length,
+        selectedCount: selectedLogs.length,
+        selected: summarizeToolLogWindow(selectedLogs),
+      }));
     },
     { immediate: true },
   );
@@ -564,10 +576,8 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
     const seen = new Set();
     return getAllCompletedLogs(messageItem)
       .filter((logItem) => {
-        const event = String(logItem?.event || logItem?.type || "").trim();
-        const callId = String(
-          logItem?.toolCallId || logItem?.tool_call_id || "",
-        ).trim();
+        const event = String(logItem?.event || "").trim();
+        const callId = String(logItem?.toolCallId || "").trim();
         if (!callId) return true;
         const key = `${event}:${callId}`;
         if (seen.has(key)) return false;

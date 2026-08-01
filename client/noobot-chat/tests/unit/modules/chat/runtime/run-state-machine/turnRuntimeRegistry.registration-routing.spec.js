@@ -225,23 +225,23 @@ describe("turnRuntimeRegistry: registration and routing", () => {
     expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s1"))).toBe("requesting");
     expect(turnRuntimeDisplayState(resolveSessionTurnRuntime(registry, "s2"))).toBe("requesting");
   });
-  it("canonicalizes workflow Turn scope variants at the Store boundary", () => {
+  it("uses canonical workflow Turn scope at the Store boundary", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "workflow-node:turn-1" });
     backendState(registry, {
       sessionId: "s1",
-      turnScopeId: "workflow-node_turn-1",
+      turnScopeId: "workflow-node:turn-1",
       dialogProcessId: "dp1",
       state: BackendChannelState.SENDING,
       seq: 2,
     });
 
-    expect(Object.keys(registry.sessions.s1.turns)).toEqual(["workflow-node_turn-1"]);
+    expect(Object.keys(registry.sessions.s1.turns)).toEqual(["workflow-node:turn-1"]);
     expect(selectTurnMessageRuntime(registry, {
       sessionId: "s1",
       turnScopeId: "workflow-node:turn-1",
     })).toMatchObject({
-      turnScopeId: "workflow-node_turn-1",
+      turnScopeId: "workflow-node:turn-1",
       running: true,
     });
   });

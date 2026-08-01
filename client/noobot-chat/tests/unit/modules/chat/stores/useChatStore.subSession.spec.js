@@ -146,15 +146,8 @@ describe("sub-session realtime message projection", () => {
     }, { source: "test" });
 
     const session = store.selectSubSessionMessages("child-session");
-    expect(session.turnStatuses).toEqual([expect.objectContaining({
-      turnScopeId: "turn-completed",
-      status: "completed",
-    })]);
-    expect(session.turnTimings).toEqual([expect.objectContaining({
-      turnScopeId: "turn-completed",
-      thinkingStartedAt: "2026-01-01T00:00:00.000Z",
-      thinkingFinishedAt: "2026-01-01T00:00:05.000Z",
-    })]);
+    expect(session.turnRuntime).toBeNull();
+    expect(session.workflowNodeState).toMatchObject({ status: "completed" });
     expect(session.messages[0].pending).toBe(true);
   });
 
@@ -194,7 +187,7 @@ describe("sub-session realtime message projection", () => {
     }
 
     expect(store.selectSubSessionMessages("child-session").messages[0].pending).toBe(true);
-    expect(store.selectSubSessionMessages("child-session").status).toBe("frontend_completion_requesting");
+    expect(store.selectSubSessionMessages("child-session").status).toBe("completing");
 
     const terminal = store.applyTurnTerminalResolution({
       protocolVersion: 1,
@@ -218,14 +211,18 @@ describe("sub-session realtime message projection", () => {
       },
     });
     expect(terminal.applied).toBe(true);
-    store.projectAppliedTurnRuntime(terminal.turn);
-
     const completed = store.selectSubSessionMessages("child-session");
     expect(completed.status).toBe("completed");
-    expect(completed.turnStatuses).toContainEqual(expect.objectContaining({
+    expect(store.selectSubSessionTurnRuntime(
+      identity.sessionId,
+      identity.turnScopeId,
+    )).toMatchObject({
+      parentSessionId: identity.parentSessionId,
       turnScopeId: identity.turnScopeId,
-      status: "completed",
-    }));
+      terminal: "completed",
+    });
+    // The same lifecycle-to-message projector owns main and child sessions.
+    // The child message is materialized from the authoritative terminal Turn.
     expect(completed.messages[0]).toMatchObject({
       pending: false,
       channelState: { state: "frontend_completed" },
@@ -279,13 +276,11 @@ describe("sub-session realtime message projection", () => {
       },
     }, { source: "live" });
 
-    expect(store.selectSubSessionMessages("child-session").turnTimings).toEqual([
-      expect.objectContaining({
-        turnScopeId: "workflow-node:node-timing",
-        thinkingStartedAt: "2026-07-30T11:54:09.626Z",
-        thinkingFinishedAt: "2026-07-30T11:54:21.339Z",
-      }),
-    ]);
+    expect(store.selectSubSessionMessages("child-session").workflowNodeState).toMatchObject({
+      status: "succeeded",
+      startedAt: "2026-07-30T11:54:09.626Z",
+      completedAt: "2026-07-30T11:54:21.339Z",
+    });
   });
 
   it("monotonically completes terminal snapshot facts across canonical turn scope aliases", () => {
@@ -320,15 +315,7 @@ describe("sub-session realtime message projection", () => {
     }, { source: "test_snapshot" });
 
     const session = store.selectSubSessionMessages(sessionId);
-    expect(session.turnStatuses).toEqual([expect.objectContaining({
-      turnScopeId: "workflow-node:node-1",
-      status: "completed",
-    })]);
-    expect(session.turnTimings).toEqual([expect.objectContaining({
-      turnScopeId: "workflow-node:node-1",
-      thinkingStartedAt: "2026-07-31T08:42:28.213Z",
-      thinkingFinishedAt: "2026-07-31T08:43:59.859Z",
-    })]);
+    expect(session.turnRuntime).toBeNull();
   });
 
   it("removes replaced workflow owners from both workflow registries", () => {

@@ -391,7 +391,13 @@ test("connector-toolkit/access_connector: command_file_path 越界应拒绝", as
         connector_type: "database",
         command_file_path: outsideSqlPath,
       }),
-      (error) => error?.code === "RECOVERABLE_PATH_OUT_OF_SCOPE",
+      (error) => {
+        assert.equal(error?.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+        assert.equal(error?.details?.allowed_roots, undefined);
+        assert.equal(JSON.stringify(error).includes(outsideRoot), false);
+        assert.equal(JSON.stringify(error).includes(allowedRoot), false);
+        return true;
+      },
     );
   } finally {
     await rm(allowedRoot, { recursive: true, force: true });

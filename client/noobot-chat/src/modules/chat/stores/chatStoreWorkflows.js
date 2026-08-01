@@ -16,7 +16,26 @@ function isWorkflowNodeTerminalStatus(value) {
 }
 function shouldApplyWorkflowNodeStateEvent(current,incoming){ if(!current)return true; const c=compareWorkflowRuntimeFacts(incoming,current,{defaultDomain:WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE}); if(!c.comparable)return false; if(c.order!==0)return c.order>0; return text(incoming.eventId)===text(current.eventId); }
 export function createWorkflowNodeStateRegistry(){ return {workflows:{},viewerStates:{}}; }
-export function createWorkflowStore({ workflowNodeStateRegistry, applySubSessionLifecycleEvent, reduceSubSessionMessageEvent, reduceSubSessionSnapshot, removeSubSessionsByWorkflowRunIds }) {
+export function createWorkflowStore({ workflowNodeStateRegistry, ensureSubSessionMessageContainer, reduceSubSessionMessageEvent, reduceSubSessionSnapshot, removeSubSessionsByWorkflowRunIds }) {
+function selectWorkflowNodeState(sessionId = "", turnScopeId = "") {
+  const requestedSessionId = text(sessionId);
+  const requestedTurnScopeId = text(turnScopeId);
+  if (!requestedSessionId && !requestedTurnScopeId) return null;
+  const workflows = workflowNodeStateRegistry.value?.workflows || {};
+  const candidates = Object.values(workflows).flatMap((workflow = {}) =>
+    Object.values(workflow.nodes || {}),
+  ).filter((node = {}) => {
+    const nodeSessionId = text(node.sessionId);
+    const nodeTurnScopeId = text(node.turnScopeId);
+    return (!requestedSessionId || nodeSessionId === requestedSessionId) &&
+      (!requestedTurnScopeId || nodeTurnScopeId === requestedTurnScopeId);
+  });
+  return candidates.sort((left, right) => {
+    const sequenceDelta = Number(right.sequence || 0) - Number(left.sequence || 0);
+    if (sequenceDelta) return sequenceDelta;
+    return Number(right.revision || 0) - Number(left.revision || 0);
+  })[0] || null;
+}
 function upsertWorkflowNodeStateEvent(eventData = {}) {
   const workflowRunId = text(eventData?.workflowRunId);
   const nodeExecutionId = text(eventData?.nodeExecutionId);
@@ -95,23 +114,14 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
   workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
   const childSessionId = text(next.sessionId);
   if (childSessionId && childSessionId !== text(next.parentSessionId)) {
-    const lifecycleResult = applySubSessionLifecycleEvent({
-      ...next,
-      sessionId: childSessionId,
-      state: next.status,
-    });
-    logWorkflowDiagnostics("frontend.workflowStore.nodeSessionStatusApplied", () => ({
+    ensureSubSessionMessageContainer({
       sessionId: childSessionId,
       parentSessionId: next.parentSessionId,
       dialogProcessId: next.dialogProcessId,
       turnScopeId: next.turnScopeId,
       workflowRunId,
       nodeExecutionId,
-      status: next.status,
-      applied: lifecycleResult?.applied === true,
-      reason: text(lifecycleResult?.reason),
-      messageCount: lifecycleResult?.session?.messages?.length || 0,
-    }));
+    });
   }
   logWorkflowDiagnostics("frontend.workflowStore.nodeStateApplied", () => ({
     sessionId: text(next.parentSessionId || next.sessionId),
@@ -280,5 +290,5 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
       removedSessionIds: subSessionResult.removedSessionIds || [],
     };
   }
-  return { applyWorkflowRuntimeEvent, removeWorkflowOwnersForReplacedTurns };
+  return { applyWorkflowRuntimeEvent, removeWorkflowOwnersForReplacedTurns, selectWorkflowNodeState };
 }

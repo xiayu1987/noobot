@@ -286,7 +286,7 @@ describe("turnProjectionStore convergence", () => {
       ...structuredClone(snapshotBase),
       throughSequence: 2,
       thinkingOpenNames: ["must-not-hydrate"],
-      expandedDetailLogKeys: ["must-not-hydrate"],
+      expandedToolDetailKeys: ["must-not-hydrate"],
     };
 
     expect(hydrateTurnSnapshot({ targetMessage: target, snapshot })).toMatchObject({
@@ -296,7 +296,7 @@ describe("turnProjectionStore convergence", () => {
     expect(target.messageEventState.lastSequence).toBe(3);
     expect(target.toolTimeline[0]).toMatchObject({ status: "completed" });
     expect(target).not.toHaveProperty("thinkingOpenNames");
-    expect(target).not.toHaveProperty("expandedDetailLogKeys");
+    expect(target).not.toHaveProperty("expandedToolDetailKeys");
 
     const once = projection(structuredClone(target));
     expect(hydrateTurnSnapshot({ targetMessage: target, snapshot: structuredClone(target), throughSequence: 3 }).applied).toBe(true);

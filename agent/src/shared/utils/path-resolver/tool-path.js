@@ -285,3 +285,17 @@ export function resolveToolInputPath({
     hint: "",
   };
 }
+
+/**
+ * Return only path-scope information safe for tool consumers.
+ *
+ * `resolveToolPathPolicy().allowedRoots` contains host filesystem paths used
+ * for enforcement. It is intentionally not part of a public tool error.
+ */
+export function buildToolPathScopeErrorDetails({ field = "", pathView = "" } = {}) {
+  return {
+    ...(field ? { field } : {}),
+    ...(pathView ? { pathView } : {}),
+    scope: "workspace",
+  };
+}

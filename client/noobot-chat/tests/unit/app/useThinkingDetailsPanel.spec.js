@@ -24,8 +24,8 @@ function createPanel(fetchThinkingDetail = vi.fn(), activeSession = ref({ messag
   });
 }
 
-const workflowMessage = { role: "assistant", dialogProcessId: "workflow-node", turnScopeId: "workflow-turn", hasThinkingDetails: true, thinkingDetailCount: 1 };
-const normalMessage = { role: "assistant", dialogProcessId: "normal-message", turnScopeId: "normal-turn", hasThinkingDetails: true, thinkingDetailCount: 1 };
+const workflowMessage = { role: "assistant", presentationMessageId: "workflow-presentation", dialogProcessId: "workflow-node", turnScopeId: "workflow-turn", hasThinkingDetails: true, thinkingDetailCount: 1 };
+const normalMessage = { role: "assistant", presentationMessageId: "normal-presentation", dialogProcessId: "normal-message", turnScopeId: "normal-turn", hasThinkingDetails: true, thinkingDetailCount: 1 };
 
 function detailFor(message) {
   return { messageItem: { ...message, loaded: true }, allMessages: [message], sessionDocs: [] };
@@ -94,6 +94,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
   it("binds the drawer to the active canonical turn instead of a stale click payload", async () => {
     const staleSummary = {
       role: "assistant",
+      presentationMessageId: "presentation-1",
       sessionId: "session-1",
       dialogProcessId: "process-1",
       turnScopeId: "turn-1",
@@ -146,6 +147,33 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline[0].status).toBe("completed");
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(panel.thinkingDetailsAllMessages.value).toContainEqual(injectedMessage);
+  });
+
+  it("does not bind the drawer to a different presentation in the same turn", async () => {
+    const canonicalMessage = {
+      role: "assistant",
+      presentationMessageId: "presentation-canonical",
+      sessionId: "session-1",
+      dialogProcessId: "process-shared",
+      turnScopeId: "turn-shared",
+      toolTimeline: [{ key: "call:canonical", toolCallId: "canonical" }],
+    };
+    const clickedMessage = {
+      role: "assistant",
+      presentationMessageId: "presentation-clicked",
+      sessionId: "session-1",
+      dialogProcessId: "process-shared",
+      turnScopeId: "turn-shared",
+      hasThinkingDetails: true,
+    };
+    const fetcher = vi.fn(async () => detailFor(clickedMessage));
+    const panel = createPanel(fetcher, ref({ messages: [canonicalMessage] }));
+
+    await panel.openThinkingDetailsPanel({ messageItem: clickedMessage });
+
+    expect(panel.thinkingDetailsMessageItem.value.presentationMessageId)
+      .toBe("presentation-clicked");
+    expect(panel.thinkingDetailsMessageItem.value).not.toBe(canonicalMessage);
   });
 
   it("refreshes a previously cached empty running detail", async () => {

@@ -10,6 +10,8 @@ import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 function toolTimeline() {
   return [{
     key: "call:call-1", toolCallId: "call-1", status: "completed",
+    args: { path: "README.md" },
+    result: { ok: true },
     call: {
       eventId: "call-1", sequence: 1, sequenceScopeId: "message-1",
       sequenceDomain: "message-event", authority: "authoritative", timestamp: "2026-07-29T01:00:00.000Z",
@@ -37,8 +39,12 @@ describe("ThinkingPanel canonical details", () => {
 
   it("renders canonical call and result in details mode", () => {
     const wrapper = mountThinkingPanel({ role: "assistant", toolTimeline: toolTimeline() }, { variant: "details" });
-    expect(wrapper.findAll(".execution-log-line").map((line) => line.text())).toEqual([
-      "read_file", "read_file done",
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(2);
+    expect(wrapper.findAll(".execution-log-detail")).toHaveLength(0);
+    expect(wrapper.vm.groupCompletedToolLogs(wrapper.props("messageItem"))[0].items
+      .map((item) => item.detailText)).toEqual([
+      '{\n  "path": "README.md"\n}',
+      '{\n  "ok": true\n}',
     ]);
     expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
   });
@@ -72,6 +78,42 @@ describe("ThinkingPanel canonical details", () => {
     wrapper.vm.toggleThinkingDetailExpanded(messageItem, key);
     await wrapper.vm.$nextTick();
     expect(wrapper.vm.isThinkingDetailExpanded(messageItem, key)).toBe(true);
+  });
+
+  it("keeps expansion identity stable across refresh ordering and timestamp changes", () => {
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-expand-refresh",
+      turnScopeId: "turn-expand-refresh",
+      toolTimeline: toolTimeline(),
+    };
+    const wrapper = mountThinkingPanel(messageItem, { variant: "details" });
+    const group = wrapper.vm.groupCompletedToolLogs(messageItem)[0];
+    const item = group.items[0];
+    const beforeRefreshKey = wrapper.vm.getThinkingDetailItemKey(group, item, 0);
+    const afterRefreshKey = wrapper.vm.getThinkingDetailItemKey(
+      group,
+      { ...item, ts: "2026-08-01T12:00:00.000Z" },
+      9,
+    );
+
+    expect(beforeRefreshKey).toBe("event:call-1");
+    expect(afterRefreshKey).toBe(beforeRefreshKey);
+  });
+
+  it("does not invent an expandable identity when eventId is missing", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      sessionId: "session-missing-event",
+      turnScopeId: "turn-missing-event",
+      toolTimeline: toolTimeline(),
+    }, { variant: "details" });
+
+    expect(wrapper.vm.getThinkingDetailItemKey(
+      { key: "tool-timeline" },
+      { toolCallId: "call-without-event", event: "tool_call", ts: "now" },
+      0,
+    )).toBe("");
   });
 
   it("renders scoped injected entities alongside canonical tool details", () => {

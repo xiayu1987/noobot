@@ -25,12 +25,12 @@ describe("buildSessionDetailProjection", () => {
 
     expect(projection.sessionId).toBe("session-1");
     expect(projection.turnStatuses[0].status).toBe("thinking");
-    expect(projection.turnTimingsByTurnScopeId["turn-1"].thinkingStartedAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
     expect(projection.messages.some((item) => item.role === "user")).toBe(true);
     expect(projection.messages.some((item) => item.placeholder === true || item.statusTurnScopeId === "turn-1")).toBe(true);
   });
 
-  it("preserves a running timing when a sparse projection has no timing facts", () => {
+  it("does not create a mutable timing store from a sparse projection", () => {
     const projection = buildSessionDetailProjection({
       sessionDetail: {
         sessionId: "session-1",
@@ -38,15 +38,9 @@ describe("buildSessionDetailProjection", () => {
       },
       makeViewMessage: identity,
       foldMessagesForView: (messages) => messages.map(identity),
-      currentTimingsByTurnScopeId: {
-        "turn-1": { thinkingStartedAt: "start", thinkingFinishedAt: null },
-      },
     });
 
-    expect(projection.turnTimingsByTurnScopeId["turn-1"]).toEqual({
-      thinkingStartedAt: "start",
-      thinkingFinishedAt: null,
-    });
+    expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
   });
 
   it("indexes workflow node timings by normalized turn scope key", () => {
@@ -70,12 +64,6 @@ describe("buildSessionDetailProjection", () => {
       foldMessagesForView: (messages) => messages.map(identity),
     });
 
-    expect(projection.turnTimingsByTurnScopeId["workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1"])
-      .toEqual({
-        thinkingStartedAt: "2026-07-21T08:29:00.000Z",
-        thinkingFinishedAt: "2026-07-21T08:30:00.000Z",
-      });
-    expect(projection.turnTimingsByTurnScopeId["workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1"])
-      .toBeUndefined();
+    expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
   });
 });

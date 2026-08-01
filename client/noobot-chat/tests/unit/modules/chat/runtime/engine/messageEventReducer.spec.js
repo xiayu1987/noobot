@@ -36,14 +36,64 @@ describe("reduceMessageEvent", () => {
   it("applies text and no-text tool lifecycle events", () => {
     const target = message();
     expect(reduce(target, event()).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
-    expect(selectToolTimelineLogs(target)[0]).toMatchObject({ type: "tool_call", toolCallId: "call-1" });
+    expect(selectToolTimelineLogs(target)[0]).toMatchObject({
+      type: "tool_call",
+      toolCallId: "call-1",
+      args: {},
+      detailText: "{}",
+    });
     expect(reduce(target, event({ eventId: "evt-2", eventType: "tool_call_end", sequence: 2, result: { ok: true } })).result)
       .toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
-    expect(selectToolTimelineLogs(target)[1].type).toBe("tool_result");
+    expect(selectToolTimelineLogs(target)[1]).toMatchObject({
+      type: "tool_result",
+      result: { ok: true },
+      detailText: "{\n  \"ok\": true\n}",
+    });
     expect(selectToolTimeline(target)).toHaveLength(1);
     expect(reduce(target, event({ eventId: "evt-3", eventType: "llm_delta", sequence: 3, text: "hello" })).result)
       .toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
     expect(target.content).toBe("hello");
+  });
+
+  it("projects persisted timeline entry detail through the same selector as live events", () => {
+    const target = message({
+      toolTimeline: [{
+        key: "call:call-persisted",
+        toolCallId: "call-persisted",
+        tool: "execute_script",
+        args: { command: "npm test" },
+        result: { ok: true, exitCode: 0 },
+        call: {
+          sequence: 1,
+          sequenceScopeId: "source-message-1",
+          authority: "authoritative",
+          sequenceDomain: "message-event",
+          log: { event: "tool_call", type: "tool_call", text: "execute_script" },
+        },
+        resultEvent: {
+          sequence: 2,
+          sequenceScopeId: "source-message-1",
+          authority: "authoritative",
+          sequenceDomain: "message-event",
+          log: { event: "tool_result", type: "tool_result", text: "execute_script" },
+        },
+      }],
+    });
+
+    expect(selectToolTimelineLogs(target)).toEqual([
+      expect.objectContaining({
+        toolCallId: "call-persisted",
+        tool: "execute_script",
+        args: { command: "npm test" },
+        detailText: "{\n  \"command\": \"npm test\"\n}",
+      }),
+      expect.objectContaining({
+        toolCallId: "call-persisted",
+        tool: "execute_script",
+        result: { ok: true, exitCode: 0 },
+        detailText: "{\n  \"ok\": true,\n  \"exitCode\": 0\n}",
+      }),
+    ]);
   });
 
   it("returns observable idempotency and sequence outcomes", () => {

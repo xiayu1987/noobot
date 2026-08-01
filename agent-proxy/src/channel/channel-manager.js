@@ -20,6 +20,7 @@ const DATA_PLANE_METRIC_KEYS = new Set([
   "channelEvents",
   "broadcasts",
   "deliveries",
+  "lifecycleReceipts",
 ]);
 
 export class ChannelManager {
@@ -38,6 +39,7 @@ export class ChannelManager {
       channelEvents: 0,
       broadcasts: 0,
       deliveries: 0,
+      lifecycleReceipts: 0,
     };
   }
 
@@ -50,7 +52,8 @@ export class ChannelManager {
 
   drainSuccessfulDataPlaneMetrics(nowMs = Date.now()) {
     const current = this.successfulDataPlaneMetrics;
-    const total = current.upstreamMessages + current.channelEvents + current.broadcasts + current.deliveries;
+    const total = current.upstreamMessages + current.channelEvents + current.broadcasts +
+      current.deliveries + current.lifecycleReceipts;
     if (!total) return null;
     this.successfulDataPlaneMetrics = {
       windowStartedAtMs: nowMs,
@@ -58,6 +61,7 @@ export class ChannelManager {
       channelEvents: 0,
       broadcasts: 0,
       deliveries: 0,
+      lifecycleReceipts: 0,
     };
     return { ...current, windowEndedAtMs: nowMs };
   }
