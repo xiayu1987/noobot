@@ -61,13 +61,17 @@ export function buildTurnTerminalCommand(command = "", payload = {}) {
   }[normalizedCommand];
   if (!contract) return null;
   const [status, reason, defaultDescription] = contract;
-  return normalizeTurnStatusEntity({
+  const normalized = normalizeTurnStatusEntity({
     ...payload,
     status,
     reason,
     description: text(payload?.description) || defaultDescription,
     error: plainError(payload?.error),
   });
+  if (normalized && payload?.assistantMessage && typeof payload.assistantMessage === "object") {
+    normalized.assistantMessage = payload.assistantMessage;
+  }
+  return normalized;
 }
 
 export function normalizeTurnStatusEntity(status = {}, now = () => new Date().toISOString()) {
@@ -134,6 +138,17 @@ export function upsertTurnStatusEntity({
   incoming = {},
   now = () => new Date().toISOString(),
 } = {}) {
+  const requestedAssistant = incoming?.assistantMessage;
+  const assistantMessage = requestedAssistant && typeof requestedAssistant === "object" && !Array.isArray(requestedAssistant)
+    ? {
+        ...requestedAssistant,
+        role: "assistant",
+        content: String(requestedAssistant.content || ""),
+        pending: false,
+        turnScopeId: text(requestedAssistant.turnScopeId || incoming.turnScopeId),
+        dialogProcessId: resolveMessageDialogProcessId(requestedAssistant) || resolveMessageDialogProcessId(incoming),
+      }
+    : null;
   const initial = normalizeTurnStatusEntity(incoming, now);
   if (!initial) return { statuses: normalizeTurnStatusesEntity(statuses, now), messages: Array.isArray(messages) ? messages : [], turnStatus: null, changed: false };
   const identityMessage = (Array.isArray(messages) ? messages : [])
@@ -152,6 +167,12 @@ export function upsertTurnStatusEntity({
       ? { ...message, pending: false }
       : message,
   );
+  const hasAssistantMessage = materializedMessages.some((message) =>
+    isSameTurnStatus(normalized, message) && text(message?.role).toLowerCase() === "assistant",
+  );
+  if (!hasAssistantMessage && assistantMessage?.content) {
+    materializedMessages.push(assistantMessage);
+  }
 
   const source = normalizeTurnStatusesEntity(statuses, now);
   const index = source.findIndex((item) => isSameTurnStatus(item, normalized));

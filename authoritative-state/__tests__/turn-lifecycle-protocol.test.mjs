@@ -15,7 +15,7 @@ import {
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleReceipt,
   validateSessionProvisionIntent,
-} from "../src/contracts/turn-lifecycle-protocol.mjs";
+} from "@noobot/event-protocol/turn-lifecycle";
 
 import {
   acknowledgeAuthorityEventDelivery,
@@ -23,7 +23,7 @@ import {
   listPendingAuthorityEvents,
   normalizeAuthorityEventOutbox,
   recordAuthorityEventDeliveryAttempt,
-} from "../src/contracts/authority-event-outbox.mjs";
+} from "@noobot/event-protocol/outbox";
 import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
 
@@ -249,6 +249,8 @@ test("turn lifecycle envelope rejects missing identity and invalid revision", ()
     "missing_message_id",
     "missing_presentation_message_id",
     "invalid_revision",
+    "event_phase_mismatch",
+    "event_state_mismatch",
   ]);
 });
 

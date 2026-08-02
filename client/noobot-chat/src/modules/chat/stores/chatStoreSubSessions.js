@@ -12,7 +12,6 @@ import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import { classifyRealtimeLog } from "../runtime/engine/realtimeLogClassifier.js";
 import { canonicalizeTurnScopeId, normalizeTurnScopeIdKey } from "../model/messageIdentity.js";
-import { applyRunStateMessageRuntimePatchToSession } from "../runtime/engine/messageRuntimePatch.js";
 import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
@@ -20,6 +19,7 @@ import {
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   dispatchTurnEnvelope,
+  projectTurnRuntimeToMessages,
   TURN_PROJECTION_SOURCE,
 } from "../runtime/engine/turnProjectionStore.js";
 
@@ -200,6 +200,25 @@ function ensureSubSessionMessageContainer(eventData = {}) {
   return { applied: true, session: nextSession };
 }
 
+function applyTurnRuntimeMessageProjection(turn = {}) {
+  const sessionId = text(turn?.sessionId);
+  if (!sessionId) return { applied: false, patchedMessageCount: 0, reason: "missing_session" };
+  const session = subSessionMessageRegistry.value?.sessions?.[sessionId] || null;
+  if (!session) return { applied: false, patchedMessageCount: 0, reason: "session_not_found" };
+  const stateSnapshot = selectTurnMessageRuntime(turnRuntimeRegistry?.value, {
+    sessionId,
+    turnScopeId: turn?.turnScopeId,
+    dialogProcessId: turn?.dialogProcessId,
+  });
+  const result = projectTurnRuntimeToMessages({ session, stateSnapshot, turn });
+  if (result.applied) {
+    const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
+    subSessionMessageRegistry.value = { ...registry, sessions: { ...(registry.sessions || {}) } };
+    if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
+  }
+  return result;
+}
+
 function upsertSubSessionEvent(eventName = "", eventData = {}) {
   if (!isMessageEventEnvelope(eventData)) {
     return { applied: false, reason: "not_authoritative_message_event" };
@@ -354,6 +373,9 @@ function upsertSubSessionEvent(eventName = "", eventData = {}) {
     nodeSessionId: sessionId,
     dialogProcessId: text(eventData?.dialogProcessId),
     turnScopeId: text(eventData?.turnScopeId),
+    workflowRunId: text(eventData?.workflowRunId),
+    nodeExecutionId: text(eventData?.nodeExecutionId),
+    eventId,
     messageId: messageKey,
     eventType: projectionEventName,
     contentLength: String(nextMessage?.content || "").length,
@@ -363,7 +385,7 @@ function upsertSubSessionEvent(eventName = "", eventData = {}) {
   return { applied: true, session: nextSession, message: nextMessage };
 }
 
-function reduceSubSessionSnapshot(sessionDoc = {}) {
+function reduceSubSessionSnapshot(sessionDoc = {}, snapshotContext = {}) {
   const sessionId = text(sessionDoc?.sessionId || sessionDoc?.id || sessionDoc?.backendSessionId);
   if (!sessionId) return { applied: false, reason: "missing_session" };
   const timingResult = typeof applyTurnTimingSnapshot === "function"
@@ -382,9 +404,24 @@ function reduceSubSessionSnapshot(sessionDoc = {}) {
     current.sequenceByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT] || 0,
   );
   if (appliedSnapshotVersion && snapshotVersion <= appliedSnapshotVersion) {
+    const reason = snapshotVersion === appliedSnapshotVersion ? "duplicate_snapshot_version" : "stale_snapshot";
+    logWorkflowDiagnostics("frontend.workflowSubSession.snapshotRejected", () => ({
+      sessionId,
+      parentSessionId: text(sessionDoc?.parentSessionId || current?.parentSessionId),
+      workflowRunId: text(sessionDoc?.workflowRunId || current?.workflowRunId),
+      nodeExecutionId: text(sessionDoc?.nodeExecutionId || current?.nodeExecutionId),
+      snapshotVersion,
+      appliedSnapshotVersion,
+      source: text(snapshotContext?.source) || "unknown",
+      eventId: text(snapshotContext?.eventId),
+      sequenceDomain: text(snapshotContext?.sequenceDomain),
+      authoritativeSequence: Number(snapshotContext?.authoritativeSequence || 0),
+      transportSequence: Number(snapshotContext?.transportSequence || 0),
+      reason,
+    }));
     return {
       applied: false,
-      reason: snapshotVersion === appliedSnapshotVersion ? "duplicate_snapshot_version" : "stale_snapshot",
+      reason,
       current,
     };
   }
@@ -394,6 +431,12 @@ function reduceSubSessionSnapshot(sessionDoc = {}) {
   logWorkflowDiagnostics("frontend.workflowSubSession.snapshotMergeStarted", () => ({
     sessionId,
     snapshotVersion,
+    appliedSnapshotVersion,
+    source: text(snapshotContext?.source) || "unknown",
+    eventId: text(snapshotContext?.eventId),
+    sequenceDomain: text(snapshotContext?.sequenceDomain),
+    authoritativeSequence: Number(snapshotContext?.authoritativeSequence || 0),
+    transportSequence: Number(snapshotContext?.transportSequence || 0),
     snapshotMessageCount: snapshotMessages.length,
     realtimeMessageCount: realtimeMessages.length,
     snapshotMessages: snapshotMessages.map((message = {}) => ({
@@ -458,6 +501,12 @@ function reduceSubSessionSnapshot(sessionDoc = {}) {
   logWorkflowDiagnostics("frontend.workflowSubSession.snapshotMergeCommitted", () => ({
     sessionId,
     snapshotVersion,
+    previousSnapshotVersion: appliedSnapshotVersion,
+    source: text(snapshotContext?.source) || "unknown",
+    eventId: text(snapshotContext?.eventId),
+    sequenceDomain: text(snapshotContext?.sequenceDomain),
+    authoritativeSequence: Number(snapshotContext?.authoritativeSequence || 0),
+    transportSequence: Number(snapshotContext?.transportSequence || 0),
     messageCount: deduplicatedMessages.length,
     messages: deduplicatedMessages.map((message = {}) => ({
       messageId: text(message?.messageId || message?.id),
@@ -566,62 +615,6 @@ function selectSubSessionTiming(sessionId = "", turnScopeId = "") {
   };
 }
 
-function applySubSessionTurnRuntimeProjection(event = {}) {
-  const sessionId = text(event?.sessionId);
-  if (!sessionId) return { applied: false, reason: "missing_session" };
-  const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
-  const session = registry.sessions?.[sessionId] || null;
-  if (!session) return { applied: false, reason: "sub_session_not_found" };
-  const stateSnapshot = selectTurnMessageRuntime(turnRuntimeRegistry?.value, {
-    sessionId,
-    turnScopeId: event?.turnScopeId,
-    dialogProcessId: event?.dialogProcessId,
-  });
-  if (!stateSnapshot) return { applied: false, reason: "turn_runtime_not_found" };
-  const projection = applyRunStateMessageRuntimePatchToSession({
-    session,
-    stateSnapshot,
-    event,
-  });
-  if (!projection.applied) {
-    logWorkflowDiagnostics("frontend.workflowSubSession.turnRuntimeProjectionRejected", () => ({
-      sessionId,
-      turnScopeId: text(stateSnapshot.turnScopeId),
-      dialogProcessId: text(stateSnapshot.dialogProcessId),
-      runtimeState: text(stateSnapshot.state),
-      runtimeTerminal: text(stateSnapshot.terminal),
-      reason: "message_not_projected",
-      messageCount: Array.isArray(session.messages) ? session.messages.length : 0,
-      messages: (Array.isArray(session.messages) ? session.messages : []).map((message = {}) => ({
-        messageId: text(message?.messageId || message?.id),
-        role: text(message?.role),
-        turnScopeId: text(message?.turnScopeId),
-        dialogProcessId: text(message?.dialogProcessId),
-        pending: message?.pending,
-      })),
-    }));
-    return { ...projection, reason: "message_not_projected", session };
-  }
-  registry.sessions[sessionId] = { ...session, messages: [...session.messages] };
-  subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
-  if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
-  logWorkflowDiagnostics("frontend.workflowSubSession.turnRuntimeProjected", () => ({
-    sessionId,
-    turnScopeId: text(stateSnapshot.turnScopeId),
-    dialogProcessId: text(stateSnapshot.dialogProcessId),
-    runtimeState: text(stateSnapshot.state),
-    runtimeTerminal: text(stateSnapshot.terminal),
-    patchedMessageCount: projection.patchedMessageCount,
-    messages: session.messages.map((message = {}) => ({
-      messageId: text(message?.messageId || message?.id),
-      role: text(message?.role),
-      pending: message?.pending,
-      channelState: text(message?.channelState?.state),
-    })),
-  }));
-  return { ...projection, reason: "", session: registry.sessions[sessionId] };
-}
-
 function removeSubSessionsByWorkflowRunIds(workflowRunIds = [], { parentSessionId = "" } = {}) {
   const owners = new Set((Array.isArray(workflowRunIds) ? workflowRunIds : []).map(text).filter(Boolean));
   if (!owners.size) return { removedSessionIds: [] };
@@ -644,12 +637,12 @@ function removeSubSessionsByWorkflowRunIds(workflowRunIds = [], { parentSessionI
 
   return {
     ensureSubSessionMessageContainer,
+    applyTurnRuntimeMessageProjection,
     reduceSubSessionMessageEvent: upsertSubSessionEvent,
     reduceSubSessionSnapshot,
     selectSubSessionMessages,
     selectSubSessionTurnRuntime,
     selectSubSessionTiming,
-    applySubSessionTurnRuntimeProjection,
     removeSubSessionsByWorkflowRunIds,
   };
 }

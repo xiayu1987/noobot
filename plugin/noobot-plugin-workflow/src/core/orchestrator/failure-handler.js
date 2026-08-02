@@ -71,9 +71,6 @@ export async function handleWorkflowFailure({
   });
   if (!beforeDispatchMode) return null;
 
-  ctx.skipAgentDispatch = true;
-  ctx.overrideAgentResult = agentResult;
-  ctx.workflowFallbackToMainAgent = false;
   await emitWorkflowRuntimeEvent({
     options,
     ctx,
@@ -86,7 +83,6 @@ export async function handleWorkflowFailure({
   });
   return createBotDispatchHandled({
     owner: "workflow",
-    result: agentResult,
     failure: {
       code: String(error?.code || "WORKFLOW_EXECUTION_FAILED").trim(),
       message,

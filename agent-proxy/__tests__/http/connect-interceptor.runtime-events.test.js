@@ -59,6 +59,9 @@ test('connect interceptor writes sanitized system event for invalid upstream bas
       { saveApiKeyIdentity() {} },
     );
 
+    // Invalid local proxy configuration is an internal configuration failure.
+    // 502 is reserved for a valid target URL that cannot be reached or returns
+    // an upstream failure.
     assert.equal(response.statusCode, 500);
     assert.deepEqual(JSON.parse(response.body), { ok: false, error: 'Bad Gateway' });
 

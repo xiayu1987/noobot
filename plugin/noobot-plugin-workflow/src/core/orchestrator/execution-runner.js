@@ -449,10 +449,12 @@ export async function runWorkflowExecution({
             });
             nodeStateSnapshot = terminalFact?.snapshot || nodeStateSnapshot;
             if (childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED) {
-              action.action = {
-                ...(action?.action || {}),
-                stepFailure: childTerminal.lifecycle.failure || { message: "child execution failed" },
-              };
+              const failure = childTerminal.lifecycle.failure || { message: "child execution failed" };
+              const error = new Error(failure.message || "child execution failed");
+              error.code = failure.code || "WORKFLOW_CHILD_EXECUTION_FAILED";
+              error.failure = failure;
+              error.nodeTerminalCommitted = true;
+              throw error;
             } else if (childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.STOPPED) {
               const error = new Error(
                 childTerminal.lifecycle?.failure?.message ||

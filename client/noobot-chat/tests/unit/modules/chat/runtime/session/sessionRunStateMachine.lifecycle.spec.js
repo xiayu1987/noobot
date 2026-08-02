@@ -13,13 +13,13 @@ import {
   normalizeSessionRunEvent,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { deriveTurnCapabilities, reduceTurnRuntimeEvent } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/authoritative-state/contracts";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol";
 
-const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
-const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
-const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
-const stopAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_ACCEPTED, phase: TURN_PHASE.ACTION, action: "stop" };
-const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
+const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, state: TURN_STATE.PROCESSING, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
+const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, state: TURN_STATE.ACTION_REQUESTING, phase: TURN_PHASE.ACTION, action: "send" };
+const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, state: TURN_STATE.COMPLETION_REQUESTING, phase: TURN_PHASE.COMPLETION };
+const stopAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_ACCEPTED, state: TURN_STATE.ACTION_REQUESTING, phase: TURN_PHASE.STOP, action: "stop" };
+const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, state: TURN_STATE.STOPPING, phase: TURN_PHASE.STOP };
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
 const terminalResolved = (state) => ({ type: SESSION_RUN_EVENT.TERMINAL_RESOLVED, state, revision: 10, sequence: 10, ...completionCommit });
 
@@ -47,7 +47,7 @@ describe("sessionRunStateMachine lifecycle", () => {
     expect(evaluateSessionRunState({ state: FrontendRunState.USER_STOPPING })).toMatchObject({ sending: true, canStop: false, stopLocked: true });
   });
 
-  it("keeps every lifecycle phase locked until its terminal summary", () => {
+  it("keeps lifecycle phases locked until the authoritative terminal event", () => {
     let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
     expect(turn).toMatchObject({ commandPending: true, pendingCommandType: "action" });
     expect(turn.state).toBeUndefined();
@@ -56,8 +56,8 @@ describe("sessionRunStateMachine lifecycle", () => {
     expect(turn.state).toBe(FrontendRunState.PROCESSING);
     turn = apply(turn, processingCompleted);
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
-    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.COMPLETED, phase: TURN_PHASE.COMPLETION, ...completionCommit });
-    expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
+    turn = apply(turn, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.COMPLETED, state: TURN_STATE.COMPLETED, phase: TURN_PHASE.COMPLETION, ...completionCommit });
+    expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
     turn = apply(turn, terminalResolved(TURN_STATE.COMPLETED));
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(deriveTurnCapabilities(turn.state, turn).actionLocked).toBe(false);

@@ -11,7 +11,7 @@ import {
   deriveAuthoritativeTurnCapabilities,
   normalizeTurnContinuationSource,
   validateTurnLifecycleEnvelope,
-} from "../contracts/turn-lifecycle-protocol.mjs";
+} from "@noobot/event-protocol/turn-lifecycle";
 
 const TERMINAL_STATES = new Set([
   TURN_STATE.COMPLETED,
@@ -71,6 +71,9 @@ export function normalizeTurnLifecycleEntity(source = {}) {
             retryable: value.finalizeIntent.retryable !== false,
             createdAt: clean(value.finalizeIntent.createdAt),
             updatedAt: clean(value.finalizeIntent.updatedAt),
+            payload: value.finalizeIntent.payload && typeof value.finalizeIntent.payload === "object" && !Array.isArray(value.finalizeIntent.payload)
+              ? { ...value.finalizeIntent.payload }
+              : {},
           }
         : null,
       continuationSource: normalizeTurnContinuationSource(value.continuationSource),
@@ -309,6 +312,9 @@ export function transitionTurnLifecycle(source = {}, input = {}, now = () => new
         retryable: true,
         createdAt: clean(current?.finalizeIntent?.createdAt) || nowValue,
         updatedAt: nowValue,
+        payload: input.finalizePayload && typeof input.finalizePayload === "object"
+          ? input.finalizePayload
+          : {},
       }
     : isFinalizeFailure && input.failure?.retryable === true
       ? {

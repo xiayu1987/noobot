@@ -16,6 +16,29 @@ import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capabili
 import { createBotDispatchHandled } from "@noobot/shared/bot-dispatch-protocol";
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
 
+const NOOP_EVENT_LISTENER = Object.freeze({ onEvent() {} });
+
+function canonicalMessageIdForTest(message = {}, activeAssistantMessageId = "") {
+  if (message?.role === "assistant" && activeAssistantMessageId) return activeAssistantMessageId;
+  const existing = String(message?.messageId || message?.id || "").trim();
+  if (existing) return existing;
+  const stableLocalId = String(message?.messageUid || message?.tool_call_id || "").trim();
+  if (!stableLocalId) throw new Error("test Turn message requires a stable identity");
+  return `msg_event_test_${stableLocalId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+function createCanonicalHandledResult(context = {}, output = "") {
+  const messageId = String(context?.runConfig?.messageId || "").trim();
+  if (!messageId) throw new Error("handled test result requires the bound canonical messageId");
+  return {
+    output,
+    traces: [],
+    assistantMessageId: messageId,
+    turnMessages: [{ role: "assistant", type: "message", messageId, content: output }],
+    turnTasks: [],
+  };
+}
+
 function createRunner({
   botHookManager = createBotHookManager(),
   agentRunner = async () => ({
@@ -39,7 +62,7 @@ function createRunner({
     userConfig: {},
     currentSessionModelAlias: "",
     executionStartIndex: 0,
-    runtimeEventListener: eventListener,
+    runtimeEventListener: eventListener || NOOP_EVENT_LISTENER,
   }),
   resolveScenarioRunConfig = (runConfig = {}) => runConfig,
   prepareRunConfig = (payload = {}) => ({
@@ -54,18 +77,84 @@ function createRunner({
   stampReusedUserTurnDialogProcessId = async () => {},
   assertPersistenceContextIdentity = null,
 } = {}) {
+  const initializeCanonicalRunSessionRuntime = async (payload = {}) => {
+    const initialized = await initializeRunSessionRuntime(payload);
+    return {
+      ...(initialized || {}),
+      runtimeEventListener:
+        initialized?.runtimeEventListener || payload?.eventListener || NOOP_EVENT_LISTENER,
+    };
+  };
+  const prepareCanonicalAgentTurnExecution = async (payload = {}) => {
+    const prepared = await prepareAgentTurnExecution(payload);
+    const runtime = prepared?.runtimeAgentContext?.execution?.controllers?.runtime;
+    if (runtime && typeof runtime === "object") {
+      const currentStore = runtime.currentTurnMessages;
+      const isCanonicalStore =
+        typeof currentStore?.push === "function" &&
+        typeof currentStore?.updateLast === "function" &&
+        typeof currentStore?.removeLast === "function" &&
+        typeof currentStore?.updateWhere === "function" &&
+        typeof currentStore?.toArray === "function";
+      if (!isCanonicalStore) {
+        runtime.currentTurnMessages = createCurrentTurnMessagesStore(
+          typeof currentStore?.toArray === "function" ? currentStore.toArray() : [],
+        );
+      }
+    }
+    return prepared;
+  };
+  const runCanonicalAgent = async (payload = {}) => {
+    const result = await agentRunner(payload);
+    if (!result || typeof result !== "object" || !String(result.output || "")) return result;
+    const runtime = payload?.agentContext?.execution?.controllers?.runtime;
+    const messageId = String(runtime?.systemRuntime?.messageEventStream?.activeMessageId || "").trim();
+    if (!messageId) throw new Error("test Agent result requires the bound canonical messageId");
+    const store = runtime.currentTurnMessages;
+    for (const [index, message] of store.toArray().entries()) {
+      const canonicalMessageId = canonicalMessageIdForTest(message, messageId);
+      store.updateWhere({ messageId: canonicalMessageId }, (_current, currentIndex) => currentIndex === index);
+    }
+    for (const message of Array.isArray(result.turnMessages) ? result.turnMessages : []) {
+      const canonicalMessageId = canonicalMessageIdForTest(message, messageId);
+      const canonicalMessage = { ...message, messageId: canonicalMessageId };
+      const updatedCount = store.updateWhere(
+        canonicalMessage,
+        (current) => String(current?.messageId || "").trim() === canonicalMessageId,
+      );
+      if (updatedCount === 0) store.push(canonicalMessage);
+    }
+    const messages = store.toArray();
+    const assistantIndex = [...messages]
+      .map((message, index) => ({ message, index }))
+      .reverse()
+      .find(({ message }) => message?.role === "assistant")?.index;
+    if (assistantIndex === undefined) {
+      store.push({ role: "assistant", type: "message", messageId, content: String(result.output) });
+    } else {
+      store.updateWhere(
+        { messageId },
+        (_message, index) => index === assistantIndex,
+      );
+    }
+    return {
+      ...result,
+      assistantMessageId: String(result.assistantMessageId || messageId).trim(),
+      turnMessages: store.toArray(),
+    };
+  };
   return new SessionExecutionRunner({
-    agentRunner,
+    agentRunner: runCanonicalAgent,
     errorLogger: { async log() {} },
     normalizeRunMessage: (message = "") => String(message || "").trim(),
     validateRunInput() {},
     ensureParentAsyncResultContainer: ({ parentAsyncResultContainer = null } = {}) =>
       parentAsyncResultContainer,
-    initializeRunSessionRuntime,
+    initializeRunSessionRuntime: initializeCanonicalRunSessionRuntime,
     resolveScenarioRunConfig,
     prepareRunConfig,
     prepareTurnInput,
-    prepareAgentTurnExecution,
+    prepareAgentTurnExecution: prepareCanonicalAgentTurnExecution,
     appendAgentMessages,
     getSessionTurns,
     appendSessionTurn: async () => {},
@@ -489,10 +578,12 @@ test("before-dispatch takeover can claim root processing before the hook complet
   const hookGate = new Promise((resolve) => { releaseHook = resolve; });
   let claimedInsideHook = false;
   botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
-    claimedInsideHook = ctx.claimAgentDispatch({ source: "test_takeover" });
-    ctx.skipAgentDispatch = true;
-    ctx.overrideAgentResult = { output: "hook result", traces: [], turnMessages: [] };
+    claimedInsideHook = ctx.claimAgentDispatch({ owner: "test_takeover", source: "test_takeover" });
     await hookGate;
+    return createBotDispatchHandled({
+      owner: "test_takeover",
+      result: createCanonicalHandledResult(ctx, "hook result"),
+    });
   });
   const runner = createRunner({ botHookManager });
   const runPromise = runner.runSession({
@@ -521,6 +612,7 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
   const lifecycleStates = [];
   botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
     assert.equal(ctx.claimAgentDispatch({
+      owner: "workflow",
       source: "workflow_takeover",
       executionKind: "workflow",
       origin: { type: "workflow", workflowRunId: "wf-1" },
@@ -531,8 +623,10 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
       executionKind: "agent",
       origin: { type: "chat" },
     }), false);
-    ctx.skipAgentDispatch = true;
-    ctx.overrideAgentResult = { output: "hook result", traces: [], turnMessages: [] };
+    return createBotDispatchHandled({
+      owner: "workflow",
+      result: createCanonicalHandledResult(ctx, "hook result"),
+    });
   });
   const runner = createRunner({ botHookManager });
   await runner.runSession({
@@ -569,7 +663,7 @@ test("structured dispatch outcome routes exclusively to the workflow owner", asy
     });
     return createBotDispatchHandled({
       owner: "workflow",
-      result: { output: "workflow result", traces: [], turnMessages: [], turnTasks: [] },
+      result: createCanonicalHandledResult(ctx, "workflow result"),
     });
   });
   const runner = createRunner({
@@ -610,7 +704,6 @@ test("a handled workflow failure terminates the root Turn without Agent fallback
     ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router", executionKind: "workflow" });
     return createBotDispatchHandled({
       owner: "workflow",
-      result: { workflow: { failed: true } },
       failure: { code: "WORKFLOW_NODE_FAILED", message: "node failed" },
     });
   });

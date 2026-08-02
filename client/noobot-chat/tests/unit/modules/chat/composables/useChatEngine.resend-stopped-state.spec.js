@@ -12,11 +12,12 @@ import {
   assistantMessage,
   emitChannelState,
   emitAuthorityProcessing,
+  emitAuthorityTerminal,
 } from "../helpers/useChatEngineHarness.js";
 import { BackendChannelState, FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { applyTurnTerminalResolution } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { applyTurnTerminalResolution, selectSessionTurnRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createTurnTerminalResolution } from "@noobot/event-protocol";
 import {
   RoleEnum,
   StreamEventEnum,
@@ -26,7 +27,7 @@ function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messag
   const revision = 100;
   const sequence = 100;
   const completionCommitId = `commit-${turnScopeId}-${revision}`;
-  return applyTurnTerminalResolution(turnRuntimeRegistry.value, createTurnTerminalResolution({
+  const result = applyTurnTerminalResolution(turnRuntimeRegistry.value, createTurnTerminalResolution({
     commandId: `resolve-${turnScopeId}-${revision}`,
     sessionId,
     turnScopeId,
@@ -52,6 +53,10 @@ function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messag
       messages,
     },
   }));
+  if (result?.applied && result.registry) {
+    turnRuntimeRegistry.value = { ...result.registry };
+  }
+  return result;
 }
 
 describe("useChatEngine.resend stopped state", () => {
@@ -177,6 +182,11 @@ describe("useChatEngine.resend stopped state", () => {
       emitChannelState(onEvent, sessionId, dialogProcessId, "sending", {
         turnScopeId: payload.turnScopeId,
       });
+      emitAuthorityProcessing(onEvent, {
+        ...payload,
+        sessionId,
+        dialogProcessId,
+      });
       onEvent({
         event: StreamEventEnum.USER_STOPPED,
         data: {
@@ -189,6 +199,14 @@ describe("useChatEngine.resend stopped state", () => {
             turnScopeId: payload.turnScopeId,
           },
         },
+      });
+      emitAuthorityTerminal(onEvent, {
+        sessionId,
+        turnScopeId: payload.turnScopeId,
+        dialogProcessId,
+        state: "stop_completed",
+        sequence: index + 2,
+        revision: index + 2,
       });
     });
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor, expectedVersion }) => {
@@ -266,26 +284,26 @@ describe("useChatEngine.resend stopped state", () => {
 
     await expect(engine.resendMonotonicMessage(activeSession.value.messages[1], "first edit")).resolves.toBe(true);
     const firstStoppedAssistant = activeSession.value.messages.find((message) => message.role === RoleEnum.ASSISTANT);
-    settleStoppedTurn(turnRuntimeRegistry, {
-      sessionId,
-      turnScopeId: firstStoppedAssistant.turnScopeId,
-      messages: activeSession.value.messages,
-    });
     await expect(engine.resendMonotonicMessage(firstStoppedAssistant, "second edit")).resolves.toBe(true);
+    const secondReplaceScope = replaceSessionTurnApi.mock.calls[1][0].turnScopeId;
 
     expect(stream).toHaveBeenCalledTimes(2);
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(2);
     const firstReplaceScope = replaceSessionTurnApi.mock.calls[0][0].turnScopeId;
-    const secondReplaceScope = replaceSessionTurnApi.mock.calls[1][0].turnScopeId;
-    expect(firstReplaceScope).not.toBe(secondReplaceScope);
+    const committedSecondReplaceScope = replaceSessionTurnApi.mock.calls[1][0].turnScopeId;
+    expect(firstReplaceScope).not.toBe(committedSecondReplaceScope);
     expect(stream.mock.calls[0][0].turnScopeId).toBe(firstReplaceScope);
-    expect(stream.mock.calls[1][0].turnScopeId).toBe(secondReplaceScope);
+    expect(stream.mock.calls[1][0].turnScopeId).toBe(committedSecondReplaceScope);
     expect(stoppedTurns[0].dialogProcessId).not.toBe(stoppedTurns[1].dialogProcessId);
-    expect(activeSession.value.turnStatuses.at(-1)).toMatchObject({
-      status: "user_stopped",
-      turnScopeId: secondReplaceScope,
-      dialogProcessId: "dp-resend-stop-2",
+    const secondRuntime = selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, secondReplaceScope);
+    expect(secondRuntime).toMatchObject({
+      // Authority state stop_completed is intentionally projected to the
+      // client presentation terminal user_stopped.
+      terminal: "user_stopped",
+      turnScopeId: committedSecondReplaceScope,
+      sending: false,
     });
+    expect(secondRuntime.lifecycleEventType).toBe("turn.stop_completed");
   });
 
   it("resendMonotonicMessage keeps the second replacement turn running instead of inheriting stopped state", async () => {
@@ -363,7 +381,7 @@ describe("useChatEngine.resend stopped state", () => {
     expect(secondPlaceholder).toEqual(expect.objectContaining({
       role: RoleEnum.ASSISTANT,
       content: "",
-      pending: true,
+      pending: false,
       statusLabel: "",
       turnScopeId: secondReplacementUser.turnScopeId,
     }));
@@ -467,10 +485,14 @@ describe("useChatEngine.resend stopped state", () => {
 
     const freshPlaceholder = [...activeSession.value.messages]
       .reverse()
-      .find((message) => message.role === RoleEnum.ASSISTANT && message.pending === true);
-    expect(freshPlaceholder).toBeUndefined();
-    expect(sending.value).toBe(false);
-    expect(canStop.value).toBe(false);
+      .find((message) => message.role === RoleEnum.ASSISTANT && message.turnScopeId === activeTurnRuntime.value.turnScopeId);
+    expect(freshPlaceholder).toEqual(expect.objectContaining({
+      role: RoleEnum.ASSISTANT,
+      pending: false,
+      turnScopeId: activeTurnRuntime.value.turnScopeId,
+    }));
+    expect(sending.value).toBe(true);
+    expect(canStop.value).toBe(true);
   });
 
   it("resendMonotonicMessage ignores stale global run state when Registry has no active turn", async () => {

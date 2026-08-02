@@ -5,7 +5,7 @@
  */
 import {
   AGENT_PROXY_ERROR,
-  CHANNEL_EVENT,
+  EVENT_TYPE,
   CONVERSATION_STATE,
 } from "../../shared/constants.js";
 import { config } from "../../shared/config.js";
@@ -14,7 +14,7 @@ import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 import {
   TURN_EVENT,
   validateTurnLifecycleReceipt,
-} from "@noobot/authoritative-state/contracts";
+} from "@noobot/event-protocol";
 
 const TERMINAL_TURN_EVENTS = new Set([
   TURN_EVENT.COMPLETED,
@@ -142,7 +142,7 @@ acknowledgeTurnLifecycleDelivery(socket, receipt = {}) {
 
 sendChannelEvent(channel, targetSocket, envelope) {
   if (!targetSocket) return { result: "skipped", reason: "socket_missing" };
-  if (envelope?.event !== CHANNEL_EVENT.TURN_LIFECYCLE) {
+  if (envelope?.event !== EVENT_TYPE.TURN_LIFECYCLE) {
     return this.sendSocketEvent(targetSocket, envelope);
   }
   const eventData = envelope?.data || {};
@@ -292,7 +292,7 @@ replayChannelEvents(channel, targetSocket, lastSequence = 0) {
   for (const eventEnvelope of replayEvents) {
     const scopedEnvelope = this._withChannelSessionScope(channel, eventEnvelope);
     const sendResult = this.sendChannelEvent(channel, targetSocket, scopedEnvelope);
-    if (!isAcceptedChannelDelivery(sendResult) || scopedEnvelope.event === CHANNEL_EVENT.TURN_LIFECYCLE) {
+    if (!isAcceptedChannelDelivery(sendResult) || scopedEnvelope.event === EVENT_TYPE.TURN_LIFECYCLE) {
       continue;
     }
     targetSocket.__agentProxyLastSequenceByChannel ||= {};
@@ -316,7 +316,7 @@ broadcastChannelEvent(channel, envelope) {
   const scopedEnvelope = this._withChannelSessionScope(channel, envelope);
   const eventData = scopedEnvelope?.data || {};
   const terminalLifecycle =
-    scopedEnvelope?.event === CHANNEL_EVENT.TURN_LIFECYCLE &&
+    scopedEnvelope?.event === EVENT_TYPE.TURN_LIFECYCLE &&
     TERMINAL_TURN_EVENTS.has(String(eventData?.eventType || "").trim());
   if (
     !channel.subscribers.size &&
@@ -407,7 +407,7 @@ broadcastChannelEvent(channel, envelope) {
     }
     if (!deliveryAccepted) continue;
     this.recordSuccessfulDataPlaneOperation("deliveries");
-    if (scopedEnvelope?.event === CHANNEL_EVENT.TURN_LIFECYCLE) continue;
+    if (scopedEnvelope?.event === EVENT_TYPE.TURN_LIFECYCLE) continue;
     subscriberSocket.__agentProxyLastSequenceByChannel =
       subscriberSocket.__agentProxyLastSequenceByChannel || {};
     subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(
@@ -420,7 +420,7 @@ broadcastChannelState(channel, stateItem = {}) {
   if (!channel || !stateItem) return;
   this.broadcastChannelEvent(channel, {
     sequence: Number(channel?.eventSequence || 0),
-    event: CHANNEL_EVENT.CHANNEL_STATE,
+    event: EVENT_TYPE.CHANNEL_STATE,
     data: this._buildConversationStatePayload(channel, stateItem, {
       updatedAtMs: Number(stateItem?.updatedAtMs || nowMs()),
     }),
@@ -441,7 +441,7 @@ buildChannelStateSnapshot(channel) {
       Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
   );
   return stateList.map((stateItem) => ({
-      event: CHANNEL_EVENT.CHANNEL_STATE,
+      event: EVENT_TYPE.CHANNEL_STATE,
       data: this._buildConversationStatePayload(channel, stateItem, {
         updatedAtMs: Number(stateItem?.updatedAtMs || 0),
       }),
@@ -544,7 +544,7 @@ sendSocketError(targetSocket, errorMessage = "") {
     String(targetSocket?.__agentProxyLocale || "").trim(),
   );
   this.sendSocketEvent(targetSocket, {
-    event: CHANNEL_EVENT.ERROR,
+    event: EVENT_TYPE.ERROR,
     data: {
       error: String(localizedError || AGENT_PROXY_ERROR.DEFAULT).trim() ||
         AGENT_PROXY_ERROR.DEFAULT,

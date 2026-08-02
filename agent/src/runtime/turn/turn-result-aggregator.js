@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  markCurrentTurnArraySummarized,
   markCurrentTurnModelMessagesSummarized,
   markCurrentTurnStoreSummarized,
 } from "../../context/session/summarized-message-policy.js";
@@ -36,33 +35,29 @@ function attachFinalStreamingResultMeta(result = {}, finalStreaming = null) {
   return result;
 }
 
-function autoMarkCurrentTurnSummarized({
-  turnMessageStore = null,
-  fallbackMessages = [],
-}) {
-  if (turnMessageStore) {
-    markCurrentTurnStoreSummarized(turnMessageStore, {
-      taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
-    });
-    return turnMessageStore.toArray();
+function requireCanonicalTurnMessageStore(turnMessageStore = null) {
+  if (
+    !turnMessageStore ||
+    typeof turnMessageStore.toArray !== "function" ||
+    typeof turnMessageStore.updateWhere !== "function"
+  ) {
+    throw new Error("turn result requires the canonical currentTurnMessages store");
   }
-  return markCurrentTurnArraySummarized(fallbackMessages, {
-    taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
-  });
+  return turnMessageStore;
 }
 
 export function finalizeTurnMessagesBeforeReturn({
   modelMessages = [],
   turnMessageStore = null,
-  fallbackMessages = [],
 } = {}) {
   markCurrentTurnModelMessagesSummarized(modelMessages, {
     taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
   });
-  return autoMarkCurrentTurnSummarized({
-    turnMessageStore,
-    fallbackMessages,
+  const canonicalStore = requireCanonicalTurnMessageStore(turnMessageStore);
+  markCurrentTurnStoreSummarized(canonicalStore, {
+    taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
   });
+  return canonicalStore.toArray();
 }
 
 export function buildLoopResult({
@@ -78,7 +73,6 @@ export function buildLoopResult({
   const finalTurnMessages = finalizeTurnMessagesBeforeReturn({
     modelMessages,
     turnMessageStore,
-    fallbackMessages: Array.isArray(loopState?.turnMessages) ? loopState.turnMessages : [],
   });
   return attachFinalStreamingResultMeta(
     {

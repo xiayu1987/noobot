@@ -180,7 +180,10 @@ function buildTerminalPresentation(status = {}, fallbackSessionId = "") {
   };
 }
 
-export function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSessionId = "") {
+export function buildLiveWorkflowPresentationMessage(
+  workflow = {},
+  fallbackSessionId = "",
+) {
   const workflowRunId = text(workflow?.workflowRunId);
   const sessionId = text(workflow?.sessionId || fallbackSessionId);
   const turnScopeId = text(workflow?.turnScopeId);
@@ -220,6 +223,7 @@ export function buildLiveWorkflowPresentationMessage(workflow = {}, fallbackSess
 }
 
 function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
+  if (isWorkflowPresentationMessage(shell)) return shell;
   return {
     ...shell,
     ...workflowMessage,
@@ -287,7 +291,9 @@ function coalescePersistedAssistantPresentations(messages = [], activeSessionId 
       continue;
     }
     if (existingWorkflow && isEmptyAssistantPlaceholder(message)) continue;
-    output.push(message);
+    throw new Error(
+      `[turn-presentation] multiple canonical assistant presentations for ${key}`,
+    );
   }
   return output;
 }
@@ -299,11 +305,18 @@ export function selectTurnPresentations({
 } = {}) {
   const activeSessionId = sessionIdFromSession(activeSession);
   const activeSessionIds = sessionIdentitySet(activeSession);
-  const sourceMessages = Array.isArray(activeSession?.messages) ? activeSession.messages : [];
+  const sourceMessages = (Array.isArray(activeSession?.messages) ? activeSession.messages : [])
+    .filter((message) => !isTurnRuntimeDeleted(turnRuntimeRegistry, {
+      sessionId: getMessageSessionId(message) || activeSessionId,
+      turnScopeId: getMessageTurnScopeId(message),
+    }));
   const terminalStatuses = [
     ...(Array.isArray(activeSession?.turnStatuses) ? activeSession.turnStatuses : []),
     ...terminalStatusesFromRuntime(turnRuntimeRegistry, activeSessionId),
-  ];
+  ].filter((status) => !isTurnRuntimeDeleted(turnRuntimeRegistry, {
+    sessionId: text(status?.sessionId) || activeSessionId,
+    turnScopeId: status?.turnScopeId,
+  }));
   const terminalByTurn = new Map(
     terminalStatuses
       .map(normalizeTerminalStatus)
@@ -354,17 +367,13 @@ export function selectTurnPresentations({
     messagesWithTerminalPresentation,
     activeSessionId,
   );
-  const persistedRunIds = new Set(messages.map(workflowRunIdFromMessage).filter(Boolean));
-  const persistedTurnKeys = new Set(
-    messages
-      .filter(isWorkflowPresentationMessage)
-      .map((message) => messageTurnKey(message, activeSessionId))
-      .filter(Boolean),
-  );
   const liveByTurn = new Map();
 
   for (const workflow of Object.values(workflowRegistry?.workflows || {})) {
-    const projection = buildLiveWorkflowPresentationMessage(workflow, activeSessionId);
+    const projection = buildLiveWorkflowPresentationMessage(
+      workflow,
+      activeSessionId,
+    );
     if (!projection) continue;
     const key = messageTurnKey(projection, activeSessionId);
     if (!key || !activeSessionIds.has(getMessageSessionId(projection))) continue;
@@ -372,7 +381,6 @@ export function selectTurnPresentations({
       sessionId: getMessageSessionId(projection) || activeSessionId,
       turnScopeId: getMessageTurnScopeId(projection),
     })) continue;
-    if (persistedRunIds.has(workflowRunIdFromMessage(projection)) || persistedTurnKeys.has(key)) continue;
     liveByTurn.set(key, projection);
   }
 

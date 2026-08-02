@@ -185,7 +185,8 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
     const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
     expect(MockWebSocket.instances).toHaveLength(1);
-    expect(JSON.parse(socket.sent[1])).toMatchObject({ action: "reconnect", currentTurnScopeId: "turn-1" });
+    expect(JSON.parse(socket.sent[1])).toMatchObject({ action: "reconnect", currentSessionId: "s-1" });
+    expect(JSON.parse(socket.sent[1])).not.toHaveProperty("currentTurnScopeId");
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
     await reconnectPromise;
     socket.emit(StreamEventEnum.DONE, {

@@ -5,22 +5,6 @@
  */
 import { _trimStr } from "./utils.js";
 
-export function getInteractionPayloadWaitKey({ sessionId = "", dialogProcessId = "" } = {}) {
-  return `${_trimStr(sessionId)}::${_trimStr(dialogProcessId)}`;
-}
-
-
-export function clearMissingInteractionPayloadTimer(
-  missingInteractionPayloadTimers,
-  { sessionId = "", dialogProcessId = "" } = {},
-) {
-  const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
-  const timer = missingInteractionPayloadTimers?.get?.(key);
-  if (!timer) return;
-  clearTimeout(timer);
-  missingInteractionPayloadTimers.delete(key);
-}
-
 export function hasPendingInteractionForDialog(pendingInteractionRequest, dialogProcessId = "") {
   const pendingRequest =
     pendingInteractionRequest?.value && typeof pendingInteractionRequest.value === "object"
@@ -54,18 +38,12 @@ export function normalizePendingInteractionPayloads(stateData = {}) {
 
 export function applyReconnectInteractionRequest({
   eventData,
-  missingInteractionPayloadTimers,
   normalizeInteractionRequestPayload,
-  clearMissingInteractionPayloadTimer: clearTimer = clearMissingInteractionPayloadTimer,
   tryAutoResolveInteraction,
   isInteractionRequestHandled,
   setPendingInteractionRequest,
 } = {}) {
   const interactionRequest = normalizeInteractionRequestPayload?.(eventData) || eventData || {};
-  clearTimer?.(missingInteractionPayloadTimers, {
-    sessionId: _trimStr(interactionRequest?.sessionId),
-    dialogProcessId: _trimStr(interactionRequest?.dialogProcessId),
-  });
   if (tryAutoResolveInteraction?.(interactionRequest)) return interactionRequest;
   if (!isInteractionRequestHandled?.(interactionRequest)) {
     setPendingInteractionRequest?.(interactionRequest);

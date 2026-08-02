@@ -330,8 +330,14 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       });
       return {
         output: "ok from fake agent",
+        assistantMessageId: "harness-assistant-message",
         traces: [{ type: "fake" }],
-        turnMessages: [{ role: "assistant", type: "message", content: "ok from fake agent" }],
+        turnMessages: [{
+          messageId: "harness-assistant-message",
+          role: "assistant",
+          type: "message",
+          content: "ok from fake agent",
+        }],
         turnTasks: [{ taskId: "t1", status: "done" }],
       };
     },

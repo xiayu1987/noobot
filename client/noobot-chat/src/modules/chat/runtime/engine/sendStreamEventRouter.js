@@ -21,7 +21,7 @@ import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosti
 export function createSendStreamEventHandler(context) {
   const {
     activeSession, activeSessionId, applyConversationState, applyConversationStateFromEvent,
-    applyRunStateEvent, applyWorkflowRuntimeEvent, botMessage: botMsg, classifyRealtimeLog,
+    applyRunStateEvent, applyTurnLifecycleEnvelope, applyWorkflowRuntimeEvent, botMessage: botMsg, classifyRealtimeLog,
     clearMissingInteractionPayloadTimer, clearPendingInteraction, connectorTypeSet,
     doneTurnFinalizer, foldMessagesForView, locateDoneMessage, locateSendingStartedMessageOnce,
     logSessionEvent, makeViewMessage, mergeAssistantAttachments, navigateOnFirstResponseOnce,
@@ -116,10 +116,10 @@ export function createSendStreamEventHandler(context) {
     // extension or message projection so a plugin cannot consume a terminal
     // child event before the single turn-runtime reducer sees it.
     if (routeForeignTurnLifecycleEvent(event, data, {
-      activeSession, applyRunStateEvent, logSessionEvent, sessionId,
+      activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId,
     })) return;
     if (routeCurrentTurnLifecycleEvent(event, data, {
-      activeSession, applyRunStateEvent, logSessionEvent, sessionId,
+      activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId,
     })) return;
     if (routeRuntimeStreamEvent(event, data, {
       source: "live", logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,

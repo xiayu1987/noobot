@@ -164,6 +164,17 @@ export function createContextWithSharedTools(sharedTools = {}, overrides = {}) {
 
 export function installTurnMessageEventRuntimeFixture(context = {}) {
   const target = context && typeof context === "object" ? context : {};
+  const runConfig = target.runConfig && typeof target.runConfig === "object"
+    ? target.runConfig
+    : (target.runConfig = {});
+  const sessionId = String(target.sessionId || "test-session").trim();
+  const dialogProcessId = String(target.dialogProcessId || "test-dialog").trim();
+  if (!String(runConfig.messageId || "").trim()) {
+    runConfig.messageId = `test-message:${sessionId}:${dialogProcessId}`;
+  }
+  if (!String(runConfig.presentationMessageId || "").trim()) {
+    runConfig.presentationMessageId = `test-presentation:${sessionId}:${dialogProcessId}`;
+  }
   const existingAgentContext = target.agentContext && typeof target.agentContext === "object"
     ? target.agentContext
     : null;
@@ -206,8 +217,8 @@ export async function runWorkflowHook({ options = {}, context = {} } = {}) {
   const hookManager = createMockBotHookManager();
   createRegisterWorkflowHooks()({ hookManager, options: { enabled: true, mode: "on", ...options } });
   const ctx = createBaseContext(context);
-  await getBeforeDispatch(hookManager).handler(ctx);
-  return { hookManager, ctx, agentResult: ctx.overrideAgentResult };
+  const dispatchOutcome = await getBeforeDispatch(hookManager).handler(ctx);
+  return { hookManager, ctx, dispatchOutcome, agentResult: dispatchOutcome?.result };
 }
 
 export function callsByNodeName(calls = []) {

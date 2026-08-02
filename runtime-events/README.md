@@ -37,7 +37,7 @@ await events.session({
 
 ## Storage
 
-The default JSONL transport writes new runtime events under `runtime/events` for startup/system scopes and `runtime/session/{sessionId}/events` for session scope. The legacy session-channel entry keeps its existing storage behavior for compatibility inside this package.
+The default JSONL transport writes new runtime events under `runtime/events` for startup/system scopes and `runtime/session/{sessionId}/events` for session scope. `workspaceRoot` is storage-routing configuration only and is never serialized into an event record. The legacy session-channel entry keeps its existing storage behavior inside this package.
 
 ## Rules
 

@@ -106,6 +106,36 @@ export function truncateWorkflowResultText(
   return `${raw.slice(0, limit).trim()}\n\n...`;
 }
 
+export function composeWorkflowFinalContent({
+  semanticText = "",
+  sourceText = "",
+  nodeAgentRuns = [],
+  attachmentPathBlock = "",
+} = {}) {
+  const nodeSections = (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : [])
+    .slice()
+    .sort((left = {}, right = {}) => {
+      const leftIndex = Number(left?.stepIndex);
+      const rightIndex = Number(right?.stepIndex);
+      if (Number.isFinite(leftIndex) && Number.isFinite(rightIndex) && leftIndex !== rightIndex) {
+        return leftIndex - rightIndex;
+      }
+      return Number(left?.transition || 0) - Number(right?.transition || 0);
+    })
+    .map((item = {}, index) => {
+      const content = String(item?.nodeResultText || "").trim();
+      if (!content) return "";
+      const name = String(item?.step?.nodeName || item?.nodeName || item?.step?.nodeId || "").trim();
+      const heading = name || `Node ${index + 1}`;
+      return `## ${heading}\n\n${content}`;
+    })
+    .filter(Boolean);
+  return [semanticText || sourceText || "", ...nodeSections, attachmentPathBlock]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function sanitizeWorkflowPayloadForSessionMessage(workflowPayload = null) {
   if (!workflowPayload || typeof workflowPayload !== "object") return null;
   let payload = null;
@@ -244,7 +274,7 @@ export async function persistWorkflowNodeResultAttachment({
   }
 }
 
-export async function appendWorkflowPlanningMessage({
+async function upsertWorkflowMessage({
   options = {},
   agentResult = {},
   ctx = {},
@@ -256,7 +286,13 @@ export async function appendWorkflowPlanningMessage({
   planningNodeSessions = [],
   workflowPayload = null,
   attachments = [],
+  nodeAgentRuns = [],
+  phase = "",
 } = {}) {
+  const normalizedPhase = String(phase || "").trim();
+  if (!new Set(["planning", "completed"]).has(normalizedPhase)) {
+    throw new Error("Workflow message requires an explicit planning or completed phase");
+  }
   const turnMessages = ensureTurnMessages(agentResult);
   const dialogProcessId = String(ctx?.dialogProcessId || "").trim();
   const baseWorkflowPayload = workflowPayload && typeof workflowPayload === "object"
@@ -282,7 +318,7 @@ export async function appendWorkflowPlanningMessage({
               nodeName: "workflow-final-attachment-summary",
               content: transferPathBlock,
               meta: {
-                phase: "planning",
+                phase: normalizedPhase,
                 dialogProcessId,
                 sessionId: String(ctx?.sessionId || "").trim(),
               },
@@ -291,9 +327,9 @@ export async function appendWorkflowPlanningMessage({
           nextSteps: [],
           forceAttachment: true,
           attachmentSource: "model",
-          generationSource: "workflow_planning_final_attachment_summary",
+          generationSource: `workflow_${normalizedPhase}_attachment_summary`,
           source: "plugin",
-          reason: "workflow_planning_final_attachment_summary",
+          reason: `workflow_${normalizedPhase}_attachment_summary`,
           mimeType: "text/markdown",
         });
         composedTransferPayload = normalizeWorkflowTransferPayload(transferred);
@@ -323,15 +359,26 @@ export async function appendWorkflowPlanningMessage({
         (composedTransferPayload.transferEnvelopes.length
           ? ""
           : buildWorkflowAttachmentPathBlockWithContext(resolvedAttachments, ctx)));
-  const content = [semanticText || sourceText || "", attachmentPathBlock]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
-    .join("\n\n");
+  const content = composeWorkflowFinalContent({
+    semanticText,
+    sourceText,
+    nodeAgentRuns,
+    attachmentPathBlock,
+  });
   const presentationMessageId = String(
     ctx?.presentationMessageId ||
       resolveWorkflowParentRunConfig(ctx)?.presentationMessageId ||
       "",
   ).trim();
+  const messageId = String(
+    ctx?.messageId ||
+      ctx?.runConfig?.messageId ||
+      resolveWorkflowParentRunConfig(ctx)?.messageId ||
+      "",
+  ).trim();
+  if (!messageId) {
+    throw new Error("Workflow final message requires canonical messageId");
+  }
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
     throw new Error("Turn message event materializer is required");
@@ -357,6 +404,8 @@ export async function appendWorkflowPlanningMessage({
   }
   const workflowMessage = {
     role: "assistant",
+    id: messageId,
+    messageId,
     type: "workflow",
     chatPresentation: true,
     ...(presentationMessageId ? { presentationMessageId } : {}),
@@ -374,17 +423,22 @@ export async function appendWorkflowPlanningMessage({
     ...(mergedTransferPayload.transferEnvelopes.length
       ? { transferEnvelopes: mergedTransferPayload.transferEnvelopes }
       : {}),
+    ...(resolvedAttachments.length ? { attachments: resolvedAttachments } : {}),
     pluginMessage: true,
     pluginMeta: {
       source: "workflow-plugin",
       kind: "workflow",
-      phase: "planning",
+      phase: normalizedPhase,
       semanticInvokerUsed: semanticResolution?.invoked === true,
       sourceTextPreview: String(sourceText || "").slice(0, LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars),
       semanticTextPreview: String(semanticText || "").slice(0, LENGTH_THRESHOLDS.contextPreview.workflowSemanticTextPreviewChars),
       payload: sessionWorkflowPayload,
     },
   };
+  if (content && messageId) {
+    agentResult.output = content;
+    agentResult.assistantMessageId = messageId;
+  }
   const existing = turnMessages.find((messageItem = {}) => {
     if (messageItem?.pluginMessage !== true) return false;
     if (String(messageItem?.dialogProcessId || "").trim() !== dialogProcessId) return false;
@@ -399,6 +453,21 @@ export async function appendWorkflowPlanningMessage({
   }
   turnMessages.push(workflowMessage);
   return workflowMessage;
+}
+
+export function appendWorkflowPlanningMessage(payload = {}) {
+  return upsertWorkflowMessage({
+    ...payload,
+    nodeAgentRuns: [],
+    phase: "planning",
+  });
+}
+
+export function publishWorkflowFinalMessage(payload = {}) {
+  return upsertWorkflowMessage({
+    ...payload,
+    phase: "completed",
+  });
 }
 
 export function buildWorkflowDialogRelativeDir({

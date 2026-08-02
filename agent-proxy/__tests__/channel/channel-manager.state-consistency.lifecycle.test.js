@@ -9,7 +9,47 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents, FakeUpstreamWebSocket } from "./channel-manager.state-consistency.test-helpers.js";
-import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/authoritative-state/contracts";
+import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/event-protocol";
+
+test("invalid authoritative lifecycle has no journal or state projection side effects", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-invalid-lifecycle" }),
+    {
+      userId: "user-1",
+      sessionId: "session-invalid-lifecycle",
+      turnScopeId: "stale-channel-turn",
+    },
+  );
+  const journalSequenceBefore = Number(channel.eventJournal?.sequence || 0);
+  const metricsBefore = { ...manager.successfulDataPlaneMetrics };
+  const lifecycleWindowsBefore = channel.lifecycleWindowsBySessionId.size;
+  const conversationStatesBefore = channel.conversationStateByDialogProcessId.size;
+
+  const result = manager.pushChannelEvent(channel, "turn_lifecycle", {
+    protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
+    eventType: "turn.completed",
+    eventId: "invalid-completed-event",
+    commandId: "invalid-completed-command",
+    sessionId: "session-invalid-lifecycle",
+    // turnScopeId is intentionally absent and must never be inferred from startPayload.
+    messageId: "message-invalid",
+    presentationMessageId: "message-invalid",
+    dialogProcessId: "dialog-invalid",
+    revision: 1,
+    sequence: 1,
+    phase: "completion",
+    state: "completed",
+    completionCommitId: "commit-invalid",
+    summaryVersion: 1,
+  });
+
+  assert.equal(result, null);
+  assert.equal(Number(channel.eventJournal?.sequence || 0), journalSequenceBefore);
+  assert.equal(channel.lifecycleWindowsBySessionId.size, lifecycleWindowsBefore);
+  assert.equal(channel.conversationStateByDialogProcessId.size, conversationStatesBefore);
+  assert.deepEqual(manager.successfulDataPlaneMetrics, metricsBefore);
+});
 
 test("upstream snapshot responses resolve and release the reconnect command", async () => {
   FakeUpstreamWebSocket.instances = [];
@@ -234,11 +274,8 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
     (entry) => String(entry?.sessionId || "") === "session-stop",
   );
   assert.ok(sessionEntry);
-  assert.equal(sessionEntry.hasRunningTask, false);
-  assert.equal(
-    (sessionEntry.conversationStates || []).some((item) => item?.state === "stopping"),
-    false,
-  );
+  assert.equal("hasRunningTask" in sessionEntry, false);
+  assert.equal("conversationStates" in sessionEntry, false);
 
   const stoppedEnvelope = manager.pushChannelEvent(channel, "user_stopped", {
     sessionId: "session-stop",
@@ -254,11 +291,8 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   const completedSessionEntry = (completedReconnectData?.data?.sessions || []).find(
     (entry) => String(entry?.sessionId || "") === "session-stop",
   );
-  assert.equal(completedSessionEntry?.hasRunningTask, false);
-  assert.equal(
-    (completedSessionEntry?.conversationStates || []).some((item) => item?.state === "user_stopped"),
-    false,
-  );
+  assert.equal("hasRunningTask" in completedSessionEntry, false);
+  assert.equal("conversationStates" in completedSessionEntry, false);
 });
 
 test("upstream close without authoritative event does not synthesize a turn terminal", () => {

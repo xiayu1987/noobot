@@ -10,7 +10,6 @@ export function createReconnectReplayPublicApi({
   applyChannelState,
   replayCache,
   appliedReconnectSeqByDialogProcessId,
-  terminalDialogProcessIdSet,
   isTestMode = false,
 }) {
   return {
@@ -21,7 +20,6 @@ export function createReconnectReplayPublicApi({
       ? {
           replayCache,
           appliedReconnectSeqByDialogProcessId,
-          terminalDialogProcessIdSet,
         }
       : undefined,
   };

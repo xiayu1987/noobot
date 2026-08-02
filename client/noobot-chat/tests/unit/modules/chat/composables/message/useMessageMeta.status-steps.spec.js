@@ -10,7 +10,7 @@ import { useMessageMeta } from "../../../../../../src/modules/chat/composables/m
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
 import { applyTurnLifecycleEnvelope, applyTurnRuntimeEvent, applyTurnTerminalResolution } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/event-protocol";
 
 function applyEvent(store, event) {
   applyTurnRuntimeEvent(store.turnRuntimeRegistry, event);
@@ -113,7 +113,7 @@ describe("useMessageMeta status steps", () => {
 
     applyLifecycle(store, {
       eventType: "turn.stop_accepted", sessionId: "session-1", turnScopeId: "turn-1",
-      revision: 3, phase: "stop", state: "stopping", action: "stop", executionState: "stopping",
+      revision: 3, phase: "stop", state: "action_requesting", action: "stop", executionState: "stopping",
     });
     await nextTick();
     expect(statusStepState.value).toBe("requesting");

@@ -11,7 +11,7 @@ import {
   createTurnLifecycleSnapshot,
   createTurnTerminalResolution,
   deriveAuthoritativeTurnCapabilities,
-} from "../contracts/turn-lifecycle-protocol.mjs";
+} from "@noobot/event-protocol/turn-lifecycle";
 import {
   isTerminalTurnLifecycleState,
   normalizeTurnLifecycleEntity,
@@ -42,6 +42,7 @@ export function createAuthoritativeTurnSnapshot({
     activeTurnScopeId: lifecycle.activeTurnScopeId,
     activeTurn,
     recentTerminalTurns,
+    replacedTurns: Object.values(lifecycle.replacedTurns),
     unchanged: knownSequence !== undefined && Number(knownSequence) === lifecycle.sequence,
     generatedAt,
   });

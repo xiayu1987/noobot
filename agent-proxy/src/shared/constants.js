@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+export { EVENT_TYPE } from "@noobot/event-protocol";
 
 export const CHANNEL_STATUS = {
   IDLE: "idle",
@@ -41,24 +42,6 @@ export const CONVERSATION_STATE = {
 export const CLIENT_ROLE = {
   USER: "user",
   SUPER_ADMIN: "super_admin",
-};
-
-export const CHANNEL_EVENT = {
-  TRANSPORT_READY: "transport_ready",
-  MESSAGE: "message",
-  THINKING: "thinking",
-  DELTA: "delta",
-  INTERACTION_REQUEST: "interaction_request",
-  INTERACTION_RESPONSE: "interaction_response",
-  DONE: "done",
-  USER_STOPPED: "user_stopped",
-  ERROR: "error",
-  CHANNEL_STATE: "channel_state",
-  TURN_LIFECYCLE: "turn_lifecycle",
-  TURN_SNAPSHOT: "turn_snapshot",
-  TRANSPORT_ERROR: "transport_error",
-  RECONNECT_DATA: "reconnect_data",
-  RECONNECT_COMPLETE: "reconnect_complete",
 };
 
 export const WS_ACTION = {

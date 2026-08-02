@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  isReconnectTerminalBatch,
-  isReconnectTerminalEvent,
-} from "../../model/reconnectReplayModel.js";
-import {
   markReconnectSequenceApplied as markReconnectSequenceAppliedInCache,
   normalizeReplayCacheKey,
   takeReplayCacheGroupsForSession,
@@ -71,7 +67,6 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   turnScopeId = "",
   appliedReconnectSeqByDialogProcessId,
   appliedReconnectEventKindsByTurnKey,
-  terminalDialogProcessIdSet,
   classifyRealtimeLog,
   envelopeCallbacks,
   markReconnectSequenceApplied: markSequenceApplied,
@@ -98,9 +93,6 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     lastAppliedEventKinds: boundary && Number(boundary.sequence || 0) === lastAppliedSeq
       ? boundary.eventKinds
       : null,
-    terminalDialogProcessIdSet,
-    isReconnectTerminalBatch,
-    isReconnectTerminalEvent,
     classifyRealtimeLog,
     normalizeExecutionLogForRealtime,
     envelopeCallbacks,

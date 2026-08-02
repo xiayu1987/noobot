@@ -3,18 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  resolveSessionRunMessageRuntimePatch,
-  SESSION_RUN_MESSAGE_RUNTIME_ACTION,
-  SESSION_RUN_MESSAGE_RUNTIME_MARK,
-} from "../sessionRunStateMachine.js";
+import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../sessionRunStateMachine.js";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
 } from "../../../debug/loggers/stateMachineLogger.js";
-import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
-import { getMessageDialogProcessId } from "../../model/messageIdentity.js";
-import { selectTurnMessageRuntime, sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
 
 export function applyRunStateMessagePatch(message, patch = {}) {
   if (!message || !patch || typeof patch !== "object") return;
@@ -66,82 +59,15 @@ export function applyRunStateMessagePatch(message, patch = {}) {
   }));
 }
 
-export function applyRunStateMessageRuntimePatch({
-  sessions,
-  activeSession,
-  turnRuntimeRegistry,
-  event,
-} = {}) {
-  const registry = turnRuntimeRegistry?.value || turnRuntimeRegistry;
-  const stateSnapshot = selectTurnMessageRuntime(registry, {
-    sessionId: event?.sessionId,
-    turnScopeId: event?.turnScopeId,
-    dialogProcessId: event?.dialogProcessId,
-  });
-  if (!stateSnapshot) return;
-  const sessionItems = Array.isArray(sessions?.value) ? sessions.value : Array.isArray(sessions) ? sessions : [];
-  const activeSessionValue = activeSession?.value || activeSession;
-  const session = sessionItems.find((item) => sessionRuntimeId(item) === stateSnapshot.sessionId)
-    || ([activeSessionValue?.id, activeSessionValue?.backendSessionId]
-      .map(sessionRuntimeId)
-      .includes(stateSnapshot.sessionId)
-      ? activeSessionValue
-      : null);
-  return applyRunStateMessageRuntimePatchToSession({ session, stateSnapshot, event });
-}
-
-export function applyRunStateMessageRuntimePatchToSession({
-  session,
-  stateSnapshot,
-  event,
-} = {}) {
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
-  if (!messages.length || !stateSnapshot) return { applied: false, patchedMessageCount: 0 };
-  let patchedMessageCount = 0;
-  messages.forEach((message) => {
-    const messageTurnScopeId = getMessageTurnScopeId(message);
-    const messageDialogProcessId = getMessageDialogProcessId(message);
-    const sameTurn = stateSnapshot.turnScopeId && messageTurnScopeId === stateSnapshot.turnScopeId;
-    const sameDialog = stateSnapshot.dialogProcessId && messageDialogProcessId === stateSnapshot.dialogProcessId;
-    if (stateSnapshot.turnScopeId ? !sameTurn : !sameDialog) return;
-    // Channel state is an independent transport-level message fact. Apply it
-    // after the lifecycle-derived presentation patch so that a generic
-    // message cleanup cannot overwrite the transport event being projected.
-    const transportPatch = event?.type === "backend_channel_state" && event?.state
-      ? {
-          channelState: {
-            state: event.state,
-            sessionId: event.sessionId || stateSnapshot.sessionId,
-            turnScopeId: event.turnScopeId || stateSnapshot.turnScopeId,
-            dialogProcessId: event.dialogProcessId || stateSnapshot.dialogProcessId,
-            seq: event.seq,
-          },
-        }
-      : null;
-    const effect = resolveSessionRunMessageRuntimePatch({
-      stateSnapshot,
-      messageItem: message,
-      activeSession: session,
-    });
-    logStateMachineDebug("stateMachine.messageRuntimePatch.effect", () => ({
-      runState: stateSnapshot.state || "",
-      eventType: stateSnapshot.sourceEvent || "",
-      message: summarizeStateMachineMessage(message),
-      hasRuntimeMark: Boolean(message?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] || message?.runtimeMark),
-      effectAction: effect?.action || "",
-      effectReason: effect?.reason || "",
-      patchChannelState: effect?.patch?.channelState?.state || "",
-      clearRuntimeMark: effect?.patch?.clearRuntimeMark === true,
-    }));
-    const effectPatchesMessage = effect?.action === SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE;
-    if (effectPatchesMessage) {
-      applyRunStateMessagePatch(message, effect.patch);
-      patchedMessageCount += 1;
-    }
-    if (transportPatch) {
-      applyRunStateMessagePatch(message, transportPatch);
-      if (!effectPatchesMessage) patchedMessageCount += 1;
-    }
-  });
-  return { applied: patchedMessageCount > 0, patchedMessageCount };
+export function summarizeMessageRuntimeProjection({ message, stateSnapshot, effect } = {}) {
+  logStateMachineDebug("stateMachine.messageRuntimePatch.effect", () => ({
+    runState: stateSnapshot?.state || "",
+    eventType: stateSnapshot?.sourceEvent || "",
+    message: summarizeStateMachineMessage(message),
+    hasRuntimeMark: Boolean(message?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] || message?.runtimeMark),
+    effectAction: effect?.action || "",
+    effectReason: effect?.reason || "",
+    patchChannelState: "",
+    clearRuntimeMark: effect?.patch?.clearRuntimeMark === true,
+  }));
 }

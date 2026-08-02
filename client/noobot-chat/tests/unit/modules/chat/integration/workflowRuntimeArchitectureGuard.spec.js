@@ -71,6 +71,16 @@ describe("workflow runtime architecture guard", () => {
     expect(turnUiStore).not.toMatch(/expandedDetailLogKeys/);
   });
 
+  it("keeps runtime breathing on the shared status and thinking container", () => {
+    const sharedMessage = source("src/modules/chat/components/message/SharedChatMessageItem.vue");
+    const thinkingRealtime = source("src/modules/chat/components/thinking/ThinkingPanelRealtime.vue");
+
+    expect(sharedMessage).toMatch(/class="message-runtime-panels"[\s\S]*'is-running': unifiedRuntimePanelsRunning/);
+    expect(sharedMessage).toMatch(/\.message-runtime-panels\.is-running\s*\{[\s\S]*animation:\s*message-runtime-panels-glow/);
+    expect(sharedMessage).not.toMatch(/prefers-reduced-motion[\s\S]*message-runtime-panels\.is-running/);
+    expect(thinkingRealtime).not.toMatch(/thinking-realtime-shell\.is-running\s*\{[\s\S]*animation:/);
+  });
+
   it("keeps canonical workflow nodes on status without persisting stepStatus", () => {
     const workflowStore = source("src/modules/chat/stores/chatStoreWorkflows.js");
     expect(workflowStore).toMatch(/stepStatus:\s*_incomingStepStatus/);
@@ -150,7 +160,7 @@ describe("workflow runtime architecture guard", () => {
     expect(engine).not.toMatch(/cloneTerminalDraft|projectAppliedTurnRuntime/);
     expect(session).toMatch(/commitTurnTerminalResolution:\s*chatStore\.applyTurnTerminalResolution/);
     expect(runtimeProjector).not.toMatch(/applyRunStateMessageRuntimePatch/);
-    expect(store).toMatch(/onTurnCommitted[\s\S]*applyRunStateMessageRuntimePatch/);
+    expect(store).not.toMatch(/onTurnCommitted[\s\S]*applyRunStateMessageRuntimePatch/);
   });
 
   it("keeps workflow transport projection in the declared plugin-runtime capability", () => {

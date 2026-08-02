@@ -120,6 +120,19 @@ test('session log controls honor explicit environment values independently of de
   }
 });
 
+test('turn recovery diagnostics are enabled by default and remain explicitly configurable', () => {
+  const defaults = resolveRuntimeEventsSessionLogControls({});
+  assert.equal(defaults.resendDebug, true);
+  assert.equal(defaults.stopDebug, true);
+
+  const disabled = resolveRuntimeEventsSessionLogControls({
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.resendDebug]: 'false',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.stopDebug]: 'false',
+  });
+  assert.equal(disabled.resendDebug, false);
+  assert.equal(disabled.stopDebug, false);
+});
+
 test('hook runtime-events mode defaults to summary and recognizes verbose values', () => {
   assert.equal(resolveHookRuntimeEventsMode({ env: {} }), 'summary');
   assert.equal(isHookRuntimeEventVerboseEnabled({ env: {} }), false);

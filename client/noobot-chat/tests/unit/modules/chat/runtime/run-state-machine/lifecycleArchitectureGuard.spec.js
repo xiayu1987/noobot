@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { clientFilePath } from "@noobot/client-shared/path-resolver";
+import { TURN_EVENT } from "@noobot/event-protocol";
 
 const projectRoot = clientFilePath.resolve(import.meta.dirname, "../../../../../../");
 const source = (relativePath) => readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8");
@@ -19,8 +20,6 @@ const files = {
   sendFinalize: "src/modules/chat/runtime/engine/sendFinalize.js",
   webSocketClient: "src/infrastructure/websocket/chatWebSocketClient.js",
 };
-
-const authorityRoot = clientFilePath.resolve(projectRoot, "../../authoritative-state");
 
 const protocolWriters = new Set([
   files.reducer,
@@ -143,7 +142,6 @@ describe("lifecycle architecture guard", () => {
   it("forbids legacy timeline, log compatibility, and thinking transport projection", () => {
     const renderConsumers = [
       "src/app/composables/useThinkingDetailsPanel.js",
-      "src/modules/chat/runtime/engine/sessionFinalize.js",
       "src/modules/chat/model/thinkingDetailModel.js",
       "src/modules/chat/composables/message/useMessageFiles.js",
       "src/modules/chat/composables/message/useMessageMeta.js",
@@ -193,15 +191,12 @@ describe("lifecycle architecture guard", () => {
   });
 
   it("keeps the authority contracts, domain reducer and client projections as the lifecycle boundary", () => {
-    const authorityProtocol = readFileSync(clientFilePath.resolve(authorityRoot, "src/contracts/turn-lifecycle-protocol.mjs"), "utf8");
-    const authorityReducer = readFileSync(clientFilePath.resolve(authorityRoot, "src/domain/turn-lifecycle-entity.js"), "utf8");
     const reducer = source(files.reducer);
     const registry = source(files.registry);
-    for (const symbol of ["ACTION_ACCEPTED", "PROCESSING_STARTED", "PROCESSING_COMPLETED", "STOP_ACCEPTED", "STOP_PROCESSING_COMPLETED", "COMPLETED", "STOP_COMPLETED", "FAILED"]) {
-      expect(authorityProtocol).toContain(symbol);
+    for (const eventType of ["ACTION_ACCEPTED", "PROCESSING_STARTED", "PROCESSING_COMPLETED", "STOP_ACCEPTED", "STOP_PROCESSING_COMPLETED", "COMPLETED", "STOP_COMPLETED", "FAILED"]) {
+      expect(TURN_EVENT[eventType]).toBeTruthy();
     }
-    expect(authorityProtocol).not.toMatch(/\bCANCEL(?:LED)?\s*:/);
-    expect(authorityReducer).toMatch(/finalizeIntent\?\.retryable\s*===\s*true/);
+    expect(TURN_EVENT).not.toHaveProperty("CANCELLED");
     expect(reducer).toMatch(/isFinalTurnState\(currentState, current\)/);
     expect(registry).toMatch(/reduceTurnRuntimeEvent\(current, rawEvent\)/);
   });
@@ -233,7 +228,7 @@ describe("lifecycle architecture guard", () => {
       expect(transport).not.toContain(legacyOwner);
       expect(finalize).not.toContain(legacyOwner);
     }
-    expect(source(files.reducer)).toContain("actionCommandId");
+    expect(source(files.reducer)).not.toContain("actionCommandId");
     expect(source(files.reducer)).toContain("lifecycleEventType");
   });
 });

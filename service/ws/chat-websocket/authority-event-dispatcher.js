@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/authoritative-state/contracts";
+import {
+  TURN_LIFECYCLE_WIRE_EVENT,
+  validateTurnLifecycleEnvelope,
+} from "@noobot/event-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const clean = (value) => String(value || "").trim();
@@ -46,7 +49,15 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       if (!events.length) break;
       for (const item of events) {
         const eventId = clean(item?.eventId);
-        if (!eventId || !item?.envelope) continue;
+        const validation = validateTurnLifecycleEnvelope(item?.envelope);
+        if (!eventId || eventId !== clean(item?.envelope?.eventId) || !validation.valid) {
+          return {
+            dispatched: false,
+            reason: "invalid_authority_event_envelope",
+            delivered,
+            errors: validation.errors,
+          };
+        }
         const attempt = await bot.recordAuthorityEventAttempt({ ...identity, eventId });
         if (!attempt?.recorded) {
           return { dispatched: false, reason: attempt?.reason || "authority_event_attempt_failed", delivered };

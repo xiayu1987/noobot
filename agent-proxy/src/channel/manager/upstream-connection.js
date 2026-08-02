@@ -6,7 +6,7 @@
 import { config } from "../../shared/config.js";
 import {
   AGENT_PROXY_ERROR,
-  CHANNEL_EVENT,
+  EVENT_TYPE,
   CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   UPSTREAM_CLOSE_REASON,
@@ -62,7 +62,7 @@ markChannelTerminal(channel, terminalStatus = CHANNEL_STATUS.DONE) {
   return true;
 }
 
-connectUpstreamChannel(channel, apiKey = "", locale = "") {
+connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
   if (!channel || channel.upstreamSocket) return;
   void writeAgentProxyRouteLifecycleEvent({
     event: "agentProxy.route.upstreamConnect.started",
@@ -78,7 +78,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       event: "agentProxy.upstream.connect.skipped",
       data: { channelKey: channel.key, reason: AGENT_PROXY_ERROR.UPSTREAM_URL_EMPTY },
     });
-    const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.TRANSPORT_ERROR, {
+    const errorEnvelope = this.pushChannelEvent(channel, EVENT_TYPE.TRANSPORT_ERROR, {
       error: AGENT_PROXY_ERROR.UPSTREAM_URL_EMPTY,
       transport: true,
     });
@@ -110,13 +110,18 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       event: "agentProxy.upstream.open",
       data: { channelKey: channel.key, status: channel.transport.phase },
     });
-    const payloadToSend =
-      channel.startPayload && typeof channel.startPayload === "object"
+    const hasExplicitInitialPayload = Object.prototype.hasOwnProperty.call(options, "initialPayload");
+    const payloadToSend = hasExplicitInitialPayload
+      ? options.initialPayload
+      : channel.startPayload && typeof channel.startPayload === "object"
         ? { ...channel.startPayload }
         : null;
-    if (!payloadToSend) return;
+    const initialCommands = Array.isArray(options.initialCommands)
+      ? options.initialCommands.filter((item) => item && typeof item === "object")
+      : [];
     try {
-      upstreamSocket.send(JSON.stringify(payloadToSend));
+      if (payloadToSend) upstreamSocket.send(JSON.stringify(payloadToSend));
+      for (const command of initialCommands) upstreamSocket.send(JSON.stringify(command));
     } catch (error) {
       this.logSessionEvent(channel, {
         category: "transport",
@@ -124,7 +129,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         event: "agentProxy.upstream.initialPayload.error",
         data: { channelKey: channel.key, error: String(error?.message || AGENT_PROXY_ERROR.FAILED_TO_SEND_PAYLOAD) },
       });
-      const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.TRANSPORT_ERROR, {
+      const errorEnvelope = this.pushChannelEvent(channel, EVENT_TYPE.TRANSPORT_ERROR, {
         error: String(error?.message || AGENT_PROXY_ERROR.FAILED_TO_SEND_PAYLOAD),
         transport: true,
       });
@@ -136,10 +141,10 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
   message: ({ rawData }) => {
     try {
       const parsed = JSON.parse(String(rawData || "{}"));
-      const eventName = String(parsed?.event || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE;
+      const eventName = String(parsed?.event || EVENT_TYPE.MESSAGE).trim() || EVENT_TYPE.MESSAGE;
       const eventData =
         parsed?.data && typeof parsed.data === "object" ? parsed.data : {};
-      if (eventName === CHANNEL_EVENT.TURN_SNAPSHOT) {
+      if (eventName === EVENT_TYPE.TURN_SNAPSHOT) {
         const commandId = String(eventData?.commandId || "").trim();
         const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
         if (requester) {
@@ -161,7 +166,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         this.sendSocketEvent(executionRequester, { event: eventName, data: eventData });
         return;
       }
-      if (eventName === CHANNEL_EVENT.ERROR) {
+      if (eventName === EVENT_TYPE.ERROR) {
         const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
         if (typeof requester?.resolve === "function") {
           channel.pendingSnapshotRequests.delete(commandId);
@@ -182,7 +187,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
         event: "agentProxy.upstream.message.error",
         data: { channelKey: channel.key, error: String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT) },
       });
-      const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.TRANSPORT_ERROR, {
+      const errorEnvelope = this.pushChannelEvent(channel, EVENT_TYPE.TRANSPORT_ERROR, {
         error: String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT),
         transport: true,
       });
@@ -230,7 +235,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
       event: "agentProxy.upstream.error",
       data: { channelKey: channel.key, error: String(error?.message || "upstream websocket error") },
     });
-    const errorEnvelope = this.pushChannelEvent(channel, CHANNEL_EVENT.TRANSPORT_ERROR, {
+    const errorEnvelope = this.pushChannelEvent(channel, EVENT_TYPE.TRANSPORT_ERROR, {
       error: String(error?.message || "upstream websocket error"),
       transport: true,
     });
@@ -252,6 +257,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "") {
   if (!connection?.socket) {
     channel.transport.phase = CHANNEL_STATUS.IDLE;
   }
+  return connection;
 }
 }
 

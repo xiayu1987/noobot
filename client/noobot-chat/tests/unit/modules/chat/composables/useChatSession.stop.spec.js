@@ -16,7 +16,7 @@ import { nextTick, ref } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { logResendDebug, setResendDebugLogSink } from "../../../../../src/modules/debug/loggers/resendDebugLogger.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import { createTurnLifecycleEnvelope } from "@noobot/authoritative-state/contracts";
+import { createTurnLifecycleEnvelope } from "@noobot/event-protocol";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,

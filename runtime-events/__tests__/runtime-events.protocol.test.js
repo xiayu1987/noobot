@@ -95,7 +95,8 @@ test('session log client policy is derived from the shared debug registry', () =
 
   assert.equal(policy.debug['workflow-diagnostics'], true);
   assert.equal(policy.debug['tool-log-window'], true);
-  assert.equal(policy.debug.resend, false);
+  assert.equal(policy.debug.resend, true);
+  assert.equal(policy.debug.stop, true);
   assert.equal(Object.hasOwn(policy.debug, 'timeline-pipeline'), false);
   assert.deepEqual(
     Object.keys(policy.debug).sort(),

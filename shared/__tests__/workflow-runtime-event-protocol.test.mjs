@@ -18,6 +18,9 @@ test("canonicalizes every turn-scoped workflow snapshot fact", () => {
     event: "workflow_session_snapshot_loaded",
     data: {
       sessionId: "child-session",
+      parentSessionId: "parent-session",
+      workflowRunId: "run-1",
+      nodeExecutionId: "node-1",
       snapshotVersion: 1,
       turnStatuses: [{ turnScopeId: "workflow-node_node-1", status: "completed" }],
       turnTimings: [{ turnScopeId: "workflow-node_node-1", thinkingStartedAt: "2026-01-01T00:00:00.000Z" }],
@@ -88,15 +91,60 @@ test("requires an authoritative version for workflow session snapshots", () => {
     data: { sessionId: "node-session-1", messages: [] },
   });
   assert.equal(missingVersion.valid, false);
-  assert.deepEqual(missingVersion.errors, ["invalid_snapshot_version"]);
+  assert.deepEqual(missingVersion.errors, [
+    "missing_snapshot_workflow_run",
+    "missing_snapshot_node_execution",
+    "missing_snapshot_parent_session",
+    "invalid_snapshot_version",
+  ]);
   assert.equal(missingVersion.sequence, 0);
 
   const versioned = normalizeWorkflowRuntimeEvent({
     event: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
-    data: { sessionId: "node-session-1", snapshotVersion: 7, messages: [] },
+    data: {
+      sessionId: "node-session-1",
+      parentSessionId: "parent-session-1",
+      workflowRunId: "workflow-run-1",
+      nodeExecutionId: "node-execution-1",
+      snapshotVersion: 7,
+      messages: [],
+    },
   });
   assert.equal(versioned.valid, true);
   assert.equal(versioned.sequence, 7);
+});
+
+test("workflow messages require complete stable node ownership", () => {
+  const base = {
+    event: WORKFLOW_RUNTIME_EVENT.MESSAGE,
+    data: {
+      envelopeKind: "noobot.message_event",
+      envelopeVersion: 2,
+      eventId: "event-1",
+      eventType: "llm_delta",
+      sessionId: "child-1",
+      messageId: "message-1",
+      presentationMessageId: "presentation-1",
+      sequence: 1,
+      timestamp: "2026-01-01T00:00:00.000Z",
+      text: "token",
+    },
+  };
+  assert.deepEqual(normalizeWorkflowRuntimeEvent(base).errors, [
+    "missing_message_workflow_run",
+    "missing_message_node_execution",
+    "missing_message_parent_session",
+  ]);
+  const complete = normalizeWorkflowRuntimeEvent({
+    ...base,
+    data: {
+      ...base.data,
+      workflowRunId: "run-1",
+      nodeExecutionId: "node-1",
+      parentSessionId: "root-1",
+    },
+  });
+  assert.equal(complete.valid, true);
 });
 
 test("events from different sequence domains are never comparable", () => {

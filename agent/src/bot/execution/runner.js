@@ -5,11 +5,6 @@
  */
 
 import { emitEvent } from "../../events/index.js";
-import {
-  isActivityMessageEvent,
-  isToolMessageEvent,
-  reduceCanonicalToolTimeline,
-} from "../../events/canonical-message-timeline.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { isAbortError, isUserStopAbort, resolveAbortStopType } from "../../shared/utils/error-utils.js";
 import {
@@ -50,6 +45,8 @@ import { buildSessionRuntimePluginResolvedEvent } from "./runner/plugin-runtime.
 import { dispatchAgentTurn } from "./runner/agent-dispatch.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { bindAssistantMessageEventStream } from "../../events/message-event-stream.js";
+import { initializeCurrentTurnMessageEventProjection } from "../../events/current-turn-message-event-projection.js";
+import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
 
 function currentTurnMessageCheckpointKey(message = {}, index = 0) {
   const messageUid = String(message?.messageUid || "").trim();
@@ -472,96 +469,34 @@ export class SessionExecutionRunner {
       const dispatchRuntime = runtimeAgentContext?.execution?.controllers?.runtime;
       if (dispatchRuntime && typeof dispatchRuntime === "object") {
         lifecycleRuntime = dispatchRuntime;
-        bindAssistantMessageEventStream(dispatchRuntime, { messageId, presentationMessageId });
+        dispatchRuntime.eventListener = runtimeEventListener;
+        const dispatchSystemRuntime = dispatchRuntime.systemRuntime &&
+          typeof dispatchRuntime.systemRuntime === "object"
+          ? dispatchRuntime.systemRuntime
+          : (dispatchRuntime.systemRuntime = {});
+        dispatchSystemRuntime.sessionId = usedSessionId;
+        dispatchSystemRuntime.dialogProcessId = dialogProcessId;
+        dispatchSystemRuntime.turnScopeId = resolvedTurnScopeId;
+        dispatchSystemRuntime.config = dispatchSystemRuntime.config &&
+          typeof dispatchSystemRuntime.config === "object"
+          ? dispatchSystemRuntime.config
+          : {};
+        dispatchSystemRuntime.config.turnScopeId = resolvedTurnScopeId;
+        bindAssistantMessageEventStream(dispatchRuntime, {
+          messageId,
+          presentationMessageId,
+          parentSessionId,
+          workflowRunId: String(resolvedRunConfig?.workflowRunId || "").trim(),
+          nodeExecutionId: String(
+            resolvedRunConfig?.workflowNodeExecutionId || resolvedRunConfig?.nodeExecutionId || "",
+          ).trim(),
+        });
         applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
         bindLifecycleToRuntime(dispatchRuntime, lifecycle);
         attachStoppedSnapshotAbortListener();
-        const pendingMessageEvents = [];
-        const activityState = dispatchRuntime.systemRuntime && typeof dispatchRuntime.systemRuntime === "object"
-          ? dispatchRuntime.systemRuntime
-          : (dispatchRuntime.systemRuntime = {});
-        activityState.activityTimeline = activityState.activityTimeline && typeof activityState.activityTimeline === "object"
-          ? activityState.activityTimeline
-          : { sequence: 0 };
-        const reduceCurrentTurnActivity = (activityFact = {}) => {
-          const eventId = String(activityFact.eventId || "").trim();
-          if (!eventId) return null;
-          const sequence = Number(activityFact.sequence) > 0
-            ? Number(activityFact.sequence)
-            : (activityState.activityTimeline.sequence += 1);
-          activityState.activityTimeline.sequence = Math.max(
-            Number(activityState.activityTimeline.sequence || 0),
-            sequence,
-          );
-          return {
-            ...activityFact,
-            sequence,
-            sequenceDomain: String(activityFact.sequenceDomain || "message-event").trim(),
-            sequenceScopeId: String(
-              activityFact.sequenceScopeId ||
-                dispatchRuntime?.runConfig?.presentationMessageId ||
-                dispatchRuntime?.systemRuntime?.turnScopeId ||
-                resolvedTurnScopeId ||
-                "turn",
-            ).trim(),
-            authority: String(activityFact.authority || "authoritative").trim(),
-          };
-        };
-        dispatchRuntime.projectCurrentTurnMessageEvent = (envelope = {}) => {
-          if (!envelope || typeof envelope !== "object") return null;
-          const eventId = String(envelope.eventId || "").trim();
-          if (!eventId) return null;
-          if (!isToolMessageEvent(envelope) && !isActivityMessageEvent(envelope)) return envelope;
-          const store = dispatchRuntime.currentTurnMessages;
-          const messages = store?.toArray?.() || [];
-          const existingAssistantIndex = [...messages]
-            .map((item, index) => ({ item, index }))
-            .reverse()
-            .find(({ item }) => item?.role === "assistant");
-          if (!existingAssistantIndex) {
-            if (!pendingMessageEvents.some((item) => item.eventId === eventId)) {
-              pendingMessageEvents.push(envelope);
-            }
-            return envelope;
-          }
-          const isToolEvent = isToolMessageEvent(envelope);
-          const currentTimeline = isToolEvent
-            ? existingAssistantIndex.item.toolTimeline
-            : existingAssistantIndex.item.activityTimeline;
-          const observed = isToolEvent
-            ? (Array.isArray(currentTimeline) ? currentTimeline : []).some((item) =>
-                String(item?.call?.eventId || "") === eventId || String(item?.resultEvent?.eventId || "") === eventId)
-            : (Array.isArray(currentTimeline) ? currentTimeline : []).some((item) => String(item?.eventId || "") === eventId);
-          if (observed) {
-            return envelope;
-          }
-          const patch = isToolEvent
-            ? { toolTimeline: reduceCanonicalToolTimeline(currentTimeline, envelope) }
-            : { activityTimeline: [...(Array.isArray(currentTimeline) ? currentTimeline : []), reduceCurrentTurnActivity(envelope)] };
-          store.updateWhere(
-            patch,
-            (_item, index) => index === existingAssistantIndex.index,
-          );
-          void dispatchRuntime.persistCurrentTurnMessages?.();
-          return envelope;
-        };
-        dispatchRuntime.materializePendingCurrentTurnMessageEvents = ({
-          activityTimeline = [],
-          toolTimeline = [],
-        } = {}) => {
-          const facts = pendingMessageEvents.splice(0, pendingMessageEvents.length);
-          return facts.reduce((projection, fact) => {
-            if (isToolMessageEvent(fact)) {
-              projection.toolTimeline = reduceCanonicalToolTimeline(projection.toolTimeline, fact);
-            } else if (isActivityMessageEvent(fact)) {
-              projection.activityTimeline.push(reduceCurrentTurnActivity(fact));
-            }
-            return projection;
-          }, {
-            activityTimeline: Array.isArray(activityTimeline) ? [...activityTimeline] : [],
-            toolTimeline: Array.isArray(toolTimeline) ? [...toolTimeline] : [],
-          });
-        };
+        initializeCurrentTurnMessageEventProjection(dispatchRuntime, {
+          sequenceScopeId: resolvedTurnScopeId,
+        });
         let persistCurrentTurnMessagesTail = Promise.resolve();
         let currentTurnPersistenceBatchDepth = 0;
         let currentTurnPersistenceRequested = false;
@@ -773,6 +708,10 @@ export class SessionExecutionRunner {
         dialogProcessId,
         resolvedTurnScopeId,
         syncLifecycleRuntimeState,
+      });
+      commitAuthoritativeFinalResult({
+        result: agentResult,
+        runtime: dispatchRuntime,
       });
       const finalizedResult = await finalizeAgentTurn({
         resolvedRunConfig, runtimeEventListener, usedSessionId, dialogProcessId,

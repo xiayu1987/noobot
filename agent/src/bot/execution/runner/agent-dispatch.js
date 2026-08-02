@@ -13,6 +13,43 @@ import {
   resolveBotDispatchOutcome,
 } from "@noobot/shared/bot-dispatch-protocol";
 
+function messageIdentity(message = {}) {
+  const messageId = String(
+    message?.messageId ||
+      message?.id ||
+      message?.additional_kwargs?.noobotMessageId ||
+      "",
+  ).trim();
+  return messageId;
+}
+
+function acceptDispatchedTurnMessages(runtime = {}, messages = []) {
+  const store = runtime?.currentTurnMessages;
+  if (
+    !store ||
+    typeof store.push !== "function" ||
+    typeof store.updateWhere !== "function" ||
+    typeof store.toArray !== "function"
+  ) {
+    throw new Error("bot dispatch requires the canonical currentTurnMessages store");
+  }
+  const accepted = [];
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (!message || typeof message !== "object") continue;
+    const identity = messageIdentity(message);
+    if (!identity) {
+      throw new Error("dispatched turn message requires a canonical messageId");
+    }
+    const updatedCount = store.updateWhere(message, (current) => messageIdentity(current) === identity);
+    if (updatedCount > 1) {
+      throw new Error(`canonical turn store contains duplicate messageId: ${identity}`);
+    }
+    if (updatedCount === 0) store.push(message);
+    accepted.push({ messageId: identity, action: updatedCount === 0 ? "inserted" : "updated" });
+  }
+  return { messages: store.toArray(), accepted };
+}
+
 export async function dispatchAgentTurn({
   agentRunner,
   errorLogger,
@@ -114,15 +151,7 @@ if (dispatchClaimed && beforeAgentDispatchErrors.length) {
   throw beforeAgentDispatchErrors[0];
 }
 let agentResult = null;
-const effectiveBeforeAgentDispatchContext =
-  beforeAgentDispatchResult?.context &&
-  typeof beforeAgentDispatchResult.context === "object"
-    ? beforeAgentDispatchResult.context
-    : beforeAgentDispatchContext;
-const dispatchOutcome = resolveBotDispatchOutcome(
-  beforeAgentDispatchResult,
-  effectiveBeforeAgentDispatchContext,
-);
+const dispatchOutcome = resolveBotDispatchOutcome(beforeAgentDispatchResult);
 const hasStructuredHandledOutcome = (Array.isArray(beforeAgentDispatchResult?.results)
   ? beforeAgentDispatchResult.results
   : []
@@ -213,6 +242,20 @@ if (dispatchOutcome.disposition === BOT_DISPATCH_DISPOSITION.HANDLED) {
     throw error;
   }
 }
+const acceptedTurnMessages = acceptDispatchedTurnMessages(dispatchRuntime, agentResult?.turnMessages);
+agentResult.turnMessages = acceptedTurnMessages.messages;
+emitEvent(runtimeEventListener, "canonical_turn_messages_accepted", {
+  sessionId: usedSessionId,
+  dialogProcessId,
+  turnScopeId: resolvedTurnScopeId,
+  disposition: dispatchOutcome.disposition,
+  owner: dispatchOutcome.owner || "root_agent",
+  assistantMessageId: String(agentResult?.assistantMessageId || "").trim(),
+  outputChars: String(agentResult?.output || "").length,
+  resultAttachmentCount: Array.isArray(agentResult?.attachments) ? agentResult.attachments.length : 0,
+  accepted: acceptedTurnMessages.accepted,
+  storeMessageIds: acceptedTurnMessages.messages.map((message) => messageIdentity(message)),
+});
 await runBotRuntimeHook({
   runtime: botHookRuntime,
   point: BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH,

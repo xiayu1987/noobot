@@ -63,7 +63,6 @@ function createActiveReplayFixture(overrides = {}) {
     activeSessionId: { value: "s-1" },
     chatList: { value: [] },
     appliedReconnectSeqByDialogProcessId: {},
-    terminalDialogProcessIdSet: new Set(),
     classifyRealtimeLog: vi.fn((logItem) => logItem),
     getReplayHydrationPromise: vi.fn(() => null),
     setReplayHydrationPromise: vi.fn(),
@@ -199,9 +198,8 @@ describe("replayCacheConsumer", () => {
     expect(fixture.scrollBottom).not.toHaveBeenCalled();
   });
 
-  it("marks terminal reconnect batches and ignores later non-terminal replay for that dialog process", async () => {
-    const terminalDialogProcessIdSet = new Set();
-    const fixture = createActiveReplayFixture({ terminalDialogProcessIdSet });
+  it("keeps replay ordering authoritative without a local terminal state set", async () => {
+    const fixture = createActiveReplayFixture();
 
     await applyReconnectMessagesToActiveSessionReplay({
       ...fixture,
@@ -212,7 +210,6 @@ describe("replayCacheConsumer", () => {
       ],
     });
 
-    expect(terminalDialogProcessIdSet.has("dp-1")).toBe(true);
     expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith("dp-1", 2, expect.objectContaining({
       sessionId: "s-1",
       turnScopeId: "turn-1",

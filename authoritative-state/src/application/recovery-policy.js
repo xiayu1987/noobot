@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "../contracts/turn-lifecycle-protocol.mjs";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol/turn-lifecycle";
 
 const RECOVERABLE_FINALIZE_STATES = new Set([
   TURN_STATE.COMPLETION_REQUESTING,
@@ -22,18 +22,20 @@ const clean = (value) => String(value || "").trim();
  */
 export async function recoverOrphanedTurn({
   conflict = null,
+  snapshot = null,
   identity = {},
   inspectExecution,
   commitTurnLifecycle,
   now = () => Date.now(),
   graceMs = TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs,
 } = {}) {
-  if (conflict?.reason !== "session_action_conflict") {
+  if (!snapshot && conflict?.reason !== "session_action_conflict") {
     return { recovered: false, reason: "not_session_action_conflict" };
   }
   const lifecycle = conflict?.lifecycle;
-  const turnScopeId = clean(lifecycle?.activeTurnScopeId);
-  const turn = lifecycle?.turns?.[turnScopeId] || null;
+  const snapshotTurn = snapshot?.activeTurn || null;
+  const turnScopeId = clean(snapshotTurn?.turnScopeId || lifecycle?.activeTurnScopeId);
+  const turn = snapshotTurn || lifecycle?.turns?.[turnScopeId] || null;
   if (!turnScopeId || !turn) return { recovered: false, reason: "active_turn_unavailable" };
   if (typeof inspectExecution !== "function") {
     return { recovered: false, reason: "execution_liveness_unavailable" };
@@ -131,6 +133,9 @@ export async function recoverTurnFinalize({
     terminalStatus: {
       command: isStop ? "user_stopped" : "completed",
       description: isStop ? "停止流程恢复完成" : "完成流程恢复完成",
+      ...(isStop && intent.payload?.assistantMessage
+        ? { assistantMessage: intent.payload.assistantMessage }
+        : {}),
     },
   });
   if (!committed?.applied && !committed?.deduplicated) {

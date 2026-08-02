@@ -28,20 +28,62 @@ function messageIdentity(message = {}) {
   ).trim();
 }
 
+function canonicalTurnMessages(runtime = {}) {
+  const store = runtime?.currentTurnMessages;
+  if (!store || typeof store.toArray !== "function") {
+    throw new Error("authoritative final result requires the canonical currentTurnMessages store");
+  }
+  return store.toArray();
+}
+
+function authoritativeFinalMessages(result = {}, runtime = {}) {
+  const messageId = String(result?.assistantMessageId || "").trim();
+  if (!messageId) return [];
+  return canonicalTurnMessages(runtime).filter(
+    (message) => message && typeof message === "object" && messageIdentity(message) === messageId,
+  );
+}
+
+function authoritativeFinalDiagnostics(result = {}, runtime = {}) {
+  const messages = canonicalTurnMessages(runtime);
+  const assistantMessageId = String(result?.assistantMessageId || "").trim();
+  const matches = messages.filter(
+    (message) => message && typeof message === "object" && messageIdentity(message) === assistantMessageId,
+  );
+  return {
+    assistantMessageId,
+    outputChars: String(result?.output || "").length,
+    storeMessageCount: messages.length,
+    storeMessageIds: messages.map((message) => messageIdentity(message)),
+    matchCount: matches.length,
+    matchedPresentationMessageIds: matches.map((message) => String(message?.presentationMessageId || "").trim()),
+    attachmentCount: matches.length === 1 && Array.isArray(matches[0]?.attachments)
+      ? matches[0].attachments.length
+      : 0,
+    transferEnvelopeCount: matches.length === 1 && Array.isArray(matches[0]?.transferEnvelopes)
+      ? matches[0].transferEnvelopes.length
+      : 0,
+  };
+}
+
 export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {}) {
   const finalOutput = String(result?.output || "");
   const messageId = String(result?.assistantMessageId || "").trim();
   if (!finalOutput || !messageId) return false;
-  let committed = false;
-  for (const collection of [result?.turnMessages, result?.modelMessages]) {
-    if (!Array.isArray(collection)) continue;
-    for (const message of collection) {
-      if (!message || typeof message !== "object" || messageIdentity(message) !== messageId) continue;
-      message.content = finalOutput;
-      committed = true;
-    }
-  }
-  return committed;
+  const store = runtime?.currentTurnMessages;
+  const matches = authoritativeFinalMessages(result, runtime);
+  if (matches.length !== 1) return false;
+  const finalMessage = matches[0];
+  const updatedCount = store.updateWhere({
+    content: finalOutput,
+    ...(Array.isArray(finalMessage?.attachments) ? { attachments: finalMessage.attachments } : {}),
+    ...(Array.isArray(finalMessage?.transferEnvelopes)
+      ? { transferEnvelopes: finalMessage.transferEnvelopes }
+      : {}),
+  }, (message) => messageIdentity(message) === messageId);
+  if (updatedCount !== 1) return false;
+  result.turnMessages = store.toArray();
+  return true;
 }
 
 export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
@@ -49,13 +91,62 @@ export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {}
   const finalOutput = String(result?.output || "");
   const messageId = String(result?.assistantMessageId || "").trim();
   if (!eventListener?.onEvent || !finalOutput || !messageId) return false;
-  emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
+  const messages = authoritativeFinalMessages(result, runtime);
+  if (messages.length === 0) return false;
+  const finalMessage = messages[0];
+  const transferEnvelopes = Array.isArray(finalMessage?.transferEnvelopes)
+    ? finalMessage.transferEnvelopes
+    : (Array.isArray(result?.transferEnvelopes) ? result.transferEnvelopes : []);
+  const attachments = Array.isArray(finalMessage?.attachments)
+    ? finalMessage.attachments
+    : (Array.isArray(result?.attachments) ? result.attachments : []);
+  const event = emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
     text: finalOutput,
     output: finalOutput,
     dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
     category: "model",
     type: "authoritative_final_content",
     source: "before_final_output_committed",
+    ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
+    ...(attachments.length ? { attachments } : {}),
+  });
+  return event;
+}
+
+/** The sole authoritative final-result boundary for every dispatch disposition. */
+export function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {}) {
+  const diagnostics = authoritativeFinalDiagnostics(result, runtime);
+  emitEvent(runtime?.eventListener || null, "authoritative_final_commit_started", diagnostics);
+  const messages = authoritativeFinalMessages(result, runtime);
+  if (String(result?.output || "") && messages.length !== 1) {
+    emitEvent(runtime?.eventListener || null, "authoritative_final_commit_rejected", {
+      ...diagnostics,
+      reason: messages.length === 0 ? "canonical_message_not_found" : "duplicate_canonical_message",
+    });
+    throw new Error(
+      messages.length === 0
+        ? "authoritative final result does not match its canonical messageId"
+        : "authoritative final result matches multiple canonical messages",
+    );
+  }
+  if (!messages.length || !String(result?.output || "")) {
+    emitEvent(runtime?.eventListener || null, "authoritative_final_commit_skipped", {
+      ...diagnostics,
+      reason: !String(result?.output || "") ? "empty_output" : "canonical_message_not_found",
+    });
+    return false;
+  }
+  if (!commitAuthoritativeFinalOutput({ result, runtime })) {
+    throw new Error("authoritative final result failed to update the canonical message");
+  }
+  emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
+  const event = emitAuthoritativeFinalMessageContent({ result, runtime });
+  if (!event) throw new Error("authoritative final result failed to emit its message event");
+  emitEvent(runtime?.eventListener || null, "authoritative_final_commit_completed", {
+    ...authoritativeFinalDiagnostics(result, runtime),
+    eventId: String(event?.eventId || "").trim(),
+    messageId: String(event?.messageId || "").trim(),
+    presentationMessageId: String(event?.presentationMessageId || "").trim(),
   });
   return true;
 }
@@ -138,9 +229,6 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
         result,
       }),
     });
-    commitAuthoritativeFinalOutput({ result, runtime });
-    emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
-    emitAuthoritativeFinalMessageContent({ result, runtime });
     const endedAtMs = Date.now();
     await runAgentRuntimeHook({
       runtime,

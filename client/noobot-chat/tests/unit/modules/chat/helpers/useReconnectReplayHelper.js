@@ -15,8 +15,8 @@ import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { applyRunStateMessageRuntimePatch } from "../../../../../src/modules/chat/runtime/engine/messageRuntimePatch.js";
-import { contributeExtension } from "../../../../../src/extensions/extension-registry.js";
+import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
+import { replacePluginExtensions } from "../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../../../../../src/extensions/extension-point-ids.js";
 import { registerFrontendPlugin as registerWorkflowFrontendPlugin } from "../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
 
@@ -51,6 +51,7 @@ export function createCanonicalAssistant({
   return {
     id: normalizedMessageId,
     messageId: normalizedMessageId,
+    presentationMessageId: normalizeIdentityPart(presentationMessageId, normalizedMessageId),
     role: RoleEnum.ASSISTANT,
     sessionId,
     dialogProcessId: normalizedDialogProcessId,
@@ -127,14 +128,16 @@ export function createFakeProcessStore() {
 }
 
 export function createFixture({ activeId = "s-1", processStore = null, currentRun = null } = {}) {
+  const workflowContributions = [];
   registerWorkflowFrontendPlugin({
-    contributeExtension: (point, contribution) => contributeExtension(point, {
-      ...contribution,
-      pluginId: "workflow",
-    }),
+    contributeExtension: (point, contribution) => {
+      workflowContributions.push({ point, contribution });
+      return true;
+    },
     extensionPoints: EXTENSION_POINTS,
     services: {},
   });
+  replacePluginExtensions("workflow", workflowContributions);
   const s1 = createSession("s-1");
   const s2 = createSession("s-2");
   if (currentRun) s1.currentRun = { ...currentRun, sessionId: "s-1" };
@@ -159,10 +162,10 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
   const applyTurnRuntimeEvents = vi.fn((events = []) =>
     events.map((event) => {
       const result = applyTurnRuntimeEvent(turnRuntimeRegistry.value, event);
-      applyRunStateMessageRuntimePatch({
+      projectTurnRuntimeToMessages({
         sessions,
         turnRuntimeRegistry,
-        event: result?.turn || event,
+        turn: result?.turn || event,
       });
       return result;
     }),
@@ -181,13 +184,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       "turn.stop_completed",
       "turn.failed",
     ].includes(String(event?.eventType || "").trim().toLowerCase());
-    const channelTerminal = event?.type === "backend_channel_state" && [
-      "completed",
-      "user_stopped",
-      "error",
-      "cancelled",
-    ].includes(String(event?.state || "").trim().toLowerCase());
-    if (lifecycleTerminal || channelTerminal) {
+    if (lifecycleTerminal) {
       return resolveTurnTerminalState(event?.sessionId, event?.turnScopeId, {
         commandId: String(event?.commandId || ""),
         sequence: Number(event?.sequence || event?.seq || 0),
@@ -201,11 +198,11 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     const result = applyTurnTerminalResolution(turnRuntimeRegistry.value, response);
     if (result?.applied) {
       turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
-      applyRunStateMessageRuntimePatch({
+      projectTurnRuntimeToMessages({
         sessions,
         activeSession,
         turnRuntimeRegistry,
-        event: result.turn,
+        turn: result.turn,
       });
     }
     return result;

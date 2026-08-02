@@ -615,10 +615,6 @@ export class SessionExecutionEngine {
     return this.session?.stampReusedUserTurnDialogProcessId?.(payload);
   }
 
-  async upsertTurnStatus(payload = {}) {
-    return this.session?.upsertTurnStatus?.(payload);
-  }
-
   async applyTurnLifecycleEvent(payload = {}) {
     return this.session?.applyTurnLifecycleEvent?.(payload);
   }
@@ -649,22 +645,6 @@ export class SessionExecutionEngine {
 
   async getExecutionTree(payload = {}) {
     return this.session?.getExecutionTree?.(payload);
-  }
-
-  async persistStoppedAssistantMessage({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    parentDialogProcessId = "",
-    partialAssistant = {},
-  } = {}) {
-    return this.turnPersister.persistStoppedAssistantMessage({
-      userId,
-      sessionId,
-      parentSessionId,
-      parentDialogProcessId,
-      partialAssistant,
-    });
   }
 
   async _initializeRunSessionRuntime({

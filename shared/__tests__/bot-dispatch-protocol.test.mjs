@@ -29,3 +29,13 @@ test("dispatch protocol rejects competing execution owners", () => {
     (error) => error?.code === "BOT_DISPATCH_OWNERSHIP_CONFLICT",
   );
 });
+
+test("failed dispatch outcome cannot carry a successful result payload", () => {
+  const outcome = createBotDispatchHandled({
+    owner: "workflow",
+    result: { output: "stale planning result", turnMessages: [{ content: "WORKFLOW_DSL/1" }] },
+    failure: { code: "WORKFLOW_NODE_FAILED", message: "node failed" },
+  });
+  assert.equal(outcome.failure.code, "WORKFLOW_NODE_FAILED");
+  assert.equal(Object.hasOwn(outcome, "result"), false);
+});

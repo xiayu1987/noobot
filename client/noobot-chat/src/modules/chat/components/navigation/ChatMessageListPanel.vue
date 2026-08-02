@@ -47,6 +47,7 @@ const presentedMessages = computed(() => {
     activeSession: props.activeSession,
     workflowRegistry: chatStore.workflowNodeStateRegistry,
     turnRuntimeRegistry: chatStore.turnRuntimeRegistry,
+    subSessionMessageRegistry: chatStore.subSessionMessageRegistry,
   });
 });
 const presentationDiagnosticsSignature = computed(() => [
@@ -54,6 +55,7 @@ const presentationDiagnosticsSignature = computed(() => [
   Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
   presentedMessages.value.length,
   Number(chatStore.workflowNodeStateRegistry?.version || 0),
+  Number(chatStore.subSessionMessageRegistryVersion || 0),
 ].join("|"));
 watch(presentationDiagnosticsSignature, () => {
   logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", () => ({

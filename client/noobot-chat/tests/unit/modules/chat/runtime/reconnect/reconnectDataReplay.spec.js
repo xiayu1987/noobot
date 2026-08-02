@@ -5,571 +5,154 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { applyReconnectDataReplay } from "../../../../../../src/modules/chat/runtime/reconnect/reconnectDataReplay.js";
+import { createReplayBatch, createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/event-protocol";
 
-function createFixture(overrides = {}) {
+function snapshot({ sessionId = "s-1", turnScopeId = "turn-1", sequence = 4, state = TURN_STATE.PROCESSING } = {}) {
+  return createTurnLifecycleSnapshot({
+    commandId: `snapshot-${turnScopeId}`,
+    sessionId,
+    sequence,
+    activeTurnScopeId: turnScopeId,
+    activeTurn: {
+      sessionId,
+      dialogProcessId: `dp-${turnScopeId}`,
+      turnScopeId,
+      messageId: `message-${turnScopeId}`,
+      presentationMessageId: `message-${turnScopeId}`,
+      commandId: `command-${turnScopeId}`,
+      action: "send",
+      state,
+      phase: state === TURN_STATE.PROCESSING ? "processing" : "completion",
+      executionState: state === TURN_STATE.PROCESSING ? "sending" : "completed",
+      revision: 2,
+      sequence,
+    },
+  });
+}
+
+function batch({ sessionId = "s-1", turnScopeId = "turn-1", sequence = 4, events = [], pendingInteractions = [] } = {}) {
+  const baseline = snapshot({ sessionId, turnScopeId, sequence });
+  return createReplayBatch({
+    sessionId,
+    streamId: `stream-${sessionId}`,
+    requestId: `reconnect-${sessionId}`,
+    snapshot: baseline,
+    snapshotSequence: sequence,
+    events,
+    pendingInteractions,
+  });
+}
+
+function fixture(overrides = {}) {
   return {
     ensureReconnectSessionActive: vi.fn(async () => {}),
-    isCurrentActiveSession: vi.fn((sessionId) => sessionId === "s-1"),
+    isCurrentActiveSession: vi.fn((id) => id === "s-1"),
     replayCache: {},
     applyReconnectMessagesToActiveSession: vi.fn(async () => {}),
-    applyChannelState: vi.fn(),
-    scheduleCacheExpiredSessionRefresh: vi.fn(),
+    applySubSessionReplayMessages: vi.fn(async () => ({ applied: true })),
     reconcileSessionState: vi.fn(async () => true),
     hydrateActiveSessionBeforeReplay: vi.fn(async () => true),
+    applyTurnLifecycleEnvelope: vi.fn(async () => ({ applied: true })),
+    applyTurnLifecycleSnapshot: vi.fn(() => ({ applied: true })),
+    applyPendingInteraction: vi.fn(async () => {}),
+    scheduleCacheExpiredSessionRefresh: vi.fn(),
     ...overrides,
   };
 }
 
 describe("applyReconnectDataReplay", () => {
-  it("routes workflow-node replay to the child projection without creating a root assistant", async () => {
-    const childEvent = {
-      event: "subagent_message_event",
+  it("requires one valid Authority Replay Batch per session", async () => {
+    const f = fixture();
+    await applyReconnectDataReplay({ reconnectData: { sessions: [{ sessionId: "s-1" }] }, ...f });
+    expect(f.reconcileSessionState).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      reason: "invalid_replay_batch",
+    });
+    expect(f.applyTurnLifecycleSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("applies the Authority snapshot before the ordered event tail", async () => {
+    const baseline = snapshot({ sequence: 4 });
+    const event = {
+      protocol: { name: "@noobot/event-protocol", version: 1, schema: "turn.lifecycle" },
+      identity: {
+        eventId: "event-5", eventType: "turn.processing_started", commandId: "command-1",
+        sessionId: "s-1", turnScopeId: "turn-1",
+      },
+      ordering: { streamId: "stream-s-1", streamSequence: 5, aggregateRevision: 3 },
+      payload: { state: "processing", phase: "processing", executionState: "sending" },
+      metadata: { producer: "authoritative-state", occurredAt: "2026-01-01T00:00:00.000Z" },
+    };
+    const f = fixture();
+    await applyReconnectDataReplay({
+      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }), dialogProcesses: [] }] },
+      ...f,
+    });
+    expect(f.applyTurnLifecycleSnapshot).toHaveBeenCalledWith(expect.objectContaining({
+      protocolVersion: baseline.protocolVersion,
+      eventType: baseline.eventType,
+      sessionId: baseline.sessionId,
+      sequence: baseline.sequence,
+      activeTurnScopeId: baseline.activeTurnScopeId,
+    }));
+    expect(f.applyTurnLifecycleEnvelope).toHaveBeenCalledWith(event);
+    expect(f.applyTurnLifecycleSnapshot.mock.invocationCallOrder[0])
+      .toBeLessThan(f.applyTurnLifecycleEnvelope.mock.invocationCallOrder[0]);
+  });
+
+  it("routes stable-identity message replay after the Authority baseline", async () => {
+    const message = {
+      event: "delta",
       data: {
-        turnScopeId: "workflow-node:node-1",
-        route: { scope: "sub_session" },
-        event: {
-          envelopeKind: "noobot.message_event",
-          eventType: "main_model_content",
-          sessionId: "child-1",
-          turnScopeId: "workflow-node:node-1",
-          messageId: "message-1",
-        },
+        sessionId: "s-1", dialogProcessId: "dp-turn-1", turnScopeId: "turn-1",
+        messageId: "message-turn-1", presentationMessageId: "message-turn-1", seq: 5, text: "partial",
       },
     };
-    const fixture = createFixture({
-      applySubSessionReplayMessages: vi.fn(async () => ({ applied: true })),
-    });
-
+    const f = fixture();
     await applyReconnectDataReplay({
       reconnectData: {
         sessions: [{
           sessionId: "s-1",
-          hasRunningTask: true,
-          currentRun: { sessionId: "s-1", dialogProcessId: "dp-root", turnScopeId: "turn-root", state: "sending" },
-          dialogProcesses: [{ dialogProcessId: "dp-node", messages: [childEvent] }],
+          replayBatch: batch({ sequence: 4 }),
+          dialogProcesses: [{ dialogProcessId: "dp-turn-1", messages: [message] }],
         }],
       },
-      ...fixture,
+      ...f,
     });
-
-    expect(fixture.applySubSessionReplayMessages).toHaveBeenCalledWith(
-      [childEvent],
-      expect.objectContaining({ rootSessionId: "s-1", turnScopeId: "workflow-node:node-1" }),
+    expect(f.applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
+      [message], "dp-turn-1", { turnScopeId: "turn-1" },
     );
-    expect(fixture.applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
   });
 
-  it("applies active session replay without currentRun message-creation controls", async () => {
-    const fixture = createFixture();
-    const messages = [
-      { event: "delta", data: { seq: 1, text: "hello", dialogProcessId: "dp-1" } },
-    ];
-
+  it("reconciles a sequence gap and never applies the invalid tail", async () => {
+    const event = {
+      protocol: { name: "@noobot/event-protocol", version: 1, schema: "turn.lifecycle" },
+      identity: { eventId: "event-7", eventType: "turn.processing_started", commandId: "command-1", sessionId: "s-1", turnScopeId: "turn-1" },
+      ordering: { streamId: "stream-s-1", streamSequence: 7, aggregateRevision: 3 },
+      payload: { state: "processing" }, metadata: { producer: "authoritative-state" },
+    };
+    const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [
-          {
-            sessionId: "s-1",
-            hasRunningTask: true,
-            currentRun: { sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1", state: "sending", seq: 1 },
-            dialogProcesses: [{ dialogProcessId: "dp-1", messages }],
-          },
-        ],
-      },
-      ...fixture,
+      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }), dialogProcesses: [] }] },
+      ...f,
     });
-
-    expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
-      messages,
-      "dp-1",
-      { turnScopeId: "turn-1" },
-    );
-    expect(fixture.replayCache).toEqual({});
-    expect(fixture.hydrateActiveRunningSession).toBeUndefined();
+    expect(f.reconcileSessionState).toHaveBeenCalledWith({ sessionId: "s-1", reason: "invalid_replay_batch" });
+    expect(f.applyTurnLifecycleEnvelope).not.toHaveBeenCalled();
   });
 
-  it("replays analysis-only envelopes through the same batch path as every other event", async () => {
-    const messages = [{
-      event: "thinking",
+  it("applies only complete pending interaction records from the batch", async () => {
+    const interaction = {
+      event: "interaction_request",
       data: {
-        sessionId: "s-1",
-        dialogProcessId: "dp-thinking",
-        turnScopeId: "turn-thinking",
-        seq: 1,
-        text: "analysis",
+        requestId: "request-1", sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1",
+        interactionType: "approval", content: "approve?",
       },
-    }];
-    const fixture = createFixture({
-      applyReconnectMessagesToActiveSession: vi.fn(async () => {
-      }),
-    });
-
+    };
+    const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          hasRunningTask: true,
-          currentRun: {
-            sessionId: "s-1",
-            dialogProcessId: "dp-thinking",
-            turnScopeId: "turn-thinking",
-            presentationMessageId: "assistant-thinking",
-            state: "sending",
-          },
-          dialogProcesses: [{ dialogProcessId: "dp-thinking", messages }],
-        }],
-      },
-      ...fixture,
+      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }), dialogProcesses: [] }] },
+      ...f,
     });
-
-    expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
-      messages,
-      "dp-thinking",
-      { turnScopeId: "turn-thinking" },
-    );
-    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledTimes(1);
-    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledWith(
-      "s-1",
-      expect.objectContaining({ presentationMessageId: "assistant-thinking" }),
-    );
-    expect(fixture.hydrateActiveSessionBeforeReplay.mock.invocationCallOrder[0]).toBeLessThan(
-      fixture.applyReconnectMessagesToActiveSession.mock.invocationCallOrder[0],
-    );
+    expect(f.applyPendingInteraction).toHaveBeenCalledWith(interaction);
   });
-
-  it("hydrates the active canonical baseline once for a reconnect transaction with multiple replay groups", async () => {
-    const fixture = createFixture();
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          currentRun: { sessionId: "s-1", dialogProcessId: "dp-2", turnScopeId: "turn-2", state: "sending" },
-          dialogProcesses: [
-            { dialogProcessId: "dp-1", messages: [{ event: "thinking", data: { sessionId: "s-1", turnScopeId: "turn-1" } }] },
-            { dialogProcessId: "dp-2", messages: [{ event: "message_event", data: { sessionId: "s-1", turnScopeId: "turn-2" } }] },
-          ],
-        }],
-      },
-      ...fixture,
-    });
-
-    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledTimes(1);
-    expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledTimes(2);
-    expect(fixture.hydrateActiveSessionBeforeReplay.mock.invocationCallOrder[0]).toBeLessThan(
-      fixture.applyReconnectMessagesToActiveSession.mock.invocationCallOrder[0],
-    );
-  });
-
-  it("hydrates an active in-flight currentRun even when no replay message exists yet", async () => {
-    const fixture = createFixture();
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          hasRunningTask: true,
-          currentRun: {
-            sessionId: "s-1",
-            dialogProcessId: "dp-1",
-            turnScopeId: "turn-1",
-            presentationMessageId: "assistant-1",
-            state: "sending",
-          },
-          dialogProcesses: [],
-        }],
-      },
-      ...fixture,
-    });
-
-    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledTimes(1);
-    expect(fixture.hydrateActiveSessionBeforeReplay).toHaveBeenCalledWith(
-      "s-1",
-      expect.objectContaining({ presentationMessageId: "assistant-1" }),
-    );
-    expect(fixture.applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
-  });
-
-  it("does not hydrate a terminal currentRun without replay messages", async () => {
-    const fixture = createFixture();
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          hasRunningTask: false,
-          currentRun: {
-            sessionId: "s-1",
-            dialogProcessId: "dp-1",
-            turnScopeId: "turn-1",
-            presentationMessageId: "assistant-1",
-            state: "completed",
-          },
-          dialogProcesses: [],
-        }],
-      },
-      ...fixture,
-    });
-
-    expect(fixture.hydrateActiveSessionBeforeReplay).not.toHaveBeenCalled();
-  });
-
-  it("caches non-active session replay messages by dialog process id", async () => {
-    const fixture = createFixture({
-      isCurrentActiveSession: vi.fn(() => false),
-    });
-    const messages = [
-      { event: "delta", data: { seq: 1, text: "cached", dialogProcessId: "dp-2" } },
-    ];
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [
-          {
-            sessionId: " s-2 ",
-            hasRunningTask: true,
-            currentRun: { sessionId: "s-2", dialogProcessId: "dp-2", turnScopeId: "turn-2", state: "sending", seq: 1 },
-            dialogProcesses: [{ dialogProcessId: " dp-2 ", messages }],
-          },
-        ],
-      },
-      ...fixture,
-    });
-
-    expect(fixture.applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
-    expect(fixture.replayCache).toEqual({
-      "s-2": {
-        "__turn__s-2::turn-2": messages,
-      },
-    });
-  });
-
-  it("derives Turn identity from inner replay envelopes before checking deletion", async () => {
-    const isDeletedTurn = vi.fn(({ turnScopeId }) => turnScopeId === "turn-deleted");
-    const fixture = createFixture({ isDeletedTurn });
-    const deletedMessages = [
-      { event: "thinking", data: { sessionId: "s-1", dialogProcessId: "dp-shared", turnScopeId: "turn-deleted", seq: 41 } },
-      { event: "user_stopped", data: { sessionId: "s-1", dialogProcessId: "dp-shared", turnScopeId: "turn-deleted", seq: 47 } },
-    ];
-    const currentMessages = [
-      { event: "delta", data: { sessionId: "s-1", dialogProcessId: "dp-shared", turnScopeId: "turn-current", seq: 1, text: "current" } },
-    ];
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          hasRunningTask: false,
-          currentRun: {
-            sessionId: "s-1",
-            dialogProcessId: "dp-shared",
-            turnScopeId: "turn-current",
-            state: "completed",
-          },
-          dialogProcesses: [{
-            dialogProcessId: "dp-shared",
-            messages: [...deletedMessages, ...currentMessages],
-          }],
-        }],
-      },
-      ...fixture,
-    });
-
-    expect(isDeletedTurn).toHaveBeenCalledWith({ sessionId: "s-1", turnScopeId: "turn-deleted" });
-    expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledTimes(1);
-    expect(fixture.applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
-      currentMessages,
-      "dp-shared",
-      expect.objectContaining({ turnScopeId: "turn-current" }),
-    );
-  });
-
-  it("applies currentRun and schedules cache expired refresh", async () => {
-    const fixture = createFixture();
-    const stateEntry = { sessionId: "s-1", dialogProcessId: "dp-state", turnScopeId: "turn-state", state: "sending" };
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        cacheExpired: true,
-        sessions: [
-          {
-            sessionId: "s-1",
-            currentRun: stateEntry,
-            conversationStates: [stateEntry],
-            dialogProcesses: [],
-          },
-        ],
-      },
-      ...fixture,
-    });
-
-    expect(fixture.applyChannelState).toHaveBeenCalledWith({
-      ...stateEntry,
-      authoritativeSnapshot: true,
-    });
-    expect(fixture.scheduleCacheExpiredSessionRefresh).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not project conversationStates when currentRun is missing", async () => {
-    const fixture = createFixture();
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          hasRunningTask: false,
-          conversationStates: [
-            { sessionId: "s-1", dialogProcessId: "dp-old", turnScopeId: "turn-old", state: "user_stopped", seq: 12 },
-          ],
-          dialogProcesses: [],
-        }],
-      },
-      ...fixture,
-    });
-
-    expect(fixture.applyChannelState).not.toHaveBeenCalled();
-    expect(fixture.reconcileSessionState).toHaveBeenCalledWith({
-      sessionId: "s-1",
-      hasRunningTask: false,
-      reason: "invalid_current_run",
-    });
-  });
-
-
-  it("restores running channel with only session-scope turnScopeId state as stoppable", async () => {
-    const applyRunStateEvents = vi.fn();
-    const fixture = createFixture({ applyRunStateEvents });
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [
-          {
-            sessionId: "s-1",
-            hasRunningTask: true,
-            currentRun: { sessionId: "s-1", dialogProcessId: "", turnScopeId: "client-turn-r", state: "sending", seq: 0 },
-            conversationStates: [
-              { sessionId: "s-1", dialogProcessId: "", turnScopeId: "client-turn-r", state: "sending", seq: 0 },
-            ],
-            dialogProcesses: [],
-          },
-        ],
-      },
-      ...fixture,
-    });
-
-    expect(fixture.ensureReconnectSessionActive).toHaveBeenCalledWith("s-1");
-    expect(applyRunStateEvents).toHaveBeenLastCalledWith(expect.arrayContaining([
-      expect.objectContaining({
-        type: "backend_channel_state",
-        state: "sending",
-        sessionId: "s-1",
-        dialogProcessId: "",
-        turnScopeId: "client-turn-r",
-      }),
-    ]));
-  });
-
-  it("ignores historical stopped turns when reconnect declares an active running turn", async () => {
-    const appliedEvents = [];
-    const appliedChannelStates = [];
-    const fixture = createFixture({
-      applyRunStateEvents: vi.fn((events) => appliedEvents.push(...events)),
-      applyChannelState: vi.fn(async (stateEntry) => appliedChannelStates.push(stateEntry)),
-    });
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          hasRunningTask: true,
-          currentRun: {
-            sessionId: "s-1",
-            dialogProcessId: "dp-current",
-            turnScopeId: "turn-current",
-            state: "sending",
-            seq: 80,
-          },
-          conversationStates: [
-            { sessionId: "s-1", dialogProcessId: "dp-old-1", turnScopeId: "turn-old-1", state: "user_stopped", seq: 31 },
-            { sessionId: "s-1", dialogProcessId: "dp-current", turnScopeId: "turn-current", state: "sending", seq: 12 },
-            { sessionId: "s-1", dialogProcessId: "dp-old-2", turnScopeId: "turn-old-2", state: "user_stopped", seq: 34 },
-            { sessionId: "s-1", dialogProcessId: "", turnScopeId: "turn-current", state: "sending", seq: 80 },
-          ],
-          dialogProcesses: [],
-        }],
-      },
-      ...fixture,
-    });
-
-    expect(appliedEvents).toEqual(expect.arrayContaining([
-      expect.objectContaining({ state: "sending", turnScopeId: "turn-current" }),
-    ]));
-    expect(appliedEvents.some((event) => event.state === "user_stopped")).toBe(false);
-    expect(appliedChannelStates).toHaveLength(1);
-    expect(appliedChannelStates.every((state) => state.turnScopeId === "turn-current")).toBe(true);
-    expect(appliedChannelStates[0]).toEqual(expect.objectContaining({
-      sessionId: "s-1",
-      dialogProcessId: "dp-current",
-      turnScopeId: "turn-current",
-      state: "sending",
-      seq: 80,
-    }));
-  });
-
-  it("uses the completed current run instead of a historical stopped turn", async () => {
-    const appliedEvents = [];
-    const appliedChannelStates = [];
-    const fixture = createFixture({
-      applyRunStateEvents: vi.fn((events) => appliedEvents.push(...events)),
-      applyChannelState: vi.fn(async (stateEntry) => appliedChannelStates.push(stateEntry)),
-    });
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          hasRunningTask: false,
-          currentRun: {
-            sessionId: "s-1",
-            dialogProcessId: "dp-current",
-            turnScopeId: "turn-current",
-            state: "completed",
-            seq: 198,
-          },
-          conversationStates: [
-            { sessionId: "s-1", dialogProcessId: "dp-old", turnScopeId: "turn-old", state: "user_stopped", seq: 123 },
-            { sessionId: "s-1", dialogProcessId: "dp-current", turnScopeId: "turn-current", state: "completed", seq: 198 },
-          ],
-          dialogProcesses: [],
-        }],
-      },
-      ...fixture,
-    });
-
-    expect(appliedEvents).toEqual([]);
-    expect(appliedChannelStates).toEqual([
-      expect.objectContaining({
-        state: "completed",
-        dialogProcessId: "dp-current",
-        turnScopeId: "turn-current",
-        authoritativeSnapshot: true,
-      }),
-    ]);
-  });
-
-  it("restores stopped state after recoverable reconnect data replay", async () => {
-    const fixture = createFixture();
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [
-          {
-            sessionId: "s-1",
-            hasRunningTask: false,
-            currentRun: { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "user_stopped", seq: 12 },
-            conversationStates: [
-              { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "sending", seq: 11 },
-              { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "user_stopped", seq: 12 },
-            ],
-            dialogProcesses: [],
-          },
-        ],
-      },
-      ...fixture,
-    });
-
-  });
-
-  it("does not resurrect a terminal currentRun when channel running lags behind", async () => {
-    const appliedEvents = [];
-    const appliedChannelStates = [];
-    const fixture = createFixture({
-      applyRunStateEvents: vi.fn((events) => appliedEvents.push(...events)),
-      applyChannelState: vi.fn(async (stateEntry) => appliedChannelStates.push(stateEntry)),
-    });
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          hasRunningTask: true,
-          currentRun: {
-            sessionId: "s-1",
-            dialogProcessId: "dp-stop",
-            turnScopeId: "turn-stop",
-            state: "user_stopped",
-            seq: 12,
-          },
-          conversationStates: [],
-          dialogProcesses: [],
-        }],
-      },
-      ...fixture,
-    });
-
-    expect(fixture.ensureReconnectSessionActive).not.toHaveBeenCalled();
-    expect(appliedEvents.some((event) => event.type === "backend_recoverable_running")).toBe(false);
-    expect(appliedChannelStates).toEqual([
-      expect.objectContaining({
-        state: "user_stopped",
-        dialogProcessId: "dp-stop",
-        turnScopeId: "turn-stop",
-      }),
-    ]);
-  });
-
-  it("restores stopping as in-flight but not stoppable after recoverable replay", async () => {
-    const fixture = createFixture();
-
-    await applyReconnectDataReplay({
-      reconnectData: {
-        sessions: [
-          {
-            sessionId: "s-1",
-            hasRunningTask: true,
-            currentRun: { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "stopping", seq: 12 },
-            conversationStates: [
-              { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "stopping", seq: 12 },
-            ],
-            dialogProcesses: [],
-          },
-        ],
-      },
-      ...fixture,
-    });
-
-    expect(fixture.ensureReconnectSessionActive).toHaveBeenCalledWith("s-1");
-    expect(fixture.applyChannelState).toHaveBeenCalledWith(expect.objectContaining({
-      sessionId: "s-1",
-      turnScopeId: "turn-stop",
-      state: "stopping",
-      authoritativeSnapshot: true,
-    }));
-  });
-
-  it.each(["cancelled", "completed", "error", "expired", "no_conversation"])(
-    "restores terminal %s as not sending and not stoppable",
-    async (terminalState) => {
-      const fixture = createFixture();
-
-      await applyReconnectDataReplay({
-        reconnectData: {
-          sessions: [
-            {
-              sessionId: "s-1",
-              hasRunningTask: false,
-              currentRun: { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: terminalState, seq: 12 },
-              conversationStates: [
-                { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: "sending", seq: 11 },
-                { sessionId: "s-1", dialogProcessId: "dp-stop", turnScopeId: "turn-stop", state: terminalState, seq: 12 },
-              ],
-              dialogProcesses: [],
-            },
-          ],
-        },
-        ...fixture,
-      });
-
-    },
-  );
 });

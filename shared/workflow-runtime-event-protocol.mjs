@@ -65,6 +65,11 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
   if (event === WORKFLOW_RUNTIME_EVENT.MESSAGE && !isMessageEventEnvelope(data)) {
     errors.push("invalid_message_envelope");
   }
+  if (event === WORKFLOW_RUNTIME_EVENT.MESSAGE) {
+    if (!text(data?.workflowRunId)) errors.push("missing_message_workflow_run");
+    if (!text(data?.nodeExecutionId)) errors.push("missing_message_node_execution");
+    if (!text(data?.parentSessionId)) errors.push("missing_message_parent_session");
+  }
   if (event === WORKFLOW_RUNTIME_EVENT.PLANNING) {
     if (!text(data?.sessionId)) errors.push("missing_planning_session");
     if (!text(data?.turnScopeId)) errors.push("missing_planning_turn_scope");
@@ -77,6 +82,9 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
   if (event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
     const sessionId = text(data?.sessionId || data?.id || data?.backendSessionId);
     if (!sessionId) errors.push("missing_snapshot_session");
+    if (!text(data?.workflowRunId)) errors.push("missing_snapshot_workflow_run");
+    if (!text(data?.nodeExecutionId)) errors.push("missing_snapshot_node_execution");
+    if (!text(data?.parentSessionId)) errors.push("missing_snapshot_parent_session");
     const snapshotVersion = Number(data?.snapshotVersion || data?.sessionVersion || data?.revision || 0);
     if (!Number.isInteger(snapshotVersion) || snapshotVersion <= 0) {
       errors.push("invalid_snapshot_version");

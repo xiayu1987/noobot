@@ -200,6 +200,8 @@ const {
   conversationStateTimeline,
   turnRuntimeRegistry,
   workflowNodeStateRegistry,
+  subSessionMessageRegistry,
+  subSessionMessageRegistryVersion,
 } = useChatSession({
   userId,
   apiKey,
@@ -234,6 +236,8 @@ chatMessageNavigatorPanel = useChatMessageNavigatorPanel({
   activeSession,
   activeSessionId,
   workflowNodeStateRegistry,
+  subSessionMessageRegistry,
+  subSessionMessageRegistryVersion,
   turnRuntimeRegistry,
   shouldRenderMessageInChat,
   messageListPanelRef,

@@ -5,18 +5,19 @@
  */
 
 export function disposeReconnectReplayTimers({
-  missingInteractionPayloadTimers,
   getCacheExpiredRefreshTimer,
   setCacheExpiredRefreshTimer,
+  missingInteractionPayloadTimers,
 }) {
-  for (const timer of missingInteractionPayloadTimers.values()) {
-    clearTimeout(timer);
-  }
-  missingInteractionPayloadTimers.clear();
-
   const cacheExpiredRefreshTimer = getCacheExpiredRefreshTimer?.();
   if (cacheExpiredRefreshTimer) {
     clearTimeout(cacheExpiredRefreshTimer);
     setCacheExpiredRefreshTimer?.(null);
+  }
+  if (missingInteractionPayloadTimers instanceof Map) {
+    for (const timer of missingInteractionPayloadTimers.values()) {
+      clearTimeout(timer);
+    }
+    missingInteractionPayloadTimers.clear();
   }
 }

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents } from "./channel-manager.state-consistency.test-helpers.js";
-import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/authoritative-state/contracts";
+import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/event-protocol";
 
 test("interaction_request resolved by one client should be consistent across all clients", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -49,8 +49,12 @@ test("interaction_request resolved by one client should be consistent across all
 
   const beforeResolveA = JSON.stringify(getEvent(clientA, "reconnect_data")?.data || {});
   const beforeResolveB = JSON.stringify(getEvent(clientB, "reconnect_data")?.data || {});
-  assert.equal(beforeResolveA.includes("__agentProxyPendingInteraction"), true);
-  assert.equal(beforeResolveB.includes("__agentProxyPendingInteraction"), true);
+  assert.equal(beforeResolveA.includes("__agentProxyPendingInteraction"), false);
+  assert.equal(beforeResolveB.includes("__agentProxyPendingInteraction"), false);
+  for (const data of [getEvent(clientA, "reconnect_data")?.data, getEvent(clientB, "reconnect_data")?.data]) {
+    assert.equal(data?.sessions?.[0]?.replayBatch?.pendingInteractions?.some((item) =>
+      String(item?.data?.requestId || item?.requestId || "") === "req-1"), true);
+  }
 
   const forwarded = manager.forwardToUpstream(channel, {
     action: "interaction_response",
@@ -72,11 +76,10 @@ test("interaction_request resolved by one client should be consistent across all
     false,
     "resolved interaction should not be replayed to any client",
   );
-  const reconnectState = getEvent(clientBAfterResolve, "reconnect_data")?.data?.sessions?.[0]
-    ?.conversationStates?.find((item) => item?.dialogProcessId === "dp-1");
-  assert.equal(reconnectState?.state, "sending");
-  assert.equal(reconnectState?.sourceEvent, "interaction_response");
-  assert.equal(reconnectState?.requestId, "req-1");
+  const resolvedSession = getEvent(clientBAfterResolve, "reconnect_data")?.data?.sessions?.[0];
+  assert.equal(resolvedSession?.replayBatch?.pendingInteractions?.some((item) =>
+    String(item?.data?.requestId || item?.requestId || "") === "req-1"), false);
+  assert.equal("conversationStates" in resolvedSession, false);
 });
 
 test("interaction_pending channel_state should carry pendingInteractions snapshot", () => {
@@ -260,13 +263,10 @@ test("workflow child terminal events cannot discard a pending interaction owned 
   const rootSession = reconnectData?.data?.sessions?.find(
     (item) => item?.sessionId === "root-session",
   );
-  const childState = rootSession?.conversationStates?.find(
-    (item) => item?.dialogProcessId === "child-dialog",
-  );
-  assert.equal(childState?.state, "interaction_pending");
-  assert.equal(childState?.requestId, "req-child");
-  assert.equal(childState?.pendingInteraction?.requestId, "req-child");
-  assert.deepEqual(childState?.pendingRequestIds, ["req-child"]);
+  const childInteraction = rootSession?.replayBatch?.pendingInteractions?.find((item) =>
+    String(item?.data?.requestId || item?.requestId || "") === "req-child");
+  assert.equal(childInteraction?.data?.dialogProcessId || childInteraction?.dialogProcessId, "child-dialog");
+  assert.equal("conversationStates" in rootSession, false);
 });
 
 test("workflow child terminal state does not own root channel retention", () => {

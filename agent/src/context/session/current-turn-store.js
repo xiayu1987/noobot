@@ -95,15 +95,16 @@ export function createCurrentTurnTasksStore(tasks = []) {
   };
 }
 
-export function resolveTurnMessagesStore(currentTurnMessages, fallbackMessages = []) {
+export function resolveTurnMessagesStore(currentTurnMessages) {
   const isValidStore =
     currentTurnMessages &&
     typeof currentTurnMessages.push === "function" &&
     typeof currentTurnMessages.updateLast === "function" &&
     typeof currentTurnMessages.removeLast === "function" &&
+    typeof currentTurnMessages.updateWhere === "function" &&
     typeof currentTurnMessages.toArray === "function";
   if (isValidStore) return currentTurnMessages;
-  return createCurrentTurnMessagesStore(fallbackMessages);
+  throw new Error("turn execution requires the canonical currentTurnMessages store");
 }
 
 export function resolveTurnTasksStore(currentTurnTasks, fallbackTasks = []) {

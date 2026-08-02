@@ -73,6 +73,7 @@ export async function prepareWorkflowPlanningMessage({
   });
   const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
   const turnScopeId = String(ctx?.turnScopeId || parentRunConfig?.turnScopeId || "").trim();
+  const messageId = String(ctx?.messageId || ctx?.runConfig?.messageId || parentRunConfig?.messageId || "").trim();
   const presentationMessageId = String(
     workflowMessage?.presentationMessageId || parentRunConfig?.presentationMessageId || "",
   ).trim();
@@ -80,6 +81,7 @@ export async function prepareWorkflowPlanningMessage({
     sessionId: String(ctx?.sessionId || "").trim(),
     dialogProcessId: String(ctx?.dialogProcessId || "").trim(),
     turnScopeId,
+    messageId,
     presentationMessageId,
     workflowRunId,
     sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
@@ -93,6 +95,7 @@ export async function prepareWorkflowPlanningMessage({
       pluginKind: String(workflowMessage?.pluginMeta?.kind || ""),
       pluginPhase: String(workflowMessage?.pluginMeta?.phase || ""),
       presentationMessageId,
+      messageId,
       workflowRunId: String(
         workflowMessage?.pluginMeta?.payload?.workflowRunId ||
           workflowMessage?.pluginMeta?.payload?.execution?.workflowRunId ||

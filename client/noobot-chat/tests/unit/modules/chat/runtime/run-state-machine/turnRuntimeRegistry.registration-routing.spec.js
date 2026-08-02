@@ -177,16 +177,12 @@ describe("turnRuntimeRegistry: registration and routing", () => {
   it("rejects a mismatched dialog identity without mutating the Turn", () => {
     const registry = createTurnRuntimeRegistryState();
     sendStart(registry, { sessionId: "s1", turnScopeId: "t1" });
-    applyTurnRuntimeEvent(registry, {
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      eventType: "turn.action_accepted",
-      sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", seq: 2,
+    lifecycle(registry, {
+      eventType: "turn.action_accepted", sessionId: "s1", turnScopeId: "t1",
+      dialogProcessId: "dp1", state: "action_requesting", phase: "action",
+      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
     });
-    applyTurnRuntimeEvent(registry, {
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      eventType: "turn.processing_started",
-      sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1", seq: 3,
-    });
+    lifecycle(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1" });
     const before = JSON.stringify(resolveSessionTurnRuntime(registry, "s1"));
     const dialogMismatch = backendState(registry, { sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp-other", state: BackendChannelState.COMPLETED, seq: 3 });
     expect(dialogMismatch).toMatchObject({ applied: false, reason: "dialog_process_identity_conflict" });
@@ -325,15 +321,11 @@ describe("turnRuntimeRegistry: registration and routing", () => {
   });
   it("hydrates an authoritative action request that arrives before any local Turn", () => {
     const registry = createTurnRuntimeRegistryState();
-    const result = applyTurnRuntimeEvent(registry, {
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      eventType: "turn.action_accepted",
-      sessionId: "s1",
-      turnScopeId: "t1",
-      dialogProcessId: "dp1",
-      action: "send",
-      revision: 1,
-      sequence: 1,
+    const result = lifecycle(registry, {
+      eventType: "turn.action_accepted", sessionId: "s1", turnScopeId: "t1",
+      dialogProcessId: "dp1", action: "send", state: "action_requesting",
+      phase: "action", executionState: "accepted", revision: 1, sequence: 1,
+      canStop: false,
     });
 
     expect(result).toMatchObject({
@@ -362,7 +354,7 @@ describe("turnRuntimeRegistry: registration and routing", () => {
       error: { message: "early failure" },
     });
 
-    expect(result).toMatchObject({ applied: false, reason: "illegal_transition" });
+    expect(result).toMatchObject({ applied: false, reason: "missing_state" });
     expect(registry.sessions.s1).toBeUndefined();
     expect(registry.routeIndex.dp1).toBeUndefined();
   });

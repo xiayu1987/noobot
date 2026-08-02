@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { applyLatestSessionVersion, getCurrentSessionVersion, isNewerSessionVersion } from "./sessionVersionManager.js";
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
-  const { activeSession, applyRunStateEvent, logSessionEvent, sessionId } = context;
+  const { activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
   const transportEvent = normalizeTrimmedString(event).toLowerCase();
   if (transportEvent === StreamEventEnum.TURN_LIFECYCLE) {
     const eventSessionId = normalizeTrimmedString(data?.sessionId);
@@ -31,15 +30,11 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
         revision: Number(data?.revision || 0),
         sequence: Number(data?.sequence || 0),
         hasPersistenceScope: Boolean(data?.persistenceScope?.scopeId),
-        reducerAvailable: typeof applyRunStateEvent === "function",
+        reducerAvailable: typeof applyTurnLifecycleEnvelope === "function",
       },
     });
     if (eventSessionId && mainSessionId && eventSessionId !== mainSessionId) {
-      const result = applyRunStateEvent?.({
-        ...data,
-        type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-        source: "turn_lifecycle",
-      });
+      const result = applyTurnLifecycleEnvelope?.(data);
       const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"]
         .includes(normalizeTrimmedString(data?.eventType).toLowerCase());
       const logReduction = (reduction = {}) => {
@@ -97,25 +92,46 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
 }
 
 export function routeCurrentTurnLifecycleEvent(event, data, context) {
-  const { activeSession, applyRunStateEvent, logSessionEvent, sessionId } = context;
+  const { activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
   if (normalizeTrimmedString(event).toLowerCase() === StreamEventEnum.TURN_LIFECYCLE) {
-    const result = applyRunStateEvent?.({
-      ...data, type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      source: "turn_lifecycle",
-    });
-    logSessionEvent?.({
-      category: "debug",
-      level: "debug",
-      debugType: "workflow-diagnostics",
-      event: "frontend.authoritativeState.mainLifecycleDispatched",
-      sessionId: normalizeTrimmedString(data?.sessionId || sessionId),
-      dialogProcessId: data?.dialogProcessId || "",
-      turnScopeId: data?.turnScopeId || "",
-      data: {
-        eventType: normalizeTrimmedString(data?.eventType).toLowerCase(),
-        asynchronous: Boolean(result && typeof result.then === "function"),
-      },
-    });
+    const result = applyTurnLifecycleEnvelope?.(data);
+    const logReduction = (reduction = {}) => {
+      const rejected = reduction?.applied !== true;
+      const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"]
+        .includes(normalizeTrimmedString(data?.eventType).toLowerCase());
+      logSessionEvent?.({
+        category: terminalLifecycle || rejected ? "state" : "debug",
+        level: rejected ? "warn" : (terminalLifecycle ? "info" : "debug"),
+        ...(terminalLifecycle || rejected ? {} : { debugType: "workflow-diagnostics" }),
+        event: terminalLifecycle
+          ? "frontend.authoritativeState.mainTerminalReduced"
+          : rejected
+            ? "frontend.authoritativeState.mainTurnRejected"
+            : "frontend.authoritativeState.mainTurnReduced",
+        sessionId: normalizeTrimmedString(data?.sessionId || sessionId),
+        dialogProcessId: data?.dialogProcessId || "",
+        turnScopeId: data?.turnScopeId || "",
+        data: {
+          eventId: normalizeTrimmedString(data?.eventId),
+          eventType: normalizeTrimmedString(data?.eventType).toLowerCase(),
+          revision: Number(data?.revision || 0),
+          sequence: Number(data?.sequence || 0),
+          applied: reduction?.applied === true,
+          reason: normalizeTrimmedString(reduction?.reason),
+          errors: Array.isArray(reduction?.errors) ? reduction.errors : [],
+          projectedState: normalizeTrimmedString(reduction?.turn?.state),
+          projectedTerminal: normalizeTrimmedString(reduction?.turn?.terminal),
+        },
+      });
+    };
+    if (result && typeof result.then === "function") {
+      void result.then(logReduction, (error) => logReduction({
+        applied: false,
+        reason: String(error?.message || "main_turn_reduction_failed"),
+      }));
+    } else {
+      logReduction(result);
+    }
     return true;
   }
   if (event !== "turn_committed") return false;

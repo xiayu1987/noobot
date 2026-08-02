@@ -14,7 +14,7 @@ import {
   acknowledgeAuthorityEventDelivery,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
-} from "@noobot/authoritative-state/contracts";
+} from "@noobot/event-protocol";
 
 export async function startServerWithWs({
   runSession = async () => ({}),
@@ -33,7 +33,12 @@ export async function startServerWithWs({
   let turnLifecycle = structuredClone(initialTurnLifecycle);
   let authorityEventOutbox = [];
   let authorityEventSequence = 0;
-  const materializeTerminal = ({ terminalStatus = {}, event = {} } = {}) => {
+  const persistedTurnStatuses = new Map();
+  const materializeTerminal = async (event = {}) => {
+    const terminalStatus = event.terminalStatus || {};
+    if (typeof suppliedBot.materializeTerminal === "function") {
+      return suppliedBot.materializeTerminal({ event, terminalStatus });
+    }
     const contract = {
       completed: ["completed", "run_completed"],
       user_stopped: ["user_stopped", "user_stop"],
@@ -41,16 +46,19 @@ export async function startServerWithWs({
       aborted: ["error", "run_aborted"],
       timeout: ["timeout", "run_timeout"],
     }[terminalStatus.command];
-    if (!contract) return { reason: "invalid_turn_status" };
-    return { turnStatus: {
-      version: 1,
+    assert.ok(contract, `unexpected terminal command: ${terminalStatus.command}`);
+    const previous = persistedTurnStatuses.get(event.turnScopeId) || null;
+    const turnStatus = {
+      version: Number(previous?.version || 0) + 1,
       turnScopeId: event.turnScopeId || "",
       dialogProcessId: event.dialogProcessId || "",
       parentDialogProcessId: event.parentDialogProcessId || "",
       status: contract[0],
       reason: contract[1],
       description: terminalStatus.description || "",
-    } };
+    };
+    persistedTurnStatuses.set(turnStatus.turnScopeId, turnStatus);
+    return { turnStatus, summaryVersion: turnStatus.version };
   };
   const testBot = {
     ...suppliedBot,
@@ -66,12 +74,15 @@ export async function startServerWithWs({
       };
     }),
     applyTurnLifecycleEvent: suppliedBot.applyTurnLifecycleEvent || (async (event = {}) => {
+      const terminalMaterialization = event.terminalStatus ? await materializeTerminal(event) : null;
       const result = commitTurnLifecycle({
         lifecycle: turnLifecycle,
         event,
         eventOutbox: authorityEventOutbox,
         createEventId: () => `test-authority-event-${++authorityEventSequence}`,
-        materializeTerminal: event.terminalStatus ? materializeTerminal : undefined,
+        materializeTerminal: event.terminalStatus
+          ? () => terminalMaterialization || { reason: "terminal_materialization_failed" }
+          : undefined,
       });
       if (result.applied) {
         turnLifecycle = result.lifecycle;
@@ -96,26 +107,6 @@ export async function startServerWithWs({
       if (result.found) authorityEventOutbox = result.outbox;
       return { acknowledged: result.found };
     }),
-    upsertTurnStatus: suppliedBot.upsertTurnStatus || (async (payload = {}) => {
-      const contract = {
-        completed: ["completed", "run_completed"],
-        user_stopped: ["user_stopped", "user_stop"],
-        error: ["error", "run_error"],
-        aborted: ["error", "run_aborted"],
-        timeout: ["timeout", "run_timeout"],
-      }[payload.command];
-      assert.ok(contract, `unexpected terminal command: ${payload.command}`);
-      assert.equal(payload.status, undefined);
-      assert.equal(payload.reason, undefined);
-      return { turnStatus: {
-        turnScopeId: payload.turnScopeId || "",
-        dialogProcessId: payload.dialogProcessId || "",
-        parentDialogProcessId: payload.parentDialogProcessId || "",
-        status: contract[0],
-        reason: contract[1],
-        description: payload.description || "",
-      } };
-    }),
   };
   if (typeof suppliedBot.applyTurnLifecycleEvent !== "function") {
     testBot.runSession = async (payload = {}) => {
@@ -130,22 +121,6 @@ export async function startServerWithWs({
       return suppliedBot.runSession(payload);
     };
   }
-  if (typeof suppliedBot.persistStoppedAssistantMessage === "function") {
-    testBot.persistStoppedAssistantMessage = async (payload = {}) => {
-      const persisted = await suppliedBot.persistStoppedAssistantMessage(payload);
-      if (persisted) return persisted;
-      const assistant = payload.partialAssistant || {};
-      return {
-        turnScopeId: assistant.turnScopeId || "",
-        dialogProcessId: assistant.dialogProcessId || "",
-        parentDialogProcessId: payload.parentDialogProcessId || "",
-        status: "user_stopped",
-        reason: "user_stop",
-        description: "用户停止了本轮生成",
-      };
-    };
-  }
-
   const registered = registerChatWebSocketServer(server, {
     getBot: () => testBot,
     resolveRequestLocale: () => "zh-CN",

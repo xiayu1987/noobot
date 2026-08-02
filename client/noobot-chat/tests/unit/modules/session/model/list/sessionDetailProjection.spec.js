@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSessionDetailProjection } from "../../../../../../src/modules/session/model/list/sessionDetailProjection.js";
+import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 
 const identity = (item) => ({ ...item });
 
@@ -65,5 +66,77 @@ describe("buildSessionDetailProjection", () => {
     });
 
     expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
+  });
+
+  it("projects edited-resend model history to one assistant presentation identity", () => {
+    const projection = buildSessionDetailProjection({
+      sessionDetail: {
+        sessionId: "session-resend",
+        messages: [
+          {
+            messageId: "user-resend",
+            role: "user",
+            content: "edited question",
+            turnScopeId: "client-turn:resend",
+          },
+          {
+            messageId: "model-tool-call-1",
+            presentationMessageId: "assistant-resend",
+            role: "assistant",
+            type: "tool_call",
+            chatPresentation: false,
+            content: "inspect first",
+            turnScopeId: "client-turn:resend",
+            tool_calls: [{ id: "call-1", name: "read_file" }],
+            activityTimeline: [{
+              eventId: "activity-1",
+              event: "main_model_content",
+              type: "main_model_content",
+              text: "inspect first",
+              sequence: 1,
+              sequenceScopeId: "model-tool-call-1",
+              sequenceDomain: "message-event",
+              authority: "authoritative",
+            }],
+          },
+          {
+            messageId: "model-tool-call-2",
+            presentationMessageId: "assistant-resend",
+            role: "assistant",
+            type: "tool_call",
+            chatPresentation: false,
+            content: "verify next",
+            turnScopeId: "client-turn:resend",
+            tool_calls: [{ id: "call-2", name: "execute_script" }],
+          },
+          {
+            messageId: "model-final",
+            presentationMessageId: "assistant-resend",
+            role: "assistant",
+            type: "message",
+            content: "final answer",
+            turnScopeId: "client-turn:resend",
+            attachments: [{ attachmentId: "result-1", name: "result.md" }],
+          },
+        ],
+      },
+      makeViewMessage: identity,
+    });
+
+    expect(projection.messages).toHaveLength(2);
+    expect(projection.messages[1]).toMatchObject({
+      id: "assistant-resend",
+      messageId: "assistant-resend",
+      presentationMessageId: "assistant-resend",
+      content: "final answer",
+      type: "message",
+    });
+    expect(projection.messages[1].tool_calls.map((item) => item.id)).toEqual(["call-1", "call-2"]);
+    expect(projection.messages[1].attachments).toEqual([
+      expect.objectContaining({ attachmentId: "result-1" }),
+    ]);
+    expect(selectActivityTimelineLogs(projection.messages[1])).toEqual([
+      expect.objectContaining({ eventId: "activity-1", text: "inspect first" }),
+    ]);
   });
 });

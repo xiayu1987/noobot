@@ -113,6 +113,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       locale: "zh-CN",
       streaming: false,
       turnScopeId: "root-turn-1",
+      messageId: "assistant-message-1",
       presentationMessageId: "assistant-presentation-1",
     },
     agentContext: {
@@ -152,9 +153,8 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       onEvent() {},
     },
   };
-  await beforeDispatch.handler(beforeContext);
-  const agentResult = beforeContext.overrideAgentResult;
-  assert.equal(beforeContext.skipAgentDispatch, true);
+  const dispatchOutcome = await beforeDispatch.handler(beforeContext);
+  const agentResult = dispatchOutcome?.result;
   assert.ok(agentResult);
 
   assert.equal(subSessionCalls.length, 1);
@@ -232,7 +232,17 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(workflowTurnMessage?.type, "workflow");
   assert.equal(workflowTurnMessage?.chatPresentation, true);
   assert.equal(workflowTurnMessage?.presentationMessageId, "assistant-presentation-1");
-  assert.equal(workflowTurnMessage?.attachments, undefined);
+  assert.equal(workflowTurnMessage?.messageId, "assistant-message-1");
+  assert.equal(workflowTurnMessage?.id, "assistant-message-1");
+  assert.equal(agentResult?.assistantMessageId, "assistant-message-1");
+  assert.deepEqual(workflowTurnMessage?.attachments, [
+    {
+      attachmentId: "wf-node-result-1",
+      name: "workflow-node-1-节点A-result.md",
+      mimeType: "text/markdown",
+      path: "/attachments/s1/workflow-node-1-result.md",
+    },
+  ]);
   assert.equal(workflowTurnMessage?.activityTimeline?.length, 1);
   assert.equal(workflowTurnMessage?.activityTimeline?.[0]?.eventId, "workflow_semantic:test");
   assert.equal(workflowTurnMessage?.activityTimeline?.[0]?.event, "workflow_semantic_response");
@@ -241,7 +251,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     String(workflowTurnMessage?.content || ""),
     /\/injected\/attachments\/s1\/workflow-node-1-result\.md/,
   );
-  assert.equal(String(workflowTurnMessage?.content || "").includes("message-node-done"), false);
+  assert.match(String(workflowTurnMessage?.content || ""), /message-node-done/);
   assert.equal(String(workflowTurnMessage?.content || "").includes("answer-node-done"), false);
   assert.equal(workflowTurnMessage?.pluginMeta?.source, "workflow-plugin");
   assert.equal(
@@ -360,8 +370,8 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
     },
   };
 
-  await beforeDispatch.handler(ctx);
-  const agentResult = ctx.overrideAgentResult;
+  const dispatchOutcome = await beforeDispatch.handler(ctx);
+  const agentResult = dispatchOutcome?.result;
   assert.ok(agentResult?.workflow);
   assert.equal(fallbackArtifactCalls.length, 0);
   assert.equal(agentResult.workflow?.transferEnvelopes?.length, 1);
@@ -428,7 +438,7 @@ test("workflow hook routes final attachment summary composition through semantic
                 async transferSemanticContent(payload = {}) {
                   semanticTransferCalls.push(payload);
                   const generationSource = String(payload?.generationSource || "").trim();
-                  const suffix = generationSource === "workflow_planning_final_attachment_summary"
+                  const suffix = generationSource === "workflow_completed_attachment_summary"
                     ? "final"
                     : "node";
                   const envelope = {
@@ -461,16 +471,16 @@ test("workflow hook routes final attachment summary composition through semantic
       },
     },
   };
-  await beforeDispatch.handler(ctx);
+  const dispatchOutcome = await beforeDispatch.handler(ctx);
 
   const hasFinalSummaryCall = semanticTransferCalls.some(
     (item = {}) =>
       String(item?.scenario || "").trim() === "bot_plugin" &&
       String(item?.strategy || "").trim() === "bot_plugin_final_return" &&
-      String(item?.generationSource || "").trim() === "workflow_planning_final_attachment_summary",
+      String(item?.generationSource || "").trim() === "workflow_completed_attachment_summary",
   );
   assert.equal(hasFinalSummaryCall, true);
-  const agentResult = ctx.overrideAgentResult;
+  const agentResult = dispatchOutcome?.result;
   const workflowTurnMessage = workflowTurn(agentResult);
   assert.ok(workflowTurnMessage);
   const transferEnvelopes = Array.isArray(workflowTurnMessage?.transferEnvelopes)

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { ref } from "vue";
-import { applyRunStateMessageRuntimePatch } from "../../../../../../src/modules/chat/runtime/engine/messageRuntimePatch.js";
+import { projectTurnRuntimeToMessages } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { applyTurnRuntimeEvent, createTurnRuntimeRegistryState } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 
@@ -35,9 +35,9 @@ describe("chatEngine message runtime patch isolation", () => {
     });
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, event);
 
-    applyRunStateMessageRuntimePatch({ sessions, turnRuntimeRegistry, event });
+    projectTurnRuntimeToMessages({ sessions, turnRuntimeRegistry, turn: event });
 
-    expect(aMessage.channelState?.state).toBe(BackendChannelState.SENDING);
+    expect(aMessage.channelState).toBeUndefined();
     expect(otherTurn.channelState).toBeUndefined();
     expect(bMessage.channelState).toBeUndefined();
   });
@@ -60,10 +60,10 @@ describe("chatEngine message runtime patch isolation", () => {
       dialogProcessId: "da",
     });
 
-    applyRunStateMessageRuntimePatch({
+    projectTurnRuntimeToMessages({
       sessions,
       turnRuntimeRegistry,
-      event: { sessionId: "b", turnScopeId: "ta", dialogProcessId: "da" },
+      turn: { sessionId: "b", turnScopeId: "ta", dialogProcessId: "da" },
     });
 
     expect(message.channelState).toBeUndefined();

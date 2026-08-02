@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/authoritative-state/contracts";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/event-protocol";
 import {
   normalizeTrimmedStringList,
   resolvePluginOptionsFromConfig,
@@ -93,9 +93,13 @@ export function createDetachedSubSessionRunner({
     mergedRunConfig.rootExecutionId = String(
       strategy?.rootExecutionId || metadata?.rootExecutionId || mergedRunConfig.executionId,
     ).trim();
-    mergedRunConfig.presentationMessageId = String(
-      mergedRunConfig.presentationMessageId || `msg_${randomUUID()}`,
-    ).trim();
+    // A detached Turn owns a distinct canonical message domain.  Neither the
+    // parent context, the node patch nor config preparation may choose this
+    // identity because all three can contain the parent workflow message.
+    const childPresentationMessageId = `msg_${randomUUID()}`;
+    const childMessageId = `msg_event_${childPresentationMessageId}`;
+    mergedRunConfig.presentationMessageId = childPresentationMessageId;
+    mergedRunConfig.messageId = childMessageId;
     delete mergedRunConfig.assistantMessageId;
     if (!String(mergedRunConfig.thinkingStartedAt || "").trim()) {
       mergedRunConfig.thinkingStartedAt = String(now()).trim();
@@ -107,7 +111,26 @@ export function createDetachedSubSessionRunner({
 
     const subSessionUserConfig = await loadSubSessionUserConfig({ workspaceService, configService, userId });
     const effectiveRunConfig = prepareRunConfig({ userId, runConfig: mergedRunConfig, userConfig: subSessionUserConfig });
+    if (!effectiveRunConfig || typeof effectiveRunConfig !== "object" || Array.isArray(effectiveRunConfig)) {
+      throw new Error("detached sub-session prepareRunConfig must return a run config object");
+    }
+    effectiveRunConfig.presentationMessageId = childPresentationMessageId;
+    effectiveRunConfig.messageId = childMessageId;
+    delete effectiveRunConfig.assistantMessageId;
     attachPluginRuntimePatch(effectiveRunConfig, parentSessionId);
+    emitEvent(eventListener, "detached_sub_session_message_identity_bound", {
+      userId,
+      sessionId: subSessionId,
+      parentSessionId,
+      dialogProcessId: subDialogProcessId,
+      turnScopeId,
+      workflowRunId: String(effectiveRunConfig.workflowRunId || "").trim(),
+      nodeExecutionId: String(
+        effectiveRunConfig.workflowNodeExecutionId || effectiveRunConfig.nodeExecutionId || "",
+      ).trim(),
+      messageId: childMessageId,
+      presentationMessageId: childPresentationMessageId,
+    });
 
     const runtimePluginState = buildRuntimePluginState({
       effectiveRunConfig,
@@ -157,10 +180,8 @@ export function createDetachedSubSessionRunner({
       persistenceScope,
       turnScopeId,
       dialogProcessId: subDialogProcessId || subSessionId,
-      messageId: String(
-        effectiveRunConfig.messageId || `msg_event_${effectiveRunConfig.presentationMessageId}`,
-      ).trim(),
-      presentationMessageId: effectiveRunConfig.presentationMessageId,
+      messageId: childMessageId,
+      presentationMessageId: childPresentationMessageId,
       executionId: mergedRunConfig.executionId,
       executionKind: "agent",
       parentExecutionId: mergedRunConfig.parentExecutionId,
@@ -364,6 +385,7 @@ function clearParentTurnTransactionIdentity(runConfig = {}) {
   delete runConfig.idempotencyKey;
   delete runConfig.reuseExistingUserTurn;
   delete runConfig.thinkingStartedAt;
+  delete runConfig.messageId;
   delete runConfig.presentationMessageId;
   delete runConfig.assistantMessageId;
   return runConfig;

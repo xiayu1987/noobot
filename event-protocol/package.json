@@ -1,0 +1,19 @@
+{
+  "name": "@noobot/event-protocol",
+  "version": "4.1.4",
+  "private": true,
+  "type": "module",
+  "description": "Noobot versioned authority event protocol, replay and delivery contracts",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./turn-lifecycle": "./src/turn-lifecycle-protocol.mjs",
+    "./outbox": "./src/authority-event-outbox.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.mjs"
+  },
+  "dependencies": {
+    "@noobot/shared": "file:../shared"
+  }
+}

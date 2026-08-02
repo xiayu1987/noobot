@@ -25,8 +25,6 @@ import {
 } from "./constants.js";
 import { createInitialSessionRunState, isInFlightSessionRunState } from "./core.js";
 import { normalizeState, trim } from "./normalize.js";
-import { TURN_RUNTIME_AUTHORITY } from "./eventNormalization.js";
-
 const MESSAGE_RUNNING_CHANNEL_STATES = Object.freeze([
   BackendChannelState.SENDING,
   BackendChannelState.RECONNECTING,
@@ -363,7 +361,7 @@ export function resolveSessionRunMessageRuntimePatch({
   if (
     stateBelongsToActiveSession && terminalOwnsMessage &&
     normalizeState(stateSnapshot?.state) === FrontendRunState.FRONTEND_COMPLETED &&
-    stateSnapshot?.authority === TURN_RUNTIME_AUTHORITY.AUTHORITATIVE_DETAIL_APPLIED
+    stateSnapshot?.lifecycleObserved === true
   ) {
     return {
       action: SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE,

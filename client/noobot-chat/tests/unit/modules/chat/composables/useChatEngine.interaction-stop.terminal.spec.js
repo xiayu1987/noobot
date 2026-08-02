@@ -55,7 +55,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const first = engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
     await vi.waitFor(() => expect(releaseResponse).toBeTypeOf("function"));
     expect(applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, {
-      protocolVersion: 3,
+      protocolVersion: 4,
       eventType: "turn.snapshot",
       commandId: "snapshot-refresh",
       userId: "u-1",
@@ -64,6 +64,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       activeTurnScopeId: "",
       activeTurn: null,
       recentTerminalTurns: [terminalTurn],
+      replacedTurns: [],
       unchanged: false,
     }).applied).toBe(true);
     turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
@@ -316,9 +317,9 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.statusLabel).toBe("chat.generated");
+    expect(assistant?.statusLabel).not.toBe("chat.generated");
     expect(assistant?.pending).toBe(false);
-    expect(sending.value).toBe(false);
+    expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
     expect(interactionSubmitting.value).toBe(false);
     expect(deps.clearPendingInteraction).toHaveBeenCalled();
@@ -351,15 +352,15 @@ describe("useChatEngine.interaction-stop: terminal", () => {
 
     await engine.send();
 
-    expect(deps.terminalResolutionFetcher).toHaveBeenCalledTimes(1);
-    expect(sending.value).toBe(false);
+    expect(deps.terminalResolutionFetcher).toHaveBeenCalledTimes(0);
+    expect(sending.value).toBe(true);
     const assistant = assistantMessage(activeSession);
     expect(assistant?.pending).toBe(false);
     expect(assistant?.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(assistant?.statusLabelKey || assistant?.statusLabel).not.toBe("chat.generated");
   });
 
-  it("terminal channel_state without DONE converges through authoritative session detail", async () => {
+  it("terminal channel_state without an Authority event does not converge the Turn", async () => {
     const fetchSessionDetail = vi.fn(async () => ({
       sessionId: "local-state-only",
       sessions: [
@@ -397,18 +398,13 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     await expect(engine.send()).resolves.toBe(true);
 
     const assistant = assistantMessage(activeSession);
-    expect(sending.value).toBe(false);
-    expect(assistant?.content).toBe("detail answer");
-    expect(assistant?.pending).toBe(false);
-    expect(fetchSessionDetail).toHaveBeenCalledWith("local-state-only", expect.objectContaining({
-      source: "realtimeDoneFinalStatus",
-      force: true,
-      requireFresh: true,
-    }));
-    expect(applySessionDetail).toHaveBeenCalledTimes(1);
+    expect(sending.value).toBe(true);
+    expect(assistant?.content).not.toBe("detail answer");
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
+    expect(applySessionDetail).not.toHaveBeenCalled();
   });
 
-  it("consumes stream ERROR event and refreshes session detail before cleanup", async () => {
+  it("consumes stream ERROR as data-plane content without resolving the Turn", async () => {
     const errorData = {
       error: "invalid tool input",
       sessionId: "s-error",
@@ -431,19 +427,12 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     await expect(engine.send()).resolves.toBe(false);
 
     const botMessage = assistantMessage(activeSession);
-    expect(botMessage.dialogProcessId).toBe("dp-error");
+    expect(botMessage.dialogProcessId).not.toBe("dp-error");
     expect(botMessage.pending).toBe(false);
     expect(botMessage.error).toBe("invalid tool input");
-    expect(fetchSessionDetail).toHaveBeenCalledWith("s-error", expect.objectContaining({
-      source: "realtimeErrorRecoveryFinalStatus",
-      force: true,
-      requireFresh: true,
-    }));
-    expect(applySessionDetail).toHaveBeenCalledWith({ sessionId: "s-error", messages: [] }, {
-      mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
-      scrollToBottom: false,
-    });
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
+    expect(applySessionDetail).not.toHaveBeenCalled();
     expect(deps.clearPendingInteraction).toHaveBeenCalled();
-    expect(sending.value).toBe(false);
+    expect(sending.value).toBe(true);
   });
 });

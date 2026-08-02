@@ -26,7 +26,9 @@ vi.mock("../../../src/plugins/generated/external-entries.js", () => ({
 
 vi.mock("../../../src/extensions/extension-registry.js", () => ({
   contributeExtension: vi.fn(),
+  listExtensionContributions: vi.fn(() => []),
   removePluginExtensions: vi.fn(),
+  replacePluginExtensions: vi.fn(() => []),
 }));
 
 vi.mock("../../../src/infrastructure/http/authenticatedHttpService.js", () => ({

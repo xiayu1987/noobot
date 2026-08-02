@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { assertTurnReplacementCommit } from "@noobot/shared/turn-replacement-protocol";
-import { normalizeAuthorityEventOutbox } from "../contracts/authority-event-outbox.mjs";
+import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
 
 const clean = (value) => String(value || "").trim();

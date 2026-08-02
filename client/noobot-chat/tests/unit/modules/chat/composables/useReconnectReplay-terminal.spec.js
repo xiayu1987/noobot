@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("EV-06/FN-01: channel_state error only requests authoritative terminal resolution", async () => {
+  it("EV-06/FN-01: channel_state error is transport-only", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-e" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -47,12 +47,12 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).toBeUndefined();
-    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith("s-1", "turn-e", { commandId: "", sequence: 3, source: "reconnect_replay" });
+    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
     expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
   });
 
-  it("EV-04a: DONE without channel_state reconciles final detail and requests authoritative terminal resolution", async () => {
+  it("EV-04a: data-plane DONE does not reconcile or terminate a Turn", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done-only" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -71,16 +71,12 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).toBeUndefined();
-    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith("s-1", "turn-done-only", { commandId: "", sequence: 2, source: "reconnect_replay" });
-    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", expect.objectContaining({
-      source: "reconnectDoneFinalStatus",
-      force: true,
-      requireFresh: true,
-    }));
-    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
+    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
   });
 
-  it("EV-04: channel_state completed remains notification-only", async () => {
+  it("EV-04: channel_state completed remains transport-only", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-done" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -106,10 +102,9 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).toBeUndefined();
-    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledTimes(2);
-    expect(mocks.resolveTurnTerminalState).toHaveBeenLastCalledWith("s-1", "turn-done", { commandId: "", sequence: 3, source: "reconnect_replay" });
-    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledTimes(1);
-    expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
+    expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -156,7 +151,7 @@ describe("useReconnectReplay", () => {
     expect(refs.canStop.value).toBe(false);
   });
 
-  it("EV-05: channel_state stopped only requests authoritative terminal resolution", async () => {
+  it("EV-05: channel_state stopped does not terminate or clean up a Turn", async () => {
     const { api, refs, mocks } = createFixture({ currentRun: { turnScopeId: "turn-stopped" } });
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
@@ -182,8 +177,7 @@ describe("useReconnectReplay", () => {
     );
     expect(assistant?.pending).toBe(true);
     expect(assistant?.statusLabel).toBeUndefined();
-    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledTimes(1);
-    expect(mocks.resolveTurnTerminalState).toHaveBeenLastCalledWith("s-1", "turn-stopped", { commandId: "", sequence: 3, source: "reconnect_replay" });
+    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
     expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
     expect(mocks.chatList.applySessionDetail).not.toHaveBeenCalled();

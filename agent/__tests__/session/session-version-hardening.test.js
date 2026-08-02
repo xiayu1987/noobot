@@ -201,7 +201,7 @@ test("continue identity round-trips only when it matches the authoritative conti
   );
 });
 
-test("internal append, status and summarization use mutation lock without changing public version", async () => {
+test("internal append and summarization use mutation lock without changing public version", async () => {
   const h = harness({
     version: 7,
     revision: 7,
@@ -211,12 +211,11 @@ test("internal append, status and summarization use mutation lock without changi
     ],
   });
   await h.service.appendTurn({ userId: "u1", sessionId: "s1", role: "assistant", content: "a", turnScopeId: "t", dialogProcessId: "dp" });
-  await h.service.upsertTurnStatus({ userId: "u1", sessionId: "s1", turnScopeId: "t", dialogProcessId: "dp", command: "completed" });
   await h.service.markSessionMessagesSummarized({ userId: "u1", sessionId: "s1", dialogProcessId: "dp" });
   assert.equal(h.get().version, 7); assert.equal(h.get().revision, 7);
   assert.equal(h.get().messages.filter((m) => m.dialogProcessId === "dp").every((m) => m.summarized), true);
   assert.equal(h.get().messages.find((m) => m.dialogProcessId === "dp-old").summarized, undefined);
-  assert.equal(h.locks(), 3);
+  assert.equal(h.locks(), 2);
 });
 
 test("summarization without a dialog scope fails closed", async () => {

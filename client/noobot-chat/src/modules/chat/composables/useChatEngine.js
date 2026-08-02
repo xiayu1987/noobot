@@ -47,6 +47,7 @@ export function useChatEngine({
   sessions,
   turnRuntimeRegistry,
   applyTurnRuntimeEvent,
+  applyTurnLifecycleEnvelope,
   commitTurnTerminalResolution,
   input,
   uploadFiles,
@@ -326,6 +327,7 @@ export function useChatEngine({
     selectedPlugins,
     turnRuntimeRegistry,
     applyRunStateEvent,
+    applyTurnLifecycleEnvelope,
     serializeAttachments,
     streamOutput,
     translate,
@@ -389,6 +391,7 @@ export function useChatEngine({
     deleteMonotonicMessage,
     resendMonotonicMessage,
     dispatchAuthoritativeRunStateEvent: applyRunStateEvent,
+    applyTurnLifecycleEnvelope,
     resolveTurnTerminalState: terminalResolutionCoordinator.resolve,
   };
 }

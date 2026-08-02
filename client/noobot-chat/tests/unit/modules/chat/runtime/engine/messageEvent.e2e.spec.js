@@ -24,7 +24,13 @@ function applyMessageEvent(store, eventName, data) {
 function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent({
     event: "workflow_session_snapshot_loaded",
-    data: { snapshotVersion: 1, ...sessionDoc },
+    data: {
+      snapshotVersion: 1,
+      parentSessionId: "parent-session",
+      workflowRunId: "workflow-run-1",
+      nodeExecutionId: "node-execution-1",
+      ...sessionDoc,
+    },
   }, { source: "test_snapshot" });
 }
 
@@ -67,6 +73,9 @@ describe("authoritative message event end-to-end fidelity", () => {
     bindAssistantMessageEventStream(runtime, {
       messageId,
       presentationMessageId,
+      parentSessionId: "parent-session",
+      workflowRunId: "workflow-run-1",
+      nodeExecutionId: "node-execution-1",
     });
     const modelMessageId = beginAssistantMessageEventStream(runtime, { turn: 1 });
     expect(modelMessageId).not.toBe(messageId);
@@ -75,6 +84,8 @@ describe("authoritative message event end-to-end fidelity", () => {
       parentSessionId: "parent-session",
       dialogProcessId: "child-dialog",
       turnScopeId: "child-turn",
+      workflowRunId: "workflow-run-1",
+      nodeExecutionId: "node-execution-1",
       text: "```mermaid\ngraph TD; A-->B\n```",
       output: "```mermaid\ngraph TD; A-->B\n```",
       thinking: "```mermaid\ngraph TD; A-->B\n```",
@@ -84,6 +95,8 @@ describe("authoritative message event end-to-end fidelity", () => {
       parentSessionId: "parent-session",
       dialogProcessId: "child-dialog",
       turnScopeId: "child-turn",
+      workflowRunId: "workflow-run-1",
+      nodeExecutionId: "node-execution-1",
       toolCallId: "call-1",
       toolResult: { tool_call_id: "call-1", output: "ok" },
     }));

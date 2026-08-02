@@ -226,8 +226,10 @@ export function createStateCommitter({
       const resolvedCallName = resolveCallName(call);
       const rawTransferPayload = parseTransferPayloadFromToolResultText(toolResultText);
       const compactedToolResultText = compactToolResultTextForModel(toolResultText);
+      const messageUid = createSessionMessageUid();
       const toolResultPayload = {
-        messageUid: createSessionMessageUid(),
+        messageUid,
+        messageId: messageUid,
         role: "tool",
         content: compactedToolResultText,
         type: "tool_result",

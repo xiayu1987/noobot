@@ -12,7 +12,7 @@ import {
   TURN_EVENT,
   TURN_PHASE,
   TURN_STATE,
-} from "@noobot/authoritative-state/contracts";
+} from "@noobot/event-protocol";
 
 setupWebSocketTestHooks();
 

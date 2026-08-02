@@ -545,12 +545,6 @@ function toggleAssistantContent() {
   animation: message-runtime-panels-glow 2.4s ease-in-out infinite;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .message-runtime-panels.is-running {
-    animation: none;
-  }
-}
-
 @keyframes message-runtime-panels-glow {
   0%, 100% {
     box-shadow: 0 3px 12px color-mix(in srgb, var(--el-color-primary) 14%, transparent), 0 0 6px color-mix(in srgb, var(--el-color-primary) 10%, transparent);

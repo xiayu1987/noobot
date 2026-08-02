@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
 import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
-import { normalizeAuthorityEventOutbox } from "@noobot/authoritative-state/contracts";
+import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {

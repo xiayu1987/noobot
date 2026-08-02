@@ -5,7 +5,8 @@
  */
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
 import { normalizeSessionRunEvent } from "./eventNormalization.js";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/authoritative-state/contracts";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol";
+import { projectAuthoritativeTurnState } from "./authoritativeTurnProjection.js";
 
 export const TURN_TRANSITION_REASON = Object.freeze({
   APPLIED: "applied",
@@ -50,21 +51,17 @@ function text(value) {
 
 export function isFinalTurnState(state = "", turn = {}) {
   const normalized = text(state || turn?.state);
-  if ((normalized === FrontendRunState.COMPLETION_ERROR || normalized === FrontendRunState.STOP_ERROR) &&
-      turn?.finalizeIntent?.retryable === true) {
-    return false;
-  }
   return FINAL_STATES.has(normalized);
 }
 
-export function deriveTurnCapabilities(state = "", { canStop = false, finalizeIntent = null } = {}) {
+export function deriveTurnCapabilities(state = "", { canStop = false } = {}) {
   const normalized = text(state);
-  const actionLocked = Boolean(normalized) && !isFinalTurnState(normalized, { finalizeIntent });
+  const actionLocked = Boolean(normalized) && !isFinalTurnState(normalized);
   return {
     actionLocked,
     sending: actionLocked,
     canStop: normalized === FrontendRunState.PROCESSING && canStop === true,
-    terminal: isFinalTurnState(normalized, { finalizeIntent }),
+    terminal: isFinalTurnState(normalized),
   };
 }
 
@@ -83,18 +80,7 @@ function targetState(current = {}, event = {}) {
   }
 
   if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
-    const lifecycleType = text(event.eventType);
-    if (lifecycleType === TURN_EVENT.ACTION_ACCEPTED || lifecycleType === TURN_EVENT.STOP_ACCEPTED) {
-      return FrontendRunState.ACTION_REQUESTING;
-    }
-    if (lifecycleType === TURN_EVENT.PROCESSING_STARTED) return FrontendRunState.PROCESSING;
-    if (lifecycleType === TURN_EVENT.PROCESSING_COMPLETED) return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
-    if (lifecycleType === TURN_EVENT.STOP_PROCESSING_COMPLETED) return FrontendRunState.USER_STOPPING;
-    if (lifecycleType === TURN_EVENT.COMPLETED) return FrontendRunState.FRONTEND_COMPLETION_REQUESTING;
-    if (lifecycleType === TURN_EVENT.STOP_COMPLETED) return FrontendRunState.USER_STOPPING;
-    if (lifecycleType === TURN_EVENT.FAILED) {
-      return currentState || FrontendRunState.ACTION_REQUESTING;
-    }
+    return projectAuthoritativeTurnState(event.state);
   }
 
   return currentState;
@@ -169,43 +155,34 @@ function reduceInteractionProjection(current = {}, event = {}) {
       lastTransportError: transportFailed ? transportState : text(current.lastTransportError),
       action: isStopStart ? "stop" : text(current.action || event.action || "send"),
       commandId: text(event.commandId || current.commandId),
-      actionCommandId: isActionStart || isStopStart
-        ? text(event.commandId || current.actionCommandId)
-        : text(current.actionCommandId),
     },
   };
 }
 
 function isAllowed(current = {}, event = {}, nextState = "") {
   if (event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED) return FINAL_STATES.has(nextState);
+  // Authority has already validated the lifecycle transition before committing
+  // the Envelope. The Client projects that complete fact; it must not require
+  // locally observed predecessor events and become a second lifecycle authority.
+  if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) return Boolean(nextState);
   if (event.type === SESSION_RUN_EVENT.LOCAL_RESET) {
     return text(current.action) === "stop" &&
       text(current.state) === FrontendRunState.ACTION_REQUESTING &&
       nextState === FrontendRunState.IDLE;
   }
-  if (FINAL_STATES.has(nextState)) return false;
   const currentState = text(current.state);
   if (!currentState) {
-    if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
-        [TURN_EVENT.COMPLETED, TURN_EVENT.STOP_COMPLETED, TURN_EVENT.FAILED].includes(text(event.eventType))) {
-      return false;
-    }
     return nextState === FrontendRunState.ACTION_REQUESTING || event.authoritativeSnapshot === true;
   }
   if (isFinalTurnState(currentState, current)) return false;
   if (ACTION_START_EVENTS.has(event.type)) return false;
   if (nextState === currentState) return true;
-  if (event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
-    const lifecycleType = text(event.eventType);
-    if (lifecycleType === TURN_EVENT.COMPLETED) {
-      return currentState === FrontendRunState.FRONTEND_COMPLETION_REQUESTING ||
-        (currentState === FrontendRunState.COMPLETION_ERROR && current.finalizeIntent?.retryable === true);
-    }
-    if (lifecycleType === TURN_EVENT.STOP_COMPLETED) {
-      return currentState === FrontendRunState.USER_STOPPING ||
-        (currentState === FrontendRunState.STOP_ERROR && current.finalizeIntent?.retryable === true);
-    }
-  }
+  // A matching authoritative success is the sole lifecycle path allowed to
+  // enter a terminal state. Do this check before the generic terminal guard;
+  // otherwise turn.completed/turn.stop_completed would be rejected merely
+  // because their target is final, while all unrelated transitions remain
+  // locked below.
+  if (FINAL_STATES.has(nextState)) return false;
   if (nextState === FrontendRunState.ACTION_REQUESTING) {
     return currentState === FrontendRunState.PROCESSING && (
       STOP_REQUEST_EVENTS.has(event.type) ||
@@ -226,6 +203,11 @@ function isAllowed(current = {}, event = {}, nextState = "") {
       ].includes(text(event.backendState || event.raw?.state)));
   }
   if (nextState === FrontendRunState.USER_STOP_COMPLETED) {
+    // Transport USER_STOPPED is only an observation. The terminal stop state
+    // must be committed by an authoritative lifecycle/terminal event.
+    if (![SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, SESSION_RUN_EVENT.TERMINAL_RESOLVED].includes(event.type)) {
+      return false;
+    }
     return currentState === FrontendRunState.USER_STOPPING ||
       (currentState === FrontendRunState.ACTION_REQUESTING && text(current.action) === "stop") ||
       currentState === FrontendRunState.PROCESSING;
@@ -256,7 +238,10 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
       event.type !== SESSION_RUN_EVENT.TERMINAL_RESOLVED) {
     return { applied: false, reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED, current, event };
   }
-  const currentComparableSeq = event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
+  const currentComparableSeq = [
+    SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+    SESSION_RUN_EVENT.TERMINAL_RESOLVED,
+  ].includes(event.type)
     ? Number(current?.lifecycleSeq || 0)
     : Number(current?.seq || 0);
   if (current && eventSeq > 0 && currentComparableSeq > eventSeq) {
@@ -284,18 +269,9 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   const lifecycleEventType = event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE
     ? String(event.eventType || "").trim()
     : String(current?.lifecycleEventType || "").trim();
-  const beginsAction = ACTION_START_EVENTS.has(event.type) || STOP_REQUEST_EVENTS.has(event.type) || (
-    event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
-    [TURN_EVENT.ACTION_ACCEPTED, TURN_EVENT.STOP_ACCEPTED].includes(event.eventType)
-  );
   const commandId = event.type === SESSION_RUN_EVENT.LOCAL_RESET
     ? ""
     : String(event.commandId || current?.commandId || "").trim();
-  const actionCommandId = event.type === SESSION_RUN_EVENT.LOCAL_RESET
-    ? ""
-    : beginsAction && event.commandId
-      ? String(event.commandId).trim()
-      : String(current?.actionCommandId || "").trim();
   const candidate = {
     ...(current || {}),
     action,
@@ -307,7 +283,6 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
   const backendState = text(event.backendState || current?.backendState);
   const capabilities = deriveTurnCapabilities(state, {
     canStop: event.raw?.capabilities?.canStop === true,
-    finalizeIntent: candidate.finalizeIntent,
   });
   const terminal = state === FrontendRunState.FRONTEND_COMPLETED
     ? "completed"
@@ -332,7 +307,6 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
       state,
       action,
       commandId,
-      actionCommandId,
       lifecycleEventType,
       terminal,
       canStop: capabilities.canStop,
@@ -358,7 +332,7 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
         ? event.materialization
         : current?.terminalMaterialization || null,
       finalizeIntent: candidate.finalizeIntent,
-      failure: event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
+      failure: [SESSION_RUN_EVENT.TERMINAL_RESOLVED, SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE].includes(event.type)
         ? event.failure
         : current?.failure || null,
     },

@@ -50,6 +50,9 @@ export function summarizeWorkflowMessage(message = {}, index = -1) {
         "",
     ),
     contentLength: String(message?.content || "").length,
+    presentationMessageId: String(
+      message?.presentationMessageId || message?.messageId || message?.id || "",
+    ),
     tagKeys: Array.isArray(message?.tags)
       ? message.tags.map((item) => String(item || ""))
       : Object.keys(message?.tags || {}),

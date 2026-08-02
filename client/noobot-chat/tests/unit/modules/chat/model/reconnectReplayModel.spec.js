@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
+import { createReplayBatch, createTurnLifecycleSnapshot } from "@noobot/event-protocol";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   findLatestPendingAssistantAfterLastUser,
@@ -18,43 +19,54 @@ import {
 
 describe("reconnectReplayModel", () => {
   it("isDialogProcessRecoverable respects running/pending interaction only", () => {
+    const activeTurn = {
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+      messageId: "message-1",
+      presentationMessageId: "presentation-1",
+      revision: 1,
+      sequence: 1,
+      state: "processing",
+    };
+    const snapshot = createTurnLifecycleSnapshot({
+      commandId: "command-1",
+      sessionId: "s-1",
+      sequence: 1,
+      activeTurnScopeId: "turn-1",
+      activeTurn,
+    });
+    const runningBatch = createReplayBatch({ sessionId: "s-1", snapshot, snapshotSequence: 1 });
     expect(
       isDialogProcessRecoverable(
-        {
-          sessionId: "s-1",
-          hasRunningTask: true,
-          currentRun: { sessionId: "s-1", turnScopeId: "turn-1", state: "sending" },
-        },
+        { sessionId: "s-1", replayBatch: runningBatch },
         [{ event: StreamEventEnum.DELTA, data: { text: "x" } }],
       ),
     ).toBe(true);
 
     expect(
       isDialogProcessRecoverable(
-        {
+        { sessionId: "s-1", replayBatch: createReplayBatch({
           sessionId: "s-1",
-          hasRunningTask: true,
-          currentRun: {
-            sessionId: "s-1",
-            dialogProcessId: "dp-stopped",
-            turnScopeId: "turn-stopped",
-            state: "user_stopped",
-          },
-        },
+          snapshot: createTurnLifecycleSnapshot({
+            commandId: "command-stopped", sessionId: "s-1", sequence: 1,
+            activeTurnScopeId: "turn-stopped",
+            activeTurn: { sessionId: "s-1", turnScopeId: "turn-stopped", messageId: "m-stopped", presentationMessageId: "p-stopped", revision: 1, sequence: 1, state: "stop_completed" },
+          }), snapshotSequence: 1,
+        }) },
         [{ event: StreamEventEnum.DELTA, data: { text: "history" } }],
       ),
     ).toBe(false);
 
     expect(
       isDialogProcessRecoverable(
-        { sessionId: "s-1", hasRunningTask: true },
+        { sessionId: "s-1", replayBatch: createReplayBatch({ sessionId: "s-1", snapshot: null, snapshotSequence: 0 }) },
         [{ event: StreamEventEnum.DELTA, data: { text: "x" } }],
       ),
     ).toBe(false);
 
     expect(
       isDialogProcessRecoverable(
-        { hasRunningTask: false },
+        { sessionId: "s-1", replayBatch: createReplayBatch({ sessionId: "s-1", snapshot: null, snapshotSequence: 0 }) },
         [
           { event: "message", data: {} },
           { event: StreamEventEnum.DELTA, data: { text: "history" } },
@@ -64,7 +76,10 @@ describe("reconnectReplayModel", () => {
 
     expect(
       isDialogProcessRecoverable(
-        { hasRunningTask: false },
+        { sessionId: "s-1", replayBatch: createReplayBatch({
+          sessionId: "s-1", snapshot: null, snapshotSequence: 0,
+          pendingInteractions: [{ requestId: "request-1", sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1", payload: { type: "confirm" } }],
+        }) },
         [
           {
             event: StreamEventEnum.INTERACTION_REQUEST,

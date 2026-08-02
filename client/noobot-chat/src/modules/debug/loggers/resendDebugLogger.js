@@ -22,6 +22,8 @@ export function summarizeDebugMessage(message = {}) {
   const channelState = getMessageRuntimeChannelState(message);
   return {
     id: message.id || message.messageId || "",
+    sourceMessageId: message.sourceMessageId || "",
+    presentationMessageId: message.presentationMessageId || "",
     role: message.role || message.messageRole || message.type || "",
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",
     dialogProcessId: message.dialogProcessId || message.dialog_process_id || message.owner?.dialogProcessId || "",

@@ -6,13 +6,9 @@
 import { buildChatPayload } from "./payload.js";
 import {
   applySendErrorState,
-  applyBackendStoppedState,
-  applyStreamCompletedFallback,
   finalizeSendCleanup,
 } from "./sendFinalize.js";
 import { prepareChatSend } from "./sendPrepare.js";
-import { finalizeDoneTurnPresentation, finalizeStoppedSessionDetail } from "./sessionFinalize.js";
-import { createDoneTurnFinalizer } from "./sendDoneFinalizer.js";
 import { createSendStreamEventHandler } from "./sendStreamEventRouter.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
@@ -84,6 +80,7 @@ export function createChatEngineSender({
   selectedPlugins,
   turnRuntimeRegistry,
   applyRunStateEvent,
+  applyTurnLifecycleEnvelope,
   serializeAttachments,
   streamOutput,
   translate,
@@ -201,8 +198,6 @@ export function createChatEngineSender({
     }));
 
     let lastStreamErrorEventData = null;
-    let finalDoneEventData = null;
-    let finalUserStopEventData = null;
     try {
       if (!explicitAttachmentFiles) clearUploads();
       const attachments = explicitTransportAttachments || await serializeAttachments(filesToSend);
@@ -262,47 +257,51 @@ export function createChatEngineSender({
         payloadThinkingStartedAt: payload?.config?.thinkingStartedAt || "",
       }));
       let locatedSendingStartedMessage = false;
+      // Authority terminal notifications are deliberately asynchronous: the
+      // coordinator resolves the authoritative materialization before the
+      // Registry can project the final message runtime. Keep that promise in
+      // the send transaction so send() cannot finish with a stale assistant.
+      const pendingAuthorityResolutions = [];
+      const applyTrackedRunStateEvent = (event) => {
+        const result = applyRunStateEvent?.(event);
+        if (result && typeof result.then === "function") {
+          const pending = Promise.resolve(result);
+          pendingAuthorityResolutions.push(pending);
+          void pending.finally(() => {
+            const index = pendingAuthorityResolutions.indexOf(pending);
+            if (index >= 0) pendingAuthorityResolutions.splice(index, 1);
+          });
+        }
+        return result;
+      };
       const locateSendingStartedMessageOnce = () => {
         if (locatedSendingStartedMessage) return;
         locatedSendingStartedMessage = true;
         locateSendingStartedMessage?.();
       };
-      const doneTurnFinalizer = createDoneTurnFinalizer({
-        activeSession,
-        activeSessionId,
-        botMessage: botMsg,
-        getFinalDoneEventData: () => finalDoneEventData,
-        fetchSessionDetail,
-        applySessionDetail,
-        applyAssistantFailureState,
-        applyRunStateEvent,
-        refreshSessionConnectorsAsync,
-        logSessionEvent,
-        locateDoneMessage,
-        finalizePendingResendOperation,
-      });
-      const startFinalDoneSessionDetailOnce = doneTurnFinalizer.start;
-
       const streamState = {
-        get finalDoneEventData() { return finalDoneEventData; },
-        set finalDoneEventData(value) { finalDoneEventData = value; },
-        get finalUserStopEventData() { return finalUserStopEventData; },
-        set finalUserStopEventData(value) { finalUserStopEventData = value; },
         get lastStreamErrorEventData() { return lastStreamErrorEventData; },
         set lastStreamErrorEventData(value) { lastStreamErrorEventData = value; },
       };
       const handleStreamEvent = createSendStreamEventHandler({
         activeSession, activeSessionId, applyConversationState, applyConversationStateFromEvent,
-        applyRunStateEvent, applyWorkflowRuntimeEvent, botMessage: botMsg, classifyRealtimeLog,
-        clearMissingInteractionPayloadTimer, clearPendingInteraction, connectorTypeSet, doneTurnFinalizer,
+        applyRunStateEvent: applyTrackedRunStateEvent, applyTurnLifecycleEnvelope,
+        applyWorkflowRuntimeEvent, botMessage: botMsg, classifyRealtimeLog,
+        clearMissingInteractionPayloadTimer, clearPendingInteraction, connectorTypeSet,
         findCanonicalMessageById, foldMessagesForView, locateDoneMessage, locateSendingStartedMessageOnce, logSessionEvent,
         makeViewMessage, mergeAssistantAttachments, navigateOnFirstResponseOnce, refreshSessionConnectorsAsync,
-        requestedTextStreaming, sessionId, setPendingInteractionRequest, startFinalDoneSessionDetailOnce,
+        requestedTextStreaming, sessionId, setPendingInteractionRequest,
         streamState, tryAutoResolveInteraction, turnScopeId, upsertConnectedConnectorInPanelState,
       });
       const streamOnce = (streamPayload) => chatWebSocketClient.stream(streamPayload, handleStreamEvent);
       try {
         await streamOnce(payload);
+        // The stream transport may resolve before the terminal lookup does.
+        // Await a stable snapshot of the promises observed during the stream;
+        // a resolution may schedule a newer one, so drain until quiescent.
+        while (pendingAuthorityResolutions.length > 0) {
+          await Promise.all([...pendingAuthorityResolutions]);
+        }
       } catch (streamError) {
         const errorData = streamError?.data || lastStreamErrorEventData || {};
         const versionConflict = normalizeTrimmedString(errorData?.errorCode) === "SESSION_VERSION_CONFLICT";
@@ -319,111 +318,23 @@ export function createChatEngineSender({
         throw streamError;
       }
       logStateMachineDebug("stateMachine.stream.resolved", () => ({
-        hasFinalDoneEventData: Boolean(finalDoneEventData),
-        hasFinalDoneDetailPromise: Boolean(doneTurnFinalizer.promise),
-        sessionId: finalDoneEventData?.sessionId || "",
-        dialogProcessId: finalDoneEventData?.dialogProcessId || "",
-        turnScopeId: finalDoneEventData?.turnScopeId || turnScopeId,
+        sessionId,
+        turnScopeId,
         botMessage: summarizeStateMachineMessage(botMsg),
       }));
       logSessionEvent({
         category: "message",
         event: "send.resolved",
-        sessionId: finalDoneEventData?.sessionId || sessionId,
-        dialogProcessId: finalDoneEventData?.dialogProcessId || "",
-        turnScopeId: finalDoneEventData?.turnScopeId || turnScopeId,
-        data: {
-          hasFinalDoneEventData: Boolean(finalDoneEventData),
-          hasFinalDoneDetailPromise: Boolean(doneTurnFinalizer.promise),
-        },
-      });
-
-      if (finalDoneEventData) {
-        await startFinalDoneSessionDetailOnce("stream_resolved");
-      }
-
-      applyStreamCompletedFallback({
-        finalDoneEventData: finalDoneEventData && !doneTurnFinalizer.promise ? finalDoneEventData : null,
-        activeSession,
-        botMessage: botMsg,
-        applyConversationState,
-      });
-
-      const userStoppedByFinalEvent = Boolean(finalUserStopEventData);
-      const userStoppedByUserStopRequest = !finalDoneEventData && applyBackendStoppedState({
-        activeSession,
-        turnRuntimeRegistry,
-        botMessage: botMsg,
-        applyConversationState,
-        backendStopEventData: finalUserStopEventData,
-      });
-      logResendDebug("send.stopCheck", () => ({
+        sessionId,
         turnScopeId,
-        userStoppedByFinalEvent,
-        userStoppedByUserStopRequest,
-        finalUserStopEventData,
-        hasFinalDoneEventData: Boolean(finalDoneEventData),
-        messages: summarizeDebugMessages(activeSession?.value?.messages),
-      }));
-      if (userStoppedByFinalEvent || userStoppedByUserStopRequest) {
-        if (userStoppedByFinalEvent && !userStoppedByUserStopRequest) {
-          applyBackendStoppedState({
-            activeSession,
-            turnRuntimeRegistry,
-            botMessage: botMsg,
-            applyConversationState,
-            backendStopEventData: finalUserStopEventData,
-          });
-        }
-        const stoppedSessionId = normalizeTrimmedString(
-          finalUserStopEventData?.sessionId ||
-          activeSession?.value?.backendSessionId ||
-          activeSession?.value?.id,
-        );
-        await finalizeStoppedSessionDetail({
-          activeSession,
-          activeSessionId,
-          botMessage: botMsg,
-          finalEventData: {
-            ...finalUserStopEventData,
-            sessionId: stoppedSessionId,
-            turnScopeId: finalUserStopEventData?.turnScopeId || turnScopeId,
-          },
-          fetchSessionDetail,
-          applySessionDetail,
-          applyRunStateEvent,
-        });
-        locateDoneMessage?.();
-        finalizePendingResendOperation?.({ finalOnly: true });
-        logResendDebug("send.stopReturn", () => ({
-          turnScopeId,
-          ...runtimeView(),
-          messages: summarizeDebugMessages(activeSession?.value?.messages),
-        }));
-        return true;
-      }
+      });
+
       logResendDebug("send.doneReturn", () => ({
         turnScopeId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       }));
       return true;
     } catch (error) {
-      if (
-        applyBackendStoppedState({
-          activeSession,
-          turnRuntimeRegistry,
-          botMessage: botMsg,
-          applyConversationState,
-        })
-      ) {
-        logResendDebug("send.catch.stopRequested", () => ({
-          turnScopeId,
-          messages: summarizeDebugMessages(activeSession?.value?.messages),
-        }));
-        locateDoneMessage?.();
-        finalizePendingResendOperation?.({ finalOnly: true });
-        return false;
-      }
       applySendErrorState({
         error,
         errorEventData: lastStreamErrorEventData || error?.data || null,
@@ -450,19 +361,6 @@ export function createChatEngineSender({
           error: String(error?.message || error || ""),
           hasStreamErrorEventData: Boolean(lastStreamErrorEventData),
         },
-      });
-      await finalizeDoneTurnPresentation({
-        activeSession,
-        activeSessionId,
-        botMessage: botMsg,
-        finalDoneEventData: lastStreamErrorEventData || error?.data || null,
-        fetchSessionDetail,
-        applySessionDetail,
-        applyAssistantFailureState,
-        applyRunStateEvent,
-        refreshSessionConnectorsAsync,
-        completionSource: "realtimeErrorRecovery",
-        logSessionEvent,
       });
       return false;
     } finally {

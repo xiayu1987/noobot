@@ -6,11 +6,11 @@
 import {
   createTurnLifecycleEnvelope,
   deriveAuthoritativeTurnCapabilities,
-} from "../contracts/turn-lifecycle-protocol.mjs";
+} from "@noobot/event-protocol/turn-lifecycle";
 import {
   findAuthorityEventEnvelope,
   normalizeAuthorityEventOutbox,
-} from "../contracts/authority-event-outbox.mjs";
+} from "@noobot/event-protocol/outbox";
 import {
   isTerminalTurnLifecycleState,
   transitionTurnLifecycle,

@@ -87,7 +87,7 @@ export class ChannelManager {
       sessionId,
       ...(parentSessionId ? { parentSessionId } : {}),
       dialogProcessId: event.dialogProcessId || event.data?.dialogProcessId || channel.startPayload?.dialogProcessId || "",
-      turnScopeId: event.turnScopeId || event.data?.turnScopeId || channel.startPayload?.turnScopeId || "",
+      turnScopeId: event.turnScopeId || event.data?.turnScopeId || "",
     };
     if (!parentSessionId) delete logEvent.parentSessionId;
     if (logEvent.data && !resolveOptionalSessionId(logEvent.data.parentSessionId)) {

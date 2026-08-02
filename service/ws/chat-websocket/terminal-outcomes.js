@@ -8,7 +8,7 @@ import {
   buildAbortErrorMessage,
   buildStoppedPartialAssistant,
 } from "./stop-lifecycle.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/authoritative-state/contracts";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/event-protocol";
 
 export function snapshotRunState({
   runMeta = null,
@@ -22,22 +22,26 @@ export function snapshotRunState({
 
 export function createTurnFinalizer({
   sendEvent,
-  persistTurnStatus,
   rejectUnpersistedTurnStatus,
-  resolveBot,
   translateText,
   sessionLogConfig,
   webSocket,
   commitTurnLifecycle,
 } = {}) {
   const finalizeTimeout = async (state, { description = "", errorObject = null } = {}) => {
-    const turnStatus = await persistTurnStatus({
-      runMeta: state.runMeta,
-      command: "timeout",
-      description,
-      error: errorObject,
+    const failed = await commitTurnLifecycle({
+      userId: state.runMeta?.userId || "",
+      sessionId: state.runMeta?.sessionId || "",
+      parentSessionId: state.runMeta?.parentSessionId || "",
+      turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
+      dialogProcessId: state.runMeta?.dialogProcessId || "",
+      commandId: `${String(state.runMeta?.turnScopeId || state.turnScopeId || "turn").trim()}:failed:timeout`,
+      eventType: TURN_EVENT.FAILED,
+      phase: TURN_PHASE.PROCESSING,
+      failure: { phase: TURN_PHASE.PROCESSING, code: "run_timeout", message: description, retryable: false },
+      terminalStatus: { command: "timeout", description, error: errorObject },
     });
-    if (!turnStatus) {
+    if (!failed?.applied && !failed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "timeout" });
       return;
     }
@@ -46,7 +50,7 @@ export function createTurnFinalizer({
       sessionId: state.runMeta?.sessionId || "",
       dialogProcessId: state.runMeta?.dialogProcessId || "",
       turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
-      turnStatus,
+      turnStatus: failed.turnStatus,
     });
     webSocket.close(1011, "timeout");
   };
@@ -60,31 +64,6 @@ export function createTurnFinalizer({
       result,
       fallbackMessage: stoppedMessage,
     });
-    let turnStatus = null;
-    try {
-      turnStatus = await resolveBot()?.persistStoppedAssistantMessage?.({
-        userId: state.runMeta?.userId || "",
-        sessionId: state.runMeta?.sessionId || "",
-        parentSessionId: state.runMeta?.parentSessionId || "",
-        parentDialogProcessId: state.runMeta?.parentDialogProcessId || "",
-        partialAssistant: stoppedPartialAssistant,
-      });
-    } catch (persistError) {
-      void recordServiceWebSocketRuntimeError({
-        sessionLogConfig,
-        event: "service.websocket.persistStoppedAssistantMessage.failed",
-        userId: state.runMeta?.userId || "",
-        sessionId: state.runMeta?.sessionId || "",
-        parentSessionId: state.runMeta?.parentSessionId || "",
-        dialogProcessId: state.runMeta?.dialogProcessId || "",
-        turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
-        error: persistError,
-      });
-    }
-    if (!turnStatus) {
-      rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "user_stopped" });
-      return;
-    }
     const stopCommandId = String(stopPayload?.commandId || `stop:${stoppedPartialAssistant.turnScopeId}`).trim();
     const processed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
@@ -95,6 +74,7 @@ export function createTurnFinalizer({
       commandId: `${stopCommandId}:processing-completed`,
       eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
       phase: TURN_PHASE.STOP,
+      finalizePayload: { assistantMessage: stoppedPartialAssistant },
     });
     if (!processed?.applied && !processed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_processing_completed" });
@@ -111,19 +91,16 @@ export function createTurnFinalizer({
       eventType: TURN_EVENT.STOP_COMPLETED,
       phase: TURN_PHASE.STOP,
       completionCommitId,
-      summaryVersion: Math.max(1, Number(turnStatus?.version || 0)),
+      terminalStatus: {
+        command: "user_stopped",
+        description: stoppedMessage,
+        assistantMessage: stoppedPartialAssistant,
+      },
     });
     if (!completed?.applied && !completed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_completed" });
       return;
     }
-    sendEvent("user_stopped", {
-      message: stoppedMessage,
-      sessionId: stoppedPartialAssistant.sessionId || "",
-      dialogProcessId: stoppedPartialAssistant.dialogProcessId || "",
-      turnScopeId: stoppedPartialAssistant.turnScopeId || state.turnScopeId || "",
-      turnStatus,
-    });
     webSocket.close(1000, "user_stopped");
   };
 
@@ -182,7 +159,7 @@ export function createTurnFinalizer({
     webSocket.close(1000, "done");
   };
 
-  const finalizeAborted = async (state, { error = null } = {}) => {
+  const finalizeAborted = async (state, { error = null, committed = null } = {}) => {
     const errorMessage = buildAbortErrorMessage({
       error,
       abortSignal: state.abortSignal,
@@ -205,13 +182,7 @@ export function createTurnFinalizer({
             : "",
       },
     });
-    const turnStatus = await persistTurnStatus({
-      runMeta: state.runMeta,
-      command: "aborted",
-      description: errorMessage,
-      error,
-    });
-    if (!turnStatus) {
+    if (!committed?.applied && !committed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error" });
       return;
     }
@@ -220,12 +191,12 @@ export function createTurnFinalizer({
       sessionId: state.runMeta?.sessionId || "",
       dialogProcessId: state.runMeta?.dialogProcessId || "",
       turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
-      turnStatus,
+      turnStatus: committed.turnStatus,
     });
     webSocket.close(1011, "aborted");
   };
 
-  const finalizeGenericError = async (state, { error = null } = {}) => {
+  const finalizeGenericError = async (state, { error = null, committed = null } = {}) => {
     void recordServiceWebSocketRuntimeError({
       sessionLogConfig,
       event: "service.websocket.run.failed",
@@ -237,13 +208,7 @@ export function createTurnFinalizer({
       error,
     });
     const errorMessage = error?.message || translateText("ws.unknownError", state.locale);
-    const turnStatus = await persistTurnStatus({
-      runMeta: state.runMeta,
-      command: "error",
-      description: errorMessage,
-      error,
-    });
-    if (!turnStatus) {
+    if (!committed?.applied && !committed?.deduplicated) {
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error" });
       return;
     }
@@ -255,7 +220,7 @@ export function createTurnFinalizer({
       sessionId: state.runMeta?.sessionId || "",
       dialogProcessId: state.runMeta?.dialogProcessId || "",
       turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
-      turnStatus,
+      turnStatus: committed.turnStatus,
     });
     webSocket.close(1011, "error");
   };

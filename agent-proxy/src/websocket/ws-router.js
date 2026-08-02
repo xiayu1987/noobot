@@ -6,7 +6,7 @@
 import { config } from "../shared/config.js";
 import {
   AGENT_PROXY_ERROR,
-  CHANNEL_EVENT,
+  EVENT_TYPE,
   CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   CONVERSATION_STATE,
@@ -22,7 +22,7 @@ import {
 import { writeAgentProxyRouteDebugEvent } from "../runtime-events/route-debug-runtime-events.js";
 import { ensureConnectionId } from "../shared/utils.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
-import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/authoritative-state/contracts";
+import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/event-protocol";
 
 function resolveRawMessageInfo(rawData) {
   const text = String(rawData || "");
@@ -50,14 +50,14 @@ export class WsRouter {
         data: { code: Number(code || 0), reasonLength: String(reason || "").length },
       });
     });
-    socket.on(CHANNEL_EVENT.ERROR, (error) => {
+    socket.on(EVENT_TYPE.ERROR, (error) => {
       void writeAgentProxyWebSocketLifecycleEvent({
         event: "agentProxy.ws.connectionError",
         socket,
         data: { error: error?.message || String(error || "unknown") },
       });
     });
-    socket.on(CHANNEL_EVENT.MESSAGE, (rawData) => {
+    socket.on(EVENT_TYPE.MESSAGE, (rawData) => {
       void writeAgentProxyWebSocketLifecycleEvent({
         event: "agentProxy.ws.messageReceived",
         socket,
@@ -317,7 +317,7 @@ export class WsRouter {
     const commandId = String(payload?.commandId || "").trim();
     if (!targetChannel || !commandId) {
       this.channelManager.sendSocketEvent(socket, {
-        event: CHANNEL_EVENT.ERROR,
+        event: EVENT_TYPE.ERROR,
         data: { error: AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE, commandId },
       });
       return;
@@ -328,7 +328,7 @@ export class WsRouter {
       String(socket?.__agentProxyUserId || "").trim(),
     )) {
       this.channelManager.sendSocketEvent(socket, {
-        event: CHANNEL_EVENT.ERROR,
+        event: EVENT_TYPE.ERROR,
         data: {
           error: AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(commandType),
           commandId,
@@ -341,7 +341,7 @@ export class WsRouter {
     if (this.channelManager.forwardToUpstream(targetChannel, payload)) return;
     targetChannel.pendingExecutionRequests.delete(commandId);
     this.channelManager.sendSocketEvent(socket, {
-      event: CHANNEL_EVENT.ERROR,
+      event: EVENT_TYPE.ERROR,
       data: { error: AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE, commandId },
     });
   }

@@ -41,6 +41,9 @@ function logCardRender(stage) {
     ),
     liveProjection: props.messageItem?.__workflowLiveProjection === true,
     nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
+    presentationMessageId: String(
+      props.messageItem?.presentationMessageId || props.messageItem?.messageId || props.messageItem?.id || "",
+    ),
     registryWorkflowCount: Object.keys(props.workflowNodeStateRegistry?.workflows || {}).length,
   });
 }
@@ -118,6 +121,7 @@ const {
     :semantic-preview="semanticPreview"
     :flow-nodes="flowNodes"
     :semantic-flowtos="semanticFlowtos"
+    :render-markdown="renderMarkdown"
     :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
     @update:selected-dialog-process-id="handleSelectedDialogProcessUpdate"
     @node-click="openWorkflowNodePanel"

@@ -33,18 +33,58 @@ function detailResponse({ sessionId, status, dialogProcessId, turnScopeId }) {
   };
 }
 
-function detailPayload({ sessionId, status, dialogProcessId, turnScopeId }) {
+function detailPayload({ sessionId, status, dialogProcessId, turnScopeId, turnLifecycleSnapshot }) {
   return {
     ok: true,
     exists: true,
     sessionId,
+    ...(turnLifecycleSnapshot ? { turnLifecycleSnapshot } : {}),
     sessions: [{
       sessionId,
       turnStatuses: [{ status, dialogProcessId, turnScopeId }],
+      ...(turnLifecycleSnapshot ? { turnLifecycleSnapshot } : {}),
       messages: [
         { role: RoleEnum.USER, content: "question", turnScopeId },
         { role: RoleEnum.ASSISTANT, content: "answer", dialogProcessId, turnScopeId },
       ],
+    }],
+  };
+}
+
+function terminalLifecycleSnapshot({
+  sessionId,
+  turnScopeId,
+  dialogProcessId,
+  state = "stop_completed",
+  revision = 4,
+  sequence = 4,
+}) {
+  const completionCommitId = `commit:${sessionId}:${turnScopeId}:${revision}`;
+  return {
+    protocolVersion: 4,
+    eventType: "turn.snapshot",
+    commandId: `summary:${sessionId}:${sequence}`,
+    sessionId,
+    sequence,
+    activeTurnScopeId: "",
+    activeTurn: null,
+    unchanged: false,
+    replacedTurns: [],
+    recentTerminalTurns: [{
+      sessionId,
+      turnScopeId,
+      dialogProcessId,
+      messageId: `msg-event-${turnScopeId}`,
+      presentationMessageId: `msg-${turnScopeId}`,
+      state,
+      phase: state === "stop_completed" ? "stop" : "completion",
+      revision,
+      sequence,
+      capabilities: { canStop: false },
+      completionCommitId,
+      summaryVersion: 1,
+      finalizeIntent: state === "stop_completed" ? "stop" : "complete",
+      failure: null,
     }],
   };
 }
@@ -113,9 +153,9 @@ describe("useChatSession summary and reconnect state", () => {
       id: "s-snapshot", backendSessionId: "s-snapshot",
       turnStatuses: [{ status: "processing", turnScopeId: "t-snapshot", dialogProcessId: "dp-snapshot" }],
       turnLifecycleSnapshot: {
-        protocolVersion: 3, eventType: "turn.snapshot", commandId: "summary:s-snapshot:2",
+        protocolVersion: 4, eventType: "turn.snapshot", commandId: "summary:s-snapshot:2",
         userId: "", sessionId: "s-snapshot", sequence: 2, activeTurnScopeId: "",
-        activeTurn: null, unchanged: false, generatedAt: "2026-07-10T00:00:00.000Z",
+        activeTurn: null, unchanged: false, generatedAt: "2026-07-10T00:00:00.000Z", replacedTurns: [],
         recentTerminalTurns: [{
           turnScopeId: "t-snapshot", dialogProcessId: "dp-snapshot", state: "completed",
           messageId: "msg-event-t-snapshot", presentationMessageId: "msg-t-snapshot",
@@ -147,7 +187,7 @@ describe("useChatSession summary and reconnect state", () => {
       id: "local-refresh-shell",
       backendSessionId: "s-late-identity",
       turnLifecycleSnapshot: {
-        protocolVersion: 3,
+        protocolVersion: 4,
         eventType: "turn.snapshot",
         commandId: "summary:s-late-identity:2",
         userId: "",
@@ -156,6 +196,7 @@ describe("useChatSession summary and reconnect state", () => {
         activeTurnScopeId: "",
         activeTurn: null,
         unchanged: false,
+        replacedTurns: [],
         generatedAt: "2026-07-10T00:00:00.000Z",
         recentTerminalTurns: [{
           turnScopeId: "t-late-identity",
@@ -184,9 +225,9 @@ describe("useChatSession summary and reconnect state", () => {
     await vi.waitFor(() => expect(
       store.turnRuntimeRegistry.sessions["s-late-identity"].turns["t-late-identity"].terminal,
     ).toBe("completed"));
-    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
+    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(0);
     store.activeSessionId = "local-refresh-shell";
-    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
+    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(0);
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-late-identity")).toMatchObject({
       sending: false,
       canStop: false,
@@ -201,12 +242,13 @@ describe("useChatSession summary and reconnect state", () => {
       id: sessionId,
       backendSessionId: sessionId,
       turnLifecycleSnapshot: {
-        protocolVersion: 3,
+        protocolVersion: 4,
         eventType: "turn.snapshot",
         commandId: "summary:s-active-refresh:4",
         sessionId,
         sequence: 4,
         activeTurnScopeId: turnScopeId,
+        replacedTurns: [],
         activeTurn: {
           sessionId,
           turnScopeId,
@@ -270,13 +312,14 @@ describe("useChatSession summary and reconnect state", () => {
       caller: "user",
       messages: [],
       turnLifecycleSnapshot: {
-        protocolVersion: 3,
+        protocolVersion: 4,
         eventType: "turn.snapshot",
         commandId: "summary:s-async-refresh:4",
         sessionId: "s-async-refresh",
         sequence: 4,
         activeTurnScopeId: "",
         activeTurn: null,
+        replacedTurns: [],
         recentTerminalTurns: [{
           sessionId: "",
           turnScopeId: "t-async-refresh",
@@ -304,7 +347,7 @@ describe("useChatSession summary and reconnect state", () => {
     await vi.waitFor(() => expect(
       store.turnRuntimeRegistry.sessions["s-async-refresh"]?.turns?.["t-async-refresh"]?.terminal,
     ).toBe("completed"));
-    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
+    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(0);
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-async-refresh")).toMatchObject({
       sending: false,
       canStop: false,
@@ -312,7 +355,7 @@ describe("useChatSession summary and reconnect state", () => {
     });
   });
 
-  it("projects a cached terminal response through the real Session detail callback without a second query", async () => {
+  it("ignores a transport channel_state without an Authority terminal record", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "local-pending",
@@ -378,11 +421,10 @@ describe("useChatSession summary and reconnect state", () => {
     const session = createChatSession({ authFetch });
 
     await session.handleReconnect();
-    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
+    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(0);
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race")).toMatchObject({
       sending: false,
       canStop: false,
-      terminal: "completed",
     });
 
     store.sessions.push(createSessionFixture({
@@ -391,19 +433,16 @@ describe("useChatSession summary and reconnect state", () => {
       loaded: false,
     }));
     await session.selectSession("s-detail-race", { force: true });
-    await vi.waitFor(() => expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race").sending,
-    ).toBe(false));
+    await nextTick();
 
-    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
+    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(0);
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-detail-race", "turn-detail-race")).toMatchObject({
       sending: false,
       canStop: false,
-      terminal: "completed",
     });
   });
 
-  it("reconciles a completion replayed before processing Turn hydration after refresh", async () => {
+  it("does not reconcile completion from a transport channel_state before Turn hydration", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "s-processing-race", backendSessionId: "s-processing-race", loaded: false, messages: [],
@@ -428,21 +467,16 @@ describe("useChatSession summary and reconnect state", () => {
     const session = createChatSession({ authFetch });
 
     await session.handleReconnect();
-    await vi.waitFor(() => expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race", turnScopeId).terminal,
-    ).toBe("completed"));
-    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
+    await nextTick();
+    expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race", turnScopeId).terminal).toBeNull();
+    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(0);
 
     await session.selectSession("s-processing-race", { force: true });
-    await vi.waitFor(() => expect(
-      selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race", turnScopeId).terminal,
-    ).toBe("completed"));
+    await nextTick();
 
-    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(1);
+    expect(authFetch.mock.calls.filter(([url]) => String(url).includes("/terminal"))).toHaveLength(0);
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-processing-race", turnScopeId)).toMatchObject({
-      sending: false,
-      canStop: false,
-      terminal: "completed",
+      terminal: null,
     });
   });
 
@@ -465,7 +499,7 @@ describe("useChatSession summary and reconnect state", () => {
 
     await session.handleReconnect();
 
-    expect(session.conversationStateSnapshot.value["s-state::dialogProcess:same-id"].state).toBe("sending");
+    expect(session.conversationStateSnapshot.value["s-state::dialogProcess:same-id"]).toBeUndefined();
     expect(session.conversationStateSnapshot.value["s-state::turnScope:same-id"]).toBeUndefined();
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-state").sending).toBe(false);
   });
@@ -515,13 +549,24 @@ describe("useChatSession summary and reconnect state", () => {
     });
     lifecycle(store.turnRuntimeRegistry, {
       sessionId: "s-stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop",
-      eventType: "turn.stop_accepted", state: "stopping", phase: "stop",
+      eventType: "turn.stop_accepted", state: "action_requesting", phase: "stop",
       action: "stop", executionState: "accepted", revision: 3, sequence: 3, canStop: false,
       commandId: "stop:turn-stop",
     });
+    // The local stop mutex and the authoritative lifecycle are separate facts.
+    // STOP_ACCEPTED is the authority's action-requesting state; it does not
+    // become STOPPING until STOP_PROCESSING_COMPLETED is committed.
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop").displayState).toBe("requesting");
     const authFetch = routeAwareFetcher({
-      detail: detailPayload({ sessionId: "s-stop", status: "user_stopped", dialogProcessId: "dp-stop", turnScopeId: "turn-stop" }),
+      detail: detailPayload({
+        sessionId: "s-stop",
+        status: "user_stopped",
+        dialogProcessId: "dp-stop",
+        turnScopeId: "turn-stop",
+        turnLifecycleSnapshot: terminalLifecycleSnapshot({
+          sessionId: "s-stop", turnScopeId: "turn-stop", dialogProcessId: "dp-stop",
+        }),
+      }),
       terminal: terminalResolution({
         sessionId: "s-stop", turnScopeId: "turn-stop", state: "stop_completed", revision: 4, sequence: 4,
       }),
@@ -533,9 +578,7 @@ describe("useChatSession summary and reconnect state", () => {
     await vi.waitFor(() => expect(session.composerActionState.value.primaryAction).toBe("continue"));
 
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-stop").sending).toBe(false);
-    expect(store.activeSession.turnStatuses).toEqual([
-      expect.objectContaining({ status: "user_stopped", dialogProcessId: "dp-stop", turnScopeId: "turn-stop" }),
-    ]);
+    expect(store.turnRuntimeRegistry.sessions["s-stop"].turns["turn-stop"].terminal).toBe("user_stopped");
     expect(session.composerActionState.value).toMatchObject({ primaryAction: "continue", userStopped: true });
   });
 
@@ -549,7 +592,16 @@ describe("useChatSession summary and reconnect state", () => {
     })];
     store.activeSessionId = "s-refresh";
     const session = createChatSession({ authFetch: routeAwareFetcher({
-      detail: detailPayload({ sessionId: "s-refresh", status: "user_stopped", dialogProcessId: "dp-refresh", turnScopeId: "turn-refresh" }),
+      detail: detailPayload({
+        sessionId: "s-refresh",
+        status: "user_stopped",
+        dialogProcessId: "dp-refresh",
+        turnScopeId: "turn-refresh",
+        turnLifecycleSnapshot: terminalLifecycleSnapshot({
+          sessionId: "s-refresh", turnScopeId: "turn-refresh", dialogProcessId: "dp-refresh",
+          revision: 2, sequence: 2,
+        }),
+      }),
       terminal: terminalResolution({ sessionId: "s-refresh", turnScopeId: "turn-refresh", state: "stop_completed" }),
     }) });
 

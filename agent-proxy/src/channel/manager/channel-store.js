@@ -5,7 +5,7 @@
  */
 import { config } from "../../shared/config.js";
 import {
-  CHANNEL_EVENT,
+  EVENT_TYPE,
   CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   CLIENT_ROLE,
@@ -21,7 +21,9 @@ import {
   TURN_EVENT,
   TURN_STATE,
   isAuthoritativeTurnLifecycleEnvelope,
-} from "@noobot/authoritative-state/contracts";
+  validateTurnLifecycleEnvelope,
+  validateInteractionRequestPayload,
+} from "@noobot/event-protocol";
 
 const TERMINAL_TURN_EVENTS = new Set([
   TURN_EVENT.COMPLETED,
@@ -39,7 +41,7 @@ const TERMINAL_TURN_STATES = new Set([
 
 function buildTurnLifecycleReplay(window = [], knownSequence = 0) {
   const sequence = Number(knownSequence || 0);
-  if (!window.length) return { events: [], requiresSnapshot: sequence > 0 };
+  if (!window.length) return { events: [], hasReplayGap: sequence > 0 };
   const first = Number(window[0]?.sequence || 0);
   let previous = first - 1;
   const hasGap = window.some((item) => {
@@ -48,10 +50,10 @@ function buildTurnLifecycleReplay(window = [], knownSequence = 0) {
     previous = current;
     return gap;
   });
-  if (hasGap || sequence < first - 1) return { events: [], requiresSnapshot: true };
+  if (hasGap || sequence < first - 1) return { events: [], hasReplayGap: true };
   return {
     events: window.filter((item) => Number(item.sequence) > sequence),
-    requiresSnapshot: false,
+    hasReplayGap: false,
   };
 }
 
@@ -69,22 +71,6 @@ function latestLifecycleEntry(channels = [], sessionId = "") {
       Number(left.envelope?.revision || 0) - Number(right.envelope?.revision || 0),
     )
     .at(-1) || null;
-}
-
-function validateInteractionRequest(data = {}) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    return { valid: false, reason: "payload_not_object", missing: [] };
-  }
-  const required = ["requestId", "sessionId", "dialogProcessId", "turnScopeId"];
-  const missing = required.filter((key) => !String(data[key] || "").trim());
-  const hasPayload =
-    typeof data.content === "string" ||
-    Array.isArray(data.fields) ||
-    Boolean(String(data.interactionType || "").trim()) ||
-    (data.interactionData && typeof data.interactionData === "object" && !Array.isArray(data.interactionData));
-  if (missing.length) return { valid: false, reason: "missing_identity", missing };
-  if (!hasPayload) return { valid: false, reason: "missing_payload", missing: [] };
-  return { valid: true, reason: "", missing: [] };
 }
 
 class ChannelStoreMethods {
@@ -207,9 +193,9 @@ get channelCount() {
 
 pushChannelEvent(channel, eventName = "", data = {}) {
   if (!channel) return null;
-  const normalizedEventName = String(eventName || CHANNEL_EVENT.MESSAGE).trim() || CHANNEL_EVENT.MESSAGE;
-  if (normalizedEventName === CHANNEL_EVENT.INTERACTION_REQUEST) {
-    const validation = validateInteractionRequest(data);
+  const normalizedEventName = String(eventName || EVENT_TYPE.MESSAGE).trim() || EVENT_TYPE.MESSAGE;
+  if (normalizedEventName === EVENT_TYPE.INTERACTION_REQUEST) {
+    const validation = validateInteractionRequestPayload(data);
     const requestId = String(data?.requestId || "").trim();
     if (!validation.valid || channel.pendingInteractionRequests.has(requestId) || this.requestChannelMap.has(requestId)) {
       this.logSessionEvent(channel, {
@@ -228,16 +214,34 @@ pushChannelEvent(channel, eventName = "", data = {}) {
       return null;
     }
   }
+  if (normalizedEventName === EVENT_TYPE.TURN_LIFECYCLE) {
+    const validation = validateTurnLifecycleEnvelope(data);
+    if (!validation.valid) {
+      this.logSessionEvent(channel, {
+        category: "protocol",
+        level: "warn",
+        event: "agentProxy.turnLifecycle.rejected",
+        sessionId: data?.sessionId,
+        dialogProcessId: data?.dialogProcessId,
+        turnScopeId: data?.turnScopeId,
+        data: {
+          eventId: String(data?.eventId || "").trim(),
+          errors: validation.errors,
+        },
+      });
+      return null;
+    }
+  }
   channel.updatedAtMs = nowMs();
   const envelope = channel.eventJournal.append(
     normalizedEventName,
     data,
   );
-  if (envelope.event === CHANNEL_EVENT.TURN_LIFECYCLE) {
+  if (envelope.event === EVENT_TYPE.TURN_LIFECYCLE) {
     this.recordTurnLifecycleEnvelope(channel, envelope.data);
   }
   this.recordSuccessfulDataPlaneOperation("channelEvents");
-  if (String(envelope.event || "") === CHANNEL_EVENT.INTERACTION_REQUEST) {
+  if (String(envelope.event || "") === EVENT_TYPE.INTERACTION_REQUEST) {
     const requestId = String(envelope?.data?.requestId || "").trim();
     this.commandRegistry.registerRoute(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
     channel.pendingInteractionRequests.set(requestId, envelope);
@@ -245,13 +249,13 @@ pushChannelEvent(channel, eventName = "", data = {}) {
       dialogProcessId: envelope.data.dialogProcessId,
       turnScopeId: envelope.data.turnScopeId,
       state: CONVERSATION_STATE.INTERACTION_PENDING,
-      sourceEvent: CHANNEL_EVENT.INTERACTION_REQUEST,
+      sourceEvent: EVENT_TYPE.INTERACTION_REQUEST,
       seq: Number(envelope.data.seq || envelope.sequence || 0),
       sessionId: envelope.data.sessionId,
       requestId,
     });
   }
-  if (envelope.event === CHANNEL_EVENT.TURN_LIFECYCLE) {
+  if (envelope.event === EVENT_TYPE.TURN_LIFECYCLE) {
     this._applyAuthoritativeConversationState(channel, envelope.data);
   }
   return envelope;
@@ -406,9 +410,7 @@ _applyAuthoritativeConversationState(channel, eventData = {}) {
   if (!channel || !isAuthoritativeTurnLifecycleEnvelope(eventData)) return;
   const eventName = String(eventData?.eventType || "").trim();
   const dialogProcessId = String(eventData?.dialogProcessId || "").trim();
-  const turnScopeId = String(
-    eventData?.turnScopeId || channel?.startPayload?.turnScopeId || "",
-  ).trim();
+  const turnScopeId = String(eventData?.turnScopeId || "").trim();
   const sessionId = String(eventData?.sessionId || "").trim();
   const seq = Number(eventData?.sequence || 0);
   const createdAtMs = Number(

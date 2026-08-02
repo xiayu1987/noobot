@@ -15,6 +15,16 @@ import { createTurnObservation } from "./turnObservation.js";
 import { mergeAttachmentSnapshot } from "../../model/dialogProcessChain.js";
 import { validateMessageEventEnvelope } from "@noobot/shared/message-event-protocol";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
+import {
+  resolveSessionRunMessageRuntimePatch,
+  SESSION_RUN_MESSAGE_RUNTIME_ACTION,
+} from "../sessionRunStateMachine.js";
+import { selectTurnMessageRuntime, sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
+import { getMessageTurnScopeId, getMessageDialogProcessId } from "../../model/messageIdentity.js";
+import {
+  applyRunStateMessagePatch,
+  summarizeMessageRuntimeProjection,
+} from "./messageRuntimePatch.js";
 
 export const TURN_PROJECTION_SOURCE = Object.freeze({
   NORMAL_LIVE: "normal_live",
@@ -22,6 +32,71 @@ export const TURN_PROJECTION_SOURCE = Object.freeze({
   HISTORY_REPLAY: "history_replay",
   SNAPSHOT: "snapshot",
 });
+
+export function projectTurnRuntimeToMessages({
+  session = null,
+  sessions = null,
+  activeSession = null,
+  turnRuntimeRegistry = null,
+  turn = null,
+  stateSnapshot = null,
+} = {}) {
+  const registry = turnRuntimeRegistry?.value || turnRuntimeRegistry;
+  const resolvedState = stateSnapshot || selectTurnMessageRuntime(registry, {
+    sessionId: turn?.sessionId,
+    turnScopeId: turn?.turnScopeId,
+    dialogProcessId: turn?.dialogProcessId,
+  });
+  if (!resolvedState) {
+    return { applied: false, patchedMessageCount: 0, reason: "turn_identity_conflict" };
+  }
+  const sessionItems = Array.isArray(sessions?.value) ? sessions.value : Array.isArray(sessions) ? sessions : [];
+  const activeSessionValue = activeSession?.value || activeSession;
+  const targetSession = session
+    || sessionItems.find((item) => sessionRuntimeId(item) === resolvedState.sessionId)
+    || ([activeSessionValue?.id, activeSessionValue?.backendSessionId]
+      .map(sessionRuntimeId)
+      .includes(resolvedState.sessionId)
+      ? activeSessionValue
+      : null);
+  if (!targetSession) {
+    return { applied: false, patchedMessageCount: 0, reason: "session_not_found", stateSnapshot: resolvedState };
+  }
+  const messages = Array.isArray(targetSession.messages) ? targetSession.messages : [];
+  if (!messages.length) {
+    return { applied: false, patchedMessageCount: 0, reason: "session_has_no_messages" };
+  }
+  let patchedMessageCount = 0;
+  let matchedMessageCount = 0;
+  messages.forEach((message) => {
+    const sameTurn = resolvedState.turnScopeId
+      && getMessageTurnScopeId(message) === resolvedState.turnScopeId;
+    const sameDialog = resolvedState.dialogProcessId
+      && getMessageDialogProcessId(message) === resolvedState.dialogProcessId;
+    if (resolvedState.turnScopeId ? !sameTurn : !sameDialog) return;
+    matchedMessageCount += 1;
+    const effect = resolveSessionRunMessageRuntimePatch({
+      stateSnapshot: resolvedState,
+      messageItem: message,
+      activeSession: targetSession,
+    });
+    summarizeMessageRuntimeProjection({ message, stateSnapshot: resolvedState, effect });
+    if (effect?.action === SESSION_RUN_MESSAGE_RUNTIME_ACTION.PATCH_MESSAGE) {
+      applyRunStateMessagePatch(message, effect.patch);
+      patchedMessageCount += 1;
+    }
+  });
+  return {
+    applied: patchedMessageCount > 0,
+    patchedMessageCount,
+    matchedMessageCount,
+    reason: patchedMessageCount > 0
+      ? "message_runtime_projected"
+      : matchedMessageCount > 0
+        ? "matching_message_requires_no_patch"
+        : "message_identity_not_found",
+  };
+}
 
 const TURN_UI_SNAPSHOT_FIELDS = new Set([
   "thinkingOpenNames",

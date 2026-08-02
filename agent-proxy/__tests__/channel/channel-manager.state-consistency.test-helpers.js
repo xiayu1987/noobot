@@ -59,7 +59,7 @@ export function sortReconnectSessions(payload = {}) {
   return sessions
     .map((sessionEntry) => ({
       sessionId: String(sessionEntry?.sessionId || ""),
-      hasRunningTask: Boolean(sessionEntry?.hasRunningTask),
+      replayBatch: sessionEntry?.replayBatch || null,
       dialogProcesses: (Array.isArray(sessionEntry?.dialogProcesses)
         ? sessionEntry.dialogProcesses
         : []

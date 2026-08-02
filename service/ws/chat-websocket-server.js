@@ -19,9 +19,14 @@ import { createConnectionState } from "./chat-websocket/connection-state.js";
 import { createMessageHandler } from "./chat-websocket/message-handler.js";
 import { createTurnLifecycleBridge } from "./chat-websocket/turn-lifecycle-bridge.js";
 import { createAuthorityEventDispatcher } from "./chat-websocket/authority-event-dispatcher.js";
-import { recoverTurnFinalize } from "./chat-websocket/finalize-recovery.js";
+import { recoverSnapshotOrphan, recoverTurnFinalize } from "./chat-websocket/finalize-recovery.js";
+import {
+  TURN_LIFECYCLE_WIRE_EVENT,
+  validateTurnLifecycleEnvelope,
+} from "@noobot/event-protocol";
 import {
   detachRunTransport,
+  findActiveRun,
   isRunTransportAttached,
 } from "./chat-websocket/run-registry.js";
 
@@ -45,49 +50,6 @@ export function registerChatWebSocketServer(
   const resolveBot = () => {
     if (typeof getBot === "function") return getBot();
     return bot;
-  };
-
-  const persistTurnStatus = async ({
-    runMeta = {},
-    command = "",
-    description = "",
-    error = null,
-  } = {}) => {
-    const normalizedCommand = String(command || "").trim();
-    const userId = String(runMeta?.userId || "").trim();
-    const sessionId = String(runMeta?.sessionId || "").trim();
-    const turnScopeId = String(runMeta?.turnScopeId || "").trim();
-    const dialogProcessId = String(runMeta?.dialogProcessId || "").trim();
-    if (!normalizedCommand || !userId || !sessionId || (!turnScopeId && !dialogProcessId)) {
-      return null;
-    }
-    try {
-      const result = await resolveBot()?.upsertTurnStatus?.({
-        userId,
-        sessionId,
-        parentSessionId: String(runMeta?.parentSessionId || "").trim(),
-        parentDialogProcessId: String(runMeta?.parentDialogProcessId || "").trim(),
-        turnScopeId,
-        dialogProcessId,
-        command: normalizedCommand,
-        description,
-        error,
-      });
-      return result?.turnStatus || null;
-    } catch (persistError) {
-      void recordServiceWebSocketRuntimeError({
-        sessionLogConfig,
-        event: "service.websocket.upsertTurnStatus.failed",
-        userId,
-        sessionId,
-        parentSessionId: String(runMeta?.parentSessionId || "").trim(),
-        dialogProcessId,
-        turnScopeId,
-        error: persistError,
-        data: { command: normalizedCommand },
-      });
-      return null;
-    }
   };
 
   const webSocketServer = new WebSocketServer({ noServer: true });
@@ -117,6 +79,17 @@ export function registerChatWebSocketServer(
 
     let eventSequence = 0;
     const sendEvent = (eventName, data = {}) => {
+      if (eventName === TURN_LIFECYCLE_WIRE_EVENT) {
+        const validation = validateTurnLifecycleEnvelope(data);
+        if (!validation.valid) {
+          logConnection("service.authorityOutbox.eventRejected", {
+            eventId: String(data?.eventId || "").trim(),
+            eventType: String(data?.eventType || "").trim(),
+            errors: validation.errors,
+          });
+          return false;
+        }
+      }
       const authoritativeEvent =
         data?.channelKind === "message_event" && data?.event && typeof data.event === "object"
           ? data.event
@@ -159,29 +132,10 @@ export function registerChatWebSocketServer(
           authoritativeEvent?.sessionId || data?.route?.sessionId || data?.sessionId || "",
         ).trim(),
         turnScopeId: String(
-          authoritativeEvent?.turnScopeId || data?.turnScopeId || state.currentRunMeta?.turnScopeId || "",
+          authoritativeEvent?.turnScopeId || data?.turnScopeId || "",
         ).trim(),
       };
-      try {
-        webSocket.send(JSON.stringify({ event: eventName, data: enrichedData }));
-        if (toolFrame) logConnection("service.websocket.toolFrame.sent", {
-          eventName, eventType, seq: eventSequence,
-          sessionId: enrichedData.sessionId,
-          dialogProcessId: enrichedData.dialogProcessId,
-          turnScopeId: enrichedData.turnScopeId,
-        });
-        if (terminalLifecycle) logConnection("service.authorityOutbox.terminalSent", {
-          eventId: enrichedData.eventId,
-          eventType,
-          lifecycleSequence: Number(enrichedData.sequence || 0),
-          transportSequence: eventSequence,
-          sessionId: enrichedData.sessionId,
-          parentSessionId: enrichedData.parentSessionId,
-          dialogProcessId: enrichedData.dialogProcessId,
-          turnScopeId: enrichedData.turnScopeId,
-        });
-        return true;
-      } catch (error) {
+      const recordSendFailure = (error) => {
         void recordServiceWebSocketSendFailure({
           sessionLogConfig,
           eventName: String(eventName || ""),
@@ -191,6 +145,37 @@ export function registerChatWebSocketServer(
           turnScopeId: enrichedData.turnScopeId,
           error,
         });
+      };
+      try {
+        const packet = JSON.stringify({ event: eventName, data: enrichedData });
+        return new Promise((resolve) => {
+          webSocket.send(packet, (error) => {
+            if (error) {
+              recordSendFailure(error);
+              resolve(false);
+              return;
+            }
+            if (toolFrame) logConnection("service.websocket.toolFrame.sent", {
+              eventName, eventType, seq: eventSequence,
+              sessionId: enrichedData.sessionId,
+              dialogProcessId: enrichedData.dialogProcessId,
+              turnScopeId: enrichedData.turnScopeId,
+            });
+            if (terminalLifecycle) logConnection("service.authorityOutbox.terminalSent", {
+              eventId: enrichedData.eventId,
+              eventType,
+              lifecycleSequence: Number(enrichedData.sequence || 0),
+              transportSequence: eventSequence,
+              sessionId: enrichedData.sessionId,
+              parentSessionId: enrichedData.parentSessionId,
+              dialogProcessId: enrichedData.dialogProcessId,
+              turnScopeId: enrichedData.turnScopeId,
+            });
+            resolve(true);
+          });
+        });
+      } catch (error) {
+        recordSendFailure(error);
         return false;
       }
     };
@@ -216,6 +201,20 @@ export function registerChatWebSocketServer(
       bot: resolveBot(),
       commitTurnLifecycle,
     });
+    const recoverPersistedSnapshotOrphan = (request = {}) => recoverSnapshotOrphan({
+      ...request,
+      bot: resolveBot(),
+      commitTurnLifecycle,
+      inspectExecution: ({ turnScopeId, dialogProcessId }) => ({
+        alive: Boolean(findActiveRun({
+          userId: String(authInfo?.userId || "").trim(),
+          sessionId: request.sessionId,
+          turnScopeId,
+          dialogProcessId,
+        })),
+        observedAtMs: Date.now(),
+      }),
+    });
 
     const {
       finalizeTimeout,
@@ -225,7 +224,6 @@ export function registerChatWebSocketServer(
       finalizeGenericError,
     } = createTurnFinalizer({
       sendEvent,
-      persistTurnStatus,
       rejectUnpersistedTurnStatus,
       resolveBot,
       translateText,
@@ -275,6 +273,7 @@ export function registerChatWebSocketServer(
       commitTurnLifecycle,
       dispatchAuthorityEvents,
       recoverTurnFinalize: recoverPersistedTurnFinalize,
+      recoverSnapshotOrphan: recoverPersistedSnapshotOrphan,
     });
     webSocket.on("message", (rawMessage) => {
       void messageHandler(rawMessage).catch((error) => {

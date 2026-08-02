@@ -153,62 +153,6 @@ test("SessionTurnPersister normalizes parentSessionId once for every persistence
   assert.equal(executionLogs[0].parentSessionId, "");
 });
 
-test("SessionTurnPersister scopes stopped assistant persistence by turnScopeId", async () => {
-  const appendedTurns = [];
-  const savedStatuses = [];
-  const session = {
-    upsertTurnStatus: async (payload = {}) => {
-      savedStatuses.push(payload);
-      assert.equal(payload.command, "user_stopped");
-      assert.equal(payload.status, undefined);
-      assert.equal(payload.reason, undefined);
-      return { turnStatus: {
-        turnScopeId: payload.turnScopeId,
-        dialogProcessId: payload.dialogProcessId,
-        status: "user_stopped",
-        reason: "user_stop",
-        description: payload.description,
-      } };
-    },
-    getSessionBundle: async () => ({
-      session: {
-        messages: [
-          { role: "user", turnScopeId: "turn-old", dialogProcessId: "dp-reused" },
-          { role: "user", turnScopeId: "turn-new", dialogProcessId: "dp-reused" },
-        ],
-      },
-    }),
-    appendExecutionLog: async () => {},
-    appendTurn: async (payload = {}) => {
-      appendedTurns.push(payload);
-    },
-  };
-  const persister = new SessionTurnPersister({ session });
-
-  const saved = await persister.persistStoppedAssistantMessage({
-    userId: "u1",
-    sessionId: "s1",
-    partialAssistant: {
-      content: "partial",
-      dialogProcessId: "dp-reused",
-      turnScopeId: "turn-new",
-    },
-  });
-
-  assert.equal(saved.status, "user_stopped");
-  assert.equal(savedStatuses.length, 1);
-  assert.equal(savedStatuses[0].turnScopeId, "turn-new");
-  assert.equal(savedStatuses[0].dialogProcessId, "dp-reused");
-  assert.equal(savedStatuses[0].command, "user_stopped");
-  assert.equal(appendedTurns.length, 1);
-  assert.equal(appendedTurns[0].turnScopeId, "turn-new");
-  assert.equal(appendedTurns[0].dialogProcessId, "dp-reused");
-  assert.equal(appendedTurns[0].stopState, undefined);
-  assert.equal(appendedTurns[0].state, undefined);
-  assert.equal(appendedTurns[0].status, undefined);
-  assert.equal(appendedTurns[0].channelState, undefined);
-});
-
 test("SessionTurnPersister persists tool transfer envelopes into session turns", async () => {
   const appendedTurns = [];
   const session = {

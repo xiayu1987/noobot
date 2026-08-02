@@ -22,13 +22,26 @@ export function createBotDispatchPass({ owner = "" } = {}) {
 export function createBotDispatchHandled({ owner = "", result = {}, failure = null } = {}) {
   const normalizedOwner = clean(owner);
   if (!normalizedOwner) throw new Error("handled bot dispatch outcome requires owner");
+  const normalizedFailure = failure && typeof failure === "object" && !Array.isArray(failure) ? failure : null;
+  if (normalizedFailure) {
+    return Object.freeze({
+      kind: BOT_DISPATCH_OUTCOME_KIND,
+      version: BOT_DISPATCH_OUTCOME_VERSION,
+      disposition: BOT_DISPATCH_DISPOSITION.HANDLED,
+      owner: normalizedOwner,
+      failure: Object.freeze({
+        code: clean(normalizedFailure.code || "BOT_DISPATCH_FAILED"),
+        message: clean(normalizedFailure.message || "owned dispatch failed"),
+      }),
+    });
+  }
   return Object.freeze({
     kind: BOT_DISPATCH_OUTCOME_KIND,
     version: BOT_DISPATCH_OUTCOME_VERSION,
     disposition: BOT_DISPATCH_DISPOSITION.HANDLED,
     owner: normalizedOwner,
     result: result && typeof result === "object" && !Array.isArray(result) ? result : {},
-    failure: failure && typeof failure === "object" && !Array.isArray(failure) ? failure : null,
+    failure: null,
   });
 }
 
@@ -41,7 +54,7 @@ export function isBotDispatchOutcome(value = null) {
   );
 }
 
-export function resolveBotDispatchOutcome(hookResult = {}, legacyContext = {}) {
+export function resolveBotDispatchOutcome(hookResult = {}) {
   const outcomes = (Array.isArray(hookResult?.results) ? hookResult.results : [])
     .filter((item) => item?.ok === true && isBotDispatchOutcome(item?.result))
     .map((item) => item.result);
@@ -53,11 +66,5 @@ export function resolveBotDispatchOutcome(hookResult = {}, legacyContext = {}) {
     throw error;
   }
   if (handled.length === 1) return handled[0];
-  if (legacyContext?.skipAgentDispatch === true) {
-    return createBotDispatchHandled({
-      owner: clean(legacyContext?.dispatchOwner || "legacy_before_agent_dispatch"),
-      result: legacyContext?.overrideAgentResult,
-    });
-  }
   return createBotDispatchPass();
 }
