@@ -3,6 +3,7 @@
   "version": "4.1.4",
   "private": true,
   "workspaces": [
+    "event-protocol",
     "authoritative-state",
     "service",
     "agent",

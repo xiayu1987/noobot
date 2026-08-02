@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_PHASE, validateTurnLifecycleSnapshot } from "@noobot/authoritative-state/contracts";
+import { TURN_PHASE, validateTurnLifecycleSnapshot } from "@noobot/event-protocol";
 import {
   EXECUTION_QUERY_COMMAND,
   EXECUTION_CHILDREN_WIRE_EVENT,
@@ -14,7 +14,7 @@ import {
 
 export function createMessageQueryHandlers({
   state, authInfo, sendEvent, translateText, isForbiddenUserScope, resolveBot,
-  pendingInteractionRequests, recoverTurnFinalize,
+  pendingInteractionRequests, recoverTurnFinalize, recoverSnapshotOrphan,
 }) {
   const handleInteractionResponse = (payload) => {
     const requestId = String(payload?.requestId || "").trim();
@@ -36,6 +36,24 @@ export function createMessageQueryHandlers({
       sendEvent("error", { errorCode: "invalid_snapshot_request", sessionId, commandId });
       return;
     }
+    const recovered = await recoverTurnFinalize?.({
+      userId,
+      sessionId,
+      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      commandId: `${commandId}:recovery`,
+      terminalLimit: payload?.terminalLimit,
+    });
+    if (!recovered?.recovered && recovered?.reason && recovered.reason !== "no_recoverable_finalize") {
+      sendEvent("error", { errorCode: recovered.reason, sessionId, commandId });
+      return;
+    }
+    await recoverSnapshotOrphan?.({
+      userId,
+      sessionId,
+      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      commandId: `${commandId}:orphan-recovery`,
+      terminalLimit: payload?.terminalLimit,
+    });
     const bot = resolveBot();
     const reader = bot?.getTurnLifecycleSnapshot;
     if (typeof reader !== "function") {

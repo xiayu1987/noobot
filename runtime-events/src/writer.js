@@ -13,23 +13,26 @@ import { isWorkspaceSessionDeleted, isWorkspaceSessionPersisted } from './sessio
 export async function writeRuntimeEvent(event = {}, options = {}) {
   try {
     const defaults = options.defaults || options;
+    const config = resolveRuntimeEventsConfig({
+      ...defaults,
+      ...options,
+      workspaceRoot: event.workspaceRoot ?? defaults.workspaceRoot ?? options.workspaceRoot,
+    });
     const record = normalizeRuntimeEvent(event, defaults);
-    const config = resolveRuntimeEventsConfig({ ...defaults, ...options, workspaceRoot: record.workspaceRoot || defaults.workspaceRoot });
     const controlledLog = record.scope === RUNTIME_EVENT_SCOPES.SESSION || isSessionLogDebugEvent(record);
     if (controlledLog && !shouldRecordSessionLog(record, { ...defaults, ...options, ...config })) {
       return { ok: true, skipped: true, record };
     }
     if (record.scope === RUNTIME_EVENT_SCOPES.SESSION && !config.root) {
-      const workspaceRoot = record.workspaceRoot || config.workspaceRoot;
       const storageSessionId = resolveRuntimeEventStorageSessionId(record);
       const sessionIds = [...new Set([record.sessionId, storageSessionId].filter(Boolean))];
       for (const sessionId of sessionIds) {
-        if (await isWorkspaceSessionDeleted({ workspaceRoot, userId: record.userId, sessionId })) {
+        if (await isWorkspaceSessionDeleted({ workspaceRoot: config.workspaceRoot, userId: record.userId, sessionId })) {
           return { ok: true, skipped: true, deleted: true, record };
         }
       }
       if (storageSessionId === record.sessionId && !await isWorkspaceSessionPersisted({
-        workspaceRoot,
+        workspaceRoot: config.workspaceRoot,
         userId: record.userId,
         sessionId: storageSessionId,
       })) {

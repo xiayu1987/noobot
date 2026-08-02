@@ -7,23 +7,74 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
-import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
+import {
+  commitTurnLifecycle,
+  createAuthoritativeTurnSnapshot,
+} from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
+  createTurnLifecycleEnvelope,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
+  TURN_COMMAND,
   TURN_PHASE,
-} from "@noobot/authoritative-state/contracts";
+  TURN_STATE,
+} from "@noobot/event-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { createRunEventListener } from "../../ws/chat-websocket/run-event-listener.js";
-import { attachRunTransport, publishRunEvent } from "../../ws/chat-websocket/run-registry.js";
+import {
+  attachRunTransport,
+  publishRunEvent,
+  registerActiveRun,
+  unregisterActiveRun,
+} from "../../ws/chat-websocket/run-registry.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
+
+const TEST_EVENT_FACTS = Object.freeze({
+  [TURN_EVENT.ACTION_ACCEPTED]: Object.freeze({ phase: TURN_PHASE.ACTION, state: TURN_STATE.ACTION_REQUESTING }),
+  [TURN_EVENT.PROCESSING_STARTED]: Object.freeze({ phase: TURN_PHASE.PROCESSING, state: TURN_STATE.PROCESSING }),
+  [TURN_EVENT.PROCESSING_COMPLETED]: Object.freeze({ phase: TURN_PHASE.COMPLETION, state: TURN_STATE.COMPLETION_REQUESTING }),
+  [TURN_EVENT.COMPLETED]: Object.freeze({ phase: TURN_PHASE.COMPLETION, state: TURN_STATE.COMPLETED }),
+});
+
+function createTestLifecycleEnvelope({
+  eventId,
+  eventType = TURN_EVENT.PROCESSING_STARTED,
+  sequence = 1,
+  sessionId = "child-session",
+  parentSessionId = "root-session",
+  turnScopeId = "workflow-node:child-turn",
+  persistenceScope,
+} = {}) {
+  const facts = TEST_EVENT_FACTS[eventType];
+  return createTurnLifecycleEnvelope({
+    eventId,
+    commandId: `${eventId}:command`,
+    eventType,
+    userId: "u1",
+    sessionId,
+    parentSessionId,
+    turnScopeId,
+    messageId: `${turnScopeId}:message`,
+    presentationMessageId: `${turnScopeId}:presentation`,
+    dialogProcessId: `${turnScopeId}:dialog`,
+    revision: sequence,
+    sequence,
+    phase: facts.phase,
+    state: facts.state,
+    action: "send",
+    executionState: eventType === TURN_EVENT.COMPLETED ? "completed" : "sending",
+    completionCommitId: eventType === TURN_EVENT.COMPLETED ? `${eventId}:completion` : "",
+    summaryVersion: eventType === TURN_EVENT.COMPLETED ? 1 : 0,
+    persistenceScope,
+  });
+}
 
 function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) {
   let lifecycle = {};
@@ -50,25 +101,16 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
       if (input.terminalStatus && !persistSummary) {
         return { applied: false, reason: "summary_persistence_failed", lifecycle };
       }
-      const lifecycleEvent = input.terminalStatus ? {
-        ...input,
-        summaryVersion: 7,
-        completionCommitId: input.completionCommitId || input.commandId,
-      } : input;
+      const terminalMaterialization = input.terminalStatus
+        ? await bot.materializeTerminal({ event: input, terminalStatus: input.terminalStatus })
+        : null;
       const result = commitTurnLifecycle({
         lifecycle,
-        event: lifecycleEvent,
+        event: input,
         eventOutbox,
         createEventId: () => `authority-event-${++eventIdSequence}`,
         materializeTerminal: input.terminalStatus
-          ? () => ({
-              turnStatus: {
-                version: 7,
-                turnScopeId: input.turnScopeId,
-                dialogProcessId: input.dialogProcessId,
-                status: input.terminalStatus.command,
-              },
-            })
+          ? () => terminalMaterialization || { reason: "terminal_materialization_failed" }
           : undefined,
       });
       if (result.applied) {
@@ -77,7 +119,7 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
         committed.push(input.eventType);
       }
       return input.terminalStatus && result.applied
-        ? { ...result, turnStatus: { version: 7, status: input.terminalStatus.command } }
+        ? { ...result, turnStatus: terminalMaterialization.turnStatus }
         : result;
     },
     async getPendingAuthorityEvents() {
@@ -119,16 +161,17 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
         executionLogs: [],
       };
     },
-    async upsertTurnStatus(payload) {
+    async materializeTerminal({ event, terminalStatus }) {
       if (!persistSummary) return null;
       return {
+        summaryVersion: 7,
         turnStatus: {
           version: 7,
-          turnScopeId: payload.turnScopeId,
-          dialogProcessId: payload.dialogProcessId,
-          status: "completed",
-          reason: "run_completed",
-        },
+          turnScopeId: event.turnScopeId,
+          dialogProcessId: event.dialogProcessId,
+          status: terminalStatus.command,
+          reason: terminalStatus.command === "user_stopped" ? "user_stop" : "run_completed",
+        }
       };
     },
   };
@@ -154,6 +197,51 @@ const payload = {
     thinkingStartedAt: "2026-07-24T05:42:07.698Z",
   },
 };
+
+function installLifecycleSnapshotReader(authoritative) {
+  authoritative.bot.getTurnLifecycleSnapshot = async ({
+    userId, sessionId, commandId, knownSequence, terminalLimit,
+  } = {}) => ({
+    found: true,
+    snapshot: createAuthoritativeTurnSnapshot({
+      lifecycle: authoritative.lifecycle(),
+      commandId,
+      userId,
+      sessionId,
+      knownSequence,
+      terminalLimit,
+    }),
+  });
+}
+
+async function requestTurnSnapshot({ port, sessionId, commandId }) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
+      headers: { authorization: "Bearer test-key" },
+    });
+    const timer = setTimeout(() => {
+      ws.terminate();
+      reject(new Error("turn snapshot response timeout"));
+    }, 2000);
+    const settle = (callback, value) => {
+      clearTimeout(timer);
+      ws.close();
+      callback(value);
+    };
+    ws.on("open", () => ws.send(JSON.stringify({
+      commandType: TURN_COMMAND.SNAPSHOT_GET,
+      userId: "u1",
+      sessionId,
+      commandId,
+    })));
+    ws.on("message", (raw) => {
+      const message = JSON.parse(String(raw || "{}"));
+      if (message?.event === "error") settle(reject, new Error(message?.data?.errorCode || "snapshot_error"));
+      if (message?.event === "turn_snapshot") settle(resolve, message.data);
+    });
+    ws.on("error", (error) => settle(reject, error));
+  });
+}
 
 test("run event publishing reports the actual transport send result", () => {
   const handle = {};
@@ -419,12 +507,13 @@ test("authority dispatcher preserves the child persistence scope across every ou
   });
   const calls = [];
   let pending = true;
-  const envelope = {
+  const envelope = createTestLifecycleEnvelope({
     eventId: "authority-event-child-context",
     sequence: 9,
     sessionId: "child-session",
     parentSessionId: "root-session",
-  };
+    persistenceScope,
+  });
   const bot = {
     async getPendingAuthorityEvents(input) {
       calls.push({ method: "get", input });
@@ -488,21 +577,18 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
     TURN_EVENT.PROCESSING_COMPLETED,
     TURN_EVENT.COMPLETED,
   ];
-  let pending = eventTypes.map((eventType, index) => ({
-    eventId: `child-authority-${index + 1}`,
-    envelope: {
-      eventId: `child-authority-${index + 1}`,
-      eventType,
-      sequence: index + 1,
-      revision: index + 1,
-      userId: "u1",
-      sessionId: "child-session",
-      parentSessionId: "root-session",
-      turnScopeId: "workflow-node:child-turn",
-      dialogProcessId: "child-dialog",
-      persistenceScope,
-    },
-  }));
+  let pending = eventTypes.map((eventType, index) => {
+    const eventId = `child-authority-${index + 1}`;
+    return {
+      eventId,
+      envelope: createTestLifecycleEnvelope({
+        eventId,
+        eventType,
+        sequence: index + 1,
+        persistenceScope,
+      }),
+    };
+  });
   const calls = [];
   const sent = [];
   const bot = {
@@ -546,10 +632,12 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   assert.deepEqual(sent.map(({ event }) => event), eventTypes.map(() => TURN_LIFECYCLE_WIRE_EVENT));
   assert.deepEqual(sent.map(({ envelope }) => envelope.eventType), eventTypes);
   assert.equal(sent.every(({ envelope }) => envelope.sessionId === "child-session"), true);
-  assert.equal(
-    calls.every(({ input }) => input.persistenceScope === persistenceScope),
-    true,
-  );
+  assert.equal(calls.every(({ input }) => (
+    JSON.stringify(input.persistenceScope) === JSON.stringify(persistenceScope)
+  )), true);
+  assert.equal(sent.every(({ envelope }) => (
+    JSON.stringify(envelope.persistenceScope) === JSON.stringify(persistenceScope)
+  )), true);
   assert.equal(pending.length, 0);
 });
 
@@ -558,12 +646,12 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
   let releaseSend;
   const sendBarrier = new Promise((resolve) => { releaseSend = resolve; });
   const calls = { get: 0, attempt: 0, acknowledge: 0, send: 0 };
-  const envelope = {
+  const envelope = createTestLifecycleEnvelope({
     eventId: "authority-event-single-flight",
     sequence: 3,
     sessionId: "child-session",
     parentSessionId: "root-session",
-  };
+  });
   const bot = {
     async getPendingAuthorityEvents() {
       calls.get += 1;
@@ -609,13 +697,11 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
 test("authority dispatcher repeats a scoped drain when a lifecycle commit arrives during its final empty read", async () => {
   let pending = [{
     eventId: "authority-event-running",
-    envelope: {
+    envelope: createTestLifecycleEnvelope({
       eventId: "authority-event-running",
       eventType: TURN_EVENT.PROCESSING_STARTED,
       sequence: 1,
-      sessionId: "child-session",
-      parentSessionId: "root-session",
-    },
+    }),
   }];
   let releaseEmptyRead;
   const emptyReadBarrier = new Promise((resolve) => { releaseEmptyRead = resolve; });
@@ -659,13 +745,11 @@ test("authority dispatcher repeats a scoped drain when a lifecycle commit arrive
   await emptyReadObserved;
   pending.push({
     eventId: "authority-event-completed",
-    envelope: {
+    envelope: createTestLifecycleEnvelope({
       eventId: "authority-event-completed",
       eventType: TURN_EVENT.COMPLETED,
       sequence: 2,
-      sessionId: "child-session",
-      parentSessionId: "root-session",
-    },
+    }),
   });
   const terminalDrain = dispatch(payload);
   assert.equal(terminalDrain, runningDrain);
@@ -795,7 +879,7 @@ test("processing-start persistence rejection is observed while Agent execution i
 
 test("message listener boundary contains failures raised by terminal error persistence", async () => {
   const authoritative = createAuthoritativeBot({ failureAt: "action" });
-  authoritative.bot.upsertTurnStatus = async () => {
+  authoritative.bot.materializeTerminal = async () => {
     throw new Error("terminal_status_storage_failed");
   };
   const server = await startServerWithWs({ bot: authoritative.bot });
@@ -969,6 +1053,116 @@ test("a new action recovers a stale persisted turn lost after service restart", 
   }
 });
 
+test("snapshot reconnect recovers a stale persisted turn lost after service restart", async () => {
+  const authoritative = createAuthoritativeBot();
+  installLifecycleSnapshotReader(authoritative);
+  await authoritative.bot.applyTurnLifecycleEvent({
+    userId: "u1",
+    sessionId: "s-snapshot-restart",
+    turnScopeId: "turn-snapshot-restart",
+    messageId: "message-snapshot-restart",
+    presentationMessageId: "presentation-snapshot-restart",
+    dialogProcessId: "dialog-snapshot-restart",
+    commandId: "command-snapshot-restart",
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    phase: TURN_PHASE.ACTION,
+    action: "send",
+  });
+  await authoritative.bot.applyTurnLifecycleEvent({
+    userId: "u1",
+    sessionId: "s-snapshot-restart",
+    turnScopeId: "turn-snapshot-restart",
+    dialogProcessId: "dialog-snapshot-restart",
+    commandId: "command-snapshot-restart:processing",
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    phase: TURN_PHASE.PROCESSING,
+    executionState: "sending",
+  });
+  authoritative.lifecycle().turns["turn-snapshot-restart"].updatedAt = new Date(
+    Date.now() - TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs - 1,
+  ).toISOString();
+
+  const server = await startServerWithWs({ bot: authoritative.bot });
+  try {
+    const first = await requestTurnSnapshot({
+      port: server.address().port,
+      sessionId: "s-snapshot-restart",
+      commandId: "snapshot-restart-1",
+    });
+    assert.equal(first.activeTurn, null);
+    assert.equal(first.activeTurnScopeId, "");
+    assert.equal(first.recentTerminalTurns[0]?.turnScopeId, "turn-snapshot-restart");
+    assert.equal(first.recentTerminalTurns[0]?.state, TURN_STATE.PROCESSING_FAILED);
+    assert.equal(first.recentTerminalTurns[0]?.failure?.code, "service_restart_orphaned_turn");
+
+    const second = await requestTurnSnapshot({
+      port: server.address().port,
+      sessionId: "s-snapshot-restart",
+      commandId: "snapshot-restart-2",
+    });
+    assert.equal(second.activeTurn, null);
+    assert.equal(authoritative.commitInputs().filter((input) => (
+      input.eventType === TURN_EVENT.FAILED && input.turnScopeId === "turn-snapshot-restart"
+    )).length, 1);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("snapshot reconnect does not terminate a matching live execution", async () => {
+  const authoritative = createAuthoritativeBot();
+  installLifecycleSnapshotReader(authoritative);
+  await authoritative.bot.applyTurnLifecycleEvent({
+    userId: "u1",
+    sessionId: "s-live-snapshot",
+    turnScopeId: "turn-live-snapshot",
+    messageId: "message-live-snapshot",
+    presentationMessageId: "presentation-live-snapshot",
+    dialogProcessId: "dialog-live-snapshot",
+    commandId: "command-live-snapshot",
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    phase: TURN_PHASE.ACTION,
+    action: "send",
+  });
+  await authoritative.bot.applyTurnLifecycleEvent({
+    userId: "u1",
+    sessionId: "s-live-snapshot",
+    turnScopeId: "turn-live-snapshot",
+    dialogProcessId: "dialog-live-snapshot",
+    commandId: "command-live-snapshot:processing",
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    phase: TURN_PHASE.PROCESSING,
+    executionState: "sending",
+  });
+  authoritative.lifecycle().turns["turn-live-snapshot"].updatedAt = new Date(
+    Date.now() - TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs - 1,
+  ).toISOString();
+  const liveHandle = registerActiveRun({
+    userId: "u1",
+    sessionId: "s-live-snapshot",
+    turnScopeId: "turn-live-snapshot",
+    dialogProcessId: "dialog-live-snapshot",
+  });
+
+  const server = await startServerWithWs({
+    bot: authoritative.bot,
+    resolveAuthByApiKey: () => ({ userId: "u1" }),
+  });
+  try {
+    const snapshot = await requestTurnSnapshot({
+      port: server.address().port,
+      sessionId: "s-live-snapshot",
+      commandId: "snapshot-live",
+    });
+    assert.equal(snapshot.activeTurn?.turnScopeId, "turn-live-snapshot");
+    assert.equal(snapshot.activeTurn?.state, TURN_STATE.PROCESSING);
+    assert.equal(authoritative.commitInputs().some((input) => input.eventType === TURN_EVENT.FAILED), false);
+  } finally {
+    unregisterActiveRun(liveHandle);
+    await closeServer(server);
+  }
+});
+
 test("summary failure is classified as completion without authoritative completed", async () => {
   const authoritative = createAuthoritativeBot({ persistSummary: false });
   const scopedPayload = {
@@ -1008,13 +1202,16 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
     error.name = "AbortError";
     throw error;
   };
-  authoritative.bot.persistStoppedAssistantMessage = async ({ partialAssistant }) => ({
-    version: 9,
-    sessionId: "s-stop-authoritative",
-    turnScopeId: partialAssistant.turnScopeId,
-    dialogProcessId: partialAssistant.dialogProcessId,
-    status: "user_stopped",
-    reason: "user_stop",
+  authoritative.bot.materializeTerminal = async ({ event }) => ({
+    summaryVersion: 9,
+    turnStatus: {
+      version: 9,
+      sessionId: "s-stop-authoritative",
+      turnScopeId: event.turnScopeId,
+      dialogProcessId: event.dialogProcessId,
+      status: "user_stopped",
+      reason: "user_stop",
+    },
   });
   const server = await startServerWithWs({ bot: authoritative.bot });
   try {
@@ -1054,7 +1251,13 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
     const turn = authoritative.lifecycle().turns["turn-stop-authoritative"];
     assert.equal(turn.state, "stop_completed");
     assert.equal(turn.summaryVersion, 9);
-    assert.equal(events.some((item) => item?.event === "user_stopped"), true);
+    const stoppedEvent = events.find((item) =>
+      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED);
+    assert.equal(stoppedEvent?.data?.sessionId, "s-stop-authoritative");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-stop-authoritative");
+    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-stop-authoritative");
+    assert.equal(stoppedEvent?.data?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.eventId);
   } finally {
     await closeServer(server);
   }

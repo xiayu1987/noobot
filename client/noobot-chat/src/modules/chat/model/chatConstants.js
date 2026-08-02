@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { EVENT_TYPE } from "@noobot/event-protocol";
 
 export const RoleEnum = Object.freeze({
   USER: "user",
@@ -23,20 +24,20 @@ export const CONNECTOR_TYPES = Object.freeze([
 ]);
 
 export const StreamEventEnum = Object.freeze({
-  DELTA: "delta",
-  DONE: "done",
-  ERROR: "error",
+  DELTA: EVENT_TYPE.DELTA,
+  DONE: EVENT_TYPE.DONE,
+  ERROR: EVENT_TYPE.ERROR,
   USER_STOPPED: "user_stopped",
-  INTERACTION_REQUEST: "interaction_request",
+  INTERACTION_REQUEST: EVENT_TYPE.INTERACTION_REQUEST,
   CONNECTOR_STATUS: "connector_status",
   ATTACHMENTS: "attachments",
   ATTACHMENT_PARSED: "attachment_parsed",
-  CHANNEL_STATE: "channel_state",
-  TURN_LIFECYCLE: "turn_lifecycle",
-  TURN_SNAPSHOT: "turn_snapshot",
+  CHANNEL_STATE: EVENT_TYPE.CHANNEL_STATE,
+  TURN_LIFECYCLE: EVENT_TYPE.TURN_LIFECYCLE,
+  TURN_SNAPSHOT: EVENT_TYPE.TURN_SNAPSHOT,
   EXECUTION_SNAPSHOT: "execution_snapshot",
   EXECUTION_CHILDREN: "execution_children",
   EXECUTION_TREE: "execution_tree",
-  RECONNECT_DATA: "reconnect_data",
+  RECONNECT_DATA: EVENT_TYPE.RECONNECT_DATA,
   RECONNECT_COMPLETE: "reconnect_complete",
 });

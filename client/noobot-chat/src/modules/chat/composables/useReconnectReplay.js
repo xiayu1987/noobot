@@ -22,11 +22,6 @@ import {
   createReconnectInteractionEnvelopeCallbacks,
   tryAutoResolveReconnectInteraction,
 } from "../runtime/reconnect/interactionHandlers.js";
-import {
-  applyReconnectChannelState,
-  emitSyntheticReconnectErrorConversationState,
-  scheduleMissingInteractionPayloadFailure as scheduleMissingInteractionPayloadFailureWithContext,
-} from "../runtime/reconnect/channelStateReplay.js";
 import { applyReconnectDataReplay } from "../runtime/reconnect/reconnectDataReplay.js";
 import { applyReconnectEventReplay } from "../runtime/reconnect/reconnectEventReplay.js";
 import { scheduleCacheExpiredSessionRefresh as scheduleCacheExpiredSessionRefreshWithContext } from "../runtime/reconnect/cacheExpiredRefresh.js";
@@ -59,10 +54,8 @@ import { createReconnectReplayPublicApi } from "../runtime/reconnect/publicApi.j
 import { registerReconnectReplayLifecycleCleanup } from "../runtime/reconnect/lifecycle.js";
 import {
   BackendChannelState,
-  SESSION_RUN_EVENT,
 } from "../runtime/sessionRunStateMachine.js";
 import { isTurnRuntimeDeleted } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
-import { finalizeDoneTurnPresentation } from "../runtime/engine/sessionFinalize.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
   logStateMachineDebug,
@@ -99,6 +92,7 @@ export function useReconnectReplay({
   processStore,
   turnRuntimeRegistry,
   dispatchAuthoritativeRunStateEvent,
+  applyTurnLifecycleEnvelope,
   applyExecutionSnapshot,
   applyExecutionChildren,
   applyExecutionTree,
@@ -110,8 +104,6 @@ export function useReconnectReplay({
     replayCache,
     appliedReconnectSeqByDialogProcessId,
     appliedReconnectEventKindsByTurnKey,
-    terminalDialogProcessIdSet,
-    missingInteractionPayloadTimers,
   } =
     reconnectReplayContext;
   let { cacheExpiredRefreshTimer, replayHydrationPromise } = reconnectReplayContext;
@@ -120,21 +112,6 @@ export function useReconnectReplay({
     isTurnRuntimeDeleted(turnRuntimeRegistry?.value || turnRuntimeRegistry, { sessionId, turnScopeId });
 
   const applyRunStateEvent = (event) => dispatchAuthoritativeRunStateEvent?.(event);
-  const applyTurnLifecycleEnvelope = (envelope = {}) => {
-    return dispatchAuthoritativeRunStateEvent?.({
-      ...envelope,
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      seq: Number(envelope?.sequence || 0),
-      source: "turn_lifecycle_replay",
-    });
-  };
-  const terminalChannelStates = new Set([
-    "completed",
-    "user_stopped",
-    "error",
-    "cancelled",
-  ]);
-
   const applyRunStateEvents = (events) => {
     const sourceEvents = Array.isArray(events) ? events : [];
     return sourceEvents.map((event) => dispatchAuthoritativeRunStateEvent?.(event));
@@ -195,7 +172,6 @@ export function useReconnectReplay({
   function createReconnectReplayEnvelopeCallbacks() {
     return createReconnectInteractionEnvelopeCallbacks({
       buildReconnectReplayEnvelopeCallbacks,
-      missingInteractionPayloadTimers,
       normalizeInteractionRequestPayload,
       tryAutoResolveInteraction,
       isInteractionRequestHandled,
@@ -206,35 +182,6 @@ export function useReconnectReplay({
       upsertConnectedConnectorInPanelState,
       refreshSessionConnectorsAsync,
       onAttachments: mergeAssistantAttachments,
-    });
-  }
-
-  function emitSyntheticErrorConversationState({
-    sessionId = "",
-    dialogProcessId = "",
-    turnScopeId = "",
-    sourceEvent = "",
-  } = {}) {
-    return emitSyntheticReconnectErrorConversationState({
-      onConversationState,
-      sessionId,
-      dialogProcessId,
-      turnScopeId,
-      sourceEvent,
-    });
-  }
-
-  function scheduleMissingInteractionPayloadFailure({
-    sessionId = "",
-    dialogProcessId = "",
-  } = {}) {
-    return scheduleMissingInteractionPayloadFailureWithContext({
-      pendingInteractionRequest,
-      missingInteractionPayloadTimers,
-      sessionId,
-      dialogProcessId,
-      translate,
-      notify,
     });
   }
 
@@ -296,11 +243,9 @@ export function useReconnectReplay({
     return applyReconnectDataReplay({
       reconnectData,
       ensureReconnectSessionActive,
-      applyRunStateEvents,
       isCurrentActiveSession,
       replayCache,
       applyReconnectMessagesToActiveSession,
-      applyChannelState,
       scheduleCacheExpiredSessionRefresh,
       reconcileSessionState,
       applySubSessionReplayMessages,
@@ -308,17 +253,24 @@ export function useReconnectReplay({
       hydrateActiveSessionBeforeReplay,
       applyTurnLifecycleEnvelope,
       applyTurnLifecycleSnapshot,
+      applyPendingInteraction: (interaction) => applyReconnectInteractionRequest({
+        eventData: interaction?.data || interaction,
+        normalizeInteractionRequestPayload,
+        tryAutoResolveInteraction,
+        isInteractionRequestHandled,
+        setPendingInteractionRequest,
+      }),
     });
   }
 
-  async function hydrateActiveSessionBeforeReplay(sessionId = "", currentRun = null) {
+  async function hydrateActiveSessionBeforeReplay(sessionId = "", activeTurnSnapshot = null) {
     const requestedSessionId = String(sessionId || "").trim();
     if (!requestedSessionId || !isCurrentActiveSession(requestedSessionId)) return false;
-    const presentationMessageId = String(currentRun?.presentationMessageId || "").trim();
+    const presentationMessageId = String(activeTurnSnapshot?.presentationMessageId || "").trim();
     logStateMachineDebug("stateMachine.reconnect.presentationHydration.before", () => ({
       sessionId: requestedSessionId,
-      dialogProcessId: String(currentRun?.dialogProcessId || "").trim(),
-      turnScopeId: String(currentRun?.turnScopeId || "").trim(),
+      dialogProcessId: String(activeTurnSnapshot?.dialogProcessId || "").trim(),
+      turnScopeId: String(activeTurnSnapshot?.turnScopeId || "").trim(),
       presentationMessageId,
       messages: (Array.isArray(activeSession.value?.messages)
         ? activeSession.value.messages
@@ -347,8 +299,8 @@ export function useReconnectReplay({
       : "";
     logStateMachineDebug("stateMachine.reconnect.presentationHydration.after", () => ({
       sessionId: requestedSessionId,
-      dialogProcessId: String(currentRun?.dialogProcessId || "").trim(),
-      turnScopeId: String(currentRun?.turnScopeId || "").trim(),
+      dialogProcessId: String(activeTurnSnapshot?.dialogProcessId || "").trim(),
+      turnScopeId: String(activeTurnSnapshot?.turnScopeId || "").trim(),
       presentationMessageId,
       detailHydrated: hydrated === true,
       presentationHydratedFromDetail: Boolean(presentationMessage),
@@ -364,7 +316,6 @@ export function useReconnectReplay({
 
   async function reconcileSessionState({
     sessionId = "",
-    hasRunningTask = false,
   } = {}) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return false;
@@ -383,82 +334,17 @@ export function useReconnectReplay({
         detailApplied = true;
       }
     }
-    if (!hasRunningTask) return detailApplied;
-
-    const attempts = Number(protocolReconcileAttempts.get(normalizedSessionId) || 0);
-    if (attempts >= 1 || typeof chatWebSocketClient?.reconnect !== "function") {
-      applyRunStateEvent({
-        type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-        state: BackendChannelState.ERROR,
-        sessionId: normalizedSessionId,
-        source: "reconnect_protocol_mismatch",
-      });
-      notify({ type: "warning", message: translate("infra.reconnectFailed") });
-      return false;
-    }
-
-    protocolReconcileAttempts.set(normalizedSessionId, attempts + 1);
-    setTimeout(() => protocolReconcileAttempts.delete(normalizedSessionId), 5000);
-    await chatWebSocketClient.reconnect({
-      currentSessionId: normalizedSessionId,
-      onReconnectData: (payload) => {
-        if (payload?.sessions) void applyReconnectData(payload);
-        if (payload?.event && payload?.data) {
-          void applyReconnectEvent(payload.event, payload.data);
-        }
-      },
-    }).catch(() => null);
-    return true;
+    return detailApplied;
   }
 
   function applyChannelState(stateData = {}) {
-    const channelState = String(stateData?.state || stateData?.channelState || "").trim().toLowerCase();
-    if (channelState === BackendChannelState.EXPIRED) {
-      const turnScopeId = String(stateData?.turnScopeId || "").trim();
-      scheduleCacheExpiredSessionRefresh({
-        sessionId: String(stateData?.sessionId || "").trim(),
-        dialogProcessId: String(stateData?.dialogProcessId || "").trim(),
-        targetAssistantMessage: turnScopeId
-          ? findAssistantMessageByTurnScopeId(turnScopeId)
-          : null,
-      });
-      return Promise.resolve({ applied: false, reason: "cache_refresh_scheduled" });
-    }
-    if (channelState === BackendChannelState.NO_CONVERSATION) {
-      interactionSubmitting.value = false;
-      clearPendingInteraction();
-      return Promise.resolve({ applied: false, reason: "transient_interaction_cleared" });
-    }
-    if (terminalChannelStates.has(channelState)) {
-      return dispatchAuthoritativeRunStateEvent?.({
-        ...stateData,
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        source: "channel_state_replay",
-      });
-    }
-    return applyReconnectChannelState({
-      stateData,
-      onConversationState,
-      isCurrentActiveSession,
-      findAssistantMessageByTurnScopeId,
-      turnRuntimeRegistry,
-      findAssistantMessageByDialogProcessId,
-      findFallbackAssistantMessage: findReconnectChannelStateFallbackAssistant,
-      applyRunStateEvent,
-      interactionSubmitting,
-      clearPendingInteractionIfObsolete,
-      pendingInteractionRequest,
-      normalizeInteractionRequestPayload,
-      tryAutoResolveInteraction,
-      isInteractionRequestHandled,
-      setPendingInteractionRequest,
-      scheduleMissingInteractionPayloadFailure,
-      missingInteractionPayloadTimers,
-      terminalDialogProcessIdSet,
-      chatWebSocketClient,
-      scheduleCacheExpiredSessionRefresh,
-      clearPendingInteraction,
-      translate,
+    // channel_state is transport-only. Recovery and business state are driven
+    // exclusively by the Replay Batch snapshot and ordered Authority tail.
+    return Promise.resolve({
+      applied: false,
+      reason: "transport_channel_state_ignored",
+      sessionId: String(stateData?.sessionId || "").trim(),
+      turnScopeId: String(stateData?.turnScopeId || "").trim(),
     });
   }
 
@@ -482,7 +368,6 @@ export function useReconnectReplay({
       chatList,
       applyRunStateEvent,
       applyAssistantFailureState,
-      emitSyntheticErrorConversationState,
       notify,
       sessionId,
       dialogProcessId,
@@ -548,51 +433,6 @@ export function useReconnectReplay({
     );
   }
 
-  async function finalizeReconnectDoneSessionDetail(eventData = {}) {
-    const sessionId = String(
-      eventData?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || "",
-    ).trim();
-    const turnScopeId = String(eventData?.turnScopeId || "").trim();
-    const botMessage = turnScopeId
-      ? findAssistantMessageByTurnScopeId(turnScopeId)
-      : null;
-    logWorkflowDiagnostics("frontend.workflowReplay.doneFinalDetailStarted", () => ({
-      sessionId,
-      dialogProcessId: String(eventData?.dialogProcessId || "").trim(),
-      turnScopeId,
-      assistantFound: Boolean(botMessage),
-      doneMessageCount: Array.isArray(eventData?.messages) ? eventData.messages.length : 0,
-    }));
-    const applied = await finalizeDoneTurnPresentation({
-      activeSession,
-      activeSessionId,
-      botMessage,
-      finalDoneEventData: eventData,
-      fetchSessionDetail: chatList.fetchSessionDetail,
-      applySessionDetail: chatList.applySessionDetail,
-      applyAssistantFailureState: (targetAssistantMessage, error) =>
-        applyAssistantFailureStateWithContext({
-          targetAssistantMessage,
-          errorMessage: String(error?.message || error || ""),
-          translate,
-        }),
-      applyRunStateEvent,
-      refreshSessionConnectorsAsync,
-      logSessionEvent: (payload) => sessionLogWebSocketClient?.log?.(payload),
-      completionSource: "reconnectDone",
-    });
-    logWorkflowDiagnostics("frontend.workflowReplay.doneFinalDetailFinished", () => ({
-      sessionId,
-      dialogProcessId: String(eventData?.dialogProcessId || "").trim(),
-      turnScopeId,
-      applied: applied === true,
-      activeMessageCount: Array.isArray(activeSession.value?.messages)
-        ? activeSession.value.messages.length
-        : 0,
-    }));
-    return applied;
-  }
-
   function logReconnectReplaySystemEvent(event, payload = {}) {
     sessionLogWebSocketClient?.log?.({
       category: "system",
@@ -629,7 +469,6 @@ export function useReconnectReplay({
       turnScopeId,
       appliedReconnectSeqByDialogProcessId,
       appliedReconnectEventKindsByTurnKey,
-      terminalDialogProcessIdSet,
       classifyRealtimeLog,
       envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
       markReconnectSequenceApplied,
@@ -648,33 +487,16 @@ export function useReconnectReplay({
         Boolean(findAssistantMessageByDialogProcessId(dialogProcessId)),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
-      applyChannelState,
-      hasAuthoritativeCurrentRun: ({ sessionId = "", turnScopeId = "" } = {}) => {
-        const requestedSessionId = String(sessionId || "").trim();
-        const requestedTurnScopeId = String(turnScopeId || "").trim();
-        if (!requestedSessionId || !requestedTurnScopeId) return false;
-        const sessionEntry = (Array.isArray(sessions.value) ? sessions.value : []).find((entry) => {
-          const entrySessionId = String(entry?.backendSessionId || entry?.sessionId || entry?.id || "").trim();
-          return entrySessionId === requestedSessionId;
-        });
-        const currentRun = sessionEntry?.currentRun;
-        return (
-          String(currentRun?.sessionId || requestedSessionId).trim() === requestedSessionId &&
-          String(currentRun?.turnScopeId || "").trim() === requestedTurnScopeId
-        );
-      },
       applyTurnLifecycleEnvelope,
       applyExecutionSnapshot,
       applyExecutionChildren,
       applyExecutionTree,
       applyWorkflowRuntimeEvent,
-      finalizeDoneTurnPresentation: finalizeReconnectDoneSessionDetail,
       isDeletedTurn,
     });
   }
 
   registerReconnectReplayLifecycleCleanup({
-    missingInteractionPayloadTimers,
     getCacheExpiredRefreshTimer: () => cacheExpiredRefreshTimer,
     setCacheExpiredRefreshTimer: (timer) => {
       cacheExpiredRefreshTimer = timer;
@@ -688,7 +510,6 @@ export function useReconnectReplay({
     applyChannelState,
     replayCache,
     appliedReconnectSeqByDialogProcessId,
-    terminalDialogProcessIdSet,
     isTestMode: import.meta.env.MODE === "test",
   });
 }

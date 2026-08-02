@@ -11,6 +11,17 @@ import {
   createFakeProcessStore,
 } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { createReplayBatch, createTurnLifecycleSnapshot } from "@noobot/event-protocol";
+
+function emptyAuthorityBatch(sessionId, commandId) {
+  return createReplayBatch({
+    sessionId,
+    streamId: `stream-${sessionId}`,
+    requestId: `reconnect-${sessionId}`,
+    snapshot: createTurnLifecycleSnapshot({ commandId, sessionId, sequence: 0 }),
+    snapshotSequence: 0,
+  });
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -104,8 +115,7 @@ describe("useReconnectReplay", () => {
       sessions: [
         {
           sessionId: "s-1",
-          hasRunningTask: true,
-          currentRun: { sessionId: "s-1", dialogProcessId: "dp-mix", turnScopeId: "turn-mix", state: "sending", seq: 2 },
+          replayBatch: emptyAuthorityBatch("s-1", "snapshot-turn-mix"),
           dialogProcesses: [
             {
               dialogProcessId: "dp-mix",
@@ -171,8 +181,7 @@ describe("useReconnectReplay", () => {
         sessions: [
           {
             sessionId: "s-1",
-            hasRunningTask: true,
-            currentRun: { sessionId: "s-1", dialogProcessId: "dp-big", turnScopeId: "turn-big", state: "sending", seq: 1200 },
+            replayBatch: emptyAuthorityBatch("s-1", "snapshot-turn-big"),
             dialogProcesses: [{ dialogProcessId: "dp-big", messages: bigBatch }],
           },
         ],

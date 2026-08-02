@@ -69,6 +69,7 @@ defineEmits([
       class="workflow-node-empty"
       :text="translate('workflow.noWorkflowNodes')"
     />
+
   </div>
 </template>
 
@@ -175,5 +176,37 @@ defineEmits([
 .workflow-node-empty {
   color: var(--noobot-text-secondary);
   font-size: 13px;
+}
+
+.workflow-node-results {
+  margin-top: var(--workflow-card-space-md);
+}
+
+.workflow-node-result {
+  padding: var(--workflow-card-space-sm) var(--workflow-card-space-md);
+  border: 1px solid var(--noobot-msg-assistant-border);
+  border-radius: var(--noobot-radius-sm);
+  background: var(--noobot-msg-assistant-bg);
+}
+
+.workflow-node-result + .workflow-node-result {
+  margin-top: var(--workflow-card-space-sm);
+}
+
+.workflow-node-result-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--workflow-card-space-sm);
+  margin-bottom: 6px;
+  color: var(--noobot-text-secondary);
+  font-size: 12px;
+}
+
+.workflow-node-result-status {
+  flex: 0 0 auto;
+}
+
+.workflow-node-result-content {
+  color: var(--noobot-text-primary);
 }
 </style>

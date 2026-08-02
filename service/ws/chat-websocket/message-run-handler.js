@@ -9,7 +9,7 @@ import { recordServiceWebSocketLifecycle, summarizeDebugAttachments } from "./ru
 import { isPluginDebugEnabled, resolveEffectiveRunTimeoutMs, resolveEffectiveStreamingEnabled, summarizePluginConfig } from "./run-config.js";
 import { isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/authoritative-state/contracts";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/event-protocol";
 import { recoverOrphanedTurn } from "@noobot/authoritative-state/application";
 import { createAgentApplication } from "#agent/application";
 
@@ -38,7 +38,7 @@ export function createMessageRunHandler({
     });
     return result.recovered === true;
   };
-  const commitCurrentFailure = async (error, fallbackPhase = TURN_PHASE.ACTION) => {
+  const commitCurrentFailure = async (error, fallbackPhase = TURN_PHASE.ACTION, terminalCommand = "error") => {
     if (pendingLifecycleCommit) {
       try {
         const pendingResult = await pendingLifecycleCommit;
@@ -66,6 +66,11 @@ export function createMessageRunHandler({
         code: String(error?.errorCode || error?.code || "turn_failed").trim(),
         message: String(error?.message || "turn failed"),
         retryable: false,
+      },
+      terminalStatus: {
+        command: terminalCommand,
+        description: String(error?.message || "turn failed"),
+        error,
       },
     });
     return failed;

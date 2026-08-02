@@ -9,8 +9,6 @@ export function createReconnectReplayContext() {
     replayCache: {},
     appliedReconnectSeqByDialogProcessId: {},
     appliedReconnectEventKindsByTurnKey: {},
-    terminalDialogProcessIdSet: new Set(),
-    missingInteractionPayloadTimers: new Map(),
     cacheExpiredRefreshTimer: null,
     replayHydrationPromise: null,
   };

@@ -272,6 +272,10 @@ function buildAppendMessage(role, content = "", attachments = [], options = {}) 
 }
 
 function resolveStableMessageIdentity(messageItem = {}) {
+  const presentationMessageId = String(messageItem?.presentationMessageId || "").trim();
+  if (getMessageRole(messageItem) === "assistant" && presentationMessageId) {
+    return presentationMessageId;
+  }
   return String(messageItem?.messageId || messageItem?.id || "").trim();
 }
 
@@ -280,6 +284,38 @@ function resolveMessageTurnScopeMergeKey(messageItem = {}) {
   if (!turnScopeId) return "";
   const sessionId = String(messageItem?.sessionId || messageItem?.session_id || "").trim();
   return sessionId ? `${sessionId}::${turnScopeId}` : turnScopeId;
+}
+
+function normalizeFoldedPresentationMessage(sourceMessage = {}, projectedMessage = {}) {
+  const messageRole = getMessageRole(projectedMessage) || getMessageRole(sourceMessage);
+  const presentationMessageId = String(
+    projectedMessage?.presentationMessageId || sourceMessage?.presentationMessageId || "",
+  ).trim();
+  const sourceMessageId = String(
+    projectedMessage?.sourceMessageId ||
+    sourceMessage?.sourceMessageId ||
+    sourceMessage?.messageId ||
+    sourceMessage?.id ||
+    "",
+  ).trim();
+  const normalizedMessage = { ...projectedMessage };
+
+  if (messageRole === "assistant" && presentationMessageId) {
+    normalizedMessage.id = presentationMessageId;
+    normalizedMessage.messageId = presentationMessageId;
+    normalizedMessage.presentationMessageId = presentationMessageId;
+    if (sourceMessageId && sourceMessageId !== presentationMessageId) {
+      normalizedMessage.sourceMessageId = sourceMessageId;
+    }
+  }
+
+  // Canonical model-history records may contain analysis text that belongs in
+  // the activity timeline but is explicitly excluded from the chat body.
+  // Enforce that protocol here so every caller gets the same presentation.
+  if (sourceMessage?.chatPresentation === false) {
+    normalizedMessage.content = "";
+  }
+  return normalizedMessage;
 }
 
 function buildViewMessage(
@@ -302,7 +338,10 @@ function foldConversationMessages(messages = [], buildView) {
       const role = getMessageRole(messageItem);
       return role === "assistant" || role === "user";
     })
-    .map((messageItem) => buildView(messageItem));
+    .map((messageItem) => normalizeFoldedPresentationMessage(
+      messageItem,
+      buildView(messageItem),
+    ));
 
   const mergedMessages = [];
   for (const currentMessage of foldedMessages) {

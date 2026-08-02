@@ -390,10 +390,8 @@ test("workflow hook owns the turn and never falls back to main agent when semant
   assert.equal(dispatchOutcome?.failure?.code, "WORKFLOW_EXECUTION_FAILED");
   assert.equal(dispatchClaims[0].owner, "workflow");
   assert.equal(dispatchClaims[0].source, "workflow_before_agent_dispatch");
-  assert.equal(beforeContext.skipAgentDispatch, true);
-  assert.ok(beforeContext.overrideAgentResult);
-  assert.ok(beforeContext.overrideAgentResult.workflow);
-  assert.equal(beforeContext.workflowFallbackToMainAgent, false);
+  assert.equal(Object.hasOwn(dispatchOutcome || {}, "result"), false);
+  assert.match(String(dispatchOutcome?.failure?.message || ""), /semantic explode/);
 });
 
 test("workflow hook in before_agent_dispatch mode can request skipping main agent dispatch", async () => {
@@ -460,11 +458,10 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
   assert.equal(dispatchClaims[0].origin?.type, "workflow");
   assert.equal(dispatchClaims[0].origin?.workflowRunId, dispatchClaims[0].origin?.workflowRunId?.trim());
   assert.ok(dispatchClaims[0].origin?.workflowRunId);
-  assert.equal(beforeContext.skipAgentDispatch, true);
-  assert.ok(beforeContext.overrideAgentResult);
-  assert.equal(Array.isArray(beforeContext.overrideAgentResult?.turnMessages), true);
+  assert.ok(dispatchOutcome?.result);
+  assert.equal(Array.isArray(dispatchOutcome?.result?.turnMessages), true);
   assert.equal(
-    beforeContext.overrideAgentResult.turnMessages.some(
+    dispatchOutcome.result.turnMessages.some(
       (item) => item?.pluginMessage === true && item?.pluginMeta?.kind === "workflow",
     ),
     true,

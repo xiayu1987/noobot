@@ -25,7 +25,7 @@ import {
   BackendChannelState,
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { createTurnTerminalResolution } from "@noobot/event-protocol";
 
 function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages = [] } = {}) {
   const activeSession = {
@@ -408,7 +408,6 @@ describe("useChatEngine.session-detail", () => {
 
   it.each([
     SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-    SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN,
     SESSION_DETAIL_APPLY_MODE.REPLACE,
   ])("applySessionDetail %s mode applies authoritative empty snapshot over missing in-flight assistant", (mode) => {
     const turnScopeId = `client-turn:${mode}`;
@@ -566,7 +565,7 @@ describe("useChatEngine.session-detail", () => {
           },
         ],
       }],
-    }, { mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN });
+    }, { mode: SESSION_DETAIL_APPLY_MODE.REPLACE });
 
     expect(activeSession.messages).toHaveLength(2);
     expect(activeSession.detailMessages).toHaveLength(2);

@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
-import { TURN_EVENT } from "@noobot/authoritative-state/contracts";
+import { TURN_EVENT } from "@noobot/event-protocol";
 
 function stoppedLifecycle({ sessionId = "s1", turnScopeId = "turn-stopped", dialogProcessId = "dp-stopped" } = {}) {
   return {
@@ -238,13 +238,17 @@ test("chat-websocket-server: continue action does not fallback to current dialog
   }
 });
 
-test("chat-websocket-server: stop during continue request keeps stopping and ends user_stopped", async () => {
+test("chat-websocket-server: stop during continue request ends with authoritative stop completion", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
     initialTurnLifecycle: stoppedLifecycle({ sessionId: "s-continue-stop" }),
     bot: {
-      persistStoppedAssistantMessage: async (payload = {}) => {
-        capturedStopPayload = payload;
+      materializeTerminal: async ({ event, terminalStatus }) => {
+        capturedStopPayload = { event, terminalStatus };
+        return { summaryVersion: 1, turnStatus: {
+          version: 1, turnScopeId: event.turnScopeId, dialogProcessId: event.dialogProcessId,
+          status: "user_stopped", reason: "user_stop",
+        } };
       },
       runSession: async ({ abortSignal }) => {
         await new Promise((resolve) => {
@@ -283,10 +287,16 @@ test("chat-websocket-server: stop during continue request keeps stopping and end
       item?.data?.eventType === TURN_EVENT.STOP_ACCEPTED &&
       item?.data?.turnScopeId === "turn-new"), true);
     assert.equal(events.some((item) => item?.event === "channel_state"), false);
-    const stoppedEvent = events.find((item) => item?.event === "user_stopped");
+    const stoppedEvent = events.find((item) =>
+      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED);
     assert.equal(stoppedEvent?.data?.sessionId, "s-continue-stop");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");
-    assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-new");
+    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-new");
+    assert.equal(stoppedEvent?.data?.phase, "stop");
+    assert.equal(stoppedEvent?.data?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.eventId);
+    assert.equal(capturedStopPayload?.terminalStatus?.assistantMessage?.turnScopeId, "turn-new");
+    assert.equal(capturedStopPayload?.terminalStatus?.assistantMessage?.dialogProcessId, "dp-new");
   } finally {
     await closeServer(server);
   }

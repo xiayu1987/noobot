@@ -6,7 +6,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { runFunctionCallLoop } from "../../../src/runtime/turn/orchestrator.js";
+import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
+import {
+  createTestTurnMessagesStore,
+  prepareTestTurnExecution,
+} from "./turn-runtime-test-helper.js";
+
+function runFunctionCallLoop(args = {}) {
+  prepareTestTurnExecution(args.modelState, args.loopState, "orchestrator-no-tools");
+  return runFunctionCallLoopProduction(args);
+}
 
 function delay(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
@@ -51,7 +60,7 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
     traces: [],
     turnMessages: [],
     turnTasks: [],
-    currentTurnMessages: null,
+    currentTurnMessages: createTestTurnMessagesStore(),
     currentTurnTasks: null,
     dialogProcessId: "dialog-1",
     maxTurns,
@@ -69,7 +78,7 @@ function createModelState(llm, defaultModelSpec = null) {
     defaultModelSpec && typeof defaultModelSpec === "object"
       ? defaultModelSpec
       : { alias: "test_alias", model: "test-model" };
-  return {
+  const modelState = {
     llm,
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
@@ -85,6 +94,7 @@ function createModelState(llm, defaultModelSpec = null) {
     activeModelSpec: resolvedModelSpec,
     abortSignal: null,
   };
+  return modelState;
 }
 
 test("when model returns no tool calls, return directly without a retry prompt", async () => {

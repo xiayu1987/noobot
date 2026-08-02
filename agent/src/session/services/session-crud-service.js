@@ -10,7 +10,7 @@ import {
   isSessionDisplaySummaryPayload,
 } from "../session-summary-builders.js";
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
-import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { createTurnTerminalResolution } from "@noobot/event-protocol";
 
 export class SessionCrudService {
   constructor({

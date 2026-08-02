@@ -168,9 +168,12 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     await vi.advanceTimersByTimeAsync(1300);
 
     const assistant = assistantMessage(activeSession);
-    expect(sending.value).toBe(false);
+    // Refresh failure cannot manufacture an Authority terminal state. The
+    // transport cache-expiry observation leaves the turn in-flight until a
+    // lifecycle envelope or snapshot arrives.
+    expect(sending.value).toBe(true);
     expect(canStop.value).toBe(false);
-    expect(assistant?.statusLabel).toBe("chat.generated");
+    expect(assistant?.statusLabel).not.toBe("chat.generated");
     expect(assistant?.error).not.toBe("chat.expiredRefreshFailed");
     expect(notify).toHaveBeenCalledWith({
       type: "error",

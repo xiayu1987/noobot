@@ -7,12 +7,12 @@ import {
   buildNormalizedDetailMessages,
   buildTurnStatusesByTurnScopeId,
 } from "./detailMessages.js";
+import { foldConversationMessages } from "../../../chat/model/messageModel.js";
 
 export function buildSessionDetailProjection({
   sessionDetail = {},
   sessionDocs = [],
   makeViewMessage,
-  foldMessagesForView = null,
 } = {}) {
   const summary = sessionDetail?.sessionSummary && typeof sessionDetail.sessionSummary === "object"
     ? sessionDetail.sessionSummary
@@ -35,12 +35,10 @@ export function buildSessionDetailProjection({
     turnStatuses,
     makeViewMessage,
   });
-  // A detail snapshot is a transport representation.  The display projection
-  // must use the same conversation folding contract as the live stream so
-  // tool_result records cannot become standalone assistant bubbles.
-  const projectedMessages = typeof foldMessagesForView === "function"
-    ? foldMessagesForView(normalizedMessages)
-    : normalizedMessages;
+  // A detail snapshot contains canonical model-history entities. Chat display
+  // entities are always projected by the same presentation-identity contract
+  // used by the live stream; callers cannot bypass this projection.
+  const projectedMessages = foldConversationMessages(normalizedMessages, makeViewMessage);
   return {
     sessionId,
     messages: projectedMessages,

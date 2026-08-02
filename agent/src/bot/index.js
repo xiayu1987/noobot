@@ -190,14 +190,6 @@ export class BotManager {
     return this.sessionRunner.resolveExecutionIntent(payload);
   }
 
-  async persistStoppedAssistantMessage(payload = {}) {
-    return this.sessionRunner.persistStoppedAssistantMessage(payload);
-  }
-
-  async upsertTurnStatus(payload = {}) {
-    return this.sessionRunner.upsertTurnStatus(payload);
-  }
-
   async applyTurnLifecycleEvent(payload = {}) {
     return this.sessionRunner.applyTurnLifecycleEvent(payload);
   }

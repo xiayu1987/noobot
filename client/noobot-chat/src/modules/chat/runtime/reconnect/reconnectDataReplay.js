@@ -9,108 +9,50 @@ import {
   splitReconnectMessagesByTurnIdentity,
 } from "../../model/reconnectReplayModel.js";
 import { nowMs } from "../../model/timeFields.js";
-import { isInFlightConversationState } from "./conversationState.js";
 import { _trimStr } from "./utils.js";
-import {
-  BackendChannelState,
-  SESSION_RUN_EVENT,
-  resolveRememberedStopRequestedEvent,
-} from "../sessionRunStateMachine.js";
 import { normalizeTurnMeta } from "../../model/messageIdentity.js";
 import { normalizeReplayCacheKey } from "./replayCache.js";
-import { validateTurnLifecycleSnapshot } from "@noobot/authoritative-state/contracts";
+import { replayEventTail, validateReplayBatch, validateTurnLifecycleSnapshot } from "@noobot/event-protocol";
 import {
   logStateMachineDebug,
   summarizeTurnLifecycleSnapshot,
 } from "../../../debug/loggers/stateMachineLogger.js";
 
 function hasValidTurnLifecycleSnapshot(sessionEntry = {}) {
-  const snapshot = sessionEntry?.turnLifecycleSnapshot;
+  const snapshot = sessionEntry?.replayBatch?.snapshot;
   return Boolean(snapshot && typeof snapshot === "object" && validateTurnLifecycleSnapshot(snapshot).valid);
 }
 
-function resolveAuthoritativeConversationStates(sessionEntry = {}) {
+function resolveAuthoritativeActiveTurn(sessionEntry = {}) {
   const sessionId = _trimStr(sessionEntry?.sessionId);
-  const authoritativeRun = sessionEntry?.currentRun;
-  const authoritativeRunMeta = normalizeTurnMeta(authoritativeRun);
+  const authoritativeRun = sessionEntry?.replayBatch?.snapshot?.activeTurn;
+  const authoritativeRunMeta = normalizeTurnMeta({ ...authoritativeRun, sessionId });
   const hasConsistentAuthoritativeRun =
     _trimStr(authoritativeRunMeta.sessionId) === sessionId &&
     Boolean(_trimStr(authoritativeRunMeta.turnScopeId));
   if (hasConsistentAuthoritativeRun) {
-    return [{
+    return {
       ...authoritativeRun,
       authoritativeSnapshot: true,
       sessionId: authoritativeRunMeta.sessionId,
       dialogProcessId: authoritativeRunMeta.dialogProcessId,
       turnScopeId: authoritativeRunMeta.turnScopeId,
-    }];
+    };
   }
-  return [];
-}
-
-function hasValidCurrentRun(sessionEntry = {}) {
-  return resolveAuthoritativeConversationStates(sessionEntry).length === 1;
+  return null;
 }
 
 function requiresSessionReconciliation(sessionEntry = {}) {
-  if (hasValidCurrentRun(sessionEntry) || hasValidTurnLifecycleSnapshot(sessionEntry)) return false;
-  return Boolean(
-    sessionEntry?.hasRunningTask === true ||
-    (Array.isArray(sessionEntry?.conversationStates) && sessionEntry.conversationStates.length) ||
-    (Array.isArray(sessionEntry?.dialogProcesses) && sessionEntry.dialogProcesses.length),
-  );
-}
-
-function createReconnectRunStateEvents(reconnectSessions = [], recoverableSessionId = "") {
-  const events = [];
-  if (recoverableSessionId) {
-    const recoverableSessionEntry = reconnectSessions.find(
-      (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
-    );
-    const recoverableRunMeta = normalizeTurnMeta(recoverableSessionEntry?.currentRun || {});
-    const rememberedStopEvent = resolveRememberedStopRequestedEvent({
-      sessionId: recoverableSessionId,
-      dialogProcessId: recoverableRunMeta.dialogProcessId,
-      turnScopeId: recoverableRunMeta.turnScopeId,
-    });
-    if (rememberedStopEvent) events.push(rememberedStopEvent);
-  }
-  reconnectSessions.forEach((sessionEntry) => {
-    const sessionId = _trimStr(sessionEntry?.sessionId);
-    const stateEntries = resolveAuthoritativeConversationStates(sessionEntry);
-    stateEntries.forEach((stateEntry) => {
-      const turnMeta = normalizeTurnMeta(stateEntry);
-      const rememberedStopEvent = resolveRememberedStopRequestedEvent({
-        sessionId,
-        dialogProcessId: _trimStr(stateEntry?.dialogProcessId),
-        turnScopeId: turnMeta.turnScopeId,
-      });
-      if (rememberedStopEvent) events.push(rememberedStopEvent);
-      const state = _trimStr(stateEntry?.state);
-      events.push({
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state,
-        sessionId,
-        dialogProcessId: _trimStr(stateEntry?.dialogProcessId),
-        turnScopeId: turnMeta.turnScopeId,
-        source: "reconnect_data",
-        sourceEvent: _trimStr(stateEntry?.sourceEvent),
-        seq: Number(stateEntry?.seq || 0),
-        authoritativeSnapshot: stateEntry?.authoritativeSnapshot === true,
-      });
-    });
-  });
-  return events;
+  if (hasValidTurnLifecycleSnapshot(sessionEntry)) return false;
+  return Boolean(Array.isArray(sessionEntry?.dialogProcesses) && sessionEntry.dialogProcesses.length);
 }
 
 export async function applyReconnectDataReplay({
   reconnectData,
   ensureReconnectSessionActive,
-  applyRunStateEvents,
   isCurrentActiveSession,
   replayCache,
   applyReconnectMessagesToActiveSession,
-  applyChannelState,
   scheduleCacheExpiredSessionRefresh,
   reconcileSessionState,
   applySubSessionReplayMessages,
@@ -118,21 +60,29 @@ export async function applyReconnectDataReplay({
   hydrateActiveSessionBeforeReplay,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
+  applyPendingInteraction,
 } = {}) {
   const receivedSessions = Array.isArray(reconnectData?.sessions)
     ? reconnectData.sessions
     : [];
-  const invalidSessions = receivedSessions.filter(requiresSessionReconciliation);
+  const invalidProtocolSessions = receivedSessions.filter((sessionEntry) => {
+    const batch = sessionEntry?.replayBatch;
+    return !batch || validateReplayBatch(batch).valid !== true;
+  });
+  const invalidSessions = receivedSessions.filter((sessionEntry) =>
+    invalidProtocolSessions.includes(sessionEntry) || requiresSessionReconciliation(sessionEntry),
+  );
   const reconnectSessions = receivedSessions.filter(
-    (sessionEntry) => !requiresSessionReconciliation(sessionEntry),
+    (sessionEntry) => !invalidProtocolSessions.includes(sessionEntry)
+      && !requiresSessionReconciliation(sessionEntry),
   );
   logStateMachineDebug("stateMachine.reconnect.data.planned", () => ({
     receivedSessionCount: receivedSessions.length,
     validSessionCount: reconnectSessions.length,
     invalidSessionCount: invalidSessions.length,
     lifecycleEventCount: reconnectSessions.reduce(
-      (count, sessionEntry) => count + (Array.isArray(sessionEntry?.lifecycleEvents)
-        ? sessionEntry.lifecycleEvents.length
+      (count, sessionEntry) => count + (Array.isArray(sessionEntry?.replayBatch?.events)
+        ? sessionEntry.replayBatch.events.length
         : 0),
       0,
     ),
@@ -141,20 +91,18 @@ export async function applyReconnectDataReplay({
   for (const sessionEntry of invalidSessions) {
     await reconcileSessionState?.({
       sessionId: _trimStr(sessionEntry?.sessionId),
-      hasRunningTask: sessionEntry?.hasRunningTask === true,
-      reason: "invalid_current_run",
+      reason: invalidProtocolSessions.includes(sessionEntry)
+        ? "invalid_replay_batch"
+        : "missing_authority_snapshot",
     });
   }
   // A reconnect transaction has exactly one Authority baseline. Events are a
   // tail after that baseline, never an alternative snapshot source.
   for (const sessionEntry of reconnectSessions) {
-    const snapshot = sessionEntry?.turnLifecycleSnapshot;
+    const snapshot = sessionEntry?.replayBatch?.snapshot;
     if (!snapshot || typeof snapshot !== "object") continue;
     logStateMachineDebug("stateMachine.reconnect.snapshot.received", () => ({
       ...summarizeTurnLifecycleSnapshot(snapshot),
-      currentRunState: _trimStr(sessionEntry?.currentRun?.state),
-      currentRunSequence: Number(sessionEntry?.currentRun?.seq || sessionEntry?.currentRun?.sequence || 0),
-      hasRunningTask: sessionEntry?.hasRunningTask === true,
     }));
     const result = applyTurnLifecycleSnapshot?.(snapshot);
     logStateMachineDebug("stateMachine.reconnect.snapshot.applied", () => ({
@@ -166,24 +114,37 @@ export async function applyReconnectDataReplay({
   }
   for (const sessionEntry of reconnectSessions) {
     const snapshot = hasValidTurnLifecycleSnapshot(sessionEntry)
-      ? sessionEntry.turnLifecycleSnapshot
+      ? sessionEntry.replayBatch.snapshot
       : null;
-    const snapshotSequence = Number(snapshot?.sequence || 0);
-    const lifecycleEvents = (Array.isArray(sessionEntry?.lifecycleEvents)
-      ? sessionEntry.lifecycleEvents
-      : [])
-      .map((item) => item?.data && typeof item.data === "object" ? item.data : item)
-      .filter((item) => item && typeof item === "object")
-      .filter((item) => Number(item?.sequence || 0) > snapshotSequence)
-      .sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0));
-    if (!lifecycleEvents.length) continue;
+    const snapshotSequence = Number(sessionEntry?.replayBatch?.snapshotSequence || 0);
+    const lifecycleEvents = Array.isArray(sessionEntry?.replayBatch?.events)
+      ? sessionEntry.replayBatch.events
+      : [];
+    const replayResult = replayEventTail({
+      snapshotSequence,
+      events: lifecycleEvents,
+      apply: () => {},
+    });
+    if (!replayResult.applied) {
+      await reconcileSessionState?.({
+        sessionId: _trimStr(sessionEntry?.sessionId),
+        reason: replayResult.reason,
+      });
+      continue;
+    }
+    if (!lifecycleEvents.length) {
+      for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
+        await applyPendingInteraction?.(interaction);
+      }
+      continue;
+    }
     const sessionId = _trimStr(sessionEntry?.sessionId);
     logStateMachineDebug("stateMachine.reconnect.lifecycleReplay.before", () => ({
       sessionId,
       snapshotSequence,
       eventCount: lifecycleEvents.length,
-      firstSequence: Number(lifecycleEvents[0]?.sequence || 0),
-      lastSequence: Number(lifecycleEvents.at(-1)?.sequence || 0),
+      firstSequence: Number(lifecycleEvents[0]?.ordering?.streamSequence || lifecycleEvents[0]?.sequence || 0),
+      lastSequence: Number(lifecycleEvents.at(-1)?.ordering?.streamSequence || lifecycleEvents.at(-1)?.sequence || 0),
     }));
     const results = [];
     for (const envelope of lifecycleEvents) {
@@ -198,13 +159,13 @@ export async function applyReconnectDataReplay({
       rejectedCount: results.filter((result) => result?.applied === false).length,
       reasons: [...new Set(results.map((result) => String(result?.reason || "")).filter(Boolean))],
     }));
+    for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
+      await applyPendingInteraction?.(interaction);
+    }
   }
   const recoverableSessionId = findRecoverableReconnectSessionId(reconnectSessions);
   const recoverableSessionEntry = reconnectSessions.find(
     (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
-  );
-  const applyReconnectRunState = () => applyRunStateEvents?.(
-    createReconnectRunStateEvents(reconnectSessions, recoverableSessionId),
   );
   if (recoverableSessionId) {
     logStateMachineDebug("stateMachine.reconnect.activation.before", () => ({
@@ -215,36 +176,34 @@ export async function applyReconnectDataReplay({
       sessionId: recoverableSessionId,
       active: isCurrentActiveSession(recoverableSessionId),
     }));
-    applyReconnectRunState();
   }
 
   for (const sessionEntry of reconnectSessions) {
     const sessionId = _trimStr(sessionEntry?.sessionId);
     if (!sessionId) continue;
-    const currentRunMeta = normalizeTurnMeta(sessionEntry?.currentRun || {});
+    const authoritativeActiveTurn = resolveAuthoritativeActiveTurn(sessionEntry);
+    const authoritativeActiveTurnMeta = normalizeTurnMeta(authoritativeActiveTurn || {});
     const dialogProcesses = Array.isArray(sessionEntry?.dialogProcesses)
       ? sessionEntry.dialogProcesses
       : [];
     const hasReplayMessages = dialogProcesses.some((dp) =>
       Array.isArray(dp?.messages) && dp.messages.length > 0,
     );
-    const hasActiveCurrentRun =
-      hasValidCurrentRun(sessionEntry) &&
-      isInFlightConversationState(sessionEntry?.currentRun?.state);
-    if ((hasActiveCurrentRun || hasReplayMessages) && isCurrentActiveSession(sessionId)) {
+    const hasAuthoritativeActiveTurn = Boolean(authoritativeActiveTurn && authoritativeActiveTurn.state && !["completed", "stop_completed"].includes(authoritativeActiveTurn.state));
+    if ((hasAuthoritativeActiveTurn || hasReplayMessages) && isCurrentActiveSession(sessionId)) {
       // Baseline restoration belongs to the reconnect-data transaction, not to
-      // individual event batches. An authoritative in-flight currentRun also
+      // individual event batches. An authoritative in-flight active Turn also
       // requires the baseline when no replay event has been persisted yet.
       logStateMachineDebug("stateMachine.reconnect.hydration.before", () => ({
         sessionId,
-        turnScopeId: currentRunMeta.turnScopeId,
-        hasActiveCurrentRun,
+        turnScopeId: authoritativeActiveTurnMeta.turnScopeId,
+        hasAuthoritativeActiveTurn,
         hasReplayMessages,
       }));
-      const hydrated = await hydrateActiveSessionBeforeReplay?.(sessionId, sessionEntry?.currentRun || null);
+      const hydrated = await hydrateActiveSessionBeforeReplay?.(sessionId, authoritativeActiveTurn);
       logStateMachineDebug("stateMachine.reconnect.hydration.after", () => ({
         sessionId,
-        turnScopeId: currentRunMeta.turnScopeId,
+        turnScopeId: authoritativeActiveTurnMeta.turnScopeId,
         hydrated: hydrated === true,
       }));
     }
@@ -263,14 +222,14 @@ export async function applyReconnectDataReplay({
         if (!messages.length) continue;
         if (!isCurrentActiveSession(sessionId)) {
           const replayTurnScopeId = replayGroup.turnScopeId || normalizeTurnMeta(dp).turnScopeId ||
-            currentRunMeta.turnScopeId;
+            authoritativeActiveTurnMeta.turnScopeId;
           const replayKey = normalizeReplayCacheKey(dpId, sessionId, replayTurnScopeId) ||
             `__unknown_${nowMs()}_${Math.random()}`;
           if (!replayCache[sessionId]) replayCache[sessionId] = {};
           replayCache[sessionId][replayKey] = messages;
         } else {
           const replayTurnScopeId = replayGroup.turnScopeId || normalizeTurnMeta(dp).turnScopeId ||
-            currentRunMeta.turnScopeId;
+            authoritativeActiveTurnMeta.turnScopeId;
           if (isDeletedTurn?.({ sessionId, turnScopeId: replayTurnScopeId }) === true) continue;
           const isWorkflowNodeReplay = replayTurnScopeId.startsWith("workflow-node:") ||
             messages.some(({ event = "", data = {} } = {}) =>
@@ -293,16 +252,6 @@ export async function applyReconnectDataReplay({
     }
   }
 
-  for (const sessionEntry of reconnectSessions) {
-    const stateEntries = resolveAuthoritativeConversationStates(sessionEntry);
-    for (const stateEntry of stateEntries) {
-      await applyChannelState(stateEntry);
-    }
-  }
-
-  if (recoverableSessionId && isCurrentActiveSession(recoverableSessionId)) {
-    applyReconnectRunState();
-  }
 
   logStateMachineDebug("stateMachine.reconnect.transaction.complete", () => ({
     sessionId: recoverableSessionId,
@@ -310,11 +259,7 @@ export async function applyReconnectDataReplay({
     validSessionCount: reconnectSessions.length,
     invalidSessionCount: invalidSessions.length,
     recoverableSessionId,
-    recoverableCurrentRunState: _trimStr(recoverableSessionEntry?.currentRun?.state),
-    recoverableTurnScopeId: normalizeTurnMeta(recoverableSessionEntry?.currentRun || {}).turnScopeId,
-    authoritativeSnapshotRequestedCount: reconnectSessions.filter(
-      (sessionEntry) => sessionEntry?.lifecycleSnapshotRequested === true,
-    ).length,
+    recoverableTurnScopeId: normalizeTurnMeta(resolveAuthoritativeActiveTurn(recoverableSessionEntry) || {}).turnScopeId,
     authoritativeSnapshotReceivedCount: reconnectSessions.filter(hasValidTurnLifecycleSnapshot).length,
     cacheExpired: reconnectData?.cacheExpired === true,
   }));

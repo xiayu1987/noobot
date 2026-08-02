@@ -28,7 +28,6 @@
     "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:frontend-structure && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
   },
   "dependencies": {
-    "@noobot/authoritative-state": "file:../../authoritative-state",
     "@noobot/client-shared": "file:../shared",
     "@noobot/plugin-runtime": "file:../../plugin-runtime",
     "@noobot/shared": "file:../../shared",
@@ -38,7 +37,8 @@
     "mermaid": "^11.16.0",
     "pinia": "^4.0.2",
     "vue": "^3.5.40",
-    "noobot-i18n": "file:../../i18n"
+    "noobot-i18n": "file:../../i18n",
+    "@noobot/event-protocol": "file:../../event-protocol"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.8",

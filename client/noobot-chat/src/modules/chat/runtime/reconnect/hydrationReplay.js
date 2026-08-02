@@ -46,9 +46,7 @@ export async function renderActiveSessionBeforeReplay({
   const hydrationPromise = (async () => {
     try {
       const detail = await chatList.fetchSessionDetail(backendSessionId, {
-        source: "reconnectHydration",
-        reuseRecentlyLoaded: false,
-        allowLoadedSnapshot: false,
+        source: "reconnectProtocolReconcile",
       });
       const matchingSessionDoc = resolveMatchingSessionDetail(detail, backendSessionId);
       const currentActiveSessionId = sessionIdentity(activeSession?.value);

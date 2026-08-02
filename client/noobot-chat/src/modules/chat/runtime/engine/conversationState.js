@@ -396,20 +396,6 @@ export function createChatEngineConversationState({
         }));
         return;
       }
-      applyRunStateEvent?.({
-          type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-          state,
-          sessionId,
-          dialogProcessId,
-          turnScopeId,
-          source: "stream",
-          sourceEvent: String(statePayload?.sourceEvent || "").trim(),
-          seq: Number(statePayload?.seq || 0),
-          createdAtMs,
-          updatedAtMs,
-          createdAt,
-          updatedAt,
-      });
       if (
         state === BackendChannelState.SENDING &&
         String(statePayload?.sourceEvent || "").trim().toLowerCase() === "interaction_response" &&
@@ -465,20 +451,6 @@ export function createChatEngineConversationState({
     }
     if (!isTerminalConversationState(state)) return;
     clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
-    applyRunStateEvent?.({
-        type: SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE,
-        state,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        source: "stream",
-        sourceEvent: String(statePayload?.sourceEvent || "").trim(),
-        seq: Number(statePayload?.seq || 0),
-        createdAtMs,
-        updatedAtMs,
-        createdAt,
-        updatedAt,
-    });
     if (typeof clearPendingInteractionIfObsolete === "function") {
       clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
     }

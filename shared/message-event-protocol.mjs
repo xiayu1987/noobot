@@ -87,6 +87,14 @@ export function validateMessageEventEnvelope(value = {}) {
     errors.push("sequence_scope_mismatch");
   }
   if (!sequenceIdentity.sequenceKey) errors.push("missing_sequence_scope");
+  const workflowRunId = text(value?.workflowRunId);
+  const nodeExecutionId = text(value?.nodeExecutionId);
+  if (Boolean(workflowRunId) !== Boolean(nodeExecutionId)) {
+    errors.push("incomplete_workflow_identity");
+  }
+  if (workflowRunId && !text(value?.parentSessionId)) {
+    errors.push("missing_workflow_parent_session");
+  }
   const eventType = text(value?.eventType);
   if (!MESSAGE_EVENT_TYPES.has(eventType)) errors.push("unsupported_event_type");
   if (eventType === MESSAGE_EVENT_TYPE.LLM_DELTA && typeof value?.text !== "string") {
@@ -94,12 +102,19 @@ export function validateMessageEventEnvelope(value = {}) {
   }
   if (
     (
-      REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType) ||
-      eventType === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT
+      REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType)
     ) &&
     typeof value?.text !== "string" &&
     typeof value?.output !== "string"
   ) errors.push("missing_content");
+  if (eventType === MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT) {
+    if (value?.attachments !== undefined && !Array.isArray(value.attachments)) {
+      errors.push("invalid_attachments");
+    }
+    if (value?.transferEnvelopes !== undefined && !Array.isArray(value.transferEnvelopes)) {
+      errors.push("invalid_transfer_envelopes");
+    }
+  }
   if (eventType === MESSAGE_EVENT_TYPE.THINKING && typeof value?.text !== "string") {
     errors.push("missing_text");
   }
@@ -144,6 +159,28 @@ export function projectMessageEventContent(event = {}) {
     });
   }
   return Object.freeze({ effect: MESSAGE_CONTENT_EFFECT.NONE, content: "" });
+}
+
+export function projectMessageEventMetadata(event = {}) {
+  const metadata = {};
+  const modelAlias = text(event?.modelAlias);
+  const modelName = text(event?.modelName || event?.model);
+  if (modelAlias) metadata.modelAlias = modelAlias;
+  if (modelName) metadata.modelName = modelName;
+  return Object.freeze(metadata);
+}
+
+export function projectAuthoritativeFinalMessage(event = {}) {
+  if (!isAuthoritativeFinalContentEvent(event)) return Object.freeze({});
+  return Object.freeze({
+    content: typeof event?.text === "string"
+      ? event.text
+      : (typeof event?.output === "string" ? event.output : ""),
+    attachments: Object.freeze(Array.isArray(event?.attachments) ? [...event.attachments] : []),
+    transferEnvelopes: Object.freeze(
+      Array.isArray(event?.transferEnvelopes) ? [...event.transferEnvelopes] : [],
+    ),
+  });
 }
 
 export function isAuthoritativeFinalContentEvent(event = {}) {

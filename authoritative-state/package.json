@@ -15,6 +15,7 @@
     "test": "node --test __tests__/*.test.mjs"
   },
   "dependencies": {
-    "@noobot/shared": "file:../shared"
+    "@noobot/shared": "file:../shared",
+    "@noobot/event-protocol": "file:../event-protocol"
   }
 }

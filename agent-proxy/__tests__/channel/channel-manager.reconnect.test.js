@@ -127,14 +127,12 @@ test("reconnect should replay unresolved interaction_request with pending marker
 
   const reconnectDataEvent = getReconnectDataEvent(socket);
   assert.ok(reconnectDataEvent, "should send reconnect_data event");
-  const replayMessages = listReplayMessages(reconnectDataEvent);
-  const pendingInteractionEnvelope = replayMessages.find(
-    (envelope) =>
-      String(envelope?.event || "") === "interaction_request" &&
-      String(envelope?.data?.requestId || "") === "req-pending",
+  const sessionEntry = reconnectDataEvent.data.sessions.find((entry) => entry.sessionId === "session-1");
+  const pendingInteractionEnvelope = sessionEntry?.replayBatch?.pendingInteractions?.find(
+    (envelope) => String(envelope?.data?.requestId || envelope?.requestId || "") === "req-pending",
   );
-  assert.ok(pendingInteractionEnvelope, "should replay unresolved interaction request");
-  assert.equal(pendingInteractionEnvelope?.data?.__agentProxyPendingInteraction, true);
+  assert.ok(pendingInteractionEnvelope, "should expose unresolved interaction in replayBatch.pendingInteractions");
+  assert.equal(JSON.stringify(reconnectDataEvent.data).includes("__agentProxyPendingInteraction"), false);
 });
 
 test("reconnect_data replay messages should include channel sessionId", () => {
@@ -256,7 +254,6 @@ test("reconnect records replay filtering and cache expiry reasons", () => {
 
   manager.handleReconnect(socket, {
     currentSessionId: "session-1",
-    currentTurnScopeId: "turn-new",
     lastReceivedSeqMap: { "dp-1": 1 },
   });
 
@@ -264,7 +261,7 @@ test("reconnect records replay filtering and cache expiry reasons", () => {
   assert.ok(evaluated?.data?.connectionId);
   assert.equal(evaluated.data.result, "empty");
   assert.equal(evaluated.data.dropReason, "cursor_gap_or_cache_expired");
-  assert.equal(evaluated.data.filteredCounts.turnScopeMismatch, 1);
+  assert.equal(evaluated.data.filteredCounts.turnScopeMismatch, 0);
   const expired = records.find((item) => item.event === "agentProxy.reconnect.cache.expired");
   assert.equal(expired?.data?.result, "expired");
   assert.equal(expired?.data?.dropReason, "cursor_gap_or_cache_expired");

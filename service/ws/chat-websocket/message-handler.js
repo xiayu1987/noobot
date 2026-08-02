@@ -7,7 +7,7 @@ import { unregisterActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { resetRunState } from "./connection-state.js";
-import { TURN_COMMAND, TURN_PHASE } from "@noobot/authoritative-state/contracts";
+import { TURN_COMMAND, TURN_PHASE } from "@noobot/event-protocol";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { createMessageQueryHandlers } from "./message-query-handlers.js";
 import { createMessageStopHandler } from "./message-stop-handler.js";
@@ -36,13 +36,14 @@ export function createMessageHandler({
   commitTurnLifecycle,
   dispatchAuthorityEvents,
   recoverTurnFinalize,
+  recoverSnapshotOrphan,
 }) {
   const canonicalRunOwnerId = String(authInfo?.userId || "").trim();
 
   const { handleInteractionResponse, handleSnapshotGet, handleExecutionQuery, handleFinalize } =
     createMessageQueryHandlers({
       state, authInfo, sendEvent, translateText, isForbiddenUserScope, resolveBot,
-      pendingInteractionRequests, recoverTurnFinalize,
+      pendingInteractionRequests, recoverTurnFinalize, recoverSnapshotOrphan,
     });
   const handleStop = createMessageStopHandler({
     state, canonicalRunOwnerId, sendEvent, translateText, resolveBot, sessionLogConfig,
@@ -126,8 +127,8 @@ export function createMessageHandler({
             ...state.currentRunMeta,
             data: { errorType: error?.name || "Error" },
           });
-          await commitCurrentFailure(error, TURN_PHASE.PROCESSING);
-          await finalizeAborted(buildRunStateSnapshot(), { error });
+          const committed = await commitCurrentFailure(error, TURN_PHASE.PROCESSING, "aborted");
+          await finalizeAborted(buildRunStateSnapshot(), { error, committed });
         }
         return;
       }
@@ -137,8 +138,8 @@ export function createMessageHandler({
         ...state.currentRunMeta,
         data: { errorType: error?.name || "Error" },
       });
-      await commitCurrentFailure(error);
-      await finalizeGenericError(buildRunStateSnapshot(), { error });
+      const committed = await commitCurrentFailure(error);
+      await finalizeGenericError(buildRunStateSnapshot(), { error, committed });
     } finally {
       if (runMessageStarted) {
         if (state.currentRunHandle) {

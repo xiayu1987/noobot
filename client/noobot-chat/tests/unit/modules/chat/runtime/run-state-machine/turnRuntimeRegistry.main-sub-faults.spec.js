@@ -13,7 +13,7 @@ import {
   resolveTurnRuntimeByScope,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/event-protocol";
 
 function event(registry, type, sessionId, turnScopeId, dialogProcessId, extra = {}) {
   return applyTurnRuntimeEvent(registry, { type, sessionId, turnScopeId, dialogProcessId, ...extra });

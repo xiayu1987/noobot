@@ -33,7 +33,6 @@ import { useAgentInteraction } from "./useAgentInteraction.js";
 import { useConnectorPanel } from "../../composer/composables/useConnectorPanel.js";
 import { useChatList } from "./useChatList.js";
 import { useChatEngine } from "./useChatEngine.js";
-import { finalizeStoppedSessionDetail } from "../runtime/engine/sessionFinalize.js";
 import { useReconnectReplay } from "./useReconnectReplay.js";
 import { useChatStore } from "../stores/useChatStore.js";
 import { useProcessStore } from "../stores/useProcessStore.js";
@@ -74,6 +73,7 @@ import { setToolLogWindowDebugLogSink } from "../../debug/loggers/toolLogWindowD
 import { setTerminalResolutionDebugLogSink } from "../../debug/loggers/terminalResolutionDebugLogger.js";
 import {
   resolveSessionTurnRuntime,
+  resolveLatestContinuableStoppedTurn,
   sessionRuntimeId,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
@@ -116,6 +116,8 @@ export function useChatSession({
   const {
     turnRuntimeRegistry,
     workflowNodeStateRegistry,
+    subSessionMessageRegistry,
+    subSessionMessageRegistryVersion,
     sessions,
     activeSessionId,
     activeSession,
@@ -143,8 +145,15 @@ export function useChatSession({
     const canonicalSessionId = String(
       turnRuntimeRegistry.value?.sessionAliases?.[sessionId] || sessionId,
     ).trim();
+    const activeTurn = resolveSessionTurnRuntime(
+      turnRuntimeRegistry.value,
+      canonicalSessionId,
+    );
+    const continuableStoppedTurn = !activeTurn
+      ? resolveLatestContinuableStoppedTurn(turnRuntimeRegistry.value, canonicalSessionId)
+      : null;
     return String(
-      resolveSessionTurnRuntime(turnRuntimeRegistry.value, canonicalSessionId)?.turnScopeId || "",
+      activeTurn?.turnScopeId || continuableStoppedTurn?.turnScopeId || "",
     ).trim();
   }
 
@@ -528,6 +537,7 @@ export function useChatSession({
     chatWebSocketClient,
     sessionLogWebSocketClient,
     applyTurnRuntimeEvent: submitTurnRuntimeEvent,
+    applyTurnLifecycleEnvelope: chatStore.applyTurnLifecycleEnvelope,
     commitTurnTerminalResolution: chatStore.applyTurnTerminalResolution,
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
     removeWorkflowOwnersForReplacedTurns: chatStore.removeWorkflowOwnersForReplacedTurns,
@@ -570,6 +580,7 @@ export function useChatSession({
     notify,
     processStore,
     dispatchAuthoritativeRunStateEvent: chatEngine.dispatchAuthoritativeRunStateEvent,
+    applyTurnLifecycleEnvelope: chatStore.applyTurnLifecycleEnvelope,
     applyExecutionSnapshot: (payload) => chatStore.applyExecutionSnapshot(payload),
     applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),
     applyExecutionTree: (payload) => chatStore.applyExecutionTree(payload),
@@ -649,5 +660,7 @@ export function useChatSession({
     conversationStateTimeline,
     turnRuntimeRegistry,
     workflowNodeStateRegistry,
+    subSessionMessageRegistry,
+    subSessionMessageRegistryVersion,
   };
 }

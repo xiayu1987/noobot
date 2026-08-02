@@ -6,7 +6,7 @@
 import { commitTurn } from "./session-message-service/commit-turn.js";
 import { appendTurn, appendTurns } from "./session-message-service/append-turn.js";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
-import { acknowledgeAuthorityEvent, applyTurnLifecycleEvent, compactAuthorityEvents, getPendingAuthorityEvents, getTurnLifecycleSnapshot, recordAuthorityEventAttempt, upsertTurnStatus, upsertTurnTiming, stampReusedUserTurnDialogProcessId } from "./session-message-service/turn-state.js";
+import { acknowledgeAuthorityEvent, applyTurnLifecycleEvent, compactAuthorityEvents, getPendingAuthorityEvents, getTurnLifecycleSnapshot, recordAuthorityEventAttempt, upsertTurnTiming, stampReusedUserTurnDialogProcessId } from "./session-message-service/turn-state.js";
 import { markSessionMessagesSummarized, getSessionTurns, getSessionContextSource, getTurnSummaryCheckpointState, hasDialogProcessIdInSession } from "./session-message-service/message-queries.js";
 import { commitTurnSummaryCheckpoint } from "./session-message-service/turn-summary-checkpoint.js";
 
@@ -59,7 +59,6 @@ export class SessionMessageService {
   async appendTurns(payload = {}) { return appendTurns.call(this, payload); }
   async deleteFromMessage(payload = {}) { return deleteFromMessage.call(this, payload); }
   async replaceTurn(payload = {}) { return replaceTurn.call(this, payload); }
-  async upsertTurnStatus(payload = {}) { return upsertTurnStatus.call(this, payload); }
   async applyTurnLifecycleEvent(payload = {}) { return applyTurnLifecycleEvent.call(this, payload); }
   async getTurnLifecycleSnapshot(payload = {}) { return getTurnLifecycleSnapshot.call(this, payload); }
   async getPendingAuthorityEvents(payload = {}) { return getPendingAuthorityEvents.call(this, payload); }

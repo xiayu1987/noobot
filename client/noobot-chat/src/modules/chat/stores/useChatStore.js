@@ -11,7 +11,7 @@ import { createChatExecutionSelectors } from "./chatStoreExecutionSelectors.js";
 import { createSubSessionMessageRegistry, createSubSessionStore } from "./chatStoreSubSessions.js";
 import { createWorkflowStore } from "./chatStoreWorkflows.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
-import { applyRunStateMessageRuntimePatch } from "../runtime/engine/messageRuntimePatch.js";
+import { projectTurnRuntimeToMessages } from "../runtime/engine/turnProjectionStore.js";
 
 export const useChatStore = defineStore("chat", () => {
   const input=ref(""); const uploadFiles=ref([]);
@@ -47,12 +47,6 @@ export const useChatStore = defineStore("chat", () => {
       const turn=result?.turn;
       const sessionId=String(turn?.sessionId||"").trim();
       const parentSessionId=String(turn?.parentSessionId||"").trim();
-      const mainProjection=applyRunStateMessageRuntimePatch({
-        sessions,
-        activeSession,
-        turnRuntimeRegistry,
-        event:turn,
-      });
       const existingSubSession=Boolean(sessionId&&subSessions?.selectSubSessionMessages(sessionId));
       logWorkflowDiagnostics("frontend.turnRuntime.commitProjectionEvaluated",()=>({
         sessionId:parentSessionId||sessionId,
@@ -66,11 +60,34 @@ export const useChatStore = defineStore("chat", () => {
         existingSubSession,
         projectionEligible:Boolean(sessionId&&subSessions&&(existingSubSession||parentSessionId)),
       }));
-      if(!sessionId||!subSessions)return {mainProjection};
-      if(!existingSubSession&&!parentSessionId)return {mainProjection};
-      const container=subSessions.ensureSubSessionMessageContainer(turn);
-      const runtimeProjection=subSessions.applySubSessionTurnRuntimeProjection(turn);
-      return {mainProjection,...container,runtimeProjection};
+      const mainSessionProjection=projectTurnRuntimeToMessages({
+        sessions,
+        activeSession,
+        turnRuntimeRegistry,
+        turn,
+      });
+      let container={applied:false,reason:"not_sub_session"};
+      let subSessionProjection={applied:false,patchedMessageCount:0,reason:"not_sub_session"};
+      if(sessionId&&subSessions&&(existingSubSession||parentSessionId)){
+        container=subSessions.ensureSubSessionMessageContainer(turn);
+        subSessionProjection=subSessions.applyTurnRuntimeMessageProjection(turn);
+      }
+      logWorkflowDiagnostics("frontend.turnRuntime.messageProjectionCommitted",()=>({
+        sessionId:parentSessionId||sessionId,
+        nodeSessionId:sessionId,
+        parentSessionId,
+        dialogProcessId:String(turn?.dialogProcessId||"").trim(),
+        turnScopeId:String(turn?.turnScopeId||"").trim(),
+        messageId:String(turn?.messageId||"").trim(),
+        presentationMessageId:String(turn?.presentationMessageId||"").trim(),
+        state:String(turn?.state||"").trim(),
+        terminal:String(turn?.terminal||"").trim(),
+        mainSessionProjectionReason:String(mainSessionProjection?.reason||"").trim(),
+        mainSessionPatchedMessageCount:Number(mainSessionProjection?.patchedMessageCount||0),
+        subSessionProjectionReason:String(subSessionProjection?.reason||"").trim(),
+        subSessionPatchedMessageCount:Number(subSessionProjection?.patchedMessageCount||0),
+      }));
+      return {container,mainSessionProjection,subSessionProjection};
     },
   });
   subSessions=createSubSessionStore({
@@ -89,6 +106,7 @@ export const useChatStore = defineStore("chat", () => {
     reduceSubSessionMessageEvent:subSessions.reduceSubSessionMessageEvent,
     reduceSubSessionSnapshot:subSessions.reduceSubSessionSnapshot,
     removeSubSessionsByWorkflowRunIds:subSessions.removeSubSessionsByWorkflowRunIds,
+    selectSubSessionMessages:subSessions.selectSubSessionMessages,
   });
   const executionSelectors=createChatExecutionSelectors({turnRuntimeRegistry,sessions,selectSubSessionMessages:subSessions.selectSubSessionMessages});
   function resetChatStore(){ input.value=""; uploadFiles.value=[]; turnRuntimeRegistry.value=createTurnRuntimeRegistryState(); workflowNodeStateRegistry.value=null; subSessionMessageRegistry.value=createSubSessionMessageRegistry(); subSessionMessageRegistryVersion.value+=1; sessions.value=[]; activeSessionId.value=""; loadingSessions.value=false; loadingSessionDetail.value=false; pendingInteractionRequest.value=null; pendingInteractionRequests.value=[]; interactionSubmitting.value=false; }

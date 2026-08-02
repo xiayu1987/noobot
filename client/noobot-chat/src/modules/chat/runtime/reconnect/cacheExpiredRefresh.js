@@ -17,7 +17,6 @@ export function scheduleCacheExpiredSessionRefresh({
   chatList,
   applyRunStateEvent,
   applyAssistantFailureState,
-  emitSyntheticErrorConversationState,
   notify,
   sessionId = "",
   dialogProcessId = "",
@@ -40,11 +39,6 @@ export function scheduleCacheExpiredSessionRefresh({
       interactionSubmitting.value = false;
       clearPendingInteraction?.();
       const expiredErrorMessage = translate("chat.expiredRefreshFailed");
-      emitSyntheticErrorConversationState({
-        sessionId: normalizedFailedSessionId,
-        dialogProcessId: failedDialogProcessId,
-        sourceEvent: "expired_refresh_failed",
-      });
       notify?.({ type: "error", message: expiredErrorMessage });
     }
 

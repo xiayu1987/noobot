@@ -18,7 +18,13 @@ function applyMessageEvent(store, eventName, data) {
 function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent({
     event: "workflow_session_snapshot_loaded",
-    data: { snapshotVersion: 1, ...sessionDoc },
+    data: {
+      snapshotVersion: 1,
+      parentSessionId: "main-session-1",
+      workflowRunId: "workflow-1",
+      nodeExecutionId: "node-1",
+      ...sessionDoc,
+    },
   }, { source: "test_snapshot" });
 }
 

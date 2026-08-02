@@ -121,6 +121,8 @@ function snapshotEvent({ version = 1, status = "running", content = "snapshot re
     data: {
       sessionId: "child-1",
       parentSessionId: "root-1",
+      workflowRunId: "run-1",
+      nodeExecutionId: "node-1",
       snapshotVersion: version,
       status,
       messages: [{ id: "assistant-1", messageId: "assistant-1", role: "assistant", content }],
@@ -204,6 +206,8 @@ describe("workflow runtime live/replay homomorphism", () => {
         parentSessionId: "root-1",
         dialogProcessId: "node-dialog-1",
         turnScopeId: "workflow-node:node-1",
+        workflowRunId: "run-1",
+        nodeExecutionId: "node-1",
         presentationMessageId: "presentation-1",
         sequenceDomain: "message-event",
         timestamp: "2026-07-26T00:00:01.000Z",

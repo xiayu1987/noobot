@@ -8,7 +8,6 @@ import { getCurrentScope, onScopeDispose } from "vue";
 import { disposeReconnectReplayTimers } from "./cleanup.js";
 
 export function registerReconnectReplayLifecycleCleanup({
-  missingInteractionPayloadTimers,
   getCacheExpiredRefreshTimer,
   setCacheExpiredRefreshTimer,
 }) {
@@ -18,7 +17,6 @@ export function registerReconnectReplayLifecycleCleanup({
 
   onScopeDispose(() => {
     disposeReconnectReplayTimers({
-      missingInteractionPayloadTimers,
       getCacheExpiredRefreshTimer,
       setCacheExpiredRefreshTimer,
     });

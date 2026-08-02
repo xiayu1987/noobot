@@ -8,7 +8,6 @@ import { normalizeTrimmedString } from "./utils.js";
 export const SESSION_DETAIL_APPLY_MODE = Object.freeze({
   AUTO: "auto",
   DELETE_CONFIRMED: "delete-confirmed",
-  FINALIZE_RUN: "finalize-run",
   REPLACE: "replace",
 });
 

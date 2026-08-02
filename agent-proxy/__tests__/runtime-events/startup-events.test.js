@@ -52,7 +52,7 @@ test('agent-proxy writes startup runtime event when HTTP server starts listening
     assert.equal(record.level, 'info');
     assert.equal(record.channel, 'direct');
     assert.equal(record.sessionId, undefined);
-    assert.equal(record.workspaceRoot, workspaceRoot);
+    assert.equal(record.workspaceRoot, undefined);
     assert.equal(record.data.host, '127.0.0.1');
     assert.equal(record.data.port, 12345);
     assert.ok(record.process?.pid);

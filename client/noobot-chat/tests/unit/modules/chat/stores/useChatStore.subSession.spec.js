@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
+import { createTurnLifecycleEnvelope } from "@noobot/event-protocol";
 
 function applyMessageEvent(store, eventName, data) {
   return store.applyWorkflowRuntimeEvent({
@@ -17,7 +18,13 @@ function applyMessageEvent(store, eventName, data) {
 function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent({
     event: "workflow_session_snapshot_loaded",
-    data: { snapshotVersion: 1, ...sessionDoc },
+    data: {
+      snapshotVersion: 1,
+      parentSessionId: "root-session",
+      workflowRunId: "workflow-run-1",
+      nodeExecutionId: "node-execution-1",
+      ...sessionDoc,
+    },
   }, { source: "test_snapshot" });
 }
 
@@ -29,6 +36,9 @@ function messageEvent(eventType, data = {}) {
     timestamp: "2026-01-01T00:00:00.000Z",
     sequence: 1,
     eventType,
+    parentSessionId: "root-session",
+    workflowRunId: "workflow-run-1",
+    nodeExecutionId: "node-execution-1",
     messageId,
     sequenceDomain: "message-event",
     ...data,
@@ -151,7 +161,7 @@ describe("sub-session realtime message projection", () => {
     expect(session.messages[0].pending).toBe(true);
   });
 
-  it("clears child message runtime only after authoritative Turn terminal materialization", () => {
+  it("clears child message runtime at the authoritative terminal event and enriches it with materialization", () => {
     const store = useChatStore();
     const identity = {
       sessionId: "child-session",
@@ -159,6 +169,7 @@ describe("sub-session realtime message projection", () => {
       turnScopeId: "turn-authoritative",
       dialogProcessId: "dialog-child",
       messageId: "assistant-authoritative",
+      presentationMessageId: "assistant-authoritative",
     };
     applyMessageEvent(store, "thinking", messageEvent("thinking", {
       ...identity,
@@ -170,24 +181,35 @@ describe("sub-session realtime message projection", () => {
     }));
 
     const lifecycle = [
-      ["turn.action_accepted", 1, "frontend_action_requesting"],
-      ["turn.processing_started", 2, "frontend_processing"],
-      ["turn.processing_completed", 3, "frontend_completion_requesting"],
-      ["turn.completed", 4, "frontend_completion_requesting"],
+      ["turn.action_accepted", 1, "action", "action_requesting", "accepted"],
+      ["turn.processing_started", 2, "processing", "processing", "sending"],
+      ["turn.processing_completed", 3, "completion", "completion_requesting", "completing"],
+      ["turn.completed", 4, "completion", "completed", "completed"],
     ];
-    for (const [eventType, sequence] of lifecycle) {
-      store.applyTurnRuntimeEvent({
+    for (const [eventType, sequence, phase, state, executionState] of lifecycle) {
+      const terminalFields = eventType === "turn.completed"
+        ? { completionCommitId: "child-run:completed", summaryVersion: 1 }
+        : {};
+      const result = store.applyTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
         ...identity,
-        type: "backend_turn_lifecycle",
+        eventId: `child-lifecycle-${sequence}`,
+        commandId: `child-command-${sequence}`,
+        userId: "u1",
         eventType,
+        phase,
+        state,
+        action: "send",
+        executionState,
         sequence,
         revision: sequence,
-        timestamp: `2026-01-01T00:00:0${sequence}.000Z`,
-      });
+        occurredAt: `2026-01-01T00:00:0${sequence}.000Z`,
+        capabilities: { actionLocked: eventType !== "turn.completed", canStop: eventType === "turn.processing_started" },
+        ...terminalFields,
+      }));
+      expect(result.applied).toBe(true);
     }
 
-    expect(store.selectSubSessionMessages("child-session").messages[0].pending).toBe(true);
-    expect(store.selectSubSessionMessages("child-session").status).toBe("completing");
+    expect(store.selectSubSessionMessages("child-session").status).toBe("completed");
 
     const terminal = store.applyTurnTerminalResolution({
       protocolVersion: 1,
@@ -221,9 +243,60 @@ describe("sub-session realtime message projection", () => {
       turnScopeId: identity.turnScopeId,
       terminal: "completed",
     });
-    // The same lifecycle-to-message projector owns main and child sessions.
-    // The child message is materialized from the authoritative terminal Turn.
     expect(completed.messages[0]).toMatchObject({
+      pending: false,
+      channelState: { state: "frontend_completed" },
+    });
+  });
+
+  it("projects the same authoritative terminal lifecycle into a non-workflow message", () => {
+    const store = useChatStore();
+    const identity = {
+      sessionId: "root-session",
+      turnScopeId: "root-turn",
+      dialogProcessId: "root-dialog",
+      messageId: "root-assistant",
+      presentationMessageId: "root-assistant",
+    };
+    store.sessions.push({
+      id: identity.sessionId,
+      messages: [{
+        ...identity,
+        id: identity.messageId,
+        role: "assistant",
+        content: "answer",
+        pending: true,
+      }],
+    });
+    store.activeSessionId = identity.sessionId;
+
+    const lifecycle = [
+      ["turn.action_accepted", 1, "action", "action_requesting", "accepted"],
+      ["turn.processing_started", 2, "processing", "processing", "sending"],
+      ["turn.processing_completed", 3, "completion", "completion_requesting", "completing"],
+      ["turn.completed", 4, "completion", "completed", "completed"],
+    ];
+    for (const [eventType, sequence, phase, state, executionState] of lifecycle) {
+      const result = store.applyTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
+        ...identity,
+        eventId: `root-lifecycle-${sequence}`,
+        commandId: `root-command-${sequence}`,
+        userId: "u1",
+        eventType,
+        phase,
+        state,
+        action: "send",
+        executionState,
+        sequence,
+        revision: sequence,
+        occurredAt: `2026-01-01T00:00:0${sequence}.000Z`,
+        capabilities: { actionLocked: eventType !== "turn.completed", canStop: eventType === "turn.processing_started" },
+        ...(eventType === "turn.completed" ? { completionCommitId: "root:completed", summaryVersion: 1 } : {}),
+      }));
+      expect(result.applied).toBe(true);
+    }
+
+    expect(store.sessions[0].messages[0]).toMatchObject({
       pending: false,
       channelState: { state: "frontend_completed" },
     });
@@ -290,6 +363,9 @@ describe("sub-session realtime message projection", () => {
       event: "workflow_session_snapshot_loaded",
       data: {
         sessionId,
+        parentSessionId: "root-session",
+        workflowRunId: "workflow-run-1",
+        nodeExecutionId: "node-1",
         snapshotVersion: 1,
         status: "succeeded",
         turnStatuses: [{ turnScopeId: "workflow-node_node-1", status: "succeeded" }],
@@ -303,6 +379,9 @@ describe("sub-session realtime message projection", () => {
       event: "workflow_session_snapshot_loaded",
       data: {
         sessionId,
+        parentSessionId: "root-session",
+        workflowRunId: "workflow-run-1",
+        nodeExecutionId: "node-1",
         snapshotVersion: 2,
         status: "completed",
         turnStatuses: [{ turnScopeId: "workflow-node:node-1", status: "completed" }],

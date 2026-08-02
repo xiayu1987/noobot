@@ -47,7 +47,6 @@ export function tryAutoResolveReconnectInteraction({
 
 export function createReconnectInteractionEnvelopeCallbacks({
   buildReconnectReplayEnvelopeCallbacks,
-  missingInteractionPayloadTimers,
   normalizeInteractionRequestPayload,
   tryAutoResolveInteraction,
   isInteractionRequestHandled,
@@ -63,7 +62,6 @@ export function createReconnectInteractionEnvelopeCallbacks({
     onInteractionRequest: (eventData) => {
       applyReconnectInteractionRequest({
         eventData,
-        missingInteractionPayloadTimers,
         normalizeInteractionRequestPayload,
         tryAutoResolveInteraction,
         isInteractionRequestHandled,

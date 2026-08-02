@@ -15,6 +15,7 @@ import { applyTurnRuntimeEvent } from "../../../../../src/modules/chat/runtime/r
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { clearExtensionRegistry } from "../../../../../src/extensions/extension-registry.js";
+import { createReplayBatch, createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/event-protocol";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -84,7 +85,7 @@ describe("useReconnectReplay", () => {
     });
   });
 
-  it("applies a live DONE snapshot after terminal lifecycle and same-sequence channel state", async () => {
+  it("does not let data-plane completion replace the Authority lifecycle", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       {
@@ -95,30 +96,6 @@ describe("useReconnectReplay", () => {
         turnScopeId: "turn-terminal-order",
       },
     ];
-    mocks.chatList.fetchSessionDetail.mockResolvedValueOnce({
-      sessionId: "s-1",
-      sessions: [{
-        sessionId: "s-1",
-        messages: [
-          refs.activeSession.value.messages[0],
-          {
-            role: RoleEnum.ASSISTANT,
-            type: "workflow",
-            content: "workflow completed",
-            sessionId: "s-1",
-            dialogProcessId: "dp-terminal-order",
-            turnScopeId: "turn-terminal-order",
-            pluginMessage: true,
-            pluginMeta: {
-              source: "workflow-plugin",
-              kind: "workflow",
-              payload: { workflowRunId: "workflow-terminal-order" },
-            },
-          },
-        ],
-      }],
-    });
-
     await api.applyReconnectEvent(StreamEventEnum.TURN_LIFECYCLE, {
       eventType: "turn.completed",
       sessionId: "s-1",
@@ -142,31 +119,24 @@ describe("useReconnectReplay", () => {
       messages: [refs.activeSession.value.messages[0]],
     });
 
-    expect(refs.activeSession.value.messages).toHaveLength(2);
-    expect(refs.activeSession.value.messages[1]).toMatchObject({
-      role: RoleEnum.ASSISTANT,
-      type: "workflow",
-      content: "workflow completed",
-      pluginMessage: true,
-    });
-    expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", expect.objectContaining({
-      source: "reconnectDoneFinalStatus",
-      force: true,
-      requireFresh: true,
-    }));
+    expect(refs.activeSession.value.messages).toHaveLength(1);
+    expect(mocks.chatList.fetchSessionDetail).not.toHaveBeenCalled();
   });
 
   it("routes a live child canonical event through the same sub-session reducer as reconnect replay", async () => {
     const { api, mocks } = createFixture();
-    const messageEvent = {
+    const messageEvent = createAuthoritativeMessageEnvelope("tool_call_start", {
       eventId: "evt-child-live-1",
       messageId: "msg-child-live-1",
+      presentationMessageId: "msg-child-live-1",
       sessionId: "child-session",
       dialogProcessId: "child-dialog",
       turnScopeId: "workflow-node:node-1",
-      type: "tool_call_start",
-      sequence: 1,
-    };
+      seq: 1,
+      tool: "child-tool",
+      toolCallId: "call-child-1",
+      args: {},
+    }).data.event;
 
     const result = await api.applyReconnectEvent("subagent_message_event", {
       sessionId: "child-session",
@@ -272,7 +242,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(false);
   });
 
-  it("EV-01d: channel_state sending restores the global processing lock", async () => {
+  it("EV-01d: channel_state sending is transport-only", async () => {
     const { api, refs } = createFixture();
     applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
@@ -291,7 +261,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(true);
   });
 
-  it("EV-01e: channel_state reconnecting restores the global processing lock", async () => {
+  it("EV-01e: channel_state reconnecting is transport-only", async () => {
     const { api, refs } = createFixture();
     applyTurnRuntimeEvent(refs.turnRuntimeRegistry.value, {
       type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED,
@@ -329,12 +299,7 @@ describe("useReconnectReplay", () => {
     );
     expect(refs.sending.value).toBe(false);
     expect(assistant?.statusLabelKey).toBeUndefined();
-    expect(assistant?.channelState).toMatchObject({
-      state: BackendChannelState.STOPPING,
-      sessionId: "s-1",
-      dialogProcessId: "dp-stop",
-      seq: 12,
-    });
+    expect(assistant?.channelState).toBeUndefined();
     expect(assistant?.pending).toBe(true);
   });
 
@@ -419,15 +384,35 @@ describe("useReconnectReplay", () => {
       seq: 1,
       text: "A",
     });
+    const snapshot = createTurnLifecycleSnapshot({
+      commandId: "command-dp-new",
+      userId: "admin",
+      sessionId: "s-1",
+      sequence: 1,
+      activeTurnScopeId: "turn-dp-new",
+      activeTurn: {
+        userId: "admin",
+        sessionId: "s-1",
+        turnScopeId: "turn-dp-new",
+        messageId: "message-dp-new",
+        presentationMessageId: "message-dp-new",
+        dialogProcessId: "dp-new",
+        state: TURN_STATE.PROCESSING,
+        executionState: "sending",
+        revision: 1,
+        sequence: 1,
+      },
+    });
     await api.applyReconnectData({
       sessions: [{
         sessionId: "s-1",
-        currentRun: {
+        replayBatch: createReplayBatch({
           sessionId: "s-1",
-          dialogProcessId: "dp-new",
-          turnScopeId: "turn-dp-new",
-          state: "sending",
-        },
+          streamId: "stream-s-1",
+          requestId: "reconnect-s-1",
+          snapshot,
+          snapshotSequence: 1,
+        }),
         dialogProcesses: [{
           dialogProcessId: "dp-new",
           messages: [envelope],
@@ -445,9 +430,7 @@ describe("useReconnectReplay", () => {
         message.content === "A",
     );
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", {
-      source: "reconnectHydration",
-      allowLoadedSnapshot: false,
-      reuseRecentlyLoaded: false,
+      source: "reconnectProtocolReconcile",
     });
     expect(mocks.chatList.applySessionDetail).toHaveBeenCalledTimes(1);
     expect(userIdx).toBeGreaterThanOrEqual(0);
@@ -522,7 +505,7 @@ describe("useReconnectReplay", () => {
     expect(mocks.clearPendingInteraction).toHaveBeenCalled();
   });
 
-  it("EV-03c: channel_state completed only requests authoritative terminal resolution", async () => {
+  it("EV-03c: channel_state completed has no business side effects", async () => {
     const { api, mocks } = createFixture();
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
@@ -533,15 +516,11 @@ describe("useReconnectReplay", () => {
       seq: 12,
     });
 
-    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith(
-      "s-1",
-      "turn-int3",
-      { commandId: "", sequence: 12, source: "reconnect_replay" },
-    );
+    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
   });
 
-  it("EV-03d: channel_state interaction_pending restores pending interaction payload", async () => {
+  it("EV-03d: channel_state interaction_pending has no pending-interaction side effects", async () => {
     const { api, refs, mocks } = createFixture();
     refs.interactionSubmitting.value = false;
 
@@ -560,17 +539,10 @@ describe("useReconnectReplay", () => {
     });
 
     expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.setPendingInteractionRequest).toHaveBeenCalledTimes(1);
-    expect(mocks.setPendingInteractionRequest.mock.calls[0][0]).toMatchObject({
-      requestId: "req-4",
-      sessionId: "s-1",
-      dialogProcessId: "dp-int4",
-      interactionType: "confirm",
-      content: "need confirm",
-    });
+    expect(mocks.setPendingInteractionRequest).not.toHaveBeenCalled();
   });
 
-  it("EV-03e: channel_state sending only clears interaction when sourceEvent=interaction_response", async () => {
+  it("EV-03e: channel_state sending never clears pending interaction", async () => {
     const { api, mocks } = createFixture();
 
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
@@ -589,9 +561,6 @@ describe("useReconnectReplay", () => {
       requestId: "req-int5",
       seq: 15,
     });
-    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledTimes(1);
-    expect(mocks.clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
-      requestId: "req-int5",
-    });
+    expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
   });
 });

@@ -107,6 +107,11 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.equal(turnMessageStore.items.length, 1);
   assert.equal(turnMessageStore.items[0].role, "tool");
   assert.equal(turnMessageStore.items[0].content, "tool_result_overridden_by_hook");
+  assert.match(turnMessageStore.items[0].messageUid, /^sm_/);
+  assert.equal(
+    turnMessageStore.items[0].messageId,
+    turnMessageStore.items[0].messageUid,
+  );
   assert.equal(traces.length, 1);
   assert.equal(traces[0].tool, "demo_tool");
   assert.equal(traces[0].result, "tool_result_overridden_by_hook");
@@ -147,6 +152,10 @@ test("state-committer checkpoints assistant and tool records with presentation i
   assert.equal(turnMessageStore.items[0].presentationMessageId, "msg_chat_checkpoint");
   assert.equal(turnMessageStore.items[0].chatPresentation, false);
   assert.equal(turnMessageStore.items[1].presentationMessageId, "msg_chat_checkpoint");
+  assert.equal(
+    turnMessageStore.items[1].messageId,
+    turnMessageStore.items[1].messageUid,
+  );
 });
 
 test("state-committer writes tool result through message store when holder is provided", async () => {

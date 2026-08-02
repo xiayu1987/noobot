@@ -13,6 +13,7 @@ import {
   stopChatWs,
   waitForCondition,
 } from "./chat-websocket-server.test-helpers.js";
+import { TURN_EVENT } from "@noobot/event-protocol";
 
 test("chat-websocket-server: stop closes run and next websocket run can start", async () => {
   let runCount = 0;
@@ -41,7 +42,6 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
           executionLogs: [],
         };
       },
-      persistStoppedAssistantMessage: async () => {},
     },
   });
   try {
@@ -63,7 +63,13 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
         },
       },
     });
-    assert.ok(stoppedEvents.some((item) => item?.event === "user_stopped"));
+    const stoppedEvent = stoppedEvents.find((item) =>
+      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED);
+    assert.equal(stoppedEvent?.data?.sessionId, "s1");
+    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-stop-before-next");
+    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-stop-before-next");
+    assert.equal(stoppedEvent?.data?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.eventId);
 
     const nextEvents = await callChatWs({
       port,

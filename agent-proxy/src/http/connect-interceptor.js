@@ -62,7 +62,7 @@ export async function interceptConnectRequest(request, response, channelManager)
   try {
     upstreamConnectUrl = new URL("/internal/connect", config.upstreamHttpBase).toString();
   } catch (error) {
-    void writeRoutedRuntimeEvent({
+    await writeRoutedRuntimeEvent({
       source: "agent-proxy",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       category: RUNTIME_EVENT_CATEGORIES.CONFIG,

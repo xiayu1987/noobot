@@ -14,13 +14,13 @@ import {
   resolveRememberedStopRequestedEvent,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { reduceTurnRuntimeEvent, TURN_TRANSITION_REASON } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/authoritative-state/contracts";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol";
 
-const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
-const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
-const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
-const stopAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_ACCEPTED, phase: TURN_PHASE.ACTION, action: "stop" };
-const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
+const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, state: TURN_STATE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
+const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, state: TURN_STATE.ACTION_REQUESTING, action: "send" };
+const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION, state: TURN_STATE.COMPLETION_REQUESTING };
+const stopAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_ACCEPTED, phase: TURN_PHASE.STOP, state: TURN_STATE.ACTION_REQUESTING, action: "stop" };
+const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP, state: TURN_STATE.STOPPING };
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
 const terminalResolved = (state) => ({ type: SESSION_RUN_EVENT.TERMINAL_RESOLVED, state, revision: 10, sequence: 10, ...completionCommit });
 
@@ -95,7 +95,7 @@ describe("sessionRunStateMachine scope separation", () => {
     processing = apply(processing, actionAccepted);
     processing = apply(processing, processingStarted);
     let completion = apply(processing, processingCompleted);
-    completion = apply(completion, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.COMPLETED, phase: TURN_PHASE.COMPLETION, ...completionCommit });
+    completion = apply(completion, { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.COMPLETED, phase: TURN_PHASE.COMPLETION, state: TURN_STATE.COMPLETED, ...completionCommit });
     completion = apply(completion, terminalResolved(TURN_STATE.COMPLETED));
     expect(completion).toMatchObject({ ...identity, state: FrontendRunState.FRONTEND_COMPLETED });
 

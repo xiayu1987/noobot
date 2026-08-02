@@ -232,7 +232,13 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
   } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.MESSAGE) {
     result = reduceSubSessionMessageEvent(canonical.data.eventType, canonical.data);
   } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
-    result = reduceSubSessionSnapshot(canonical.data);
+    result = reduceSubSessionSnapshot(canonical.data, {
+      source: canonical.source,
+      eventId: canonical.eventId,
+      sequenceDomain: canonical.sequenceDomain,
+      authoritativeSequence: canonical.sequence,
+      transportSequence: canonical.transportSequence,
+    });
   } else {
     result = { applied: false, reason: "unsupported_event" };
   }

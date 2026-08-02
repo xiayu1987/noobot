@@ -6,10 +6,14 @@
 import { watch } from "vue";
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
-import { isAuthoritativeTerminalState, isLegacyTerminalDiscoveryState } from "../sessionRunStateMachine.js";
 import { sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
 
-export function installSessionLifecycleHydration({ sessions, activeSessionId, chatStore, scheduleTerminalResolution }) {
+export function installSessionLifecycleHydration({
+  sessions,
+  activeSessionId,
+  chatStore,
+  scheduleTerminalResolution,
+}) {
   function hydrateSessionLifecycle(sessionItem) {
     const snapshot = sessionItem?.turnLifecycleSnapshot;
     const sessionId = sessionRuntimeId(sessionItem);
@@ -24,68 +28,50 @@ export function installSessionLifecycleHydration({ sessions, activeSessionId, ch
       snapshotSequence: Number(snapshot?.sequence || 0),
       activeTurnScopeId: String(snapshot?.activeTurnScopeId || "").trim(),
       recentTerminalCount: Array.isArray(snapshot?.recentTerminalTurns) ? snapshot.recentTerminalTurns.length : 0,
+      replacedTurnScopeIds: (Array.isArray(snapshot?.replacedTurns) ? snapshot.replacedTurns : [])
+        .map((replacement) => String(replacement?.turnScopeId || "").trim())
+        .filter(Boolean),
       turnTimingsCount: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings.length : 0,
       timingSnapshotApplied: timingResult?.applied === true,
       timingSnapshotReason: timingResult?.reason || "",
     }));
     if (snapshot && typeof snapshot === "object") {
-      const candidates = [snapshot.activeTurn, ...(Array.isArray(snapshot.recentTerminalTurns) ? snapshot.recentTerminalTurns : [])]
-        .filter((turn) => {
-          if (!turn || !getMessageTurnScopeId(turn) && !turn?.turnScopeId) return false;
-          return turn === snapshot.activeTurn || isAuthoritativeTerminalState(turn?.state);
-        })
-        .sort((left, right) => Number(right?.sequence || right?.revision || 0) - Number(left?.sequence || left?.revision || 0));
-      if (sessionId && candidates[0]) {
-        const turn = candidates[0];
-        scheduleTerminalResolution(sessionId, getMessageTurnScopeId(turn) || turn?.turnScopeId, {
-          ...turn,
-          source: turn === snapshot.activeTurn ? "snapshot_active_turn" : "snapshot_terminal_turn",
+      const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
+      const activeTurn = snapshot.activeTurn;
+      const activeTurnState = String(activeTurn?.state || "").trim().toLowerCase();
+      const activeTurnScopeId = String(activeTurn?.turnScopeId || snapshot.activeTurnScopeId || "").trim();
+      const isTerminal = ["completed", "stop_completed", "failed", "processing_failed", "action_failed", "stopped"].includes(activeTurnState);
+      // A non-terminal authoritative activeTurn is the only legal source for
+      // terminal discovery after refresh. Never inspect turnStatuses or
+      // persisted message status here.
+      if (result?.applied === true && activeTurn && activeTurnScopeId && !isTerminal) {
+        scheduleTerminalResolution?.(sessionId, activeTurnScopeId, {
+          source: "authoritative_active_turn_hydration",
+          revision: activeTurn.revision ?? snapshot.revision,
+          sequence: activeTurn.sequence ?? snapshot.sequence,
+          state: activeTurn.state,
+          phase: activeTurn.phase,
+          executionState: activeTurn.executionState,
+          startedAt: activeTurn.startedAt,
+          persistenceScope: {
+            scopeId: sessionId,
+            parentSessionId: sessionItem?.parentSessionId || "",
+          },
         });
       }
-      const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
       logThinkingReplayDebug("frontend.lifecycle.hydrateApplied", () => ({
         requestedSessionId: String(sessionItem?.sessionId || "").trim(),
         runtimeSessionId: sessionId,
         snapshotSessionId: String(snapshot?.sessionId || "").trim(),
-        candidateTurnScopeId: String(candidates[0]?.turnScopeId || "").trim(),
-        candidateState: String(candidates[0]?.state || "").trim(),
-        candidateStartedAt: candidates[0]?.startedAt || "",
-        candidateFinishedAt: candidates[0]?.finishedAt || "",
         resultApplied: result?.applied === true,
         resultReason: result?.reason || "",
+        replacedTurnScopeIds: result?.replacedTurnScopeIds || [],
+        removedTurnScopeIds: result?.replacementDeletion?.removedTurnScopeIds || [],
+        confirmedTurnScopeIds: result?.replacementDeletion?.confirmedTurnScopeIds || [],
       }));
-      if (sessionId && candidates[0]) {
-        const turn = candidates[0];
-        const postHydrateMetadata = {
-          ...turn,
-          source: "snapshot_post_hydrate",
-        };
-        Promise.resolve().then(() => scheduleTerminalResolution(
-          sessionId,
-          getMessageTurnScopeId(turn) || turn?.turnScopeId,
-          postHydrateMetadata,
-        ));
-      }
       return result;
     }
-    const terminalStatus = (Array.isArray(sessionItem?.turnStatuses) ? sessionItem.turnStatuses : [])
-      .filter((turn) => isLegacyTerminalDiscoveryState(turn?.status || turn?.state))
-      .sort((left, right) => {
-        const versionDelta = Number(right?.sequence || right?.revision || 0)
-          - Number(left?.sequence || left?.revision || 0);
-        if (versionDelta) return versionDelta;
-        return String(right?.updatedAt || right?.createdAt || "")
-          .localeCompare(String(left?.updatedAt || left?.createdAt || ""));
-      })[0];
-    if (sessionId && terminalStatus) {
-      scheduleTerminalResolution(
-        sessionId,
-        getMessageTurnScopeId(terminalStatus) || terminalStatus?.turnScopeId,
-        { ...terminalStatus, source: "turn_status_discovery" },
-      );
-      return { applied: false, reason: "terminal_resolution_scheduled" };
-    }
-    return { applied: false, reason: "terminal_discovery_missing" };
+    return { applied: false, reason: "authoritative_snapshot_missing" };
   }
 
 

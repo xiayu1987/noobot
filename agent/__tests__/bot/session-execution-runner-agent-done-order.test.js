@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { SessionExecutionRunner } from "../../src/bot/execution/runner.js";
 import { finalizeAgentTurn } from "../../src/bot/execution/runner/result-finalizer.js";
+import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
 import {
   AGENT_LIFECYCLE_BRANCH_STATE,
   AGENT_LIFECYCLE_EVENT,
@@ -20,7 +21,7 @@ import { loadStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-
 
 function createRunner({
   callOrder,
-  eventListener,
+  eventListener = { onEvent() {} },
   finalizeRunSession,
   agentRunner,
   runConfig = {},
@@ -30,13 +31,22 @@ function createRunner({
   getTurnSummaryCheckpointState,
 }) {
   const defaultRuntime = runtime || { attachmentMetas: [] };
+  if (!defaultRuntime.currentTurnMessages) {
+    defaultRuntime.currentTurnMessages = createCurrentTurnMessagesStore([]);
+  }
   return new SessionExecutionRunner({
     agentRunner: agentRunner || (async () => {
       callOrder.push("agentRunner");
       return {
         output: "ok",
+        assistantMessageId: "message-test-assistant",
         traces: [{ id: "trace-1" }],
-        turnMessages: [{ role: "assistant", type: "message", content: "ok" }],
+        turnMessages: [{
+          messageId: "message-test-assistant",
+          role: "assistant",
+          type: "message",
+          content: "ok",
+        }],
         turnTasks: [],
       };
     }),
@@ -105,10 +115,11 @@ test("runSession restores only the checkpoint-persisted agent prefix at finaliza
     runtime,
     agentRunner: async () => ({
       output: "tail",
+      assistantMessageId: "message-tail",
       traces: [],
       turnMessages: [
-        { role: "tool", content: "retained-persisted" },
-        { role: "assistant", content: "tail" },
+        { messageId: "message-retained-persisted", role: "tool", content: "retained-persisted" },
+        { messageId: "message-tail", role: "assistant", content: "tail" },
       ],
       turnTasks: [],
     }),
@@ -151,10 +162,11 @@ test("runSession restores checkpoint messages by exact persistent UID when avail
     runtime,
     agentRunner: async () => ({
       output: "tail",
+      assistantMessageId: "message-tail",
       traces: [],
       turnMessages: [
-        { messageUid: "sm_retained", role: "tool", content: "retained-persisted" },
-        { messageUid: "sm_tail", role: "assistant", content: "tail" },
+        { messageId: "message-retained", messageUid: "sm_retained", role: "tool", content: "retained-persisted" },
+        { messageId: "message-tail", messageUid: "sm_tail", role: "assistant", content: "tail" },
       ],
       turnTasks: [],
     }),
@@ -191,10 +203,11 @@ test("runSession recovers checkpoint UIDs and active prefix from the durable rec
     runtime,
     agentRunner: async () => ({
       output: "tail",
+      assistantMessageId: "message-tail",
       traces: [],
       turnMessages: [
-        { messageUid: "sm_retained", role: "tool", content: "retained-persisted" },
-        { messageUid: "sm_tail", role: "assistant", content: "tail" },
+        { messageId: "message-retained", messageUid: "sm_retained", role: "tool", content: "retained-persisted" },
+        { messageId: "message-tail", messageUid: "sm_tail", role: "assistant", content: "tail" },
       ],
       turnTasks: [],
     }),
@@ -430,15 +443,25 @@ test("runSession keeps resume snapshot identity separate from current run identi
     },
     prepareAgentTurnExecution: async ({ buildContextPayload }) => {
       captured.buildContextPayload = buildContextPayload;
+      const runtime = {
+        attachmentMetas: [],
+        currentTurnMessages: createCurrentTurnMessagesStore([]),
+      };
       return {
         agentContext: {
           execution: {
             controllers: {
-              runtime: { attachmentMetas: [] },
+              runtime,
             },
           },
         },
-        runtimeAgentContext: {},
+        runtimeAgentContext: {
+          execution: {
+            controllers: {
+              runtime,
+            },
+          },
+        },
       };
     },
     finalizeRunSession: async ({ dialogProcessId, turnScopeId, lifecycle }) => {

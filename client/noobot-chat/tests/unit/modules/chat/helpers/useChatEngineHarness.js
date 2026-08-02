@@ -5,7 +5,7 @@
  */
 import { computed, ref } from "vue";
 import { vi } from "vitest";
-import { createTurnLifecycleEnvelope } from "@noobot/authoritative-state/contracts";
+import { createTurnLifecycleEnvelope } from "@noobot/event-protocol";
 import { createTurnReplacementCommit } from "@noobot/shared/turn-replacement-protocol";
 import { useChatEngine } from "../../../../../src/modules/chat/composables/useChatEngine.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
@@ -22,14 +22,17 @@ import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { applyRunStateMessageRuntimePatch } from "../../../../../src/modules/chat/runtime/engine/messageRuntimePatch.js";
+import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 
-const terminalResolutionFromUrl = (url, state = "completed", messages = []) => {
+const terminalResolutionFromUrl = (
+  url,
+  state = "completed",
+  messages = [],
+  { revision = 2, sequence = revision } = {},
+) => {
   const match = String(url).match(/\/session\/[^/]+\/([^/]+)\/turns\/([^/]+)\/terminal/);
   const sessionId = decodeURIComponent(match?.[1] || "");
   const turnScopeId = decodeURIComponent(match?.[2] || "");
-  const revision = 2;
-  const sequence = 2;
   const completionCommitId = `commit:${sessionId}:${turnScopeId}:${revision}`;
   const failure = state.endsWith("_failed")
     ? { stage: state.slice(0, -"_failed".length), retryable: false, message: "terminal failure" }
@@ -140,6 +143,8 @@ export const createHarness = ({
   interactionSubmittingValue = false,
   autoPatchStreamTurnScopeId = true,
   terminalResolutionState = "completed",
+  terminalResolutionRevision = 2,
+  terminalResolutionSequence = terminalResolutionRevision,
   deps = {},
 } = {}) => {
   const activeSessionId = ref(sessionId);
@@ -170,12 +175,20 @@ export const createHarness = ({
     const result = applyTurnRuntimeEvent(registry, event);
     if (result?.applied !== false) {
       turnRuntimeRegistry.value = { ...registry };
-      applyRunStateMessageRuntimePatch({
+      projectTurnRuntimeToMessages({
         sessions,
         activeSession,
         turnRuntimeRegistry,
-        event: result?.turn || event,
+        turn: result?.turn || event,
       });
+    }
+    return result;
+  };
+  const commitTurnLifecycleEnvelope = (envelope) => {
+    const registry = turnRuntimeRegistry.value;
+    const result = applyTurnLifecycleEnvelope(registry, envelope);
+    if (result?.applied !== false) {
+      turnRuntimeRegistry.value = { ...registry };
     }
     return result;
   };
@@ -184,11 +197,11 @@ export const createHarness = ({
     const result = applyTurnTerminalResolution(registry, response);
     if (result?.applied !== false) {
       turnRuntimeRegistry.value = { ...registry };
-      applyRunStateMessageRuntimePatch({
+      projectTurnRuntimeToMessages({
         sessions,
         activeSession,
         turnRuntimeRegistry,
-        event: result?.turn || response?.turn || response,
+        turn: result?.turn || response?.turn || response,
       });
     }
     return result;
@@ -249,6 +262,7 @@ export const createHarness = ({
     sessions,
     turnRuntimeRegistry,
     applyTurnRuntimeEvent: commitTurnRuntimeEvent,
+    applyTurnLifecycleEnvelope: commitTurnLifecycleEnvelope,
     commitTurnTerminalResolution,
     input,
     uploadFiles,
@@ -312,6 +326,10 @@ export const createHarness = ({
         url,
         terminalResolutionState,
         JSON.parse(JSON.stringify(activeSession.value?.rawMessages || [])),
+        {
+          revision: terminalResolutionRevision,
+          sequence: terminalResolutionSequence,
+        },
       ),
     })),
   };
@@ -455,4 +473,77 @@ export const emitAuthorityProcessing = (onEvent, {
     executionState: "sending",
     capabilities: { actionLocked: true, canStop: true },
   }));
+};
+
+export const emitAuthorityCompletionRequested = (onEvent, {
+  sessionId,
+  turnScopeId,
+  dialogProcessId = "",
+  userId = "u-1",
+  commandId = `send:${turnScopeId}`,
+  messageId = `event-message:${turnScopeId}`,
+  presentationMessageId = `message:${turnScopeId}`,
+} = {}) => {
+  onEvent({
+    event: StreamEventEnum.TURN_LIFECYCLE,
+    data: createTurnLifecycleEnvelope({
+      eventType: "turn.processing_completed",
+      eventId: `completion-requested:${sessionId}:${turnScopeId}`,
+      commandId,
+      userId,
+      sessionId,
+      turnScopeId,
+      messageId,
+      presentationMessageId,
+      dialogProcessId,
+      revision: 3,
+      sequence: 3,
+      phase: "completion",
+      state: "completion_requesting",
+      action: "send",
+      executionState: "completing",
+      capabilities: { actionLocked: true, canStop: false },
+    }),
+  });
+};
+
+export const emitAuthorityTerminal = (onEvent, {
+  sessionId,
+  turnScopeId,
+  dialogProcessId = "",
+  userId = "u-1",
+  commandId = `send:${turnScopeId}`,
+  messageId = `event-message:${turnScopeId}`,
+  presentationMessageId = `message:${turnScopeId}`,
+  state = "completed",
+  sequence = 3,
+  revision = 3,
+  failure = null,
+} = {}) => {
+  onEvent({
+    event: StreamEventEnum.TURN_LIFECYCLE,
+    data: createTurnLifecycleEnvelope({
+      eventType: state === "stop_completed" ? "turn.stop_completed" : (
+        failure ? "turn.failed" : "turn.completed"
+      ),
+      eventId: `terminal:${sessionId}:${turnScopeId}:${sequence}`,
+      commandId,
+      userId,
+      sessionId,
+      turnScopeId,
+      messageId,
+      presentationMessageId,
+      dialogProcessId,
+      revision,
+      sequence,
+      phase: state === "stop_completed" ? "stop" : "completion",
+      state,
+      action: state === "stop_completed" ? "stop" : "send",
+      executionState: "completed",
+      completionCommitId: `commit:${sessionId}:${turnScopeId}:${revision}`,
+      summaryVersion: revision,
+      failure,
+      capabilities: { actionLocked: false, canStop: false },
+    }),
+  });
 };

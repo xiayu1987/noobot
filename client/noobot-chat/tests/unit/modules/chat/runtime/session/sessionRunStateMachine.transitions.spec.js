@@ -14,16 +14,16 @@ import {
   reduceTurnRuntimeEvent,
   TURN_TRANSITION_REASON,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/authoritative-state/contracts";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol";
 
 const identity = { sessionId: "s1", turnScopeId: "turn-1", dialogProcessId: "dp-1" };
-const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, action: "send" };
-const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
-const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: TURN_PHASE.COMPLETION };
-const stopAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_ACCEPTED, phase: TURN_PHASE.ACTION, action: "stop" };
-const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, phase: TURN_PHASE.STOP };
+const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, state: TURN_STATE.ACTION_REQUESTING, phase: TURN_PHASE.ACTION, action: "send" };
+const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, state: TURN_STATE.PROCESSING, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
+const processingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_COMPLETED, state: TURN_STATE.COMPLETION_REQUESTING, phase: TURN_PHASE.COMPLETION };
+const stopAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_ACCEPTED, state: TURN_STATE.ACTION_REQUESTING, phase: TURN_PHASE.STOP, action: "stop" };
+const stopProcessingCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED, state: TURN_STATE.STOPPING, phase: TURN_PHASE.STOP };
 const completionCommit = { completionCommitId: "completion-commit-1", summaryVersion: 1 };
-const authoritativeCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.COMPLETED, phase: TURN_PHASE.COMPLETION, ...completionCommit };
+const authoritativeCompleted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.COMPLETED, state: TURN_STATE.COMPLETED, phase: TURN_PHASE.COMPLETION, ...completionCommit };
 const terminalResolved = (state, overrides = {}) => ({
   type: SESSION_RUN_EVENT.TERMINAL_RESOLVED,
   state,
@@ -80,14 +80,14 @@ describe("turn runtime interaction lifecycle", () => {
     }
   });
 
-  it("keeps a completion notification locked until Terminal Resolution settles it", () => {
+  it("settles completion directly from the authoritative lifecycle event", () => {
     let turn = apply(null, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED });
     turn = apply(turn, actionAccepted);
     turn = apply(turn, processingStarted);
     turn = apply(turn, processingCompleted);
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
     turn = apply(turn, authoritativeCompleted);
-    expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETION_REQUESTING);
+    expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
     turn = apply(turn, terminalResolved(TURN_STATE.COMPLETED));
     expect(turn.state).toBe(FrontendRunState.FRONTEND_COMPLETED);
     expect(deriveTurnCapabilities(turn.state, turn)).toMatchObject({ sending: false, terminal: true });
@@ -119,7 +119,6 @@ describe("turn runtime interaction lifecycle", () => {
       state: FrontendRunState.PROCESSING,
       action: "stop",
       commandId: "stop:turn-1",
-      actionCommandId: "stop:turn-1",
       lifecycleEventType: TURN_EVENT.PROCESSING_STARTED,
       commandPending: true,
     });
@@ -129,7 +128,6 @@ describe("turn runtime interaction lifecycle", () => {
       state: FrontendRunState.ACTION_REQUESTING,
       action: "stop",
       commandId: "stop:turn-1",
-      actionCommandId: "stop:turn-1",
       lifecycleEventType: TURN_EVENT.STOP_ACCEPTED,
     });
 
@@ -140,7 +138,6 @@ describe("turn runtime interaction lifecycle", () => {
     expect(turn).toMatchObject({
       state: FrontendRunState.USER_STOPPING,
       commandId: "stop:turn-1:processing-completed",
-      actionCommandId: "stop:turn-1",
       lifecycleEventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
     });
   });
@@ -195,38 +192,35 @@ describe("turn runtime interaction lifecycle", () => {
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType: TURN_EVENT.FAILED,
       phase,
+      state: protocolState,
+      failure: { phase, message: "failed" },
     });
-    expect(notification.state).toBe(currentByPhase[phase].state);
+    expect(notification).toMatchObject({ state: expectedState, terminal: "error" });
     const failed = apply(notification, terminalResolved(protocolState));
     expect(failed).toMatchObject({ state: expectedState, terminal: "error" });
   });
 
   it.each([
-    [TURN_PHASE.COMPLETION, FrontendRunState.COMPLETION_ERROR, TURN_EVENT.COMPLETED, FrontendRunState.FRONTEND_COMPLETED],
-    [TURN_PHASE.STOP, FrontendRunState.STOP_ERROR, TURN_EVENT.STOP_COMPLETED, FrontendRunState.USER_STOP_COMPLETED],
-  ])("allows only the matching authoritative success to settle retryable %s failure", (phase, failedState, successEvent, completedState) => {
+    [TURN_PHASE.COMPLETION, FrontendRunState.COMPLETION_ERROR, TURN_EVENT.COMPLETED, TURN_STATE.COMPLETED],
+    [TURN_PHASE.STOP, FrontendRunState.STOP_ERROR, TURN_EVENT.STOP_COMPLETED, TURN_STATE.STOP_COMPLETED],
+  ])("does not reopen terminal %s failure for a later success event", (phase, failedState, successEvent, successState) => {
     const failed = {
       ...identity,
       state: failedState,
       action: phase === TURN_PHASE.STOP ? "stop" : "send",
-      terminal: null,
+      terminal: "error",
       lifecycleObserved: true,
       finalizeIntent: { type: phase, retryable: true },
     };
-    expect(deriveTurnCapabilities(failed.state, failed)).toMatchObject({ terminal: false, sending: true });
-    const notification = reduceTurnRuntimeEvent(failed, { ...identity, type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: successEvent, phase, revision: 2 });
-    expect(notification).toMatchObject({ applied: true });
-    expect(notification.next.state).toBe(
-      phase === TURN_PHASE.STOP
-        ? FrontendRunState.USER_STOPPING
-        : FrontendRunState.FRONTEND_COMPLETION_REQUESTING,
-    );
-    const completedTurn = apply(notification.next, terminalResolved(
-      phase === TURN_PHASE.STOP ? TURN_STATE.STOP_COMPLETED : TURN_STATE.COMPLETED,
-      { revision: 3, sequence: 3 },
-    ));
-    expect(completedTurn).toMatchObject({ state: completedState });
-    expect(completedTurn.terminal).toBe(phase === TURN_PHASE.STOP ? "user_stopped" : "completed");
+    expect(deriveTurnCapabilities(failed.state, failed)).toMatchObject({ terminal: true, sending: false });
+    expect(reduceTurnRuntimeEvent(failed, {
+      ...identity,
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      eventType: successEvent,
+      state: successState,
+      phase,
+      revision: 2,
+    })).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED });
   });
 
   it.each([
@@ -242,16 +236,17 @@ describe("turn runtime interaction lifecycle", () => {
   });
 
   it.each([
-    [FrontendRunState.COMPLETION_ERROR, TURN_EVENT.STOP_COMPLETED, TURN_PHASE.STOP],
-    [FrontendRunState.STOP_ERROR, TURN_EVENT.COMPLETED, TURN_PHASE.COMPLETION],
-  ])("rejects mismatched success %s for retryable failure %s", (state, eventType, phase) => {
-    const failed = { ...identity, state, terminal: null, lifecycleObserved: true, finalizeIntent: { retryable: true } };
+    [FrontendRunState.COMPLETION_ERROR, TURN_EVENT.STOP_COMPLETED, TURN_STATE.STOP_COMPLETED, TURN_PHASE.STOP],
+    [FrontendRunState.STOP_ERROR, TURN_EVENT.COMPLETED, TURN_STATE.COMPLETED, TURN_PHASE.COMPLETION],
+  ])("rejects mismatched success %s for terminal failure %s", (state, eventType, successState, phase) => {
+    const failed = { ...identity, state, terminal: "error", lifecycleObserved: true, finalizeIntent: { retryable: true } };
     expect(reduceTurnRuntimeEvent(failed, {
       ...identity,
       type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
       eventType,
+      state: successState,
       phase,
-    })).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.ILLEGAL_TRANSITION });
+    })).toMatchObject({ applied: false, reason: TURN_TRANSITION_REASON.TERMINAL_LOCKED });
   });
 
   it("does not let transport cancelled override an authoritative Turn", () => {

@@ -499,6 +499,9 @@ describe("SharedChatMessageItem", () => {
         event: "workflow_session_snapshot_loaded",
         data: {
           sessionId: "child-session",
+          parentSessionId: "parent-session",
+          workflowRunId: "workflow-run-1",
+          nodeExecutionId: "node-execution-1",
           snapshotVersion: 1,
           turnTimings: [{
             dialogProcessId: "child-dialog",
@@ -561,6 +564,9 @@ describe("SharedChatMessageItem", () => {
           event: "workflow_session_snapshot_loaded",
           data: {
             sessionId: "child-session-terminal",
+            parentSessionId: "parent-session",
+            workflowRunId: "workflow-run-1",
+            nodeExecutionId: "node-execution-1",
             snapshotVersion: 1,
             turnTimings: [{
               dialogProcessId: "child-dialog-terminal",

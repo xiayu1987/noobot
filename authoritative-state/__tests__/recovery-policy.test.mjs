@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "../src/contracts/turn-lifecycle-protocol.mjs";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol/turn-lifecycle";
 import { recoverOrphanedTurn, recoverTurnFinalize } from "../src/application/recovery-policy.js";
 
 const staleTurn = (overrides = {}) => ({
@@ -93,6 +93,28 @@ test("finalize recovery constructs one revision-bound authority command", async 
   assert.equal(commands[0].eventType, TURN_EVENT.COMPLETED);
   assert.equal(commands[0].expectedRevision, 3);
   assert.equal(commands[0].commandId, "stable-finalize");
+});
+
+test("stop finalize recovery carries the pending assistant into terminal materialization", async () => {
+  const turn = staleTurn({
+    state: TURN_STATE.STOPPING,
+    phase: TURN_PHASE.STOP,
+    finalizeIntent: {
+      type: "stop",
+      commandId: "stable-stop-finalize",
+      retryable: true,
+      payload: { assistantMessage: { role: "assistant", content: "partial", turnScopeId: "turn-stale", dialogProcessId: "dialog-stale" } },
+    },
+  });
+  let command;
+  const result = await recoverTurnFinalize({
+    userId: "u1", sessionId: "s1",
+    readSnapshot: async () => ({ found: true, snapshot: { activeTurn: turn } }),
+    commitTurnLifecycle: async (input) => { command = input; return { applied: true }; },
+  });
+  assert.equal(result.recovered, true);
+  assert.equal(command.eventType, TURN_EVENT.STOP_COMPLETED);
+  assert.equal(command.terminalStatus.assistantMessage.content, "partial");
 });
 
 test("finalize recovery exposes revision races without retrying a stale decision", async () => {

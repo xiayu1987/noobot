@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTurnLifecycleEnvelope } from "@noobot/authoritative-state/contracts";
+import { createTurnLifecycleEnvelope } from "@noobot/event-protocol";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { startServerWithWs, closeServer, callChatWs } from "./chat-websocket-server.test-helpers.js";
 
@@ -71,6 +71,45 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   assert.equal(events[0]?.data?.parentSessionId, "parent-session");
   assert.equal(events[0]?.data?.turnScopeId, "child-turn");
   assert.equal(events[0]?.data?.revision, 2);
+});
+
+test("authority dispatcher rejects an invalid lifecycle envelope before delivery side effects", async () => {
+  const calls = { attempts: 0, sends: 0, acknowledgements: 0 };
+  const invalidEnvelope = {
+    eventId: "invalid-event",
+    eventType: "turn.completed",
+    sessionId: "session-invalid",
+    // Required stable turn identity and the rest of the lifecycle contract are intentionally absent.
+  };
+  const bot = {
+    async getPendingAuthorityEvents() {
+      return {
+        found: true,
+        events: [{ eventId: invalidEnvelope.eventId, envelope: invalidEnvelope }],
+      };
+    },
+    async recordAuthorityEventAttempt() {
+      calls.attempts += 1;
+      return { recorded: true };
+    },
+    async acknowledgeAuthorityEvent() {
+      calls.acknowledgements += 1;
+      return { acknowledged: true };
+    },
+  };
+  const dispatchAuthorityEvents = createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: () => {
+      calls.sends += 1;
+      return true;
+    },
+  });
+
+  const result = await dispatchAuthorityEvents({ userId: "user-1", sessionId: "session-invalid" });
+
+  assert.equal(result.dispatched, false);
+  assert.equal(result.reason, "invalid_authority_event_envelope");
+  assert.deepEqual(calls, { attempts: 0, sends: 0, acknowledgements: 0 });
 });
 
 test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta", async () => {

@@ -41,7 +41,15 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
   const turnMeta = normalizeTurnMeta(rawEvent);
   const type = trim(rawEvent?.type || rawEvent?.event || SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE);
   const wireState = normalizeState(rawEvent?.state);
-  const state = type === SESSION_RUN_EVENT.LOCAL_FAILURE
+  const isAuthoritativeEvent = type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE ||
+    type === SESSION_RUN_EVENT.TERMINAL_RESOLVED;
+  // Authority lifecycle state belongs to @noobot/event-protocol. Do not pass
+  // it through transport/UI state normalization: that conversion changes
+  // `completed` and drops states such as `processing`/`stop_completed` before
+  // the sole Authority projector can consume them.
+  const state = isAuthoritativeEvent
+    ? trim(rawEvent?.state || rawEvent?.raw?.turn?.state).toLowerCase()
+    : type === SESSION_RUN_EVENT.LOCAL_FAILURE
     ? normalizeState(rawEvent?.failureState)
     : wireState;
   const isBackendStateEvent = [
@@ -50,8 +58,7 @@ export function normalizeSessionRunEvent(rawEvent = {}) {
   ].includes(type);
   const timestamp = normalizeTimestamp(rawEvent);
   const rawSequence = Number(rawEvent?.sequence || rawEvent?.seq || 0);
-  const isLifecycleEvent = type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE ||
-    type === SESSION_RUN_EVENT.TERMINAL_RESOLVED;
+  const isLifecycleEvent = isAuthoritativeEvent;
   return {
     type,
     state,

@@ -11,14 +11,18 @@ import {
   closeServer,
   waitForCondition,
 } from "./chat-websocket-server.test-helpers.js";
-import { TURN_EVENT } from "@noobot/authoritative-state/contracts";
+import { TURN_EVENT } from "@noobot/event-protocol";
 
 test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
   let capturedStopPayload = null;
   const server = await startServerWithWs({
     bot: {
-      persistStoppedAssistantMessage: async (payload = {}) => {
-        capturedStopPayload = payload;
+      materializeTerminal: async ({ event, terminalStatus }) => {
+        capturedStopPayload = { event, terminalStatus };
+        return { summaryVersion: 1, turnStatus: {
+          version: 1, turnScopeId: event.turnScopeId, dialogProcessId: event.dialogProcessId,
+          status: "user_stopped", reason: "user_stop",
+        } };
       },
       runSession: async ({ abortSignal }) => {
         await new Promise((resolve) => {
@@ -73,7 +77,7 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
       });
       ws.on("error", (error) => { clearTimeout(timer); reject(error); });
     });
-    assert.equal(stopAck?.data?.phase, "action");
+    assert.equal(stopAck?.data?.phase, "stop");
     assert.equal(stopAck?.data?.turnScopeId, "turn-cross-stop");
 
     await new Promise((resolve, reject) => {
@@ -81,23 +85,27 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
       runWs.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
         runEvents.push(parsed);
-        if (parsed?.event === "user_stopped") {
+        if (parsed?.event === "turn_lifecycle" && parsed?.data?.eventType === TURN_EVENT.STOP_COMPLETED) {
           clearTimeout(timer);
           resolve();
         }
       });
       runWs.on("close", () => {
-        if (runEvents.some((item) => item?.event === "user_stopped")) {
+        if (runEvents.some((item) =>
+          item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED)) {
           clearTimeout(timer);
           resolve();
         }
       });
       runWs.on("error", (error) => { clearTimeout(timer); reject(error); });
     });
-    const stoppedEvent = runEvents.find((item) => item?.event === "user_stopped");
+    const stoppedEvent = runEvents.find((item) =>
+      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED);
     assert.equal(stoppedEvent?.data?.sessionId, "s-cross-stop");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-cross-stop");
-    assert.equal(capturedStopPayload?.partialAssistant?.turnScopeId, "turn-cross-stop");
+    assert.equal(stoppedEvent?.data?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.eventId);
+    assert.equal(capturedStopPayload?.terminalStatus?.assistantMessage?.turnScopeId, "turn-cross-stop");
   } finally {
     await closeServer(server);
   }
@@ -111,13 +119,6 @@ test("chat-websocket-server: an authenticated owner cannot stop another owner's 
       userId: request.headers.authorization === "Bearer owner-a-key" ? "owner-a" : "owner-b",
     }),
     bot: {
-      persistStoppedAssistantMessage: async (payload = {}) => ({
-        sessionId: payload.sessionId || "s-owner-isolation",
-        turnScopeId: payload.turnScopeId || payload?.partialAssistant?.turnScopeId || "turn-owner-isolation",
-        dialogProcessId: payload.dialogProcessId || payload?.partialAssistant?.dialogProcessId || "dp-owner-isolation",
-        status: "user_stopped",
-        reason: "user_stop",
-      }),
       runSession: async ({ abortSignal }) => {
         await new Promise((resolve) => {
           releaseActiveRun = resolve;
@@ -184,7 +185,7 @@ test("chat-websocket-server: an authenticated owner cannot stop another owner's 
       foreignStop.on("error", (error) => { clearTimeout(timer); reject(error); });
     });
 
-    assert.equal(stopState?.data?.phase, "action");
+    assert.equal(stopState?.data?.phase, "stop");
     assert.equal(stopState?.data?.turnScopeId, "turn-owner-isolation");
     await new Promise((resolve) => setTimeout(resolve, 25));
     assert.equal(activeRunAborted, false);
@@ -201,13 +202,6 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
   const server = await startServerWithWs({
     resolveAuthByApiKey: () => ({ userId: "canonical-owner" }),
     bot: {
-      persistStoppedAssistantMessage: async (payload = {}) => ({
-        sessionId: payload.sessionId || "s-owner-stop",
-        turnScopeId: payload.turnScopeId || payload?.partialAssistant?.turnScopeId || "turn-owner-stop",
-        dialogProcessId: payload.dialogProcessId || payload?.partialAssistant?.dialogProcessId || "dp-owner-stop",
-        status: "user_stopped",
-        reason: "user_stop",
-      }),
       runSession: async ({ abortSignal }) => {
         await new Promise((resolve) => {
           if (abortSignal?.aborted) return resolve();
@@ -263,7 +257,7 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
       stopWs.on("error", (error) => { clearTimeout(timer); reject(error); });
     });
 
-    assert.equal(stopState?.data?.phase, "action");
+    assert.equal(stopState?.data?.phase, "stop");
     assert.equal(stopState?.data?.turnScopeId, "turn-owner-stop");
     const deadline = Date.now() + 1000;
     while (!aborted && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));

@@ -155,3 +155,23 @@ test("ChannelManager ignores placeholder parent session ids", () => {
   assert.equal(records[0].event.parentSessionId, undefined);
   assert.equal(records[0].event.data.parentSessionId, undefined);
 });
+
+test("ChannelManager does not infer log turn identity from channel start payload", () => {
+  const records = [];
+  const manager = new ChannelManager({ OPEN: 1 }, {
+    sessionLogClient: { log: (apiKey, event) => records.push({ apiKey, event }) },
+  });
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-1" }),
+    { sessionId: "session-1", turnScopeId: "stale-start-turn" },
+  );
+
+  records.length = 0;
+  manager.logSessionEvent(channel, {
+    category: "transport",
+    event: "agentProxy.transport.observed",
+  });
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].event.turnScopeId, "");
+});

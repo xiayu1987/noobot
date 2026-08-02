@@ -45,9 +45,11 @@ export function createSessionMessageView({
     const messages = Array.isArray(targetSession?.messages)
       ? targetSession.messages
       : [];
-    return messages.find((message) => (
-      String(message?.messageId || "").trim() === normalizedMessageId
-    )) || null;
+    return messages.find((message) => {
+      const messageIdentity = String(message?.messageId || "").trim();
+      const presentationIdentity = String(message?.presentationMessageId || "").trim();
+      return messageIdentity === normalizedMessageId || presentationIdentity === normalizedMessageId;
+    }) || null;
   }
 
   function upsertCanonicalAssistantMessage(messageId, identity = {}) {

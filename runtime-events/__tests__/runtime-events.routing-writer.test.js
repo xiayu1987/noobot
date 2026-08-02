@@ -101,6 +101,8 @@ test('session runtime events write to runtime session events path', async () => 
   assert.equal(record.sessionId, 's_1');
   assert.equal(record.userId, 'admin');
   assert.equal(record.dialogProcessId, 'dialog-1');
+  assert.equal(result.record.workspaceRoot, undefined);
+  assert.equal(record.workspaceRoot, undefined);
 });
 
 test('routed runtime events write session when full session context exists', async () => {
@@ -138,6 +140,7 @@ test('routed runtime events write system without session context', async () => {
   assert.equal(result.ok, true);
   assert.equal(result.record.scope, 'system');
   assert.equal(result.record.sessionId, undefined);
+  assert.equal(result.record.workspaceRoot, undefined);
   assert.equal(result.record.data.authorization, '[Redacted]');
   assert.match(result.file, /runtime\/events\/system\/service\/config\.jsonl$/);
 });

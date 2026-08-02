@@ -41,6 +41,22 @@ test("message event protocol validates the authoritative identity envelope", () 
   assert.throws(() => assertMessageEventEnvelope(envelope({ messageId: "" })), /invalid authoritative/);
 });
 
+test("message event protocol keeps ordinary identity valid and requires complete workflow ownership", () => {
+  assert.deepEqual(validateMessageEventEnvelope(envelope()), { valid: true, errors: [] });
+  assert.deepEqual(
+    validateMessageEventEnvelope(envelope({ workflowRunId: "run-1" })).errors,
+    ["incomplete_workflow_identity", "missing_workflow_parent_session"],
+  );
+  assert.deepEqual(
+    validateMessageEventEnvelope(envelope({
+      workflowRunId: "run-1",
+      nodeExecutionId: "node-1",
+      parentSessionId: "root-1",
+    })),
+    { valid: true, errors: [] },
+  );
+});
+
 test("message event protocol requires an explicit presentation identity", () => {
   const current = envelope();
   assert.equal(assertMessageEventEnvelope(current), current);

@@ -9,12 +9,8 @@ import { WebSocket } from "ws";
 import { startServerWithWs, closeServer, callChatWs } from "./chat-websocket-server.test-helpers.js";
 
 test("chat-websocket-server: non-user abort does not persist or emit user_stopped", async () => {
-  let persistCalled = false;
   const server = await startServerWithWs({
     bot: {
-      persistStoppedAssistantMessage: async () => {
-        persistCalled = true;
-      },
       runSession: async () => {
         const error = new Error("upstream aborted unexpectedly");
         error.name = "AbortError";
@@ -35,7 +31,6 @@ test("chat-websocket-server: non-user abort does not persist or emit user_stoppe
       },
     });
 
-    assert.equal(persistCalled, false);
     assert.equal(events.some((item) => item?.event === "user_stopped"), false);
     const errorEvent = events.find((item) => item?.event === "error");
     assert.match(String(errorEvent?.data?.error || ""), /upstream aborted unexpectedly/);

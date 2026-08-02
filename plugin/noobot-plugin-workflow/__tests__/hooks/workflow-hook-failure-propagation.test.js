@@ -29,7 +29,22 @@ import {
   resolveWorkflowDialogProcessId,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
-test("workflow hook marks failed sub-agent step and continues downstream", async () => {
+function assertWorkflowFailedWithoutSuccessfulResult({ ctx, outcome, subSessionCalls, forbiddenNodes = [] } = {}) {
+  assert.equal(outcome?.disposition, "handled");
+  assert.equal(outcome?.owner, "workflow");
+  assert.equal(outcome?.failure?.code, "WORKFLOW_CHILD_EXECUTION_FAILED");
+  assert.equal(Object.hasOwn(outcome || {}, "result"), false);
+  assert.equal(Object.hasOwn(ctx || {}, "overrideAgentResult"), false);
+  assert.equal(Object.hasOwn(ctx || {}, "skipAgentDispatch"), false);
+
+  const calls = callsByNodeName(subSessionCalls);
+  for (const nodeName of forbiddenNodes) {
+    assert.equal(calls.has(nodeName), false, `${nodeName} must not execute after workflow failure`);
+  }
+
+}
+
+test("workflow hook fails the parent workflow and stops downstream after a sub-agent failure", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
@@ -87,28 +102,21 @@ test("workflow hook marks failed sub-agent step and continues downstream", async
     userMessage: "请运行失败继续流程",
     runConfig: { locale: "zh-CN" },
   };
-  await beforeDispatch.handler(beforeContext);
+  const outcome = await beforeDispatch.handler(beforeContext);
 
-  assert.equal(beforeContext.skipAgentDispatch, true);
-  assert.equal(subSessionCalls.length, 2);
-  const callByNodeName = callsByNodeName(subSessionCalls);
-  const nodeBSystem = String(callByNodeName.get("节点B")?.systemMessages?.[0] || "");
-  assert.match(nodeBSystem, /上游失败节点/);
-  assert.match(nodeBSystem, /节点A子agent失败/);
-
-  const nodeRuns = beforeContext.overrideAgentResult?.workflow?.execution?.nodeAgentRuns || [];
-  const nodeARun = nodeRuns.find((item) => String(item?.step?.nodeName || "") === "节点A");
-  assert.equal(nodeARun?.stepStatus, undefined);
-  assert.match(String(nodeARun?.stepFailure?.message || ""), /节点A子agent失败/);
-  const nodeSessionA = beforeContext.overrideAgentResult?.workflow?.nodeSessions?.find(
-    (item) => String(item?.nodeName || "") === "节点A",
-  );
-  assert.equal(nodeSessionA?.stepStatus, undefined);
+  assert.equal(subSessionCalls.length, 1);
+  assertWorkflowFailedWithoutSuccessfulResult({
+    ctx: beforeContext,
+    outcome,
+    subSessionCalls,
+    forbiddenNodes: ["节点B"],
+  });
+  assert.match(String(outcome?.failure?.message || ""), /节点A子agent失败/);
 });
 
 
 
-test("workflow hook injects failed upstream task+error from single upstream into multiple downstream nodes", async () => {
+test("workflow hook stops all fan-out downstream nodes after their upstream node fails", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
@@ -152,23 +160,26 @@ test("workflow hook injects failed upstream task+error from single upstream into
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
+  const ctx = {
     userId: "u1",
     sessionId: "s-failure-fanout",
     dialogProcessId: "d-failure-fanout",
     userMessage: "请运行失败传播流程",
     runConfig: { locale: "zh-CN" },
+  };
+  const outcome = await beforeDispatch.handler(ctx);
+  assert.equal(subSessionCalls.length, 1);
+  assertWorkflowFailedWithoutSuccessfulResult({
+    ctx,
+    outcome,
+    subSessionCalls,
+    forbiddenNodes: ["节点B", "节点C"],
   });
-  const callByNodeName = callsByNodeName(subSessionCalls);
-  const nodeBSystem = String(callByNodeName.get("节点B")?.systemMessages?.[0] || "");
-  const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
-  assert.match(nodeBSystem, /节点A（任务：执行A任务）: 节点A失败/);
-  assert.match(nodeCSystem, /节点A（任务：执行A任务）: 节点A失败/);
 });
 
 
 
-test("workflow hook injects failed upstream task+error from multiple upstream into single downstream node", async () => {
+test("workflow hook does not execute a merge downstream node after an upstream branch fails", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
@@ -216,21 +227,25 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
+  const ctx = {
     userId: "u1",
     sessionId: "s-failure-merge",
     dialogProcessId: "d-failure-merge",
     userMessage: "请运行失败传播流程",
     runConfig: { locale: "zh-CN" },
+  };
+  const outcome = await beforeDispatch.handler(ctx);
+  assertWorkflowFailedWithoutSuccessfulResult({
+    ctx,
+    outcome,
+    subSessionCalls,
+    forbiddenNodes: ["节点C"],
   });
-  const callByNodeName = callsByNodeName(subSessionCalls);
-  const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
-  assert.match(nodeCSystem, /节点A（任务：执行A任务）: 节点A失败/);
 });
 
 
 
-test("workflow hook injects failed upstream task+error from multiple upstream into multiple downstream nodes", async () => {
+test("workflow hook does not execute any post-merge fan-out node after an upstream branch fails", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
@@ -283,18 +298,20 @@ test("workflow hook injects failed upstream task+error from multiple upstream in
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await beforeDispatch.handler({
+  const ctx = {
     userId: "u1",
     sessionId: "s-failure-multi",
     dialogProcessId: "d-failure-multi",
     userMessage: "请运行失败传播流程",
     runConfig: { locale: "zh-CN" },
+  };
+  const outcome = await beforeDispatch.handler(ctx);
+  assertWorkflowFailedWithoutSuccessfulResult({
+    ctx,
+    outcome,
+    subSessionCalls,
+    forbiddenNodes: ["节点C", "节点D"],
   });
-  const callByNodeName = callsByNodeName(subSessionCalls);
-  const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
-  const nodeDSystem = String(callByNodeName.get("节点D")?.systemMessages?.[0] || "");
-  assert.match(nodeCSystem, /节点A（任务：执行A任务）: 节点A失败/);
-  assert.match(nodeDSystem, /节点A（任务：执行A任务）: 节点A失败/);
 });
 
 

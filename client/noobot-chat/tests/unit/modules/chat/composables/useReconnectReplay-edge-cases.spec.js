@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("终态 channel_state 只触发权威查询，不直接清理交互或结算消息", async () => {
+  it("transport channel_state has no Authority or message side effects", async () => {
     const { api, refs, mocks } = createFixture();
     const assistant = createCanonicalAssistant({
       messageId: "message-order",
@@ -28,43 +28,20 @@ describe("useReconnectReplay", () => {
       { role: RoleEnum.USER, content: "q" },
       assistant,
     ];
-    const deltaEnvelope = createAuthoritativeMessageEnvelope("llm_delta", {
-      messageId: assistant.messageId,
-      dialogProcessId: "dp-order",
-      turnScopeId: "turn-order",
-      seq: 1,
-      text: "A",
-    });
-    await api.applyReconnectData({
-      sessions: [
-        {
-          sessionId: "s-1",
-          currentRun: { sessionId: "s-1", dialogProcessId: "dp-order", turnScopeId: "turn-order", state: "error", seq: 3 },
-          dialogProcesses: [
-            {
-              dialogProcessId: "dp-order",
-              messages: [deltaEnvelope],
-            },
-          ],
-          conversationStates: [
-            { sessionId: "s-1", dialogProcessId: "dp-order", state: "error", seq: 3 },
-          ],
-        },
-      ],
+    const result = await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1", dialogProcessId: "dp-order", turnScopeId: "turn-order",
+      state: "error", seq: 3,
     });
 
-    expect(assistant.content).toBe("A");
+    expect(result).toEqual({ applied: false, reason: "transport_channel_state_ignored" });
+    expect(assistant.content).toBe("");
     expect(mocks.appendMessage).not.toHaveBeenCalled();
-    expect(mocks.resolveTurnTerminalState).toHaveBeenCalledWith(
-      "s-1",
-      "turn-order",
-      { commandId: "", sequence: 3, source: "reconnect_replay" },
-    );
+    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     expect(mocks.clearPendingInteractionIfObsolete).not.toHaveBeenCalled();
     expect(mocks.scrollBottom).not.toHaveBeenCalled();
   });
 
-  it("interaction_pending without payload reports diagnostics without settling the Turn", async () => {
+  it("a reconnect entry without a valid Replay Batch is reconciled without creating a Turn", async () => {
     vi.useFakeTimers();
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
@@ -72,44 +49,23 @@ describe("useReconnectReplay", () => {
       { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "", turnScopeId: "turn-missing" },
     ];
 
-    await api.applyReconnectData({
-      sessions: [
-        {
-          sessionId: "s-1",
-          currentRun: { sessionId: "s-1", dialogProcessId: "dp-missing", turnScopeId: "turn-missing", state: "interaction_pending", seq: 10 },
-          conversationStates: [
-            {
-              sessionId: "s-1",
-              dialogProcessId: "dp-missing",
-              state: "interaction_pending",
-              seq: 10,
-            },
-          ],
-          dialogProcesses: [],
-        },
-      ],
-    });
+    await api.applyReconnectData({ sessions: [{ sessionId: "s-1" }] });
 
     const assistant = refs.activeSession.value.messages.find(
       (message) => message.role === RoleEnum.ASSISTANT,
     );
-    expect(refs.sending.value).toBe(true);
+    expect(refs.sending.value).toBe(false);
     expect(mocks.notify).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1200);
-
-    expect(refs.sending.value).toBe(true);
     expect(assistant?.statusLabel).toBe("");
     expect(assistant?.error).toBeUndefined();
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
-    expect(mocks.notify).toHaveBeenCalledWith({
-      type: "error",
-      message: "chat.interactionPayloadMissing",
-    });
+    expect(mocks.notify).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
-  it("interaction_pending without pendingInteraction waits for later interaction_request", async () => {
+  it("an interaction request is only accepted as a complete protocol record", async () => {
     vi.useFakeTimers();
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
@@ -117,35 +73,31 @@ describe("useReconnectReplay", () => {
       { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "", turnScopeId: "turn-missing" },
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-late",
-      turnScopeId: "turn-missing",
-      state: "interaction_pending",
-      seq: 10,
-    });
-    await api.applyReconnectEvent(StreamEventEnum.INTERACTION_REQUEST, {
+    const result = await api.applyReconnectEvent(StreamEventEnum.INTERACTION_REQUEST, {
       requestId: "req-late",
       sessionId: "s-1",
       dialogProcessId: "dp-late",
+      turnScopeId: "turn-missing",
       interactionType: "confirm",
-      content: "continue?",
+      payload: { content: "continue?" },
     });
 
-    await vi.advanceTimersByTimeAsync(1200);
-
+    expect(result?.applied).not.toBe(false);
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         requestId: "req-late",
         dialogProcessId: "dp-late",
       }),
     );
-    expect(refs.sending.value).toBe(true);
+    // An interaction record is not a lifecycle event.  It registers the
+    // pending interaction only; running/stop capabilities come from the
+    // authoritative Turn snapshot.
+    expect(refs.sending.value).toBe(false);
     expect(mocks.notify).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
-  it("expired refresh failure reports diagnostics without manufacturing a Turn terminal state", async () => {
+  it("Replay Batch cache expiration refreshes without manufacturing a Turn terminal state", async () => {
     vi.useFakeTimers();
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
@@ -154,36 +106,13 @@ describe("useReconnectReplay", () => {
     ];
     mocks.chatList.fetchSessions.mockResolvedValue(false);
 
-    await api.applyReconnectData({
-      sessions: [
-        {
-          sessionId: "s-1",
-          currentRun: { sessionId: "s-1", dialogProcessId: "dp-expired", turnScopeId: "turn-expired", state: "expired", seq: 11 },
-          conversationStates: [
-            {
-              sessionId: "s-1",
-              dialogProcessId: "dp-expired",
-              state: "expired",
-              seq: 11,
-            },
-          ],
-          dialogProcesses: [],
-        },
-      ],
-    });
+    await api.applyReconnectData({ sessions: [], cacheExpired: true });
 
     await vi.advanceTimersByTimeAsync(1300);
 
-    const assistant = refs.activeSession.value.messages.find(
-      (message) => message.role === RoleEnum.ASSISTANT,
-    );
     expect(refs.sending.value).toBe(false);
-    expect(assistant?.statusLabel).toBe("");
-    expect(assistant?.error).toBeUndefined();
-    expect(mocks.notify).toHaveBeenCalledWith({
-      type: "error",
-      message: "chat.expiredRefreshFailed",
-    });
+    expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", { silent: true });
+    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 });

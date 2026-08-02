@@ -502,7 +502,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       })
     : ai, { block: "incremental" });
 
-  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
+  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages);
   const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
   const currentModelInfo = resolveCurrentModelInfo(modelState);
 

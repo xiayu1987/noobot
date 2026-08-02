@@ -469,6 +469,9 @@ export function useWorkflowNodeSessionViewer({
                     data: {
                       ...(hydratedDetail.sessionSummary || {}),
                       sessionId: sessionIdHint,
+                      parentSessionId: text(canonicalNodeItem?.parentSessionId || rootSessionId),
+                      workflowRunId: text(canonicalNodeItem?.workflowRunId),
+                      nodeExecutionId: text(canonicalNodeItem?.nodeExecutionId || executionId),
                       messages: rawMessages,
                       rawMessages,
                       snapshotVersion: Number(hydratedDetail?.snapshotVersion || 0),
@@ -636,34 +639,58 @@ export function useWorkflowNodeSessionViewer({
       const subSessionMessageRegistry = props.subSessionMessageRegistry;
       const subSessionMessageRegistryVersion = Number(props.subSessionMessageRegistryVersion || 0);
       const viewKey = nodeViewTransaction.state.ownerKey;
-      if (nodeViewTransaction.state.phase !== "live" || !viewKey || !selectedRuntimeStep.value) return null;
+      const transactionPhase = text(nodeViewTransaction.state.phase);
+      const selectedStep = selectedRuntimeStep.value;
+      const unavailable = (reason, extra = {}) => ({
+        available: false,
+        reason,
+        viewKey,
+        transactionPhase,
+        selectedStep,
+        subSessionMessageRegistry,
+        subSessionMessageRegistryVersion,
+        ...extra,
+      });
+      if (transactionPhase !== "live") return unavailable("transaction_not_live");
+      if (!viewKey) return unavailable("missing_transaction_owner");
+      if (!selectedStep) return unavailable("missing_selected_runtime_step");
       const detail = buildUnifiedSessionDetail({
-        nodeItem: selectedRuntimeStep.value,
+        nodeItem: selectedStep,
         runtimeNodeSessions,
         selectSessionMessages: props.selectSessionMessages,
         selectExecutionDetail: props.selectExecutionDetail,
         allowEmptyMessages: false,
       });
-      if (detail) return { viewKey, detail, subSessionMessageRegistry, subSessionMessageRegistryVersion };
-      const runtimeNode = resolveRuntimeNodeSession(selectedRuntimeStep.value, runtimeNodeSessions);
-      const sessionId = resolveIsolatedNodeSessionId(selectedRuntimeStep.value, runtimeNode);
+      if (detail) return { available: true, viewKey, detail, subSessionMessageRegistry, subSessionMessageRegistryVersion };
+      const runtimeNode = resolveRuntimeNodeSession(selectedStep, runtimeNodeSessions);
+      const sessionId = resolveIsolatedNodeSessionId(selectedStep, runtimeNode);
+      if (!sessionId) return unavailable("missing_session_identity", { runtimeNodeFound: Boolean(runtimeNode) });
+      if (typeof props.selectSessionMessages !== "function") {
+        return unavailable("missing_session_selector", { sessionId, runtimeNodeFound: Boolean(runtimeNode) });
+      }
       const sessionDoc = sessionId && typeof props.selectSessionMessages === "function"
         ? props.selectSessionMessages(sessionId)
         : null;
       return sessionDoc && typeof sessionDoc === "object"
-        ? { viewKey, detail: { sessionId, sessionSummary: sessionDoc, messages: sessionDoc.messages || [], rawMessages: sessionDoc.rawMessages || [] }, subSessionMessageRegistry, subSessionMessageRegistryVersion }
-        : null;
+        ? { available: true, viewKey, detail: { sessionId, sessionSummary: sessionDoc, messages: sessionDoc.messages || [], rawMessages: sessionDoc.rawMessages || [] }, subSessionMessageRegistry, subSessionMessageRegistryVersion }
+        : unavailable("session_projection_unavailable", { sessionId, runtimeNodeFound: Boolean(runtimeNode) });
     },
     (projection) => {
-      if (!projection) {
+      if (!projection?.available) {
+        const selectedStep = projection?.selectedStep || selectedRuntimeStep.value || {};
         props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.liveProjectionUnavailable", {
-          sessionId: text(selectedRuntimeStep.value?.sessionId || selectedRuntimeStep.value?.nodeSessionId),
-          dialogProcessId: resolveWorkflowDialogProcessId(selectedRuntimeStep.value || {}),
-          turnScopeId: text(selectedRuntimeStep.value?.turnScopeId),
-          workflowRunId: text(selectedRuntimeStep.value?.workflowRunId),
-          nodeExecutionId: text(selectedRuntimeStep.value?.nodeExecutionId),
-          transactionPhase: text(nodeViewTransaction.state.phase),
-          transactionOwnerKey: text(nodeViewTransaction.state.ownerKey),
+          sessionId: text(projection?.sessionId || selectedStep?.sessionId || selectedStep?.nodeSessionId),
+          dialogProcessId: resolveWorkflowDialogProcessId(selectedStep),
+          turnScopeId: text(selectedStep?.turnScopeId),
+          workflowRunId: text(selectedStep?.workflowRunId),
+          nodeExecutionId: text(selectedStep?.nodeExecutionId),
+          reason: text(projection?.reason) || "projection_state_unavailable",
+          transactionPhase: text(projection?.transactionPhase || nodeViewTransaction.state.phase),
+          transactionOwnerKey: text(projection?.viewKey || nodeViewTransaction.state.ownerKey),
+          selectedRuntimeStepPresent: Boolean(selectedStep && Object.keys(selectedStep).length),
+          runtimeNodeFound: projection?.runtimeNodeFound === true,
+          sessionSelectorAvailable: typeof props.selectSessionMessages === "function",
+          subSessionMessageRegistryVersion: Number(projection?.subSessionMessageRegistryVersion || 0),
         });
         return;
       }

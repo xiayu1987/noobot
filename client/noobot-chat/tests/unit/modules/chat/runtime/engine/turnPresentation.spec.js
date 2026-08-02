@@ -24,7 +24,13 @@ function workflow({
     presentationMessageId,
     dialogProcessId,
     semanticText: "WORKFLOW_DSL/1",
-    nodes: { nodeA: { nodeExecutionId: "node-a", status: "ready" } },
+    nodes: {
+      nodeA: {
+        nodeExecutionId: "node-a",
+        sessionId: "node-session-a",
+        status: "ready",
+      },
+    },
   };
 }
 
@@ -98,16 +104,20 @@ describe("selectTurnPresentations", () => {
     });
   });
 
-  it("lets the persisted workflow synchronously replace the live projection", () => {
-    const persisted = persistedWorkflow();
+  it("keeps the persisted workflow shell as the sole completed-content source", () => {
+    const persisted = persistedWorkflow({ content: "final workflow content" });
     const result = selectTurnPresentations({
       activeSession: { id: "session-a", messages: [persisted] },
       workflowRegistry: liveRegistry(),
     });
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toBe(persisted);
-    expect(result[0].__workflowLiveProjection).toBeUndefined();
+    expect(result[0]).toMatchObject({
+      id: persisted.id,
+      content: "final workflow content",
+      presentationMessageId: "assistant-presentation-a",
+    });
+    expect(result[0].pluginMeta.payload.nodeResults).toBeUndefined();
   });
 
   it("coalesces a placeholder and persisted workflow into one stable Turn shell", () => {
@@ -345,6 +355,61 @@ describe("selectTurnPresentations", () => {
     });
 
     expect(result).toHaveLength(2);
+  });
+
+  it("does not render ordinary or workflow assistant projections for replaced Turns", () => {
+    const turnRuntimeRegistry = createTurnRuntimeRegistryState();
+    confirmTurnRuntimeDeletion(turnRuntimeRegistry, ["turn-old", "turn-tail"], { sessionId: "session-a" });
+    const result = selectTurnPresentations({
+      activeSession: {
+        id: "session-a",
+        messages: [
+          { id: "user-old", sessionId: "session-a", role: "user", turnScopeId: "turn-old", content: "old" },
+          { id: "assistant-old", sessionId: "session-a", role: "assistant", turnScopeId: "turn-old", content: "old answer" },
+          { id: "assistant-tail", sessionId: "session-a", role: "assistant", turnScopeId: "turn-tail", content: "tail answer" },
+          { id: "user-new", sessionId: "session-a", role: "user", turnScopeId: "turn-new", content: "edited" },
+        ],
+        turnStatuses: [
+          { sessionId: "session-a", turnScopeId: "turn-old", status: "user_stopped" },
+        ],
+      },
+      workflowRegistry: liveRegistry(workflow({ turnScopeId: "turn-tail" })),
+      turnRuntimeRegistry,
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({ id: "user-new", turnScopeId: "turn-new" }),
+    ]);
+  });
+
+  it("rejects multiple canonical assistant presentations for one Turn", () => {
+    expect(() => selectTurnPresentations({
+      activeSession: {
+        id: "session-a",
+        messages: [
+          {
+            id: "assistant-source-a",
+            messageId: "assistant-source-a",
+            presentationMessageId: "assistant-presentation-a",
+            sessionId: "session-a",
+            role: "assistant",
+            turnScopeId: "turn-a",
+            content: "first",
+          },
+          {
+            id: "assistant-source-b",
+            messageId: "assistant-source-b",
+            presentationMessageId: "assistant-presentation-a",
+            sessionId: "session-a",
+            role: "assistant",
+            turnScopeId: "turn-a",
+            content: "second",
+          },
+        ],
+      },
+    })).toThrow(
+      "[turn-presentation] multiple canonical assistant presentations for session-a::turn-a",
+    );
   });
 
   it("never projects across Session or Turn ownership boundaries", () => {

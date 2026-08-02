@@ -24,14 +24,13 @@ export async function commitNoToolsTurnState({
   presentationMessageId = "",
 } = {}) {
   const {
-    turnMessages,
     currentTurnMessages,
     currentTurnTasks,
     dialogProcessId,
   } = loopState;
   const { eventListener, runtime } = modelState;
 
-  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages, turnMessages);
+  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages);
   const currentModelInfo = resolveCurrentModelInfo(modelState);
   const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
   const stateCommitter = createStateCommitter({

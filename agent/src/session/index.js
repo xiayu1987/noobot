@@ -334,10 +334,6 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.replaceTurn(payload);
     },
 
-    async upsertTurnStatus(payload = {}) {
-      return sessionMessageService.upsertTurnStatus(payload);
-    },
-
     async applyTurnLifecycleEvent(payload = {}) {
       return sessionMessageService.applyTurnLifecycleEvent(payload);
     },

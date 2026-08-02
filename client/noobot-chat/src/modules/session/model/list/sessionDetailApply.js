@@ -115,6 +115,17 @@ export function createSessionDetailApplicator({
     const hasMessageSnapshot = Array.isArray(mainSessionDoc.messages);
     sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
     sessionItem.currentTaskStatus = "idle";
+    // Keep the authoritative lifecycle snapshot attached to the canonical
+    // session object.  sessionLifecycleHydration is the single consumer that
+    // projects it into turnRuntimeRegistry; dropping it here makes a detail
+    // refresh silently fall back to the non-authoritative session view.
+    const turnLifecycleSnapshot = [
+      mainSessionDoc?.turnLifecycleSnapshot,
+      detail?.turnLifecycleSnapshot,
+    ].find((value) => value && typeof value === "object") || null;
+    if (turnLifecycleSnapshot) {
+      sessionItem.turnLifecycleSnapshot = turnLifecycleSnapshot;
+    }
     applyLatestSessionVersion(sessionItem, mainSessionDoc);
     sessionItem.createdAt = mainSessionDoc.createdAt || sessionItem.createdAt;
     sessionItem.updatedAt = mainSessionDoc.updatedAt || sessionItem.updatedAt;
@@ -207,7 +218,10 @@ export function createSessionDetailApplicator({
     if (hasMessageSnapshot) {
       logResendDebug("detail.apply.replaceAll", () => ({
         sessionId: detail.sessionId,
-        detailMessages: summarizeDebugMessages(detailMessages),
+        canonicalMessages: summarizeDebugMessages(detailMessages),
+        presentationMessages: summarizeDebugMessages(normalizedDetailMessages),
+        canonicalMessageCount: detailMessages.length,
+        presentationMessageCount: normalizedDetailMessages.length,
       }));
       sessionItem.messages = normalizedDetailMessages;
     }

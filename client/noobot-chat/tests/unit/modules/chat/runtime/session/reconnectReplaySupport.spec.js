@@ -19,7 +19,6 @@ describe("reconnectReplay support modules", () => {
     const internals = {
       replayCache: { "s-1": {} },
       appliedReconnectSeqByDialogProcessId: { "dp-1": 1 },
-      terminalDialogProcessIdSet: new Set(["dp-1"]),
     };
 
     const api = createReconnectReplayPublicApi({
@@ -52,6 +51,7 @@ describe("reconnectReplay support modules", () => {
       missingInteractionPayloadTimers,
       getCacheExpiredRefreshTimer: () => refreshTimer,
       setCacheExpiredRefreshTimer,
+      missingInteractionPayloadTimers,
     });
 
     expect(missingInteractionPayloadTimers.size).toBe(0);
@@ -107,9 +107,7 @@ describe("reconnectReplay support modules", () => {
 
     expect(result).toBe(true);
     expect(fetchSessionDetail).toHaveBeenCalledWith("s-1", {
-      source: "reconnectHydration",
-      reuseRecentlyLoaded: false,
-      allowLoadedSnapshot: false,
+      source: "reconnectProtocolReconcile",
     });
     expect(applySessionDetail).toHaveBeenCalledWith(detail);
   });
@@ -191,11 +189,7 @@ describe("reconnectReplay support modules", () => {
     expect(canStop.value).toBe(true);
     expect(clearPendingInteraction).toHaveBeenCalledTimes(1);
     expect(applyAssistantFailureState).not.toHaveBeenCalled();
-    expect(emitSyntheticErrorConversationState).toHaveBeenCalledWith({
-      sessionId: "failed-s",
-      dialogProcessId: "dp-failed",
-      sourceEvent: "expired_refresh_failed",
-    });
+    expect(emitSyntheticErrorConversationState).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith({
       type: "error",
       message: "translated:chat.expiredRefreshFailed",

@@ -323,11 +323,12 @@ describe("useChatSession reconnect replay", () => {
         loaded: true,
         messages: [
           { role: RoleEnum.USER, content: "old q" },
-          { role: RoleEnum.ASSISTANT, messageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+          { role: RoleEnum.ASSISTANT, messageId: "msg-old", presentationMessageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
             messageId: "msg-new",
+            presentationMessageId: "msg-new",
             dialogProcessId: "dp-new",
             turnScopeId: "turn-new",
             content: "",
@@ -362,9 +363,12 @@ describe("useChatSession reconnect replay", () => {
             envelopeKind: "noobot.message_event",
             envelopeVersion: 2,
             eventId: "evt-new-final",
-            eventType: "main_model_content",
+            eventType: "authoritative_final_content",
             sessionId: "s-1",
             messageId: "msg-new",
+            presentationMessageId: "msg-new",
+            sequenceDomain: "message-event",
+            sequenceScopeId: "msg-new",
             dialogProcessId: "dp-new",
             turnScopeId: "turn-new",
             sequence: 1,
@@ -386,6 +390,7 @@ describe("useChatSession reconnect replay", () => {
             {
               role: RoleEnum.ASSISTANT,
               messageId: "msg-old",
+              presentationMessageId: "msg-old",
               dialogProcessId: "dp-old",
               turnScopeId: "turn-old",
               content: "old overwritten by snapshot",
@@ -394,6 +399,7 @@ describe("useChatSession reconnect replay", () => {
             {
               role: RoleEnum.ASSISTANT,
               messageId: "msg-new",
+              presentationMessageId: "msg-new",
               dialogProcessId: "dp-new",
               turnScopeId: "turn-new",
               content: "new final answer",
@@ -425,11 +431,12 @@ describe("useChatSession reconnect replay", () => {
             sessionId: "s-1",
             messages: [
               { role: RoleEnum.USER, content: "old q" },
-              { role: RoleEnum.ASSISTANT, messageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+              { role: RoleEnum.ASSISTANT, messageId: "msg-old", presentationMessageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
               { role: RoleEnum.USER, content: "new q" },
               {
                 role: RoleEnum.ASSISTANT,
                 messageId: "msg-new",
+                presentationMessageId: "msg-new",
                 dialogProcessId: "dp-new",
                 turnScopeId: "turn-new",
                 content: "new final answer",
@@ -440,11 +447,12 @@ describe("useChatSession reconnect replay", () => {
         ],
         messages: [
           { role: RoleEnum.USER, content: "old q" },
-          { role: RoleEnum.ASSISTANT, messageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+          { role: RoleEnum.ASSISTANT, messageId: "msg-old", presentationMessageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
             messageId: "msg-new",
+            presentationMessageId: "msg-new",
             dialogProcessId: "dp-new",
             turnScopeId: "turn-new",
             content: "new final answer",
@@ -484,11 +492,11 @@ describe("useChatSession reconnect replay", () => {
     expect(newAssistant.content).toBe("new final answer");
     expect(newAssistant.modelAlias).toBe("alias-1");
     const requestedUrls = authFetch.mock.calls.map(([url]) => url);
-    expect(requestedUrls).toContain("/api/internal/session/u-1/s-1");
-    expect(requestedUrls).toContain("/api/internal/connectors/u-1/s-1");
-    expect(requestedUrls.some((url) => url.includes("/turns/turn-new/terminal"))).toBe(true);
+    expect(requestedUrls.some((url) => url.includes("/turns/turn-new/terminal"))).toBe(false);
     expect(store.turnRuntimeRegistry.sessions).toEqual({});
-    expect(newAssistant.pending).toBe(false);
+    // Message content is data-plane presentation only; lifecycle completion
+    // must come from an Authority snapshot or lifecycle envelope.
+    expect(newAssistant.pending).toBe(true);
   });
 
 

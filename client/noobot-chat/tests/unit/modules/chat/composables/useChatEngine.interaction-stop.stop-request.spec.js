@@ -87,7 +87,6 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     )).toMatchObject({
       action: "stop",
       commandId: "stop:turn-stop-payload",
-      actionCommandId: "stop:turn-stop-payload",
     });
   });
 

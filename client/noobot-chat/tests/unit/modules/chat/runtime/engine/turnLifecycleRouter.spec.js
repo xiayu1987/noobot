@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { routeForeignTurnLifecycleEvent } from "../../../../../../src/modules/chat/runtime/engine/turnLifecycleRouter.js";
 
 describe("foreign Turn lifecycle routing", () => {
   it("commits child Session authority envelopes into the canonical Turn registry", () => {
-    const applyRunStateEvent = vi.fn();
+    const applyTurnLifecycleEnvelope = vi.fn();
     const data = {
       sessionId: "child-session",
       parentSessionId: "root-session",
@@ -20,19 +19,15 @@ describe("foreign Turn lifecycle routing", () => {
 
     expect(routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
       activeSession: { value: { backendSessionId: "root-session" } },
-      applyRunStateEvent,
+      applyTurnLifecycleEnvelope,
       sessionId: "root-session",
     })).toBe(true);
-    expect(applyRunStateEvent).toHaveBeenCalledWith({
-      ...data,
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
-      source: "turn_lifecycle",
-    });
+    expect(applyTurnLifecycleEnvelope).toHaveBeenCalledWith(data);
   });
 
   it("logs the settled terminal resolution result instead of treating its Promise as a reducer result", async () => {
     const logSessionEvent = vi.fn();
-    const applyRunStateEvent = vi.fn().mockResolvedValue({
+    const applyTurnLifecycleEnvelope = vi.fn().mockResolvedValue({
       applied: true,
       reason: "terminal_resolution_applied",
     });
@@ -47,7 +42,7 @@ describe("foreign Turn lifecycle routing", () => {
 
     routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
       activeSession: { value: { backendSessionId: "root-session" } },
-      applyRunStateEvent,
+      applyTurnLifecycleEnvelope,
       logSessionEvent,
       sessionId: "root-session",
     });

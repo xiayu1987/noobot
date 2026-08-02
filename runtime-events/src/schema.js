@@ -48,8 +48,6 @@ export function normalizeRuntimeEvent(event = {}, defaults = {}) {
     const value = normalizeOptionalSessionId(event[key] ?? defaults[key]);
     if (value) record[key] = safeSegment(value);
   }
-  const workspaceRoot = event.workspaceRoot || defaults.workspaceRoot;
-  if (workspaceRoot) record.workspaceRoot = String(workspaceRoot);
   const processInfo = event.process ?? defaults.process ?? buildProcessInfo(defaults.includeProcess ?? true);
   if (processInfo) record.process = sanitizeValue(processInfo);
   if (event.data || defaults.data) {

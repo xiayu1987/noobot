@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { validateTurnLifecycleEnvelope } from "./turn-lifecycle-protocol.mjs";
+import { validateTurnLifecycleEnvelope } from "@noobot/event-protocol/turn-lifecycle";
 
 const clean = (value) => String(value || "").trim();
 

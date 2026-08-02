@@ -38,8 +38,9 @@ Based on latest examples:
 | `NOOBOT_RUNTIME_EVENT_TRANSPORT_LOG` | boolean | `true` | Whether runtime-events records transport session logs. |
 | `NOOBOT_RUNTIME_EVENT_AGENT_PROXY_LOG` | boolean | `true` | Whether runtime-events records agent-proxy session logs. |
 | `NOOBOT_RUNTIME_EVENT_SYSTEM_LOG` | boolean | `true` | Whether runtime-events records system session logs. |
-| `NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG` | boolean | `false` | Whether runtime-events records state-machine debug events. |
-| `NOOBOT_RUNTIME_EVENT_RESEND_DEBUG` | boolean | `false` | Whether runtime-events records resend debug events. |
+| `NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG` | boolean | `true` | Whether runtime-events records state-machine debug events. |
+| `NOOBOT_RUNTIME_EVENT_RESEND_DEBUG` | boolean | `true` | Whether runtime-events records resend debug events. |
+| `NOOBOT_RUNTIME_EVENT_STOP_DEBUG` | boolean | `true` | Whether runtime-events records stop debug events. |
 | `NOOBOT_RUNTIME_EVENT_SESSION_LOG_WS_DEBUG` | boolean | `false` | Whether runtime-events records session log WebSocket debug events. |
 
 Session log WebSocket:
@@ -47,7 +48,7 @@ Session log WebSocket:
 - Auth: reuses the existing API key WebSocket authentication.
 - Storage: backend writes one directory per `sessionId`, and one JSONL file per category (`state`, `message`, `interaction`, `transport`, `agent-proxy`, `system`); debug logs are further split by `data.debugType` into `debug-<debugType>.jsonl`, or `debug.jsonl` when no explicit `debugType` is present.
 - Main fields: `source`, `category`, `event`, `sessionId`, optional `dialogProcessId` / `turnScopeId`, and compact `data` payloads for state-machine, message-flow, frontend/backend interaction, and agent-proxy events.
-- Control: frontend and agent-proxy only send events through the log WebSocket. Runtime-events is the single control point that decides whether to record by the specific business-type switches in `runtime-events-config.mjs`. Log-specific switches default to enabled; debug-specific switches default to disabled.
+- Control: frontend and agent-proxy only send events through the log WebSocket. Runtime-events is the single control point that decides whether to record by the specific business-type switches in `runtime-events-config.mjs`. Core state-machine, resend, and stop diagnostics default to enabled and can still be explicitly disabled by operators.
 
 ---
 

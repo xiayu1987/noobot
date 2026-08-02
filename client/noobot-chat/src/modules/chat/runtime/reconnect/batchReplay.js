@@ -7,8 +7,8 @@ import { StreamEventEnum } from "../../model/chatConstants.js";
 import {
   getReconnectEnvelopeSequence,
   getReconnectMaxSequence,
-  isPendingInteractionReplay,
 } from "../../model/reconnectReplayModel.js";
+import { isPendingInteractionReplay } from "@noobot/event-protocol";
 import { _ensureArray, _trimStr } from "./utils.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../engine/turnProjectionStore.js";
@@ -54,42 +54,23 @@ export function prepareReconnectReplayMessages({
 
 export function shouldSkipReconnectBatchAfterTerminal({
   normalizedDpId = "",
-  terminalDialogProcessIdSet,
-  nextMessages = [],
-  isReconnectTerminalBatch,
 } = {}) {
-  return Boolean(
-    normalizedDpId &&
-      terminalDialogProcessIdSet?.has?.(normalizedDpId) &&
-      !isReconnectTerminalBatch?.(nextMessages),
-  );
+  return false;
 }
 
 export function prepareReconnectReplayBatchPlan({
   messages = [],
   lastAppliedSeq = 0,
   lastAppliedEventKinds = null,
-  normalizedDpId = "",
-  terminalDialogProcessIdSet,
-  isReconnectTerminalBatch,
 } = {}) {
   const { nextMessages, maxSequence } = prepareReconnectReplayMessages({
     messages,
     lastAppliedSeq,
     lastAppliedEventKinds,
   });
-  const shouldSkipAfterTerminal = shouldSkipReconnectBatchAfterTerminal({
-    normalizedDpId,
-    terminalDialogProcessIdSet,
-    nextMessages,
-    isReconnectTerminalBatch,
-  });
-  const batchHasTerminalEvent = isReconnectTerminalBatch?.(nextMessages) || false;
   return {
     nextMessages,
     maxSequence,
-    shouldSkipAfterTerminal,
-    batchHasTerminalEvent,
   };
 }
 
@@ -97,8 +78,6 @@ export function applyReconnectEnvelopeToTargetMessage({
   envelope,
   findCanonicalMessageById,
   normalizedDpId = "",
-  terminalDialogProcessIdSet,
-  isReconnectTerminalEvent,
   classifyRealtimeLog,
   normalizeExecutionLogForRealtime,
   onInteractionRequest,
@@ -108,12 +87,6 @@ export function applyReconnectEnvelopeToTargetMessage({
 } = {}) {
   const eventName = _trimStr(envelope?.event);
   const eventData = envelope?.data || {};
-  if (
-    terminalDialogProcessIdSet?.has?.(normalizedDpId) &&
-    !isReconnectTerminalEvent?.(eventName)
-  ) {
-    return false;
-  }
   if (eventName === "message_event") {
     const messageEvent = eventData?.event;
     const sourceMessageId = _trimStr(messageEvent?.messageId);
@@ -131,7 +104,11 @@ export function applyReconnectEnvelopeToTargetMessage({
     const canonicalTarget = findCanonicalMessageById?.(targetSessionId, presentationMessageId);
     if (
       !canonicalTarget ||
-      _trimStr(canonicalTarget?.messageId || canonicalTarget?.id) !== presentationMessageId
+      ![
+        canonicalTarget?.messageId,
+        canonicalTarget?.presentationMessageId,
+        canonicalTarget?.id,
+      ].some((candidate) => _trimStr(candidate) === presentationMessageId)
     ) {
       logWorkflowDiagnostics("frontend.workflowReplay.messageEventRejected", () => ({
         sessionId: _trimStr(messageEvent?.sessionId || eventData?.sessionId),
@@ -173,7 +150,6 @@ export function applyReconnectEnvelopeToTargetMessage({
     eventName === StreamEventEnum.DONE ||
     eventName === StreamEventEnum.ERROR
   ) {
-    terminalDialogProcessIdSet?.add?.(normalizedDpId);
     logWorkflowDiagnostics("frontend.workflowReplay.legacyMessageMutationSkipped", () => ({
       dialogProcessId: _trimStr(normalizedDpId),
       turnScopeId: _trimStr(eventData?.turnScopeId),
@@ -197,8 +173,6 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
   findCanonicalMessageById,
   normalizedDpId = "",
   lastAppliedSeq = 0,
-  terminalDialogProcessIdSet,
-  isReconnectTerminalEvent,
   classifyRealtimeLog,
   normalizeExecutionLogForRealtime,
   onInteractionRequest,
@@ -213,8 +187,6 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
       envelope,
       findCanonicalMessageById,
       normalizedDpId,
-      terminalDialogProcessIdSet,
-      isReconnectTerminalEvent,
       classifyRealtimeLog,
       normalizeExecutionLogForRealtime,
       onInteractionRequest,
@@ -268,9 +240,6 @@ export async function applyReconnectReplayBatchToActiveSession({
   turnScopeId = "",
   lastAppliedSeq = 0,
   lastAppliedEventKinds = null,
-  terminalDialogProcessIdSet,
-  isReconnectTerminalBatch,
-  isReconnectTerminalEvent,
   classifyRealtimeLog,
   normalizeExecutionLogForRealtime,
   envelopeCallbacks = {},
@@ -292,15 +261,11 @@ export async function applyReconnectReplayBatchToActiveSession({
   const {
     nextMessages,
     maxSequence,
-    shouldSkipAfterTerminal,
   } = prepareReconnectReplayBatchPlan({
     messages,
     lastAppliedSeq,
     lastAppliedEventKinds,
-    normalizedDpId,
     turnScopeId: normalizedTurnScopeId,
-    terminalDialogProcessIdSet,
-    isReconnectTerminalBatch,
   });
   logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchPlanned", () => ({
     sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
@@ -311,7 +276,6 @@ export async function applyReconnectReplayBatchToActiveSession({
     filteredCount: Math.max(0, _ensureArray(messages).length - nextMessages.length),
     lastAppliedSeq: Number(lastAppliedSeq || 0),
     maxSequence,
-    shouldSkipAfterTerminal,
   }));
   logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchPlanned", () => ({
     sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
@@ -325,10 +289,6 @@ export async function applyReconnectReplayBatchToActiveSession({
       ? lastAppliedEventKinds
       : null,
     maxTransportSequence: maxSequence,
-    terminalDialogSeen: Boolean(
-      normalizedDpId && terminalDialogProcessIdSet?.has?.(normalizedDpId),
-    ),
-    shouldSkipAfterTerminal,
     inputEnvelopes: _ensureArray(messages).map(summarizeReconnectEnvelope),
     replayEnvelopes: nextMessages.map(summarizeReconnectEnvelope),
   }));
@@ -349,26 +309,11 @@ export async function applyReconnectReplayBatchToActiveSession({
       .map((envelope) => _trimStr(envelope?.event))
       .filter(Boolean),
   )).sort();
-  if (shouldSkipAfterTerminal) {
-    finalizeReconnectReplayBatch({
-      normalizedDpId,
-      sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
-      turnScopeId: normalizedTurnScopeId,
-      maxAppliedSeq: maxSequence,
-      eventKindsAtSequence: eventKindsAtMaxSequence,
-      markReconnectSequenceApplied,
-      navigateToLastMessage,
-      shouldNavigate: false,
-    });
-    return true;
-  }
   const maxAppliedSeq = applyReconnectEnvelopeBatchToTargetMessage({
     messages: nextMessages,
     findCanonicalMessageById,
     normalizedDpId,
     lastAppliedSeq,
-    terminalDialogProcessIdSet,
-    isReconnectTerminalEvent,
     classifyRealtimeLog,
     normalizeExecutionLogForRealtime,
     ...envelopeCallbacks,

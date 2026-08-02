@@ -12,10 +12,14 @@ import {
 import { normalizeSessionRunEvent } from "./eventNormalization.js";
 import { isFinalTurnState, reduceTurnRuntimeEvent } from "./turnReducer.js";
 import {
+  projectAuthoritativeTurnState,
+  projectAuthoritativeTurnTerminal,
+} from "./authoritativeTurnProjection.js";
+import {
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleSnapshot,
   validateTurnTerminalResolution,
-} from "@noobot/authoritative-state/contracts";
+} from "@noobot/event-protocol";
 import { validateExecutionIdentity } from "@noobot/shared/execution-lifecycle-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { canonicalizeTurnScopeId } from "../../model/messageIdentity.js";
@@ -381,7 +385,6 @@ export function selectSessionTurnRuntime(registry, sessionId, turnScopeId = "") 
     dialogProcessId: text(turn?.dialogProcessId),
     action: text(turn?.action),
     commandId: text(turn?.commandId),
-    actionCommandId: text(turn?.actionCommandId),
     lifecycleEventType: text(turn?.lifecycleEventType),
     lifecycleObserved: turn?.lifecycleObserved === true,
     commandPending: turn?.commandPending === true,
@@ -408,6 +411,7 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
     dialogProcessId: normalizedDialogProcessId,
     source: "",
     sourceEvent: "",
+    lifecycleObserved: false,
     seq: 0,
     updatedAt: "",
     updatedAtMs: 0,
@@ -445,6 +449,7 @@ export function selectTurnMessageRuntime(registry, { sessionId = "", turnScopeId
     dialogProcessId: turn.dialogProcessId || "",
     source: turn.source || "",
     sourceEvent: turn.sourceEvent || "",
+    lifecycleObserved: turn.lifecycleObserved === true,
     authority: turn.authority || "none",
     seq: Number(turn.seq || 0),
     updatedAt: turn.updatedAt || "",
@@ -706,6 +711,26 @@ export function applyTurnLifecycleEnvelope(registry, envelope = {}) {
       errors: validation.errors,
     };
   }
+  const existing = resolveTurnRuntimeByScope(registry, envelope.turnScopeId, { sessionId: envelope.sessionId });
+  const incomingRevision = Number(envelope.revision || 0);
+  const incomingSequence = Number(envelope.sequence || 0);
+  const currentRevision = Number(existing?.revision || 0);
+  const currentSequence = Number(existing?.lifecycleSeq || 0);
+  const fingerprint = executionFingerprint(envelope);
+  if (existing && incomingRevision === currentRevision && incomingSequence === currentSequence) {
+    if (text(existing.authoritativeEventId) === text(envelope.eventId) &&
+        existing.authoritativeEventFingerprint === fingerprint) {
+      return { registry, turn: existing, applied: false, deduplicated: true, reason: "duplicate_authoritative_event" };
+    }
+    return { registry, turn: existing, applied: false, reason: "authoritative_event_coordinate_conflict" };
+  }
+  if (existing && (incomingRevision <= currentRevision || incomingSequence <= currentSequence)) {
+    return { registry, turn: existing, applied: false, reason: "stale_authoritative_event" };
+  }
+  if (existing && isFinalTurnState(existing.state, existing) &&
+      !projectAuthoritativeTurnTerminal(envelope.state)) {
+    return { registry, turn: existing, applied: false, reason: "terminal_locked" };
+  }
   const result = applyTurnRuntimeEvent(registry, {
     ...envelope,
     type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
@@ -713,6 +738,19 @@ export function applyTurnLifecycleEnvelope(registry, envelope = {}) {
     source: "turn_lifecycle",
   });
   if (result.applied) {
+    // Keep envelope identity and lifecycle metadata in the same canonical
+    // Turn projection used by snapshot hydration. These are business
+    // identity fields, not a snapshot-specific observation flag.
+    if (result.turn) {
+      Object.assign(result.turn, {
+        parentSessionId: text(envelope.parentSessionId),
+        messageId: text(envelope.messageId),
+        presentationMessageId: text(envelope.presentationMessageId),
+        phase: text(envelope.phase || envelope.failure?.phase),
+        authoritativeEventId: text(envelope.eventId),
+        authoritativeEventFingerprint: fingerprint,
+      });
+    }
     const bucket = ensureSessionBucket(registry, envelope.sessionId);
     bucket.authoritativeSequence = Math.max(Number(bucket.authoritativeSequence || 0), Number(envelope.sequence || 0));
     bucket.protocolVersion = Number(envelope.protocolVersion || 1);
@@ -765,7 +803,7 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   const sessionId = text(snapshot.sessionId);
   const sequence = Number(snapshot.sequence || 0);
   if (!sessionId || !Number.isInteger(sequence) || sequence < 0) return { applied: false, reason: "invalid_snapshot_identity" };
-  const bucket = ensureSessionBucket(registry, sessionId);
+  let bucket = ensureSessionBucket(registry, sessionId);
   if (Number(bucket.authoritativeSequence || 0) > sequence) return { applied: false, reason: "stale_snapshot" };
   const fingerprint = JSON.stringify(snapshot);
   if (Number(bucket.authoritativeSequence || 0) === sequence && bucket.authoritativeSnapshotFingerprint) {
@@ -789,28 +827,53 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
     if (!eventType) return { applied: false, reason: "invalid_snapshot_state" };
     const sourceIsTerminal = isAuthoritativeTerminalState(source.state);
     const phase = text(source.phase || source.failure?.phase);
-    const stateMap = {
-      action_requesting: FrontendRunState.ACTION_REQUESTING, processing: FrontendRunState.PROCESSING,
-      completion_requesting: FrontendRunState.FRONTEND_COMPLETION_REQUESTING, completed: FrontendRunState.FRONTEND_COMPLETED,
-      stopping: FrontendRunState.USER_STOPPING, stop_completed: FrontendRunState.USER_STOP_COMPLETED,
-      action_failed: FrontendRunState.ACTION_REQUEST_ERROR, processing_failed: FrontendRunState.PROCESSING_ERROR,
-      completion_failed: FrontendRunState.COMPLETION_ERROR, stop_failed: FrontendRunState.STOP_ERROR,
-    };
-    const state = stateMap[text(source.state)];
+    const state = projectAuthoritativeTurnState(source.state);
     if (current && isFinalTurnState(current.state, current) && !isFinalTurnState(state, source)) continue;
-    const terminal = text(source.state) === "completed"
-      ? "completed"
-      : text(source.state) === "stop_completed"
-        ? "user_stopped"
-        : sourceIsTerminal
-          ? "error"
-          : null;
-    const preservesTerminalResolution = sourceIsTerminal && current?.terminalResolved === true &&
-      Number(current?.revision || 0) >= revision;
-    const turn = { ...(current || {}), ...source, sessionId, turnScopeId, dialogProcessId: text(source.dialogProcessId), state, phase, revision, seq: Number(source.sequence || 0), lifecycleSeq: Number(source.sequence || 0), backendState: text(source.executionState), canStop: source.capabilities?.canStop === true, terminal, actionCommandId: text(current?.actionCommandId || (text(source.action) === "stop" && text(source.state) === "action_requesting" ? source.commandId : "")), lifecycleEventType: SNAPSHOT_STATE_EVENT[text(source.state)] || text(current?.lifecycleEventType), authoritativeCompletionCommit: sourceIsTerminal ? { completionCommitId: text(source.completionCommitId), summaryVersion: Number(source.summaryVersion || 0), revision } : current?.authoritativeCompletionCommit || null, terminalResolved: preservesTerminalResolution || (!sourceIsTerminal && current?.terminalResolved === true), startedAt: text(source.startedAt || source.thinkingStartedAt || current?.startedAt), finishedAt: text(source.finishedAt || current?.finishedAt), finishedAtMs: sourceIsTerminal ? Number(Date.parse(source.finishedAt || source.updatedAt) || current?.finishedAtMs || 0) : Number(current?.finishedAtMs || 0), source: "turn_snapshot", lifecycleSnapshotObserved: true, lifecycleObserved: true };
+    const terminal = projectAuthoritativeTurnTerminal(source.state);
+    const preservesTerminalResolution = sourceIsTerminal && current?.terminalResolved === true && Number(current?.revision || 0) >= revision;
+    const action = text(source.action || current?.action || "send");
+    const commandId = text(source.commandId || current?.commandId);
+    const startedAt = text(source.startedAt || source.thinkingStartedAt || source.updatedAt || current?.startedAt);
+    const updatedAt = text(source.updatedAt || current?.updatedAt);
+    const turn = {
+      ...(current || {}), sessionId, turnScopeId,
+      dialogProcessId: text(source.dialogProcessId), state, phase, revision,
+      seq: Number(source.sequence || 0), lifecycleSeq: Number(source.sequence || 0),
+      backendState: text(source.executionState), canStop: source.capabilities?.canStop === true,
+      terminal, action, commandId,
+      messageId: text(source.messageId), presentationMessageId: text(source.presentationMessageId),
+      failure: source.failure || null,
+      lifecycleEventType: SNAPSHOT_STATE_EVENT[text(source.state)] || text(current?.lifecycleEventType),
+      authoritativeCompletionCommit: sourceIsTerminal
+        ? { completionCommitId: text(source.completionCommitId), summaryVersion: Number(source.summaryVersion || 0), revision }
+        : current?.authoritativeCompletionCommit || null,
+      terminalResolved: preservesTerminalResolution || (!sourceIsTerminal && current?.terminalResolved === true),
+      startedAt,
+      finishedAt: text(source.finishedAt || current?.finishedAt),
+      finishedAtMs: sourceIsTerminal ? Number(Date.parse(source.finishedAt || source.updatedAt) || current?.finishedAtMs || 0) : Number(current?.finishedAtMs || 0),
+      updatedAt,
+      updatedAtMs: updatedAt ? (Date.parse(updatedAt) || 0) : Number(current?.updatedAtMs || 0),
+      error: null,
+      finalizeIntent: source.finalizeIntent || current?.finalizeIntent || null,
+      continuationSource: source.continuationSource || current?.continuationSource || null,
+      continuedByTurnScopeId: text(source.continuedByTurnScopeId || current?.continuedByTurnScopeId),
+      commandPending: false,
+      pendingCommandId: "",
+      pendingCommandType: "",
+      transportSeq: 0,
+      terminalMaterialization: current?.terminalMaterialization || null,
+      parentSessionId: text(source.parentSessionId),
+      source: "turn_lifecycle", sourceEvent: "backend_turn_lifecycle", authority: "none",
+      sessionIdentityPending: false, lifecycleObserved: true,
+    };
     bucket.turns[turnScopeId] = turn;
     if (turn.dialogProcessId) registry.routeIndex[turn.dialogProcessId] = { sessionId, turnScopeId };
   }
+  const replacedTurnScopeIds = [...new Set(
+    snapshot.replacedTurns.map((replacement) => turnKey(replacement?.turnScopeId)).filter(Boolean),
+  )];
+  const replacementDeletion = confirmTurnRuntimeDeletion(registry, replacedTurnScopeIds, { sessionId });
+  bucket = ensureSessionBucket(registry, sessionId);
   const previousActiveTurnScopeId = text(bucket.activeTurnScopeId);
   const candidateSnapshotActiveScope = turnKey(snapshot.activeTurnScopeId);
   const snapshotActiveScope = isTurnRuntimeDeleted(registry, {
@@ -827,7 +890,7 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   bucket.authoritativeSequence = sequence;
   bucket.protocolVersion = Number(snapshot.protocolVersion || 1);
   bucket.authoritativeSnapshotFingerprint = fingerprint;
-  return { applied: true, bucket };
+  return { applied: true, bucket, replacedTurnScopeIds, replacementDeletion };
 }
 
 export function applyTurnTimingUpdate(registry, update = {}) {

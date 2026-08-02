@@ -645,7 +645,7 @@ describe("useChatEngine.resend replace turn", () => {
     expect(placeholder).toEqual(expect.objectContaining({
       role: RoleEnum.ASSISTANT,
       content: "",
-      pending: true,
+      pending: false,
       statusLabel: "",
       turnScopeId: replacementUser.turnScopeId,
     }));

@@ -20,11 +20,12 @@ import {
 } from "./messageIdentity.js";
 import { parseTimeMs } from "./timeFields.js";
 import {
-  BackendTerminalStates,
+  isAuthoritativeTerminalState,
   resolveSessionRunMessageRuntimeView,
 } from "../runtime/sessionRunStateMachine.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { hydrateTurnSnapshot } from "../runtime/engine/turnProjectionStore.js";
+import { isPendingInteractionReplay } from "@noobot/event-protocol";
 
 function isReconnectTerminalEvent(eventName = "") {
   return [
@@ -34,35 +35,29 @@ function isReconnectTerminalEvent(eventName = "") {
   ].includes(String(eventName || "").trim());
 }
 
-function isPendingInteractionReplay(envelope = {}) {
-  return (
-    String(envelope?.event || "").trim() === StreamEventEnum.INTERACTION_REQUEST &&
-    envelope?.data?.__agentProxyPendingInteraction === true
-  );
-}
-
 function isSessionEntryRunning(sessionEntry = {}) {
   const sessionId = String(sessionEntry?.sessionId || "").trim();
-  const currentRunSessionId = String(sessionEntry?.currentRun?.sessionId || "").trim();
-  const currentRunTurnScopeId = String(sessionEntry?.currentRun?.turnScopeId || "").trim();
-  const currentRunState = String(sessionEntry?.currentRun?.state || "").trim();
-  if (!currentRunState || BackendTerminalStates.includes(currentRunState)) return false;
+  const snapshot = sessionEntry?.replayBatch?.snapshot || {};
+  const activeTurn = snapshot?.activeTurn || snapshot?.payload?.activeTurn || {};
+  const activeTurnSessionId = String(activeTurn?.sessionId || snapshot?.sessionId || "").trim();
+  const activeTurnScopeId = String(activeTurn?.turnScopeId || "").trim();
+  const activeTurnState = String(activeTurn?.state || "").trim();
+  if (!activeTurnState || isAuthoritativeTerminalState(activeTurnState)) return false;
   return Boolean(
     sessionId &&
-    currentRunSessionId === sessionId &&
-    currentRunTurnScopeId,
+    activeTurnSessionId === sessionId &&
+    activeTurnScopeId,
   );
 }
 
-function hasPendingInteractionReplayEvents(messages = []) {
-  return (Array.isArray(messages) ? messages : []).some((envelope) =>
-    isPendingInteractionReplay(envelope),
-  );
+function hasPendingInteractions(sessionEntry = {}) {
+  return Array.isArray(sessionEntry?.replayBatch?.pendingInteractions) &&
+    sessionEntry.replayBatch.pendingInteractions.length > 0;
 }
 
-function isDialogProcessRecoverable(sessionEntry = {}, messages = []) {
+function isDialogProcessRecoverable(sessionEntry = {}) {
   if (isSessionEntryRunning(sessionEntry)) return true;
-  return hasPendingInteractionReplayEvents(messages);
+  return hasPendingInteractions(sessionEntry);
 }
 
 function findRecoverableReconnectSessionId(sessionsPayload = []) {
@@ -70,13 +65,7 @@ function findRecoverableReconnectSessionId(sessionsPayload = []) {
     const sessionId = String(sessionEntry?.sessionId || "").trim();
     if (!sessionId) continue;
     if (isSessionEntryRunning(sessionEntry)) return sessionId;
-    const dialogProcesses = Array.isArray(sessionEntry?.dialogProcesses)
-      ? sessionEntry.dialogProcesses
-      : [];
-    const hasPendingInteraction = dialogProcesses.some((dialogProcess) =>
-      hasPendingInteractionReplayEvents(dialogProcess?.messages || []),
-    );
-    if (hasPendingInteraction) return sessionId;
+    if (hasPendingInteractions(sessionEntry)) return sessionId;
   }
   return "";
 }
@@ -392,9 +381,7 @@ export {
   getLastUserMessageIndex,
   getReconnectEnvelopeSequence,
   getReconnectMaxSequence,
-  hasPendingInteractionReplayEvents,
   isDialogProcessRecoverable,
-  isPendingInteractionReplay,
   isReconnectTerminalBatch,
   isReconnectTerminalEvent,
   isSessionEntryRunning,

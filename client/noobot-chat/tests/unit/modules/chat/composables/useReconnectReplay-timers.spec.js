@@ -35,8 +35,7 @@ describe("useReconnectReplay", () => {
     expect(api.__test.replayCache["s-2"]).toBeUndefined();
   });
 
-  it("FN-02b: channel_state expired triggers silent refresh timer", async () => {
-    vi.useFakeTimers();
+  it("FN-02b: channel_state expired is ignored without refresh", async () => {
     const { api, mocks } = createFixture();
     await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
@@ -45,15 +44,10 @@ describe("useReconnectReplay", () => {
       seq: 15,
     });
 
-    vi.advanceTimersByTime(1200);
-    await Promise.resolve();
-
-    expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", {
-      silent: true,
-    });
+    expect(mocks.chatList.fetchSessions).not.toHaveBeenCalled();
   });
 
-  it("FN-02c: channel_state no_conversation clears pending interaction", async () => {
+  it("FN-02c: channel_state no_conversation does not clear interaction state", async () => {
     const { api, refs, mocks } = createFixture();
     refs.interactionSubmitting.value = true;
 
@@ -64,9 +58,8 @@ describe("useReconnectReplay", () => {
       seq: 16,
     });
 
-    expect(refs.sending.value).toBe(false);
-    expect(refs.interactionSubmitting.value).toBe(false);
-    expect(mocks.clearPendingInteraction).toHaveBeenCalled();
+    expect(refs.interactionSubmitting.value).toBe(true);
+    expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
   });
 
   it("FN-03: timer is cleaned on scope dispose", async () => {

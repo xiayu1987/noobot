@@ -12,7 +12,6 @@ const TERMINAL_NOTIFICATION_TYPES = new Set([
   "turn.stop_completed",
   "turn.failed",
 ]);
-const TERMINAL_CHANNEL_STATES = new Set(["completed", "user_stopped", "error", "expired"]);
 
 function clean(input) {
   return String(input || "").trim();
@@ -68,11 +67,8 @@ function maxVersion(left = {}, right = {}) {
 }
 
 function isTerminalNotification(event = {}) {
-  if (event?.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
-    return TERMINAL_NOTIFICATION_TYPES.has(clean(event.eventType || event.raw?.eventType).toLowerCase());
-  }
-  return event?.type === SESSION_RUN_EVENT.BACKEND_CHANNEL_STATE &&
-    TERMINAL_CHANNEL_STATES.has(clean(event.state || event.backendState).toLowerCase());
+  return event?.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
+    TERMINAL_NOTIFICATION_TYPES.has(clean(event.eventType || event.raw?.eventType).toLowerCase());
 }
 
 export function createTerminalResolutionCoordinator({

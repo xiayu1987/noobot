@@ -129,6 +129,30 @@ describe("reduceMessageEvent", () => {
     expect(nonStreamed.pending).toBe(true);
   });
 
+  it("atomically replaces final content, attachments and semantic transfers", () => {
+    const target = message({
+      content: "draft",
+      attachments: [{ attachmentId: "stale" }],
+      transferEnvelopes: [{ protocol: "stale" }],
+    });
+    const attachments = [{ attachmentId: "att-final", name: "final.md" }];
+    const transferEnvelopes = [{
+      protocol: "noobot.semantic-transfer",
+      files: [{ attachmentId: "att-final", name: "final.md" }],
+    }];
+
+    expect(reduce(target, event({
+      eventId: "evt-final-payload",
+      eventType: "authoritative_final_content",
+      text: "complete final",
+      output: "complete final",
+      attachments,
+      transferEnvelopes,
+    })).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
+
+    expect(target).toMatchObject({ content: "complete final", attachments, transferEnvelopes });
+  });
+
   it("keeps child-agent written files available after final content resolves the placeholder", () => {
     const target = message({ pending: true });
     reduce(target, event());

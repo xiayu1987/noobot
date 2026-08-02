@@ -158,6 +158,7 @@ export async function handleBeforeAgentDispatch({
       semanticResolution,
       workflowPayload,
       workflowAttachments,
+      nodeAgentRuns,
       execution,
       beforeDispatchMode,
     });

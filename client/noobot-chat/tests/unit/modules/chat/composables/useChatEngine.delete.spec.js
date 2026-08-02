@@ -16,7 +16,7 @@ import {
   applyTurnTerminalResolution,
   resolveSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { createTurnTerminalResolution } from "@noobot/authoritative-state/contracts";
+import { createTurnTerminalResolution } from "@noobot/event-protocol";
 import {
   RoleEnum,
 } from "../../../../../src/modules/chat/model/chatConstants.js";

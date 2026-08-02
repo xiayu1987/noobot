@@ -7,7 +7,9 @@ import {
   MESSAGE_CONTENT_EFFECT,
   MESSAGE_EVENT_TYPE,
   isAuthoritativeFinalContentEvent,
+  projectAuthoritativeFinalMessage,
   projectMessageEventContent,
+  projectMessageEventMetadata,
   resolveMessageEventPresentationId,
   resolveMessageEventSequenceIdentity,
   validateMessageEventEnvelope,
@@ -90,8 +92,12 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.APPEND) {
     targetMessage.content = String(targetMessage.content || "") + contentProjection.content;
   } else if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.REPLACE) {
-    targetMessage.content = contentProjection.content;
-    if (isAuthoritativeFinalContentEvent(event)) state.finalContentSequence = sequence;
+    if (isAuthoritativeFinalContentEvent(event)) {
+      Object.assign(targetMessage, projectAuthoritativeFinalMessage(event));
+      state.finalContentSequence = sequence;
+    } else {
+      targetMessage.content = contentProjection.content;
+    }
   } else {
     const log = classifyRealtimeLog?.(event);
     if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.eventType)) {
@@ -135,6 +141,7 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
     }
   }
   if (event.dialogProcessId && !targetMessage.dialogProcessId) targetMessage.dialogProcessId = event.dialogProcessId;
+  Object.assign(targetMessage, projectMessageEventMetadata(event));
   targetMessage.hasFirstStreamEvent = true;
   state.lastSequence = sequence;
   state.consumedEventIds = [...state.consumedEventIds, event.eventId].slice(-1000);

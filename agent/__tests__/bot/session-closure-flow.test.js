@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
+import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
 
 test("service -> bot -> agent -> toolchain -> return -> persist: should form full closed loop", async () => {
   const persistedTurns = [];
@@ -109,10 +110,12 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       );
       return {
         output: "已切换模型并生成附件",
+        assistantMessageId: "closure-assistant-message",
         traces: [{ event: "tool_chain_done" }],
         turnTasks: [{ taskId: "task-1", taskStatus: "completed" }],
         turnMessages: [
           {
+            messageId: "closure-tool-call",
             role: "assistant",
             type: "tool_call",
             content: "",
@@ -124,12 +127,14 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             ],
           },
           {
+            messageId: "closure-tool-result",
             role: "tool",
             type: "tool_result",
             tool_call_id: "call_switch_model",
             content: "{\"ok\":true,\"modelAlias\":\"anthropic\"}",
           },
           {
+            messageId: "closure-assistant-message",
             role: "assistant",
             type: "message",
             content: "已切换模型并生成附件",
@@ -180,6 +185,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
           execution: {
             controllers: {
               runtime: {
+                currentTurnMessages: createCurrentTurnMessagesStore(),
                 runtimeModel: String(runConfig?.runtimeModel || ""),
                 userMessageAttachments: [
                   {
@@ -352,10 +358,12 @@ test("continue mode closed-loop: should build continue context and persist paren
     botManager: {},
     agentRunner: async () => ({
       output: "continue answer",
+      assistantMessageId: "continue-assistant-message",
       traces: [],
       turnTasks: [],
       turnMessages: [
         {
+          messageId: "continue-assistant-message",
           role: "assistant",
           type: "message",
           content: "continue answer",
@@ -375,6 +383,7 @@ test("continue mode closed-loop: should build continue context and persist paren
         execution: {
           controllers: {
             runtime: {
+              currentTurnMessages: createCurrentTurnMessagesStore(),
               runtimeModel: String(runConfig?.runtimeModel || ""),
               attachmentMetas: [],
               systemRuntime: { dialogProcessId },
@@ -391,6 +400,7 @@ test("continue mode closed-loop: should build continue context and persist paren
         execution: {
           controllers: {
             runtime: {
+              currentTurnMessages: createCurrentTurnMessagesStore(),
               runtimeModel: "",
               attachmentMetas: [],
               systemRuntime: { dialogProcessId, sessionId },

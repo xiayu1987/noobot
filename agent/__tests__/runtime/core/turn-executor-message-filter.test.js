@@ -7,9 +7,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  invokeNoToolsTurn,
-  invokeWithToolsTurn,
+  invokeNoToolsTurn as invokeNoToolsTurnProduction,
+  invokeWithToolsTurn as invokeWithToolsTurnProduction,
 } from "../../../src/runtime/turn/turn-executor.js";
+import { prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
+
+function invokeNoToolsTurn(args = {}) {
+  prepareTestTurnExecution(args.modelState, args.loopState, `no-tools-${args.loopState?.dialogProcessId || "turn"}`);
+  return invokeNoToolsTurnProduction(args);
+}
+
+function invokeWithToolsTurn(args = {}) {
+  prepareTestTurnExecution(args.modelState, args.loopState, `with-tools-${args.loopState?.dialogProcessId || "turn"}`);
+  return invokeWithToolsTurnProduction(args);
+}
 
 test("invokeNoToolsTurn filters only summarized messages before llm invoke", async () => {
   let capturedMessages = [];

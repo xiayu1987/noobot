@@ -9,7 +9,7 @@ import { createTurnReplacementCommit } from "@noobot/shared/turn-replacement-pro
 import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
 import { commitTurnReplacement } from "../src/application/commit-turn-replacement.js";
 import { createAuthoritativeTurnSnapshot } from "../src/application/authority-query-service.js";
-import { TURN_EVENT, TURN_PHASE } from "../src/contracts/turn-lifecycle-protocol.mjs";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/event-protocol/turn-lifecycle";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
 
 function acceptedTurn() {
@@ -76,6 +76,7 @@ test("turn replacement atomically removes lifecycle projection and outbox state"
   });
   assert.equal(snapshot.activeTurn, null);
   assert.deepEqual(snapshot.recentTerminalTurns, []);
+  assert.deepEqual(snapshot.replacedTurns, [committed.lifecycle.replacedTurns["turn-old"]]);
 });
 
 test("replaced Turn tombstone rejects delayed lifecycle events and replacement conflicts", () => {

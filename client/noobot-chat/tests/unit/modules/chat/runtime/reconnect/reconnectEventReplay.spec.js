@@ -6,20 +6,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyReconnectEventReplay } from "../../../../../../src/modules/chat/runtime/reconnect/reconnectEventReplay.js";
 import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
-import { clearExtensionRegistry, contributeExtension } from "../../../../../../src/extensions/extension-registry.js";
+import { clearExtensionRegistry, replacePluginExtensions } from "../../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "../../../../../../src/extensions/extension-point-ids.js";
 import { registerFrontendPlugin as registerWorkflowFrontendPlugin } from "../../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
 
 describe("applyReconnectEventReplay", () => {
   beforeEach(() => {
+    const workflowContributions = [];
     registerWorkflowFrontendPlugin({
-      contributeExtension: (point, contribution) => contributeExtension(point, {
-        ...contribution,
-        pluginId: "workflow",
-      }),
+      contributeExtension: (point, contribution) => {
+        workflowContributions.push({ point, contribution });
+        return true;
+      },
       extensionPoints: EXTENSION_POINTS,
       services: {},
     });
+    replacePluginExtensions("workflow", workflowContributions);
   });
   afterEach(() => clearExtensionRegistry());
 
@@ -72,16 +74,22 @@ describe("applyReconnectEventReplay", () => {
       applyWorkflowRuntimeEvent,
     });
     expect(applyWorkflowRuntimeEvent).not.toHaveBeenCalled();
-    expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledOnce();
+    expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
   });
 
   it("routes authoritative TURN_LIFECYCLE envelopes directly to the lifecycle reducer", async () => {
     const replayCache = {};
     const applyTurnLifecycleEnvelope = vi.fn(() => ({ applied: true }));
     const envelope = {
+      protocolVersion: 4,
+      eventId: "event-1",
+      messageId: "message-1",
+      presentationMessageId: "presentation-1",
       eventType: "turn.processing_started",
       sessionId: "s-1",
       turnScopeId: "turn-1",
+      phase: "processing",
+      state: "processing",
       revision: 2,
       sequence: 2,
     };
@@ -103,23 +111,21 @@ describe("applyReconnectEventReplay", () => {
     expect(replayCache).toEqual({});
   });
 
-  it("routes CHANNEL_STATE events without touching replay cache", async () => {
+  it("ignores CHANNEL_STATE because it is transport projection only", async () => {
     const replayCache = {};
-    const applyChannelState = vi.fn();
     const consumeReplayCacheForSession = vi.fn();
     const applyReconnectMessagesToActiveSession = vi.fn();
 
-    await applyReconnectEventReplay({
+    const result = await applyReconnectEventReplay({
       event: StreamEventEnum.CHANNEL_STATE,
       data: { state: "connected" },
       replayCache,
       isCurrentActiveSession: vi.fn(() => true),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
-      applyChannelState,
     });
 
-    expect(applyChannelState).toHaveBeenCalledWith({ state: "connected" });
+    expect(result).toEqual({ applied: false, reason: "transport_channel_state_ignored" });
     expect(consumeReplayCacheForSession).not.toHaveBeenCalled();
     expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
     expect(replayCache).toEqual({});
@@ -197,78 +203,6 @@ describe("applyReconnectEventReplay", () => {
       { turnScopeId: "" },
     );
     expect(replayCache).toEqual({});
-  });
-
-  it.each([
-    [StreamEventEnum.DONE, { sessionId: "s-1", turnScopeId: "turn-1", dialogProcessId: "dp-1" }],
-    [StreamEventEnum.CHANNEL_STATE, { sessionId: "s-1", turnScopeId: "turn-1", state: "completed" }],
-    [StreamEventEnum.CHANNEL_STATE, { sessionId: "s-1", turnScopeId: "turn-1", state: "error" }],
-    [StreamEventEnum.CHANNEL_STATE, { sessionId: "s-1", turnScopeId: "turn-1", state: "user_stopped" }],
-  ])("does not grant terminal lifecycle authority without an exact currentRun: %s", async (event, data) => {
-    const applyChannelState = vi.fn();
-    await applyReconnectEventReplay({
-      event,
-      data,
-      replayCache: {},
-      isCurrentActiveSession: vi.fn(() => true),
-      consumeReplayCacheForSession: vi.fn(),
-      applyReconnectMessagesToActiveSession: vi.fn(),
-      applyChannelState,
-      hasAuthoritativeCurrentRun: vi.fn(() => false),
-    });
-
-    expect(applyChannelState).toHaveBeenCalledOnce();
-    expect(applyChannelState.mock.calls[0][0]).toMatchObject({ authoritativeSnapshot: false });
-  });
-
-  it("grants terminal authority only for an exact session and Turn match", async () => {
-    const applyChannelState = vi.fn();
-    const hasAuthoritativeCurrentRun = vi.fn(({ sessionId, turnScopeId }) => (
-      sessionId === "s-1" && turnScopeId === "turn-current"
-    ));
-    await applyReconnectEventReplay({
-      event: StreamEventEnum.DONE,
-      data: { sessionId: "s-1", turnScopeId: "turn-other", dialogProcessId: "shared-dialog" },
-      replayCache: {},
-      isCurrentActiveSession: vi.fn(() => true),
-      consumeReplayCacheForSession: vi.fn(),
-      applyReconnectMessagesToActiveSession: vi.fn(),
-      applyChannelState,
-      hasAuthoritativeCurrentRun,
-    });
-    await applyReconnectEventReplay({
-      event: StreamEventEnum.DONE,
-      data: { sessionId: "s-1", turnScopeId: "turn-current", dialogProcessId: "shared-dialog" },
-      replayCache: {},
-      isCurrentActiveSession: vi.fn(() => true),
-      consumeReplayCacheForSession: vi.fn(),
-      applyReconnectMessagesToActiveSession: vi.fn(),
-      applyChannelState,
-      hasAuthoritativeCurrentRun,
-    });
-
-    expect(applyChannelState.mock.calls[0][0].authoritativeSnapshot).toBe(false);
-    expect(applyChannelState.mock.calls[1][0].authoritativeSnapshot).toBe(true);
-  });
-
-  it("never grants lifecycle authority to dialog-only DONE payloads", async () => {
-    const applyChannelState = vi.fn();
-    await applyReconnectEventReplay({
-      event: StreamEventEnum.DONE,
-      data: { dialogProcessId: "dp-1" },
-      replayCache: {},
-      isCurrentActiveSession: vi.fn(() => false),
-      isCurrentActiveDialogProcess: vi.fn(() => true),
-      consumeReplayCacheForSession: vi.fn(),
-      applyReconnectMessagesToActiveSession: vi.fn(),
-      applyChannelState,
-      hasAuthoritativeCurrentRun: vi.fn(() => true),
-    });
-
-    expect(applyChannelState).toHaveBeenCalledWith(expect.objectContaining({
-      state: "completed",
-      authoritativeSnapshot: false,
-    }));
   });
 
 });

@@ -16,7 +16,7 @@ import {
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
   validateSessionProvisionIntent,
-} from "@noobot/authoritative-state/contracts";
+} from "@noobot/event-protocol";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 
 export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessionId = "", persistenceContext = null, commandId = "", knownSequence, terminalLimit = 10 } = {}) {
@@ -158,6 +158,7 @@ export async function applyTurnLifecycleEvent({
           parentDialogProcessId: terminalStatus.parentDialogProcessId,
           description: terminalStatus.description,
           error: terminalStatus.error,
+          assistantMessage: terminalStatus.assistantMessage,
           updatedAt: this.now(),
         });
         if (!incoming) return { reason: "invalid_turn_status_command" };
@@ -230,56 +231,6 @@ export async function provisionSessionWithInitialTurn({
   }, parentSessionId, persistenceContext);
 }
 
-export async function upsertTurnStatus({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    persistenceContext = null,
-    turnScopeId = "",
-    dialogProcessId = "",
-    parentDialogProcessId = "",
-    command = "",
-    description = "",
-    error = null,
-  } = {}) {
-    if (!userId || !sessionId) return { upserted: false, reason: "missing_session" };
-    return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    const session = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext);
-    if (!session) return { upserted: false, reason: "session_not_found" };
-    const nowValue = this.now();
-    const incoming = buildTurnTerminalCommand(command, {
-      turnScopeId,
-      dialogProcessId,
-      parentDialogProcessId,
-      description,
-      error,
-      updatedAt: nowValue,
-    });
-    if (!incoming) return { upserted: false, reason: "invalid_turn_status_command" };
-    const upsertResult = upsertTurnStatusEntity({
-      statuses: session.turnStatuses,
-      messages: session.messages,
-      incoming,
-      now: this.now,
-    });
-    const turnStatus = upsertResult.turnStatus;
-    if (!turnStatus) return { upserted: false, reason: "invalid_turn_status" };
-    session.turnStatuses = upsertResult.statuses;
-    if (!upsertResult.changed) {
-      return { upserted: false, reason: "unchanged", session, turnStatus, version: resolveSessionVersion(session) };
-    }
-    session.updatedAt = nowValue;
-    if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
-    return { upserted: true, session, turnStatus, version: resolveSessionVersion(session) };
-    }, parentSessionId, persistenceContext);
-  }
 
 export async function upsertTurnTiming({
     userId,

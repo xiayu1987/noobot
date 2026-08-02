@@ -9,7 +9,7 @@ import {
 } from "@noobot/shared/execution-lifecycle-protocol";
 import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "@noobot/shared/turn-scope-identity";
 
-export const TURN_LIFECYCLE_PROTOCOL_VERSION = 3;
+export const TURN_LIFECYCLE_PROTOCOL_VERSION = 4;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";
 export const TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION = 3;
 export const TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION = 1;
@@ -60,6 +60,33 @@ export const TURN_STATE = Object.freeze({
 
 const STOPPABLE_STATES = new Set([TURN_STATE.PROCESSING]);
 const EVENT_VALUES = new Set(Object.values(TURN_EVENT));
+
+const EVENT_STATE = Object.freeze({
+  [TURN_EVENT.ACTION_ACCEPTED]: TURN_STATE.ACTION_REQUESTING,
+  [TURN_EVENT.PROCESSING_STARTED]: TURN_STATE.PROCESSING,
+  [TURN_EVENT.PROCESSING_COMPLETED]: TURN_STATE.COMPLETION_REQUESTING,
+  [TURN_EVENT.STOP_ACCEPTED]: TURN_STATE.ACTION_REQUESTING,
+  [TURN_EVENT.STOP_PROCESSING_COMPLETED]: TURN_STATE.STOPPING,
+  [TURN_EVENT.COMPLETED]: TURN_STATE.COMPLETED,
+  [TURN_EVENT.STOP_COMPLETED]: TURN_STATE.STOP_COMPLETED,
+});
+
+const EVENT_PHASE = Object.freeze({
+  [TURN_EVENT.ACTION_ACCEPTED]: TURN_PHASE.ACTION,
+  [TURN_EVENT.PROCESSING_STARTED]: TURN_PHASE.PROCESSING,
+  [TURN_EVENT.PROCESSING_COMPLETED]: TURN_PHASE.COMPLETION,
+  [TURN_EVENT.STOP_ACCEPTED]: TURN_PHASE.STOP,
+  [TURN_EVENT.STOP_PROCESSING_COMPLETED]: TURN_PHASE.STOP,
+  [TURN_EVENT.COMPLETED]: TURN_PHASE.COMPLETION,
+  [TURN_EVENT.STOP_COMPLETED]: TURN_PHASE.STOP,
+});
+
+const FAILED_PHASE_STATE = Object.freeze({
+  [TURN_PHASE.ACTION]: TURN_STATE.ACTION_FAILED,
+  [TURN_PHASE.PROCESSING]: TURN_STATE.PROCESSING_FAILED,
+  [TURN_PHASE.COMPLETION]: TURN_STATE.COMPLETION_FAILED,
+  [TURN_PHASE.STOP]: TURN_STATE.STOP_FAILED,
+});
 
 const clean = (value) => String(value || "").trim();
 
@@ -180,9 +207,28 @@ function snapshotTurn(turn = {}) {
   };
 }
 
+function snapshotReplacedTurn(replacement = {}) {
+  return {
+    turnScopeId: canonicalizeTurnScopeId(replacement.turnScopeId),
+    replacementTurnScopeId: canonicalizeTurnScopeId(replacement.replacementTurnScopeId),
+    replacementUserMessageId: clean(replacement.replacementUserMessageId),
+    commandId: clean(replacement.commandId),
+    committedVersion: Number(replacement.committedVersion || 0),
+    replacedTurnScopeIds: [...new Set(
+      (Array.isArray(replacement.replacedTurnScopeIds)
+        ? replacement.replacedTurnScopeIds
+        : [replacement.turnScopeId])
+        .map(canonicalizeTurnScopeId)
+        .filter(Boolean),
+    )],
+    sequence: Number(replacement.sequence || 0),
+    committedAt: clean(replacement.committedAt),
+  };
+}
+
 export function createTurnLifecycleSnapshot({
   commandId = "", userId = "", sessionId, sequence = 0, activeTurnScopeId = "",
-  activeTurn = null, recentTerminalTurns = [], unchanged = false,
+  activeTurn = null, recentTerminalTurns = [], replacedTurns = [], unchanged = false,
   generatedAt = new Date().toISOString(),
 } = {}) {
   return {
@@ -195,6 +241,7 @@ export function createTurnLifecycleSnapshot({
     activeTurnScopeId: canonicalizeTurnScopeId(activeTurnScopeId),
     activeTurn: activeTurn ? snapshotTurn(activeTurn) : null,
     recentTerminalTurns: (Array.isArray(recentTerminalTurns) ? recentTerminalTurns : []).map(snapshotTurn),
+    replacedTurns: (Array.isArray(replacedTurns) ? replacedTurns : []).map(snapshotReplacedTurn),
     unchanged: unchanged === true,
     generatedAt: clean(generatedAt),
   };
@@ -215,6 +262,33 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
     if (!clean(turn.presentationMessageId)) errors.push("missing_presentation_message_id");
     if (!Number.isInteger(Number(turn.revision)) || Number(turn.revision) < 1) errors.push("invalid_turn_revision");
     if (!Number.isInteger(Number(turn.sequence)) || Number(turn.sequence) < 1) errors.push("invalid_turn_sequence");
+    else if (Number(turn.sequence) > Number(snapshot.sequence)) errors.push("turn_sequence_exceeds_snapshot");
+  }
+  if (!Array.isArray(snapshot.replacedTurns)) errors.push("missing_replaced_turns");
+  const replacementScopes = new Set();
+  for (const replacement of Array.isArray(snapshot.replacedTurns) ? snapshot.replacedTurns : []) {
+    const turnScopeId = canonicalizeTurnScopeId(replacement?.turnScopeId);
+    const replacementTurnScopeId = canonicalizeTurnScopeId(replacement?.replacementTurnScopeId);
+    const replacedTurnScopeIds = Array.isArray(replacement?.replacedTurnScopeIds)
+      ? replacement.replacedTurnScopeIds.map(canonicalizeTurnScopeId).filter(Boolean)
+      : [];
+    if (!turnScopeId) errors.push("missing_replaced_turn_scope_id");
+    else if (!isCanonicalTurnScopeId(replacement.turnScopeId)) errors.push("non_canonical_replaced_turn_scope_id");
+    if (replacementScopes.has(turnScopeId)) errors.push("duplicate_replaced_turn_scope_id");
+    replacementScopes.add(turnScopeId);
+    if (!replacementTurnScopeId) errors.push("missing_replacement_turn_scope_id");
+    else if (!isCanonicalTurnScopeId(replacement.replacementTurnScopeId)) errors.push("non_canonical_replacement_turn_scope_id");
+    if (!clean(replacement?.replacementUserMessageId)) errors.push("missing_replacement_user_message_id");
+    if (!clean(replacement?.commandId)) errors.push("missing_replacement_command_id");
+    if (!Number.isInteger(Number(replacement?.committedVersion)) || Number(replacement.committedVersion) < 1) errors.push("invalid_replacement_committed_version");
+    if (!replacedTurnScopeIds.length || !replacedTurnScopeIds.includes(turnScopeId)) errors.push("invalid_replaced_turn_scope_ids");
+    if (replacedTurnScopeIds.includes(replacementTurnScopeId)) errors.push("replacement_scope_reuses_replaced_scope");
+    if (!Number.isInteger(Number(replacement?.sequence)) || Number(replacement.sequence) < 1 || Number(replacement.sequence) > Number(snapshot.sequence)) errors.push("invalid_replacement_sequence");
+    if (!clean(replacement?.committedAt)) errors.push("missing_replacement_committed_at");
+  }
+  const materializedTurnScopes = new Set(turns.map((turn) => canonicalizeTurnScopeId(turn?.turnScopeId)).filter(Boolean));
+  if ([...replacementScopes].some((turnScopeId) => materializedTurnScopes.has(turnScopeId))) {
+    errors.push("replaced_turn_still_materialized");
   }
   if (snapshot.activeTurn && canonicalizeTurnScopeId(snapshot.activeTurnScopeId) !== canonicalizeTurnScopeId(snapshot.activeTurn.turnScopeId)) errors.push("active_turn_identity_mismatch");
   return { valid: errors.length === 0, errors };
@@ -311,6 +385,14 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   if (!clean(envelope.presentationMessageId)) errors.push("missing_presentation_message_id");
   if (!Number.isInteger(Number(envelope.revision)) || Number(envelope.revision) < 1) errors.push("invalid_revision");
   if (!Number.isInteger(Number(envelope.sequence)) || Number(envelope.sequence) < 1) errors.push("invalid_sequence");
+  const eventType = clean(envelope.eventType);
+  const phase = clean(envelope.phase || envelope.failure?.phase);
+  const expectedState = eventType === TURN_EVENT.FAILED
+    ? FAILED_PHASE_STATE[phase]
+    : EVENT_STATE[eventType];
+  const expectedPhase = eventType === TURN_EVENT.FAILED ? phase : EVENT_PHASE[eventType];
+  if (!expectedPhase || phase !== expectedPhase) errors.push("event_phase_mismatch");
+  if (!expectedState || clean(envelope.state) !== expectedState) errors.push("event_state_mismatch");
   if (envelope.persistenceScope !== undefined && !normalizeTurnPersistenceScope(envelope.persistenceScope)) {
     errors.push("invalid_persistence_scope");
   }

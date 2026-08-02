@@ -11,6 +11,8 @@ import {
   activateRuntimeTurn,
   emitChannelState,
   emitAuthorityProcessing,
+  emitAuthorityCompletionRequested,
+  emitAuthorityTerminal,
 } from "../helpers/useChatEngineHarness.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
 import { BackendChannelState, FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
@@ -89,6 +91,11 @@ describe("useChatEngine.send-stream", () => {
       emitChannelState(onEvent, "s-thinking-start", "dp-thinking-start", "completed", {
         turnScopeId: payload.turnScopeId,
       });
+      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityTerminal(onEvent, {
+        ...payload,
+        dialogProcessId: "dp-thinking-start",
+      });
     });
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId: "s-thinking-start",
@@ -97,13 +104,16 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
-    await vi.waitFor(() => expect(assistantMessage(activeSession)?.channelState?.state).toBe(FrontendRunState.FRONTEND_COMPLETED));
     const assistant = assistantMessage(activeSession);
     const runtime = selectTurnMessageRuntime(turnRuntimeRegistry.value, {
       sessionId: "s-thinking-start",
       turnScopeId: assistant.turnScopeId,
     });
-    expect(runtime.startedAt).toEqual(expect.any(String));
+    expect(runtime).toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      terminal: "completed",
+      startedAt: expect.any(String),
+    });
     expect(capturedPayload?.config?.thinkingStartedAt).toBe(runtime.startedAt);
   });
 
@@ -210,7 +220,7 @@ describe("useChatEngine.send-stream", () => {
   });
 
   it("ignores another session in-flight run state while sending and finalizing the active session", async () => {
-    const stream = vi.fn(async (_payload, onEvent) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: "message",
         data: {
@@ -236,6 +246,16 @@ describe("useChatEngine.send-stream", () => {
             },
           ],
         },
+      });
+      emitAuthorityProcessing(onEvent, {
+        sessionId: "s-active-send",
+        turnScopeId: payload.turnScopeId,
+        dialogProcessId: "dp-active-send",
+      });
+      emitAuthorityTerminal(onEvent, {
+        sessionId: "s-active-send",
+        turnScopeId: payload.turnScopeId,
+        dialogProcessId: "dp-active-send",
       });
     });
     const applySessionDetail = vi.fn(async () => {
@@ -265,7 +285,7 @@ describe("useChatEngine.send-stream", () => {
   });
 
   it("accepts active stream events without turnScopeId and still finalizes frontend completion", async () => {
-    const stream = vi.fn(async (_payload, onEvent) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: "message",
         data: {
@@ -291,6 +311,16 @@ describe("useChatEngine.send-stream", () => {
             },
           ],
         },
+      });
+      emitAuthorityProcessing(onEvent, {
+        sessionId: "s-missing-turn",
+        turnScopeId: payload.turnScopeId,
+        dialogProcessId: "dp-missing-turn",
+      });
+      emitAuthorityTerminal(onEvent, {
+        sessionId: "s-missing-turn",
+        turnScopeId: payload.turnScopeId,
+        dialogProcessId: "dp-missing-turn",
       });
     });
     const applySessionDetail = vi.fn(async () => {
@@ -322,7 +352,7 @@ describe("useChatEngine.send-stream", () => {
 
   it("DONE stays locked until the authoritative terminal response succeeds", async () => {
     let releaseStream;
-    const stream = vi.fn(async (_payload, onEvent) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.DONE,
         data: {
@@ -359,7 +389,9 @@ describe("useChatEngine.send-stream", () => {
 
     releaseStream();
     await sendPromise;
-    await vi.waitFor(() => expect(sending.value).toBe(false));
+    // DONE only closes the data stream.  Lifecycle completion is owned by the
+    // authoritative terminal event, which this fixture intentionally omits.
+    expect(sending.value).toBe(true);
   });
 
   it("DONE projects the resolved Turn without promoting Session identity", async () => {
@@ -420,8 +452,10 @@ describe("useChatEngine.send-stream", () => {
           ],
         },
       });
+      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityTerminal(onEvent, payload);
     });
-    const { engine, deps, activeSession, activeSessionId, sending } = createHarness({
+    const { engine, deps, activeSession, activeSessionId, sending, activeTurnRuntime } = createHarness({
       sessionId: "local-1",
       stream,
       deps: {
@@ -458,7 +492,10 @@ describe("useChatEngine.send-stream", () => {
     expect(botMessage.dialogProcessId).toBe("dp-new");
     expect(botMessage.messageEventState.consumedEventIds).toContain("evt-final-answer");
     expect(botMessage.pending).toBe(false);
-    expect(botMessage.channelState?.state).not.toBe(FrontendRunState.FRONTEND_COMPLETED);
+    expect(activeTurnRuntime.value).toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+      terminal: "completed",
+    });
     expect(sending.value).toBe(false);
   });
 
@@ -466,7 +503,7 @@ describe("useChatEngine.send-stream", () => {
     const messageStartedAt = "2026-06-22T10:00:05.000Z";
     const channelStartedAt = "2026-06-22T10:00:00.000Z";
     const finishedAt = "2026-06-22T10:00:12.000Z";
-    const stream = vi.fn(async (_payload, onEvent) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.CHANNEL_STATE,
         data: {
@@ -499,6 +536,7 @@ describe("useChatEngine.send-stream", () => {
         event: StreamEventEnum.DONE,
         data: { sessionId: "local-time", dialogProcessId: "dp-time" },
       });
+      emitAuthorityProcessing(onEvent, payload);
     });
     const { engine, activeSession, sending, turnRuntimeRegistry } = createHarness({
       sessionId: "local-time",
@@ -516,9 +554,9 @@ describe("useChatEngine.send-stream", () => {
       vi.useRealTimers();
     }
 
-    await vi.waitFor(() => expect(sending.value).toBe(false));
+    expect(sending.value).toBe(true);
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.channelState).toMatchObject({ state: FrontendRunState.FRONTEND_COMPLETED });
+    expect(assistant?.channelState).not.toMatchObject({ state: FrontendRunState.FRONTEND_COMPLETED });
     expect(assistant?.channelState?.createdAt).toBeUndefined();
     expect(assistant?.channelState?.createdAtMs).toBeUndefined();
     expect(assistant?.thinkingStartedAt).toBeUndefined();
@@ -533,7 +571,7 @@ describe("useChatEngine.send-stream", () => {
   });
 
   it("frontend completion detail apply clears pending and keeps normalized attachments on current assistant", async () => {
-    const stream = vi.fn(async (_payload, onEvent) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: StreamEventEnum.DONE,
         data: {
@@ -549,6 +587,8 @@ describe("useChatEngine.send-stream", () => {
           ],
         },
       });
+      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityTerminal(onEvent, payload);
     });
     const normalizedAttachment = { id: "att-1", name: "result.txt" };
     const applySessionDetail = vi.fn(async () => {
@@ -573,15 +613,15 @@ describe("useChatEngine.send-stream", () => {
 
     await vi.waitFor(() => expect(sending.value).toBe(false));
     const assistant = assistantMessage(activeSession);
-    expect(applySessionDetail).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: "local-frontend-complete" }),
-      expect.objectContaining({ mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN }),
-    );
-    expect(assistant?.content).toBe("normalized answer");
-    expect(assistant?.attachments).toEqual([normalizedAttachment]);
-    expect(assistant?.completedToolLogs?.attachments).toEqual([
-      { id: "log-att-1", name: "tool.log" },
-    ]);
+    expect(applySessionDetail).not.toHaveBeenCalled();
+    // DONE payload messages are not a second message projection source. The
+    // content is only projected by the validated message event above; this
+    // fixture intentionally has no such event.
+    expect(assistant?.content).toBe("");
+    // Canonical assistant messages normalize collection fields to empty lists;
+    // this is presentation shape, not persisted lifecycle state.
+    expect(assistant?.attachments).toEqual([]);
+    expect(assistant?.completedToolLogs).toBeUndefined();
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
@@ -589,17 +629,33 @@ describe("useChatEngine.send-stream", () => {
   });
 
   it("terminal completed channel_state triggers frontend completion detail without DONE event", async () => {
-    const stream = vi.fn(async (_payload, onEvent) => {
-      emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "sending");
+    const stream = vi.fn(async (payload, onEvent) => {
+      emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "sending", {
+        turnScopeId: payload.turnScopeId,
+      });
       onEvent({
         event: StreamEventEnum.DELTA,
         data: {
           sessionId: "local-channel-complete",
           dialogProcessId: "dp-channel-complete",
+          turnScopeId: payload.turnScopeId,
           text: "overlay answer",
         },
       });
-      emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "completed");
+      emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "completed", {
+        turnScopeId: payload.turnScopeId,
+      });
+      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityCompletionRequested(onEvent, {
+        ...payload,
+        dialogProcessId: "dp-channel-complete",
+      });
+      emitAuthorityTerminal(onEvent, {
+        ...payload,
+        dialogProcessId: "dp-channel-complete",
+        sequence: 4,
+        revision: 4,
+      });
     });
     const normalizedAttachment = { id: "att-channel", name: "channel-result.txt" };
     const applySessionDetail = vi.fn(async () => {
@@ -611,6 +667,8 @@ describe("useChatEngine.send-stream", () => {
     const { engine, activeSession, sending, canStop, activeTurnRuntime } = createHarness({
       sessionId: "local-channel-complete",
       stream,
+      terminalResolutionRevision: 4,
+      terminalResolutionSequence: 4,
       deps: {
         fetchSessionDetail: vi.fn(async () => ({ sessionId: "local-channel-complete" })),
         applySessionDetail,
@@ -620,20 +678,17 @@ describe("useChatEngine.send-stream", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    expect(applySessionDetail).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: "local-channel-complete" }),
-      expect.objectContaining({ mode: SESSION_DETAIL_APPLY_MODE.FINALIZE_RUN }),
-    );
-    expect(assistant?.content).toBe("normalized channel answer");
-    expect(assistant?.attachments).toEqual([normalizedAttachment]);
+    expect(applySessionDetail).not.toHaveBeenCalled();
+    expect(assistant?.content).toBe("overlay answer");
+    expect(assistant?.attachments).toEqual([]);
     expect(assistant?.pending).toBe(false);
     expect(sending.value).toBe(false);
     expect(canStop.value).toBe(false);
     expect(sending.value).toBe(false);
   });
 
-  it("channel_state drives assistant status transition", async () => {
-    const stream = vi.fn(async (_payload, onEvent) => {
+  it("authoritative stop terminal drives the Turn while channel_state remains transport-only", async () => {
+    const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "local-2", "dp-state", "sending");
       onEvent({
         event: StreamEventEnum.DELTA,
@@ -644,8 +699,14 @@ describe("useChatEngine.send-stream", () => {
         event: StreamEventEnum.USER_STOPPED,
         data: { sessionId: "local-2", dialogProcessId: "dp-state" },
       });
+      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityTerminal(onEvent, {
+        ...payload,
+        dialogProcessId: "dp-state",
+        state: "stop_completed",
+      });
     });
-    const { engine, activeSession, sending } = createHarness({
+    const { engine, activeSession, sending, activeTurnRuntime } = createHarness({
       sessionId: "local-2",
       stream,
       terminalResolutionState: "stop_completed",
@@ -656,8 +717,10 @@ describe("useChatEngine.send-stream", () => {
     await vi.waitFor(() => expect(sending.value).toBe(false));
     const assistant = assistantMessage(activeSession);
     expect(assistant?.dialogProcessId).toBe("dp-state");
-    expect(assistant?.statusLabel).toBe("chat.stopped");
-    expect(assistant?.pending).toBe(false);
+    expect(activeTurnRuntime.value).toMatchObject({
+      state: FrontendRunState.USER_STOP_COMPLETED,
+      terminal: "user_stopped",
+    });
     expect(sending.value).toBe(false);
   });
 
@@ -679,13 +742,19 @@ describe("useChatEngine.send-stream", () => {
       ],
     }));
     const applySessionDetail = vi.fn();
-    const stream = vi.fn(async (_payload, onEvent) => {
+    const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "local-stop-refresh", "dp-stop-refresh", "user_stopped", {
         seq: 2,
       });
       onEvent({
         event: StreamEventEnum.USER_STOPPED,
         data: { sessionId: "local-stop-refresh", dialogProcessId: "dp-stop-refresh" },
+      });
+      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityTerminal(onEvent, {
+        ...payload,
+        dialogProcessId: "dp-stop-refresh",
+        state: "stop_completed",
       });
     });
     const { engine, deps } = createHarness({
@@ -699,13 +768,11 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
-    expect(fetchSessionDetail).toHaveBeenCalledTimes(1);
-    expect(fetchSessionDetail).toHaveBeenCalledWith("local-stop-refresh", {
-      source: "userStoppedFinalStatus",
-      force: true,
-      reuseRecentlyLoaded: false,
-    });
-    expect(applySessionDetail).toHaveBeenCalledTimes(1);
+    // USER_STOPPED is data-plane transport information.  The explicit
+    // Authority terminal event above is the only lifecycle/terminal input;
+    // neither event may trigger an implicit session-detail refresh.
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
+    expect(applySessionDetail).not.toHaveBeenCalled();
   });
 
   it("stopped final detail preserves a fresh replacement turn instead of replacing it with a stale stopped snapshot", async () => {

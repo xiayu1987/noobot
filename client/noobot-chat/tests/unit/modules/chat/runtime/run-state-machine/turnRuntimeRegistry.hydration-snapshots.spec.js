@@ -37,8 +37,78 @@ import {
 } from "./turnRuntimeRegistryTestFixtures.js";
 import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
+import { createTurnLifecycleEnvelope, replayEventTail } from "@noobot/event-protocol";
+
+const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revision, sequence }) => createTurnLifecycleEnvelope({
+  eventType,
+  eventId,
+  commandId: "command-t1",
+  userId: "u1",
+  sessionId: "s1",
+  turnScopeId: "t1",
+  messageId: "msg-event-t1",
+  presentationMessageId: "msg-t1",
+  dialogProcessId: "dp1",
+  revision,
+  sequence,
+  phase,
+  state,
+  action: "send",
+  executionState,
+  capabilities: { actionLocked: state !== "completed", canStop: false },
+  updatedAt: "2026-01-01T00:00:01.000Z",
+  completionCommitId: state === "completed" ? "commit-t1" : "",
+  summaryVersion: state === "completed" ? 1 : 0,
+});
 
 describe("turnRuntimeRegistry: hydration and snapshots", () => {
+  it("produces the same Registry projection from realtime events and snapshot plus ordered tail", () => {
+    const events = [
+      lifecycleEvent({
+        eventType: "turn.action_accepted", eventId: "event-t1-1", state: "action_requesting",
+        phase: "action", executionState: "accepted", revision: 1, sequence: 1,
+      }),
+      lifecycleEvent({
+        eventType: "turn.processing_started", eventId: "event-t1-2", state: "processing",
+        phase: "processing", executionState: "sending", revision: 2, sequence: 2,
+      }),
+      lifecycleEvent({
+        eventType: "turn.processing_completed", eventId: "event-t1-3", state: "completion_requesting",
+        phase: "completion", executionState: "completing", revision: 3, sequence: 3,
+      }),
+      lifecycleEvent({
+        eventType: "turn.completed", eventId: "event-t1-4", state: "completed",
+        phase: "completion", executionState: "completed", revision: 4, sequence: 4,
+      }),
+    ];
+    const realtime = createTurnRuntimeRegistryState();
+    for (const event of events) applyTurnLifecycleEnvelope(realtime, event);
+
+    const recovered = createTurnRuntimeRegistryState();
+    const baseline = snapshot({
+      commandId: events[1].commandId,
+      sequence: 2,
+      activeTurn: {
+        ...snapshot().activeTurn,
+        ...events[1],
+        state: "processing",
+        phase: "processing",
+        executionState: "sending",
+        revision: 2,
+        sequence: 2,
+      },
+    });
+    expect(applyTurnLifecycleSnapshot(recovered, baseline)).toMatchObject({ applied: true });
+    expect(replayEventTail({
+      snapshotSequence: 2,
+      events: events.slice(2),
+      apply: (event) => applyTurnLifecycleEnvelope(recovered, event),
+    })).toMatchObject({ applied: true, lastSequence: 4 });
+
+    expect(resolveTurnRuntimeByScope(recovered, "t1", { sessionId: "s1" }))
+      .toEqual(resolveTurnRuntimeByScope(realtime, "t1", { sessionId: "s1" }));
+  });
+
   it("hydrates every persisted turn timing without creating lifecycle authority", () => {
     const registry = createTurnRuntimeRegistryState();
     const result = applyTurnTimingSnapshot(registry, {
@@ -83,6 +153,47 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     expect(applyTurnLifecycleSnapshot(registry, snapshot({ generatedAt: "2026-01-01T00:00:03.000Z" }))).toMatchObject({
       applied: false, reason: "snapshot_sequence_conflict",
     });
+  });
+
+  it("applies replacement tombstones from the authoritative snapshot", () => {
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnLifecycleSnapshot(registry, snapshot({
+      sequence: 4,
+      activeTurn: null,
+      activeTurnScopeId: "",
+      recentTerminalTurns: [
+        { ...snapshot().activeTurn, turnScopeId: "turn-old", revision: 2, sequence: 2 },
+        { ...snapshot().activeTurn, turnScopeId: "turn-tail", revision: 2, sequence: 4 },
+      ],
+    }));
+
+    const result = applyTurnLifecycleSnapshot(registry, snapshot({
+      commandId: "snapshot-after-replacement",
+      sequence: 5,
+      activeTurn: null,
+      activeTurnScopeId: "",
+      recentTerminalTurns: [],
+      replacedTurns: ["turn-old", "turn-tail"].map((turnScopeId) => ({
+        turnScopeId,
+        replacementTurnScopeId: "turn-new",
+        replacementUserMessageId: "user-new",
+        commandId: "replace-old-chain",
+        committedVersion: 7,
+        replacedTurnScopeIds: ["turn-old", "turn-tail"],
+        sequence: 5,
+        committedAt: "2026-08-02T10:00:00.000Z",
+      })),
+    }));
+
+    expect(result).toMatchObject({
+      applied: true,
+      replacedTurnScopeIds: ["turn-old", "turn-tail"],
+      replacementDeletion: { removedTurnScopeIds: ["turn-old", "turn-tail"] },
+    });
+    expect(isTurnRuntimeDeleted(registry, { sessionId: "s1", turnScopeId: "turn-old" })).toBe(true);
+    expect(isTurnRuntimeDeleted(registry, { sessionId: "s1", turnScopeId: "turn-tail" })).toBe(true);
+    expect(resolveTurnRuntimeByScope(registry, "turn-old", { sessionId: "s1" })).toBeNull();
+    expect(resolveTurnRuntimeByScope(registry, "turn-tail", { sessionId: "s1" })).toBeNull();
   });
 
   it("rejects malformed authoritative lifecycle envelopes before reducing them", () => {
@@ -349,16 +460,15 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       terminal: null,
     });
 
-    const completed = applyTurnRuntimeEvent(registry, {
-      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+    const completed = applyTurnLifecycleEnvelope(registry, lifecycleEvent({
       eventType: "turn.processing_completed",
+      eventId: "event-t1-channel-independent-completion",
+      state: "completion_requesting",
       phase: "completion",
-      sessionId: "s1",
-      turnScopeId: "t1",
-      dialogProcessId: "dp1",
+      executionState: "completing",
       revision: 3,
       sequence: 3,
-    });
+    }));
     expect(completed).toMatchObject({ applied: true, turn: { state: "frontend_completion_requesting", seq: 3 } });
   });
 

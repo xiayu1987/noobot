@@ -78,6 +78,37 @@ test("Turn message event identity is immutable after binding", () => {
   }), /messageId conflict/);
 });
 
+test("workflow ownership is immutable and emitted by the common message stream", () => {
+  const runtime = {
+    runConfig: {
+      messageId: "workflow-message",
+      presentationMessageId: "workflow-presentation",
+      workflowRunId: "workflow-run-1",
+      workflowNodeExecutionId: "node-execution-1",
+    },
+    systemRuntime: { sessionId: "child-session", parentSessionId: "root-session" },
+  };
+  bindAssistantMessageEventStream(runtime, {
+    messageId: "workflow-message",
+    presentationMessageId: "workflow-presentation",
+    parentSessionId: "root-session",
+    workflowRunId: "workflow-run-1",
+    nodeExecutionId: "node-execution-1",
+  });
+  beginAssistantMessageEventStream(runtime);
+  const envelope = emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "token" });
+  assert.equal(envelope.parentSessionId, "root-session");
+  assert.equal(envelope.workflowRunId, "workflow-run-1");
+  assert.equal(envelope.nodeExecutionId, "node-execution-1");
+  assert.throws(() => bindAssistantMessageEventStream(runtime, {
+    messageId: "workflow-message",
+    presentationMessageId: "workflow-presentation",
+    parentSessionId: "root-session",
+    workflowRunId: "workflow-run-1",
+    nodeExecutionId: "node-execution-2",
+  }), /nodeExecutionId conflict/);
+});
+
 test("authoritative message envelope validation rejects partial events", () => {
   const envelope = {
     envelopeKind: "noobot.message_event",

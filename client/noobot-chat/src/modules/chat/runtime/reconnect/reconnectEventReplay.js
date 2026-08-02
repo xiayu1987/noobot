@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { BackendChannelState } from "../sessionRunStateMachine.js";
+import { validateRegisteredEvent } from "@noobot/event-protocol";
 import { normalizeReplayCacheKey } from "./replayCache.js";
 import { _trimStr } from "./utils.js";
 import { normalizeTurnTransportEnvelope } from "../engine/turnTransportEnvelope.js";
@@ -23,15 +23,12 @@ export async function applyReconnectEventReplay({
   isCurrentActiveDialogProcess,
   consumeReplayCacheForSession,
   applyReconnectMessagesToActiveSession,
-  applyChannelState,
-  hasAuthoritativeCurrentRun,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
   applyExecutionSnapshot,
   applyExecutionChildren,
   applyExecutionTree,
   applyWorkflowRuntimeEvent,
-  finalizeDoneTurnPresentation,
   isDeletedTurn,
 } = {}) {
   const normalizedTransportEnvelope = normalizeTurnTransportEnvelope({
@@ -56,16 +53,70 @@ export async function applyReconnectEventReplay({
   if (isDeletedTurn?.({ sessionId: replaySessionId, turnScopeId: replayTurnScopeId }) === true) {
     return { applied: false, reason: "deleted_turn_tombstoned" };
   }
-  let runtimeResult = null;
-  const runtimeRouted = routeRuntimeStreamEvent(replayEvent, data, {
-    source: "reconnect",
-    logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
-    applyWorkflowRuntimeEvent: (record, options) => {
-      runtimeResult = applyWorkflowRuntimeEvent?.(record, options);
-      return runtimeResult;
-    },
-  });
+  // Workflow runtime events have their own identity and reducer. Route an
+  // explicit sub-session event before the generic message cache branch;
+  // otherwise a valid child-session message is mistaken for an inactive
+  // session and never reaches the workflow projection.
+  const routeRuntimeEvent = () => {
+    let result = null;
+    const routed = routeRuntimeStreamEvent(replayEvent, data, {
+      source: "reconnect",
+      logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
+      applyWorkflowRuntimeEvent: (record, options) => {
+        result = applyWorkflowRuntimeEvent?.(record, options);
+        return result;
+      },
+    });
+    return { routed, result };
+  };
+  // Only the explicitly tagged sub-agent wire event may bypass main-session
+  // message routing. A normal message_event is also a valid workflow payload,
+  // but its transport tag still assigns it to the main message reducer.
+  if (replayEvent === "subagent_message_event") {
+    const { routed, result } = routeRuntimeEvent();
+    if (routed) return result || { applied: true };
+  }
+  // Message events use the shared message-event protocol. They are not
+  // authority/transport registry events and must enter the canonical message
+  // reducer without being interpreted as lifecycle state.
+  if (replayEvent === "message_event" || replayEvent === "subagent_message_event") {
+    const dialogProcessId = _trimStr(data?.dialogProcessId || data?.messageEvent?.dialogProcessId);
+    const sessionId = _trimStr(data?.sessionId || data?.messageEvent?.sessionId);
+    const turnScopeId = _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId);
+    if (sessionId && isCurrentActiveSession(sessionId)) {
+      await consumeReplayCacheForSession(sessionId);
+      await applyReconnectMessagesToActiveSession([{ event: replayEvent, data }], dialogProcessId, {
+        turnScopeId,
+      });
+      return { applied: true, reason: "message_event_replayed" };
+    }
+    if (!sessionId && dialogProcessId && isCurrentActiveDialogProcess?.(dialogProcessId)) {
+      await applyReconnectMessagesToActiveSession([{ event: replayEvent, data }], dialogProcessId, {
+        turnScopeId,
+      });
+      return { applied: true, reason: "message_event_replayed" };
+    }
+    if (sessionId) {
+      const replayKey = normalizeReplayCacheKey(dialogProcessId, sessionId, turnScopeId);
+      if (!replayCache[sessionId]) replayCache[sessionId] = {};
+      if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
+      replayCache[sessionId][replayKey].push({ event: replayEvent, data });
+      return { applied: false, reason: "message_event_cached" };
+    }
+    return { applied: false, reason: "message_event_missing_identity" };
+  }
+  const { routed: runtimeRouted, result: runtimeResult } = routeRuntimeEvent();
   if (runtimeRouted) return runtimeResult || { applied: true };
+  // Let registered extensions consume their own events before applying the
+  // core registry. Core authority events are excluded by the router, so they
+  // still always pass through the authoritative protocol validation below.
+  const protocolResult = validateRegisteredEvent({
+    eventType: replayEvent,
+    ...(data && typeof data === "object" ? data : {}),
+  });
+  if (!protocolResult.valid) {
+    return { applied: false, reason: "unsupported_replay_event", errors: protocolResult.errors };
+  }
   if (replayEvent === StreamEventEnum.EXECUTION_SNAPSHOT) return applyExecutionSnapshot?.(data || {});
   if (replayEvent === StreamEventEnum.EXECUTION_CHILDREN) return applyExecutionChildren?.(data || {});
   if (replayEvent === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(data || {});
@@ -91,37 +142,10 @@ export async function applyReconnectEventReplay({
     return applyTurnLifecycleEnvelope?.(data || {});
   }
   if (replayEvent === StreamEventEnum.CHANNEL_STATE) {
-    const stateData = data || {};
-    const sessionId = _trimStr(stateData.sessionId);
-    const turnScopeId = _trimStr(stateData.turnScopeId || stateData.messageEvent?.turnScopeId);
-    const state = _trimStr(stateData.state || stateData.channelState);
-    const terminalStates = new Set([
-      BackendChannelState.COMPLETED,
-      BackendChannelState.ERROR,
-      BackendChannelState.USER_STOPPED,
-      BackendChannelState.CANCELLED,
-      BackendChannelState.EXPIRED,
-      BackendChannelState.NO_CONVERSATION,
-    ]);
-    const authoritativeSnapshot =
-      sessionId && turnScopeId && terminalStates.has(state)
-        ? hasAuthoritativeCurrentRun?.({ sessionId, turnScopeId }) === true
-        : stateData.authoritativeSnapshot === true;
-    logStateMachineDebug("stateMachine.reconnect.eventChannel.routed", () => ({
-      sessionId,
-      turnScopeId,
-      dialogProcessId: _trimStr(stateData.dialogProcessId),
-      channelState: state,
-      sourceEvent: _trimStr(stateData.sourceEvent),
-      authoritativeSnapshot,
-      pendingInteractionCount: Array.isArray(stateData.pendingInteractions)
-        ? stateData.pendingInteractions.length
-        : stateData.pendingInteraction ? 1 : 0,
-    }));
-    return applyChannelState({
-      ...stateData,
-      ...(terminalStates.has(state) ? { authoritativeSnapshot } : {}),
-    });
+    // Channel state is a transport projection, never an authority input.
+    // Lifecycle state can only enter the registry through an authority
+    // snapshot or lifecycle envelope.
+    return { applied: false, reason: "transport_channel_state_ignored" };
   }
 
   const dialogProcessId = _trimStr(data?.dialogProcessId);
@@ -132,21 +156,6 @@ export async function applyReconnectEventReplay({
     await applyReconnectMessagesToActiveSession([{ event: replayEvent, data }], dialogProcessId, {
       turnScopeId,
     });
-    if (replayEvent === StreamEventEnum.DONE) {
-      await finalizeDoneTurnPresentation?.(data || {});
-      const authoritativeSnapshot = hasAuthoritativeCurrentRun?.({
-        sessionId,
-        turnScopeId,
-      }) === true;
-      await applyChannelState({
-        ...(data || {}),
-        sessionId,
-        dialogProcessId,
-        state: BackendChannelState.COMPLETED,
-        sourceEvent: "done",
-        authoritativeSnapshot,
-      });
-    }
     return;
   }
 
@@ -154,16 +163,6 @@ export async function applyReconnectEventReplay({
     await applyReconnectMessagesToActiveSession([{ event: replayEvent, data }], dialogProcessId, {
       turnScopeId,
     });
-    if (replayEvent === StreamEventEnum.DONE) {
-      await finalizeDoneTurnPresentation?.(data || {});
-      await applyChannelState({
-        ...(data || {}),
-        dialogProcessId,
-        state: BackendChannelState.COMPLETED,
-        sourceEvent: "done",
-        authoritativeSnapshot: false,
-      });
-    }
     return;
   }
 

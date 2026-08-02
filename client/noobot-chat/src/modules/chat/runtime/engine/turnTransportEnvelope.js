@@ -24,9 +24,21 @@ export function normalizeTurnTransportEnvelope({
     : isMessageEventEnvelope(payload?.messageEvent)
       ? payload.messageEvent
       : null;
+  // Replay and live transports carry the canonical message envelope under
+  // `data.event`. Keep that envelope as the single payload source, while
+  // exposing its stable identity through the normalized transport record.
+  const normalizedData = messageEvent
+    ? {
+        ...payload,
+        messageEvent,
+        sessionId: text(payload?.sessionId || messageEvent.sessionId),
+        dialogProcessId: text(payload?.dialogProcessId || messageEvent.dialogProcessId),
+        turnScopeId: text(payload?.turnScopeId || messageEvent.turnScopeId),
+      }
+    : payload;
   return {
     event: text(event),
-    data: payload,
+    data: normalizedData,
     source: text(source) || "unknown",
     identity: {
       sessionId: text(payload?.sessionId || messageEvent?.sessionId),
