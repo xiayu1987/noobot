@@ -5,8 +5,12 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { buildThinkingDetailPayload } from "../../src/session/session-thinking-detail.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import { readSessionTurn, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
 
 test("thinking detail message carries its session envelope identity and scoped injections", () => {
   const payload = buildThinkingDetailPayload({
@@ -78,7 +82,7 @@ test("thinking detail projects the complete turn timeline onto the final assista
   assert.equal(payload.counts.executionLogCount, 1);
 });
 
-test("session summary and thinking detail project the same complete turn timeline", () => {
+test("session summary references canonical thinking detail without copying its timeline", () => {
   const messages = [
     {
       id: "tool-call-one",
@@ -112,7 +116,80 @@ test("session summary and thinking detail project the same complete turn timelin
 
   assert.equal(summaryMessage.thinkingDetailCount, 2);
   assert.equal(summaryMessage.hasThinkingDetails, true);
-  assert.equal(summaryMessage.toolTimeline.length, 2);
+  assert.equal(summaryMessage.toolTimeline, undefined);
+  assert.equal(summaryMessage.activityTimeline, undefined);
   assert.equal(detail.messageItem.thinkingDetailCount, summaryMessage.thinkingDetailCount);
-  assert.deepEqual(detail.messageItem.toolTimeline, summaryMessage.toolTimeline);
+  assert.equal(detail.messageItem.toolTimeline.length, 2);
+});
+
+test("session summary does not copy large tool payloads retained by thinking detail", () => {
+  const largePayload = "x".repeat(512 * 1024);
+  const messages = [{
+    id: "final-assistant",
+    role: "assistant",
+    type: "message",
+    turnScopeId: "turn-large-detail",
+    content: "done",
+    toolTimeline: [{
+      key: "call:large",
+      toolCallId: "large",
+      status: "completed",
+      call: { arguments: largePayload },
+      resultEvent: { output: largePayload },
+    }],
+  }];
+
+  const summary = buildSessionDisplaySummary({ sessionId: "large-session", messages });
+  const detail = buildThinkingDetailPayload({
+    sessionId: "large-session",
+    sessions: [{ sessionId: "large-session", rawMessages: messages }],
+  }, { turnScopeId: "turn-large-detail" });
+
+  assert.equal(JSON.stringify(summary).includes(largePayload), false);
+  assert.equal(summary.messages[0].thinkingDetailCount, 1);
+  assert.equal(detail.messageItem.toolTimeline[0].call.arguments, largePayload);
+  assert.equal(detail.messageItem.toolTimeline[0].resultEvent.output, largePayload);
+});
+
+test("thinking detail storage lookup reads exactly one canonical Turn journal", async () => {
+  const sessionDir = await mkdtemp(path.join(os.tmpdir(), "noobot-thinking-turn-"));
+  try {
+    await writeSessionArtifact({
+      sessionDir,
+      sessionPayload: {
+        sessionId: "scoped-session",
+        messages: [{
+          messageUid: "sm-one",
+          role: "assistant",
+          type: "message",
+          turnScopeId: "turn-one",
+          dialogProcessId: "dialog-one",
+          content: "one",
+          toolTimeline: [{ key: "call:one", status: "completed" }],
+        }, {
+          messageUid: "sm-two",
+          role: "assistant",
+          type: "message",
+          turnScopeId: "turn-two",
+          dialogProcessId: "dialog-two",
+          content: "two",
+          toolTimeline: [{ key: "call:two", status: "completed" }],
+        }],
+      },
+    });
+
+    const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
+    const unrelatedTurn = manifest.turnOrder.find((item) => item.turnScopeId === "turn-one");
+    await writeFile(
+      path.join(sessionDir, "turns", `${unrelatedTurn.turnId}.jsonl`),
+      "not-json\n",
+      "utf8",
+    );
+
+    const turn = await readSessionTurn({ sessionDir, turnScopeId: "turn-two" });
+    assert.equal(turn.turnScopeId, "turn-two");
+    assert.deepEqual(turn.messages.map((message) => message.messageUid), ["sm-two"]);
+  } finally {
+    await rm(sessionDir, { recursive: true, force: true });
+  }
 });

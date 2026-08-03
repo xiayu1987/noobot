@@ -6,7 +6,6 @@
 
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { createAuthoritativeTurnSnapshot } from "@noobot/authoritative-state/application";
-import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
   compactAttachmentRef,
@@ -14,7 +13,7 @@ import {
   dedupeAttachmentRefs,
 } from "./transfer-attachment-refs.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 13;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 16;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
@@ -311,30 +310,45 @@ function pickLightTransferEnvelopes(message = {}) {
     });
 }
 
-function pickLightActivityTimeline(message = {}) {
-  const timeline = Array.isArray(message?.activityTimeline) ? message.activityTimeline : [];
-  return timeline
-    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
-    .map((item) => {
-      const projected = {};
-      for (const key of [
-        "eventId", "event", "type", "text", "output", "purpose", "pluginFlow",
-        "chain", "activityKind", "sequence", "sequenceScopeId", "authority", "sequenceDomain",
-      ]) {
-        const value = item?.[key];
-        if (value !== undefined && value !== null && value !== "") projected[key] = value;
-      }
-      return projected;
-    })
-    .filter((item) => Object.keys(item).length)
-    .slice(0, 200);
-}
-
-function pickLightToolTimeline(message = {}) {
-  const timeline = Array.isArray(message?.toolTimeline) ? message.toolTimeline : [];
-  return timeline
-    .filter((item) => item && typeof item === "object" && !Array.isArray(item))
-    .slice(0, 200);
+function buildThinkingDetailCountByMessage(messages = []) {
+  const routeByMessage = new WeakMap();
+  const factsByRoute = new Map();
+  messages.forEach((message, index) => {
+    if (!message || typeof message !== "object" || Array.isArray(message)) return;
+    const turnScopeId = String(message?.turnScopeId || "").trim();
+    const dialogProcessId = String(message?.dialogProcessId || "").trim();
+    const route = turnScopeId
+      ? `turn:${turnScopeId}`
+      : dialogProcessId
+        ? `dialog:${dialogProcessId}`
+        : `message:${index}`;
+    routeByMessage.set(message, route);
+    const facts = factsByRoute.get(route) || {
+      activityKeys: new Set(),
+      toolKeys: new Set(),
+      unkeyedActivityCount: 0,
+      unkeyedToolCount: 0,
+    };
+    for (const item of Array.isArray(message?.activityTimeline) ? message.activityTimeline : []) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const key = String(item?.eventId || item?.id || "").trim();
+      if (key) facts.activityKeys.add(key);
+      else facts.unkeyedActivityCount += 1;
+    }
+    for (const item of Array.isArray(message?.toolTimeline) ? message.toolTimeline : []) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const key = String(item?.key || item?.toolCallId || item?.tool_call_id || "").trim();
+      if (key) facts.toolKeys.add(key);
+      else facts.unkeyedToolCount += 1;
+    }
+    factsByRoute.set(route, facts);
+  });
+  return (message = {}) => {
+    const facts = factsByRoute.get(routeByMessage.get(message));
+    if (!facts) return 0;
+    return facts.activityKeys.size + facts.toolKeys.size
+      + facts.unkeyedActivityCount + facts.unkeyedToolCount;
+  };
 }
 
 function buildDisplayMessageSummary(message = {}) {
@@ -383,15 +397,6 @@ function buildDisplayMessageSummary(message = {}) {
   const transferEnvelopes = pickLightTransferEnvelopes(message);
   if (pluginMeta) summary.pluginMeta = pluginMeta;
   if (transferEnvelopes.length) summary.transferEnvelopes = transferEnvelopes;
-  const activityTimeline = pickLightActivityTimeline(message);
-  if (activityTimeline.length) summary.activityTimeline = activityTimeline;
-  const toolTimeline = pickLightToolTimeline(message);
-  if (toolTimeline.length) summary.toolTimeline = toolTimeline;
-  const thinkingDetailCount = activityTimeline.length + toolTimeline.length;
-  if (thinkingDetailCount > 0) {
-    summary.hasThinkingDetails = true;
-    summary.thinkingDetailCount = thinkingDetailCount;
-  }
   if (Array.isArray(message?.tool_calls) && message.tool_calls.length) {
     summary.toolCalls = message.tool_calls.map((toolCall = {}) => ({
       id: String(toolCall?.id || "").trim(),
@@ -431,7 +436,7 @@ function buildActiveTurnPresentation(lifecycle = null, sessionId = "") {
   };
 }
 
-function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
+function buildToolLogSummaries(session = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const sessionId = String(session?.sessionId || "").trim();
   const toolNameByCallId = new Map();
@@ -500,7 +505,7 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
         text: writtenFiles.length
           ? `${writtenFiles[0]?.toolName || toolName} ${writtenFiles[0]?.fileName || ""}`.trim()
           : truncateText(`${toolName}`.trim(), SUMMARY_FILE_NAME_CHARS),
-        ts, sessionId, depth, toolCallId, dialogProcessId, parentDialogProcessId, turnScopeId,
+        ts, sessionId, toolCallId, dialogProcessId, parentDialogProcessId, turnScopeId,
       };
       if (attachments.length) summary.attachments = attachments;
       if (writtenFiles.length) summary.writtenFiles = writtenFiles;
@@ -510,8 +515,11 @@ function buildToolLogSummaries(session = {}, { depth = 0 } = {}) {
   return { logs, totalCount };
 }
 
-export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
+export function buildSessionDisplaySummary(session = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
+  const terminalTurnScopeIds = [...new Set(
+    messages.map((message) => String(message?.turnScopeId || "").trim()).filter(Boolean),
+  )];
   const turnTimings = Array.isArray(session?.turnTimings) ? session.turnTimings : [];
   const turnStatuses = Array.isArray(session?.turnStatuses) ? session.turnStatuses : [];
   const sessionId = String(session?.sessionId || "").trim();
@@ -528,18 +536,12 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
       String(messageItem?.content || "").trim(),
   );
   const customTitle = String(session?.customTitle || "").trim();
+  const thinkingDetailCountForMessage = buildThinkingDetailCountByMessage(messages);
   const projectedDisplayMessages = messages
     .map((message) => {
       const summary = buildDisplayMessageSummary(message);
       if (!summary || String(message?.role || "").trim() !== "assistant") return summary;
-      const projectedMessage = projectThinkingTimeline(messages, message).projectedRootMessage;
-      const activityTimeline = pickLightActivityTimeline(projectedMessage);
-      const toolTimeline = pickLightToolTimeline(projectedMessage);
-      if (activityTimeline.length) summary.activityTimeline = activityTimeline;
-      else delete summary.activityTimeline;
-      if (toolTimeline.length) summary.toolTimeline = toolTimeline;
-      else delete summary.toolTimeline;
-      const thinkingDetailCount = activityTimeline.length + toolTimeline.length;
+      const thinkingDetailCount = thinkingDetailCountForMessage(message);
       if (thinkingDetailCount > 0) {
         summary.thinkingDetailCount = thinkingDetailCount;
         summary.hasThinkingDetails = true;
@@ -593,28 +595,17 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
     const existingIsPlaceholder = Boolean(String(existing?.sourceMessageType || "").trim());
     const incomingIsPlaceholder = Boolean(String(message?.sourceMessageType || "").trim());
     const presentation = !incomingIsPlaceholder || existingIsPlaceholder ? message : existing;
-    const facts = [
-      ...(Array.isArray(existing.activityTimeline) ? existing.activityTimeline : []),
-      ...(Array.isArray(message.activityTimeline) ? message.activityTimeline : []),
-    ];
-    presentation.activityTimeline = facts.filter((fact, index, list) =>
-      list.findIndex((item) => String(item?.eventId || "") === String(fact?.eventId || "")) === index,
+    presentation.thinkingDetailCount = Math.max(
+      Number(existing?.thinkingDetailCount || 0),
+      Number(message?.thinkingDetailCount || 0),
     );
-    const toolFacts = [
-      ...(Array.isArray(existing.toolTimeline) ? existing.toolTimeline : []),
-      ...(Array.isArray(message.toolTimeline) ? message.toolTimeline : []),
-    ];
-    presentation.toolTimeline = toolFacts.filter((fact, index, list) =>
-      list.findIndex((item) => String(item?.key || item?.toolCallId || "") === String(fact?.key || fact?.toolCallId || "")) === index,
-    );
-    presentation.thinkingDetailCount = presentation.activityTimeline.length + presentation.toolTimeline.length;
     presentation.hasThinkingDetails = presentation.thinkingDetailCount > 0;
     displayMessageByIdentity.set(identity, presentation);
   }
   const displayMessages = [...displayMessageByIdentity.values()];
   const injectedCount = messages.filter((message) => message?.injectedMessage === true).length;
   const thinkingCount = displayMessages.filter((message) => message?.hasThinkingDetails === true).length;
-  const { logs: toolLogSummaries, totalCount: toolLogCount } = buildToolLogSummaries(session, { depth });
+  const { logs: toolLogSummaries, totalCount: toolLogCount } = buildToolLogSummaries(session);
   const attachmentCount = displayMessages.reduce(
     (count, message) => count + (Array.isArray(message?.attachments) ? message.attachments.length : 0),
     0,
@@ -623,6 +614,7 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
     ? createAuthoritativeTurnSnapshot({
       lifecycle,
       turnTimings,
+      terminalTurnScopeIds,
       commandId: `session-summary:${sessionId}:${Number(lifecycle?.sequence || 0)}`,
       sessionId,
       generatedAt: String(session?.updatedAt || "").trim(),
@@ -641,7 +633,6 @@ export function buildSessionDisplaySummary(session = {}, { depth = 0 } = {}) {
       : sessionId.slice(0, 8)),
     version: session?.version,
     revision: session?.revision,
-    depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
     turnTimings,
     turnStatuses,
     turnLifecycleSnapshot,

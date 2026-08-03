@@ -29,6 +29,11 @@ export async function getTurnLifecycleSnapshot({ userId, sessionId, parentSessio
     snapshot: createAuthoritativeTurnSnapshot({
       lifecycle: session.turnLifecycle,
       turnTimings: session.turnTimings,
+      terminalTurnScopeIds: [...new Set(
+        (Array.isArray(session.messages) ? session.messages : [])
+          .map((message) => String(message?.turnScopeId || "").trim())
+          .filter(Boolean),
+      )],
       commandId, userId, sessionId, knownSequence, terminalLimit,
       generatedAt: this.now(),
     }),

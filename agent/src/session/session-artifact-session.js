@@ -252,6 +252,67 @@ export async function readRecentSessionTurns({ sessionDir = "", limit = 10, fall
   return turns;
 }
 
+export async function readSessionTurn({
+  sessionDir = "",
+  turnScopeId = "",
+  dialogProcessId = "",
+} = {}) {
+  const files = buildSessionArtifactFileMap(sessionDir);
+  const session = await readJsonArtifactFile(files.session, null);
+  if (!session || typeof session !== "object") return null;
+  if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
+    const error = new Error("session turn lookup requires the canonical turn journal schema");
+    error.code = "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED";
+    throw error;
+  }
+  const normalizedTurnScopeId = String(turnScopeId || "").trim();
+  const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+  if (!normalizedTurnScopeId && !normalizedDialogProcessId) {
+    const error = new Error("turnScopeId or dialogProcessId is required");
+    error.code = "SESSION_TURN_IDENTITY_REQUIRED";
+    throw error;
+  }
+  const matches = (Array.isArray(session.turnOrder) ? session.turnOrder : []).filter((item) => {
+    if (normalizedTurnScopeId && String(item?.turnScopeId || "").trim() !== normalizedTurnScopeId) return false;
+    if (normalizedDialogProcessId && String(item?.dialogProcessId || "").trim() !== normalizedDialogProcessId) return false;
+    return true;
+  });
+  if (matches.length > 1) {
+    const error = new Error("session turn identity is ambiguous");
+    error.code = "SESSION_TURN_IDENTITY_AMBIGUOUS";
+    throw error;
+  }
+  const item = matches[0];
+  if (!item) return null;
+  const records = await readJournalRecords(
+    journalPath(sessionDir, item.turnId),
+    item.committedBytes,
+  );
+  return {
+    sessionId: String(session.sessionId || "").trim(),
+    turnId: String(item.turnId || "").trim(),
+    artifactOrdinal: Number(item.artifactOrdinal || 0),
+    turnScopeId: String(item.turnScopeId || "").trim(),
+    dialogProcessId: String(item.dialogProcessId || "").trim(),
+    messages: materializeJournal(records, item.messageOrder),
+  };
+}
+
+export async function readSessionMessageCount({ sessionDir = "" } = {}) {
+  const files = buildSessionArtifactFileMap(sessionDir);
+  const session = await readJsonArtifactFile(files.session, null);
+  if (!session || typeof session !== "object") return 0;
+  if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
+    const error = new Error("session message count requires the canonical turn journal schema");
+    error.code = "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED";
+    throw error;
+  }
+  return (Array.isArray(session.turnOrder) ? session.turnOrder : []).reduce(
+    (count, item) => count + Math.max(0, Number(item?.messageCount || 0)),
+    0,
+  );
+}
+
 function turnContentMetadata(turn) {
   const canonical = JSON.stringify(turn);
   return {
@@ -386,7 +447,6 @@ export async function writeSessionArtifact({
   storageService = null,
   sessionDir = "",
   sessionPayload = {},
-  depth = 0,
   atomic = true,
   now = () => new Date().toISOString(),
 } = {}) {
@@ -394,7 +454,7 @@ export async function writeSessionArtifact({
   await mkdir(sessionDir, { recursive: true });
   const normalizedSessionPayload = normalizeSessionEntity(sessionPayload, { now });
   assertSessionMessageIdentityInvariants(normalizedSessionPayload.messages);
-  const summaryPayload = buildSessionDisplaySummary(normalizedSessionPayload, { depth });
+  const summaryPayload = buildSessionDisplaySummary(normalizedSessionPayload);
   const { turns, messageOrder } = splitSessionMessages(
     normalizedSessionPayload.messages,
     normalizedSessionPayload.dialogOrder,
@@ -433,9 +493,11 @@ export async function writeSessionArtifact({
       ? previous.messageHashes
       : {};
     const nextByUid = new Map(turn.messages.map((message) => [message.messageUid, message]));
+    const nextHashes = {};
     const records = [];
     for (const message of turn.messages) {
       const hash = messageHash(message);
+      nextHashes[message.messageUid] = hash;
       if (previousHashes[message.messageUid] !== hash) records.push({ op: "upsert", messageUid: message.messageUid, message, hash });
     }
     for (const uid of Object.keys(previousHashes)) if (!nextByUid.has(uid)) records.push({ op: "remove", messageUid: uid });
@@ -453,7 +515,7 @@ export async function writeSessionArtifact({
       recordCount: compact ? turn.messages.length : (Number(previous?.recordCount) || 0) + records.length,
       messageCount: turn.messages.length,
       messageOrder: turn.messages.map((message) => message.messageUid),
-      messageHashes: Object.fromEntries(turn.messages.map((message) => [message.messageUid, messageHash(message)])),
+      messageHashes: nextHashes,
       compacted: compact || previous?.compacted === true,
     });
   }
@@ -516,10 +578,9 @@ export async function rebuildSessionDisplaySummaryArtifact({
   storageService = null,
   sessionDir = "",
   sessionPayload = {},
-  depth = 0,
 } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
-  const summaryPayload = buildSessionDisplaySummary(sessionPayload, { depth });
+  const summaryPayload = buildSessionDisplaySummary(sessionPayload);
   await writeJsonWithStorage({
     storageService,
     artifactPath: files.sessionSummary,

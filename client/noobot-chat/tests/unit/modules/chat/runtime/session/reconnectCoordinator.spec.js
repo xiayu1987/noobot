@@ -9,6 +9,24 @@ import { createReconnectCoordinator } from "../../../../../../src/modules/chat/r
 import { createTurnRuntimeRegistryState } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 describe("createReconnectCoordinator", () => {
+  it("does not reconnect a local Session without a backend identity", async () => {
+    const chatWebSocketClient = { reconnect: vi.fn() };
+    const coordinator = createReconnectCoordinator({
+      activeSession: ref({ id: "local-1", backendSessionId: "", isLocal: true, messages: [] }),
+      activeSessionId: ref("local-1"),
+      turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
+      userId: ref("user-1"),
+      chatWebSocketClient,
+      reconnectReplay: {},
+      chatList: {},
+      resolveActiveSessionIdentity: () => "local-1",
+      resolveActiveTurnScopeIdentity: () => "",
+    });
+
+    await expect(coordinator.handleReconnect()).resolves.toBe(false);
+    expect(chatWebSocketClient.reconnect).not.toHaveBeenCalled();
+  });
+
   it("finishes the ordered replay queue after a packet rejection", async () => {
     const replayOrder = [];
     const reconnectReplay = {

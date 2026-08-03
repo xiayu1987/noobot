@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 
 function createService({ initialSession }) {
   const saved = [];
@@ -102,6 +103,61 @@ test("SessionMessageService.deleteFromMessage cleans only the owning session tur
     child.getSession().turnStatuses.map((item) => item.turnScopeId),
     ["child-turn"],
   );
+});
+
+test("SessionMessageService.deleteFromMessage removes deleted terminal Turns from refresh projection", async () => {
+  const { service, getSession } = createService({
+    initialSession: {
+      sessionId: "s1",
+      version: 2,
+      revision: 2,
+      messages: [
+        { turnScopeId: "scope-keep", role: "user", content: "keep" },
+        { turnScopeId: "scope-delete", role: "assistant", content: "delete" },
+      ],
+      turnLifecycle: {
+        sequence: 2,
+        activeTurnScopeId: "",
+        turns: {
+          "scope-keep": {
+            turnScopeId: "scope-keep", messageId: "message-keep",
+            presentationMessageId: "presentation-keep", state: "completed",
+            revision: 1, sequence: 1,
+          },
+          "scope-delete": {
+            turnScopeId: "scope-delete", messageId: "message-delete",
+            presentationMessageId: "presentation-delete", state: "stop_completed",
+            revision: 2, sequence: 2,
+          },
+        },
+      },
+    },
+  });
+
+  await service.deleteFromMessage({
+    userId: "u1",
+    sessionId: "s1",
+    anchor: { turnScopeId: "scope-delete" },
+    expectedVersion: 2,
+  });
+
+  const persisted = getSession();
+  const summary = buildSessionDisplaySummary(persisted);
+  const lifecycle = await service.getTurnLifecycleSnapshot({
+    userId: "u1",
+    sessionId: "s1",
+    commandId: "snapshot-after-delete",
+  });
+  assert.deepEqual(summary.messages.map((message) => message.turnScopeId), ["scope-keep"]);
+  assert.deepEqual(
+    summary.turnLifecycleSnapshot.recentTerminalTurns.map((turn) => turn.turnScopeId),
+    ["scope-keep"],
+  );
+  assert.deepEqual(
+    lifecycle.snapshot.recentTerminalTurns.map((turn) => turn.turnScopeId),
+    ["scope-keep"],
+  );
+  assert.equal(persisted.turnLifecycle.turns["scope-delete"].state, "stop_completed");
 });
 
 test("SessionMessageService.deleteFromMessage returns 404 when anchor is missing", async () => {

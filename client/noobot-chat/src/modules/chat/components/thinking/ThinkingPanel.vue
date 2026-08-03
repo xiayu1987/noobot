@@ -27,8 +27,11 @@ const props = defineProps({
 });
 const emit = defineEmits(["open-thinking-details", "panel-visibility-change"]);
 const { translate } = useLocale();
-const panel = useThinkingPanel(props, emit);
 const thinkingOpenNames = computed(() => getTurnUiState(props.messageItem)?.thinkingOpenNames || []);
+const shouldLoadThinkingDetail = () =>
+  String(props.variant || "panel") === "details" ||
+  thinkingOpenNames.value.includes("thinking-panel");
+const panel = useThinkingPanel(props, emit, { shouldLoadThinkingDetail });
 const thinkingIdentity = computed(() => [
   String(props.messageItem?.sessionId || "").trim(),
   normalizeTurnScopeIdKey(props.messageItem?.turnScopeId),

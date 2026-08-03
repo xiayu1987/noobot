@@ -75,6 +75,7 @@ const {
   defaultLocale,
   workspaceRootPath,
   getBot,
+  readSessionUserIds,
   buildHttpModuleDependencies,
   openVSCodeService,
 } = appDependencies;
@@ -138,3 +139,46 @@ httpServer = startHttpServer({
   openVSCodeService,
   workspaceRootPath,
 });
+
+void (async () => {
+  const results = [];
+  for (const userId of await readSessionUserIds()) {
+    results.push(await getBot().session.maintainSessionDisplaySummaries({ userId }));
+  }
+  const failures = results.flatMap((result) => result.failures || []);
+  await writeRoutedRuntimeEvent({
+    scope: "startup",
+    source: "service",
+    channel: RUNTIME_EVENT_CHANNELS.STARTUP,
+    category: RUNTIME_EVENT_CATEGORIES.STATE,
+    level: failures.length ? "error" : "info",
+    event: failures.length
+      ? "service.startup.sessionDisplaySummaryMaintenance.failed"
+      : "service.startup.sessionDisplaySummaryMaintenance.completed",
+    workspaceRoot: workspaceRootPath(),
+    data: {
+      userCount: results.length,
+      migratedSessionCount: results.reduce(
+        (count, result) => count + (result.migratedSessionIds?.length || 0),
+        0,
+      ),
+      rebuiltSessionCount: results.reduce(
+        (count, result) => count + (result.rebuiltSessionIds?.length || 0),
+        0,
+      ),
+      failures,
+    },
+  });
+})().catch((error) => writeRoutedRuntimeEvent({
+  scope: "startup",
+  source: "service",
+  channel: RUNTIME_EVENT_CHANNELS.STARTUP,
+  category: RUNTIME_EVENT_CATEGORIES.STATE,
+  level: "error",
+  event: "service.startup.sessionDisplaySummaryMaintenance.failed",
+  workspaceRoot: workspaceRootPath(),
+  data: {
+    code: String(error?.code || ""),
+    message: String(error?.message || error || ""),
+  },
+}));

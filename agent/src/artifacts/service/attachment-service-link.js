@@ -237,13 +237,6 @@ export async function syncParsedResultToSessionSnapshots({
     const sessionDir = path.dirname(sessionJsonFile);
     const sessionPayload = await readSessionArtifact({ sessionDir, fallback: null });
     if (!sessionPayload) continue;
-    let summaryDepth = 0;
-    try {
-      const summary = JSON.parse(await fsReadFile(path.join(sessionDir, "session-summary.json"), "utf8"));
-      if (Number.isFinite(Number(summary?.depth))) summaryDepth = Number(summary.depth);
-    } catch {
-      summaryDepth = 0;
-    }
     const messages = Array.isArray(sessionPayload?.messages) ? sessionPayload.messages : [];
     let changed = false;
     const syncAttachmentBucket = (attachmentItems = []) => {
@@ -284,7 +277,7 @@ export async function syncParsedResultToSessionSnapshots({
     if (!changed) continue;
     const nextSessionPayload = { ...(sessionPayload || {}), messages: nextMessages };
     try {
-      await writeSessionArtifact({ sessionDir, sessionPayload: nextSessionPayload, depth: summaryDepth });
+      await writeSessionArtifact({ sessionDir, sessionPayload: nextSessionPayload });
     } catch {
     }
   }
@@ -292,14 +285,7 @@ export async function syncParsedResultToSessionSnapshots({
 
 async function syncSessionSummaryForSessionFile(sessionJsonFile = "", sessionPayload = {}) {
   const summaryFile = path.join(path.dirname(sessionJsonFile), "session-summary.json");
-  let depth = 0;
-  try {
-    const existingSummary = JSON.parse(await fsReadFile(summaryFile, "utf8"));
-    if (Number.isFinite(Number(existingSummary?.depth))) depth = Number(existingSummary.depth);
-  } catch {
-    depth = 0;
-  }
-  const summaryPayload = buildSessionDisplaySummary(sessionPayload, { depth });
+  const summaryPayload = buildSessionDisplaySummary(sessionPayload);
   await fsWriteFile(summaryFile, `${JSON.stringify(summaryPayload, null, 2)}\n`, "utf8");
 }
 

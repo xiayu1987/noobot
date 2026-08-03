@@ -44,12 +44,35 @@ test("authority builds active and terminal snapshot from one lifecycle rule", ()
     commandId: "snapshot-1",
     userId: "u1",
     sessionId: "s1",
+    terminalTurnScopeIds: ["turn-0"],
     knownSequence: 3,
     generatedAt: now,
   });
   assert.equal(snapshot.activeTurn.startedAt, "2026-07-29T23:59:00.000Z");
   assert.deepEqual(snapshot.recentTerminalTurns.map((item) => item.turnScopeId), ["turn-0"]);
   assert.equal(snapshot.unchanged, true);
+});
+
+test("authority snapshots only terminal Turns represented by canonical messages", () => {
+  const snapshot = createAuthoritativeTurnSnapshot({
+    lifecycle: {
+      sequence: 3,
+      turns: {
+        retained: turn({ turnScopeId: "turn-retained", state: "completed", sequence: 2 }),
+        deleted: turn({ turnScopeId: "turn-deleted", state: "stop_completed", sequence: 3 }),
+      },
+    },
+    terminalTurnScopeIds: ["turn-retained"],
+    commandId: "snapshot-message-projection",
+    userId: "u1",
+    sessionId: "s1",
+    generatedAt: now,
+  });
+
+  assert.deepEqual(
+    snapshot.recentTerminalTurns.map((item) => item.turnScopeId),
+    ["turn-retained"],
+  );
 });
 
 test("authority owns terminal readiness decisions", () => {

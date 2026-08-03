@@ -69,6 +69,38 @@ function createUseChatListFixture(overrides = {}) {
 }
 
 describe("useChatList", () => {
+  it("keeps a new Session local across navigation until the backend identity is provisioned", async () => {
+    const { api, refs, mocks } = createUseChatListFixture();
+    const persisted = {
+      id: "persisted-1",
+      backendSessionId: "persisted-1",
+      title: "Persisted",
+      isLocal: false,
+      loaded: true,
+      messages: [],
+      sessionDocs: [],
+      connectorPanelState: { selectedConnectors: {} },
+    };
+    refs.sessions.value = [persisted];
+    refs.activeSessionId.value = persisted.id;
+
+    api.newSession();
+    const local = refs.sessions.value[0];
+    expect(local).toMatchObject({
+      id: "local-generated",
+      backendSessionId: "",
+      isLocal: true,
+      loaded: true,
+    });
+
+    await api.selectSession("persisted-1");
+    await api.selectSession("local-generated");
+
+    expect(refs.activeSessionId.value).toBe("local-generated");
+    expect(mocks.getSessionDetailApi).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
   it("fetchSessions keeps the session object while applying the authoritative detail messages", async () => {
     const fixture = createUseChatListFixture();
     const { api, refs, mocks } = fixture;

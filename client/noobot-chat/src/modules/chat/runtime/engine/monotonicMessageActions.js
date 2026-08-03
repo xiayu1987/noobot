@@ -291,6 +291,16 @@ export function createMonotonicMessageActions({
       activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
     );
     const initialTurnScopeId = getMessageTurnScopeId(userTargetMessage);
+    const anchor = buildMessageAnchor(userTargetMessage);
+    if (!Object.keys(anchor).length) return false;
+    const deleteIdempotencyKey = `delete:${initialSessionId}:${anchor.turnScopeId || anchor.dialogProcessId || anchor.id || "anchor"}`;
+    const deleteOperation = messageOperationStore?.registerOperation?.({
+      type: "delete",
+      opId: deleteIdempotencyKey,
+      sessionId: initialSessionId,
+      status: "stopping",
+      turnScopeId: anchor.turnScopeId || "",
+    });
     logWorkflowDiagnostics("frontend.messageDelete.started", () => ({
       sessionId: initialSessionId,
       dialogProcessId: getMessageDialogProcessId(userTargetMessage),
@@ -299,114 +309,116 @@ export function createMonotonicMessageActions({
       resolvedUserTarget: summarizeDeleteMessages([userTargetMessage])[0] || null,
       messagesBefore: summarizeDeleteMessages(activeSession.value?.messages),
     }));
-    const prepared = await prepareMonotonicMessageAction({
-      ...options,
-      targetMessage: userTargetMessage,
-      originalTargetMessage: targetMessage,
-    });
-    if (prepared === false) return false;
-    if (typeof deleteSessionMessagesFromApi === "function") {
-      const sessionId = normalizeTrimmedString(
-        activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
-      );
-      const anchor = buildMessageAnchor(userTargetMessage);
-      if (!Object.keys(anchor).length) return false;
-      const locallyDeletedTurnScopeIds = collectMessageCascadeTurnScopeIds(userTargetMessage);
-      const deleteIdempotencyKey = `delete:${sessionId}:${anchor.turnScopeId || anchor.dialogProcessId || anchor.id || "anchor"}`;
-      logWorkflowDiagnostics("frontend.messageDelete.requestPrepared", () => ({
-        sessionId,
-        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
-        turnScopeId: getMessageTurnScopeId(userTargetMessage),
-        anchor,
-        locallyDeletedTurnScopeIds,
-        idempotencyKey: deleteIdempotencyKey,
-      }));
-      const sessionVersionManager = createSessionVersionManager({
-        activeSession,
-        fetchSessionDetail,
-        applySessionDetail,
+    try {
+      const prepared = await prepareMonotonicMessageAction({
+        ...options,
+        targetMessage: userTargetMessage,
+        originalTargetMessage: targetMessage,
       });
-      const mutationResult = await sessionVersionManager.runVersionedMutation({
-        mutate: async ({ expectedVersion }) => {
-          const result = await deleteSessionMessagesFromApi({
-            userId: userId?.value || userId,
-            sessionId,
-            parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
-            anchor,
-            expectedVersion,
-            idempotencyKey: deleteIdempotencyKey,
-          }, { fetcher: authFetch });
-          const payload = typeof result?.json === "function" ? await result.json() : result;
-          return { result, payload };
-        },
-        refreshOptions: {
+      if (prepared === false) return false;
+      if (typeof deleteSessionMessagesFromApi === "function") {
+        const sessionId = normalizeTrimmedString(
+          activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
+        );
+        const locallyDeletedTurnScopeIds = collectMessageCascadeTurnScopeIds(userTargetMessage);
+        messageOperationStore?.updateOperation?.(deleteOperation?.opId, { status: "deleting" });
+        logWorkflowDiagnostics("frontend.messageDelete.requestPrepared", () => ({
           sessionId,
-          detailOptions: { source: "deleteVersionConflict" },
-          logContext: { turnScopeId: anchor.turnScopeId || "" },
-        },
-      });
-      const result = mutationResult?.result;
-      const payload = mutationResult?.payload;
-      logWorkflowDiagnostics("frontend.messageDelete.responseReceived", () => ({
-        sessionId,
-        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
-        turnScopeId: getMessageTurnScopeId(userTargetMessage),
-        responseOk: result?.ok !== false && payload?.ok !== false,
-        deletedCount: Number(payload?.deletedCount || 0),
-        anchorIndex: Number(payload?.anchorIndex ?? -1),
-        deletedTurnScopeIds: Array.isArray(payload?.deletedTurnScopeIds)
+          dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+          turnScopeId: getMessageTurnScopeId(userTargetMessage),
+          anchor,
+          locallyDeletedTurnScopeIds,
+          idempotencyKey: deleteIdempotencyKey,
+        }));
+        const sessionVersionManager = createSessionVersionManager({
+          activeSession,
+          fetchSessionDetail,
+          applySessionDetail,
+        });
+        const mutationResult = await sessionVersionManager.runVersionedMutation({
+          mutate: async ({ expectedVersion }) => {
+            const result = await deleteSessionMessagesFromApi({
+              userId: userId?.value || userId,
+              sessionId,
+              parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
+              anchor,
+              expectedVersion,
+              idempotencyKey: deleteIdempotencyKey,
+            }, { fetcher: authFetch });
+            const payload = typeof result?.json === "function" ? await result.json() : result;
+            return { result, payload };
+          },
+          refreshOptions: {
+            sessionId,
+            detailOptions: { source: "deleteVersionConflict" },
+            logContext: { turnScopeId: anchor.turnScopeId || "" },
+          },
+        });
+        const result = mutationResult?.result;
+        const payload = mutationResult?.payload;
+        logWorkflowDiagnostics("frontend.messageDelete.responseReceived", () => ({
+          sessionId,
+          dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+          turnScopeId: getMessageTurnScopeId(userTargetMessage),
+          responseOk: result?.ok !== false && payload?.ok !== false,
+          deletedCount: Number(payload?.deletedCount || 0),
+          anchorIndex: Number(payload?.anchorIndex ?? -1),
+          deletedTurnScopeIds: Array.isArray(payload?.deletedTurnScopeIds)
+            ? payload.deletedTurnScopeIds.map(normalizeTrimmedString).filter(Boolean)
+            : [],
+          responseMessages: summarizeDeleteMessages(payload?.session?.messages),
+          responseTurnStatuses: (Array.isArray(payload?.session?.turnStatuses)
+            ? payload.session.turnStatuses
+            : []).map((status = {}) => ({
+              turnScopeId: normalizeTrimmedString(status?.turnScopeId),
+              dialogProcessId: normalizeTrimmedString(status?.dialogProcessId),
+              status: normalizeTrimmedString(status?.status),
+            })),
+        }));
+        if (result?.ok === false || payload?.ok === false) return false;
+        const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
+        if (!sessionDetail) return false;
+        const protocolDeletedTurnScopeIds = Array.isArray(payload?.deletedTurnScopeIds)
           ? payload.deletedTurnScopeIds.map(normalizeTrimmedString).filter(Boolean)
-          : [],
-        responseMessages: summarizeDeleteMessages(payload?.session?.messages),
-        responseTurnStatuses: (Array.isArray(payload?.session?.turnStatuses)
-          ? payload.session.turnStatuses
-          : []).map((status = {}) => ({
-            turnScopeId: normalizeTrimmedString(status?.turnScopeId),
-            dialogProcessId: normalizeTrimmedString(status?.dialogProcessId),
-            status: normalizeTrimmedString(status?.status),
-          })),
-      }));
-      if (result?.ok === false || payload?.ok === false) return false;
-      const sessionDetail = normalizeSessionDetailSnapshot(payload, sessionId);
-      if (!sessionDetail) return false;
-      const protocolDeletedTurnScopeIds = Array.isArray(payload?.deletedTurnScopeIds)
-        ? payload.deletedTurnScopeIds.map(normalizeTrimmedString).filter(Boolean)
-        : [];
-      const confirmedDeletedTurnScopeIds = protocolDeletedTurnScopeIds.length
-        ? protocolDeletedTurnScopeIds
-        : locallyDeletedTurnScopeIds;
-      confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, confirmedDeletedTurnScopeIds, { sessionId });
-      cascadeDeleteMessagesFrom(userTargetMessage);
-      logWorkflowDiagnostics("frontend.messageDelete.localCascadeApplied", () => ({
-        sessionId,
-        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
-        turnScopeId: getMessageTurnScopeId(userTargetMessage),
-        stage: "before-detail-apply",
-        messages: summarizeDeleteMessages(activeSession.value?.messages),
-      }));
-      applySessionDetail?.(sessionDetail, {
-        mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
-        deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
-      });
-      cascadeDeleteMessagesFrom(userTargetMessage);
-      logWorkflowDiagnostics("frontend.messageDelete.completed", () => ({
-        sessionId,
-        dialogProcessId: getMessageDialogProcessId(userTargetMessage),
-        turnScopeId: getMessageTurnScopeId(userTargetMessage),
-        confirmedDeletedTurnScopeIds,
-        messagesAfter: summarizeDeleteMessages(activeSession.value?.messages),
-      }));
-      clearPendingInteraction?.();
-      return true;
+          : [];
+        const confirmedDeletedTurnScopeIds = protocolDeletedTurnScopeIds.length
+          ? protocolDeletedTurnScopeIds
+          : locallyDeletedTurnScopeIds;
+        confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, confirmedDeletedTurnScopeIds, { sessionId });
+        cascadeDeleteMessagesFrom(userTargetMessage);
+        logWorkflowDiagnostics("frontend.messageDelete.localCascadeApplied", () => ({
+          sessionId,
+          dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+          turnScopeId: getMessageTurnScopeId(userTargetMessage),
+          stage: "before-detail-apply",
+          messages: summarizeDeleteMessages(activeSession.value?.messages),
+        }));
+        applySessionDetail?.(sessionDetail, {
+          mode: SESSION_DETAIL_APPLY_MODE.DELETE_CONFIRMED,
+          deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
+        });
+        cascadeDeleteMessagesFrom(userTargetMessage);
+        logWorkflowDiagnostics("frontend.messageDelete.completed", () => ({
+          sessionId,
+          dialogProcessId: getMessageDialogProcessId(userTargetMessage),
+          turnScopeId: getMessageTurnScopeId(userTargetMessage),
+          confirmedDeletedTurnScopeIds,
+          messagesAfter: summarizeDeleteMessages(activeSession.value?.messages),
+        }));
+        clearPendingInteraction?.();
+        return true;
+      }
+      const sessionId = sessionRuntimeId(activeSession.value || activeSessionId?.value);
+      confirmTurnRuntimeDeletion(
+        turnRuntimeRegistry?.value,
+        collectMessageCascadeTurnScopeIds(userTargetMessage),
+        { sessionId },
+      );
+      const cascaded = cascadeDeleteMessagesFrom(userTargetMessage);
+      return cascaded;
+    } finally {
+      if (deleteOperation) messageOperationStore?.completeOperation?.(deleteOperation.opId);
     }
-    const sessionId = sessionRuntimeId(activeSession.value || activeSessionId?.value);
-    confirmTurnRuntimeDeletion(
-      turnRuntimeRegistry?.value,
-      collectMessageCascadeTurnScopeIds(userTargetMessage),
-      { sessionId },
-    );
-    const cascaded = cascadeDeleteMessagesFrom(userTargetMessage);
-    return cascaded;
   }
 
   const resendTransaction = createResendMessageTransaction({

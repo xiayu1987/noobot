@@ -24,7 +24,6 @@ export function resolveMatchingSessionDetail(detail, backendSessionId = "") {
 
 export async function renderActiveSessionBeforeReplay({
   activeSession,
-  activeSessionId,
   chatList,
   getReplayHydrationPromise = () => null,
   setReplayHydrationPromise = () => {},
@@ -33,9 +32,7 @@ export async function renderActiveSessionBeforeReplay({
   if (!activeSession?.value) return false;
   const existingPromise = getReplayHydrationPromise();
   if (existingPromise) return existingPromise;
-  const backendSessionId = String(
-    activeSession.value?.backendSessionId || activeSessionId?.value || "",
-  ).trim();
+  const backendSessionId = String(activeSession.value?.backendSessionId || "").trim();
   if (
     !backendSessionId ||
     typeof chatList?.fetchSessionDetail !== "function" ||

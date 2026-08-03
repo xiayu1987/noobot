@@ -288,8 +288,8 @@ export function createChatWebSocketClient({
     const sameDialog = !dialogProcessId || !scope.dialogProcessId || String(dialogProcessId) === String(scope.dialogProcessId);
     if (!sameSession || !sameTurn || !sameDialog) return false;
     const pending = resolveCurrentStream;
-    if (pending?.serial === context.serial && typeof pending.reject === "function") {
-      pending.reject(new Error("stream_cancelled_by_message_delete"));
+    if (pending?.serial === context.serial && typeof pending.fn === "function") {
+      pending.fn();
       return true;
     }
     activeStreamContext = null;

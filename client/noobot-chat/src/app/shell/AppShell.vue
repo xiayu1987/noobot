@@ -262,7 +262,6 @@ const {
 function hasActiveSessionForReconnect() {
   return hasActiveSessionForReconnectState({
     activeSession: activeSession.value,
-    activeSessionId: activeSessionId.value,
   });
 }
 

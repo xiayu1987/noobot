@@ -20,10 +20,6 @@ export function formatTime(ts) {
   return formatLocalTime(ts);
 }
 
-export function hasActiveSessionForReconnect({ activeSession = {}, activeSessionId = "" } = {}) {
-  return Boolean(
-    String(activeSession?.backendSessionId || "").trim() ||
-      String(activeSession?.id || "").trim() ||
-      String(activeSessionId || "").trim(),
-  );
+export function hasActiveSessionForReconnect({ activeSession = {} } = {}) {
+  return Boolean(String(activeSession?.backendSessionId || "").trim());
 }

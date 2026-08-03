@@ -43,7 +43,12 @@ import {
   sourceToProjectionLatencyMs,
 } from "./thinkingPanelAnalysis.js";
 
-export function useThinkingTimeline(props, translate, getRuntimeView) {
+export function useThinkingTimeline(
+  props,
+  translate,
+  getRuntimeView,
+  { shouldLoadThinkingDetail = () => true } = {},
+) {
   const timelineMessage = (messageItem = {}) => messageItem;
   const thinkingDetailLoadingKey = ref("");
   const loadedThinkingDetail = ref(null);
@@ -408,6 +413,7 @@ export function useThinkingTimeline(props, translate, getRuntimeView) {
 
   const thinkingDetailLoadKey = computed(() => {
     const messageItem = props.messageItem || {};
+    if (shouldLoadThinkingDetail() !== true) return "";
     if (hasLocalThinkingDetails(messageItem)) return "";
     if (messageItem?.pending === true) return "";
     const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");

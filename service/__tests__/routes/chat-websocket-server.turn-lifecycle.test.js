@@ -205,6 +205,7 @@ function installLifecycleSnapshotReader(authoritative) {
     found: true,
     snapshot: createAuthoritativeTurnSnapshot({
       lifecycle: authoritative.lifecycle(),
+      terminalTurnScopeIds: Object.keys(authoritative.lifecycle()?.turns || {}),
       commandId,
       userId,
       sessionId,
