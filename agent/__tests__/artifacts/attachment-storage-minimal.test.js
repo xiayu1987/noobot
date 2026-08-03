@@ -24,6 +24,7 @@ import {
 } from "../../src/artifacts/policy/policy-validator.js";
 import { getMimeTypeFromExtension, isValidMimeType } from "../../src/artifacts/policy/mime-utils.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-test-"));
@@ -389,8 +390,10 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
 
     const runtimeSummary = JSON.parse(await readFile(runtimeSummaryFile, "utf8"));
     const pluginSummary = JSON.parse(await readFile(pluginSummaryFile, "utf8"));
-    assert.equal(runtimeSummary.depth, 2);
-    assert.equal(pluginSummary.depth, 3);
+    assert.equal(runtimeSummary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
+    assert.equal(pluginSummary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
+    assert.equal("depth" in runtimeSummary, false);
+    assert.equal("depth" in pluginSummary, false);
     assert.equal(runtimeSummary.messages[0].attachments[0].parsedResult?.attachmentId, parsedAttachment.attachmentId);
     assert.equal(pluginSummary.messages[0].attachments[0].parsedResult?.attachmentId, parsedAttachment.attachmentId);
     assert.equal(runtimeSummary.messages[0].attachments[0].parsedResult?.tool, "doc_to_data");
