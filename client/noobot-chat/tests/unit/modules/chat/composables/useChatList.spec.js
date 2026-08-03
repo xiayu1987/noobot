@@ -101,7 +101,7 @@ describe("useChatList", () => {
     expect(mocks.notify).not.toHaveBeenCalled();
   });
 
-  it("fetchSessions keeps the session object while applying the authoritative detail messages", async () => {
+  it("fetchSessions preserves active optimistic detail while promoting its canonical identity", async () => {
     const fixture = createUseChatListFixture();
     const { api, refs, mocks } = fixture;
     const existingMessages = [{ role: RoleEnum.USER, content: "local" }];
@@ -160,9 +160,10 @@ describe("useChatList", () => {
 
     expect(refs.sessions.value).toBe(sessionsArrayRef);
     expect(refs.sessions.value[0]).toBe(existingSessionRef);
-    expect(refs.sessions.value[0].messages).not.toBe(existingMessagesRef);
-    expect(refs.sessions.value[0].messages).toEqual([]);
+    expect(refs.sessions.value[0].messages).toBe(existingMessagesRef);
+    expect(refs.sessions.value[0].messages).toEqual(existingMessages);
     expect(refs.activeSessionId.value).toBe("backend-1");
+    expect(mocks.getSessionDetailApi).not.toHaveBeenCalled();
   });
 
   it("fetchSessions with silent=true does not enable loadingSessions flag", async () => {

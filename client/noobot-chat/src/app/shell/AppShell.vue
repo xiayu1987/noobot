@@ -138,7 +138,10 @@ const {
   notify: notifyUi,
   onConnected: async () => {
     const route = parsePseudoRouteFromLocation();
-    await fetchSessions(route.sessionId || "", { navigateToLastMessage: false });
+    await fetchSessions(route.sessionId || "", {
+      navigateToLastMessage: false,
+      forceCurrentSessionRerender: true,
+    });
     await applyPseudoRoute(route);
     await locateDoneMessageAfterRender();
     chatWebSocketClient.connect();

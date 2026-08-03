@@ -111,7 +111,10 @@ describe("useReconnectReplay", () => {
     await vi.advanceTimersByTimeAsync(1300);
 
     expect(refs.sending.value).toBe(false);
-    expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", { silent: true });
+    expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", {
+      silent: true,
+      forceCurrentSessionRerender: true,
+    });
     expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
