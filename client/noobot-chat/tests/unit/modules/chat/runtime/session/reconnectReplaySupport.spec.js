@@ -90,6 +90,7 @@ describe("reconnectReplay support modules", () => {
     expect(replayCache).toEqual({});
     expect(fetchSessions).toHaveBeenCalledWith("s-1", {
       silent: true,
+      forceCurrentSessionRerender: true,
     });
     vi.useRealTimers();
   });

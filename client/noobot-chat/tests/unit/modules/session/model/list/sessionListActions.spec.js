@@ -159,3 +159,77 @@ describe("createSessionListActions.renameSession", () => {
     expect(getSessionsApi).toHaveBeenCalledWith({ userId: "u1" }, { fetcher: authFetch });
   });
 });
+
+describe("createSessionListActions.deleteSession", () => {
+  it("does not reload or overwrite the active running Session when deleting another Session", async () => {
+    const activeMessage = {
+      role: "assistant",
+      content: "streaming answer",
+      turnScopeId: "turn-active",
+      pending: true,
+    };
+    const activeSession = {
+      id: "s-active",
+      backendSessionId: "s-active",
+      title: "Active",
+      caller: "user",
+      loaded: true,
+      messages: [activeMessage],
+      sessionDocs: [{ sessionId: "s-active", messages: [activeMessage] }],
+    };
+    const sessions = ref([
+      activeSession,
+      { id: "s-delete", backendSessionId: "s-delete", title: "Delete", caller: "user" },
+    ]);
+    const activeSessionId = ref("s-active");
+    const registry = createTurnRuntimeRegistryState();
+    applyTurnRuntimeEvent(registry, {
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: "s-active",
+      turnScopeId: "turn-active",
+      dialogProcessId: "dp-active",
+      source: "test",
+    });
+    const turnRuntimeRegistry = ref(registry);
+    const deleteSessionApi = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
+    const getSessionsApi = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        sessions: [{
+          sessionId: "s-active",
+          title: "Active",
+          caller: "user",
+          updatedAt: "2026-01-01T00:01:00.000Z",
+        }],
+      }),
+    });
+    const fetchSessionDetail = vi.fn();
+    const applySessionDetail = vi.fn();
+    const { actions } = createHarness({
+      sessions,
+      activeSessionId,
+      turnRuntimeRegistry,
+      deleteSessionApi,
+      getSessionsApi,
+      fetchSessionDetail,
+      applySessionDetail,
+    });
+
+    await expect(actions.deleteSession("s-delete")).resolves.toBe(true);
+
+    expect(deleteSessionApi).toHaveBeenCalledWith(
+      { userId: "u1", sessionId: "s-delete" },
+      expect.any(Object),
+    );
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
+    expect(applySessionDetail).not.toHaveBeenCalled();
+    expect(activeSessionId.value).toBe("s-active");
+    expect(sessions.value[0]).toBe(activeSession);
+    expect(sessions.value[0].messages[0]).toBe(activeMessage);
+    expect(turnRuntimeRegistry.value.sessions["s-active"]?.activeTurnScopeId).toBe("turn-active");
+  });
+});

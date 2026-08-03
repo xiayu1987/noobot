@@ -45,6 +45,7 @@ export function scheduleCacheExpiredSessionRefresh({
     Promise.resolve(
       chatList.fetchSessions(_trimStr(activeSessionId.value), {
         silent: true,
+        forceCurrentSessionRerender: true,
       }),
     )
       .then((ok) => {

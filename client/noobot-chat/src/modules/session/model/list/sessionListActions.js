@@ -167,7 +167,7 @@ export function createSessionListActions({
       const keepActive = Boolean(prevActiveId && findSessionByAnyIdInList(sessions.value, prevActiveId));
       const nextId = keepActive ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId) : sessions.value[0].id;
       await selectSession(nextId, {
-        force: true,
+        force: forceCurrentSessionRerender,
         silent,
         navigateToLastMessage: shouldNavigateToLastMessage,
         requireFresh: forceCurrentSessionRerender,

@@ -31,6 +31,7 @@ describe("useReconnectReplay", () => {
 
     expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", {
       silent: true,
+      forceCurrentSessionRerender: true,
     });
     expect(api.__test.replayCache["s-2"]).toBeUndefined();
   });
