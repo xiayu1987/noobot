@@ -1,0 +1,59 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { readFile } from "node:fs/promises";
+import { clientFilePath as path } from "../path-resolver.js";
+
+export const DESKTOP_BACKEND_ENTRY_WORKSPACES = Object.freeze([
+  "service",
+  "agent-proxy",
+  "model-proxy",
+  "plugin/noobot-plugin-harness",
+  "plugin/noobot-plugin-workflow",
+]);
+
+async function readPackageJson(filePath) {
+  return JSON.parse(await readFile(filePath, "utf8"));
+}
+
+export async function resolveDesktopBackendRuntimeWorkspaces({
+  repoRoot,
+  entryWorkspaces = DESKTOP_BACKEND_ENTRY_WORKSPACES,
+} = {}) {
+  const rootPackage = await readPackageJson(path.join(repoRoot, "package.json"));
+  const workspacePaths = Array.isArray(rootPackage.workspaces) ? rootPackage.workspaces : [];
+  const packagesByPath = new Map();
+  const workspacePathByPackageName = new Map();
+
+  for (const workspacePath of workspacePaths) {
+    const packageJson = await readPackageJson(path.join(repoRoot, workspacePath, "package.json"));
+    const packageName = String(packageJson?.name || "").trim();
+    if (!packageName) throw new Error(`Workspace package name is required: ${workspacePath}`);
+    packagesByPath.set(workspacePath, packageJson);
+    workspacePathByPackageName.set(packageName, workspacePath);
+  }
+
+  const pending = [...entryWorkspaces];
+  const included = new Set();
+  while (pending.length) {
+    const workspacePath = pending.shift();
+    if (included.has(workspacePath)) continue;
+    const packageJson = packagesByPath.get(workspacePath);
+    if (!packageJson) throw new Error(`Desktop backend entry workspace is not declared: ${workspacePath}`);
+    included.add(workspacePath);
+    const runtimeDependencies = {
+      ...(packageJson.dependencies || {}),
+      ...(packageJson.optionalDependencies || {}),
+    };
+    for (const dependencyName of Object.keys(runtimeDependencies)) {
+      const dependencyWorkspacePath = workspacePathByPackageName.get(dependencyName);
+      if (dependencyWorkspacePath && !included.has(dependencyWorkspacePath)) {
+        pending.push(dependencyWorkspacePath);
+      }
+    }
+  }
+
+  return workspacePaths.filter((workspacePath) => included.has(workspacePath));
+}

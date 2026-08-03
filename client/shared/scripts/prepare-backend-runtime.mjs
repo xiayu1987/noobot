@@ -8,6 +8,7 @@ import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { getDesktopRipgrepPackages, getRipgrepBinaryRelativePath } from './desktop-ripgrep-packages.mjs';
+import { resolveDesktopBackendRuntimeWorkspaces } from './backend-runtime-workspaces.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '../../..');
@@ -16,20 +17,6 @@ const desktopTargetArch = process.env.NOOBOT_DESKTOP_ARCH || process.env.npm_con
 const outRoot = path.join(desktopProjectDir, 'build/backend-runtime');
 const backendRoot = path.join(outRoot, 'backend');
 
-const runtimeWorkspaces = [
-  'service',
-  'agent',
-  'agent-proxy',
-  'model-proxy',
-  'shared',
-  'runtime-events',
-  'sanitize',
-  'i18n',
-  'plugin-runtime',
-  'workflow',
-  'plugin/noobot-plugin-harness',
-  'plugin/noobot-plugin-workflow',
-];
 const runtimeAssetDirs = ['user-template'];
 const ignore = /(^|[/\\])(?:node_modules|\.git|__tests__|test|tests|\.cache|dist|coverage)([/\\]|$)|\.(?:map|md)$/i;
 const privateConfigFileNames = new Set(['global.config.json', 'config.json', 'agent-proxy.config.json', 'model-proxy.config.json']);
@@ -124,8 +111,10 @@ function getNpmCommand() {
 }
 
 async function main() {
+  const runtimeWorkspaces = await resolveDesktopBackendRuntimeWorkspaces({ repoRoot });
   log(`repoRoot=${repoRoot}`);
   log(`backendRoot=${backendRoot}`);
+  log(`runtimeWorkspaces=${runtimeWorkspaces.join(',')}`);
   log(`Node=${process.version}; platform=${process.platform}; arch=${process.arch}; targetArch=${desktopTargetArch}`);
 
   log(`Cleaning ${outRoot}`);
@@ -185,6 +174,8 @@ async function main() {
   await assertExists(path.join(backendRoot, 'agent/src/prompts/base.en-US.md'), 'Prepared backend English system prompt');
   await assertExists(path.join(backendRoot, 'node_modules/noobot-agent/package.json'), 'Prepared backend dependency noobot-agent');
   await assertExists(path.join(backendRoot, 'node_modules/@noobot/plugin-runtime/package.json'), 'Prepared backend dependency @noobot/plugin-runtime');
+  await assertExists(path.join(backendRoot, 'node_modules/@noobot/event-protocol/package.json'), 'Prepared backend dependency @noobot/event-protocol');
+  await assertExists(path.join(backendRoot, 'node_modules/@noobot/authoritative-state/package.json'), 'Prepared backend dependency @noobot/authoritative-state');
   await assertExists(path.join(backendRoot, 'node_modules/@noobot/sanitize/package.json'), 'Prepared backend dependency @noobot/sanitize');
   await assertExists(path.join(backendRoot, 'node_modules/express/package.json'), 'Prepared backend dependency express');
   log(`Prepared backend runtime: ${backendRoot}`);

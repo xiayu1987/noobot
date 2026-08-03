@@ -26,6 +26,8 @@ async function createFixture() {
   await writeRuntimeFile(backendSource, "service/app.js");
   await writeRuntimeFile(backendSource, "node_modules/noobot-agent/package.json", "{}");
   await writeRuntimeFile(backendSource, "node_modules/@noobot/plugin-runtime/package.json", "{}");
+  await writeRuntimeFile(backendSource, "node_modules/@noobot/event-protocol/package.json", "{}");
+  await writeRuntimeFile(backendSource, "node_modules/@noobot/authoritative-state/package.json", "{}");
   await writeRuntimeFile(backendSource, "node_modules/@noobot/sanitize/package.json", "{}");
   await writeRuntimeFile(
     backendSource,
@@ -125,6 +127,35 @@ test("copyBackendAfterPack copies plugin-runtime into packaged resources", async
       await readFile(path.join(backendDestination, "node_modules", "@noobot", "plugin-runtime", "package.json"), "utf8"),
       "{}",
     );
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack copies authoritative lifecycle protocol packages", async () => {
+  const fixture = await createFixture();
+  try {
+    await copyBackendAfterPack(fixture.context);
+    await copyBackendAfterPack({
+      ...fixture.context,
+      electronPlatformName: "darwin",
+      packager: {
+        ...fixture.context.packager,
+        appInfo: { productFilename: "Noobot" },
+      },
+    });
+
+    for (const backendDestination of [
+      path.join(fixture.appOutDir, "resources", "backend"),
+      path.join(fixture.appOutDir, "Noobot.app", "Contents", "Resources", "backend"),
+    ]) {
+      for (const packageName of ["event-protocol", "authoritative-state"]) {
+        assert.equal(
+          await readFile(path.join(backendDestination, "node_modules", "@noobot", packageName, "package.json"), "utf8"),
+          "{}",
+        );
+      }
+    }
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
   }
