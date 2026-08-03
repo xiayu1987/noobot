@@ -78,7 +78,7 @@ export function registerChatWebSocketServer(
     webSocket.once("error", (error) => logConnection("service.websocket.connection.error", { error: error?.message || String(error || "") }));
 
     let eventSequence = 0;
-    const sendEvent = (eventName, data = {}) => {
+    const sendEvent = (eventName, data = {}, transportContext = {}) => {
       if (eventName === TURN_LIFECYCLE_WIRE_EVENT) {
         const validation = validateTurnLifecycleEnvelope(data);
         if (!validation.valid) {
@@ -97,6 +97,20 @@ export function registerChatWebSocketServer(
       const eventType = String(
         authoritativeEvent?.eventType || data?.eventType || data?.messageEvent?.eventType || "",
       ).trim();
+      const transportDiagnostic = {
+        eventId: String(authoritativeEvent?.eventId || data?.eventId || "").trim(),
+        eventType,
+        messageId: String(authoritativeEvent?.messageId || data?.messageId || "").trim(),
+        presentationMessageId: String(
+          authoritativeEvent?.presentationMessageId || data?.presentationMessageId || "",
+        ).trim(),
+        runHandleId: String(transportContext?.runHandleId || "").trim(),
+        bindingId: String(transportContext?.bindingId || "").trim(),
+        readyState: webSocket.readyState,
+      };
+      if (authoritativeEvent) {
+        logConnection("service.websocket.messageEvent.sendStarted", transportDiagnostic);
+      }
       const toolFrame = eventType === "tool_call_start" || eventType === "tool_call_end";
       const terminalLifecycle = eventName === "turn_lifecycle" && [
         "turn.completed",
@@ -104,6 +118,9 @@ export function registerChatWebSocketServer(
         "turn.failed",
       ].includes(eventType);
       if (webSocket.readyState !== 1) {
+        if (authoritativeEvent) {
+          logConnection("service.websocket.messageEvent.sendRejected", transportDiagnostic);
+        }
         if (toolFrame) logConnection("service.websocket.toolFrame.dropped", {
           eventName, eventType, readyState: webSocket.readyState,
           sessionId: data?.sessionId, dialogProcessId: data?.dialogProcessId,
@@ -151,9 +168,22 @@ export function registerChatWebSocketServer(
         return new Promise((resolve) => {
           webSocket.send(packet, (error) => {
             if (error) {
+              if (authoritativeEvent) {
+                logConnection("service.websocket.messageEvent.sendFailed", {
+                  ...transportDiagnostic,
+                  error: error?.message || String(error || "websocket_send_failed"),
+                });
+              }
               recordSendFailure(error);
               resolve(false);
               return;
+            }
+            if (authoritativeEvent) {
+              logConnection("service.websocket.messageEvent.sendCompleted", {
+                ...transportDiagnostic,
+                transportSequence: eventSequence,
+                readyState: webSocket.readyState,
+              });
             }
             if (toolFrame) logConnection("service.websocket.toolFrame.sent", {
               eventName, eventType, seq: eventSequence,

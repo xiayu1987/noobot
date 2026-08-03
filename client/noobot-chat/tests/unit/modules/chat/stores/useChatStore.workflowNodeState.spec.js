@@ -22,6 +22,14 @@ function applyPlanningEvent(store, data) {
       sessionId: "parent-session",
       turnScopeId: "parent-turn-a",
       presentationMessageId: "assistant-presentation-a",
+      workflowPayload: {
+        workflowRunId: data?.workflowRunId,
+        semantic: {
+          nodes: [{ id: "node-a", name: "Node A", type: "action" }],
+          flowtos: [{ from: "start", to: "node-a" }],
+        },
+        interaction: { semanticTextPreview: "WORKFLOW_DSL/1" },
+      },
       ...data,
     },
   }, { source: "test" });

@@ -10,6 +10,7 @@ import {
   normalizeTurnScopeIdKey,
 } from "../../model/messageIdentity.js";
 import { isTurnRuntimeDeleted } from "../run-state-machine/turnRuntimeRegistry.js";
+import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 
 function text(value = "") {
   return String(value || "").trim();
@@ -188,7 +189,12 @@ export function buildLiveWorkflowPresentationMessage(
   const sessionId = text(workflow?.sessionId || fallbackSessionId);
   const turnScopeId = text(workflow?.turnScopeId);
   const presentationMessageId = text(workflow?.presentationMessageId);
-  if (!workflowRunId || !sessionId || !turnScopeId || !presentationMessageId) return null;
+  const workflowPayload = workflow?.workflowPayload &&
+    typeof workflow.workflowPayload === "object" &&
+    !Array.isArray(workflow.workflowPayload)
+    ? workflow.workflowPayload
+    : null;
+  if (!workflowRunId || !sessionId || !turnScopeId || !presentationMessageId || !workflowPayload) return null;
   return {
     id: presentationMessageId,
     messageId: presentationMessageId,
@@ -205,26 +211,17 @@ export function buildLiveWorkflowPresentationMessage(
       source: "workflow-plugin",
       kind: "workflow",
       phase: "planning",
-      payload: {
-        workflowRunId,
-        nodeSessions: Object.values(workflow?.nodes || {}),
-        planningDialog: {
-          sessionId,
-          dialogProcessId: text(workflow?.dialogProcessId),
-        },
-        execution: {
-          instanceId: workflowRunId,
-          workflowRunId,
-          started: false,
-        },
-      },
+      payload: workflowPayload,
     },
   };
 }
 
 function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
   if (isWorkflowPresentationMessage(shell)) return shell;
-  return {
+  const canonicalContent = text(shell?.content);
+  const livePlanningContent = text(workflowMessage?.content);
+  const content = canonicalContent || livePlanningContent;
+  const merged = {
     ...shell,
     ...workflowMessage,
     id: shell?.id || workflowMessage?.id,
@@ -232,8 +229,24 @@ function mergeWorkflowIntoShell(shell = {}, workflowMessage = {}) {
     sessionId: getMessageSessionId(shell) || getMessageSessionId(workflowMessage),
     turnScopeId: getMessageTurnScopeId(shell) || getMessageTurnScopeId(workflowMessage),
     dialogProcessId: shell?.dialogProcessId || workflowMessage?.dialogProcessId || "",
+    content,
     __turnPresentationShellId: text(shell?.id || workflowMessage?.id),
   };
+  logThinkingReplayDebug("frontend.turnPresentation.workflowMerged", () => ({
+    sessionId: getMessageSessionId(merged),
+    dialogProcessId: text(merged?.dialogProcessId),
+    turnScopeId: getMessageTurnScopeId(merged),
+    canonicalMessageId: text(shell?.messageId || shell?.id),
+    presentationMessageId: text(workflowMessage?.presentationMessageId || workflowMessage?.messageId),
+    canonicalContentLength: canonicalContent.length,
+    livePlanningContentLength: livePlanningContent.length,
+    selectedContentSource: canonicalContent ? "canonical" : "live_planning",
+    selectedContentLength: content.length,
+    canonicalType: text(shell?.type),
+    canonicalPhase: text(shell?.pluginMeta?.phase),
+    livePhase: text(workflowMessage?.pluginMeta?.phase),
+  }));
+  return merged;
 }
 
 function mergeTurnStatusIntoAssistant(shell = {}, terminalPresentation = {}) {

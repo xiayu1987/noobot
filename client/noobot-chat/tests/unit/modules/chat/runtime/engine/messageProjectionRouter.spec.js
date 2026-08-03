@@ -96,6 +96,20 @@ describe("live canonical message projection", () => {
       messageId: "assistant-message-1",
       content: "final answer",
     });
+    expect(context.logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: "frontend.messageEvent.targetResolved",
+      data: expect.objectContaining({
+        eventId: "event-final-1",
+        target: expect.objectContaining({ found: true, contentLength: 0 }),
+      }),
+    }));
+    expect(context.logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: "frontend.messageEvent.reduced",
+      data: expect.objectContaining({
+        result: "applied",
+        targetAfter: expect.objectContaining({ contentLength: 12 }),
+      }),
+    }));
 
     const idsBeforeRefresh = messages.map(({ messageId }) => messageId);
     const hydration = hydrateTurnSnapshot({

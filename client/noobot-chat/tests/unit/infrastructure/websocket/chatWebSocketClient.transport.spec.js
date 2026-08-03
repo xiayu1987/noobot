@@ -17,6 +17,74 @@ import {
 setupWebSocketTestHooks();
 
 describe("chatWebSocketClient transport lifecycle and failures", () => {
+  it("records every received protocol event at the shared websocket transport boundary", async () => {
+    const sessionLogSink = { log: vi.fn(() => true) };
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+      sessionLogSink,
+    });
+    const onEvent = vi.fn();
+    const streamPromise = client.stream({
+      action: "chat",
+      sessionId: "session-transport-log",
+      turnScopeId: "turn-transport-log",
+    }, onEvent);
+    const socket = MockWebSocket.instances[0];
+    const authoritativeEvent = {
+      eventId: "event-transport-log",
+      eventType: "authoritative_final_content",
+      sessionId: "session-transport-log",
+      parentSessionId: "parent-transport-log",
+      dialogProcessId: "dialog-transport-log",
+      turnScopeId: "turn-transport-log",
+      messageId: "message-transport-log",
+      presentationMessageId: "assistant-transport-log",
+      sequence: 9,
+      content: "complete assistant body",
+      attachments: [{ path: "/workspace/result.txt" }],
+      transferEnvelopes: [{ id: "transfer-1" }],
+    };
+
+    socket.emit("message_event", { seq: 41, event: authoritativeEvent });
+
+    expect(onEvent).toHaveBeenCalledWith({
+      event: "message_event",
+      data: expect.objectContaining({ event: authoritativeEvent }),
+    });
+    expect(sessionLogSink.log).toHaveBeenCalledWith({
+      category: "transport",
+      level: "debug",
+      event: "frontend.websocket.transportEventReceived",
+      sessionId: "session-transport-log",
+      dialogProcessId: "dialog-transport-log",
+      turnScopeId: "turn-transport-log",
+      data: expect.objectContaining({
+        protocolEvent: "message_event",
+        eventId: "event-transport-log",
+        eventType: "authoritative_final_content",
+        parentSessionId: "parent-transport-log",
+        messageId: "message-transport-log",
+        presentationMessageId: "assistant-transport-log",
+        transportSequence: 41,
+        authoritativeSequence: 9,
+        contentLength: 23,
+        attachmentCount: 1,
+        transferEnvelopeCount: 1,
+      }),
+    });
+
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "session-transport-log",
+      turnScopeId: "turn-transport-log",
+    });
+    await streamPromise;
+    expect(sessionLogSink.log).toHaveBeenCalledWith(expect.objectContaining({
+      category: "transport",
+      event: "frontend.websocket.transportEventReceived",
+      sessionId: "session-transport-log",
+    }));
+  });
+
   it("acknowledges authoritative lifecycle only after handing it to the business reducer", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();

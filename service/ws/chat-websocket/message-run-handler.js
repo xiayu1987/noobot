@@ -76,7 +76,21 @@ export function createMessageRunHandler({
     return failed;
   };
 
-  const handleRun = async (payload, { isContinueAction }) => {
+  const recordRunTransportDiagnostic = (identity = {}) => (data = {}) => {
+    void recordServiceWebSocketLifecycle({
+      sessionLogConfig,
+      category: "debug",
+      level: "debug",
+      debugType: "workflow-diagnostics",
+      event: `service.websocket.runTransport.${String(data.stage || "observed")}`,
+      userId: identity.userId || "",
+      sessionId: identity.sessionId || "",
+      dialogProcessId: identity.dialogProcessId || "",
+      turnScopeId: identity.turnScopeId || "",
+      data,
+    });
+  };
+  const handleRun = async (payload, { isContinueAction, onRunBound = null }) => {
     const {
       userId,
       sessionId,
@@ -145,7 +159,10 @@ export function createMessageRunHandler({
     });
     if (runningTurn && !runningTurn.abortController?.signal?.aborted) {
       state.currentRunHandle = runningTurn;
-      state.currentRunTransportBinding = attachRunTransport(runningTurn, sendEvent);
+      state.currentRunTransportBinding = attachRunTransport(runningTurn, sendEvent, {
+        onDiagnostic: recordRunTransportDiagnostic(runningTurn),
+      });
+      onRunBound?.(runningTurn);
       await dispatchAuthorityEvents?.({ userId, sessionId, parentSessionId });
       void recordServiceWebSocketLifecycle({
         sessionLogConfig,
@@ -291,7 +308,8 @@ export function createMessageRunHandler({
       dialogProcessId: "",
       turnScopeId: String(normalizedRunConfig?.turnScopeId || state.currentTurnScopeId || "").trim(),
     };
-    state.currentRunHandle = registerActiveRun({
+    const runMeta = state.currentRunMeta;
+    const runHandle = registerActiveRun({
       userId: state.currentRunMeta.runOwnerId,
       sessionId: state.currentRunMeta.sessionId,
       dialogProcessId: state.currentRunMeta.dialogProcessId,
@@ -300,7 +318,11 @@ export function createMessageRunHandler({
       stopRequested: false,
       stopPayload: null,
     });
-    state.currentRunTransportBinding = attachRunTransport(state.currentRunHandle, sendEvent);
+    state.currentRunHandle = runHandle;
+    state.currentRunTransportBinding = attachRunTransport(runHandle, sendEvent, {
+      onDiagnostic: recordRunTransportDiagnostic(runMeta),
+    });
+    onRunBound?.(runHandle);
     if (state.stopRequested && state.currentAbortController && !state.currentAbortController.signal?.aborted) {
       if (state.currentRunHandle) {
         state.currentRunHandle.stopRequested = true;
@@ -319,13 +341,13 @@ export function createMessageRunHandler({
     });
     let processingStartedPromise = null;
     const eventListener = createRunEventListener({
-      sendEvent: (...args) => publishRunEvent(state.currentRunHandle, ...args),
+      sendEvent: (...args) => publishRunEvent(runHandle, ...args),
       sessionId,
       textStreamingEnabled,
       registerActiveRun,
-      getCurrentRunMeta: () => state.currentRunMeta,
-      getCurrentRunHandle: () => state.currentRunHandle,
-      getCurrentTurnScopeId: () => state.currentTurnScopeId,
+      getCurrentRunMeta: () => runMeta,
+      getCurrentRunHandle: () => runHandle,
+      getCurrentTurnScopeId: () => runMeta.turnScopeId,
       onEventReceived: (eventData = {}) => {
         const eventType = String(eventData.eventType || eventData.eventName || "").trim();
         if (

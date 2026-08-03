@@ -407,6 +407,14 @@ describe("sub-session realtime message projection", () => {
           sessionId: "parent-session",
           turnScopeId: ownerTurnScopeId,
           presentationMessageId: `assistant:${ownerTurnScopeId}`,
+          workflowPayload: {
+            workflowRunId,
+            semantic: {
+              nodes: [{ id: nodeExecutionId, name: nodeExecutionId, type: "action" }],
+              flowtos: [{ from: "start", to: nodeExecutionId }],
+            },
+            interaction: { semanticTextPreview: "WORKFLOW_DSL/1" },
+          },
           nodeSessions: [{
             workflowRunId,
             nodeExecutionId,

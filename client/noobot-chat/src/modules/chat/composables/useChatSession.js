@@ -330,16 +330,17 @@ export function useChatSession({
     clearUploadSelection,
   });
 
+  const sessionLogWebSocketClient = createSessionLogWebSocketClient({
+    resolveWebSocketUrl: () => buildLogWebSocketUrl({ apiKey: apiKey.value || "" }),
+    source: "frontend",
+    refreshAuthentication,
+  });
   const chatWebSocketClient = createChatWebSocketClient({
     resolveWebSocketUrl: () =>
       buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
     translateText: translate,
     refreshAuthentication,
-  });
-  const sessionLogWebSocketClient = createSessionLogWebSocketClient({
-    resolveWebSocketUrl: () => buildLogWebSocketUrl({ apiKey: apiKey.value || "" }),
-    source: "frontend",
-    refreshAuthentication,
+    sessionLogSink: sessionLogWebSocketClient,
   });
   watch(apiKey, (nextApiKey, previousApiKey) => {
     if (nextApiKey && nextApiKey !== previousApiKey) sessionLogWebSocketClient.resume();

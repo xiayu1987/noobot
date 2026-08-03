@@ -39,6 +39,45 @@ export function createRunEventListener({
   const resolveTurnScopeId = () =>
     getCurrentRunMeta()?.turnScopeId || getCurrentTurnScopeId() || "";
 
+  const deliverAuthoritativeMessage = (eventName, packet, routeData) => {
+    try {
+      const delivery = sendEvent(eventName, packet);
+      if (delivery && typeof delivery.then === "function") {
+        return delivery.then(
+          (delivered) => {
+            onAuthoritativeMessageRouted?.({
+              ...routeData,
+              delivery: delivered === true ? "delivered" : "rejected",
+              rejectionReason: delivered === true ? "" : "transport_send_rejected",
+            });
+            return delivered;
+          },
+          (error) => {
+            onAuthoritativeMessageRouted?.({
+              ...routeData,
+              delivery: "failed",
+              rejectionReason: error?.message || String(error || "transport_send_failed"),
+            });
+            throw error;
+          },
+        );
+      }
+      onAuthoritativeMessageRouted?.({
+        ...routeData,
+        delivery: delivery === true ? "delivered" : "rejected",
+        rejectionReason: delivery === true ? "" : "transport_send_rejected",
+      });
+      return delivery;
+    } catch (error) {
+      onAuthoritativeMessageRouted?.({
+        ...routeData,
+        delivery: "failed",
+        rejectionReason: error?.message || String(error || "transport_send_failed"),
+      });
+      throw error;
+    }
+  };
+
   return {
     onEvent: (eventPayload) => {
       const eventName = eventPayload?.event || "thinking";
@@ -111,7 +150,7 @@ export function createRunEventListener({
         return;
       }
       if (eventName === "turn_committed") {
-        sendEvent("turn_committed", {
+        return sendEvent("turn_committed", {
           ...eventData,
           sessionId: String(eventData?.sessionId || sessionId || "").trim(),
           turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
@@ -138,7 +177,7 @@ export function createRunEventListener({
           : "subagent_message_event";
         const authoritativeEventType = String(eventData?.eventType || eventName || "").trim();
         const suppressed = authoritativeEventType === "llm_delta" && !textStreamingEnabled;
-        onAuthoritativeMessageRouted?.({
+        const routeData = {
           routedEventName,
           authoritativeScope,
           rootSessionId,
@@ -148,29 +187,39 @@ export function createRunEventListener({
           parentDialogProcessId: String(parentDialogProcessId || "").trim(),
           turnScopeId: String(eventData?.turnScopeId || "").trim(),
           eventType: authoritativeEventType,
+          eventId: String(eventData?.eventId || "").trim(),
           messageId: String(eventData?.messageId || "").trim(),
+          presentationMessageId: String(eventData?.presentationMessageId || "").trim(),
           sequence: Number(eventData?.sequence || 0),
           sequenceDomain: String(eventData?.sequenceDomain || "").trim(),
           sequenceScopeId: String(eventData?.sequenceScopeId || eventData?.messageId || "").trim(),
           textStreamingEnabled: Boolean(textStreamingEnabled),
-          delivery: suppressed ? "suppressed" : "delivered",
+          delivery: suppressed ? "suppressed" : "pending",
           suppressionReason: suppressed ? "non_streaming_delta" : "",
           workflowRunId: String(eventData?.workflowRunId || "").trim(),
           nodeExecutionId: String(eventData?.nodeExecutionId || "").trim(),
           hasContent: Boolean(eventData?.content || eventData?.delta || eventData?.text),
+          contentLength: String(eventData?.text || eventData?.content || "").length,
+          attachmentCount: Array.isArray(eventData?.attachments) ? eventData.attachments.length : 0,
+          transferEnvelopeCount: Array.isArray(eventData?.transferEnvelopes)
+            ? eventData.transferEnvelopes.length
+            : 0,
           hasTool: Boolean(eventData?.tool),
           hasResult: eventData?.result !== undefined,
-        });
-        if (suppressed) return;
-        sendEvent(
+        };
+        if (suppressed) {
+          onAuthoritativeMessageRouted?.(routeData);
+          return true;
+        }
+        return deliverAuthoritativeMessage(
           routedEventName,
           buildAuthoritativeMessagePacket(eventData, {
             rootSessionId: sessionId,
             parentDialogProcessId,
             scope: authoritativeScope,
           }),
+          routeData,
         );
-        return;
       }
       if (
         eventName === "agent_lifecycle_state_changed" &&
@@ -201,7 +250,7 @@ export function createRunEventListener({
           return;
         }
         if (workflowChildRunEvent) {
-          sendEvent("subagent_delta", buildSubSessionWirePayload({
+          return sendEvent("subagent_delta", buildSubSessionWirePayload({
             ...eventData,
             content: String(eventData.text || ""),
             delta: String(eventData.text || ""),
@@ -210,14 +259,13 @@ export function createRunEventListener({
             parentDialogProcessId,
             turnScopeId: resolveTurnScopeId(),
           }));
-          return;
         }
         if (childRunEvent) {
           const parentOwnedData = parentOwnsChildRunEventData(eventData, {
             rootSessionId: sessionId,
             parentDialogProcessId,
           });
-          sendEvent(
+          return sendEvent(
             "subagent_llm_delta",
             buildParentOwnedChildRunPayload({
               ...parentOwnedData,
@@ -227,15 +275,13 @@ export function createRunEventListener({
               turnScopeId: resolveTurnScopeId(),
             }),
           );
-          return;
         }
-        sendEvent("delta", {
+        return sendEvent("delta", {
           text: String(eventData.text || ""),
           dialogProcessId: String(eventData?.dialogProcessId || ""),
           sessionId: String(sessionId || ""),
           turnScopeId: eventData?.turnScopeId || resolveTurnScopeId(),
         });
-        return;
       }
       if (eventName === "attachment_parsed") {
         const parentOwnedData = childRunEvent
@@ -244,13 +290,12 @@ export function createRunEventListener({
               parentDialogProcessId,
             })
           : eventData;
-        sendEvent("attachment_parsed", {
+        return sendEvent("attachment_parsed", {
           ...parentOwnedData,
           sessionId: String(sessionId || ""),
           turnScopeId: resolveTurnScopeId(),
           attachments: Array.isArray(eventData?.attachments) ? eventData.attachments : [],
         });
-        return;
       }
       if (
         eventName === "attachments_saved" ||
@@ -265,25 +310,23 @@ export function createRunEventListener({
         const attachments = Array.isArray(eventData?.attachments)
           ? eventData.attachments
           : [];
-        sendEvent("attachments", {
+        return sendEvent("attachments", {
           ...parentOwnedData,
           dialogProcessId: String(parentOwnedData?.dialogProcessId || ""),
           sessionId: String(sessionId || ""),
           turnScopeId: resolveTurnScopeId(),
           attachments,
         });
-        return;
       }
       if (typeof eventName === "string" && eventName.startsWith("workflow_")) {
-        sendEvent(eventName, {
+        return sendEvent(eventName, {
           ...eventData,
           sessionId: String(eventData?.sessionId || sessionId || ""),
           turnScopeId: eventData?.turnScopeId || resolveTurnScopeId(),
         });
-        return;
       }
       if (workflowChildRunEvent) {
-        sendEvent(subagentEventName(eventName), buildSubSessionWirePayload({
+        return sendEvent(subagentEventName(eventName), buildSubSessionWirePayload({
           ...eventData,
           rawEvent: eventName,
         }, {
@@ -291,23 +334,21 @@ export function createRunEventListener({
           parentDialogProcessId,
           turnScopeId: resolveTurnScopeId(),
         }));
-        return;
       }
       if (childRunEvent) {
         const parentOwnedData = parentOwnsChildRunEventData(eventData, {
           rootSessionId: sessionId,
           parentDialogProcessId,
         });
-        sendEvent(
+        return sendEvent(
           subagentEventName(eventName),
           buildParentOwnedChildRunPayload(parentOwnedData, parentOwnedData, {
             rootSessionId: sessionId,
             turnScopeId: resolveTurnScopeId(),
           }),
         );
-        return;
       }
-      sendEvent(eventName, {
+      return sendEvent(eventName, {
         ...eventData,
         sessionId: String(eventData?.sessionId || sessionId || ""),
         turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || ""),

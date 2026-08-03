@@ -75,6 +75,9 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
     if (!text(data?.turnScopeId)) errors.push("missing_planning_turn_scope");
     if (!text(data?.presentationMessageId)) errors.push("missing_planning_presentation");
     if (!text(data?.workflowRunId)) errors.push("missing_planning_workflow_run");
+    if (!data?.workflowPayload || typeof data.workflowPayload !== "object" || Array.isArray(data.workflowPayload)) {
+      errors.push("missing_planning_workflow_payload");
+    }
     if (!Array.isArray(data?.nodeSessions) || !data.nodeSessions.length) {
       errors.push("missing_planning_nodes");
     }

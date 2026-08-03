@@ -57,6 +57,7 @@ export function createMessageHandler({
 
   return async function onMessage(rawMessage) {
     let runMessageStarted = false;
+    let boundRunHandle = null;
     try {
       const payload = JSON.parse(String(rawMessage || "{}"));
       const action = String(payload?.action || "").trim().toLowerCase();
@@ -87,7 +88,10 @@ export function createMessageHandler({
         return;
       }
       runMessageStarted = true;
-      const runResult = await handleRun(payload, { isContinueAction });
+      const runResult = await handleRun(payload, {
+        isContinueAction,
+        onRunBound: (handle) => { boundRunHandle = handle; },
+      });
       if (runResult?.rebound === true) runMessageStarted = false;
     } catch (error) {
       if (!runMessageStarted || !state.currentRunMeta) {
@@ -142,10 +146,12 @@ export function createMessageHandler({
       await finalizeGenericError(buildRunStateSnapshot(), { error, committed });
     } finally {
       if (runMessageStarted) {
-        if (state.currentRunHandle) {
-          unregisterActiveRun(state.currentRunHandle);
+        if (boundRunHandle) {
+          unregisterActiveRun(boundRunHandle);
         }
-        resetRunState(state);
+        if (!boundRunHandle || state.currentRunHandle === boundRunHandle) {
+          resetRunState(state);
+        }
         void recordServiceWebSocketLifecycle({
           sessionLogConfig,
           event: "service.websocket.run.stateReset",

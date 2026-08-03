@@ -24,6 +24,17 @@ function workflow({
     presentationMessageId,
     dialogProcessId,
     semanticText: "WORKFLOW_DSL/1",
+    workflowPayload: {
+      workflowRunId,
+      semantic: {
+        nodes: [{ id: "semantic-node-a", name: "Node A", type: "action" }],
+        flowtos: [{ from: "start", to: "semantic-node-a" }],
+      },
+      interaction: { semanticTextPreview: "WORKFLOW_DSL/1" },
+      nodeSessions: [{ nodeExecutionId: "node-a", sessionId: "node-session-a", status: "ready" }],
+      planningDialog: { sessionId, dialogProcessId },
+      execution: { workflowRunId, instanceId: workflowRunId, started: false },
+    },
     nodes: {
       nodeA: {
         nodeExecutionId: "node-a",
@@ -74,6 +85,14 @@ describe("selectTurnPresentations", () => {
       type: "workflow",
       turnScopeId: "turn-a",
       __workflowLiveProjection: true,
+      pluginMeta: {
+        payload: {
+          semantic: {
+            nodes: [{ id: "semantic-node-a", name: "Node A", type: "action" }],
+            flowtos: [{ from: "start", to: "semantic-node-a" }],
+          },
+        },
+      },
     });
   });
 
@@ -101,6 +120,33 @@ describe("selectTurnPresentations", () => {
       pending: true,
       type: "workflow",
       __workflowLiveProjection: true,
+    });
+  });
+
+  it("never lets a planning projection overwrite authoritative canonical content", () => {
+    const canonical = {
+      id: "assistant-shell-a",
+      messageId: "assistant-presentation-a",
+      presentationMessageId: "assistant-presentation-a",
+      sessionId: "session-a",
+      role: "assistant",
+      type: "message",
+      turnScopeId: "turn-a",
+      content: "WORKFLOW_DSL/1\n\n插件拼接的附件结果",
+      attachments: [{ name: "workflow-result.txt" }],
+    };
+    const result = selectTurnPresentations({
+      activeSession: { id: "session-a", messages: [canonical] },
+      workflowRegistry: liveRegistry(),
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "assistant-shell-a",
+      type: "workflow",
+      content: "WORKFLOW_DSL/1\n\n插件拼接的附件结果",
+      attachments: [{ name: "workflow-result.txt" }],
+      pluginMeta: { phase: "planning" },
     });
   });
 

@@ -241,6 +241,58 @@ test("v5 turn journals append only changed messages and hide uncommitted tails",
   assert.deepEqual(visible.messages.map((message) => message.messageUid), ["m1", "m2"]);
 }));
 
+test("replacement turns receive a new stable journal identity instead of reusing the removed turn position", async () => withTemp(async (root) => {
+  const first = { messageUid: "m1", role: "user", content: "keep", dialogProcessId: "d1", turnScopeId: "t1" };
+  const replaced = { messageUid: "m2", role: "user", content: "old", dialogProcessId: "d2", turnScopeId: "t2" };
+  await writeSessionArtifact({ sessionDir: root, sessionPayload: { sessionId: "replace", messages: [first, replaced] } });
+
+  const files = buildSessionArtifactFileMap(root);
+  let manifest = JSON.parse(await readFile(files.session, "utf8"));
+  assert.deepEqual(manifest.turnOrder.map((turn) => turn.turnId), ["turn-000001", "turn-000002"]);
+  assert.equal(manifest.turnArtifactSequence, 2);
+
+  const replacement = { messageUid: "m3", role: "user", content: "new", dialogProcessId: "d3", turnScopeId: "t3" };
+  await writeSessionArtifact({ sessionDir: root, sessionPayload: { sessionId: "replace", messages: [first, replacement] } });
+  manifest = JSON.parse(await readFile(files.session, "utf8"));
+
+  assert.deepEqual(manifest.turnOrder.map((turn) => turn.turnId), ["turn-000001", "turn-000003"]);
+  assert.deepEqual(manifest.turnOrder.map((turn) => turn.artifactOrdinal), [1, 2]);
+  assert.equal(manifest.turnArtifactSequence, 3);
+  assert.deepEqual((await readSessionArtifact({ sessionDir: root })).messages.map((message) => message.content), ["keep", "new"]);
+  await assert.rejects(access(path.join(files.turnsDir, "turn-000002.jsonl")), { code: "ENOENT" });
+
+  const updatedReplacement = { ...replacement, content: "newer" };
+  await writeSessionArtifact({ sessionDir: root, sessionPayload: { sessionId: "replace", messages: [first, updatedReplacement] } });
+  manifest = JSON.parse(await readFile(files.session, "utf8"));
+  assert.deepEqual(manifest.turnOrder.map((turn) => turn.turnId), ["turn-000001", "turn-000003"]);
+  assert.equal(manifest.turnArtifactSequence, 3);
+  assert.deepEqual((await readSessionArtifact({ sessionDir: root })).messages.map((message) => message.content), ["keep", "newer"]);
+}));
+
+test("a stopped turn followed by continuation keeps distinct journal identities across refresh writes", async () => withTemp(async (root) => {
+  const stopped = { messageUid: "stopped", role: "assistant", content: "partial", dialogProcessId: "d-stop", turnScopeId: "t-stop" };
+  await writeSessionArtifact({
+    sessionDir: root,
+    sessionPayload: { sessionId: "continue", messages: [stopped], turnStatuses: [{ turnScopeId: "t-stop", dialogProcessId: "d-stop", status: "user_stopped" }] },
+  });
+  const continuation = { messageUid: "continued", role: "assistant", content: "complete", dialogProcessId: "d-next", turnScopeId: "t-next" };
+  await writeSessionArtifact({
+    sessionDir: root,
+    sessionPayload: {
+      sessionId: "continue", messages: [stopped, continuation],
+      turnStatuses: [
+        { turnScopeId: "t-stop", dialogProcessId: "d-stop", status: "user_stopped" },
+        { turnScopeId: "t-next", dialogProcessId: "d-next", status: "completed" },
+      ],
+    },
+  });
+  const files = buildSessionArtifactFileMap(root);
+  const manifest = JSON.parse(await readFile(files.session, "utf8"));
+  assert.deepEqual(manifest.turnOrder.map((turn) => turn.turnId), ["turn-000001", "turn-000002"]);
+  assert.equal(manifest.turnArtifactSequence, 2);
+  assert.deepEqual((await readSessionArtifact({ sessionDir: root })).messages.map((message) => message.content), ["partial", "complete"]);
+}));
+
 test("session reader reports missing and corrupted turn artifacts", async () => withTemp(async (root) => {
   const files = buildSessionArtifactFileMap(root);
   await writeSessionArtifact({

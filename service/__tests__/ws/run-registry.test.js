@@ -6,11 +6,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  attachRunTransport,
   buildRunRegistryKeys,
-  consumePendingStop,
+  detachRunTransport,
   findActiveRun,
+  isRunTransportAttached,
+  publishRunEvent,
   registerActiveRun,
-  rememberPendingStop,
   unregisterActiveRun,
 } from "../../ws/chat-websocket/run-registry.js";
 
@@ -41,14 +43,74 @@ test("run-registry finds a run only for the same canonical owner", () => {
   }
 });
 
-test("run-registry pending stops are consumed only by the same canonical owner", () => {
-  const identity = {
-    userId: "owner-pending-a",
-    sessionId: "session-pending-owner",
-    turnScopeId: "turn-pending-owner",
-  };
-  rememberPendingStop(identity, { marker: "owned-stop" });
-  assert.equal(consumePendingStop({ ...identity, userId: "owner-pending-b" }), null);
-  assert.deepEqual(consumePendingStop(identity), { marker: "owned-stop" });
-  assert.equal(consumePendingStop(identity), null);
+test("run transport rebound keeps the stable Run Handle and routes late events only to the current binding", async () => {
+  const firstFrames = [];
+  const reboundFrames = [];
+  const diagnostics = [];
+  const handle = registerActiveRun({
+    userId: "owner-rebound",
+    sessionId: "session-rebound",
+    turnScopeId: "turn-rebound",
+  });
+  const stableRunHandleId = handle.runHandleId;
+  const firstBinding = attachRunTransport(
+    handle,
+    async (event, data, context) => {
+      firstFrames.push({ event, data, context });
+      return true;
+    },
+    { onDiagnostic: (data) => diagnostics.push(data) },
+  );
+  const reboundBinding = attachRunTransport(
+    handle,
+    async (event, data, context) => {
+      reboundFrames.push({ event, data, context });
+      return true;
+    },
+    { onDiagnostic: (data) => diagnostics.push(data) },
+  );
+
+  assert.equal(handle.runHandleId, stableRunHandleId);
+  assert.equal(isRunTransportAttached(handle, firstBinding), false);
+  assert.equal(isRunTransportAttached(handle, reboundBinding), true);
+  assert.equal(detachRunTransport(handle, firstBinding), false);
+  assert.equal(await publishRunEvent(handle, "message_event", {
+    event: {
+      eventId: "event-after-rebound",
+      eventType: "authoritative_final_content",
+      messageId: "message-after-rebound",
+      presentationMessageId: "presentation-after-rebound",
+    },
+  }), true);
+
+  assert.equal(firstFrames.length, 0);
+  assert.equal(reboundFrames.length, 1);
+  assert.equal(reboundFrames[0].context.runHandleId, stableRunHandleId);
+  assert.equal(reboundFrames[0].context.bindingId, reboundBinding.id);
+  assert.deepEqual(diagnostics.map((item) => item.stage), ["publish_started", "publish_completed"]);
+  assert.ok(diagnostics.every((item) => item.runHandleId === stableRunHandleId));
+  assert.ok(diagnostics.every((item) => item.bindingId === reboundBinding.id));
+  unregisterActiveRun(handle);
+});
+
+test("terminal unregister detaches the current transport and rejects late publication", async () => {
+  const frames = [];
+  const handle = registerActiveRun({
+    userId: "owner-terminal",
+    sessionId: "session-terminal",
+    turnScopeId: "turn-terminal",
+  });
+  const binding = attachRunTransport(handle, async (...args) => {
+    frames.push(args);
+    return true;
+  });
+  assert.equal(isRunTransportAttached(handle, binding), true);
+
+  unregisterActiveRun(handle);
+
+  assert.equal(isRunTransportAttached(handle, binding), false);
+  assert.equal(await publishRunEvent(handle, "message_event", {
+    event: { eventId: "late-terminal-event" },
+  }), false);
+  assert.equal(frames.length, 0);
 });

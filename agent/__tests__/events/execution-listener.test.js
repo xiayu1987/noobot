@@ -96,3 +96,31 @@ test("execution listener persists events in source order and exposes a durabilit
   await listener.flushPersistence();
   assert.deepEqual(calls, [4, 5]);
 });
+
+test("execution listener exposes rejected asynchronous upstream delivery at the final barrier", async () => {
+  const listener = createExecutionEventListener({
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    upstream: {
+      onEvent: async () => false,
+    },
+  });
+
+  const delivered = await listener.onEvent({
+    event: "authoritative_final_content",
+    data: {
+      eventId: "event-final",
+      eventType: "authoritative_final_content",
+      messageId: "message-final",
+      presentationMessageId: "presentation-final",
+      text: "complete body",
+    },
+  });
+
+  assert.equal(delivered, false);
+  await assert.rejects(
+    listener.flushDelivery(),
+    (error) => error?.code === "EVENT_UPSTREAM_DELIVERY_FAILED" &&
+      error?.failures?.[0]?.eventId === "event-final",
+  );
+});

@@ -175,6 +175,9 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   )?.event;
   assert.equal(planningRuntimeEvent?.turnScopeId, "root-turn-1");
   assert.equal(planningRuntimeEvent?.presentationMessageId, "assistant-presentation-1");
+  assert.equal(planningRuntimeEvent?.workflowPayload?.workflowRunId, planningRuntimeEvent?.workflowRunId);
+  assert.equal(Array.isArray(planningRuntimeEvent?.workflowPayload?.semantic?.nodes), true);
+  assert.equal(Array.isArray(planningRuntimeEvent?.workflowPayload?.semantic?.flowtos), true);
   assert.equal(planningPersistCalls[0]?.relativeDir, "runtime/workflow/planning/s1/d1");
   assert.equal(planningPersistCalls[0]?.fileName, "planning.json");
 
@@ -251,7 +254,8 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     String(workflowTurnMessage?.content || ""),
     /\/injected\/attachments\/s1\/workflow-node-1-result\.md/,
   );
-  assert.match(String(workflowTurnMessage?.content || ""), /message-node-done/);
+  assert.match(String(workflowTurnMessage?.content || ""), /^WORKFLOW_DSL\/1/);
+  assert.equal(String(workflowTurnMessage?.content || "").includes("message-node-done"), false);
   assert.equal(String(workflowTurnMessage?.content || "").includes("answer-node-done"), false);
   assert.equal(workflowTurnMessage?.pluginMeta?.source, "workflow-plugin");
   assert.equal(

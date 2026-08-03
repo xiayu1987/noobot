@@ -278,7 +278,7 @@ describe("SharedChatMessageItem", () => {
     expect(wrapper.html()).not.toContain("current body");
   });
 
-  it("does not mount a historical assistant body until expanded", async () => {
+  it("keeps a historical assistant body collapsed by default and allows it to be expanded", async () => {
     const wrapper = mountItem({
       currentTurn: false,
       messageItem: {
@@ -294,6 +294,25 @@ describe("SharedChatMessageItem", () => {
     expect(wrapper.html()).not.toContain("historical body");
     await wrapper.find(".assistant-copy-actions").trigger("click");
     expect(wrapper.find(".BaseMarkdownContent-stub").text()).toBe("historical body");
+  });
+
+  it("preserves an explicit expansion when the current assistant turn becomes historical", async () => {
+    const wrapper = mountItem({
+      currentTurn: true,
+      messageItem: {
+        id: "assistant-explicit-history",
+        role: "assistant",
+        content: "explicit historical body",
+        sessionId: "session-content",
+        turnScopeId: "turn-explicit-history",
+      },
+    });
+
+    await wrapper.find(".assistant-copy-actions").trigger("click");
+    await wrapper.find(".assistant-copy-actions").trigger("click");
+    await wrapper.setProps({ currentTurn: false });
+
+    expect(wrapper.find(".BaseMarkdownContent-stub").text()).toBe("explicit historical body");
   });
 
   it("keeps the canonical asset area mounted while assistant body is collapsed", () => {

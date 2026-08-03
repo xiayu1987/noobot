@@ -78,14 +78,11 @@ defineEmits([
   --noobot-text-primary: var(--noobot-text-main);
   --workflow-card-space-sm: 10px;
   --workflow-card-space-md: 12px;
-  --workflow-card-radius-sm: 7px;
-  --workflow-card-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
   border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: var(--noobot-radius-md);
   padding: var(--workflow-card-space-md);
   margin-bottom: var(--workflow-card-space-sm);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, #6d4aff 4%);
-  box-shadow: var(--workflow-card-shadow);
+  background: var(--noobot-msg-assistant-bg);
 }
 
 .workflow-card-header {
@@ -111,44 +108,28 @@ defineEmits([
   flex: 0 0 auto;
   height: 26px;
   padding: 0 var(--workflow-card-space-sm);
-  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 76%, #6d4aff 24%);
-  border-radius: var(--workflow-card-radius-sm);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, #6d4aff 6%);
+  border: 1px solid var(--noobot-msg-assistant-border);
+  border-radius: var(--noobot-radius-sm);
+  background: var(--noobot-accent-soft);
   color: var(--noobot-text-primary);
   font-size: 12px;
   cursor: pointer;
 }
 
 .workflow-preview-toggle:hover {
-  border-color: color-mix(in srgb, var(--noobot-msg-assistant-border) 46%, #6d4aff 54%);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 90%, #6d4aff 10%);
+  border-color: var(--noobot-border-primary);
+  color: var(--noobot-text-accent);
 }
 
 .workflow-card-preview-shell {
-  position: relative;
   border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 86%, transparent 14%);
   border-radius: var(--noobot-radius-sm);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 97%, #000 3%);
+  background: var(--noobot-panel-muted);
   overflow: hidden;
 }
 
 .workflow-card-preview-shell.is-collapsed {
   max-height: 188px;
-}
-
-.workflow-card-preview-shell.is-collapsed::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 44px;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--noobot-msg-assistant-bg) 0%, transparent 100%),
-    color-mix(in srgb, var(--noobot-msg-assistant-bg) 98%, #000 2%)
-  );
-  pointer-events: none;
 }
 
 .workflow-card-preview {
@@ -178,35 +159,4 @@ defineEmits([
   font-size: 13px;
 }
 
-.workflow-node-results {
-  margin-top: var(--workflow-card-space-md);
-}
-
-.workflow-node-result {
-  padding: var(--workflow-card-space-sm) var(--workflow-card-space-md);
-  border: 1px solid var(--noobot-msg-assistant-border);
-  border-radius: var(--noobot-radius-sm);
-  background: var(--noobot-msg-assistant-bg);
-}
-
-.workflow-node-result + .workflow-node-result {
-  margin-top: var(--workflow-card-space-sm);
-}
-
-.workflow-node-result-header {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--workflow-card-space-sm);
-  margin-bottom: 6px;
-  color: var(--noobot-text-secondary);
-  font-size: 12px;
-}
-
-.workflow-node-result-status {
-  flex: 0 0 auto;
-}
-
-.workflow-node-result-content {
-  color: var(--noobot-text-primary);
-}
 </style>

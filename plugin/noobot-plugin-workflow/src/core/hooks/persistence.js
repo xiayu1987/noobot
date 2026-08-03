@@ -108,29 +108,9 @@ export function truncateWorkflowResultText(
 
 export function composeWorkflowFinalContent({
   semanticText = "",
-  sourceText = "",
-  nodeAgentRuns = [],
   attachmentPathBlock = "",
 } = {}) {
-  const nodeSections = (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : [])
-    .slice()
-    .sort((left = {}, right = {}) => {
-      const leftIndex = Number(left?.stepIndex);
-      const rightIndex = Number(right?.stepIndex);
-      if (Number.isFinite(leftIndex) && Number.isFinite(rightIndex) && leftIndex !== rightIndex) {
-        return leftIndex - rightIndex;
-      }
-      return Number(left?.transition || 0) - Number(right?.transition || 0);
-    })
-    .map((item = {}, index) => {
-      const content = String(item?.nodeResultText || "").trim();
-      if (!content) return "";
-      const name = String(item?.step?.nodeName || item?.nodeName || item?.step?.nodeId || "").trim();
-      const heading = name || `Node ${index + 1}`;
-      return `## ${heading}\n\n${content}`;
-    })
-    .filter(Boolean);
-  return [semanticText || sourceText || "", ...nodeSections, attachmentPathBlock]
+  return [semanticText, attachmentPathBlock]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join("\n\n");
@@ -361,8 +341,6 @@ async function upsertWorkflowMessage({
           : buildWorkflowAttachmentPathBlockWithContext(resolvedAttachments, ctx)));
   const content = composeWorkflowFinalContent({
     semanticText,
-    sourceText,
-    nodeAgentRuns,
     attachmentPathBlock,
   });
   const presentationMessageId = String(

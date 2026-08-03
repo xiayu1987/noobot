@@ -7,11 +7,7 @@
 function createDefaultEventAdapter() {
   return {
     emit({ eventListener, event, data, ts }) {
-      try {
-        eventListener?.onEvent?.({ event, data, ts });
-      } catch {
-
-      }
+      return eventListener?.onEvent?.({ event, data, ts });
     },
   };
 }
@@ -20,13 +16,7 @@ function normalizeEventAdapter(adapter = null, fallback = null) {
   const defaultAdapter = fallback || createDefaultEventAdapter();
   if (typeof adapter === "function") {
     return {
-      emit: (payload = {}) => {
-        try {
-          adapter(payload);
-        } catch {
-          defaultAdapter.emit(payload);
-        }
-      },
+      emit: (payload = {}) => adapter(payload),
     };
   }
   const source = adapter && typeof adapter === "object" ? adapter : {};

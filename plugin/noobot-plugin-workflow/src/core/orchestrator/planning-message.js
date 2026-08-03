@@ -86,6 +86,7 @@ export async function prepareWorkflowPlanningMessage({
     workflowRunId,
     sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
     semanticText,
+    workflowPayload: planningWorkflowPayload,
     nodeSessions: planningNodeSessions,
     sourceMessage: {
       role: String(workflowMessage?.role || ""),
@@ -102,6 +103,12 @@ export async function prepareWorkflowPlanningMessage({
           "",
       ),
       contentLength: String(workflowMessage?.content || "").length,
+      semanticNodeCount: Array.isArray(planningWorkflowPayload?.semantic?.nodes)
+        ? planningWorkflowPayload.semantic.nodes.length
+        : 0,
+      semanticFlowtoCount: Array.isArray(planningWorkflowPayload?.semantic?.flowtos)
+        ? planningWorkflowPayload.semantic.flowtos.length
+        : 0,
     },
   };
   await emitWorkflowRuntimeEvent({

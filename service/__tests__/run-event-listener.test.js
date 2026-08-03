@@ -11,7 +11,10 @@ import { createRunEventListener } from "../ws/chat-websocket/run-event-listener.
 test("run-event-listener forwards committed session version as a first-class event", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => frames.push({ event, data }),
+    sendEvent: (event, data) => {
+      frames.push({ event, data });
+      return true;
+    },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -45,7 +48,7 @@ test("run-event-listener forwards workflow planning frames verbatim", () => {
   const frames = [];
   const received = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => frames.push({ event, data }),
+    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -95,7 +98,7 @@ test("run-event-listener forwards workflow planning frames verbatim", () => {
 test("run-event-listener forwards workflow node state frames verbatim", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => frames.push({ event, data }),
+    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -131,7 +134,7 @@ test("run-event-listener forwards workflow node state frames verbatim", () => {
 test("run-event-listener routes workflow child deltas with sub session identity", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => frames.push({ event, data }),
+    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -165,7 +168,7 @@ test("run-event-listener routes workflow child deltas with sub session identity"
 test("run-event-listener rejects malformed authoritative envelopes instead of legacy normalization", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => frames.push({ event, data }),
+    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -197,7 +200,7 @@ test("run-event-listener rejects malformed authoritative envelopes instead of le
 test("run-event-listener separates root and child authoritative message channels", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => frames.push({ event, data }),
+    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -224,7 +227,7 @@ test("non-streaming delivery suppresses only deltas and preserves root and workf
   const frames = [];
   const routed = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => frames.push({ event, data }),
+    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
     sessionId: "root-session",
     textStreamingEnabled: false,
     registerActiveRun: () => {},
@@ -265,4 +268,92 @@ test("non-streaming delivery suppresses only deltas and preserves root and workf
   assert.equal(routed[0].suppressionReason, "non_streaming_delta");
   assert.equal(routed[1].textStreamingEnabled, false);
   assert.equal(routed[1].sequenceScopeId, "msg-1");
+});
+
+test("authoritative final content awaits the canonical transport result with complete body and attachments", async () => {
+  const frames = [];
+  const routed = [];
+  let releaseSend;
+  const sendCompleted = new Promise((resolve) => {
+    releaseSend = resolve;
+  });
+  const listener = createRunEventListener({
+    sendEvent: async (event, data) => {
+      frames.push({ event, data });
+      await sendCompleted;
+      return true;
+    },
+    sessionId: "root-session",
+    textStreamingEnabled: false,
+    registerActiveRun: () => {},
+    onAuthoritativeMessageRouted: (data) => routed.push(data),
+  });
+  const event = {
+    envelopeKind: "noobot.message_event",
+    envelopeVersion: 2,
+    eventId: "event-final",
+    eventType: "authoritative_final_content",
+    sessionId: "root-session",
+    turnScopeId: "turn-1",
+    messageId: "message-final",
+    presentationMessageId: "presentation-final",
+    sequenceDomain: "message-event",
+    sequenceScopeId: "message-final",
+    sequence: 7,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    text: "WORKFLOW_DSL/1\nEND\n\ncomplete workflow body",
+    attachments: [{ path: "runtime/attach/result.txt", summary: "result" }],
+    transferEnvelopes: [{ envelopeId: "transfer-1" }],
+  };
+
+  let settled = false;
+  const delivery = listener.onEvent({ event: event.eventType, data: event })
+    .then((result) => {
+      settled = true;
+      return result;
+    });
+  await Promise.resolve();
+  assert.equal(settled, false);
+  assert.equal(frames.length, 1);
+  assert.equal(frames[0].event, "message_event");
+  assert.equal(frames[0].data.event.eventId, "event-final");
+  assert.equal(frames[0].data.event.text, event.text);
+  assert.deepEqual(frames[0].data.event.attachments, event.attachments);
+  assert.deepEqual(frames[0].data.event.transferEnvelopes, event.transferEnvelopes);
+
+  releaseSend();
+  assert.equal(await delivery, true);
+  assert.equal(routed.at(-1).delivery, "delivered");
+  assert.equal(routed.at(-1).eventId, "event-final");
+});
+
+test("authoritative final content reports asynchronous transport rejection", async () => {
+  const routed = [];
+  const listener = createRunEventListener({
+    sendEvent: async () => false,
+    sessionId: "root-session",
+    textStreamingEnabled: true,
+    registerActiveRun: () => {},
+    onAuthoritativeMessageRouted: (data) => routed.push(data),
+  });
+  const result = await listener.onEvent({
+    event: "authoritative_final_content",
+    data: {
+      envelopeKind: "noobot.message_event",
+      envelopeVersion: 2,
+      eventId: "event-rejected",
+      eventType: "authoritative_final_content",
+      sessionId: "root-session",
+      messageId: "message-rejected",
+      presentationMessageId: "presentation-rejected",
+      sequence: 1,
+      timestamp: "2026-01-01T00:00:00.000Z",
+      text: "final body",
+    },
+  });
+
+  assert.equal(result, false);
+  assert.equal(routed.at(-1).delivery, "rejected");
+  assert.equal(routed.at(-1).rejectionReason, "transport_send_rejected");
+  assert.equal(routed.at(-1).eventId, "event-rejected");
 });

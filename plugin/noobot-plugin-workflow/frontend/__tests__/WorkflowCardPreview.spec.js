@@ -19,6 +19,7 @@ describe("WorkflowCardPreview", () => {
     });
 
     expect(wrapper.text()).toContain("planning content");
+    expect(wrapper.find("[data-testid=workflow-completed-content]").exists()).toBe(false);
     expect(wrapper.find("[data-testid=workflow-node-results]").exists()).toBe(false);
   });
 });

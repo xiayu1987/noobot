@@ -7,31 +7,6 @@ import { computed } from "vue";
 import { resolveActionRuntimeStatus } from "../runtime/workflowRuntimeStatus.js";
 import { firstRuntimeStep, stripRuntimeInternal } from "../runtime/workflowRuntimeSteps.js";
 
-function buildFlowNodeFromRuntime({ runtime = {}, index = 0, semanticNodeMap, resolveStepStatus }) {
-  const cleanRuntime = stripRuntimeInternal(runtime);
-  const firstStep = firstRuntimeStep(cleanRuntime.actionNodeStates) || {};
-  const semanticNode =
-    semanticNodeMap.value.get(`id:${cleanRuntime.nodeId}`) ||
-    semanticNodeMap.value.get(`name:${cleanRuntime.nodeName}`) ||
-    null;
-  return {
-    ...firstStep,
-    nodeId: cleanRuntime.nodeId || String(firstStep?.nodeId || "").trim(),
-    nodeName: cleanRuntime.nodeName || String(firstStep?.nodeName || firstStep?.nodeId || "").trim(),
-    nodeType: 2,
-    type: String(firstStep?.type || semanticNode?.type || "action").trim(),
-    stateType: Number.isFinite(Number(firstStep?.stateType))
-      ? Number(firstStep.stateType)
-      : Number.isFinite(Number(semanticNode?.stateType))
-        ? Number(semanticNode.stateType)
-        : undefined,
-    actionNodeStates: cleanRuntime.actionNodeStates,
-    runtimeBoxes: cleanRuntime.actionNodeStates,
-    status: resolveActionRuntimeStatus(cleanRuntime.actionNodeStates, resolveStepStatus),
-    _order: Number.isFinite(Number(firstStep?.transition)) ? Number(firstStep.transition) : index + 1,
-  };
-}
-
 function buildFlowNodeFromSemantic({ nodeItem = {}, index = 0, workflowPayload, executionMeta, actionRuntimeBySemanticKey, resolveStepStatus }) {
   const nodeId = String(nodeItem?.id || "").trim();
   const nodeName = String(nodeItem?.name || nodeId || "").trim();
@@ -78,29 +53,21 @@ function buildFlowNodeFromSemantic({ nodeItem = {}, index = 0, workflowPayload, 
   };
 }
 
-export function createFlowNodes({ workflowPayload, executionMeta, semanticNodeMap, actionRuntimeBySemanticKey, resolveStepStatus }) {
+export function createFlowNodes({ workflowPayload, executionMeta, actionRuntimeBySemanticKey, resolveStepStatus }) {
   return computed(() => {
     const semanticNodes = Array.isArray(workflowPayload.value?.semantic?.nodes)
       ? workflowPayload.value.semantic.nodes
       : [];
-    if (semanticNodes.length) {
-      return semanticNodes
-        .map((item, index) =>
-          buildFlowNodeFromSemantic({
-            nodeItem: item,
-            index,
-            workflowPayload,
-            executionMeta,
-            actionRuntimeBySemanticKey,
-            resolveStepStatus,
-          }),
-        )
-        .sort((left, right) => Number(left?._order || 0) - Number(right?._order || 0));
-    }
-    const uniqueRuntimes = Array.from(new Set(actionRuntimeBySemanticKey.value.values()));
-    return uniqueRuntimes
-      .map((runtime, index) =>
-        buildFlowNodeFromRuntime({ runtime, index, semanticNodeMap, resolveStepStatus }),
+    return semanticNodes
+      .map((item, index) =>
+        buildFlowNodeFromSemantic({
+          nodeItem: item,
+          index,
+          workflowPayload,
+          executionMeta,
+          actionRuntimeBySemanticKey,
+          resolveStepStatus,
+        }),
       )
       .sort((left, right) => Number(left?._order || 0) - Number(right?._order || 0));
   });
