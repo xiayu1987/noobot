@@ -26,11 +26,46 @@ export function routeMessageProjectionEvent(event, data, context) {
     });
     return true;
   }
-  if (shouldProjectMainSessionEvent(event, data || {})) {
-    const messageEvent = data.event || {};
+  const messageEvent = data?.event || {};
+  const shouldProjectMain = shouldProjectMainSessionEvent(event, data || {});
+  logSessionEvent({
+    category: "transport", level: shouldProjectMain ? "debug" : "warn",
+    event: "frontend.messageEvent.routeEvaluated",
+    sessionId: messageEvent.sessionId || sessionId,
+    dialogProcessId: messageEvent.dialogProcessId || "",
+    turnScopeId: messageEvent.turnScopeId || turnScopeId,
+    data: {
+      channelEvent: String(event || ""), shouldProjectMain,
+      routeScope: String(data?.route?.scope || ""),
+      eventId: messageEvent.eventId || "", eventType: messageEvent.eventType || "",
+      messageId: messageEvent.messageId || "",
+      presentationMessageId: resolveMessageEventPresentationId(messageEvent),
+    },
+  });
+  if (shouldProjectMain) {
     const presentationMessageId = resolveMessageEventPresentationId(messageEvent);
     const targetSessionId = String(messageEvent.sessionId || sessionId || "").trim();
     const targetMessage = findCanonicalMessageById?.(targetSessionId, presentationMessageId);
+    const targetBefore = {
+      found: Boolean(targetMessage),
+      id: String(targetMessage?.id || ""),
+      messageId: String(targetMessage?.messageId || ""),
+      role: String(targetMessage?.role || ""),
+      type: String(targetMessage?.type || ""),
+      phase: String(targetMessage?.pluginMeta?.phase || ""),
+      contentLength: String(targetMessage?.content || "").length,
+    };
+    logSessionEvent({
+      category: "transport", level: targetMessage ? "debug" : "warn",
+      event: "frontend.messageEvent.targetResolved",
+      sessionId: targetSessionId, dialogProcessId: messageEvent.dialogProcessId || "",
+      turnScopeId: messageEvent.turnScopeId || turnScopeId,
+      data: {
+        eventId: messageEvent.eventId || "", eventType: messageEvent.eventType || "",
+        messageId: messageEvent.messageId || "", presentationMessageId,
+        targetSessionId, target: targetBefore,
+      },
+    });
     const reduction = dispatchTurnEnvelope({ targetMessage, envelope: messageEvent, classifyRealtimeLog, source: TURN_PROJECTION_SOURCE.NORMAL_LIVE });
     logSessionEvent({
       category: "transport", level: reduction.applied ? "debug" : "warn", event: "frontend.messageEvent.reduced",
@@ -41,6 +76,13 @@ export function routeMessageProjectionEvent(event, data, context) {
         messageId: messageEvent.messageId || "", presentationMessageId,
         sequence: messageEvent.sequence ?? null,
         result: reduction.result, errors: reduction.errors || [],
+        targetBefore,
+        targetAfter: {
+          contentLength: String(targetMessage?.content || "").length,
+          type: String(targetMessage?.type || ""),
+          phase: String(targetMessage?.pluginMeta?.phase || ""),
+          lastSequence: Number(targetMessage?.messageEventState?.lastSequence || 0),
+        },
       },
     });
     if (reduction.applied) {

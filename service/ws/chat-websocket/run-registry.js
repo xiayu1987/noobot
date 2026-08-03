@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 const activeRunRegistry = new Map();
+let nextRunHandleId = 0;
 let nextTransportBindingId = 0;
 
 export function normalizeRunIdentityPart(value = "") {
@@ -24,15 +25,27 @@ export function buildRunRegistryKeys({ userId = "", sessionId = "", turnScopeId 
 }
 
 export function registerActiveRun(handle = {}) {
+  if (!normalizeRunIdentityPart(handle.runHandleId)) {
+    Object.defineProperty(handle, "runHandleId", {
+      value: `run-handle-${++nextRunHandleId}`,
+      enumerable: true,
+      configurable: false,
+      writable: false,
+    });
+  }
   const keys = buildRunRegistryKeys(handle);
   handle.registryKeys = [...new Set([...(handle.registryKeys || []), ...keys])];
   for (const key of keys) activeRunRegistry.set(key, handle);
   return handle;
 }
 
-export function attachRunTransport(handle = {}, send = null) {
+export function attachRunTransport(handle = {}, send = null, { onDiagnostic = null } = {}) {
   if (!handle || typeof send !== "function") return null;
-  const binding = Object.freeze({ id: ++nextTransportBindingId, send });
+  const binding = Object.freeze({
+    id: `run-transport-${++nextTransportBindingId}`,
+    send,
+    onDiagnostic: typeof onDiagnostic === "function" ? onDiagnostic : null,
+  });
   handle.transportBinding = binding;
   return binding;
 }
@@ -47,10 +60,41 @@ export function isRunTransportAttached(handle = {}, binding = null) {
   return Boolean(handle && binding && handle.transportBinding === binding);
 }
 
-export function publishRunEvent(handle = {}, eventName, data = {}) {
+export async function publishRunEvent(handle = {}, eventName, data = {}) {
   const binding = handle?.transportBinding;
+  const diagnostic = {
+    eventId: String(data?.event?.eventId || data?.eventId || "").trim(),
+    eventType: String(data?.event?.eventType || data?.eventType || eventName || "").trim(),
+    messageId: String(data?.event?.messageId || data?.messageId || "").trim(),
+    presentationMessageId: String(
+      data?.event?.presentationMessageId || data?.presentationMessageId || "",
+    ).trim(),
+    runHandleId: String(handle?.runHandleId || "").trim(),
+    bindingId: String(binding?.id || "").trim(),
+    bindingCurrent: Boolean(binding && handle?.transportBinding === binding),
+  };
   if (!binding || typeof binding.send !== "function") return false;
-  return binding.send(eventName, data) === true;
+  binding.onDiagnostic?.({ ...diagnostic, stage: "publish_started" });
+  try {
+    const delivered = (await binding.send(eventName, data, {
+      runHandleId: diagnostic.runHandleId,
+      bindingId: diagnostic.bindingId,
+    })) === true;
+    binding.onDiagnostic?.({
+      ...diagnostic,
+      stage: delivered ? "publish_completed" : "publish_rejected",
+      bindingCurrent: handle?.transportBinding === binding,
+    });
+    return delivered;
+  } catch (error) {
+    binding.onDiagnostic?.({
+      ...diagnostic,
+      stage: "publish_failed",
+      bindingCurrent: handle?.transportBinding === binding,
+      error: error?.message || String(error || "transport_publish_failed"),
+    });
+    throw error;
+  }
 }
 
 export function unregisterActiveRun(handle = {}) {
@@ -58,6 +102,7 @@ export function unregisterActiveRun(handle = {}) {
     if (activeRunRegistry.get(key) === handle) activeRunRegistry.delete(key);
   }
   handle.registryKeys = [];
+  handle.transportBinding = null;
 }
 
 export function findActiveRun(identity = {}) {

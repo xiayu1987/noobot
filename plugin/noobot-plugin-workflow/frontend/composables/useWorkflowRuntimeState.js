@@ -71,7 +71,6 @@ export function useWorkflowRuntimeState(workflowPayload, runtimeRegistries = {})
   const flowNodes = createFlowNodes({
     workflowPayload,
     executionMeta,
-    semanticNodeMap,
     actionRuntimeBySemanticKey,
     resolveStepStatus,
   });

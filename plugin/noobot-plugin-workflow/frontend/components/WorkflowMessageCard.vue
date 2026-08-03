@@ -32,6 +32,7 @@ const { translate } = useWorkflowLocale();
 
 function logCardRender(stage) {
   const payload = props.messageItem?.pluginMeta?.payload || {};
+  const content = String(props.messageItem?.content || "");
   props.logWorkflowDiagnostics?.(`frontend.workflowRender.card${stage}`, {
     sessionId: String(payload?.planningDialog?.sessionId || props.messageItem?.sessionId || ""),
     dialogProcessId: String(props.messageItem?.dialogProcessId || payload?.planningDialog?.dialogProcessId || ""),
@@ -40,6 +41,9 @@ function logCardRender(stage) {
       payload?.workflowRunId || payload?.execution?.workflowRunId || payload?.execution?.instanceId || "",
     ),
     liveProjection: props.messageItem?.__workflowLiveProjection === true,
+    pluginPhase: String(props.messageItem?.pluginMeta?.phase || ""),
+    contentLength: content.length,
+    assistantBodyPresent: Boolean(content.trim()),
     nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
     presentationMessageId: String(
       props.messageItem?.presentationMessageId || props.messageItem?.messageId || props.messageItem?.id || "",
@@ -121,7 +125,6 @@ const {
     :semantic-preview="semanticPreview"
     :flow-nodes="flowNodes"
     :semantic-flowtos="semanticFlowtos"
-    :render-markdown="renderMarkdown"
     :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
     @update:selected-dialog-process-id="handleSelectedDialogProcessUpdate"
     @node-click="openWorkflowNodePanel"

@@ -111,6 +111,11 @@ function turnKey(turn = {}) {
   return `${String(turn.dialogProcessId || "").trim()}\u0000${String(turn.turnScopeId || "").trim()}`;
 }
 
+function turnIdOrdinal(turnId = "") {
+  const match = /^turn-(\d+)$/.exec(String(turnId || "").trim());
+  return match ? Number(match[1]) : 0;
+}
+
 function isTerminalTurn(session, turn) {
   const scope = String(turn?.turnScopeId || "").trim();
   const dialog = String(turn?.dialogProcessId || "").trim();
@@ -396,12 +401,26 @@ export async function writeSessionArtifact({
   );
   const previousManifest = await readJsonWithStorage({ storageService, artifactPath: files.session, fallback: null });
   const previousV5 = Number(previousManifest?.schemaVersion) === TURN_JOURNAL_SCHEMA_VERSION ? previousManifest : null;
-  const previousByKey = new Map((Array.isArray(previousV5?.turnOrder) ? previousV5.turnOrder : []).map((item) => [turnKey(item), item]));
+  const previousTurns = Array.isArray(previousV5?.turnOrder) ? previousV5.turnOrder : [];
+  const previousByKey = new Map();
+  for (const item of previousTurns) {
+    const key = turnKey(item);
+    const matches = previousByKey.get(key) || [];
+    matches.push(item);
+    previousByKey.set(key, matches);
+  }
+  let turnArtifactSequence = Math.max(
+    Number(previousV5?.turnArtifactSequence) || 0,
+    ...previousTurns.map((item) => turnIdOrdinal(item?.turnId)),
+  );
   const usedTurnIds = new Set();
   const artifactTurns = turns.map(({ sourceIndices, ...turn }, index) => {
-    const previous = previousByKey.get(turnKey(turn));
+    const previous = previousByKey.get(turnKey(turn))?.shift();
     let turnId = String(previous?.turnId || "").trim();
-    if (!turnId || usedTurnIds.has(turnId)) turnId = `turn-${String(index + 1).padStart(6, "0")}`;
+    if (!turnId || usedTurnIds.has(turnId)) {
+      turnArtifactSequence += 1;
+      turnId = `turn-${String(turnArtifactSequence).padStart(6, "0")}`;
+    }
     usedTurnIds.add(turnId);
     return { ...turn, turnId, artifactOrdinal: index + 1 };
   });
@@ -442,6 +461,7 @@ export async function writeSessionArtifact({
     ...normalizedSessionPayload,
     schemaVersion: TURN_JOURNAL_SCHEMA_VERSION,
     messageIdentityVersion: 1,
+    turnArtifactSequence,
     turnOrder,
     messageOrder: normalizedSessionPayload.messages.map((message) => ({ messageUid: message.messageUid })),
   };

@@ -64,6 +64,10 @@ test("planning node facts receive node-state domain while planning stays unorder
       turnScopeId: "turn-1",
       presentationMessageId: "assistant-1",
       workflowRunId: "run-1",
+      workflowPayload: {
+        workflowRunId: "run-1",
+        semantic: { nodes: [{ id: "node-1" }], flowtos: [] },
+      },
       nodeSessions: [{ nodeExecutionId: "node-1", sequence: 1 }],
     },
   });
@@ -82,6 +86,7 @@ test("rejects planning events without authoritative presentation ownership", () 
     "missing_planning_session",
     "missing_planning_turn_scope",
     "missing_planning_presentation",
+    "missing_planning_workflow_payload",
   ]);
 });
 

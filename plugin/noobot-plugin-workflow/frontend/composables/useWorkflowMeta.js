@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { parseWorkflowDslPayload } from "../utils/workflowDsl.js";
 
 function text(value) {
   return String(value || "").trim();
@@ -46,8 +45,6 @@ export function projectWorkflowMessageIdentity(payload = {}, messageItem = {}) {
 }
 
 export function useWorkflowMeta(props) {
-  const parsedDslPayload = computed(() => parseWorkflowDslPayload(props.messageItem?.content) || {});
-
   const workflowMeta = computed(() =>
     props.messageItem?.pluginMeta &&
     typeof props.messageItem.pluginMeta === "object" &&
@@ -63,46 +60,7 @@ export function useWorkflowMeta(props) {
       !Array.isArray(workflowMeta.value.payload)
         ? workflowMeta.value.payload
         : {};
-    const parsedPayload =
-      parsedDslPayload.value &&
-      typeof parsedDslPayload.value === "object" &&
-      !Array.isArray(parsedDslPayload.value)
-        ? parsedDslPayload.value
-        : {};
-    const metaSemantic =
-      metaPayload.semantic &&
-      typeof metaPayload.semantic === "object" &&
-      !Array.isArray(metaPayload.semantic)
-        ? metaPayload.semantic
-        : {};
-    const parsedSemantic =
-      parsedPayload.semantic &&
-      typeof parsedPayload.semantic === "object" &&
-      !Array.isArray(parsedPayload.semantic)
-        ? parsedPayload.semantic
-        : {};
-    const hasMetaNodes = Array.isArray(metaSemantic.nodes) && metaSemantic.nodes.length > 0;
-    const mergedPayload = hasMetaNodes || !Object.keys(parsedPayload).length
-      ? metaPayload
-      : {
-          ...parsedPayload,
-          ...metaPayload,
-          semantic: {
-            ...parsedSemantic,
-            ...metaSemantic,
-            nodes: Array.isArray(metaSemantic.nodes) && metaSemantic.nodes.length
-              ? metaSemantic.nodes
-              : parsedSemantic.nodes,
-            flowtos: Array.isArray(metaSemantic.flowtos) && metaSemantic.flowtos.length
-              ? metaSemantic.flowtos
-              : parsedSemantic.flowtos,
-          },
-          interaction: {
-            ...(parsedPayload.interaction || {}),
-            ...(metaPayload.interaction || {}),
-          },
-        };
-    return projectWorkflowMessageIdentity(mergedPayload, props.messageItem);
+    return projectWorkflowMessageIdentity(metaPayload, props.messageItem);
   });
 
   const semanticFlowtos = computed(() =>
@@ -116,7 +74,6 @@ export function useWorkflowMeta(props) {
       String(
         workflowMeta.value?.semanticTextPreview ||
           workflowPayload.value?.interaction?.semanticTextPreview ||
-          props.messageItem?.content ||
           "",
       ).trim(),
   );

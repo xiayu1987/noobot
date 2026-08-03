@@ -243,12 +243,18 @@ async function requestTurnSnapshot({ port, sessionId, commandId }) {
   });
 }
 
-test("run event publishing reports the actual transport send result", () => {
+test("run event publishing awaits the actual transport send result", async () => {
   const handle = {};
-  attachRunTransport(handle, () => false);
-  assert.equal(publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-1" }), false);
-  attachRunTransport(handle, () => true);
-  assert.equal(publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-2" }), true);
+  assert.equal(await publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-0" }), false);
+  attachRunTransport(handle, async () => false);
+  assert.equal(await publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-1" }), false);
+  attachRunTransport(handle, async () => true);
+  assert.equal(await publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-2" }), true);
+  attachRunTransport(handle, async () => { throw new Error("send failed"); });
+  await assert.rejects(
+    publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-3" }),
+    /send failed/,
+  );
 });
 
 test("authoritative lifecycle follows accepted -> running -> processed -> summary completed", async () => {

@@ -17,6 +17,7 @@ export function createConnectionState({ locale = "" } = {}) {
     currentTurnScopeId: "",
     currentAbortSignal: null,
     currentRunHandle: null,
+    currentRunTransportBinding: null,
     currentLifecycleCommandId: "",
     currentLifecyclePhase: "",
   };
@@ -32,6 +33,7 @@ export function resetRunState(state) {
   state.currentAbortController = null;
   state.currentAbortSignal = null;
   state.currentRunHandle = null;
+  state.currentRunTransportBinding = null;
   state.currentRunMeta = null;
   state.currentRunTimedOut = false;
   state.currentStopPayload = null;

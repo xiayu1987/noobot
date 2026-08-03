@@ -143,18 +143,24 @@ function upsertWorkflowNodeStateEvent(eventData = {}) {
 function upsertWorkflowPlanningEvent(eventData = {}) {
   const workflowRunId = text(eventData?.workflowRunId);
   const nodeSessions = Array.isArray(eventData?.nodeSessions) ? eventData.nodeSessions : [];
+  const workflowPayload = eventData?.workflowPayload &&
+    typeof eventData.workflowPayload === "object" &&
+    !Array.isArray(eventData.workflowPayload)
+    ? eventData.workflowPayload
+    : null;
   const sequenceDomain = text(eventData?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.PLANNING;
   if (sequenceDomain !== WORKFLOW_SEQUENCE_DOMAIN.PLANNING) {
     return { applied: false, reason: "sequence_domain_mismatch" };
   }
-  if (!workflowRunId || !nodeSessions.length) {
-    const result = { applied: false, reason: "missing_planning_nodes" };
+  if (!workflowRunId || !nodeSessions.length || !workflowPayload) {
+    const result = { applied: false, reason: "missing_planning_payload" };
     logWorkflowDiagnostics("frontend.workflowStore.planningRejected", () => ({
       sessionId: text(eventData?.sessionId),
       dialogProcessId: text(eventData?.dialogProcessId),
       turnScopeId: text(eventData?.turnScopeId),
       workflowRunId,
       nodeSessionCount: nodeSessions.length,
+      hasWorkflowPayload: Boolean(workflowPayload),
       reason: result.reason,
       dataKeys: Object.keys(eventData || {}).sort(),
     }));
@@ -173,6 +179,7 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
       currentWorkflow.presentationMessageId || eventData?.presentationMessageId,
     ),
     semanticText: text(eventData?.semanticText || currentWorkflow.semanticText),
+    workflowPayload,
     plannedAt: eventData?.createdAt || currentWorkflow.plannedAt || new Date().toISOString(),
   };
   workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
@@ -199,6 +206,12 @@ function upsertWorkflowPlanningEvent(eventData = {}) {
     workflowRunId,
     nodeSessionCount: nodeSessions.length,
     appliedNodeCount: results.filter((item) => item?.applied === true).length,
+    semanticNodeCount: Array.isArray(workflowPayload?.semantic?.nodes)
+      ? workflowPayload.semantic.nodes.length
+      : 0,
+    semanticFlowtoCount: Array.isArray(workflowPayload?.semantic?.flowtos)
+      ? workflowPayload.semantic.flowtos.length
+      : 0,
     applied: result.applied,
     workflowCount: Object.keys(registry.workflows).length,
   }));

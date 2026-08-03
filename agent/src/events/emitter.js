@@ -6,7 +6,7 @@
 import { emitByAdapter } from "./adapter.js";
 
 export function emitEvent(eventListener, event, data = {}) {
-  emitByAdapter({
+  return emitByAdapter({
     eventListener,
     event,
     data,

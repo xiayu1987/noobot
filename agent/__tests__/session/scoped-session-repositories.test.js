@@ -25,6 +25,7 @@ import {
   createPersistenceContext,
 } from "../../src/session/session-location-resolver.js";
 import {
+  buildSessionArtifactFileMap,
   readJsonlArtifactFile,
   readSessionArtifact,
 } from "../../src/session/session-artifact-store.js";
@@ -89,6 +90,63 @@ function buildHarness() {
 async function readJson(file) {
   return JSON.parse(await readFile(file, "utf8"));
 }
+
+test("concurrent repository saves allocate monotonic Turn journals without cross-Turn records", async () => {
+  const harness = buildHarness();
+  const { sessionRepo } = await harness.setup();
+  try {
+    const sessionId = "concurrent-turn-journals";
+    const keep = {
+      messageUid: "keep-message",
+      role: "user",
+      content: "keep",
+      dialogProcessId: "dialog-keep",
+      turnScopeId: "turn-keep",
+    };
+    const replaced = {
+      messageUid: "replaced-message",
+      role: "assistant",
+      content: "replaced",
+      dialogProcessId: "dialog-replaced",
+      turnScopeId: "turn-replaced",
+    };
+    await sessionRepo.save("alice", { sessionId, messages: [keep, replaced] });
+
+    const replacement = (suffix) => ({
+      messageUid: `replacement-${suffix}`,
+      role: "assistant",
+      content: `replacement-${suffix}`,
+      dialogProcessId: `dialog-${suffix}`,
+      turnScopeId: `turn-${suffix}`,
+    });
+    await Promise.all([
+      sessionRepo.save("alice", { sessionId, messages: [keep, replacement("a")] }),
+      sessionRepo.save("alice", { sessionId, messages: [keep, replacement("b")] }),
+    ]);
+
+    const scope = await sessionRepo.resolveSessionScope("alice", sessionId, "");
+    const files = buildSessionArtifactFileMap(scope.sessionDir);
+    const manifest = await readJson(files.session);
+    assert.deepEqual(manifest.turnOrder.map((turn) => turn.turnId), ["turn-000001", "turn-000004"]);
+    assert.equal(manifest.turnArtifactSequence, 4);
+    assert.equal(new Set(manifest.turnOrder.map((turn) => turn.turnId)).size, manifest.turnOrder.length);
+
+    const restored = await readSessionArtifact({ sessionDir: scope.sessionDir });
+    assert.equal(restored.messages[0].turnScopeId, "turn-keep");
+    assert.equal(restored.messages.length, 2);
+    assert.equal(["turn-a", "turn-b"].includes(restored.messages[1].turnScopeId), true);
+
+    for (const turn of manifest.turnOrder) {
+      const records = await readJsonlArtifactFile(path.join(scope.sessionDir, turn.file));
+      const recordTurnScopes = new Set(records
+        .map((record) => record?.message?.turnScopeId)
+        .filter(Boolean));
+      assert.deepEqual([...recordTurnScopes], [turn.turnScopeId]);
+    }
+  } finally {
+    await harness.cleanup();
+  }
+});
 
 test("scoped repositories keep all artifacts and metadata in their execution directory without default leakage", async () => {
   const harness = buildHarness();
