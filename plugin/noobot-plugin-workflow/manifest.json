@@ -2,7 +2,7 @@
   "id": "workflow",
   "pluginKey": "workflow",
   "name": "noobot-plugin-workflow",
-  "version": "4.1.4",
+  "version": "4.1.5",
   "capabilities": [
     "agent.workflow",
     "agent.execution_intent",

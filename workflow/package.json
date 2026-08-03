@@ -1,6 +1,6 @@
 {
   "name": "workflow",
-  "version": "4.1.4",
+  "version": "4.1.5",
   "type": "module",
   "main": "src/index.js",
   "exports": {
