@@ -45,10 +45,8 @@ defineEmits([
       </button>
     </div>
     <div
+      v-if="!semanticPreviewCollapsible || semanticPreviewExpanded"
       class="workflow-card-preview-shell"
-      :class="{
-        'is-collapsed': semanticPreviewCollapsible && !semanticPreviewExpanded,
-      }"
     >
       <pre class="workflow-card-preview">{{ semanticPreview || translate("workflow.empty") }}</pre>
     </div>
@@ -126,10 +124,6 @@ defineEmits([
   border-radius: var(--noobot-radius-sm);
   background: var(--noobot-panel-muted);
   overflow: hidden;
-}
-
-.workflow-card-preview-shell.is-collapsed {
-  max-height: 188px;
 }
 
 .workflow-card-preview {
