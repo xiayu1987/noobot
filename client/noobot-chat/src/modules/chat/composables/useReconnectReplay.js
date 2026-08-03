@@ -278,7 +278,6 @@ export function useReconnectReplay({
     }));
     const hydrated = await renderActiveSessionBeforeReplay({
       activeSession,
-      activeSessionId,
       chatList,
       getReplayHydrationPromise: () => replayHydrationPromise,
       setReplayHydrationPromise: (promise) => {
@@ -437,7 +436,7 @@ export function useReconnectReplay({
     sessionLogWebSocketClient?.log?.({
       category: "system",
       event,
-      sessionId: payload?.sessionId || String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
+      sessionId: payload?.sessionId || String(activeSession.value?.backendSessionId || ""),
       dialogProcessId: payload?.dialogProcessId || "",
       turnScopeId: payload?.turnScopeId || "",
       data: {
@@ -453,9 +452,7 @@ export function useReconnectReplay({
     dialogProcessId,
     { turnScopeId = "" } = {},
   ) {
-    const sessionId = String(
-      activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value || "",
-    ).trim();
+    const sessionId = String(activeSession.value?.backendSessionId || "").trim();
     if (isDeletedTurn({ sessionId, turnScopeId })) {
       return { applied: false, reason: "deleted_turn_tombstoned" };
     }

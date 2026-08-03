@@ -17,6 +17,7 @@ import {
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
 } from "../../src/session/session-summary-builders.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(
@@ -100,6 +101,90 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
+test("display maintenance migrates legacy session artifacts before rebuilding summaries", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "legacy";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+
+    const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, "");
+    session.messages = [{
+      messageUid: "sm-legacy-user",
+      role: "user",
+      content: "legacy message",
+      turnScopeId: "turn-legacy",
+      dialogProcessId: "dialog-legacy",
+    }];
+    await runtime.repositories.sessionRepository.save(userId, session, "");
+
+    const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
+    await writeFile(
+      path.join(sessionDir, "session.json"),
+      JSON.stringify({ ...session, schemaVersion: 4 }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(sessionDir, "session-summary.json"),
+      JSON.stringify({ schemaVersion: 13, sessionId, messages: [] }),
+      "utf8",
+    );
+
+    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
+    assert.deepEqual(maintenance.failures, []);
+    assert.deepEqual(maintenance.migratedSessionIds, [sessionId]);
+    assert.deepEqual(maintenance.rebuiltSessionIds, []);
+
+    const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
+    assert.equal(manifest.schemaVersion, TURN_THRESHOLDS.session.turnJournalSchemaVersion);
+    assert.equal("messages" in manifest, false);
+    const summary = JSON.parse(await readFile(path.join(sessionDir, "session-summary.json"), "utf8"));
+    assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
+    const display = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId });
+    assert.equal(display.sessions[0].messages[0].content, "legacy message");
+  });
+});
+
+test("deleting one session does not invalidate another session display summary", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    for (const sessionId of ["kept", "deleted"]) {
+      await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
+      await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    }
+
+    const kept = await runtime.repositories.sessionRepository.findById(userId, "kept", "");
+    kept.messages = [{
+      messageUid: "sm-kept-user",
+      role: "user",
+      content: "keep me",
+      turnScopeId: "turn-kept",
+      dialogProcessId: "dialog-kept",
+    }];
+    await runtime.repositories.sessionRepository.save(userId, kept, "");
+    const keptSummaryFile = path.join(
+      workspaceRoot,
+      userId,
+      "runtime",
+      "session",
+      "kept",
+      "session-summary.json",
+    );
+    const persistedSummary = JSON.parse(await readFile(keptSummaryFile, "utf8"));
+    assert.equal("depth" in persistedSummary, false);
+
+    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId: "deleted" });
+    const display = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId: "kept" });
+    assert.equal(display.exists, true);
+    assert.equal(display.sessions[0].depth, 1);
+    assert.equal(display.sessions[0].messages[0].content, "keep me");
+  });
+});
+
 test("session save refreshes the display projection with live activity timeline", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
@@ -130,7 +215,8 @@ test("session save refreshes the display projection with live activity timeline"
     const display = await runtime.repositories.sessionRepository.readSessionDisplaySummary(userId, "live", "");
     assert.equal(display.messages.length, 1);
     assert.equal(display.messages[0].presentationMessageId, "presentation-live");
-    assert.equal(display.messages[0].activityTimeline[0].eventId, "guidance-analysis:live");
+    assert.equal(display.messages[0].thinkingDetailCount, 1);
+    assert.equal(display.messages[0].activityTimeline, undefined);
   });
 });
 
@@ -346,6 +432,7 @@ test("full and summary Session Detail expose the same canonical active Turn mess
       },
     };
     await runtime.repositories.sessionRepository.save(userId, session, "");
+    await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
 
     const summaryDetail = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId });
     const fullDetail = await runtime.sessionCrudService.getSessionData({ userId, sessionId });
@@ -425,7 +512,8 @@ test("session display summary does not duplicate an active Turn with persisted a
 
   assert.equal(summary.messages.length, 1);
   assert.equal(summary.messages[0].messageId, "presentation-active");
-  assert.equal(summary.messages[0].activityTimeline[0].eventId, "thinking-1");
+  assert.equal(summary.messages[0].thinkingDetailCount, 1);
+  assert.equal(summary.messages[0].activityTimeline, undefined);
   assert.notEqual(summary.messages[0].turnPlaceholder, true);
 });
 
@@ -472,8 +560,9 @@ test("session display summary projects one explicit assistant presentation from 
   });
 
   assert.equal(summary.messages.length, 1);
-  assert.equal(summary.messages[0].activityTimeline.length, 1);
-  assert.equal(summary.messages[0].toolTimeline.length, 1);
+  assert.equal(summary.messages[0].thinkingDetailCount, 2);
+  assert.equal(summary.messages[0].activityTimeline, undefined);
+  assert.equal(summary.messages[0].toolTimeline, undefined);
   assert.deepEqual(
     (({ id, messageId, messageUid, sourceMessageId, sourceMessageUid, content }) => ({
       id, messageId, messageUid, sourceMessageId, sourceMessageUid, content,
@@ -853,6 +942,12 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(JSON.stringify(summary).includes("injected secret"), false);
 
     await writeFile(summaryFile, JSON.stringify({ schemaVersion: 4, sessionId: "B", depth: 2, messages: [] }), "utf8");
+    await assert.rejects(
+      runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId: "B" }),
+      (error) => error?.code === "SESSION_DISPLAY_SUMMARY_MAINTENANCE_REQUIRED",
+    );
+    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
+    assert.deepEqual(maintenance.rebuiltSessionIds, ["B"]);
     const displayData = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId: "B" });
     assert.equal(displayData.summary, true);
     assert.equal(displayData.sessions.length, 1);
@@ -861,6 +956,6 @@ test("session display summary should keep chat view lightweight and rebuild stal
     summary = JSON.parse(await readFile(summaryFile, "utf8"));
     assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
     assert.equal(summary.sessionId, "B");
-    assert.equal(summary.depth, 2);
+    assert.equal("depth" in summary, false);
   });
 });

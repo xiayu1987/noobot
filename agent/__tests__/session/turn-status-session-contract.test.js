@@ -60,6 +60,7 @@ test("summary projects an authoritative lifecycle snapshot for refresh replay", 
   const session = normalizeSessionEntity({
     sessionId: "s-lifecycle",
     updatedAt: now(),
+    messages: [{ role: "assistant", content: "done", turnScopeId: "t1" }],
     turnLifecycle: {
       sequence: 2,
       activeTurnScopeId: "",

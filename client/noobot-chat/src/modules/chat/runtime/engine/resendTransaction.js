@@ -98,6 +98,11 @@ function operationSeed({ sessionId }) {
   };
 }
 
+function ownsMessageOperation(messageOperationStore, operation = null) {
+  if (!operation || typeof messageOperationStore?.getActiveOperation !== "function") return true;
+  return messageOperationStore.getActiveOperation(operation.sessionId)?.opId === operation.opId;
+}
+
 function getMessageText(message = {}) {
   return String(message?.content || message?.text || message?.message || "");
 }
@@ -184,12 +189,26 @@ export function createResendMessageTransaction({
     const text = String(editedContent || "").trim();
     if (!text) return false;
 
-    const prepared = await prepareMonotonicMessageAction?.(options);
-    if (prepared === false) return false;
     const userTargetMessage = resolveMonotonicUserTarget?.(targetMessage);
     if (!userTargetMessage) return false;
-
     const originalSession = activeSession?.value;
+    const originalInputValue = input?.value;
+    const sessionId = resolveSessionId(activeSession, activeSessionId);
+    const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
+    const operation = messageOperationStore?.registerOperation(operationSeed({ sessionId }));
+    if (!normalizeTrimmedString(operation?.opId)) {
+      throw new TypeError("resend command registration failed: missing_command_id");
+    }
+    try {
+      const prepared = await prepareMonotonicMessageAction?.(options);
+      if (prepared === false || !ownsMessageOperation(messageOperationStore, operation)) {
+        messageOperationStore?.completeOperation(operation.opId);
+        return false;
+      }
+    } catch (error) {
+      messageOperationStore?.completeOperation(operation.opId);
+      throw error;
+    }
     const removedAttachmentKeys = new Set(
       (Array.isArray(options?.removedAttachmentKeys) ? options.removedAttachmentKeys : [])
         .map((key) => String(key || "").trim())
@@ -202,14 +221,18 @@ export function createResendMessageTransaction({
       ...(Array.isArray(options?.attachments) ? options.attachments : []),
     ]);
     const attachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : [];
-    const serializedNewAttachments = await serializeAttachments?.(attachmentFiles) || [];
+    let serializedNewAttachments;
+    try {
+      serializedNewAttachments = await serializeAttachments?.(attachmentFiles) || [];
+    } catch (error) {
+      messageOperationStore?.completeOperation(operation.opId);
+      throw error;
+    }
+    if (!ownsMessageOperation(messageOperationStore, operation)) return false;
     const pendingDisplayAttachments = serializedNewAttachments
       .map((attachment) => toPendingDisplayAttachment(attachment))
       .filter(Boolean);
     const finalAttachments = mergeAttachmentMetas(keptAttachments, serializedNewAttachments);
-    const originalInputValue = input?.value;
-    const sessionId = resolveSessionId(activeSession, activeSessionId);
-    const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
     logResendDebug("resend.attachments.resolved", () => ({
       sessionId,
       oldTurnScopeId: getMessageTurnScopeId(userTargetMessage),
@@ -229,14 +252,16 @@ export function createResendMessageTransaction({
       messages: summarizeDebugMessages(originalSession?.messages),
     }));
 
-    if (typeof replaceSessionTurnApi !== "function") return false;
-    const anchor = buildMonotonicMessageAnchor?.(userTargetMessage) || {};
-    if (!normalizeTrimmedString(anchor.turnScopeId)) return false;
-
-    const operation = messageOperationStore?.registerOperation(operationSeed({ sessionId }));
-    if (!normalizeTrimmedString(operation?.opId)) {
-      throw new TypeError("resend command registration failed: missing_command_id");
+    if (typeof replaceSessionTurnApi !== "function") {
+      messageOperationStore?.completeOperation(operation.opId);
+      return false;
     }
+    const anchor = buildMonotonicMessageAnchor?.(userTargetMessage) || {};
+    if (!normalizeTrimmedString(anchor.turnScopeId)) {
+      messageOperationStore?.completeOperation(operation.opId);
+      return false;
+    }
+
     const oldTurnScopeId = getMessageTurnScopeId(userTargetMessage);
     applyRunStateEvent?.({
       type: SESSION_RUN_EVENT.LOCAL_RESEND_STARTED,
@@ -303,6 +328,7 @@ export function createResendMessageTransaction({
         input.value = originalInputValue;
         return false;
       }
+      if (!ownsMessageOperation(messageOperationStore, operation)) return false;
       const materialization = assertTurnReplacementMaterialization({
         commit: payload?.turnReplacement,
         session: payload?.session,
@@ -389,6 +415,7 @@ export function createResendMessageTransaction({
         turnScopeId: resendTurnScopeId,
         source: "resend_transaction",
       });
+      if (!ownsMessageOperation(messageOperationStore, operation)) return false;
       input.value = text;
       logResendDebug("resend.send.before", () => ({
         sessionId,

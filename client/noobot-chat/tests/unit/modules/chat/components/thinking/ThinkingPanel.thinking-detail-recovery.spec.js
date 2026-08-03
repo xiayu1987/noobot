@@ -14,6 +14,7 @@ import {
 } from "../../../../../../src/modules/chat/model/thinkingDetailCache.js";
 import { normalizeThinkingToolLogs } from "../../../../../../src/modules/chat/model/thinkingDetailModel.js";
 import ThinkingPanelRealtime from "../../../../../../src/modules/chat/components/thinking/ThinkingPanelRealtime.vue";
+import { setTurnThinkingOpenNames } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
 
 async function flushAsync() {
   for (let index = 0; index < 20; index += 1) {
@@ -49,7 +50,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     vi.restoreAllMocks();
   });
 
-  it("loads summary-only thinking details by turnScopeId and reuses the cache across message replacement", async () => {
+  it("loads summary-only thinking details on expansion and reuses the cache across message replacement", async () => {
     const getDetail = vi.fn(async (params) => {
       expect(params).toEqual({
         userId: "user-1",
@@ -77,6 +78,9 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       runtime: { running: false, terminal: true, startedAt: "2026-07-21T10:00:00.000Z", finishedAt: "2026-07-21T10:00:01.000Z" },
     });
 
+    await flushAsync();
+    expect(getDetail).not.toHaveBeenCalled();
+    setTurnThinkingOpenNames(wrapper.props("messageItem"), ["thinking-panel"]);
     await flushAsync();
     expect(getDetail).toHaveBeenCalledTimes(1);
     const identity = resolveThinkingDetailIdentity({
@@ -201,7 +205,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     expect(getDetail).not.toHaveBeenCalled();
   });
 
-  it("recovers scoped details when refresh omitted summary flags and runtime is stale", async () => {
+  it("does not infer missing summary detail flags or prefetch a collapsed stale runtime", async () => {
     const getDetail = vi.fn(async () => thinkingDetailPayload({
       role: "assistant",
       sessionId: "session-stale",
@@ -221,34 +225,10 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     });
     await flushAsync();
 
-    expect(getDetail).toHaveBeenCalledTimes(1);
-    const staleIdentity = resolveThinkingDetailIdentity({
-      role: "assistant",
-      sessionId: "session-stale",
-      turnScopeId: "client-turn:stale",
-    }, "session-stale");
-    const staleCached = getCachedThinkingDetail(staleIdentity);
-    expect(staleCached?.messageItem?.toolTimeline).toHaveLength(1);
-    expect(normalizeThinkingToolLogs({
-      messageItem: staleCached.messageItem,
-      allMessages: staleCached.allMessages,
-      sessionDocs: staleCached.sessionDocs,
-      variant: "panel",
-    })).toHaveLength(1);
-    expect(wrapper.vm.currentExecutionLogs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ text: "restored-after-refresh" }),
-    ]));
-    expect(wrapper.vm.loadedThinkingDetail?.messageItem?.toolTimeline).toHaveLength(1);
-    expect(wrapper.vm.hasThinking).toBe(true);
-    await nextTick();
-    expect(wrapper.findComponent(ThinkingPanelRealtime).exists()).toBe(true);
-    expect(wrapper.html()).toContain("thinking-realtime-shell");
-    expect(wrapper.findAllComponents(ThinkingPanelRealtime)).toHaveLength(1);
-    expect(wrapper.findComponent(ThinkingPanelRealtime).props("executionLogs"))
-      .toEqual(expect.arrayContaining([
-        expect.objectContaining({ text: "restored-after-refresh" }),
-      ]));
-    expect(wrapper.findAll(".execution-log-line").map((item) => item.text())).toContain("restored-after-refresh");
+    expect(getDetail).not.toHaveBeenCalled();
+    expect(wrapper.vm.loadedThinkingDetail).toBeNull();
+    expect(wrapper.vm.hasThinking).toBe(false);
+    expect(wrapper.findComponent(ThinkingPanelRealtime).exists()).toBe(false);
   });
 
   it("rotates an unsequenced tool error out of the latest ten execution logs", async () => {

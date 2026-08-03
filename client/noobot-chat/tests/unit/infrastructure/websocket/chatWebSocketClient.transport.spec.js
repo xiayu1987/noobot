@@ -17,6 +17,21 @@ import {
 setupWebSocketTestHooks();
 
 describe("chatWebSocketClient transport lifecycle and failures", () => {
+  it("settles a deleted Turn stream as an intentional cancellation", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const streamPromise = client.stream({
+      action: "chat",
+      sessionId: "session-delete",
+      turnScopeId: "turn-delete",
+    }, vi.fn());
+
+    expect(client.cancelStreamForTurn({
+      sessionId: "session-delete",
+      turnScopeId: "turn-delete",
+    })).toBe(true);
+    await expect(streamPromise).resolves.toBeUndefined();
+  });
+
   it("records every received protocol event at the shared websocket transport boundary", async () => {
     const sessionLogSink = { log: vi.fn(() => true) };
     const client = createChatWebSocketClient({

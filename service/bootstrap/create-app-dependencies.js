@@ -108,6 +108,7 @@ export async function createAppDependencies({
 
   const chatRunService = createChatRunService({
     getBot: () => bot,
+    readWorkspaceUsers,
     normalizeLocale,
     defaultLocale: DEFAULT_LOCALE,
     translateText,
@@ -166,6 +167,17 @@ export async function createAppDependencies({
 
   await rebuildRuntimeConfig();
 
+  async function readSessionUserIds() {
+    const workspaceUsers = await readWorkspaceUsers();
+    const superAdminUserId = String(
+      globalConfigRaw?.super_admin?.user_id || globalConfigRaw?.superAdmin?.userId || "",
+    ).trim();
+    return [...new Set([
+      ...workspaceUsers.map((user) => String(user?.userId || "").trim()),
+      superAdminUserId,
+    ].filter(Boolean))];
+  }
+
   return {
     normalizeLocale,
     defaultLocale: DEFAULT_LOCALE,
@@ -176,6 +188,7 @@ export async function createAppDependencies({
     isForbiddenUserScope,
     workspaceRootPath,
     getBot: () => bot,
+    readSessionUserIds,
     openVSCodeService,
     buildHttpModuleDependencies: () => ({
       pluginRootDir: String(startupContext?.paths?.pluginRootDir || "").trim(),
@@ -183,7 +196,6 @@ export async function createAppDependencies({
       openVSCodeService,
       globalConfigProvider: () => globalConfig,
       issueApiKey,
-      readWorkspaceUsers,
       readWorkspaceUsersConfig,
       writeWorkspaceUsersConfig,
       normalizeWorkspaceUsersConfig,

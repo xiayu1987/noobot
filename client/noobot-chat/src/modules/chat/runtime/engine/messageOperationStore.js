@@ -36,6 +36,10 @@ export function createPendingMessageOperationStore() {
       createdAt: operation.createdAt || nowIso(),
       updatedAt: nowIso(),
     };
+    const previousOperationId = activeOperationIdsBySessionId.get(sessionId);
+    if (previousOperationId && previousOperationId !== opId) {
+      operationsById.delete(previousOperationId);
+    }
     operationsById.set(opId, normalizedOperation);
     activeOperationIdsBySessionId.set(sessionId, opId);
     return normalizedOperation;

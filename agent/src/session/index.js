@@ -287,12 +287,20 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.getSessionDisplayData({ userId, sessionId });
     },
 
+    async getSessionThinkingDetail(payload = {}) {
+      return sessionCrudService.getSessionThinkingDetail(payload);
+    },
+
     async getAllSessionsData({ userId }) {
       return sessionCrudService.getAllSessionsData({ userId });
     },
 
     async getAllSessionSummaries({ userId }) {
       return sessionCrudService.getAllSessionSummaries({ userId });
+    },
+
+    async maintainSessionDisplaySummaries({ userId }) {
+      return sessionCrudService.maintainSessionDisplaySummaries({ userId });
     },
 
     async listSessionIds({ userId }) {
@@ -494,6 +502,8 @@ export {
   readJsonlArtifactFile,
   iterateExecutionLogs,
   readRecentSessionTurns,
+  readSessionMessageCount,
+  readSessionTurn,
   readSessionArtifactSnapshot,
   readSessionDisplaySummaryArtifact,
   rebuildSessionDisplaySummaryArtifact,

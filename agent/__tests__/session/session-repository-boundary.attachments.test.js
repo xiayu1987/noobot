@@ -220,7 +220,7 @@ test("session artifact persistence should normalize attachment fields before wri
     assert.equal("attachments" in persistedSession.messages[1], false);
     assert.equal(sessionJson.includes("attachmentMetas"), false);
     assert.equal(sessionJson.includes("attachment_metas"), false);
-    assert.equal(persistedSummary.depth, 1);
+    assert.equal(persistedSummary.depth, undefined);
     assert.equal(persistedSummary.messages[0].attachments[0].attachmentId, "att-canonical");
     assert.equal("attachments" in persistedSummary.messages[1], false);
     assert.equal(summaryJson.includes("attachmentMetas"), false);

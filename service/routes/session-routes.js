@@ -7,7 +7,6 @@ import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import { createServicePluginHost } from "../services/service-plugin-host.js";
 import {
-  buildThinkingDetailPayload,
   normalizeSessionThinkingRouteText as normalizeRouteText,
   readJsonlArtifactFile,
 } from "noobot-agent/session";
@@ -386,8 +385,9 @@ export function registerSessionRoutes(
         error.statusCode = HTTP_STATUS.BAD_REQUEST;
         throw error;
       }
-      const result = await bot.session.getSessionData({ userId, sessionId });
-      const detail = buildThinkingDetailPayload(result, {
+      const detail = await bot.session.getSessionThinkingDetail({
+        userId,
+        sessionId,
         dialogProcessId,
         turnScopeId,
       });

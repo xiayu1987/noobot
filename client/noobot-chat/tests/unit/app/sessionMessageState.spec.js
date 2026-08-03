@@ -95,10 +95,10 @@ describe("sessionMessageState", () => {
     expect(formatTime("2026-06-18T09:08:00.000Z")).toMatch(/\d{1,2}:\d{2}/);
   });
 
-  it("detects whether there is an active session candidate for reconnect", () => {
+  it("allows reconnect only after a backend session identity exists", () => {
     expect(hasActiveSessionForReconnect({ activeSession: {}, activeSessionId: "" })).toBe(false);
     expect(hasActiveSessionForReconnect({ activeSession: { backendSessionId: " backend " }, activeSessionId: "" })).toBe(true);
-    expect(hasActiveSessionForReconnect({ activeSession: { id: " local " }, activeSessionId: "" })).toBe(true);
-    expect(hasActiveSessionForReconnect({ activeSession: {}, activeSessionId: " active " })).toBe(true);
+    expect(hasActiveSessionForReconnect({ activeSession: { id: " local ", isLocal: true }, activeSessionId: "local" })).toBe(false);
+    expect(hasActiveSessionForReconnect({ activeSession: {}, activeSessionId: " active " })).toBe(false);
   });
 });

@@ -22,6 +22,84 @@ import {
 } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.resend replace turn", () => {
+  it("does not start a stale resend stream after delete supersedes its pending replace command", async () => {
+    let resolveReplace;
+    const replaceResponse = new Promise((resolve) => {
+      resolveReplace = resolve;
+    });
+    const stream = vi.fn();
+    const replaceSessionTurnApi = vi.fn(() => replaceResponse);
+    const deleteSessionMessagesFromApi = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        sessionId: "resend-delete-race",
+        sessionVersion: 3,
+        deletedTurnScopeIds: ["client-turn:old"],
+        session: {
+          sessionId: "resend-delete-race",
+          version: 3,
+          revision: 3,
+          messages: [],
+          rawMessages: [],
+        },
+      }),
+    }));
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "resend-delete-race",
+      stream,
+      deps: { replaceSessionTurnApi, deleteSessionMessagesFromApi, applySessionDetail },
+    });
+    const user = {
+      id: "old-user",
+      messageId: "old-user",
+      turnScopeId: "client-turn:old",
+      role: RoleEnum.USER,
+      content: "old question",
+    };
+    const assistant = {
+      id: "old-assistant",
+      messageId: "old-assistant",
+      turnScopeId: "client-turn:old",
+      role: RoleEnum.ASSISTANT,
+      content: "old answer",
+      stopState: "user_stopped",
+      channelState: { state: "user_stopped" },
+    };
+    activeSession.value.messages = [user, assistant];
+    activeSession.value.rawMessages = [user, assistant];
+    activeSession.value.version = 1;
+
+    const resendPromise = engine.resendMonotonicMessage(assistant, "edited question", {
+      turnScopeId: "client-turn:replacement",
+    });
+    await vi.waitFor(() => expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1));
+
+    await expect(engine.deleteMonotonicMessage(user)).resolves.toBe(true);
+    const resendRequest = replaceSessionTurnApi.mock.calls[0][0];
+    resolveReplace(makeTurnReplacementResponse({
+      commandId: resendRequest.idempotencyKey,
+      sessionId: "resend-delete-race",
+      version: 2,
+      replacedTurnScopeIds: ["client-turn:old"],
+      replacementUser: {
+        id: "replacement-user",
+        messageId: "replacement-user",
+        turnScopeId: "client-turn:replacement",
+        role: RoleEnum.USER,
+        content: "edited question",
+      },
+    }));
+
+    await expect(resendPromise).resolves.toBe(false);
+    expect(stream).not.toHaveBeenCalled();
+    expect(activeSession.value.messages).toEqual([]);
+  });
+
   it("resendMonotonicMessage continues generation after atomic replace-turn returns user-only snapshot", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitAuthorityProcessing(onEvent, payload);

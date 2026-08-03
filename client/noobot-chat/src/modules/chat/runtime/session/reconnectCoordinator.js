@@ -16,7 +16,7 @@ import {
 } from "../../../debug/loggers/stateMachineLogger.js";
 
 export function createReconnectCoordinator({
-  activeSession, activeSessionId, turnRuntimeRegistry, userId, chatWebSocketClient,
+  activeSession, turnRuntimeRegistry, userId, chatWebSocketClient,
   reconnectReplay, chatList, classifyRealtimeLog, resolveActiveSessionIdentity,
   resolveActiveTurnScopeIdentity, logSessionSystemEvent, notify, translate,
 }) {
@@ -88,7 +88,8 @@ export function createReconnectCoordinator({
     let reconnectReplayQueue = Promise.resolve();
     const reconnectReplayFailures = [];
     const directExecutionRestoreCommandIds = new Set();
-    const reconnectSessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "");
+    const reconnectSessionId = String(activeSession.value?.backendSessionId || "").trim();
+    if (!reconnectSessionId) return false;
     const knownLifecycleSequence = Number(
       turnRuntimeRegistry.value?.sessions?.[reconnectSessionId]?.authoritativeSequence || 0,
     );
@@ -213,7 +214,7 @@ export function createReconnectCoordinator({
         activeTurnAfter: summarizeStateMachineTurn(replayRuntime),
       }));
       if (typeof chatWebSocketClient.requestJson !== "function") return;
-      const sessionId = String(activeSession.value?.backendSessionId || activeSessionId.value || "").trim();
+      const sessionId = String(activeSession.value?.backendSessionId || "").trim();
       const currentTurn = resolveSessionTurnRuntime(
         turnRuntimeRegistry.value,
         sessionId,

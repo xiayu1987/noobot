@@ -17,12 +17,17 @@ import {
 } from "../session-summary-builders.js";
 import {
   buildSessionArtifactFileMap,
+  migrateSessionArtifacts,
+  readJsonArtifactFile,
   readSessionDisplaySummaryArtifact,
   readSessionArtifact,
+  readSessionMessageCount,
   readRecentSessionTurns,
+  readSessionTurn,
   rebuildSessionDisplaySummaryArtifact,
   writeSessionArtifact,
 } from "../session-artifact-store.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 export class FileSystemSessionRepository {
   constructor({
@@ -480,7 +485,7 @@ export class FileSystemSessionRepository {
     });
   }
 
-  async writeSessionDisplaySummary(userId = "", session = {}, { depth = 0, persistenceContext = null } = {}) {
+  async writeSessionDisplaySummary(userId = "", session = {}, { persistenceContext = null } = {}) {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) return null;
     const { sessionDir } = await this.resolveSessionScope(userId, sessionId, session?.parentSessionId || "", persistenceContext);
@@ -488,11 +493,10 @@ export class FileSystemSessionRepository {
       storageService: this.storageService,
       sessionDir,
       sessionPayload: session,
-      depth,
     });
   }
 
-  async rebuildSessionDisplaySummary(userId = "", sessionId = "", parentSessionId = "", { depth = 0, persistenceContext = null } = {}) {
+  async rebuildSessionDisplaySummary(userId = "", sessionId = "", parentSessionId = "", { persistenceContext = null } = {}) {
     const session = await this.findById(userId, sessionId, parentSessionId, persistenceContext);
     if (!session) return null;
     const turns = await readRecentSessionTurns({
@@ -511,15 +515,74 @@ export class FileSystemSessionRepository {
       Array.isArray(session.turnOrder) && session.turnOrder.length > 0
         ? { ...session, messages }
         : session,
-      { depth, persistenceContext },
+      { persistenceContext },
+    );
+  }
+
+  async readSessionTurn(userId = "", sessionId = "", {
+    parentSessionId = "",
+    turnScopeId = "",
+    dialogProcessId = "",
+    persistenceContext = null,
+  } = {}) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return null;
+    const { sessionDir } = await this.resolveSessionScope(
+      userId,
+      normalizedSessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    return readSessionTurn({ sessionDir, turnScopeId, dialogProcessId });
+  }
+
+  async maintainCanonicalSessionArtifacts(
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return { migrated: false };
+    const currentSchemaVersion = Number(TURN_THRESHOLDS.session.turnJournalSchemaVersion);
+    const scope = await this.resolveSessionScope(
+      userId,
+      normalizedSessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    const manifest = await readJsonArtifactFile(scope.sessionFile, null);
+    if (!manifest || Number(manifest.schemaVersion) === currentSchemaVersion) {
+      return { migrated: false };
+    }
+    return this.withSessionMutation(
+      userId,
+      normalizedSessionId,
+      parentSessionId,
+      async () => {
+        const lockedManifest = await readJsonArtifactFile(scope.sessionFile, null);
+        if (!lockedManifest || Number(lockedManifest.schemaVersion) === currentSchemaVersion) {
+          return { migrated: false };
+        }
+        await migrateSessionArtifacts({
+          sessionDir: scope.sessionDir,
+          sessionId: normalizedSessionId,
+          mutationCoordinator: null,
+        });
+        return { migrated: true };
+      },
+      persistenceContext,
     );
   }
 
   async getTurnMessageCount(userId = "", sessionId = "", parentSessionId = "", persistenceContext = null) {
-    const session = await this.findById(userId, sessionId, parentSessionId, persistenceContext);
-    return Array.isArray(session?.turnOrder)
-      ? session.turnOrder.reduce((count, item = {}) => count + Math.max(0, Number(item?.messageCount || 0)), 0)
-      : Array.isArray(session?.messages) ? session.messages.length : 0;
+    const { sessionDir } = await this.resolveSessionScope(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    return readSessionMessageCount({ sessionDir });
   }
 
   async removeSessionDisplaySummaries(userId = "", sessionIds = []) {

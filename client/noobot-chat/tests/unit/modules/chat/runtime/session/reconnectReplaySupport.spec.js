@@ -112,6 +112,18 @@ describe("reconnectReplay support modules", () => {
     expect(applySessionDetail).toHaveBeenCalledWith(detail);
   });
 
+  it("does not hydrate a local Session from its client identity", async () => {
+    const fetchSessionDetail = vi.fn();
+    const result = await renderActiveSessionBeforeReplay({
+      activeSession: { value: { id: "local-1", backendSessionId: "", isLocal: true, messages: [] } },
+      activeSessionId: { value: "local-1" },
+      chatList: { fetchSessionDetail, applySessionDetail: vi.fn() },
+    });
+
+    expect(result).toBe(false);
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["empty detail", { sessions: [] }],
     ["mismatched top-level identity", { sessionId: "s-other", sessions: [{ sessionId: "s-other" }] }],

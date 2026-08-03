@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { buildThinkingDetailPayload } from "noobot-agent/session";
 import express, { createSessionApp, registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 
 test("session-routes: sessions 列表只读取并返回概要", async () => {
@@ -168,6 +169,13 @@ test("session-routes: session detail rebuilds running workflow projection from p
         presentationMessageId: "assistant-presentation-one",
         workflowRunId: "client-turn:one",
         semanticText: "WORKFLOW_DSL/1",
+        workflowPayload: {
+          workflowRunId: "client-turn:one",
+          semantic: {
+            nodes: [{ id: "node-1" }],
+            flowtos: [],
+          },
+        },
         nodeSessions: [{ nodeExecutionId: "node-1", stepStatus: "ready" }],
       },
     },
@@ -270,12 +278,17 @@ test("session-routes: deleted Turn audit events are not returned as workflow UI 
 test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话明细", async () => {
   const app = express();
   let fullCalled = false;
+  let detailCalled = false;
   registerSessionRoutes(app, {
     bot: {
       session: {
         getSessionData: async () => {
           fullCalled = true;
-          return {
+          return {};
+        },
+        getSessionThinkingDetail: async ({ dialogProcessId }) => {
+          detailCalled = true;
+          return buildThinkingDetailPayload({
             exists: true,
             sessionId: "s1",
             sessions: [{
@@ -295,7 +308,7 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
                 { id: "t3", role: "assistant", type: "tool_call", dialogProcessId: "dp-2", content: "other tool" },
               ],
             }],
-          };
+          }, { dialogProcessId });
         },
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
@@ -315,7 +328,8 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.exists, true);
-    assert.equal(fullCalled, true);
+    assert.equal(fullCalled, false);
+    assert.equal(detailCalled, true);
     assert.equal(payload.messageItem.dialogProcessId, "dp-1");
     assert.equal(payload.messageItem.hasThinkingDetails, true);
     assert.equal(payload.counts.executionLogCount, 2);

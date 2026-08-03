@@ -8,12 +8,12 @@ import { useThinkingTimeline } from "./thinkingPanelTimeline.js";
 import { createThinkingPanelPresentation } from "./thinkingPanelPresentation.js";
 import { useThinkingRuntime } from "./thinkingPanelRuntime.js";
 
-export function useThinkingPanel(props, emit) {
+export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () => true } = {}) {
   const { translate } = useLocale();
   const getRuntimeView = () =>
     props.runtime || { running: false, terminal: false, startedAt: "", finishedAt: "" };
 
-  const timeline = useThinkingTimeline(props, translate, getRuntimeView);
+  const timeline = useThinkingTimeline(props, translate, getRuntimeView, { shouldLoadThinkingDetail });
   const runtime = useThinkingRuntime(props, getRuntimeView);
   const presentation = createThinkingPanelPresentation({
     props,

@@ -22,15 +22,21 @@ const clean = (value) => String(value || "").trim();
 
 export function createAuthoritativeTurnSnapshot({
   lifecycle: lifecycleSource = {}, turnTimings = [], commandId = "", userId = "",
-  sessionId = "", knownSequence, terminalLimit = 10, generatedAt = new Date().toISOString(),
+  sessionId = "", knownSequence, terminalLimit = 10, terminalTurnScopeIds = [],
+  generatedAt = new Date().toISOString(),
 } = {}) {
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
+  const terminalTurnScopes = new Set(
+    (Array.isArray(terminalTurnScopeIds) ? terminalTurnScopeIds : []).map(clean).filter(Boolean),
+  );
   const activeTurn = lifecycle.turns[lifecycle.activeTurnScopeId]
     ? { ...projectTurnLifecycleTiming(lifecycle.turns[lifecycle.activeTurnScopeId], turnTimings), sessionId: clean(sessionId) }
     : null;
   const limit = Math.max(0, Math.min(100, Number(terminalLimit) || 10));
   const recentTerminalTurns = Object.values(lifecycle.turns)
-    .filter((turn) => isTerminalTurnLifecycleState(turn.state))
+    .filter((turn) => (
+      terminalTurnScopes.has(turn.turnScopeId) && isTerminalTurnLifecycleState(turn.state)
+    ))
     .sort((left, right) => Number(right.sequence) - Number(left.sequence))
     .slice(0, limit)
     .map((turn) => ({ ...projectTurnLifecycleTiming(turn, turnTimings), sessionId: clean(sessionId) }));

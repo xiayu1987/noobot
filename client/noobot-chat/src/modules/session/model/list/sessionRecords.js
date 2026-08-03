@@ -12,7 +12,7 @@ export function createLocalSessionItem({ id, title, createConnectorPanelState })
     title,
     isLocal: true,
     loaded: true,
-    backendSessionId: id,
+    backendSessionId: "",
     currentTaskId: "",
     currentTaskStatus: "idle",
     messageCount: 0,

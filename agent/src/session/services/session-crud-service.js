@@ -11,6 +11,18 @@ import {
 } from "../session-summary-builders.js";
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
 import { createTurnTerminalResolution } from "@noobot/event-protocol";
+import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
+
+function projectSessionTreeDepth(summary = {}, depth = 0) {
+  const normalizedDepth = Number.isFinite(Number(depth)) ? Number(depth) : 0;
+  return {
+    ...summary,
+    depth: normalizedDepth,
+    toolLogSummaries: Array.isArray(summary?.toolLogSummaries)
+      ? summary.toolLogSummaries.map((item) => ({ ...item, depth: normalizedDepth }))
+      : [],
+  };
+}
 
 export class SessionCrudService {
   constructor({
@@ -116,14 +128,16 @@ export class SessionCrudService {
       const rawMessages = Array.isArray(currentBundle.session.messages)
         ? currentBundle.session.messages
         : [];
-      const displayProjection = buildSessionDisplaySummary(currentBundle.session, {
-        depth: this.sessionTreeService
-          ? await this.sessionTreeService.getSessionDepth({
-            userId,
-            sessionId: currentSessionId,
-          })
-          : this._getDepthFromTree(currentSessionId, sessionTree),
-      });
+      const depth = this.sessionTreeService
+        ? await this.sessionTreeService.getSessionDepth({
+          userId,
+          sessionId: currentSessionId,
+        })
+        : this._getDepthFromTree(currentSessionId, sessionTree);
+      const displayProjection = projectSessionTreeDepth(
+        buildSessionDisplaySummary(currentBundle.session),
+        depth,
+      );
       sessions.push({
         ...currentBundle.session,
         ...displayProjection,
@@ -140,6 +154,23 @@ export class SessionCrudService {
       messageProjection: SESSION_DETAIL_MESSAGE_PROJECTION,
       sessions,
     };
+  }
+
+  async getSessionThinkingDetail({
+    userId,
+    sessionId,
+    turnScopeId = "",
+    dialogProcessId = "",
+  }) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    const turn = await this.sessionRepo.readSessionTurn(userId, normalizedSessionId, {
+      turnScopeId,
+      dialogProcessId,
+    });
+    return buildThinkingDetailPayload({
+      sessionId: normalizedSessionId,
+      sessions: turn ? [{ sessionId: normalizedSessionId, rawMessages: turn.messages }] : [],
+    }, { turnScopeId, dialogProcessId });
   }
 
   async resolveTurnTerminalState({
@@ -184,11 +215,8 @@ export class SessionCrudService {
 
   async getSessionDisplayData({ userId, sessionId }) {
     const normalizedSessionId = String(sessionId || "").trim();
-    const sessionBundle = await this.getSessionBundle({
-      userId,
-      sessionId: normalizedSessionId,
-    });
-    if (!sessionBundle.exists) {
+    const sessionTree = await this.treeRepo.getTree(userId);
+    if (!sessionTree?.nodes?.[normalizedSessionId]) {
       return {
         exists: false,
         sessionId: normalizedSessionId,
@@ -199,7 +227,6 @@ export class SessionCrudService {
       };
     }
 
-    const sessionTree = await this.treeRepo.getTree(userId);
     const allSessionIds = [];
     const queue = [normalizedSessionId];
     const visited = new Set();
@@ -222,35 +249,26 @@ export class SessionCrudService {
       const depth = this.sessionTreeService
         ? await this.sessionTreeService.getSessionDepth({ userId, sessionId: currentSessionId })
         : this._getDepthFromTree(currentSessionId, sessionTree);
-      let summary = typeof this.sessionRepo?.readSessionDisplaySummary === "function"
+      const summary = typeof this.sessionRepo?.readSessionDisplaySummary === "function"
         ? await this.sessionRepo.readSessionDisplaySummary(userId, currentSessionId, currentParentSessionId)
         : null;
       const canonicalMessageCount = typeof this.sessionRepo?.getTurnMessageCount === "function"
         ? await this.sessionRepo.getTurnMessageCount(userId, currentSessionId, currentParentSessionId)
         : 0;
-      const needsRebuild = !isSessionDisplaySummaryPayload(summary, currentSessionId) ||
-        Number(summary?.depth || 0) !== Number(depth || 0) ||
-        canonicalMessageCount > Number(summary?.stats?.messageCount || summary?.messages?.length || 0) ||
-        (Array.isArray(summary?.toolLogSummaries) &&
-          summary.toolLogSummaries.some((item) => Number(item?.depth || 0) !== Number(depth || 0)));
-      if (needsRebuild && typeof this.sessionRepo?.rebuildSessionDisplaySummary === "function") {
-        summary = await this.sessionRepo.rebuildSessionDisplaySummary(
-          userId,
-          currentSessionId,
-          currentParentSessionId,
-          { depth },
-        );
+      const summaryCurrent = isSessionDisplaySummaryPayload(summary, currentSessionId) &&
+        canonicalMessageCount <= Number(summary?.stats?.messageCount || summary?.messages?.length || 0);
+      if (!summaryCurrent) {
+        const error = new Error(`session display summary requires maintenance: ${currentSessionId}`);
+        error.code = "SESSION_DISPLAY_SUMMARY_MAINTENANCE_REQUIRED";
+        error.statusCode = 503;
+        throw error;
       }
       if (!summary) continue;
-      sessions.push({
+      sessions.push(projectSessionTreeDepth({
         ...summary,
         sessionId: currentSessionId,
         parentSessionId: currentParentSessionId,
-        depth,
-        toolLogSummaries: Array.isArray(summary?.toolLogSummaries)
-          ? summary.toolLogSummaries.map((item) => ({ ...item, depth }))
-          : [],
-      });
+      }, depth));
     }
 
     return {
@@ -261,6 +279,49 @@ export class SessionCrudService {
       summary: true,
       sessions,
     };
+  }
+
+  async maintainSessionDisplaySummaries({ userId }) {
+    const sessionTree = this.sessionTreeService
+      ? await this.sessionTreeService.getSessionTree({ userId })
+      : await this.treeRepo.getTree(userId);
+    const treeSessionIds = Object.keys(sessionTree?.nodes || {});
+    const sessionIds = treeSessionIds.length
+      ? treeSessionIds
+      : await this.listSessionIds({ userId });
+    const rebuiltSessionIds = [];
+    const migratedSessionIds = [];
+    const failures = [];
+    for (const sessionId of sessionIds) {
+      const parentSessionId = String(sessionTree?.nodes?.[sessionId]?.parentSessionId || "").trim();
+      try {
+        const artifactMaintenance = await this.sessionRepo.maintainCanonicalSessionArtifacts(
+          userId,
+          sessionId,
+          parentSessionId,
+        );
+        if (artifactMaintenance?.migrated === true) migratedSessionIds.push(sessionId);
+        const summary = await this.sessionRepo.readSessionDisplaySummary(userId, sessionId, parentSessionId);
+        const canonicalMessageCount = await this.sessionRepo.getTurnMessageCount(userId, sessionId, parentSessionId);
+        const current = isSessionDisplaySummaryPayload(summary, sessionId) &&
+          canonicalMessageCount <= Number(summary?.stats?.messageCount || summary?.messages?.length || 0);
+        if (current) continue;
+        await this.sessionRepo.rebuildSessionDisplaySummary(
+          userId,
+          sessionId,
+          parentSessionId,
+          {},
+        );
+        rebuiltSessionIds.push(sessionId);
+      } catch (error) {
+        failures.push({
+          sessionId,
+          code: String(error?.code || error?.errorCode || ""),
+          message: String(error?.message || error || ""),
+        });
+      }
+    }
+    return { userId, migratedSessionIds, rebuiltSessionIds, failures };
   }
 
   async getAllSessionsData({ userId }) {
