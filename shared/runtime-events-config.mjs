@@ -47,6 +47,7 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
       workflowDiagnostics: "NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG",
       contextIdentity: "NOOBOT_RUNTIME_EVENT_CONTEXT_IDENTITY_DEBUG",
       agentContext: "NOOBOT_RUNTIME_EVENT_AGENT_CONTEXT_DEBUG",
+      agentTransport: "NOOBOT_RUNTIME_EVENT_AGENT_TRANSPORT_DEBUG",
     },
   },
   hookRuntimeEvents: {
@@ -94,6 +95,7 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
       workflowDiagnostics: false,
       contextIdentity: true,
       agentContext: true,
+      agentTransport: true,
     },
   },
   hookRuntimeEvents: {
@@ -141,6 +143,7 @@ export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
   "workflow-diagnostics": { controlKey: "workflowDiagnostics", exposeToClient: true },
   "context-identity": { controlKey: "contextIdentity", exposeToClient: false },
   "agent-context": { controlKey: "agentContext", exposeToClient: false },
+  "agent-transport": { controlKey: "agentTransport", exposeToClient: true },
 });
 
 export const HOOK_RUNTIME_EVENT_VERBOSE_VALUES = deepFreeze([

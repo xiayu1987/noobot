@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { startServerWithWs, closeServer, stopChatWs } from "./chat-websocket-server.test-helpers.js";
+import { startServerWithWs, closeServer, stopChatWs, createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   TURN_EVENT,
@@ -103,21 +103,21 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
     });
     const stoppingEvent = await new Promise((resolve, reject) => {
       ws.on("open", () => {
-        ws.send(JSON.stringify({
+        ws.send(JSON.stringify(createProtocolTestCommand({
           userId: "u1",
           sessionId: "s1",
           message: "hello",
           turnScopeId: "turn-slow",
           config: { locale: "zh-CN" },
-        }));
-        setTimeout(() => ws.send(JSON.stringify({
+        })));
+        setTimeout(() => ws.send(JSON.stringify(createProtocolTestCommand({
           action: "stop",
           turnScopeId: "turn-slow",
           partialAssistant: {
             dialogProcessId: "dp-slow",
             turnScopeId: "turn-slow",
           },
-        })), 10);
+        }))), 10);
       });
       ws.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
@@ -372,7 +372,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
         reject(new Error(`idle stop response timeout: ${JSON.stringify(messages)}`));
       }, 1000);
       ws.on("open", () => {
-        ws.send(JSON.stringify({
+        ws.send(JSON.stringify(createProtocolTestCommand({
           action: "stop",
           sessionId: "session-idle-stop",
           turnScopeId: "turn-idle-stop",
@@ -380,7 +380,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
             dialogProcessId: "dp-idle-stop",
             turnScopeId: "turn-idle-stop",
           },
-        }));
+        })));
       });
       ws.on("message", (raw) => {
         try {
@@ -454,11 +454,11 @@ test("chat-websocket-server: stop without an authoritative Turn is rejected", as
       const ws = new WebSocket(`ws://127.0.0.1:${port}/chat/ws`, {
         headers: { authorization: "Bearer test-key" },
       });
-      ws.on("open", () => ws.send(JSON.stringify({
+      ws.on("open", () => ws.send(JSON.stringify(createProtocolTestCommand({
         action: "stop",
         sessionId: "s-without-turn",
         turnScopeId: "turn-without-authority",
-      })));
+      }))));
       ws.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
         messages.push(parsed);

@@ -161,15 +161,15 @@ describe("useChatSession send/continue actions", () => {
     expect(session.composerActionState.value.primaryAction).toBe("continue");
     expect(await session.send()).toBe(true);
     const payload = wsClientMock.stream.mock.calls[0][0];
-    expect(payload.sessionId).toBe("backend-session");
-    expect(payload.action).toBe("continue");
-    expect(payload.config).toMatchObject({
-      resumeDialogProcessId: "dp-stopped",
-      resumeTurnScopeId: "turn-stopped",
+    expect(payload.identity.sessionId).toBe("backend-session");
+    expect(payload.commandType).toBe("turn.continue");
+    expect(payload.continuation).toMatchObject({
+      dialogProcessId: "dp-stopped",
+      turnScopeId: "turn-stopped",
     });
-    expect(payload.config.thinkingStartedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(payload.turnScopeId).toMatch(/^client-turn:/);
-    expect(payload.turnScopeId).not.toBe("turn-stopped");
+    expect(payload.preferences).not.toHaveProperty("thinkingStartedAt");
+    expect(payload.identity.turnScopeId).toMatch(/^client-turn:/);
+    expect(payload.identity.turnScopeId).not.toBe("turn-stopped");
     expect(session.sending.value).toBe(true);
   });
 
@@ -197,9 +197,8 @@ describe("useChatSession send/continue actions", () => {
     });
     await expect(session.send()).resolves.toBe(true);
     const payload = wsClientMock.stream.mock.calls[0][0];
-    expect(payload.action).toBeUndefined();
-    expect(payload.config.resumeDialogProcessId).toBeUndefined();
-    expect(payload.config.resumeTurnScopeId).toBeUndefined();
+    expect(payload.commandType).toBe("turn.send");
+    expect(payload.continuation).toBeUndefined();
   });
 
   it("does not continue when the stopped status lacks a complete matching identity", async () => {
@@ -217,6 +216,6 @@ describe("useChatSession send/continue actions", () => {
     expect(session.composerActionState.value.primaryAction).toBe("send");
     expect(await session.send()).toBe(true);
     expect(wsClientMock.stream).toHaveBeenCalledTimes(1);
-    expect(wsClientMock.stream.mock.calls[0][0].action).toBeUndefined();
+    expect(wsClientMock.stream.mock.calls[0][0].commandType).toBe("turn.send");
   });
 });

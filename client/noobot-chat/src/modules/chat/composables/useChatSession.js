@@ -90,7 +90,6 @@ export function useChatSession({
   userId,
   apiKey,
   allowUserInteraction,
-  safeConfirm,
   safeConfirmLevel,
   sanitizeOutput,
   streamOutput,
@@ -492,7 +491,6 @@ export function useChatSession({
   const chatEngine = useChatEngine({
     userId,
     allowUserInteraction,
-    safeConfirm,
     safeConfirmLevel,
     sanitizeOutput,
     streamOutput,

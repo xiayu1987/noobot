@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { startServerWithWs, closeServer, callChatWs } from "./chat-websocket-server.test-helpers.js";
+import { startServerWithWs, closeServer, callChatWs, createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
 
 test("chat-websocket-server: non-user abort does not persist or emit user_stopped", async () => {
   const server = await startServerWithWs({
@@ -65,12 +65,12 @@ test("chat-websocket-server: client disconnect aborts execution without persisti
     });
     await new Promise((resolve, reject) => {
       ws.on("open", () => {
-        ws.send(JSON.stringify({
+        ws.send(JSON.stringify(createProtocolTestCommand({
           userId: "u1",
           sessionId: "s-client-disconnect",
           message: "hello",
           turnScopeId: "turn-client-disconnect",
-        }));
+        })));
         setTimeout(() => ws.close(1000, "dispose"), 10);
       });
       ws.on("close", resolve);
@@ -85,7 +85,7 @@ test("chat-websocket-server: client disconnect aborts execution without persisti
   }
 });
 
-test("chat-websocket-server: forbidden user scope does not run or persist a turn status", async () => {
+test("chat-websocket-server: request userId cannot override the authenticated owner", async () => {
   let runCalls = 0;
   let turnStatusWrites = 0;
   const server = await startServerWithWs({
@@ -99,7 +99,7 @@ test("chat-websocket-server: forbidden user scope does not run or persist a turn
         return null;
       },
     },
-    isForbiddenUserScope: () => true,
+    resolveAuthByApiKey: () => ({ userId: "authenticated-user" }),
   });
   try {
     const { port } = server.address();
@@ -114,10 +114,10 @@ test("chat-websocket-server: forbidden user scope does not run or persist a turn
       },
     });
 
-    assert.equal(runCalls, 0);
+    assert.equal(runCalls, 1);
     assert.equal(turnStatusWrites, 0);
-    assert.equal(events.some((item) => item?.event === "done"), false);
-    assert.equal(events.some((item) => item?.event === "error"), true);
+    assert.equal(events.some((item) => item?.event === "done"), true);
+    assert.equal(events.some((item) => item?.event === "error"), false);
   } finally {
     await closeServer(server);
   }

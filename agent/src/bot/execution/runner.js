@@ -38,6 +38,7 @@ import { createTurnCommand, resolveRunTurnScopeId, toCommitTurnPayload } from ".
 import { summarizeDebugAttachments, readSelectedModelValue } from "./runner/debug-utils.js";
 import { buildSessionRuntimePluginResolvedEvent } from "./runner/plugin-runtime.js";
 import { dispatchAgentTurn } from "./runner/agent-dispatch.js";
+import { buildAgentTransportConsumption } from "./runner/agent-transport-consumption.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { bindAssistantMessageEventStream } from "../../events/message-event-stream.js";
 import { initializeCurrentTurnMessageEventProjection } from "../../events/current-turn-message-event-projection.js";
@@ -283,9 +284,7 @@ export class SessionExecutionRunner {
       lifecycle.transition(resolveInitialLifecycleState(resolvedRunConfig));
       if (
         !String(resolvedRunConfig?.runtimeModel || "").trim() &&
-        !readSelectedModelValue(
-          resolvedRunConfig?.config?.selectedModel ?? resolvedRunConfig?.selectedModel,
-        ) &&
+        !readSelectedModelValue(resolvedRunConfig?.selectedModel) &&
         String(currentSessionModelAlias || "").trim()
       ) {
         resolvedRunConfig.runtimeModel = String(currentSessionModelAlias || "").trim();
@@ -376,6 +375,7 @@ export class SessionExecutionRunner {
       let currentUserMessage;
       let reusedTurnResult = null;
       let committedTurnResult = null;
+      let effectiveTurnCommand = null;
       if (resolvedRunConfig?.reuseExistingUserTurn === true) {
         reusedTurnResult = await this.stampReusedUserTurnDialogProcessId?.({
           userId,
@@ -400,6 +400,7 @@ export class SessionExecutionRunner {
           runConfig: resolvedRunConfig,
           caller,
         });
+        effectiveTurnCommand = turnCommand;
         const commitPayload = toCommitTurnPayload(turnCommand);
         const commitPayloadWithPersistence = { ...commitPayload, persistenceContext };
         if (typeof this.commitSessionTurn !== "function") {
@@ -497,6 +498,24 @@ export class SessionExecutionRunner {
         initializeCurrentTurnMessageEventProjection(dispatchRuntime, {
           sequenceScopeId: resolvedTurnScopeId,
         });
+        emitEvent(runtimeEventListener, "agent_transport_parameters_consumed", buildAgentTransportConsumption({
+          transportCommand: resolvedRunConfig?.transportCommand,
+          identity: {
+            sessionId: usedSessionId,
+            parentSessionId,
+            dialogProcessId,
+            parentDialogProcessId,
+            turnScopeId: resolvedTurnScopeId,
+          },
+          normalizedMessage,
+          requestedAttachments: attachments,
+          canonicalAttachments,
+          currentUserMessage,
+          resolvedRunConfig,
+          turnCommand: effectiveTurnCommand,
+          committedTurnResult,
+          dispatchRuntime,
+        }));
         let persistCurrentTurnMessagesTail = Promise.resolve();
         let currentTurnPersistenceBatchDepth = 0;
         let currentTurnPersistenceRequested = false;

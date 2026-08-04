@@ -123,6 +123,7 @@ test('context identity diagnostics default on while other diagnostics retain the
   const defaults = resolveRuntimeEventsSessionLogControls({});
   assert.equal(defaults.debug.contextIdentity, true);
   assert.equal(defaults.debug.agentContext, true);
+  assert.equal(defaults.debug.agentTransport, true);
   assert.equal(defaults.debug.resend, false);
   assert.equal(defaults.debug.stop, false);
 
@@ -135,6 +136,17 @@ test('context identity diagnostics default on while other diagnostics retain the
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.agentContext]: 'false',
   });
   assert.equal(agentContextDisabled.debug.agentContext, false);
+});
+
+test('agent transport diagnostics are independently configurable and default on', () => {
+  const envName = RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.agentTransport;
+  assert.equal(envName, 'NOOBOT_RUNTIME_EVENT_AGENT_TRANSPORT_DEBUG');
+  assert.deepEqual(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES['agent-transport'], {
+    controlKey: 'agentTransport',
+    exposeToClient: true,
+  });
+  assert.equal(resolveRuntimeEventsSessionLogControls({}).debug.agentTransport, true);
+  assert.equal(resolveRuntimeEventsSessionLogControls({ [envName]: 'off' }).debug.agentTransport, false);
 });
 
 test('session log controls do not accept the removed flat override protocol', () => {

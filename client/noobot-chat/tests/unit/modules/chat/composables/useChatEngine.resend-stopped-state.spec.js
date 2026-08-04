@@ -175,12 +175,12 @@ describe("useChatEngine.resend stopped state", () => {
       const index = stoppedTurns.length + 1;
       const dialogProcessId = `dp-resend-stop-${index}`;
       stoppedTurns.push({
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
         dialogProcessId,
-        content: payload.message,
+        content: payload.input.message,
       });
       emitChannelState(onEvent, sessionId, dialogProcessId, "sending", {
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
       });
       emitAuthorityProcessing(onEvent, {
         ...payload,
@@ -192,17 +192,17 @@ describe("useChatEngine.resend stopped state", () => {
         data: {
           sessionId,
           dialogProcessId,
-          turnScopeId: payload.turnScopeId,
+          turnScopeId: payload.identity.turnScopeId,
           turnStatus: {
             status: "user_stopped",
             dialogProcessId,
-            turnScopeId: payload.turnScopeId,
+            turnScopeId: payload.identity.turnScopeId,
           },
         },
       });
       emitAuthorityTerminal(onEvent, {
         sessionId,
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
         dialogProcessId,
         state: "stop_completed",
         sequence: index + 2,
@@ -292,8 +292,8 @@ describe("useChatEngine.resend stopped state", () => {
     const firstReplaceScope = replaceSessionTurnApi.mock.calls[0][0].turnScopeId;
     const committedSecondReplaceScope = replaceSessionTurnApi.mock.calls[1][0].turnScopeId;
     expect(firstReplaceScope).not.toBe(committedSecondReplaceScope);
-    expect(stream.mock.calls[0][0].turnScopeId).toBe(firstReplaceScope);
-    expect(stream.mock.calls[1][0].turnScopeId).toBe(committedSecondReplaceScope);
+    expect(stream.mock.calls[0][0].identity.turnScopeId).toBe(firstReplaceScope);
+    expect(stream.mock.calls[1][0].identity.turnScopeId).toBe(committedSecondReplaceScope);
     expect(stoppedTurns[0].dialogProcessId).not.toBe(stoppedTurns[1].dialogProcessId);
     const secondRuntime = selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, secondReplaceScope);
     expect(secondRuntime).toMatchObject({
@@ -405,7 +405,7 @@ describe("useChatEngine.resend stopped state", () => {
       });
       if (streamCallCount === 2) {
         emitChannelState(onEvent, "local-resend-stale-stop-replay", "dp-old-stopped", "user_stopped", {
-          turnScopeId: payload.turnScopeId,
+          turnScopeId: payload.identity.turnScopeId,
         });
       }
     });

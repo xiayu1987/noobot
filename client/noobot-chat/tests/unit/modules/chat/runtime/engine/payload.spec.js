@@ -9,19 +9,19 @@ import { buildChatPayload } from "../../../../../../src/modules/chat/runtime/eng
 
 describe("buildChatPayload model preferences", () => {
   it("disables text streaming by default", () => {
-    expect(buildChatPayload({ message: "x" }).config.streaming).toBe(false);
+    expect(buildChatPayload({ message: "x" }).preferences.streaming).toBe(false);
   });
 
   it("enables output sanitization by default and sends an explicit opt-out", () => {
-    expect(buildChatPayload({ message: "x" }).config.sanitizeOutput).toBe(true);
-    expect(buildChatPayload({ message: "x", sanitizeOutput: false }).config.sanitizeOutput).toBe(false);
+    expect(buildChatPayload({ message: "x" }).preferences.sanitizeOutput).toBe(true);
+    expect(buildChatPayload({ message: "x", sanitizeOutput: false }).preferences.sanitizeOutput).toBe(false);
   });
 
   it("normalizes and sends the safety confirmation level", () => {
-    expect(buildChatPayload({ message: "x", safeConfirmLevel: { value: "HIGH" } }).config.safeConfirmLevel).toBe("high");
-    expect(buildChatPayload({ message: "x", safeConfirmLevel: "invalid" }).config.safeConfirmLevel).toBe("low");
+    expect(buildChatPayload({ message: "x", safeConfirmLevel: { value: "HIGH" } }).preferences.confirmationLevel).toBe("high");
+    expect(buildChatPayload({ message: "x", safeConfirmLevel: "invalid" }).preferences.confirmationLevel).toBe("low");
   });
-  it("writes selectedModel and current scenario pluginModelConfig to config payload", () => {
+  it("writes selectedModel and current scenario pluginModelConfig to preferences", () => {
     const payload = buildChatPayload({
       userId: "admin",
       message: "hello",
@@ -47,7 +47,11 @@ describe("buildChatPayload model preferences", () => {
       selectedPlugins: { value: ["harness", "workflow"] },
     });
 
-    expect(payload.config).toMatchObject({
+    expect(payload).toMatchObject({
+      protocolVersion: 1,
+      commandType: "turn.send",
+      input: { message: "hello", attachments: [] },
+      preferences: {
       scenario: "programming",
       selectedModel: "main-programming",
       memoryModel: "memory-programming",
@@ -66,7 +70,10 @@ describe("buildChatPayload model preferences", () => {
         workflow: { semanticModel: "workflow-programming" },
       },
       selectedPlugins: ["harness", "workflow"],
+      },
     });
+    expect(payload).not.toHaveProperty("userId");
+    expect(payload).not.toHaveProperty("config");
   });
 
   it("accepts selectedPlugins as a plain array", () => {
@@ -76,31 +83,40 @@ describe("buildChatPayload model preferences", () => {
       selectedPlugins: [" harness ", "workflow", ""],
     });
 
-    expect(payload.config.selectedPlugins).toEqual(["harness", "workflow"]);
+    expect(payload.preferences.selectedPlugins).toEqual(["harness", "workflow"]);
   });
 
-  it("carries the preallocated presentation message identity at both transport boundaries", () => {
+  it("carries the preallocated assistant message identity once in presentation", () => {
     const payload = buildChatPayload({
       message: "hello",
       turnScopeId: "turn-1",
       assistantMessageId: "  msg_assistant-1  ",
     });
 
-    expect(payload.presentationMessageId).toBe("msg_assistant-1");
-    expect(payload.config.presentationMessageId).toBe("msg_assistant-1");
+    expect(payload.presentation.assistantMessageId).toBe("msg_assistant-1");
+    expect(payload).not.toHaveProperty("presentationMessageId");
     expect(payload).not.toHaveProperty("assistantMessageId");
-    expect(payload.config).not.toHaveProperty("assistantMessageId");
   });
 
-  it("carries the preallocated user message identity at both transport boundaries", () => {
+  it("carries the preallocated user message identity once in presentation", () => {
     const payload = buildChatPayload({
       message: "hello",
       turnScopeId: "turn-1",
       userMessageId: "  msg_user-1  ",
     });
 
-    expect(payload.userMessageId).toBe("msg_user-1");
-    expect(payload.config.userMessageId).toBe("msg_user-1");
+    expect(payload.presentation.userMessageId).toBe("msg_user-1");
+    expect(payload).not.toHaveProperty("userMessageId");
+  });
+
+  it("carries the caller-owned session revision in concurrency", () => {
+    const payload = buildChatPayload({
+      message: "hello",
+      turnScopeId: "turn-1",
+      expectedVersion: 0,
+    });
+
+    expect(payload.concurrency.expectedRevision).toBe(0);
   });
 
   it("builds independent continue payload with new turn and stopped snapshot identity", () => {
@@ -108,7 +124,7 @@ describe("buildChatPayload model preferences", () => {
       userId: "admin",
       activeSession: { value: { sessionId: "s1" } },
       message: "continue question",
-      action: "continue",
+      continueFromStopped: true,
       turnScopeId: "turn-resume-new",
       resumeDialogProcessId: "dlg-stopped",
       resumeTurnScopeId: "turn-stopped",
@@ -121,22 +137,28 @@ describe("buildChatPayload model preferences", () => {
     });
 
     expect(payload).toMatchObject({
-      action: "continue",
-      userId: "admin",
-      sessionId: "s1",
-      turnScopeId: "turn-resume-new",
-      message: "continue question",
-      attachments: [{ attachmentId: "att-1", name: "a.txt" }],
+      protocolVersion: 1,
+      commandType: "turn.continue",
+      identity: {
+        sessionId: "s1",
+        turnScopeId: "turn-resume-new",
+      },
+      input: {
+        message: "continue question",
+        attachments: [{ attachmentId: "att-1", name: "a.txt" }],
+      },
+      preferences: {
+        streaming: false,
+        scenario: "programming",
+        selectedModel: "main-model",
+      },
+      continuation: {
+        dialogProcessId: "dlg-stopped",
+        turnScopeId: "turn-stopped",
+      },
     });
-    expect(payload.config).toMatchObject({
-      streaming: false,
-      scenario: "programming",
-      selectedModel: "main-model",
-      resumeDialogProcessId: "dlg-stopped",
-      resumeTurnScopeId: "turn-stopped",
-    });
-    expect(payload.config.stoppedTurnScopeId).toBeUndefined();
-    expect(payload.dialogProcessId).toBeUndefined();
-    expect(payload.config.reuseExistingUserTurn).toBeUndefined();
+    expect(payload).not.toHaveProperty("userId");
+    expect(payload).not.toHaveProperty("action");
+    expect(payload).not.toHaveProperty("config");
   });
 });

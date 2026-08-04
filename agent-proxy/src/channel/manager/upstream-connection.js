@@ -16,6 +16,12 @@ import {
   buildUpstreamUrl,
 } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
+import { writeAgentTransportDebugEvent } from "../../runtime-events/agent-transport-debug-runtime-events.js";
+import { TURN_EVENT } from "@noobot/event-protocol";
+import {
+  AGENT_TRANSPORT_DEBUG_TYPE,
+  summarizeAgentTransportCommand,
+} from "@noobot/agent-transport-protocol";
 
 class UpstreamConnectionMethods {
 
@@ -120,9 +126,38 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
       ? options.initialCommands.filter((item) => item && typeof item === "object")
       : [];
     try {
-      if (payloadToSend) upstreamSocket.send(JSON.stringify(payloadToSend));
-      for (const command of initialCommands) upstreamSocket.send(JSON.stringify(command));
+      if (payloadToSend) {
+        upstreamSocket.send(JSON.stringify(payloadToSend));
+        void writeAgentTransportDebugEvent({
+          event: "agentProxy.agentTransport.commandForwarded",
+          command: payloadToSend,
+          channel,
+          data: { forwarded: true, transport: "websocket", initialCommand: true },
+        });
+      }
+      for (const command of initialCommands) {
+        upstreamSocket.send(JSON.stringify(command));
+        void writeAgentTransportDebugEvent({
+          event: "agentProxy.agentTransport.commandForwarded",
+          command,
+          channel,
+          data: { forwarded: true, transport: "websocket", initialCommand: true },
+        });
+      }
     } catch (error) {
+      const failedCommand = payloadToSend || initialCommands[0] || {};
+      void writeAgentTransportDebugEvent({
+        event: "agentProxy.agentTransport.forwardFailed",
+        command: failedCommand,
+        channel,
+        data: {
+          forwarded: false,
+          reason: "initial_send_error",
+          errorType: String(error?.name || "Error"),
+          errorCode: String(error?.code || ""),
+          initialCommand: true,
+        },
+      });
       this.logSessionEvent(channel, {
         category: "transport",
         level: "error",
@@ -144,6 +179,33 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
       const eventName = String(parsed?.event || EVENT_TYPE.MESSAGE).trim() || EVENT_TYPE.MESSAGE;
       const eventData =
         parsed?.data && typeof parsed.data === "object" ? parsed.data : {};
+      if (
+        eventName === EVENT_TYPE.TURN_LIFECYCLE &&
+        String(eventData?.eventType || "").trim() === TURN_EVENT.ACTION_ACCEPTED
+      ) {
+        const summary = summarizeAgentTransportCommand(channel.startPayload, {
+          accepted: true,
+          consumedByService: true,
+          transport: "websocket",
+          lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
+          lifecycleEventId: String(eventData?.eventId || "").trim(),
+          lifecycleRevision: Number(eventData?.revision || 0),
+        });
+        this.logSessionEvent(channel, {
+          category: "debug",
+          level: "debug",
+          debugType: AGENT_TRANSPORT_DEBUG_TYPE,
+          event: "agentProxy.agentTransport.commandAccepted",
+          sessionId: summary.sessionId,
+          dialogProcessId: summary.dialogProcessId,
+          turnScopeId: summary.turnScopeId,
+          data: {
+            debugType: AGENT_TRANSPORT_DEBUG_TYPE,
+            event: "agentProxy.agentTransport.commandAccepted",
+            ...summary,
+          },
+        });
+      }
       if (eventName === EVENT_TYPE.TURN_SNAPSHOT) {
         const commandId = String(eventData?.commandId || "").trim();
         const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;

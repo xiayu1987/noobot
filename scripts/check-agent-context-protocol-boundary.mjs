@@ -54,6 +54,7 @@ const runtimeConsumers = [
 const forbiddenReads = [
   [/execution\?*\.controllers\?*\.runtime/, "execution.controllers.runtime"],
   [/agentContext\?*\.runtime/, "agentContext.runtime"],
+  [/runtimeAgentContext\?*\.payload/, "runtimeAgentContext.payload"],
   [/payload\?*\.tools\?*\.registry/, "payload.tools.registry"],
 ];
 for (const file of runtimeConsumers) {

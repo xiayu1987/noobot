@@ -9,9 +9,14 @@ import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervis
 import { logWorkflowDiagnostics } from "../../modules/debug/loggers/workflowDiagnosticsLogger.js";
 import {
   createTurnLifecycleReceipt,
+  TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   validateTurnLifecycleEnvelope,
 } from "@noobot/event-protocol";
+import {
+  AGENT_TRANSPORT_DEBUG_TYPE,
+  summarizeAgentTransportCommand,
+} from "@noobot/agent-transport-protocol";
 
 import { createReconnectCursorStore } from "./chatWebSocketReconnectCursor.js";
 import { createWebSocketCommandRequests } from "./chatWebSocketCommandRequests.js";
@@ -58,10 +63,49 @@ export function createChatWebSocketClient({
   let reconnectTimeout = null;
   let liveEventSubscriber = null;
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
+  function logAgentTransportCommand(event, command, extra = {}) {
+    try {
+      if (!sessionLogSink?.isEnabled?.(AGENT_TRANSPORT_DEBUG_TYPE)) return false;
+      return sessionLogSink.debug?.(AGENT_TRANSPORT_DEBUG_TYPE, () => {
+        const summary = summarizeAgentTransportCommand(command, extra);
+        return {
+          category: "debug",
+          level: "debug",
+          debugType: AGENT_TRANSPORT_DEBUG_TYPE,
+          event,
+          sessionId: summary.sessionId,
+          dialogProcessId: summary.dialogProcessId,
+          turnScopeId: summary.turnScopeId,
+          data: { debugType: AGENT_TRANSPORT_DEBUG_TYPE, event, ...summary },
+        };
+      });
+    } catch {
+      return false;
+    }
+  }
   const commandRequests = createWebSocketCommandRequests({
     getActiveSocket: () => getActiveSocket(),
     timeoutMs: RECONNECT_TIMEOUT_MS,
     translateText,
+    onCommandSending: (command) => logAgentTransportCommand(
+      "frontend.agentTransport.commandSending",
+      command,
+      { transport: "websocket" },
+    ),
+    onCommandSent: (command) => logAgentTransportCommand(
+      "frontend.agentTransport.commandSent",
+      command,
+      { transport: "websocket" },
+    ),
+    onCommandSendFailed: (command, error) => logAgentTransportCommand(
+      "frontend.agentTransport.commandSendFailed",
+      command,
+      {
+        transport: "websocket",
+        errorType: String(error?.name || "Error"),
+        errorCode: String(error?.code || ""),
+      },
+    ),
   });
   const { register: registerSocketHandlers } = createSocketHandlerRegistry();
 
@@ -222,6 +266,25 @@ export function createChatWebSocketClient({
                 : "unowned";
           const dispatchEligible = owner !== "unowned";
           if (event === TURN_LIFECYCLE_WIRE_EVENT) {
+            if (
+              data?.eventType === TURN_EVENT.ACTION_ACCEPTED &&
+              activeStreamContext?.payload &&
+              activeStreamContext.agentTransportAcceptedLogged !== true
+            ) {
+              activeStreamContext.agentTransportAcceptedLogged = true;
+              logAgentTransportCommand(
+                "frontend.agentTransport.commandAccepted",
+                activeStreamContext.payload,
+                {
+                  accepted: true,
+                  acknowledgedByBackend: true,
+                  transport: "websocket",
+                  lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
+                  lifecycleEventId: normalizeTrimmedString(data?.eventId),
+                  lifecycleRevision: Number(data?.revision || 0),
+                },
+              );
+            }
             logWorkflowDiagnostics("frontend.websocket.lifecycleDispatchEvaluated", () => ({
               sessionId: normalizeTrimmedString(data?.sessionId),
               parentSessionId: normalizeTrimmedString(data?.parentSessionId),
@@ -304,10 +367,6 @@ export function createChatWebSocketClient({
 
   async function stream(payload = {}, onEvent = () => {}, options = {}) {
     return new Promise((resolve, reject) => {
-      payload = {
-        ...payload,
-        requestId: normalizeTrimmedString(payload?.requestId) || nextRequestId("stream"),
-      };
       const currentStreamSerial = ++streamSerial;
       const streamScope = normalizeScopeFromPayload(payload);
       activeStreamContext = {
@@ -449,8 +508,28 @@ export function createChatWebSocketClient({
         bindStreamSocketHandlers(ws);
 
         try {
+          logAgentTransportCommand(
+            "frontend.agentTransport.commandSending",
+            payload,
+            { transport: "websocket", stream: true },
+          );
           ws.send(JSON.stringify(payload || {}));
+          logAgentTransportCommand(
+            "frontend.agentTransport.commandSent",
+            payload,
+            { transport: "websocket", stream: true },
+          );
         } catch (error) {
+          logAgentTransportCommand(
+            "frontend.agentTransport.commandSendFailed",
+            payload,
+            {
+              transport: "websocket",
+              stream: true,
+              errorType: String(error?.name || "Error"),
+              errorCode: String(error?.code || ""),
+            },
+          );
           cleanupSocketRef(ws);
           finalize(() => reject(error));
           try { ws.close?.(1011, "stream_send_failed"); } catch {}
@@ -666,7 +745,7 @@ export function createChatWebSocketClient({
 
   function requestStop(stopPayload = {}) {
     return requestJson(
-      { action: "stop", ...stopPayload },
+      stopPayload,
       { expectedEvents: [StreamEventEnum.TURN_LIFECYCLE] },
     ).then(() => true);
   }

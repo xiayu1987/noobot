@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { HTTP_STATUS } from "#agent/constants";
-import { hasOwnConfigKey, normalizeBooleanLike, resolveTimeMs } from "#agent/config";
+import {
+  AGENT_COMMAND,
+  RUN_COMMAND_TYPES,
+  parseAgentCommand,
+} from "@noobot/agent-transport-protocol";
+import { recordServiceAgentTransportDebug } from "../runtime-events/agent-transport-debug.js";
 
 function summarizeDebugAttachments(attachments) {
   if (!Array.isArray(attachments)) {
@@ -28,6 +33,7 @@ export function createChatRunService({
   normalizeLocale,
   defaultLocale,
   translateText,
+  sessionLogConfig,
 } = {}) {
   function normalizeSelectedConnectors(input = {}) {
     const source = input && typeof input === "object" ? input : {};
@@ -81,157 +87,109 @@ export function createChatRunService({
     return normalizedPlugins;
   }
 
-  function normalizeSelectedModel(input = "") {
-    return String(input || "").trim();
-  }
-
-  function normalizePluginModelConfig(input = {}) {
-    if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
-    const normalized = {};
-    for (const [scopeKey, scopeValue] of Object.entries(input)) {
-      const normalizedScopeKey = String(scopeKey || "").trim();
-      if (!normalizedScopeKey) continue;
-      if (!scopeValue || typeof scopeValue !== "object" || Array.isArray(scopeValue)) continue;
-      normalized[normalizedScopeKey] = { ...scopeValue };
-    }
-    return Object.keys(normalized).length ? normalized : undefined;
-  }
-
-  function normalizeRunConfig(input = {}) {
-    const source = input && typeof input === "object" ? input : {};
-    const allowUserInteractionRaw = input?.allowUserInteraction;
-    const allowUserInteraction =
-      allowUserInteractionRaw === undefined ? true : Boolean(allowUserInteractionRaw);
-    const safeConfirm = source?.safeConfirm === undefined
-      ? true
-      : Boolean(source.safeConfirm);
-    const locale = normalizeLocale(input?.locale || defaultLocale);
-    const hasScenarioField = Object.prototype.hasOwnProperty.call(source, "scenario");
-    const scenario = hasScenarioField ? String(source?.scenario || "").trim() : undefined;
-    const hasStreamingField = hasOwnConfigKey(source, "streaming");
-    const streaming = hasStreamingField
-      ? normalizeBooleanLike(source?.streaming, false)
-      : undefined;
-    const hasSanitizeOutputField = hasOwnConfigKey(source, "sanitizeOutput");
-    const sanitizeOutput = hasSanitizeOutputField
-      ? normalizeBooleanLike(source?.sanitizeOutput, true)
-      : undefined;
-    const hasRunTimeout =
-      Object.prototype.hasOwnProperty.call(source, "runTimeoutMs") ||
-      Object.prototype.hasOwnProperty.call(source, "run_timeout_ms");
-    const runTimeoutMs = hasRunTimeout
-      ? resolveTimeMs(source, {
-          key: "runTimeoutMs",
-          legacyKeys: ["run_timeout_ms"],
-          sourceTag: "service.chat-run-service",
-          warnLegacy: true,
-          fallback: 0,
-          min: 1,
-        })
-      : 0;
-    const selectedModel = normalizeSelectedModel(source?.selectedModel);
-    const memoryModel = normalizeSelectedModel(source?.memoryModel);
-    const pluginModelConfig = normalizePluginModelConfig(source?.pluginModelConfig);
-    const normalizedTurnScopeId = String(source?.turnScopeId || "").trim();
-    const normalizedUserMessageId = String(source?.userMessageId || "").trim();
-    const normalizedPresentationMessageId = String(
-      source?.presentationMessageId || source?.assistantMessageId || "",
-    ).trim();
-    const normalizedThinkingStartedAt = (() => {
-      const value = String(source?.thinkingStartedAt || "").trim();
-      if (!value) return "";
-      const ms = Date.parse(value);
-      return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : "";
-    })();
-    const compatConfig = {
-      ...(hasScenarioField ? { scenario } : {}),
-      ...(selectedModel ? { selectedModel } : {}),
-      ...(memoryModel ? { memoryModel } : {}),
-      ...(pluginModelConfig ? { pluginModelConfig } : {}),
+  function mapAgentRunCommand(command, { userId = "" } = {}) {
+    const identity = command.identity;
+    const preferences = command.preferences;
+    const selectedPlugins = normalizeStringArray(preferences.selectedPlugins);
+    const runConfig = {
+      allowUserInteraction: preferences.allowUserInteraction,
+      safeConfirm: true,
+      safeConfirmLevel: preferences.confirmationLevel,
+      sanitizeOutput: preferences.sanitizeOutput,
+      ...(Object.prototype.hasOwnProperty.call(preferences, "streaming")
+        ? { streaming: preferences.streaming }
+        : {}),
+      locale: normalizeLocale(preferences.locale || defaultLocale),
+      ...(preferences.scenario ? { scenario: preferences.scenario } : {}),
+      ...(preferences.selectedModel ? { selectedModel: preferences.selectedModel } : {}),
+      ...(preferences.memoryModel ? { memoryModel: preferences.memoryModel } : {}),
+      ...(preferences.pluginModelConfig ? { pluginModelConfig: preferences.pluginModelConfig } : {}),
+      selectedConnectors: normalizeSelectedConnectors(preferences.selectedConnectors),
+      selectedPlugins,
+      plugins: normalizePlugins({}, selectedPlugins),
+      turnScopeId: identity.turnScopeId,
+      userMessageId: String(command.presentation?.userMessageId || "").trim(),
+      presentationMessageId: String(command.presentation?.assistantMessageId || "").trim(),
+      idempotencyKey: String(command.concurrency?.idempotencyKey || command.commandId).trim(),
+      expectedVersion: command.concurrency?.expectedRevision,
+      transportCommand: {
+        protocolVersion: command.protocolVersion,
+        commandType: command.commandType,
+        commandId: command.commandId,
+      },
+      ...(command.commandType === AGENT_COMMAND.RESEND ? { reuseExistingUserTurn: true } : {}),
+      ...(command.commandType === AGENT_COMMAND.CONTINUE ? {
+        resumeFromStoppedSnapshot: true,
+        resumeDialogProcessId: command.continuation.dialogProcessId,
+        resumeTurnScopeId: command.continuation.turnScopeId,
+      } : {}),
     };
     return {
-      allowUserInteraction,
-      safeConfirm,
-      ...(hasStreamingField ? { streaming } : {}),
-      ...(hasSanitizeOutputField ? { sanitizeOutput } : {}),
-      locale,
-      scenario,
-      ...(selectedModel ? { selectedModel } : {}),
-      ...(memoryModel ? { memoryModel } : {}),
-      ...(pluginModelConfig ? { pluginModelConfig } : {}),
-      ...(Object.keys(compatConfig).length ? { config: compatConfig } : {}),
-      ...(Number.isFinite(runTimeoutMs) && runTimeoutMs > 0
-        ? { runTimeoutMs: Math.floor(runTimeoutMs) }
-        : {}),
-      selectedConnectors: normalizeSelectedConnectors(input?.selectedConnectors),
-      selectedPlugins: normalizeStringArray(input?.selectedPlugins),
-      plugins: normalizePlugins(source?.plugins, input?.selectedPlugins),
-      ...(normalizedTurnScopeId ? { turnScopeId: normalizedTurnScopeId } : {}),
-      ...(normalizedUserMessageId ? { userMessageId: normalizedUserMessageId } : {}),
-      ...(normalizedPresentationMessageId ? {
-        presentationMessageId: normalizedPresentationMessageId,
-      } : {}),
-      ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
-      ...(source?.reuseExistingUserTurn === true ? {
-        reuseExistingUserTurn: true,
-      } : {}),
+      userId: String(userId || "").trim(),
+      sessionId: identity.sessionId,
+      parentSessionId: identity.parentSessionId || "",
+      dialogProcessId: identity.dialogProcessId || "",
+      parentDialogProcessId: identity.parentDialogProcessId || "",
+      turnScopeId: identity.turnScopeId,
+      commandId: command.commandId,
+      message: command.input.message,
+      attachments: command.input.attachments,
+      expectedRevision: command.concurrency?.expectedRevision,
+      runConfig,
     };
   }
 
   async function handleChat(req, res) {
+    let acceptedCommand = null;
     try {
-      const {
-        userId,
-        sessionId,
-        parentSessionId = "",
-        parentDialogProcessId = "",
-        message,
-        attachments = [],
-        config = {},
-        turnScopeId = "",
-        userMessageId = "",
-        presentationMessageId = "",
-        assistantMessageId = "",
-      } = req.body;
-      if (!userId || !sessionId || !message) {
-        throw new Error(translateText("common.userSessionMessageRequired", req.locale));
-      }
+      const command = parseAgentCommand(req.body);
+      if (!RUN_COMMAND_TYPES.includes(command.commandType)) throw new Error("run_command_required");
+      acceptedCommand = command;
+      void recordServiceAgentTransportDebug({
+        sessionLogConfig,
+        event: "service.agentTransport.httpCommandReceived",
+        command,
+        userId: req.auth?.userId,
+        data: { accepted: true, transport: "http" },
+      });
+      const request = mapAgentRunCommand(command, { userId: req.auth?.userId });
       const bot = getBot();
       bot?.emitRuntimeEvent?.("debug_resend_http_received", {
-        sessionId,
-        parentSessionId,
-        turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
-        reuseExistingUserTurn: config?.reuseExistingUserTurn === true,
-        attachments: summarizeDebugAttachments(attachments),
-        bodyAttachments: summarizeDebugAttachments(req.body?.attachments),
+        sessionId: request.sessionId,
+        parentSessionId: request.parentSessionId,
+        turnScopeId: request.turnScopeId,
+        reuseExistingUserTurn: request.runConfig.reuseExistingUserTurn === true,
+        attachments: summarizeDebugAttachments(request.attachments),
       });
       const result = await bot.runSession({
-        userId,
-        sessionId,
-        parentSessionId,
-        parentDialogProcessId,
+        ...request,
         caller: "user",
-        message,
-        attachments,
-        runConfig: {
-          ...normalizeRunConfig(config),
-          turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
-          userMessageId: String(userMessageId || config?.userMessageId || "").trim(),
-          presentationMessageId: String(
-            presentationMessageId || config?.presentationMessageId ||
-            assistantMessageId || config?.assistantMessageId || "",
-          ).trim(),
-        },
       });
       res.json({ ok: true, ...result });
     } catch (error) {
+      void recordServiceAgentTransportDebug({
+        sessionLogConfig,
+        event: acceptedCommand
+          ? "service.agentTransport.httpCommandProcessingFailed"
+          : "service.agentTransport.httpCommandRejected",
+        command: acceptedCommand || req.body,
+        userId: req.auth?.userId,
+        data: {
+          accepted: Boolean(acceptedCommand),
+          processed: false,
+          transport: "http",
+          errorType: String(error?.name || "Error"),
+          errorCode: String(error?.errorCode || error?.code || ""),
+          validationErrors: Array.isArray(error?.errors) ? error.errors.slice(0, 20) : [],
+        },
+      });
       res.status(HTTP_STATUS.BAD_REQUEST).json({ ok: false, error: error.message });
     }
   }
 
   return {
     normalizeSelectedConnectors,
-    normalizeRunConfig,
+    mapAgentRunCommand,
     handleChat,
   };
 }

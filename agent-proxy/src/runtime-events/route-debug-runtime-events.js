@@ -21,8 +21,8 @@ export function writeAgentProxyRouteDebugEvent({
   data = {},
   workspaceRoot,
 } = {}) {
-  const sessionId = String(payload?.sessionId || data?.sessionId || channel?.startPayload?.sessionId || parseChannelKeyPart(channel?.key, 1) || "").trim();
-  const userId = String(payload?.userId || socket?.__agentProxyUserId || data?.userId || channel?.ownerUserId || channel?.startPayload?.userId || parseChannelKeyPart(channel?.key, 0) || "").trim();
+  const sessionId = String(payload?.identity?.sessionId || payload?.sessionId || data?.sessionId || channel?.startPayload?.identity?.sessionId || parseChannelKeyPart(channel?.key, 1) || "").trim();
+  const userId = String(socket?.__agentProxyUserId || data?.userId || channel?.ownerUserId || parseChannelKeyPart(channel?.key, 0) || "").trim();
   return writeRoutedRuntimeEvent({
     source: "agent-proxy",
     channel: RUNTIME_EVENT_CHANNELS.AGENT_PROXY_WEB_SOCKET,
@@ -31,14 +31,15 @@ export function writeAgentProxyRouteDebugEvent({
     event,
     userId,
     sessionId,
-    dialogProcessId: String(payload?.dialogProcessId || data?.dialogProcessId || "").trim(),
-    turnScopeId: String(payload?.turnScopeId || data?.turnScopeId || "").trim(),
+    dialogProcessId: String(payload?.identity?.dialogProcessId || payload?.dialogProcessId || data?.dialogProcessId || "").trim(),
+    turnScopeId: String(payload?.identity?.turnScopeId || payload?.turnScopeId || data?.turnScopeId || "").trim(),
     workspaceRoot,
     data: {
       debugType: "agent-proxy-route",
       action: String(payload?.action || data?.action || "").trim().toLowerCase(),
-      payloadSessionId: String(payload?.sessionId || "").trim(),
-      payloadUserIdPresent: Boolean(payload?.userId),
+      commandType: String(payload?.commandType || data?.commandType || "").trim().toLowerCase(),
+      payloadSessionId: String(payload?.identity?.sessionId || payload?.sessionId || "").trim(),
+      payloadUserIdPresent: false,
       payloadChannelKeyPresent: Boolean(payload?.channelKey),
       socketUserIdPresent: Boolean(socket?.__agentProxyUserId),
       socketActiveChannelKeyPresent: Boolean(socket?.__agentProxyActiveChannelKey),

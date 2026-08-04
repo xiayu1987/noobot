@@ -152,21 +152,17 @@ function buildStateWithRunConfig(runConfig) {
   return received;
 }
 
-test("state builder reads selectedModel from runConfig.config first", () => {
+test("state builder reads selectedModel and scenario only from canonical runConfig fields", () => {
   const received = buildStateWithRunConfig({
     selectedModel: "top_level_alias",
     scenario: "top_level_scenario",
-    config: {
-      selectedModel: "config_alias",
-      scenario: "config_scenario",
-    },
   });
 
-  assert.equal(received.selectedModel, "config_alias");
-  assert.equal(received.scenario, "config_scenario");
+  assert.equal(received.selectedModel, "top_level_alias");
+  assert.equal(received.scenario, "top_level_scenario");
 });
 
-test("state builder falls back to top-level selectedModel and scenario", () => {
+test("state builder accepts canonical selectedModel and scenario", () => {
   const received = buildStateWithRunConfig({
     selectedModel: "selected_alias",
     scenario: "programming",

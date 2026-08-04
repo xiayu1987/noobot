@@ -11,6 +11,7 @@ import {
   closeServer,
   callChatWs,
   stopChatWs,
+  createProtocolTestCommand,
   waitForCondition,
 } from "./chat-websocket-server.test-helpers.js";
 import { TURN_EVENT } from "@noobot/event-protocol";
@@ -130,7 +131,7 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
     const oldWs = new WebSocket(url, { headers: { authorization: "Bearer test-key" } });
     sockets.push(oldWs);
     await new Promise((resolve, reject) => {
-      oldWs.on("open", () => { oldWs.send(JSON.stringify(payload)); resolve(); });
+      oldWs.on("open", () => { oldWs.send(JSON.stringify(createProtocolTestCommand(payload))); resolve(); });
       oldWs.on("error", reject);
     });
     await waitForCondition(() => Boolean(emitAfterRefresh), {
@@ -150,7 +151,7 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
       newWs.on("error", reject);
     });
     await new Promise((resolve, reject) => {
-      newWs.on("open", () => { newWs.send(JSON.stringify(payload)); resolve(); });
+      newWs.on("open", () => { newWs.send(JSON.stringify(createProtocolTestCommand(payload))); resolve(); });
       newWs.on("error", reject);
     });
     emitAfterRefresh();

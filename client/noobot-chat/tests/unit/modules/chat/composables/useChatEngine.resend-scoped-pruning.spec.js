@@ -247,11 +247,9 @@ describe("useChatEngine.resend scoped pruning", () => {
     expect(deleteSessionMessagesFromApi).not.toHaveBeenCalled();
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
-      message: "edited question",
-      sessionId: "local-resend-replace-completed",
-      config: expect.objectContaining({
-        reuseExistingUserTurn: true,
-      }),
+      commandType: "turn.resend",
+      input: expect.objectContaining({ message: "edited question" }),
+      identity: expect.objectContaining({ sessionId: "local-resend-replace-completed" }),
     }));
     expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", ""]);
     expect(activeSession.value.messages[1]).toEqual(expect.objectContaining({

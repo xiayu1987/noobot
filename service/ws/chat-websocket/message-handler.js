@@ -4,11 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 import { unregisterActiveRun } from "./run-registry.js";
-import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
+import {
+  recordServiceAgentTransportDebug,
+  recordServiceWebSocketLifecycle,
+} from "./runtime-events.js";
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { resetRunState } from "./connection-state.js";
-import { TURN_COMMAND, TURN_PHASE } from "@noobot/event-protocol";
-import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
+import { TURN_PHASE } from "@noobot/event-protocol";
+import {
+  AGENT_COMMAND,
+  EXECUTION_QUERY_COMMAND_TYPES,
+  RUN_COMMAND_TYPES,
+  parseAgentCommand,
+} from "@noobot/agent-transport-protocol";
 import { createMessageQueryHandlers } from "./message-query-handlers.js";
 import { createMessageStopHandler } from "./message-stop-handler.js";
 import { createMessageRunHandler } from "./message-run-handler.js";
@@ -20,8 +28,7 @@ export function createMessageHandler({
   sendEvent,
   translateText,
   normalizeLocale,
-  normalizeRunConfig,
-  isForbiddenUserScope,
+  mapAgentRunCommand,
   resolveBot,
   sessionLogConfig,
   pendingInteractionRequests,
@@ -42,7 +49,7 @@ export function createMessageHandler({
 
   const { handleInteractionResponse, handleSnapshotGet, handleExecutionQuery, handleFinalize } =
     createMessageQueryHandlers({
-      state, authInfo, sendEvent, translateText, isForbiddenUserScope, resolveBot,
+    state, authInfo, sendEvent, translateText, resolveBot,
       pendingInteractionRequests, recoverTurnFinalize, recoverSnapshotOrphan,
     });
   const handleStop = createMessageStopHandler({
@@ -50,7 +57,7 @@ export function createMessageHandler({
     rejectAllPendingInteractions, commitTurnLifecycle,
   });
   const { handleRun, commitCurrentFailure } = createMessageRunHandler({
-    state, authInfo, sendEvent, translateText, normalizeLocale, normalizeRunConfig, isForbiddenUserScope,
+    state, authInfo, sendEvent, translateText, normalizeLocale, mapAgentRunCommand,
     resolveBot, sessionLogConfig, userInteractionBridge, buildRunStateSnapshot,
     finalizeTimeout, finalizeUserStopped, finalizeCompleted, commitTurnLifecycle, dispatchAuthorityEvents,
   });
@@ -58,43 +65,66 @@ export function createMessageHandler({
   return async function onMessage(rawMessage) {
     let runMessageStarted = false;
     let boundRunHandle = null;
+    let parsedCommand = null;
     try {
-      const payload = JSON.parse(String(rawMessage || "{}"));
-      const action = String(payload?.action || "").trim().toLowerCase();
-      const commandType = String(payload?.commandType || "").trim().toLowerCase();
-      if (Object.values(EXECUTION_QUERY_COMMAND).includes(commandType)) {
-        await handleExecutionQuery(payload, commandType);
+      const command = parseAgentCommand(rawMessage);
+      parsedCommand = command;
+      void recordServiceAgentTransportDebug({
+        sessionLogConfig,
+        event: "service.agentTransport.commandReceived",
+        command,
+        userId: canonicalRunOwnerId,
+        data: { accepted: true, transport: "websocket" },
+      });
+      const { commandType } = command;
+      if (EXECUTION_QUERY_COMMAND_TYPES.includes(commandType)) {
+        await handleExecutionQuery(command, commandType);
         return;
       }
-      if (commandType === TURN_COMMAND.SNAPSHOT_GET) {
-        await handleSnapshotGet(payload);
+      if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
+        await handleSnapshotGet(command);
         return;
       }
-      if (commandType === TURN_COMMAND.FINALIZE) {
-        await handleFinalize(payload);
+      if (commandType === AGENT_COMMAND.FINALIZE) {
+        await handleFinalize(command);
         return;
       }
-      const isContinueAction = action === "continue" || action === "resume";
-      if (action === "interaction_response") {
-        handleInteractionResponse(payload);
+      if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
+        handleInteractionResponse(command);
         return;
       }
-      if (action === "stop") {
-        await handleStop(payload);
+      if (commandType === AGENT_COMMAND.STOP) {
+        await handleStop(command);
         return;
       }
+      if (!RUN_COMMAND_TYPES.includes(commandType)) throw new Error("unsupported_agent_command");
       if (state.isRunning) {
         sendEvent("error", { error: translateText("ws.sessionAlreadyRunning", state.currentLocale) });
         return;
       }
       runMessageStarted = true;
-      const runResult = await handleRun(payload, {
-        isContinueAction,
+      const runResult = await handleRun(command, {
         onRunBound: (handle) => { boundRunHandle = handle; },
       });
       if (runResult?.rebound === true) runMessageStarted = false;
     } catch (error) {
       if (!runMessageStarted || !state.currentRunMeta) {
+        void recordServiceAgentTransportDebug({
+          sessionLogConfig,
+          event: parsedCommand
+            ? "service.agentTransport.commandDispatchFailed"
+            : "service.agentTransport.commandRejected",
+          command: parsedCommand || rawMessage,
+          userId: canonicalRunOwnerId,
+          data: {
+            accepted: Boolean(parsedCommand),
+            dispatched: false,
+            transport: "websocket",
+            errorType: String(error?.name || "Error"),
+            errorCode: String(error?.errorCode || error?.code || ""),
+            validationErrors: Array.isArray(error?.errors) ? error.errors.slice(0, 20) : [],
+          },
+        });
         void recordServiceWebSocketLifecycle({
           sessionLogConfig,
           event: "service.websocket.request.rejected",

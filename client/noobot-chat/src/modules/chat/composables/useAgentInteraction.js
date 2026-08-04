@@ -6,6 +6,7 @@
 import { storeToRefs } from "pinia";
 import { useChatStore } from "../stores/useChatStore.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
 
 export function useAgentInteraction({
   encryptPayloadBySessionId,
@@ -207,11 +208,15 @@ export function useAgentInteraction({
           }
         : response || {};
     try {
-      sendJson({
-        action: "interaction_response",
-        requestId: request.requestId,
-        response: responsePayload,
-      });
+      sendJson(createInteractionResponseCommand({
+        commandId: `interaction:${request.requestId}`,
+        identity: {
+          sessionId,
+          dialogProcessId: request?.dialogProcessId,
+          turnScopeId: request?.turnScopeId,
+        },
+        interaction: { requestId: request.requestId, response: responsePayload },
+      }));
     } catch (error) {
       interactionSubmitting.value = false;
       throw error;

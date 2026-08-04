@@ -45,11 +45,29 @@ describe("useChatEngine.send-stream", () => {
       id: expect.stringMatching(/^msg_/),
       messageId: expect.stringMatching(/^msg_/),
       sessionId: "s-user-message-identity",
-      turnScopeId: capturedPayload.turnScopeId,
+      turnScopeId: capturedPayload.identity.turnScopeId,
     }));
     expect(userMessage.id).toBe(userMessage.messageId);
-    expect(capturedPayload.userMessageId).toBe(userMessage.messageId);
-    expect(capturedPayload.config.userMessageId).toBe(userMessage.messageId);
+    expect(capturedPayload.presentation.userMessageId).toBe(userMessage.messageId);
+    expect(capturedPayload.concurrency.expectedRevision).toBe(0);
+    expect(capturedPayload).not.toHaveProperty("userMessageId");
+  });
+
+  it("sends the current session version as the expected revision", async () => {
+    let capturedPayload = null;
+    const stream = vi.fn(async (payload) => {
+      capturedPayload = payload;
+    });
+    const { engine, activeSession } = createHarness({
+      sessionId: "s-current-version",
+      stream,
+    });
+    activeSession.value.version = 7;
+    activeSession.value.revision = 6;
+
+    await engine.send();
+
+    expect(capturedPayload.concurrency.expectedRevision).toBe(7);
   });
 
   it("refreshes a stale session version without replaying the failed Turn", async () => {
@@ -89,7 +107,7 @@ describe("useChatEngine.send-stream", () => {
     const stream = vi.fn(async (payload, onEvent) => {
       capturedPayload = payload;
       emitChannelState(onEvent, "s-thinking-start", "dp-thinking-start", "completed", {
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
       });
       emitAuthorityProcessing(onEvent, payload);
       emitAuthorityTerminal(onEvent, {
@@ -114,25 +132,25 @@ describe("useChatEngine.send-stream", () => {
       terminal: "completed",
       startedAt: expect.any(String),
     });
-    expect(capturedPayload?.config?.thinkingStartedAt).toBe(runtime.startedAt);
+    expect(capturedPayload.preferences).not.toHaveProperty("thinkingStartedAt");
   });
 
   it("does not derive authoritative finished timing from transport completion", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "s-late-completed", "dp-late-completed", "sending", {
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
       });
       const assistant = assistantMessage(activeSession);
       assistant.pending = false;
       assistant.channelState = { state: FrontendRunState.FRONTEND_COMPLETED };
       applyTurnTimingUpdate(turnRuntimeRegistry.value, {
         sessionId: "s-late-completed",
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
         dialogProcessId: "dp-late-completed",
         thinkingStartedAt: "2026-07-15T10:00:00.000Z",
       });
       emitChannelState(onEvent, "s-late-completed", "dp-late-completed", "completed", {
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
       });
     });
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
@@ -159,7 +177,7 @@ describe("useChatEngine.send-stream", () => {
     const stream = vi.fn(async (payload, onEvent) => {
       capturedPayload = payload;
       emitChannelState(onEvent, "local-client-turn", "", "sending", {
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
       });
       emitAuthorityProcessing(onEvent, {
         ...payload,
@@ -176,9 +194,9 @@ describe("useChatEngine.send-stream", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(capturedPayload).toEqual(expect.objectContaining({
-      turnScopeId: expect.stringMatching(/^client-turn:/),
+      identity: { sessionId: "local-client-turn", turnScopeId: expect.stringMatching(/^client-turn:/) },
     }));
-    expect(assistant?.turnScopeId).toBe(capturedPayload.turnScopeId);
+    expect(assistant?.turnScopeId).toBe(capturedPayload.identity.turnScopeId);
     expect(activeTurnRuntime.value).toEqual(expect.objectContaining({
       state: FrontendRunState.PROCESSING,
       backendState: BackendChannelState.SENDING,
@@ -249,12 +267,12 @@ describe("useChatEngine.send-stream", () => {
       });
       emitAuthorityProcessing(onEvent, {
         sessionId: "s-active-send",
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
         dialogProcessId: "dp-active-send",
       });
       emitAuthorityTerminal(onEvent, {
         sessionId: "s-active-send",
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
         dialogProcessId: "dp-active-send",
       });
     });
@@ -314,12 +332,12 @@ describe("useChatEngine.send-stream", () => {
       });
       emitAuthorityProcessing(onEvent, {
         sessionId: "s-missing-turn",
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
         dialogProcessId: "dp-missing-turn",
       });
       emitAuthorityTerminal(onEvent, {
         sessionId: "s-missing-turn",
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
         dialogProcessId: "dp-missing-turn",
       });
     });
@@ -413,9 +431,9 @@ describe("useChatEngine.send-stream", () => {
             eventType: "authoritative_final_content",
             sessionId: "local-1",
             messageId: "model-output-final-answer",
-            presentationMessageId: payload.presentationMessageId,
+            presentationMessageId: payload.presentation.assistantMessageId,
             dialogProcessId: "dp-new",
-            turnScopeId: payload.turnScopeId,
+            turnScopeId: payload.identity.turnScopeId,
             sequence: 1,
             timestamp: "2026-07-22T05:00:01.000Z",
             text: "final answer",
@@ -439,9 +457,9 @@ describe("useChatEngine.send-stream", () => {
             { role: RoleEnum.USER, content: "hello" },
             {
               role: RoleEnum.ASSISTANT,
-              messageId: payload.presentationMessageId,
+              messageId: payload.presentation.assistantMessageId,
               dialogProcessId: "dp-new",
-              turnScopeId: payload.turnScopeId,
+              turnScopeId: payload.identity.turnScopeId,
               content: "final answer",
               modelAlias: "alias-a",
               modelName: "model-a",
@@ -631,19 +649,19 @@ describe("useChatEngine.send-stream", () => {
   it("terminal completed channel_state triggers frontend completion detail without DONE event", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "sending", {
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
       });
       onEvent({
         event: StreamEventEnum.DELTA,
         data: {
           sessionId: "local-channel-complete",
           dialogProcessId: "dp-channel-complete",
-          turnScopeId: payload.turnScopeId,
+          turnScopeId: payload.identity.turnScopeId,
           text: "overlay answer",
         },
       });
       emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "completed", {
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
       });
       emitAuthorityProcessing(onEvent, payload);
       emitAuthorityCompletionRequested(onEvent, {
@@ -798,16 +816,16 @@ describe("useChatEngine.send-stream", () => {
       ],
     }));
     const stream = vi.fn(async (payload, onEvent) => {
-      replacementTurnScopeId = payload.turnScopeId;
+      replacementTurnScopeId = payload.identity.turnScopeId;
       emitChannelState(onEvent, "local-stop-detail-preserve", "dp-new", "user_stopped", {
-        turnScopeId: payload.turnScopeId,
+        turnScopeId: payload.identity.turnScopeId,
       });
       onEvent({
         event: StreamEventEnum.USER_STOPPED,
         data: {
           sessionId: "local-stop-detail-preserve",
           dialogProcessId: "dp-new",
-          turnScopeId: payload.turnScopeId,
+          turnScopeId: payload.identity.turnScopeId,
         },
       });
     });

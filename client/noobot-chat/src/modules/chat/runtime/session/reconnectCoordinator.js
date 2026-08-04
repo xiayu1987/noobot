@@ -14,6 +14,7 @@ import {
   summarizeStateMachineTurn,
   summarizeTurnLifecycleSnapshot,
 } from "../../../debug/loggers/stateMachineLogger.js";
+import { createExecutionQueryCommand } from "@noobot/agent-transport-protocol";
 
 export function createReconnectCoordinator({
   activeSession, turnRuntimeRegistry, userId, chatWebSocketClient,
@@ -241,12 +242,12 @@ export function createReconnectCoordinator({
           rootExecutionId: String(payload?.rootExecutionId || ""),
         }));
         try {
-          const response = await chatWebSocketClient.requestJson({
+          const response = await chatWebSocketClient.requestJson(createExecutionQueryCommand({
             commandType: action,
             commandId,
-            userId: String(userId?.value || userId || "").trim(),
-            ...payload,
-          }, { expectedEvents: [expectedEvent] });
+            identity: { sessionId },
+            query: payload,
+          }), { expectedEvents: [expectedEvent] });
           const result = await reconnectReplay.applyReconnectEvent(response?.event, response?.data || {});
           logStateMachineDebug("stateMachine.reconnect.executionQuery.after", () => ({
             sessionId: reconnectSessionId,

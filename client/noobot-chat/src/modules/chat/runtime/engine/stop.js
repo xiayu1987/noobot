@@ -16,6 +16,7 @@ import {
   getMessageTurnScopeId,
 } from "../../model/messageIdentity.js";
 import { nowMs } from "../../model/timeFields.js";
+import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
 import {
   logResendDebug,
   summarizeDebugMessage,
@@ -65,41 +66,39 @@ function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "
   };
 }
 
-function buildStopPayload({ userId, activeSession, session: targetSession, pendingAssistantMessage, turnRuntime, execution } = {}) {
+function buildStopPayload({ activeSession, session: targetSession, pendingAssistantMessage, turnRuntime, execution } = {}) {
   const session = targetSession || activeSession?.value || {};
   const dialogProcessId = normalizeTrimmedString(turnRuntime?.dialogProcessId);
   const turnScopeId = normalizeTrimmedString(turnRuntime?.turnScopeId);
   const createdAtMs = nowMs();
-  const payload = {
-    userId: String(userId?.value ?? userId ?? ""),
-    sessionId: String(session.backendSessionId || session.sessionId || session.id || ""),
-    dialogProcessId,
-    turnScopeId,
+  return createTurnStopCommand({
     commandId: `stop:${turnScopeId}`,
-    executionId: normalizeTrimmedString(execution?.executionId),
-    expectedRevision: Number.isFinite(Number(execution?.revision))
-      ? Number(execution.revision)
-      : undefined,
-    createdAtMs,
-    parentSessionId: String(
-      session.parentSessionId || pendingAssistantMessage?.parentSessionId || "",
-    ),
-    parentDialogProcessId: String(
-      getMessageParentDialogProcessId(pendingAssistantMessage) || session.parentDialogProcessId || "",
-    ),
-    partialAssistant: {
-      content: String(pendingAssistantMessage?.content || ""),
+    identity: {
+      sessionId: String(session.backendSessionId || session.sessionId || session.id || ""),
+      parentSessionId: String(session.parentSessionId || pendingAssistantMessage?.parentSessionId || ""),
       dialogProcessId,
+      parentDialogProcessId: String(
+        getMessageParentDialogProcessId(pendingAssistantMessage) || session.parentDialogProcessId || "",
+      ),
       turnScopeId,
-        createdAtMs,
-      modelAlias: String(pendingAssistantMessage?.modelAlias || ""),
-      modelName: String(pendingAssistantMessage?.modelName || ""),
     },
-  };
-  Object.keys(payload).forEach((key) => {
-    if (key !== "partialAssistant" && !normalizeTrimmedString(payload[key])) delete payload[key];
+    concurrency: {
+      expectedRevision: Number.isFinite(Number(execution?.revision))
+        ? Number(execution.revision)
+        : undefined,
+    },
+    stop: {
+      executionId: normalizeTrimmedString(execution?.executionId),
+      partialAssistant: {
+        content: String(pendingAssistantMessage?.content || ""),
+        dialogProcessId,
+        turnScopeId,
+        createdAtMs,
+        modelAlias: String(pendingAssistantMessage?.modelAlias || ""),
+        modelName: String(pendingAssistantMessage?.modelName || ""),
+      },
+    },
   });
-  return payload;
 }
 
 export function stopSending({
@@ -144,7 +143,6 @@ export function stopSending({
     messages: summarizeDebugMessages(activeSession?.value?.messages),
   }));
   const stopPayload = buildStopPayload({
-    userId,
     activeSession,
     session,
     pendingAssistantMessage,
@@ -152,9 +150,9 @@ export function stopSending({
     execution,
   });
   logStopDebug("stop.payload", () => ({
-    sessionId: stopPayload.sessionId,
-    dialogProcessId: stopPayload.dialogProcessId,
-    turnScopeId: stopPayload.turnScopeId,
+    sessionId: stopPayload.identity.sessionId,
+    dialogProcessId: stopPayload.identity.dialogProcessId,
+    turnScopeId: stopPayload.identity.turnScopeId,
     commandId: stopPayload.commandId,
     stopPayload,
     pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),
@@ -165,11 +163,11 @@ export function stopSending({
     messages: summarizeDebugMessages(activeSession?.value?.messages),
   }));
   const stopEvent = rememberStopRequestedEvent({
-    sessionId: stopPayload.sessionId,
-    dialogProcessId: stopPayload.dialogProcessId,
-    turnScopeId: stopPayload.turnScopeId,
+    sessionId: stopPayload.identity.sessionId,
+    dialogProcessId: stopPayload.identity.dialogProcessId,
+    turnScopeId: stopPayload.identity.turnScopeId,
     commandId: stopPayload.commandId,
-    createdAtMs: stopPayload.createdAtMs,
+    createdAtMs: stopPayload.stop.partialAssistant.createdAtMs,
     source: "stop_sending",
   });
   if (applyRunStateEvent) {
@@ -179,9 +177,9 @@ export function stopSending({
     if (applyRunStateEvent) {
       applyRunStateEvent({
         type: SESSION_RUN_EVENT.LOCAL_RESET,
-        sessionId: stopPayload.sessionId,
-        dialogProcessId: stopPayload.dialogProcessId,
-        turnScopeId: stopPayload.turnScopeId,
+        sessionId: stopPayload.identity.sessionId,
+        dialogProcessId: stopPayload.identity.dialogProcessId,
+        turnScopeId: stopPayload.identity.turnScopeId,
         source: "stop_sending_request_failed",
         error,
       });

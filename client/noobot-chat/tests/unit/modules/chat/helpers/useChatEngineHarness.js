@@ -290,7 +290,7 @@ export const createHarness = ({
     chatWebSocketClient: {
       stream: stream
         ? vi.fn(async (payload, onEvent) => {
-            currentStreamTurnScopeId = String(payload?.turnScopeId || "").trim();
+            currentStreamTurnScopeId = String(payload?.identity?.turnScopeId || "").trim();
             const wrappedOnEvent = (envelope = {}) => {
               const data = envelope?.data && typeof envelope.data === "object" && !Array.isArray(envelope.data)
                 ? envelope.data
@@ -427,7 +427,18 @@ export const emitChannelState = (onEvent, sessionId, dialogProcessId, state, dat
   });
 };
 
-export const emitAuthorityProcessing = (onEvent, {
+function authorityEventInput(source = {}) {
+  return {
+    ...source,
+    sessionId: source.sessionId ?? source.identity?.sessionId,
+    turnScopeId: source.turnScopeId ?? source.identity?.turnScopeId,
+    dialogProcessId: source.dialogProcessId ?? source.identity?.dialogProcessId,
+    presentationMessageId: source.presentationMessageId ?? source.presentation?.assistantMessageId,
+  };
+}
+
+export const emitAuthorityProcessing = (onEvent, source = {}) => {
+  const {
   sessionId,
   turnScopeId,
   dialogProcessId = "",
@@ -435,7 +446,7 @@ export const emitAuthorityProcessing = (onEvent, {
   commandId = `send:${turnScopeId}`,
   messageId = `event-message:${turnScopeId}`,
   presentationMessageId = `message:${turnScopeId}`,
-} = {}) => {
+  } = authorityEventInput(source);
   const emit = (data) => onEvent({ event: StreamEventEnum.TURN_LIFECYCLE, data });
   emit(createTurnLifecycleEnvelope({
     eventType: "turn.action_accepted",
@@ -475,7 +486,8 @@ export const emitAuthorityProcessing = (onEvent, {
   }));
 };
 
-export const emitAuthorityCompletionRequested = (onEvent, {
+export const emitAuthorityCompletionRequested = (onEvent, source = {}) => {
+  const {
   sessionId,
   turnScopeId,
   dialogProcessId = "",
@@ -483,7 +495,7 @@ export const emitAuthorityCompletionRequested = (onEvent, {
   commandId = `send:${turnScopeId}`,
   messageId = `event-message:${turnScopeId}`,
   presentationMessageId = `message:${turnScopeId}`,
-} = {}) => {
+  } = authorityEventInput(source);
   onEvent({
     event: StreamEventEnum.TURN_LIFECYCLE,
     data: createTurnLifecycleEnvelope({
@@ -507,7 +519,8 @@ export const emitAuthorityCompletionRequested = (onEvent, {
   });
 };
 
-export const emitAuthorityTerminal = (onEvent, {
+export const emitAuthorityTerminal = (onEvent, source = {}) => {
+  const {
   sessionId,
   turnScopeId,
   dialogProcessId = "",
@@ -519,7 +532,7 @@ export const emitAuthorityTerminal = (onEvent, {
   sequence = 3,
   revision = 3,
   failure = null,
-} = {}) => {
+  } = authorityEventInput(source);
   onEvent({
     event: StreamEventEnum.TURN_LIFECYCLE,
     data: createTurnLifecycleEnvelope({

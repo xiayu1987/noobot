@@ -5,7 +5,14 @@
  */
 import { normalizeTrimmedString } from "./chatWebSocketProtocol.js";
 
-export function createWebSocketCommandRequests({ getActiveSocket, timeoutMs, translateText }) {
+export function createWebSocketCommandRequests({
+  getActiveSocket,
+  timeoutMs,
+  translateText,
+  onCommandSending = null,
+  onCommandSent = null,
+  onCommandSendFailed = null,
+}) {
   const pendingRequests = new Map();
 
   function rejectAll(error) {
@@ -34,11 +41,20 @@ export function createWebSocketCommandRequests({ getActiveSocket, timeoutMs, tra
   }
 
   function sendJson(payload = {}) {
+    onCommandSending?.(payload);
     const ws = getActiveSocket();
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      throw new Error(translateText("infra.interactionChannelUnavailable"));
+      const error = new Error(translateText("infra.interactionChannelUnavailable"));
+      onCommandSendFailed?.(payload, error);
+      throw error;
     }
-    ws.send(JSON.stringify(payload || {}));
+    try {
+      ws.send(JSON.stringify(payload || {}));
+      onCommandSent?.(payload);
+    } catch (error) {
+      onCommandSendFailed?.(payload, error);
+      throw error;
+    }
   }
 
   function requestJson(payload = {}, { expectedEvents = [], timeoutMs: requestTimeoutMs = timeoutMs } = {}) {

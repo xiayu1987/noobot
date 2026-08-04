@@ -28,6 +28,7 @@
     "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:frontend-structure && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
   },
   "dependencies": {
+    "@noobot/agent-transport-protocol": "file:../../agent-transport-protocol",
     "@noobot/client-shared": "file:../shared",
     "@noobot/plugin-runtime": "file:../../plugin-runtime",
     "@noobot/shared": "file:../../shared",

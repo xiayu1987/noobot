@@ -593,10 +593,6 @@ function resolvePluginModelConfig(runConfig = {}) {
   if (directConfig && typeof directConfig === "object" && !Array.isArray(directConfig)) {
     return directConfig;
   }
-  const nestedConfig = runConfig?.config?.pluginModelConfig;
-  if (nestedConfig && typeof nestedConfig === "object" && !Array.isArray(nestedConfig)) {
-    return nestedConfig;
-  }
   return {};
 }
 

@@ -65,19 +65,24 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(engine.stopSending()).toBe(false);
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
     expect(deps.chatWebSocketClient.requestStop.mock.calls[0][0]).toMatchObject({
-      userId: "u-1",
-      sessionId: "backend-stop-payload",
-      dialogProcessId: "dp-stop-payload",
-      turnScopeId: "turn-stop-payload",
+      protocolVersion: 1,
+      commandType: "turn.stop",
       commandId: "stop:turn-stop-payload",
-      parentSessionId: "parent-session",
-      parentDialogProcessId: "parent-dp",
-      partialAssistant: {
-        content: "partial answer",
+      identity: {
+        sessionId: "backend-stop-payload",
         dialogProcessId: "dp-stop-payload",
         turnScopeId: "turn-stop-payload",
-        modelAlias: "alias-a",
-        modelName: "model-a",
+        parentSessionId: "parent-session",
+        parentDialogProcessId: "parent-dp",
+      },
+      stop: {
+        partialAssistant: {
+          content: "partial answer",
+          dialogProcessId: "dp-stop-payload",
+          turnScopeId: "turn-stop-payload",
+          modelAlias: "alias-a",
+          modelName: "model-a",
+        },
       },
     });
     expect(resolveSessionTurnRuntime(
@@ -113,14 +118,8 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:turn-refreshed",
-        sessionId: "backend-stop-refreshed",
-        dialogProcessId: "dp-refreshed",
-        turnScopeId: "turn-refreshed",
-        partialAssistant: expect.objectContaining({
-          content: "partial after refresh",
-          dialogProcessId: "dp-refreshed",
-          turnScopeId: "turn-refreshed",
-        }),
+        identity: expect.objectContaining({ sessionId: "backend-stop-refreshed", dialogProcessId: "dp-refreshed", turnScopeId: "turn-refreshed" }),
+        stop: expect.objectContaining({ partialAssistant: expect.objectContaining({ content: "partial after refresh", dialogProcessId: "dp-refreshed", turnScopeId: "turn-refreshed" }) }),
       }),
     );
   });
@@ -150,14 +149,8 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:turn-channel-identity",
-        sessionId: "backend-stop-channel-identity",
-        dialogProcessId: "dp-channel-identity",
-        turnScopeId: "turn-channel-identity",
-        partialAssistant: expect.objectContaining({
-          content: "",
-          dialogProcessId: "dp-channel-identity",
-          turnScopeId: "turn-channel-identity",
-        }),
+        identity: expect.objectContaining({ sessionId: "backend-stop-channel-identity", dialogProcessId: "dp-channel-identity", turnScopeId: "turn-channel-identity" }),
+        stop: expect.objectContaining({ partialAssistant: expect.objectContaining({ content: "", dialogProcessId: "dp-channel-identity", turnScopeId: "turn-channel-identity" }) }),
       }),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({
@@ -193,13 +186,8 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:turn-user-fallback",
-        sessionId: "backend-stop-user-turn-fallback",
-        dialogProcessId: "dp-user-turn-fallback",
-        turnScopeId: "turn-user-fallback",
-        partialAssistant: expect.objectContaining({
-          dialogProcessId: "dp-user-turn-fallback",
-          turnScopeId: "turn-user-fallback",
-        }),
+        identity: expect.objectContaining({ sessionId: "backend-stop-user-turn-fallback", dialogProcessId: "dp-user-turn-fallback", turnScopeId: "turn-user-fallback" }),
+        stop: expect.objectContaining({ partialAssistant: expect.objectContaining({ dialogProcessId: "dp-user-turn-fallback", turnScopeId: "turn-user-fallback" }) }),
       }),
     );
     expect(activeSession.value.messages[0]).not.toMatchObject({
@@ -231,12 +219,9 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledWith(
       expect.objectContaining({
         commandId: "stop:child-turn",
-        executionId: "child-execution",
-        expectedRevision: 7,
-        sessionId: "child-session",
-        parentSessionId: "main-session",
-        dialogProcessId: "child-dialog",
-        turnScopeId: "child-turn",
+        identity: expect.objectContaining({ sessionId: "child-session", parentSessionId: "main-session", dialogProcessId: "child-dialog", turnScopeId: "child-turn" }),
+        concurrency: { expectedRevision: 7 },
+        stop: expect.objectContaining({ executionId: "child-execution" }),
       }),
     );
   });

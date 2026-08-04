@@ -163,12 +163,10 @@ describe("useChatEngine.resend replace turn", () => {
       replacedTurnScopeIds: ["client-turn:old"],
     });
     expect(stream).toHaveBeenCalledTimes(1);
-    expect(stream.mock.calls[0][0].message).toBe("edited question");
-    expect(stream.mock.calls[0][0].sessionId).toBe("local-resend-replace-success");
-    expect(stream.mock.calls[0][0].turnScopeId).toEqual(expect.stringMatching(/^client-turn:/));
-    expect(stream.mock.calls[0][0].config).toEqual(expect.objectContaining({
-      reuseExistingUserTurn: true,
-    }));
+    expect(stream.mock.calls[0][0].input.message).toBe("edited question");
+    expect(stream.mock.calls[0][0].identity.sessionId).toBe("local-resend-replace-success");
+    expect(stream.mock.calls[0][0].identity.turnScopeId).toEqual(expect.stringMatching(/^client-turn:/));
+    expect(stream.mock.calls[0][0].commandType).toBe("turn.resend");
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);
@@ -274,15 +272,18 @@ describe("useChatEngine.resend replace turn", () => {
     }), expect.any(Object));
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
-      message: "edited with attachments",
-      attachments: [
-        keptAttachment,
-        expect.objectContaining({
-          attachmentId: "canonical-1",
-          name: "new.txt",
-          sessionId: "local-resend-attachments",
-        }),
-      ],
+      commandType: "turn.resend",
+      input: expect.objectContaining({
+        message: "edited with attachments",
+        attachments: [
+          keptAttachment,
+          expect.objectContaining({
+            attachmentId: "canonical-1",
+            name: "new.txt",
+            sessionId: "local-resend-attachments",
+          }),
+        ],
+      }),
     }));
     expect(activeSession.value.messages[0].attachments).toEqual([
       keptAttachment,
@@ -400,8 +401,7 @@ describe("useChatEngine.resend replace turn", () => {
     }), expect.any(Object));
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
-      message: "old with attachment A",
-      attachments: [originalAttachment],
+      input: { message: "old with attachment A", attachments: [originalAttachment] },
     }));
     expect(activeSession.value.messages[0].attachments).toEqual([originalAttachment]);
   });
@@ -474,7 +474,9 @@ describe("useChatEngine.resend replace turn", () => {
     })).resolves.toBe(true);
 
     expect(stream).toHaveBeenCalledWith(expect.objectContaining({
-      attachments: [expect.objectContaining({ attachmentId: "attachment-rich", parsedResultAttachmentId: "parsed-rich" })],
+      input: expect.objectContaining({
+        attachments: [expect.objectContaining({ attachmentId: "attachment-rich", parsedResultAttachmentId: "parsed-rich" })],
+      }),
     }), expect.any(Function));
     expect(activeSession.value.messages[0].attachments).toEqual([
       expect.objectContaining({
@@ -537,7 +539,9 @@ describe("useChatEngine.resend replace turn", () => {
     })).resolves.toBe(true);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({ attachments: [] }), expect.any(Object));
-    expect(stream).toHaveBeenCalledWith(expect.objectContaining({ attachments: [] }), expect.any(Function));
+    expect(stream).toHaveBeenCalledWith(expect.objectContaining({
+      input: expect.objectContaining({ attachments: [] }),
+    }), expect.any(Function));
     expect(activeSession.value.messages[0].attachments).toEqual([]);
   });
 
@@ -605,8 +609,8 @@ describe("useChatEngine.resend replace turn", () => {
     }));
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
-      message: "edited after conflict",
-      turnScopeId: expect.stringMatching(/^client-turn:/),
+      input: expect.objectContaining({ message: "edited after conflict" }),
+      identity: expect.objectContaining({ turnScopeId: expect.stringMatching(/^client-turn:/) }),
     }));
     expect(appendMessage).toHaveBeenCalledWith(
       RoleEnum.ASSISTANT,
