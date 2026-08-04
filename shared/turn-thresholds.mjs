@@ -69,7 +69,7 @@ export const TURN_THRESHOLDS = deepFreeze({
         phaseAcceptanceTriggerTurns: 9,
       },
       programming: {
-        summaryTurns: 3,
+        summaryTurns: 30,
         analysisTurns: 1,
         planUpdateTriggerTurns: 14,
         phaseAcceptanceTriggerTurns: 29,
