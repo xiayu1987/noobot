@@ -83,7 +83,6 @@ export class RunConfigPluginPreparer {
     normalizeStringArray = null,
     mergePluginOptions = null,
     createPluginResolveModelMessages = null,
-    createPluginMarkMessagesSummarized = null,
     createDetachedSubSessionRunner = null,
     createBotSubSessionRunner = null,
     createGeneratedArtifactPersister = null,
@@ -103,7 +102,6 @@ export class RunConfigPluginPreparer {
         ? mergePluginOptions
         : (...items) => Object.assign({}, ...items.filter((item) => item && typeof item === "object"));
     this.createAgentPluginResolveModelMessages = createPluginResolveModelMessages;
-    this.createAgentPluginMarkMessagesSummarized = createPluginMarkMessagesSummarized;
     this.createBotSubSessionRunner =
       createDetachedSubSessionRunner || createBotSubSessionRunner;
     this.createGeneratedArtifactPersister = createGeneratedArtifactPersister;
@@ -232,7 +230,6 @@ export class RunConfigPluginPreparer {
     next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
       agentPluginOptions: next,
     });
-    next.markMessagesSummarized = this.createAgentPluginMarkMessagesSummarized();
     next.miniRunnerMaxTurns =
       Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
         ? Math.min(Number(next.miniRunnerMaxTurns), AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS)

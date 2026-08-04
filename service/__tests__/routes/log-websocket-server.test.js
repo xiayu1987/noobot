@@ -92,7 +92,7 @@ test("log-websocket-server: announces the effective client policy before ACK", a
       logRoot,
       retentionMs: 60000,
       cleanupIntervalMs: 60000,
-      workflowDiagnosticsDebug: true,
+      sessionLogControls: { debug: { workflowDiagnostics: true } },
     },
   });
   try {
@@ -120,7 +120,12 @@ test("log-websocket-server: mixed batches ACK after reliable writes without wait
   const server = createServer((_req, res) => res.end("not-found"));
   const registered = registerLogWebSocketServer(server, {
     resolveAuthByApiKey: () => ({ userId: "u1" }),
-    logConfig: { logRoot, retentionMs: 60000, cleanupIntervalMs: 60000, frontendToolLogWindowDebug: true },
+    logConfig: {
+      logRoot,
+      retentionMs: 60000,
+      cleanupIntervalMs: 60000,
+      sessionLogControls: { debug: { frontendToolLogWindow: true } },
+    },
     writeLogEvent: async (event) => {
       writes.push(event);
       if (event.category === "debug") return pendingDebug;
@@ -177,7 +182,7 @@ test("log-websocket-server: writes tool log window debug to its dedicated file",
     logRoot,
     retentionMs: 60000,
     cleanupIntervalMs: 60000,
-    frontendToolLogWindowDebug: true,
+    sessionLogControls: { debug: { frontendToolLogWindow: true } },
   };
   const { server, registered } = await startLogServer({ logConfig });
   try {

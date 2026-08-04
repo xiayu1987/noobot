@@ -11,6 +11,89 @@ import {
   buildContextMessageBlocks,
 } from "../../../src/context/assembly/message-builder.js";
 import { MAIN_MODEL_HISTORY_ROUND_LIMIT } from "../../../src/session/utils/context-window-normalizer.js";
+import { createModelContext } from "@noobot/context-protocol/hook-context";
+import { toConversationMessages } from "../../../src/context/session/message-converter.js";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
+import { projectTerminalHistoryMessages } from "@noobot/context-protocol/terminal-history-policy";
+
+test("terminal history reaches the model as canonical user/meta/injection/explanation messages", () => {
+  const projected = projectTerminalHistoryMessages({
+    messages: [{
+      messageUid: "stopped-user",
+      role: "user",
+      content: "停止轮问题",
+      frontendUserMessage: true,
+      userName: "u1",
+      sessionId: "s1",
+      dialogProcessId: "dlg-stopped",
+      turnScopeId: "turn-stopped",
+      summarized: true,
+    }, {
+      messageUid: "guidance-old",
+      role: "user",
+      content: "旧 guidance",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+      dialogProcessId: "dlg-stopped",
+      turnScopeId: "turn-stopped",
+    }, {
+      messageUid: "tool-result",
+      role: "tool",
+      content: "工具结果",
+      tool_call_id: "call-1",
+      dialogProcessId: "dlg-stopped",
+      turnScopeId: "turn-stopped",
+    }, {
+      messageUid: "guidance-new",
+      role: "user",
+      content: "最新 guidance",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+      dialogProcessId: "dlg-stopped",
+      turnScopeId: "turn-stopped",
+    }],
+    turnStatuses: [{
+      status: "user_stopped",
+      reason: "user_stop",
+      description: "用户停止了本轮生成",
+      dialogProcessId: "dlg-stopped",
+      turnScopeId: "turn-stopped",
+    }],
+  });
+  const history = toConversationMessages(projected);
+  const blocks = buildContextMessageBlocks({
+    execution: {
+      controllers: {
+        runtime: {
+          userId: "u1",
+          systemRuntime: {
+            sessionId: "s-current",
+            dialogProcessId: "dlg-current",
+            turnScopeId: "turn-current",
+          },
+        },
+      },
+    },
+    payload: { messages: { system: [], history, incremental: [] } },
+  });
+
+  assert.deepEqual(blocks.history.map((item) => item.content), [
+    "停止轮问题",
+    blocks.history[1].content,
+    "最新 guidance",
+    "用户停止了本轮生成",
+  ]);
+  assert.equal(blocks.history[1].content.startsWith("[用户元信息]"), true);
+  assert.deepEqual(blocks.history.map((item) => item.additional_kwargs?.noobotMessageId), [
+    "stopped-user",
+    "stopped-user::user_meta",
+    "guidance-new",
+    "turn-stopped::terminal_status",
+  ]);
+  assert.equal(blocks.history[3]._getType(), "human");
+});
 
 test("buildContextMessageBlocks builds user_meta with source info for historical user attachments", () => {
   const blocks = buildContextMessageBlocks({
@@ -89,6 +172,80 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
   ]);
 });
 
+test("historical user content and metadata remain distinct canonical projections", () => {
+  const blocks = buildContextMessageBlocks({
+    execution: {
+      controllers: {
+        runtime: {
+          userId: "u1",
+          systemRuntime: { sessionId: "s1", dialogProcessId: "dlg-current" },
+        },
+      },
+    },
+    payload: {
+      messages: {
+        system: [],
+        history: [{
+          role: "user",
+          content: "历史问题",
+          messageUid: "sm_history_user",
+          frontendUserMessage: true,
+          dialogProcessId: "dlg-history",
+          turnScopeId: "turn-history",
+        }],
+      },
+    },
+  });
+
+  const context = createModelContext({
+    messageBlocks: blocks,
+  });
+  const historicalUsers = context.messageBlocks.history;
+
+  assert.deepEqual(historicalUsers.map((message) => message.content), [
+    "历史问题",
+    historicalUsers[1].content,
+  ]);
+  assert.equal(historicalUsers[1].content.startsWith("[用户元信息]"), true);
+  assert.deepEqual(
+    historicalUsers.map((message) => message.additional_kwargs?.noobotMessageId),
+    ["sm_history_user", "sm_history_user::user_meta"],
+  );
+  assert.notEqual(historicalUsers[0], historicalUsers[1]);
+});
+
+test("persisted history keeps messageUid as its canonical model context identity", () => {
+  const [persistedHistory] = toConversationMessages([{
+    messageUid: "sm_persisted_history",
+    role: "assistant",
+    content: "历史回答",
+    dialogProcessId: "dlg-history",
+    turnScopeId: "turn-history",
+  }]);
+  const blocks = buildContextMessageBlocks({
+    execution: {
+      controllers: {
+        runtime: {
+          userId: "u1",
+          systemRuntime: { sessionId: "s1", dialogProcessId: "dlg-current" },
+        },
+      },
+    },
+    payload: {
+      messages: {
+        system: [],
+        history: [persistedHistory],
+      },
+    },
+  });
+  const context = createModelContext({ messageBlocks: blocks });
+
+  assert.equal(
+    context.messageBlocks.history[0]?.additional_kwargs?.noobotMessageId,
+    "sm_persisted_history",
+  );
+});
+
 test("buildContextMessageBlocks does not infer frontend user metadata from round identity", () => {
   const blocks = buildContextMessageBlocks({
     execution: { controllers: { runtime: { userId: "u1", systemRuntime: { sessionId: "s1" } } } },
@@ -156,7 +313,7 @@ test("buildContextMessageBlocks keeps previous history rounds with same user tex
         },
       },
     },
-    { currentUserMessage: "全仓回归测试" },
+    { currentUserMessage: createPersistedCurrentUserMessage("全仓回归测试") },
   );
 
   const visibleContents = blocks.messages
@@ -209,7 +366,7 @@ test("buildContextMessageBlocks keeps latest repeated next-step dialog rounds", 
         },
       },
     },
-    { currentUserMessage: "下一步" },
+    { currentUserMessage: createPersistedCurrentUserMessage("下一步") },
   );
 
   const visibleContents = blocks.messages

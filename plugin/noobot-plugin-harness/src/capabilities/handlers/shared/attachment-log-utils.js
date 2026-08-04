@@ -13,6 +13,7 @@ import {
   buildHarnessInjectedMessage,
   resolveCurrentTurnMessagesStore,
 } from "./message/injected-message-utils.js";
+import { resolveModelMessages } from "../../../core/message-store.js";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 function isPlainObject(value) {
@@ -231,25 +232,19 @@ function isHarnessInjectedMessage(message = {}) {
 
 export function attachMetasToLatestInjectedMessage(ctx = {}, metas = [], transferPayload = null) {
   const normalizedTransferPayload = getTransferPayloadFromAttachments(metas, transferPayload);
-  const candidates = [{ list: Array.isArray(ctx?.messages) ? ctx.messages : [], isCtxMessages: true }];
-  for (const candidate of candidates) {
-    const messages = candidate.list;
-    if (!messages.length) continue;
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const item = messages[index] || {};
-      if (!isHarnessInjectedMessage(item)) continue;
-      messages[index] = applyTransferPayloadToMessage({ ...item }, normalizedTransferPayload);
-      if (candidate.isCtxMessages) {
-        const turnStore = resolveCurrentTurnMessagesStore(ctx);
-        if (turnStore && typeof turnStore.updateLast === "function") {
-          turnStore.updateLast(
-            applyTransferPayloadToMessage({}, normalizedTransferPayload),
-            (messageItem = {}) => isHarnessInjectedMessage(messageItem),
-          );
-        }
-      }
-      return true;
+  const messages = resolveModelMessages(ctx);
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const item = messages[index] || {};
+    if (!isHarnessInjectedMessage(item)) continue;
+    Object.assign(item, applyTransferPayloadToMessage({ ...item }, normalizedTransferPayload));
+    const turnStore = resolveCurrentTurnMessagesStore(ctx);
+    if (turnStore && typeof turnStore.updateLast === "function") {
+      turnStore.updateLast(
+        applyTransferPayloadToMessage({}, normalizedTransferPayload),
+        (messageItem = {}) => isHarnessInjectedMessage(messageItem),
+      );
     }
+    return true;
   }
   return false;
 }

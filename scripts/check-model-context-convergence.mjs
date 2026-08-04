@@ -34,6 +34,7 @@ function resolveRepoRoot() {
 
 const ROOT = resolveRepoRoot();
 const SOURCE_ROOTS = [
+  path.join(ROOT, "context-protocol", "src"),
   path.join(ROOT, "agent", "src"),
   path.join(ROOT, "plugin", "noobot-plugin-harness", "src"),
 ];
@@ -225,6 +226,11 @@ const forbiddenPatterns = [
     pattern: /\b(?:systemIds|historyIds|incrementalIds|resolveBlockMessagesByIds)\b/g,
     advice: "上下文分块唯一事实源只能是 messageBlocks.system/history/incremental 数组，不能再保留 blockIds 第二事实源。",
   },
+  {
+    name: "injected message type inferred from content",
+    pattern: /\b(?:recognizeContent|resolveContentType|isPluginRelayContent|resolvePluginRelayInjectedMessageType|isInjectedMessageLike)\b/g,
+    advice: "注入消息只能使用 injectedMessage/injectedBy/injectedMessageType 协议字段，禁止从内容前缀推断。",
+  },
 ];
 
 for (const file of sourceFiles) {
@@ -258,14 +264,256 @@ if (!failures.some((item) => item.title.includes("tail system"))) {
 if (!failures.some((item) => item.title.includes("system message written to incremental"))) {
   pass("no known system-to-incremental append pattern in source");
 }
+if (!failures.some((item) => item.title.includes("injected message type inferred from content"))) {
+  pass("injected message classification never falls back to content");
+}
+
+const SUMMARY_POLICY_PATH = "context-protocol/src/summary-policy.js";
+const TERMINAL_HISTORY_POLICY_PATH = "context-protocol/src/terminal-history-policy.js";
+const latestInjectionPolicyPattern = /\b(?:keepLatestInjectedOnly|filterLatestInjectedMessagesByType|filterInjectedMessagesForDialog|collectLatestInjectedMessageIndexes)\b/g;
+const latestInjectionPolicyHits = [];
+for (const file of sourceFiles) {
+  const fileRel = rel(file);
+  if (fileRel === SUMMARY_POLICY_PATH || fileRel === TERMINAL_HISTORY_POLICY_PATH) continue;
+  const text = readFileSync(file, "utf8");
+  latestInjectionPolicyPattern.lastIndex = 0;
+  let match;
+  while ((match = latestInjectionPolicyPattern.exec(text))) {
+    latestInjectionPolicyHits.push({ file: fileRel, index: match.index, token: match[0] });
+  }
+}
+if (latestInjectionPolicyHits.length) {
+  fail(
+    "latest injected-message retention escaped summary or terminal-history policy",
+    latestInjectionPolicyHits
+      .slice(0, 12)
+      .map((item) => `  ${item.file}:${lineOf(readRel(item.file), item.index)} ${item.token}`)
+      .join("\n"),
+  );
+} else {
+  pass("latest injected-message retention exists only in summary and terminal-history policies");
+}
+
+const summarizedMutationAllowed = new Set([
+  SUMMARY_POLICY_PATH,
+  "context-protocol/src/message-store.js",
+  "context-protocol/src/snapshot-policy.js",
+  "agent/src/runtime/resume/model-message-snapshot-store.js",
+  "agent/src/bot/session/summary-checkpoint-committer.js",
+  "agent/src/session/services/session-message-service/turn-summary-checkpoint.js",
+]);
+const summarizedMutationPattern = /summarized\s*(?:=|:)\s*true/g;
+const summarizedMutationHits = [];
+for (const file of sourceFiles) {
+  const fileRel = rel(file);
+  if (summarizedMutationAllowed.has(fileRel)) continue;
+  const text = readFileSync(file, "utf8");
+  summarizedMutationPattern.lastIndex = 0;
+  let match;
+  while ((match = summarizedMutationPattern.exec(text))) {
+    summarizedMutationHits.push({ file: fileRel, index: match.index });
+  }
+}
+if (summarizedMutationHits.length) {
+  fail(
+    "summarized state mutation exists outside canonical summary ownership",
+    summarizedMutationHits
+      .slice(0, 12)
+      .map((item) => `  ${item.file}:${lineOf(readRel(item.file), item.index)}`)
+      .join("\n"),
+  );
+} else {
+  pass("summarized writes are restricted to summary policy, checkpoint persistence, and snapshot hydration");
+}
+
+const summaryMutationCallAllowed = new Set([
+  SUMMARY_POLICY_PATH,
+  "context-protocol/src/message-store.js",
+  "agent/src/context/session/summarized-message-policy.js",
+  "agent/src/runtime/turn/turn-result-aggregator.js",
+  "agent/src/bot/session/summary-checkpoint-committer.js",
+]);
+const summaryMutationCallPattern = /\b(?:markCurrentTurn(?:Store|Array|ModelMessages)Summarized|markScopedMessagesSummarized|markMessagesSummarizedByIds)\s*\(/g;
+const summaryMutationCallHits = [];
+for (const file of sourceFiles) {
+  const fileRel = rel(file);
+  if (summaryMutationCallAllowed.has(fileRel)) continue;
+  const text = readFileSync(file, "utf8");
+  summaryMutationCallPattern.lastIndex = 0;
+  let match;
+  while ((match = summaryMutationCallPattern.exec(text))) {
+    summaryMutationCallHits.push({ file: fileRel, index: match.index, token: match[0] });
+  }
+}
+if (summaryMutationCallHits.length) {
+  fail(
+    "summary mutation API called outside the three authoritative flows",
+    summaryMutationCallHits
+      .slice(0, 12)
+      .map((item) => `  ${item.file}:${lineOf(readRel(item.file), item.index)} ${item.token}`)
+      .join("\n"),
+  );
+} else {
+  pass("summary mutation API is restricted to checkpoint commit and completed-turn finalization");
+}
 
 const normalizerText = assertFileContains("agent/src/session/utils/context-window-normalizer.js", [
   { name: "resolveMainModelSystemMessages", pattern: /export\s+function\s+resolveMainModelSystemMessages\b/ },
   { name: "resolveMainModelHistoryMessages", pattern: /export\s+function\s+resolveMainModelHistoryMessages\b/ },
   { name: "resolveMainModelIncrementalMessages", pattern: /export\s+function\s+resolveMainModelIncrementalMessages\b/ },
   { name: "resolveMainModelFinalMessages", pattern: /export\s+function\s+resolveMainModelFinalMessages\b/ },
-  { name: "history excludes system-like roles", pattern: /isSystemLikeMessageRole\(resolveMessageRole\(messageItem\)\)/ },
+  { name: "delegates to protocol window reducer", pattern: /@noobot\/context-protocol\/window-reducer/ },
+]);
+assertFileContains("context-protocol/src/window-reducer.js", [
+  { name: "history excludes system-like roles", pattern: /isSystemLikeMessageRole\(resolveMessageRole\(message\)\)/ },
   { name: "final order system/history/incremental", pattern: /messages:\s*\[\s*\.\.\.system\s*,\s*\.\.\.history\s*,\s*\.\.\.incremental\s*\]/ },
+  { name: "cross-block identity requires canonical message id", pattern: /const explicitId = resolveMessageId\(message\);[\s\S]*?return explicitId \? `id:\$\{explicitId\}` : ""/ },
+]);
+const messagePolicyText = assertFileContains("context-protocol/src/message-policy.js", [
+  { name: "message policy resolves only canonical noobot id", pattern: /export\s+function\s+resolveMessageId[\s\S]*?return\s+readMessageField\(message,\s*["']noobotMessageId["']\)/ },
+  { name: "injected marker uses canonical field reader", pattern: /readMessageField\(message,\s*["']injectedMessage["']\)/ },
+]);
+const policyResolveIdMatch = messagePolicyText.match(/export\s+function\s+resolveMessageId[\s\S]*?\n}/);
+if (policyResolveIdMatch && /readMessageField\(message,\s*["'](?:id|messageId)["']\)/.test(policyResolveIdMatch[0])) {
+  fail(
+    "message policy accepts a non-canonical identity",
+    "Cross-block identity must come only from noobotMessageId.",
+  );
+} else {
+  pass("message policy uses only noobotMessageId as canonical id");
+}
+assertFileContains("agent/src/bot/session/session-execution-engine-utils.js", [
+  { name: "model runtime normalization preserves canonical message id", pattern: /const noobotMessageId = getMessageId\(messageItem\)[\s\S]*?noobotMessageId/ },
+  { name: "model runtime normalization preserves turn scope", pattern: /readMessageField\(messageItem,\s*"turnScopeId"\)/ },
+]);
+assertFileContains("context-protocol/src/block-strategy.js", [
+  { name: "owns canonical system/history/incremental composition", pattern: /export\s+function\s+buildCanonicalMessageBlocks\b/ },
+  { name: "owns snapshot history grouping identity", pattern: /export\s+function\s+createHistoryRoundIdentityResolver\b/ },
+  { name: "owns current-turn history exclusion", pattern: /export\s+function\s+filterCurrentTurnMessagesFromHistory\b/ },
+]);
+assertFileContains("context-protocol/src/summary-policy.js", [
+  { name: "owns summary scope marking", pattern: /export\s+function\s+markScopedMessagesSummarized\b/ },
+  { name: "owns latest task summary pair", pattern: /export\s+function\s+collectLatestTaskSummaryMessageIndexes\b/ },
+]);
+assertFileContains("context-protocol/src/terminal-history-policy.js", [
+  { name: "owns terminal history projection", pattern: /export\s+function\s+projectTerminalHistoryMessages\b/ },
+  { name: "terminal projection requires canonical round identity", pattern: /terminal history status requires dialogProcessId and turnScopeId/ },
+  { name: "terminal projection derives a stable explanation identity", pattern: /`\$\{status\.turnScopeId\}::terminal_status`/ },
+]);
+assertFileContains("agent/src/session/services/session-context-service.js", [
+  { name: "delegates terminal history projection to Context Protocol", pattern: /@noobot\/context-protocol\/terminal-history-policy/ },
+  { name: "reads messages and statuses from one authoritative snapshot", pattern: /getSessionContextSource/ },
+]);
+const summaryCheckpointText = assertFileContains("agent/src/bot/session/summary-checkpoint-committer.js", [
+  { name: "summary checkpoint matches canonical ids", pattern: /summarizedMessageIds\.has\(resolveMessageId\(message\)\)/ },
+]);
+if (/buildMessageIdentity|remainingByIdentity|summarizedMessages/.test(summaryCheckpointText)) {
+  fail(
+    "summary checkpoint contains a non-canonical identity path",
+    "Summary checkpoint persistence must resolve only canonical message ids.",
+  );
+} else {
+  pass("summary checkpoint persistence uses canonical ids only");
+}
+const sessionMessageServiceText = readFileSync(
+  path.join(ROOT, "agent", "src", "session", "services", "session-message-service.js"),
+  "utf8",
+);
+const sessionFacadeText = readFileSync(
+  path.join(ROOT, "agent", "src", "session", "index.js"),
+  "utf8",
+);
+if (/markSessionMessagesSummarized/.test(sessionMessageServiceText) || /markSessionMessagesSummarized/.test(sessionFacadeText)) {
+  fail(
+    "direct session summarized-message mutation port remains",
+    "Persisted summarized state must be written only by the canonical UID checkpoint transaction.",
+  );
+} else {
+  pass("session exposes only the canonical summary checkpoint mutation");
+}
+const taskSummaryToolText = readFileSync(
+  path.join(ROOT, "agent", "src", "tools", "collaboration", "task-summary-tool.js"),
+  "utf8",
+);
+if (/markCurrentTurn(?:Store|ModelMessages|Array)Summarized/.test(taskSummaryToolText)) {
+  fail(
+    "task_summary mutates summarized state before checkpoint commit",
+    "task_summary must request the UID checkpoint through the orchestrator without pre-marking memory.",
+  );
+} else {
+  pass("task_summary has no pre-checkpoint summarized mutation");
+}
+assertFileContains("agent/src/session/services/session-message-service/turn-summary-checkpoint.js", [
+  {
+    name: "terminal recovery cannot append messages",
+    pattern: /isTerminalTurnLifecycleState\(lifecycleTurn\.state\)[\s\S]*?normalizedPersistedUids\.length[\s\S]*?TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE/,
+  },
+]);
+const guidanceSummaryTrackerText = assertFileContains(
+  "plugin/noobot-plugin-harness/src/capabilities/handlers/guidance/signal-tracker.js",
+  [
+    { name: "guidance checkpoint captures canonical ids", pattern: /summaryCheckpointMessageIds\s*=\s*messageIds/ },
+    { name: "guidance checkpoint capture owns incremental only", pattern: /const sourceMessages\s*=\s*blocks\.incremental/ },
+    { name: "guidance checkpoint commit owns incremental only", pattern: /const coveredMessages\s*=\s*blocks\.incremental/ },
+    { name: "guidance checkpoint rejects unclosed history", pattern: /assertSummaryHistoryClosed\(blocks\.history\)/ },
+  ],
+);
+if (/summaryCheckpointMessageCount/.test(guidanceSummaryTrackerText)) {
+  fail(
+    "guidance summary checkpoint retains a count-based scope",
+    "The checkpoint scope must have one representation: canonical message ids.",
+  );
+} else {
+  pass("guidance summary checkpoint uses one canonical id scope");
+}
+assertFileContains("agent/src/runtime/tool-execution/state-committer.js", [
+  {
+    name: "tool result shares persistence identity with model context",
+    pattern: /additional_kwargs:\s*\{\s*noobotMessageId:\s*messageUid\s*\}/,
+  },
+]);
+assertFileContains("context-protocol/src/snapshot-policy.js", [
+  { name: "owns snapshot serialization", pattern: /export\s+function\s+createModelContextSnapshot\b/ },
+  { name: "owns snapshot hydration", pattern: /export\s+function\s+hydrateModelContextSnapshot\b/ },
+  { name: "owns recovered identity projection", pattern: /export\s+function\s+projectRecoveredMessagesToIdentity\b/ },
+]);
+const stoppedResumePreparerText = assertFileContains(
+  "agent/src/bot/session/turn-execution-preparer.js",
+  [
+    { name: "stopped resume loads the authoritative snapshot", pattern: /loadStoppedModelMessageSnapshot\s*\(/ },
+    { name: "stopped resume reads snapshot system block", pattern: /snapshot\?\.messageBlocks\?\.system/ },
+    { name: "stopped resume reads snapshot history block", pattern: /snapshot\?\.messageBlocks\?\.history/ },
+    { name: "stopped resume reads snapshot incremental block", pattern: /snapshot\?\.messageBlocks\?\.incremental/ },
+  ],
+);
+if (
+  /projectTerminalHistoryMessages|getContextRecords|buildExistingSessionContext|buildContinueContext/.test(
+    stoppedResumePreparerText,
+  )
+) {
+  fail(
+    "stopped snapshot resume rebuilds blocks from Session history",
+    "A successful stopped resume must source system/history/incremental only from the stopped snapshot.",
+  );
+} else {
+  pass("stopped resume sources all three Context blocks only from its snapshot");
+}
+assertFileContains("agent/src/context/assembly/message-builder/context-blocks.js", [
+  { name: "delegates block strategy to context protocol", pattern: /@noobot\/context-protocol\/block-strategy/ },
+]);
+const snapshotStoreText = assertFileContains("agent/src/runtime/resume/model-message-snapshot-store.js", [
+  { name: "delegates snapshot strategy to context protocol", pattern: /@noobot\/context-protocol\/snapshot-policy/ },
+]);
+if (/legacySnapshotPath\b/.test(snapshotStoreText)) {
+  fail(
+    "stopped snapshot legacy path fallback remains",
+    "Stopped snapshots must use the single parent-aware canonical path.",
+  );
+} else {
+  pass("stopped snapshots use one canonical storage path");
+}
+assertFileContains("agent/src/context/session/summarized-message-policy.js", [
+  { name: "delegates summary strategy to context protocol", pattern: /@noobot\/context-protocol\/summary-policy/ },
 ]);
 const turnThresholdsText = readFileSync(
   path.join(ROOT, "shared", "turn-thresholds.mjs"),
@@ -291,8 +539,28 @@ if (historyLimitUsesTurnThreshold && centralizedHistoryLimitIsValid) {
   );
 }
 
-const mainIncrementalResolverMatch = normalizerText.match(
-  /export\s+function\s+resolveMainModelIncrementalMessages\s*\([\s\S]*?\n}\n/,
+const windowReducerText = readRel("context-protocol/src/window-reducer.js");
+const mainHistoryResolverMatch = windowReducerText.match(
+  /export\s+function\s+resolveModelHistoryMessages\s*\([\s\S]*?\n}\n/,
+);
+const mainHistoryResolverText = mainHistoryResolverMatch
+  ? mainHistoryResolverMatch[0]
+  : "";
+if (!mainHistoryResolverText) {
+  fail(
+    "main history resolver body missing",
+    "resolveModelHistoryMessages must remain explicit so complete unsummarized dialog rounds can be guarded.",
+  );
+} else if (/\bkeepLatestInjectedOnly\b|\bfilterLatestInjectedMessagesByType\b|\bfilterInjectedMessagesForDialog\b/.test(mainHistoryResolverText)) {
+  fail(
+    "main history resolver compacts injected messages",
+    "History must preserve every unsummarized message inside each selected dialog round.",
+  );
+} else {
+  pass("main history preserves complete unsummarized dialog rounds");
+}
+const mainIncrementalResolverMatch = windowReducerText.match(
+  /export\s+function\s+resolveModelIncrementalMessages\s*\([\s\S]*?\n}\n/,
 );
 const mainIncrementalResolverText = mainIncrementalResolverMatch
   ? mainIncrementalResolverMatch[0]
@@ -300,7 +568,7 @@ const mainIncrementalResolverText = mainIncrementalResolverMatch
 if (!mainIncrementalResolverText) {
   fail(
     "main incremental resolver body missing",
-    "resolveMainModelIncrementalMessages must remain explicit so append-only incremental semantics can be guarded.",
+    "resolveModelIncrementalMessages must remain explicit so summarized-only filtering can be guarded.",
   );
 } else if (
   /\bkeepLatestInjectedOnly\b/.test(mainIncrementalResolverText) ||
@@ -309,25 +577,25 @@ if (!mainIncrementalResolverText) {
 ) {
   fail(
     "main incremental resolver compacts injected messages",
-    "Main incremental context must stay append-only before summary: do not apply latest-injected or dialog injected compaction in resolveMainModelIncrementalMessages.",
+    "Latest-only injection selection belongs to summary marking. Model projection must preserve every unsummarized incremental message.",
   );
 } else if (
-  !/return\s+filterForModelContext\(\s*sourceMessages\s*\)\s*;/.test(mainIncrementalResolverText)
+  !/return\s+filterForModelContext\(\s*sourceMessages\s*,\s*policyOptions\s*\)\s*;/.test(mainIncrementalResolverText)
 ) {
   fail(
-    "main incremental resolver drifted from append-only filter",
-    "resolveMainModelIncrementalMessages must filter only summarized/invalid tool-pair messages via filterForModelContext(sourceMessages).",
+    "main incremental resolver drifted from summarized-only filter",
+    "resolveModelIncrementalMessages must filter summarized and invalid tool-pair messages without same-type injection compaction.",
   );
 } else {
-  pass("main incremental keeps unsummarized injected messages append-only");
+  pass("main incremental preserves every unsummarized injected message");
 }
 
 const helpersText = assertFileContains("agent/src/bot/session/model-message-runtime-helpers.js", [
   { name: "uses central final resolver", pattern: /resolveMainModelFinalMessages/ },
-  { name: "reads messageBlocks", pattern: /ctx\?\.messageBlocks/ },
-  { name: "resolves system block", pattern: /resolveBlockMessages\(ctx,\s*blocks,\s*["']system["']\)/ },
-  { name: "resolves history block", pattern: /resolveBlockMessages\(ctx,\s*blocks,\s*["']history["']\)/ },
-  { name: "resolves incremental block", pattern: /resolveBlockMessages\(ctx,\s*blocks,\s*["']incremental["']\)/ },
+  { name: "requires authoritative modelContext", pattern: /requireAuthoritativeMessageBlocks\(ctx\)/ },
+  { name: "resolves system block", pattern: /resolveBlockMessages\(blocks,\s*["']system["']\)/ },
+  { name: "resolves history block", pattern: /resolveBlockMessages\(blocks,\s*["']history["']\)/ },
+  { name: "resolves incremental block", pattern: /resolveBlockMessages\(blocks,\s*["']incremental["']\)/ },
   { name: "explicit block arrays are the only block source", pattern: /function\s+resolveBlockMessages[\s\S]*?Array\.isArray\(blocks\?\.\[blockName\]\)[\s\S]*?return\s+blocks\[blockName\][\s\S]*?return\s+\[\]/ },
 ]);
 if (helpersText && /ctx\?\.agentContext\?\.payload\?\.messages/.test(helpersText)) {
@@ -377,21 +645,36 @@ if (
 assertFileContains("plugin/noobot-plugin-harness/src/core/model-message-context.js", [
   { name: "harness before_llm_call delegates to resolver", pattern: /applyAgentResolvedModelMessages/ },
   { name: "uses injected resolveModelMessages", pattern: /resolveModelMessages/ },
-  { name: "updates through message-store replaceMessages", pattern: /replaceMessages\(ctx,\s*resolved\)/ },
+  {
+    name: "updates only the final model-message projection",
+    pattern: /replaceMessageProjection\(ctx,\s*resolved\)/,
+  },
 ]);
 
-const messageStoreText = assertFileContains("agent/src/context/runtime-state/message-store.js", [
-  { name: "message-store owns noobot ids", pattern: /function\s+resolveMessageId[\s\S]*?readField\(message,\s*["']noobotMessageId["']\)[\s\S]*?readField\(message,\s*["']messageId["']\)/ },
+assertFileContains("agent/src/context/runtime-state/message-store.js", [
+  { name: "agent message-store delegates to context protocol", pattern: /export\s+\*\s+from\s+["']@noobot\/context-protocol\/message-store["']/ },
+]);
+const messageStoreText = assertFileContains("context-protocol/src/message-store.js", [
+  { name: "persisted message uid owns canonical entity identity", pattern: /function\s+resolveMessageId[\s\S]*?const\s+persistedMessageUid\s*=\s*String\(message\?\.messageUid[\s\S]*?return\s+canonicalMessageId\s*\|\|\s*persistedMessageUid/ },
+  { name: "persisted and context identities cannot diverge", pattern: /canonicalMessageId\s*&&\s*persistedMessageUid\s*&&\s*canonicalMessageId\s*!==\s*persistedMessageUid[\s\S]*?persisted messageUid conflicts with canonical noobotMessageId/ },
   { name: "message-store bumps next id for hydrated ids", pattern: /function\s+bumpNextMessageId[\s\S]*?match\(\s*\/\^am_\(\[0-9a-z\]\+\)\$\/i\s*\)[\s\S]*?store\.nextId\s*=\s*numeric\s*\+\s*1/ },
   { name: "replaceMessages only replaces flat view", pattern: /export\s+function\s+replaceMessages[\s\S]*?holder\.messages\.splice\(0,\s*holder\.messages\.length,\s*\.\.\.canonicalMessages\)[\s\S]*?return\s+holder\.messages/ },
   { name: "messageBlocks deletes old block id views", pattern: /for\s*\(\s*const\s+staleField\s+of\s+\[[\s\S]*?system[\s\S]*?history[\s\S]*?incremental[\s\S]*?delete\s+blocks\[staleField\]/ },
 ]);
 if (messageStoreText) {
-  const resolveIdMatch = messageStoreText.match(/function\s+resolveMessageId[\s\S]*?\n}/);
-  if (resolveIdMatch && /readField\(message,\s*["']id["']\)/.test(resolveIdMatch[0])) {
-    fail("message-store must not use provider id as canonical id", "Only noobotMessageId/messageId are allowed; provider id collisions can cross-wire system/history/incremental blocks.");
+  if (/\bbyKey\b|buildMessageKey\b|legacyCandidate\b/.test(messageStoreText)) {
+    fail(
+      "context protocol still infers identity from message content",
+      "Message identity must come only from the persisted messageUid or its equal Context projection id.",
+    );
   } else {
-    pass("message-store ignores provider id as canonical id");
+    pass("context protocol never infers message identity from content");
+  }
+  const resolveIdMatch = messageStoreText.match(/function\s+resolveMessageId[\s\S]*?\n}/);
+  if (resolveIdMatch && /readField\(message,\s*["'](?:id|messageId)["']\)/.test(resolveIdMatch[0])) {
+    fail("message-store accepts a provider or presentation id as canonical identity", "Only persisted messageUid and its equal noobotMessageId projection may own Context identity.");
+  } else {
+    pass("message-store uses only persisted messageUid and its equal Context projection id");
   }
   const replaceMatch = messageStoreText.match(/export\s+function\s+replaceMessages[\s\S]*?\n}/);
   if (replaceMatch && /canonicalizeMessageStore\(holder\)\s*;[\s\S]*return\s+holder\.messages/.test(replaceMatch[0])) {
@@ -402,11 +685,12 @@ if (messageStoreText) {
 }
 
 assertFileContains("agent/src/runtime/hooks/hook-context-builder.js", [
-  { name: "hook context carries messageStore", pattern: /messageStore:\s*safeRaw\?\.messageStore\s*\?\?\s*safeRaw\?\.loopState\?\.messageStore\s*\?\?\s*null/ },
+  { name: "hook context accepts only supplied versioned modelContext", pattern: /attachModelContext\(context,\s*suppliedModelContext\?\.protocolVersion\s*\?\s*suppliedModelContext\s*:\s*null\)/ },
 ]);
 
 assertFileContains("agent/src/runtime/turn/turn-executor.js", [
-  { name: "before_llm hook passes messageStore", pattern: /buildHookContext\(AGENT_HOOK_POINTS\.BEFORE_LLM_CALL[\s\S]*?messageStore:\s*loopState\.messageStore/ },
+  { name: "before_llm hook passes authoritative modelContext", pattern: /const\s+modelContext\s*=\s*requireLoopStateModelContext\(loopState\)[\s\S]*?buildHookContext\(AGENT_HOOK_POINTS\.BEFORE_LLM_CALL[\s\S]*?modelContext,/ },
+  { name: "before_llm hook cannot replace authoritative entity", pattern: /assertHookContextRetainsModelContext\(loopState,\s*beforeLlmHookContext\)/ },
 ]);
 
 assertFileContains("plugin/noobot-plugin-harness/src/capabilities/handlers/shared/model/message-factory.js", [
@@ -420,7 +704,7 @@ const loopControlText = assertFileContains("agent/src/runtime/loop-control.js", 
 ]);
 if (loopControlText) {
   const markerIndex = loopControlText.indexOf("HELP_TOOL_LOOP_PROMPT_MARKER");
-  const appendIndex = loopControlText.indexOf("appendMessage(loopState, new SystemMessage", Math.max(0, markerIndex - 1000));
+  const appendIndex = loopControlText.indexOf("appendMessage(loopState.modelContext, new SystemMessage", Math.max(0, markerIndex - 1000));
   const blockIndex = loopControlText.indexOf('block: "system"', appendIndex >= 0 ? appendIndex : 0);
   if (appendIndex >= 0 && blockIndex >= appendIndex && blockIndex - appendIndex < 900) {
     pass("help tool loop prompt writes SystemMessage to system block");

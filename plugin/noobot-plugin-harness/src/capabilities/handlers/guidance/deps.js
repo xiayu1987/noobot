@@ -32,8 +32,6 @@ export {
 
 export {
   extractRawTextContent,
-  markMessagesSummarized,
-  resolveInjectedMessageSummarizer,
   shouldSkipAnalysisForTrailingToolCallContent,
 } from "../shared/message/utils.js";
 export {

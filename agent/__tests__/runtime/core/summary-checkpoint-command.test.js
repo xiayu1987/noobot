@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { requestMainFlowSummaryCheckpoint } from "../../../src/runtime/main-flow-control.js";
 import { consumeSummaryCheckpointCommand } from "../../../src/runtime/summary-checkpoint-command.js";
 
-test("summary command is consumed once and enters the unified checkpoint after marking", async () => {
+test("summary command is acknowledged once only after the unified checkpoint commits", async () => {
   const markedMessage = {
     role: "assistant",
     content: "old tool call",
@@ -24,7 +24,6 @@ test("summary command is consumed once and enters the unified checkpoint after m
     },
     async commitSummaryCheckpoint(payload) {
       calls.push(payload);
-      assert.equal(markedMessage.summarized, true, "notification must happen after marking");
       return { committed: true };
     },
   };
@@ -32,7 +31,6 @@ test("summary command is consumed once and enters the unified checkpoint after m
   requestMainFlowSummaryCheckpoint(runtime, {
     source: "plugin.summary",
     summarizedMessageIds: ["m1"],
-    summarizedMessages: [markedMessage],
   });
 
   await consumeSummaryCheckpointCommand({ runtime, loopState, turn: 3 });
@@ -42,4 +40,35 @@ test("summary command is consumed once and enters the unified checkpoint after m
   assert.equal(calls[0].summaryCompletion.source, "plugin.summary");
   assert.deepEqual(loopState.turnMessages, [{ role: "user", content: "keep" }]);
   assert.equal(runtime.systemRuntime.mainFlowControlInstructions, undefined);
+});
+
+test("summary checkpoint failures expose exact unresolved identities without message content", async () => {
+  const events = [];
+  const runtime = {
+    systemRuntime: {},
+    async commitSummaryCheckpoint() {
+      const error = new Error("unresolved canonical identity");
+      error.requestedMessageIds = ["sm_found", "sm_missing"];
+      error.resolvedMessageIds = ["sm_found"];
+      error.unresolvedMessageIds = ["sm_missing"];
+      throw error;
+    },
+  };
+  requestMainFlowSummaryCheckpoint(runtime, {
+    source: "plugin.summary",
+    summarizedMessageIds: ["sm_found", "sm_missing"],
+  });
+
+  await assert.rejects(consumeSummaryCheckpointCommand({
+    runtime,
+    eventListener: { onEvent: (payload) => events.push(payload) },
+    turn: 4,
+  }), /unresolved canonical identity/);
+
+  const failure = events.find((item) => item.event === "summary_checkpoint_failed");
+  assert.deepEqual(failure?.data?.requestedMessageIds, ["sm_found", "sm_missing"]);
+  assert.deepEqual(failure?.data?.resolvedMessageIds, ["sm_found"]);
+  assert.deepEqual(failure?.data?.unresolvedMessageIds, ["sm_missing"]);
+  assert.equal("content" in failure.data, false);
+  assert.equal(runtime.systemRuntime.mainFlowControlInstructions.length, 1);
 });

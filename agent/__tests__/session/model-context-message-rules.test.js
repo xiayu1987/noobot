@@ -19,7 +19,7 @@ function contents(messages = []) {
   return messages.map((item = {}) => String(item.content || item.tool_call_id || item.tool_calls?.[0]?.id || ""));
 }
 
-test("model-context rules 1.1: systemMessages keeps latest injected system by type, drops summarized non-current, preserves order without clipping", () => {
+test("model-context rules 1.1: systemMessages preserves every unsummarized injection and consumes summary marks", () => {
   const input = [
     { role: "system", content: "main-system-1" },
     {
@@ -53,11 +53,12 @@ test("model-context rules 1.1: systemMessages keeps latest injected system by ty
 
   assert.deepEqual(contents(result), [
     "main-system-1",
+    "plugin-system-old",
     "plugin-system-latest",
     "current-system-context-even-if-summarized",
     ...Array.from({ length: 12 }, (_, index) => `main-system-extra-${index + 1}`),
   ]);
-  assert.equal(result.length, 15);
+  assert.equal(result.length, 16);
 });
 
 test("model-context rules 1.2: historyMessages keeps non-system unsummarized messages in natural dialog groups for default latest rounds", () => {
@@ -103,7 +104,7 @@ test("model-context rules 1.2: historyMessages keeps non-system unsummarized mes
   );
 });
 
-test("model-context rules 1.2: historyMessages preserves legacy messages without dialogProcessId", () => {
+test("model-context rules 1.2: historyMessages excludes messages without dialog identity", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
       { role: "user", content: "legacy-u1" },
@@ -113,9 +114,7 @@ test("model-context rules 1.2: historyMessages preserves legacy messages without
     ],
   });
 
-  assert.deepEqual(contents(result), [
-    "legacy-u1", "legacy-a1", "legacy-u2", "legacy-a2",
-  ]);
+  assert.deepEqual(result, []);
 });
 
 test("model-context rules 1.3: incrementalMessages keeps unsummarized tool/plugin/main-flow increments in actual order without clipping", () => {
@@ -256,11 +255,11 @@ test("model-context rules: cross-block duplicate current user stays only in incr
   const result = resolveMainModelFinalMessages({
     systemMessages: [{ role: "system", content: "sys" }],
     historyMessages: [
-      { role: "user", content: "same", dialogProcessId: "d-current", turnScopeId: "t-current" },
+      { role: "user", content: "same", additional_kwargs: { noobotMessageId: "current-user" }, dialogProcessId: "d-current", turnScopeId: "t-current" },
       { role: "assistant", content: "old answer", dialogProcessId: "d-old" },
     ],
     incrementalMessages: [
-      { role: "user", content: "same", dialogProcessId: "d-current", turnScopeId: "t-current" },
+      { role: "user", content: "same", additional_kwargs: { noobotMessageId: "current-user" }, dialogProcessId: "d-current", turnScopeId: "t-current" },
       { role: "user", content: "[用户元信息]\n{}", dialogProcessId: "d-current", turnScopeId: "t-current" },
     ],
   });

@@ -5,6 +5,7 @@
  */
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
+import { resolveModelMessageBlocks, resolveModelMessages } from "../../../../core/message-store.js";
 
 function escapeRegExp(value = "") {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -43,10 +44,8 @@ function isSummaryRelayMessage(message = {}) {
 
 export function resolveLatestSummaryRelayText(ctx = {}) {
   const candidates = [
-    ...(Array.isArray(ctx?.messages) ? ctx.messages : []),
-    ...(Array.isArray(ctx?.agentContext?.payload?.messages?.history)
-      ? ctx.agentContext.payload.messages.history
-      : []),
+    ...resolveModelMessages(ctx),
+    ...resolveModelMessageBlocks(ctx).history,
   ];
   for (let index = candidates.length - 1; index >= 0; index -= 1) {
     const message = candidates[index] || {};

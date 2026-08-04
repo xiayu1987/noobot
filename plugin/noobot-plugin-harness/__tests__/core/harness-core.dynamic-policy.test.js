@@ -9,7 +9,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
+import {
+  createTestHookContext,
+  createTestHookManager as createAgentHookManager,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
 import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
@@ -77,8 +80,7 @@ test("dynamic policy prompt protocol instruction is localized", () => {
 });
 
 test("dynamic policy prompt overrides default scenario policy prompt", async () => {
-  const ctx = {
-    messages: [{ role: "user", content: "continue" }],
+  const ctx = createTestHookContext({
     agentContext: {
       payload: {
         harness: {
@@ -93,7 +95,7 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
         },
       },
     },
-  };
+  }, { messages: [{ role: "user", content: "continue" }] });
 
   const prompt = buildDefaultPolicyPrompt("en-US", ctx, {});
   assert.match(prompt, /\[HARNESS_POLICY_SELECTION\]/);
@@ -113,11 +115,11 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
     writePrompts: false,
   });
   assert.match(
-    String(ctx.messages[0]?.content || ""),
+    String(ctx.modelContext.messages[0]?.content || ""),
     /Dynamic output policy: produce deliverable batches and preserve citations/,
   );
   assert.equal(
-    ctx.messages.filter((item = {}) =>
+    ctx.modelContext.messages.filter((item = {}) =>
       /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || "")),
     ).length,
     1,
@@ -125,10 +127,9 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
 });
 
 test("dynamic policy prompt change refreshes the unique main-flow policy selection", async () => {
-  const ctx = {
-    messages: [{ role: "user", content: "continue" }],
+  const ctx = createTestHookContext({
     agentContext: { payload: { harness: {} } },
-  };
+  }, { messages: [{ role: "user", content: "continue" }] });
 
   applyDynamicPolicyPromptFromText(ctx, [
     "[HARNESS_DYNAMIC_POLICY_PROMPT]",
@@ -148,10 +149,10 @@ test("dynamic policy prompt change refreshes the unique main-flow policy selecti
   });
   assert.equal(ctx.agentContext.payload.harness.policyPromptRefresh.pending, false);
   assert.equal(
-    ctx.messages.filter((item = {}) => /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || ""))).length,
+    ctx.modelContext.messages.filter((item = {}) => /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || ""))).length,
     1,
   );
-  assert.match(String(ctx.messages[0]?.content || ""), /Dynamic policy one/);
+  assert.match(String(ctx.modelContext.messages[0]?.content || ""), /Dynamic policy one/);
 
   applyDynamicPolicyPromptFromText(ctx, [
     "[HARNESS_DYNAMIC_POLICY_PROMPT]",
@@ -171,7 +172,7 @@ test("dynamic policy prompt change refreshes the unique main-flow policy selecti
     writePrompts: false,
   });
 
-  const policyMessages = ctx.messages.filter((item = {}) =>
+  const policyMessages = ctx.modelContext.messages.filter((item = {}) =>
     /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || "")),
   );
   assert.equal(policyMessages.length, 1);
@@ -205,13 +206,13 @@ test("harness policy prompt survives agent-side system message compaction", asyn
   await hookManager.emit("before_llm_call", ctx);
 
   assert.equal(
-    ctx.messages.filter((item = {}) =>
+    ctx.modelContext.messages.filter((item = {}) =>
       item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
     ).length,
     1,
   );
   assert.equal(
-    ctx.messageBlocks.system.filter((item = {}) =>
+    ctx.modelContext.messageBlocks.system.filter((item = {}) =>
       item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
     ).length,
     1,
@@ -244,7 +245,7 @@ test("harness policy preservation ignores ordinary system text that only mention
   await hookManager.emit("before_llm_call", ctx);
 
   assert.equal(
-    ctx.messages.some((item = {}) =>
+    ctx.modelContext.messages.some((item = {}) =>
       String(item?.content || "").includes("ordinary docs mention"),
     ),
     false,

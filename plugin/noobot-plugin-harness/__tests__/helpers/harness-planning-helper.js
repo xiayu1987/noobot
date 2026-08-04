@@ -9,8 +9,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import {
+  createTestHookManager as createAgentHookManager,
+  createTestResolveModelMessages,
+} from "./public-runtime-fixtures.js";
+import { registerNoobotPlugin as registerNoobotPluginImpl } from "../../src/index.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
 function assertFlatCapabilityMessages(messages = []) {
@@ -22,6 +25,13 @@ function assertFlatCapabilityMessages(messages = []) {
   const last = messages[messages.length - 1] || {};
   assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
   assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
+}
+
+function registerNoobotPlugin(api = {}, options = {}) {
+  return registerNoobotPluginImpl(api, {
+    resolveModelMessages: createTestResolveModelMessages(),
+    ...options,
+  });
 }
 
 export {

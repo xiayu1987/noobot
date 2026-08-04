@@ -22,6 +22,52 @@ export function isAbortError(error) {
   );
 }
 
+function normalizeErrorText(value) {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value).trim();
+  }
+  return "";
+}
+
+export function resolveErrorMessage(error = null) {
+  const structuredCandidates = [
+    error?.message,
+    error?.error?.message,
+    error?.error,
+    error?.response?.data?.error?.message,
+    error?.response?.data?.error,
+    error?.response?.data?.message,
+    error?.cause?.message,
+    error?.cause?.error?.message,
+    error?.cause?.error,
+    error?.cause,
+  ];
+  for (const candidate of structuredCandidates) {
+    const message = normalizeErrorText(candidate);
+    if (message) return message;
+  }
+
+  const identityCandidates = [
+    error?.type,
+    error?.stopType,
+    error?.code,
+    error?.name,
+    error?.error?.type,
+    error?.error?.code,
+    error?.cause?.type,
+    error?.cause?.stopType,
+    error?.cause?.code,
+    error?.cause?.name,
+  ];
+  for (const candidate of identityCandidates) {
+    const message = normalizeErrorText(candidate);
+    if (message) return message;
+  }
+
+  return normalizeErrorText(error);
+}
+
 export function readAbortReason(error = null, abortSignal = null) {
   const signalReason = abortSignal?.reason;
   if (signalReason && typeof signalReason === "object") return signalReason;

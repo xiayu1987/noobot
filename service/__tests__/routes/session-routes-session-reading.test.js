@@ -83,7 +83,6 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
                 hasThinkingDetails: true,
                 thinkingDetailCount: 2,
               }],
-              toolLogSummaries: [{ event: "tool_call", text: "read_file /tmp/a" }],
               stats: { messageCount: 4, injectedMessageCount: 1, thinkingMessageCount: 1 },
             }],
           };

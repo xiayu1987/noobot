@@ -136,7 +136,7 @@ test("guidance schedules summary after a single model tool burst reaches summary
 
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(
-    nextCtx.messages.some((msg = {}) =>
+    nextCtx.modelContext.messages.some((msg = {}) =>
       String(msg?.content || "").includes("harness-guidance-summary"),
     ),
     true,

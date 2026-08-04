@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildSessionDetailProjection } from "../../../../../../src/modules/session/model/list/sessionDetailProjection.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
+import { selectCompletedToolArtifacts } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 
 const identity = (item) => ({ ...item });
 
@@ -138,5 +139,49 @@ describe("buildSessionDetailProjection", () => {
     expect(selectActivityTimelineLogs(projection.messages[1])).toEqual([
       expect.objectContaining({ eventId: "activity-1", text: "inspect first" }),
     ]);
+  });
+
+  it("preserves the canonical completed-tool artifact projection during detail hydration", () => {
+    const projection = buildSessionDetailProjection({
+      sessionDetail: {
+        sessionId: "session-artifacts",
+        messages: [{
+          id: "assistant-artifacts",
+          role: "assistant",
+          content: "done",
+          turnScopeId: "turn-artifacts",
+          dialogProcessId: "dialog-artifacts",
+          toolTimeline: [{
+            key: "call:call-artifacts",
+            toolCallId: "call-artifacts",
+            tool: "write_file",
+            status: "completed",
+            resultEvent: {
+              eventId: "event-artifacts",
+              attachments: [{ attachmentId: "attachment-artifacts", name: "stdout.txt" }],
+              writtenFiles: [{
+                toolName: "write_file",
+                resolvedPath: "/workspace/result.txt",
+                fileName: "result.txt",
+              }],
+              log: {
+                event: "tool_result",
+                type: "tool_result",
+                toolCallId: "call-artifacts",
+                turnScopeId: "turn-artifacts",
+              },
+            },
+          }],
+        }],
+      },
+      makeViewMessage: identity,
+    });
+
+    expect(projection.messages).toHaveLength(1);
+    expect(selectCompletedToolArtifacts(projection.messages[0])).toMatchObject({
+      resultCount: 1,
+      attachments: [{ attachmentId: "attachment-artifacts", name: "stdout.txt" }],
+      writtenFiles: [{ fileName: "result.txt" }],
+    });
   });
 });

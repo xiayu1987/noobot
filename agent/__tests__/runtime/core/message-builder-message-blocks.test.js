@@ -11,6 +11,7 @@ import {
   buildContextMessageBlocks,
 } from "../../../src/context/assembly/message-builder.js";
 import { MAIN_MODEL_HISTORY_ROUND_LIMIT } from "../../../src/session/utils/context-window-normalizer.js";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 test("buildContextMessageBlocks splits system/history/incremental and preserves concat order", () => {
   const blocks = buildContextMessageBlocks(
@@ -36,7 +37,7 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
         },
       },
     },
-    { currentUserMessage: "u-1" },
+    { currentUserMessage: createPersistedCurrentUserMessage("u-1") },
   );
 
   assert.equal(Array.isArray(blocks.system), true);
@@ -51,8 +52,16 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
   assert.equal(blocks.messages[2]?.content, "h-1");
   assert.equal(blocks.messages[3]?.content, "u-1");
   assert.equal(
+    blocks.messages[3]?.additional_kwargs?.noobotMessageId,
+    "sm_current_user_fixture",
+  );
+  assert.equal(
     blocks.messages[4]?.additional_kwargs?.noobotInternalMessageType,
     "user_meta",
+  );
+  assert.equal(
+    blocks.messages[4]?.additional_kwargs?.noobotMessageId,
+    "sm_current_user_fixture::user_meta",
   );
 });
 
@@ -100,7 +109,15 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
         },
       },
     },
-    { currentUserMessage: "resume question" },
+    { currentUserMessage: createPersistedCurrentUserMessage("resume question", {
+      userName: "admin",
+      sessionId: "s1",
+      parentSessionId: "parent-s1",
+      dialogProcessId: "dlg-resume-new",
+      parentDialogProcessId: "dlg-stopped",
+      turnScopeId: "turn-resume-new",
+      attachments: [{ attachmentId: "att-1", name: "resume.txt", mimeType: "text/plain", attachmentSource: "user", sessionId: "s1", parsedResult: { text: "parsed attachment" } }],
+    }) },
   );
 
   assert.equal(blocks.system[0]?.content, "snapshot system");
@@ -155,7 +172,13 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
         },
       },
     },
-    { currentUserMessage: "resume user input" },
+    { currentUserMessage: createPersistedCurrentUserMessage("resume user input", {
+      userName: "admin",
+      dialogProcessId: "dlg-current",
+      turnScopeId: "turn-current",
+      parentDialogProcessId: "dlg-stopped",
+      attachments: [{ attachmentId: "att-resume", name: "resume.png", mimeType: "image/png" }],
+    }) },
   );
 
   assert.equal(blocks.system.length, 1);
@@ -199,13 +222,18 @@ test("buildContextMessageBlocks preserves restored LangChain tool messages in un
             new AIMessage({
               content: "",
               tool_calls: [{ id: "call_resume_1", name: "read_file", args: { filePath: "a.txt" } }],
+              additional_kwargs: { dialogProcessId: "dlg-stopped" },
             }),
-            new ToolMessage({ tool_call_id: "call_resume_1", content: "tool result text" }),
+            new ToolMessage({
+              tool_call_id: "call_resume_1",
+              content: "tool result text",
+              additional_kwargs: { dialogProcessId: "dlg-stopped" },
+            }),
           ],
         },
       },
     },
-    { currentUserMessage: "resume user input" },
+    { currentUserMessage: createPersistedCurrentUserMessage("resume user input") },
   );
 
   assert.equal(blocks.history[0]?._getType?.(), "ai");
@@ -262,7 +290,10 @@ test("buildContextMessageBlocks removes current turn user residue from history",
         },
       },
     },
-    { currentUserMessage: "全仓回归测试" },
+    { currentUserMessage: createPersistedCurrentUserMessage("全仓回归测试", {
+      dialogProcessId: "dlg-current",
+      turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+    }) },
   );
 
   const visibleContents = blocks.messages
@@ -325,6 +356,7 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
           ],
           incremental: [
             {
+              messageUid: "sm_current_user_fixture",
               role: "user",
               content: "全仓回归测试",
               frontendUserMessage: true,
@@ -335,7 +367,10 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
         },
       },
     },
-    { currentUserMessage: "全仓回归测试" },
+    { currentUserMessage: createPersistedCurrentUserMessage("全仓回归测试", {
+      dialogProcessId: "dlg-current",
+      turnScopeId: "client-turn:current",
+    }) },
   );
 
   const visibleContents = blocks.messages

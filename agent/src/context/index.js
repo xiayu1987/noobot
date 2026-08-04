@@ -376,6 +376,7 @@ export class ContextBuilder {
     return this.sessionManager.getContextRecords({
       userId: this.userId,
       sessionId: resolvedSessionId,
+      parentSessionId: normalizeParentSessionId(this.parentSessionId),
       userConfig: this.userConfig,
       currentDialogProcessId: dialogProcessId,
       currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),

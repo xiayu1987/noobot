@@ -371,22 +371,20 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
         executedPrimary = true;
       }
       if (point === "before_llm_call" && decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance) {
-        if (Array.isArray(ctx?.messages)) {
-          const overflowPromptTemplate =
-            WORKFLOW_PARAMS.acceptance.guards.overflowForcedAcceptanceSystemPrompt;
-          const overflowPrompt = String(overflowPromptTemplate || "")
-            .replaceAll("{tool}", TASK_ACCEPTANCE_TOOL_NAME);
-          appendMessage(
-            ctx,
-            buildHarnessInjectedMessage(overflowPrompt, {
-              role: "user",
-              injectedMessageType: "acceptance_overflow_forced_prompt",
-            }),
-            { block: "incremental" },
-          );
-          changed = true;
-          executedPrimary = true;
-        }
+        const overflowPromptTemplate =
+          WORKFLOW_PARAMS.acceptance.guards.overflowForcedAcceptanceSystemPrompt;
+        const overflowPrompt = String(overflowPromptTemplate || "")
+          .replaceAll("{tool}", TASK_ACCEPTANCE_TOOL_NAME);
+        appendMessage(
+          ctx,
+          buildHarnessInjectedMessage(overflowPrompt, {
+            role: "user",
+            injectedMessageType: "acceptance_overflow_forced_prompt",
+          }),
+          { block: "incremental" },
+        );
+        changed = true;
+        executedPrimary = true;
       }
       if (point === "before_final_output" && decision.chosenAction === ACCEPTANCE_DECISION.action.finalOutputAcceptanceGuard) {
         const step1 = (await ensurePhaseAcceptanceBeforeFinalAcceptance(ctx, meta)) || false;

@@ -9,11 +9,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
-import { ModelMessageRuntimeHelpers } from "../../../../agent/src/bot/session/model-message-runtime-helpers.js";
+import {
+  createTestHookContext,
+  createTestHookManager as createAgentHookManager,
+  TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
@@ -60,13 +63,6 @@ test("harness acceptance semantic validation uses separate model when enabled", 
 
   const agentContext = {
     payload: {
-      messages: {
-        system: [{ role: "system", content: "系统上下文：必须保留" }],
-        history: [
-          { role: "user", content: "用户原始需求：执行核心任务", frontendUserMessage: true, dialogProcessId: "dp-history" },
-          { role: "assistant", content: "执行过程上下文：已完成核心任务", dialogProcessId: "dp-history" },
-        ],
-      },
       harness: {
         taskChecklist: [{ index: 1, task: "执行核心任务", owner: "primary_task_owner" }],
         state: {
@@ -81,13 +77,23 @@ test("harness acceptance semantic validation uses separate model when enabled", 
   };
   const result = { output: "done: 执行核心任务" };
 
-  await hookManager.emit("before_final_output", {
+  const finalContext = createTestHookContext({
     userId: "u19",
     sessionId: "s19",
     dialogProcessId: "dp19",
     result,
     agentContext,
+  }, {
+    messageBlocks: {
+      system: [{ role: "system", content: "系统上下文：必须保留" }],
+      history: [
+        { role: "user", content: "用户原始需求：执行核心任务", frontendUserMessage: true, dialogProcessId: "dp-history" },
+        { role: "assistant", content: "执行过程上下文：已完成核心任务", dialogProcessId: "dp-history" },
+      ],
+      incremental: [],
+    },
   });
+  await hookManager.emit("before_final_output", finalContext);
 
   assert.equal(invocations.length, 2);
   assert.equal(invocations[0].purpose, "phase_acceptance_before_final");
@@ -106,7 +112,7 @@ test("harness acceptance semantic validation uses separate model when enabled", 
 });
 
 
-test("acceptance semantic validation relays via unified ctx.messages protocol", async () => {
+test("acceptance semantic validation relays via unified ctx.modelContext.messages protocol", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const modelMessages = [{ role: "assistant", content: "任务完成", type: "message" }];
   const ctx = {
@@ -157,9 +163,9 @@ test("acceptance semantic validation relays via unified ctx.messages protocol", 
 
   const res = await handler({ capability: "acceptance", point: "before_final_output", ctx, meta });
   assert.equal(res.status, "active");
-  assert.equal(Array.isArray(ctx.messages), true);
+  assert.equal(Array.isArray(ctx.modelContext.messages), true);
   assert.equal(
-    ctx.messages.some(
+    ctx.modelContext.messages.some(
       (item = {}) =>
         item.injectedMessage === true &&
         String(item.injectedBy || "") === "harness-plugin" &&
@@ -179,6 +185,7 @@ test("harness acceptance semantic validation failure does not block active accep
       trace: false,
       promptPolicy: false,
       acceptance: { semanticValidation: true },
+      resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async () => {
         throw new Error("semantic model unavailable");
       },
@@ -200,11 +207,16 @@ test("harness acceptance semantic validation failure does not block active accep
     },
   };
 
-  await hookManager.emit("before_turn", { agentContext });
+  await hookManager.emit("before_turn", createTestHookContext({ agentContext }));
   const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
   const raw = await tool.invoke(
     { mode: "active" },
-    { configurable: { noobotHookContext: { agentContext, result: { output: "done" } }, noobotHookMeta: hookManager.runtime } },
+    {
+      configurable: {
+        noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
+        noobotHookMeta: hookManager.runtime,
+      },
+    },
   );
   const result = typeof raw === "string" ? JSON.parse(raw) : raw;
 
@@ -262,7 +274,7 @@ test("acceptance handler inject mode schedules and captures semantic validation 
   const injectCtx = { agentContext, messages: [{ role: "user", content: "continue" }] };
   await handler({ capability: "acceptance", point: "before_llm_call", ctx: injectCtx, meta });
   assert.equal(
-    injectCtx.messages.some((item) =>
+    injectCtx.modelContext.messages.some((item) =>
       String(item?.content || "").includes("harness-acceptance-semantic-validation"),
     ),
     true,
@@ -291,4 +303,3 @@ test("acceptance handler inject mode schedules and captures semantic validation 
     true,
   );
 });
-

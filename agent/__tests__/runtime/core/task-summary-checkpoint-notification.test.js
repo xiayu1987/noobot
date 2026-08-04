@@ -8,8 +8,9 @@ import assert from "node:assert/strict";
 
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
+import { createModelContext } from "@noobot/context-protocol";
 
-test("task_summary sends one checkpoint command only after the pre-refactor marking completes", async () => {
+test("task_summary sends one checkpoint command without mutating messages before commit", async () => {
   const oldSystem = { role: "system", content: "old system" };
   const oldCall = {
     role: "assistant",
@@ -29,6 +30,12 @@ test("task_summary sends one checkpoint command only after the pre-refactor mark
     toolName: "task_summary",
   };
   const messages = [oldSystem, oldCall, oldResult, summaryCall, summaryResult];
+  messages.forEach((message, index) => {
+    message.messageUid = `sm_${index + 1}`;
+    message.dialogProcessId = "dialog-1";
+    message.turnScopeId = "scope-1";
+    message.additional_kwargs = { noobotMessageId: message.messageUid };
+  });
   const currentTurnMessages = createCurrentTurnMessagesStore(structuredClone(messages));
   const checkpointCalls = [];
   const runtime = {
@@ -36,12 +43,12 @@ test("task_summary sends one checkpoint command only after the pre-refactor mark
     currentTurnMessages,
     async commitSummaryCheckpoint(payload) {
       checkpointCalls.push(payload);
-      assert.equal(oldSystem.summarized, true);
-      assert.equal(oldCall.summarized, true);
-      assert.equal(oldResult.summarized, true);
+      assert.equal(oldSystem.summarized, undefined);
+      assert.equal(oldCall.summarized, undefined);
+      assert.equal(oldResult.summarized, undefined);
       assert.equal(summaryCall.summarized, undefined);
       assert.equal(summaryResult.summarized, undefined);
-      return { committed: false };
+      return { committed: true };
     },
   };
   let invocation = 0;
@@ -85,8 +92,10 @@ test("task_summary sends one checkpoint command only after the pre-refactor mark
       tools: [{}],
       traces: [],
       maxTurns: 10,
-      messages,
-      messageBlocks: { system: [], history: [], incremental: messages },
+      modelContext: createModelContext({
+        messageBlocks: { system: [], history: [], incremental: messages },
+        activeTurnIdentity: { dialogProcessId: "dialog-1", turnScopeId: "scope-1" },
+      }),
       turnMessages: currentTurnMessages.toArray(),
       turnTasks: [],
     },
@@ -96,10 +105,8 @@ test("task_summary sends one checkpoint command only after the pre-refactor mark
   assert.equal(result.output, "done");
   assert.equal(checkpointCalls.length, 1);
   assert.equal(checkpointCalls[0].summaryCompletion.source, "task_summary");
-  assert.equal(
-    checkpointCalls[0].summaryCompletion.summarizedMessages.every(
-      (message) => message.summarized === true || message.lc_kwargs?.summarized === true,
-    ),
-    true,
+  assert.deepEqual(
+    new Set(checkpointCalls[0].summaryCompletion.summarizedMessageIds),
+    new Set(["sm_1", "sm_2", "sm_3"]),
   );
 });

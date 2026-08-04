@@ -55,14 +55,15 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   }
   assert.equal(normalizeSessionLogCategory('missing'), SESSION_LOG_DEFAULT_CATEGORY);
   assert.equal(normalizeSessionLogCategory('DEBUG'), SESSION_LOG_DEBUG_CATEGORY);
-  assert.equal(getSessionLogControlKey({ category: 'message' }, 'message'), 'messageLog');
-  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'state-machine' } }), 'stateMachineDebug');
-  assert.equal(getSessionLogDebugControlKey({ debugType: 'stop-continue' }), 'frontendStopContinueDebug');
-  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'stop-continue' } }), 'frontendStopContinueDebug');
-  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'terminal-resolution' } }), 'frontendTerminalResolutionDebug');
-  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'tool-log-window' } }), 'frontendToolLogWindowDebug');
-  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'timeline-pipeline' } }), 'timelinePipelineDebug');
-  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-proxy-route' } }), 'agentProxyRouteDebug');
+  assert.equal(getSessionLogControlKey({ category: 'message' }, 'message'), 'message');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'state-machine' } }), 'stateMachine');
+  assert.equal(getSessionLogDebugControlKey({ debugType: 'stop-continue' }), 'frontendStopContinue');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'stop-continue' } }), 'frontendStopContinue');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'terminal-resolution' } }), 'frontendTerminalResolution');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'tool-log-window' } }), 'frontendToolLogWindow');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'timeline-pipeline' } }), 'timelinePipeline');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-proxy-route' } }), 'agentProxyRoute');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'context-identity' } }), 'contextIdentity');
 
   const record = buildSessionLogRecord({
     source: 'frontend',
@@ -88,15 +89,17 @@ test('session log protocol exports stable categories and helpers from runtime-ev
 
 test('session log client policy is derived from the shared debug registry', () => {
   const policy = resolveSessionLogClientPolicy({
-    workflowDiagnosticsDebug: true,
-    frontendToolLogWindowDebug: true,
-    timelinePipelineDebug: true,
+    sessionLogControls: { debug: {
+      workflowDiagnostics: true,
+      frontendToolLogWindow: true,
+      timelinePipeline: true,
+    } },
   });
 
   assert.equal(policy.debug['workflow-diagnostics'], true);
   assert.equal(policy.debug['tool-log-window'], true);
-  assert.equal(policy.debug.resend, true);
-  assert.equal(policy.debug.stop, true);
+  assert.equal(policy.debug.resend, false);
+  assert.equal(policy.debug.stop, false);
   assert.equal(Object.hasOwn(policy.debug, 'timeline-pipeline'), false);
   assert.deepEqual(
     Object.keys(policy.debug).sort(),
@@ -112,7 +115,7 @@ test('session log client policy is derived from the shared debug registry', () =
 
 test('tool log window debug uses its own file when enabled', async () => {
   assert.equal(
-    RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.frontendToolLogWindowDebug,
+    RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.frontendToolLogWindow,
     'NOOBOT_RUNTIME_EVENT_FRONTEND_TOOL_LOG_WINDOW_DEBUG',
   );
   const root = await tempRoot();
@@ -125,7 +128,7 @@ test('tool log window debug uses its own file when enabled', async () => {
     userId: 'admin',
     sessionId: 'session-tool-window',
     data: { debugType: 'tool-log-window', selectedCount: 10 },
-  }, { root, includeProcess: false, frontendToolLogWindowDebug: true });
+  }, { root, includeProcess: false, sessionLogControls: { debug: { frontendToolLogWindow: true } } });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);
@@ -135,7 +138,7 @@ test('tool log window debug uses its own file when enabled', async () => {
 
 test('workflow diagnostics debug follows explicit disabled and enabled controls', async () => {
   assert.equal(
-    RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.workflowDiagnosticsDebug,
+    RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.workflowDiagnostics,
     'NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG',
   );
   const root = await tempRoot();
@@ -152,7 +155,7 @@ test('workflow diagnostics debug follows explicit disabled and enabled controls'
   const skipped = await writeRuntimeEvent(event, {
     root,
     includeProcess: false,
-    workflowDiagnosticsDebug: false,
+    sessionLogControls: { debug: { workflowDiagnostics: false } },
   });
 
   assert.equal(skipped.ok, true);
@@ -162,7 +165,7 @@ test('workflow diagnostics debug follows explicit disabled and enabled controls'
   const result = await writeRuntimeEvent(event, {
     root,
     includeProcess: false,
-    workflowDiagnosticsDebug: true,
+    sessionLogControls: { debug: { workflowDiagnostics: true } },
   });
 
   assert.equal(result.ok, true);
@@ -183,7 +186,7 @@ test('session log record preserves top-level debug type in data', () => {
   }, { includeTimestamp: false });
 
   assert.equal(record.data.debugType, 'stop-continue');
-  assert.equal(getSessionLogDebugControlKey(record), 'frontendStopContinueDebug');
+  assert.equal(getSessionLogDebugControlKey(record), 'frontendStopContinue');
 });
 
 test('normalizeRuntimeEvent builds a sanitized structured record', () => {

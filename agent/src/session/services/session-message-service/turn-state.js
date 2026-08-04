@@ -329,6 +329,7 @@ export async function stampReusedUserTurnDialogProcessId({
         stamped: false,
         reason: "unchanged",
         session,
+        userMessage: targetMessage,
         messageIndex: targetIndex,
         dialogProcessId: normalizedDialogProcessId,
       };
@@ -346,6 +347,7 @@ export async function stampReusedUserTurnDialogProcessId({
     return {
       stamped: true,
       session,
+      userMessage: targetMessage,
       messageIndex: targetIndex,
       version: resolveSessionVersion(session),
       dialogProcessId: normalizedDialogProcessId,

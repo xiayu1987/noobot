@@ -9,11 +9,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
-import { ModelMessageRuntimeHelpers } from "../../../../agent/src/bot/session/model-message-runtime-helpers.js";
+import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
+import { TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
@@ -37,6 +37,7 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
+      resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "summary") {
@@ -259,6 +260,7 @@ test("planning_refinement is scheduled independently after revision main-plan ch
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
+      resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "summary") return { content: "小结完成" };
@@ -310,6 +312,7 @@ test("harness summary without completion marker still triggers planning revision
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
+      resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "summary") {
@@ -387,12 +390,12 @@ test("guidance handler inject mode can schedule and capture planning revision wi
   };
   await handler({ capability: "guidance", point: "before_llm_call", ctx: firstCtx, meta });
   assert.equal(
-    firstCtx.messages.some((msg) => String(msg.content || "").includes("harness-guidance-summary")),
+    firstCtx.modelContext.messages.some((msg) => String(msg.content || "").includes("harness-guidance-summary")),
     true,
   );
 
   const summaryCtx = {
-    messages: firstCtx.messages,
+    messages: firstCtx.modelContext.messages,
     ai: { content: "已完成：完成初始检查\n小结完成" },
     agentContext,
   };
@@ -410,12 +413,12 @@ test("guidance handler inject mode can schedule and capture planning revision wi
   };
   await handler({ capability: "guidance", point: "before_llm_call", ctx: secondCtx, meta });
   assert.equal(
-    secondCtx.messages.some((msg) => String(msg.content || "").includes("harness-planning-revision")),
+    secondCtx.modelContext.messages.some((msg) => String(msg.content || "").includes("harness-planning-revision")),
     false,
   );
 
   const revisionCtx = {
-    messages: secondCtx.messages,
+    messages: secondCtx.modelContext.messages,
     ai: {
       content: JSON.stringify({
         totalGoal: "完成 inject 模式计划闭环",

@@ -89,8 +89,30 @@ function createRunner({
         },
       },
     })),
-    appendSessionTurn: async () => {
+    commitSessionTurn: async (payload = {}) => {
       callOrder.push("appendSessionTurn");
+      const messageUid = `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+      return {
+        version: 1,
+        attachments: payload.attachments || [],
+        userMessage: {
+          messageUid,
+          id: payload.messageId || messageUid,
+          messageId: payload.messageId || messageUid,
+          role: "user",
+          type: "message",
+          content: payload.content,
+          userName: payload.userId,
+          sessionId: payload.sessionId,
+          parentSessionId: payload.parentSessionId,
+          dialogProcessId: payload.dialogProcessId,
+          parentDialogProcessId: payload.parentDialogProcessId,
+          turnScopeId: payload.turnScopeId,
+          frontendUserMessage: payload.frontendUserMessage === true,
+          messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
+          attachments: payload.attachments || [],
+        },
+      };
     },
     getSessionTurns,
     getTurnSummaryCheckpointState,
@@ -541,11 +563,11 @@ test("runSession persists stopped model message snapshot from runtime candidate 
       parentSessionId: "",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
-      messages: [{ type: "human", content: "hello", additional_kwargs: { dialogProcessId: "dialog-1" } }],
+      messages: [{ type: "human", content: "hello", dialogProcessId: "dialog-1", turnScopeId: "turn-1" }],
       messageBlocks: {
         system: [{ type: "system", content: "system" }],
         history: [],
-        incremental: [{ type: "human", content: "hello" }],
+        incremental: [{ type: "human", content: "hello", dialogProcessId: "dialog-1", turnScopeId: "turn-1" }],
       },
     },
   };
@@ -587,6 +609,12 @@ test("runSession persists stopped model message snapshot from runtime candidate 
   assert.equal(loaded.messageBlocks.system[0].content, "system");
   const savedEvent = events.find((item) => item.event === "stopped_model_message_snapshot_saved");
   assert.equal(savedEvent?.data?.source, "runner_user_stop_catch");
+  assert.deepEqual(savedEvent?.data?.roundIdentityAudit?.blocks?.incremental, {
+    total: 1,
+    complete: 1,
+    missing: 0,
+    partial: 0,
+  });
   const stoppedEvent = findStoppedLifecycleEvent(events);
   assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.status, "saved");
   assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.source, "runner_user_stop_catch");
@@ -664,7 +692,7 @@ test("runSession persists stopped model message snapshot for plain user_stop err
   assert.equal(stoppedEvent?.data?.canResume, true);
 });
 
-test("runSession persists stopped snapshot when abort signal fires before abort error bubbles", async () => {
+test("runSession seals stopped snapshot only after the abort reaches the terminal catch", async () => {
   const callOrder = [];
   const events = [];
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-runner-stop-signal-snapshot-"));
@@ -701,6 +729,13 @@ test("runSession persists stopped snapshot when abort signal fires before abort 
     agentRunner: async () => {
       abortController.abort({ type: "user_stop", reason: "user stop action" });
       await new Promise((resolve) => setImmediate(resolve));
+      runtime.stoppedModelMessageSnapshotCandidate.messageBlocks.incremental.push({
+        type: "human",
+        role: "user",
+        content: "terminal hook injection after stop signal",
+        injectedMessage: true,
+        injectedMessageType: "separate_model_relay:guidance",
+      });
       throw abortError;
     },
     finalizeRunSession: async () => ({ ok: true }),
@@ -726,12 +761,17 @@ test("runSession persists stopped snapshot when abort signal fires before abort 
     },
   });
   assert.equal(loaded.messages[0].content, "system");
-  assert.equal(loaded.messages.at(-1).content, "hello before signal");
+  assert.equal(loaded.messages.at(-1).content, "terminal hook injection after stop signal");
+  assert.equal(loaded.messages.at(-1).injectedMessage, true);
+  assert.equal(
+    loaded.messages.at(-1).injectedMessageType,
+    "separate_model_relay:guidance",
+  );
   const savedEvent = events.find((item) => item.event === "stopped_model_message_snapshot_saved");
-  assert.equal(savedEvent?.data?.source, "runner_user_stop_signal");
+  assert.equal(savedEvent?.data?.source, "runner_user_stop_catch");
   const stoppedEvent = findStoppedLifecycleEvent(events);
   assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.status, "saved");
-  assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.source, "runner_user_stop_signal");
+  assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.source, "runner_user_stop_catch");
 });
 
 test("runSession emits stopped snapshot diagnostic when abort candidate is incomplete", async () => {

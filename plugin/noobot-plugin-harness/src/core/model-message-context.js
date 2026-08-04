@@ -3,29 +3,39 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { replaceMessages } from "./message-store.js";
-import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../../../../agent/src/context/runtime-state/context-diagnostics.js";
+import { replaceMessageProjection } from "./message-store.js";
+import {
+  resolveAuthoritativeModelContext,
+  resolveModelContextTraceEmitter,
+} from "@noobot/context-protocol/hook-context";
+import {
+  summarizeDiagnosticBlocks,
+  summarizeDiagnosticMessages,
+} from "@noobot/context-protocol/context-diagnostics";
 
 
 function emitHarnessModelContextTrace(ctx = {}, stage = "", payload = {}) {
-  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
-  emitModelContextTrace(runtime, stage, {
+  const emit = resolveModelContextTraceEmitter(ctx);
+  if (!emit) return false;
+  emit(stage, {
     source: "harness",
     point: ctx?.point || "",
     turn: ctx?.turn ?? null,
     mode: ctx?.mode || "",
     ...payload,
   });
+  return true;
 }
 
 export function applyAgentResolvedModelMessages(point = "", ctx = {}, options = {}) {
   if (String(point || "").trim().toLowerCase() !== "before_llm_call") return false;
-  if (!ctx || typeof ctx !== "object" || !Array.isArray(ctx.messages)) return false;
+  const modelContext = resolveAuthoritativeModelContext(ctx);
+  if (!modelContext || !Array.isArray(modelContext.messages)) return false;
   const resolver = options?.resolveModelMessages || options?.harness?.resolveModelMessages;
   if (typeof resolver !== "function") return false;
   emitHarnessModelContextTrace(ctx, "harness_apply_agent_resolved_before", {
-    blocks: summarizeDiagnosticBlocks(ctx.messageBlocks),
-    messages: summarizeDiagnosticMessages(ctx.messages),
+    blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
+    messages: summarizeDiagnosticMessages(modelContext.messages),
   });
   let resolved = null;
   try {
@@ -33,20 +43,20 @@ export function applyAgentResolvedModelMessages(point = "", ctx = {}, options = 
   } catch (error) {
     emitHarnessModelContextTrace(ctx, "harness_apply_agent_resolved_error", {
       error: String(error?.message || error || ""),
-      blocks: summarizeDiagnosticBlocks(ctx.messageBlocks),
-      messages: summarizeDiagnosticMessages(ctx.messages),
+      blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
+      messages: summarizeDiagnosticMessages(modelContext.messages),
     });
     return false;
   }
   if (!Array.isArray(resolved)) return false;
   emitHarnessModelContextTrace(ctx, "harness_apply_agent_resolved_after_resolver", {
-    blocks: summarizeDiagnosticBlocks(ctx.messageBlocks),
+    blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
     resolvedMessages: summarizeDiagnosticMessages(resolved),
   });
-  replaceMessages(ctx, resolved);
+  replaceMessageProjection(ctx, resolved);
   emitHarnessModelContextTrace(ctx, "harness_apply_agent_resolved_after_replace", {
-    blocks: summarizeDiagnosticBlocks(ctx.messageBlocks),
-    messages: summarizeDiagnosticMessages(ctx.messages),
+    blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
+    messages: summarizeDiagnosticMessages(modelContext.messages),
   });
   return true;
 }

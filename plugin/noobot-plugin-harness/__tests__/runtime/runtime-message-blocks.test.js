@@ -7,10 +7,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
-import { resolveMainModelFinalMessages } from "../../../../agent/src/session/utils/context-window-normalizer.js";
+import {
+  createModelContext,
+  resolveModelFinalMessages as resolveMainModelFinalMessages,
+} from "@noobot/context-protocol";
+import { ensureTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import { appendMessage } from "../../src/core/message-store.js";
+
+function withModelContext(ctx = {}) {
+  return ensureTestHookContext(ctx);
+}
 
 function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};
+  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
+    ? ctx.modelContext.messageBlocks
+    : {};
   return resolveMainModelFinalMessages({
     systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
     historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
@@ -35,7 +46,7 @@ test("capability runtime runs global bootstrap before capability handlers", asyn
     },
   });
 
-  await runtime.runHook("before_llm_call", {}, {
+  await runtime.runHook("before_llm_call", withModelContext({ messages: [] }), {
     harness: {
       globalBootstrap: async () => {
         calls.push("globalBootstrap");
@@ -63,7 +74,7 @@ test("capability runtime exposes resolved capability profile to handlers", async
     },
   });
 
-  await runtime.runHook("before_llm_call", { messages: [] }, {});
+  await runtime.runHook("before_llm_call", withModelContext({ messages: [] }), {});
 
   assert.equal(capturedProfile?.planning?.enabled, false);
   assert.equal(capturedProfile?.guidance?.enabled, true);
@@ -91,7 +102,7 @@ test("capability runtime keeps planning first without blocking later before_llm_
       review: { enabled: false },
     },
   });
-  const ctx = {
+  const ctx = withModelContext({
     agentContext: {
       payload: {
         harness: {
@@ -102,7 +113,7 @@ test("capability runtime keeps planning first without blocking later before_llm_
       },
     },
     messages: [],
-  };
+  });
 
   const results = await runtime.runHook("before_llm_call", ctx, {});
 
@@ -131,7 +142,7 @@ test("capability runtime does not block guidance when plan text exists but captu
       review: { enabled: false },
     },
   });
-  const ctx = {
+  const ctx = withModelContext({
     agentContext: {
       payload: {
         harness: {
@@ -143,7 +154,7 @@ test("capability runtime does not block guidance when plan text exists but captu
       },
     },
     messages: [],
-  };
+  });
 
   await runtime.runHook("before_llm_call", ctx, {});
 
@@ -160,24 +171,24 @@ test("capability runtime delegates before_llm_call messages to agent resolver", 
       review: { enabled: false },
     },
   });
-  const ctx = {
+  const ctx = withModelContext({
     messages: [{ role: "assistant", content: "legacy" }],
     messageBlocks: {
       system: [{ role: "system", content: "sys1" }],
       history: [{ role: "assistant", content: "h1", dialogProcessId: "d1" }],
       incremental: [{ role: "user", content: "u1" }],
     },
-  };
+  });
   const calls = [];
   await runtime.runHook("before_llm_call", ctx, {
     harness: {
       resolveModelMessages: ({ ctx: resolverCtx = {} } = {}) => {
         calls.push("resolveModelMessages");
         return [
-          ...resolverCtx.messageBlocks.system,
-          ...resolverCtx.messageBlocks.history,
+          ...resolverCtx.modelContext.messageBlocks.system,
+          ...resolverCtx.modelContext.messageBlocks.history,
           { role: "assistant", content: "h2" },
-          ...resolverCtx.messageBlocks.incremental.filter((item) => item?.role === "user"),
+          ...resolverCtx.modelContext.messageBlocks.incremental.filter((item) => item?.role === "user"),
         ];
       },
     },
@@ -185,7 +196,7 @@ test("capability runtime delegates before_llm_call messages to agent resolver", 
 
   assert.deepEqual(calls, ["resolveModelMessages"]);
   assert.deepEqual(
-    ctx.messages.map((item) => item.content),
+    ctx.modelContext.messages.map((item) => item.content),
     ["sys1", "h1", "h2", "u1"],
   );
 });
@@ -199,7 +210,7 @@ test("capability runtime filters summarized messages from incremental blocks by 
       review: { enabled: false },
     },
   });
-  const ctx = {
+  const ctx = withModelContext({
     messages: [],
     messageBlocks: {
       system: [{ role: "system", content: "sys" }],
@@ -213,16 +224,16 @@ test("capability runtime filters summarized messages from incremental blocks by 
         { role: "user", content: "current user", additional_kwargs: { frontendUserMessage: true } },
       ],
     },
-  };
+  });
 
   await runtime.runHook("before_llm_call", ctx, { harness: { resolveModelMessages: resolveFromBlocks } });
 
   assert.deepEqual(
-    ctx.messages.map((item) => item.content),
+    ctx.modelContext.messages.map((item) => item.content),
     ["sys", "active-history", "current user"],
   );
   assert.deepEqual(
-    ctx.messageBlocks.incremental.map((item) => item.content),
+    ctx.modelContext.messageBlocks.incremental.map((item) => item.content),
     ["summarized-incremental", "summarized-tool", "current user"],
   );
 });
@@ -237,7 +248,7 @@ test("capability runtime does not let resolver reintroduce summarized messages",
     },
   });
   const summarized = { role: "assistant", content: "summarized-incremental", summarized: true };
-  const ctx = {
+  const ctx = withModelContext({
     messages: [],
     messageBlocks: {
       system: [],
@@ -247,18 +258,18 @@ test("capability runtime does not let resolver reintroduce summarized messages",
         { role: "user", content: "current user", additional_kwargs: { frontendUserMessage: true } },
       ],
     },
-  };
+  });
 
   await runtime.runHook("before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
 
   assert.deepEqual(
-    ctx.messages.map((item) => item.content),
+    ctx.modelContext.messages.map((item) => item.content),
     ["current user"],
   );
   assert.deepEqual(
-    ctx.messageBlocks.incremental.map((item) => item.content),
+    ctx.modelContext.messageBlocks.incremental.map((item) => item.content),
     ["summarized-incremental", "current user"],
   );
 });
@@ -272,7 +283,7 @@ test("capability runtime applies message blocks only once per runtime turn conte
       review: { enabled: false },
     },
   });
-  const ctx = {
+  const ctx = withModelContext({
     messages: [{ role: "assistant", content: "legacy" }],
     messageBlocks: {
       system: [{ role: "system", content: "sys1" }],
@@ -286,22 +297,82 @@ test("capability runtime applies message blocks only once per runtime turn conte
         },
       },
     },
-  };
-  const originalMessageBlocks = ctx.messageBlocks;
+  });
+  const originalMessageBlocks = ctx.modelContext.messageBlocks;
 
   await runtime.runHook("before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
-  assert.equal(ctx.messageBlocks, originalMessageBlocks);
-  ctx.messages.push({ role: "assistant", content: "after-first-call" });
+  assert.equal(ctx.modelContext.messageBlocks, originalMessageBlocks);
+  appendMessage(ctx, { role: "assistant", content: "after-first-call" }, { block: "incremental" });
   await runtime.runHook("before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
 
   assert.deepEqual(
-    ctx.messages.map((item) => item.content),
-    ["sys1", "h1", "u1"],
+    ctx.modelContext.messages.map((item) => item.content),
+    ["sys1", "h1", "u1", "after-first-call"],
   );
+});
+
+test("capability runtime keeps repeated unsummarized guidance across tool rounds", async () => {
+  const runtime = createCapabilityRuntime({
+    profile: {
+      planning: { enabled: false },
+      guidance: { enabled: false },
+      acceptance: { enabled: false },
+      review: { enabled: false },
+    },
+  });
+  const firstGuidance = {
+    role: "user",
+    content: "first guidance",
+    injectedMessage: true,
+    injectedBy: "harness-plugin",
+    injectedMessageType: "separate_model_relay:guidance",
+  };
+  const ctx = withModelContext({
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [firstGuidance],
+    },
+  });
+
+  await runtime.runHook("before_llm_call", ctx, {
+    harness: { resolveModelMessages: resolveFromBlocks },
+  });
+  appendMessage(ctx, {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
+  }, { block: "incremental" });
+  appendMessage(ctx, {
+    role: "tool",
+    content: "tool result",
+    tool_call_id: "call-1",
+  }, { block: "incremental" });
+  appendMessage(ctx, {
+    role: "user",
+    content: "second guidance",
+    injectedMessage: true,
+    injectedBy: "harness-plugin",
+    injectedMessageType: "separate_model_relay:guidance",
+  }, { block: "incremental" });
+
+  await runtime.runHook("before_llm_call", ctx, {
+    harness: { resolveModelMessages: resolveFromBlocks },
+  });
+
+  assert.deepEqual(
+    ctx.modelContext.messageBlocks.incremental.map((item) => item.content),
+    ["first guidance", "", "tool result", "second guidance"],
+  );
+  assert.deepEqual(
+    ctx.modelContext.messages.map((item) => item.content),
+    ["first guidance", "", "tool result", "second guidance"],
+  );
+  assert.equal(firstGuidance.summarized, undefined);
 });
 
 test("capability runtime preserves history and incremental user messages in block order", async () => {
@@ -313,7 +384,7 @@ test("capability runtime preserves history and incremental user messages in bloc
       review: { enabled: false },
     },
   });
-  const ctx = {
+  const ctx = withModelContext({
     messages: [],
     messageBlocks: {
       system: [
@@ -329,7 +400,10 @@ test("capability runtime preserves history and incremental user messages in bloc
           role: "user",
           content: "全仓回归测试",
           dialogProcessId: "d-current",
-          additional_kwargs: { turnScopeId: "client-turn:current" },
+          additional_kwargs: {
+            turnScopeId: "client-turn:current",
+            noobotMessageId: "am_current_user",
+          },
         },
       ],
       incremental: [
@@ -337,7 +411,11 @@ test("capability runtime preserves history and incremental user messages in bloc
           role: "user",
           content: "全仓回归测试",
           dialogProcessId: "d-current",
-          additional_kwargs: { turnScopeId: "client-turn:current", frontendUserMessage: true },
+          additional_kwargs: {
+            turnScopeId: "client-turn:current",
+            frontendUserMessage: true,
+            noobotMessageId: "am_current_user",
+          },
         },
         {
           role: "user",
@@ -354,17 +432,17 @@ test("capability runtime preserves history and incremental user messages in bloc
         },
       },
     },
-  };
+  });
 
   await runtime.runHook("before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
 
-  const userTextIndexes = ctx.messages
+  const userTextIndexes = ctx.modelContext.messages
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => item?.role === "user" && item?.content === "全仓回归测试")
     .map(({ index }) => index);
-  const userMetaIndex = ctx.messages.findIndex((item) =>
+  const userMetaIndex = ctx.modelContext.messages.findIndex((item) =>
     String(item?.content || "").startsWith("[用户元信息]"),
   );
 
@@ -380,7 +458,7 @@ test("capability runtime does not remove same-text user from a different turn", 
       review: { enabled: false },
     },
   });
-  const ctx = {
+  const ctx = withModelContext({
     messages: [],
     messageBlocks: {
       system: [{ role: "system", content: "sys" }],
@@ -413,13 +491,13 @@ test("capability runtime does not remove same-text user from a different turn", 
         },
       },
     },
-  };
+  });
 
   await runtime.runHook("before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
 
-  const userTextIndexes = ctx.messages
+  const userTextIndexes = ctx.modelContext.messages
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => item?.role === "user" && item?.content === "全仓回归测试")
     .map(({ index }) => index);
@@ -458,7 +536,7 @@ test("capability runtime keeps later flows running when one flow fails", async (
       },
     },
   };
-  const results = await runtime.runHook("before_llm_call", { agentContext, messages: [] }, {});
+  const results = await runtime.runHook("before_llm_call", withModelContext({ agentContext, messages: [] }), {});
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
   assert.equal(results[0]?.status, "error");

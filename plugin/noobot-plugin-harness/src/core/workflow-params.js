@@ -252,9 +252,6 @@ export const WORKFLOW_PARAMS = deepFreeze({
       turnsThreshold: TURN_THRESHOLDS.harness.guidance.summaryTurns,
       messageCharsThreshold: LENGTH_THRESHOLDS.context.harnessSummaryMessageChars,
       overflowPolicy: {
-        enablePruneAfterSummary: true,
-        pruneTriggerAfterCharSummaryRounds:
-          TURN_THRESHOLDS.agent.phaseSummaryPruneAfterCharSummaryRounds,
         forceAcceptanceWhenStillOverflow: true,
       },
     },

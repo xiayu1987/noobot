@@ -7,7 +7,6 @@ import { filterForModelContext } from "../../context/session/message-context-pol
 import { mergeConfig, normalizeBooleanLike, resolveRunConfigValue } from "../../config/index.js";
 import { emitEvent } from "../../events/index.js";
 import { createChatModelFromSpec } from "../../models/index.js";
-import { syncStoppedModelMessageSnapshotCandidate } from "../resume/model-message-snapshot-store.js";
 import { invokeLlmWithTransientRetry, normalizeAiTextContent } from "../llm-invoker.js";
 import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
 
@@ -91,7 +90,6 @@ export async function maybeInvokeFinalStreamingNoTools({
   emitEvent(eventListener, "llm_final_stream_start", { turn, mode });
   try {
     const modelMessages = filterForModelContext(baseMessages);
-    syncStoppedModelMessageSnapshotCandidate(runtime, modelMessages);
     const streamedAi = await invokeLlmWithTransientRetry({
       modelState,
       turn,

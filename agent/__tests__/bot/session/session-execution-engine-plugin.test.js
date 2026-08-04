@@ -9,12 +9,41 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
+import { createModelContext } from "@noobot/context-protocol";
 
 import { SessionExecutionEngine } from "../../../src/bot/session/session-execution-engine.js";
 import { AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS, AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS } from "../../../src/bot/session/run-config-plugin-preparer.js";
 
 function createWorkspaceService(basePath) {
   return { getWorkspacePath: () => basePath };
+}
+
+function createResolverContext({
+  messages = [],
+  messageBlocks = null,
+  dialogProcessId = "dlg_current",
+  context = {},
+} = {}) {
+  const blocks = messageBlocks || {
+    system: messages.filter((message) => String(message?.role || "").toLowerCase() === "system"),
+    history: [],
+    incremental: messages.filter((message) => String(message?.role || "").toLowerCase() !== "system"),
+  };
+  for (const blockName of ["history", "incremental"]) {
+    for (const message of blocks[blockName] || []) {
+      if (!message.dialogProcessId) message.dialogProcessId = dialogProcessId;
+      if (!message.turnScopeId) message.turnScopeId = `turn:${message.dialogProcessId}`;
+    }
+  }
+  return {
+    ...context,
+    dialogProcessId,
+    contextProtocolVersion: 1,
+    modelContext: createModelContext({
+      messageBlocks: blocks,
+      activeTurnIdentity: { dialogProcessId, turnScopeId: `turn:${dialogProcessId}` },
+    }),
+  };
 }
 
 test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for plugin separate_model", async () => {
@@ -231,20 +260,18 @@ test("SessionExecutionEngine injects bot plugin resolveModelMessages without plu
 
   const resolver = prepared.plugins.botPlugin.resolveModelMessages;
   assert.equal(typeof resolver, "function");
-  const resolved = resolver({
-    messages: [
+  const resolved = resolver({ ctx: createResolverContext({ messages: [
       { role: "system", content: "policy" },
       { role: "user", content: "old" },
       { role: "assistant", content: "a1" },
       { role: "user", content: "current", frontendUserMessage: true },
-    ],
-  });
+    ] }) });
 
-  assert.deepEqual(resolved, [
-    { role: "system", content: "policy", summarized: false },
-    { role: "user", content: "old", summarized: false },
-    { role: "assistant", content: "a1", summarized: false },
-    { role: "user", content: "current", summarized: false, frontendUserMessage: true },
+  assert.deepEqual(resolved.map(({ role, content }) => ({ role, content })), [
+    { role: "system", content: "policy" },
+    { role: "user", content: "old" },
+    { role: "assistant", content: "a1" },
+    { role: "user", content: "current" },
   ]);
 });
 
@@ -274,15 +301,15 @@ test("SessionExecutionEngine injects plugin resolveModelMessages without plugin 
     { role: "assistant", content: "a3" },
     { role: "assistant", content: "a4" },
   ];
-  const resolved = resolver({ messages });
+  const resolved = resolver({ ctx: createResolverContext({ messages }) });
 
   assert.equal(Array.isArray(resolved), true);
-  assert.deepEqual(resolved, [
-    { role: "system", content: "policy", summarized: false },
-    { role: "user", content: "u1", summarized: false },
-    { role: "assistant", content: "a2", summarized: false },
-    { role: "assistant", content: "a3", summarized: false },
-    { role: "assistant", content: "a4", summarized: false },
+  assert.deepEqual(resolved.map(({ role, content }) => ({ role, content })), [
+    { role: "system", content: "policy" },
+    { role: "user", content: "u1" },
+    { role: "assistant", content: "a2" },
+    { role: "assistant", content: "a3" },
+    { role: "assistant", content: "a4" },
   ]);
 });
 
@@ -303,76 +330,6 @@ test("SessionExecutionEngine no longer injects legacy resolveMessageBlock", asyn
   assert.equal(typeof prepared.plugins.agentPlugin.resolveModelMessages, "function");
 });
 
-test("SessionExecutionEngine injects plugin markMessagesSummarized aligned with agent summary policy", async () => {
-  const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
-    userId: "u1",
-    runConfig: {
-      plugins: {
-        agentPlugin: {
-          enabled: true,
-          mode: "on",
-        },
-      },
-    },
-  });
-
-  const summarizer = prepared.plugins.agentPlugin.markMessagesSummarized;
-  assert.equal(typeof summarizer, "function");
-
-  const messages = [
-    { role: "system", content: "policy" },
-    { role: "user", content: "task" },
-    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
-    { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
-    { role: "tool", content: '{"toolName":"task_summary","ok":true}' },
-  ];
-  const marked = await summarizer({ messages });
-  assert.equal(marked, 3);
-  assert.equal(messages[0].summarized, true);
-  assert.equal(messages[1].summarized, undefined);
-  assert.equal(messages[2].summarized, true);
-  assert.equal(messages[3].summarized, true);
-  assert.equal(messages[4].summarized, undefined);
-});
-
-test("SessionExecutionEngine markMessagesSummarized supports scoped marking", async () => {
-  const engine = new SessionExecutionEngine({ globalConfig: {} });
-  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
-    userId: "u1",
-    runConfig: {
-      plugins: {
-        agentPlugin: {
-          enabled: true,
-          mode: "on",
-        },
-      },
-    },
-  });
-
-  const summarizer = prepared.plugins.agentPlugin.markMessagesSummarized;
-  const messages = [
-    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
-    { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
-    { role: "assistant", content: "", tool_calls: [{ id: "c2", function: { name: "execute_script" } }] },
-    { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
-  ];
-
-  const marked = await summarizer({
-    messages,
-    summaryScope: {
-      maxMessages: 2,
-      limitToProvidedMessagesOnly: true,
-    },
-  });
-
-  assert.equal(marked, 2);
-  assert.equal(messages[0].summarized, true);
-  assert.equal(messages[1].summarized, true);
-  assert.equal(messages[2].summarized, undefined);
-  assert.equal(messages[3].summarized, undefined);
-});
-
 test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages for plugin model", async () => {
   const engine = new SessionExecutionEngine({
     globalConfig: {},
@@ -390,12 +347,13 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
   });
   const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
   const resolved = resolver({
-    messages: [
+    ctx: createResolverContext({
+      messages: [
       new HumanMessage("查找最适合组织的人"),
       new HumanMessage('[user_meta]\n{"sessionId":"s1","attachments":[]}\n[/user_meta]'),
       new AIMessage("收到，准备规划"),
     ],
-    ctx: {
+      context: {
       agentContext: {
         execution: {
           controllers: {
@@ -407,13 +365,14 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
           },
         },
       },
-    },
+      },
+    }),
   });
   assert.equal(Array.isArray(resolved), true);
-  assert.deepEqual(resolved, [
-    { role: "user", content: "查找最适合组织的人", summarized: false },
-    { role: "user", content: '[user_meta]\n{"sessionId":"s1","attachments":[]}\n[/user_meta]', summarized: false },
-    { role: "assistant", content: "收到，准备规划", summarized: false },
+  assert.deepEqual(resolved.map(({ role, content }) => ({ role, content })), [
+    { role: "user", content: "查找最适合组织的人" },
+    { role: "user", content: '[user_meta]\n{"sessionId":"s1","attachments":[]}\n[/user_meta]' },
+    { role: "assistant", content: "收到，准备规划" },
   ]);
 });
 
@@ -446,8 +405,7 @@ test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer too
     filePath: "/workspace/result.md",
     files: [{ filePath: "/workspace/result.md", attachmentMeta }],
   };
-  const resolved = resolver({
-    messages: [
+  const resolved = resolver({ ctx: createResolverContext({ messages: [
       { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "echo" } }] },
       {
         role: "tool",
@@ -458,8 +416,7 @@ test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer too
           attachmentMetas: [attachmentMeta],
         }),
       },
-    ],
-  });
+    ] }) });
 
   const compactedToolPayload = JSON.parse(resolved.find((item) => item.role === "tool").content);
   assert.equal("transferEnvelopes" in compactedToolPayload, false);
@@ -467,7 +424,7 @@ test("SessionExecutionEngine resolveModelMessages compacts semantic-transfer too
   assert.equal(compactedToolPayload.transferFiles[0].attachmentId, "att-agent-plugin");
 });
 
-test("SessionExecutionEngine resolveModelMessages filters injected messages from non-current dialog", async () => {
+test("SessionExecutionEngine resolveModelMessages keeps unsummarized injected messages append-only", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
@@ -481,7 +438,8 @@ test("SessionExecutionEngine resolveModelMessages filters injected messages from
     },
   });
   const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
-  const resolved = resolver({
+  const resolved = resolver({ ctx: createResolverContext({
+    dialogProcessId: "dlg_current",
     messages: [
       {
         role: "assistant",
@@ -502,21 +460,12 @@ test("SessionExecutionEngine resolveModelMessages filters injected messages from
         content: "normal response",
       },
     ],
-    ctx: {
-      dialogProcessId: "dlg_current",
-    },
-  });
+  }) });
 
-  assert.deepEqual(resolved, [
-    {
-      role: "assistant",
-      content: "current injected",
-      summarized: false,
-      injectedMessage: true,
-      injectedBy: "agent-plugin",
-      dialogProcessId: "dlg_current",
-    },
-    { role: "assistant", content: "normal response", summarized: false },
+  assert.deepEqual(resolved.map((message) => message.content), [
+    "current injected",
+    "old injected",
+    "normal response",
   ]);
 });
 
@@ -534,9 +483,7 @@ test("SessionExecutionEngine resolveModelMessages treats persisted harness summa
     },
   });
   const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
-  const resolved = resolver({
-    messages: [{ role: "user", content: "当前增量" }],
-    ctx: {
+  const resolved = resolver({ ctx: createResolverContext({
       dialogProcessId: "dlg_current",
       messageBlocks: {
         system: [],
@@ -558,8 +505,7 @@ test("SessionExecutionEngine resolveModelMessages treats persisted harness summa
           { role: "user", content: "当前增量", dialogProcessId: "dlg_current" },
         ],
       },
-    },
-  });
+  }) });
 
   assert.deepEqual(
     resolved.map((item = {}) => String(item.content || "")),
@@ -574,7 +520,7 @@ test("SessionExecutionEngine resolveModelMessages treats persisted harness summa
 });
 
 
-test("SessionExecutionEngine resolveModelMessages lets incremental current dialog win over history duplicate", async () => {
+test("SessionExecutionEngine resolveModelMessages never content-deduplicates distinct identities", async () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
     userId: "u1",
@@ -589,8 +535,7 @@ test("SessionExecutionEngine resolveModelMessages lets incremental current dialo
   });
   const resolver = prepared.plugins.agentPlugin.resolveModelMessages;
 
-  const resolved = resolver({
-    ctx: {
+  const resolved = resolver({ ctx: createResolverContext({
       messageBlocks: {
         system: [{ role: "system", content: "policy" }],
         history: [
@@ -607,12 +552,11 @@ test("SessionExecutionEngine resolveModelMessages lets incremental current dialo
           },
         ],
       },
-    },
-  });
+  }) });
 
   assert.deepEqual(
     resolved.map((item) => item.content),
-    ["policy", "normal history", "current summary"],
+    ["policy", "current summary", "normal history", "current summary"],
   );
 });
 

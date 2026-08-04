@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { isMessageInjected } from "./shared.js";
+import {
+  appendMessage,
+  resolveModelMessageBlocks,
+  writeMessageBlocks,
+} from "../../core/message-store.js";
 
 function normalizeStringArray(input) {
   if (!Array.isArray(input)) return [];
@@ -73,32 +78,28 @@ function applyMemoryTakeoverForStateCommit(ctx = {}, takeover = {}) {
   return changed;
 }
 
-function applyMemoryTakeoverForAgentContext(ctx = {}, takeover = {}) {
+function applyMemoryTakeoverForModelContext(ctx = {}, takeover = {}) {
   if (!ctx || typeof ctx !== "object") return false;
-  const agentContext =
-    ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
-  if (!agentContext) return false;
-
   let changed = false;
-  const history = agentContext?.payload?.messages?.history;
-  if (Array.isArray(history)) {
-    if (takeover?.clearHistory === true && history.length) {
-      history.splice(0, history.length);
-      changed = true;
-    }
+  const blocks = resolveModelMessageBlocks(ctx);
+  const history = blocks.history;
+  if (takeover?.clearHistory === true && history.length) {
+    writeMessageBlocks(ctx, { ...blocks, history: [] });
+    changed = true;
+  } else {
     const trimTo = Number(takeover?.trimHistoryTo);
     if (Number.isFinite(trimTo) && trimTo >= 0 && history.length > trimTo) {
-      history.splice(0, history.length - trimTo);
+      writeMessageBlocks(ctx, { ...blocks, history: history.slice(history.length - trimTo) });
       changed = true;
     }
   }
 
   const memoryNote = String(takeover?.memoryNote || takeover?.injectSystemNote || "").trim();
-  if (memoryNote && Array.isArray(agentContext?.payload?.messages?.system)) {
+  if (memoryNote) {
     const marker = String(takeover?.id || "harness-memory-takeover").trim();
     const content = `<!-- ${marker} -->\n${memoryNote}`;
-    if (!isMessageInjected(agentContext.payload.messages.system, marker, content)) {
-      agentContext.payload.messages.system.unshift({ role: "system", content });
+    if (!isMessageInjected(resolveModelMessageBlocks(ctx).system, marker, content)) {
+      appendMessage(ctx, { role: "system", content }, { block: "system" });
       changed = true;
     }
   }
@@ -113,6 +114,6 @@ export function applyMemoryTakeover(point = "", ctx = {}, takeover = {}) {
   if (point === "before_state_commit") {
     changed = applyMemoryTakeoverForStateCommit(ctx, takeover) || changed;
   }
-  changed = applyMemoryTakeoverForAgentContext(ctx, takeover) || changed;
+  changed = applyMemoryTakeoverForModelContext(ctx, takeover) || changed;
   return changed;
 }

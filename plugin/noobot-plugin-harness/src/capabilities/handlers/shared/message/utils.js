@@ -5,6 +5,7 @@
  */
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
+import { replaceMessages, resolveModelMessages } from "../../../../core/message-store.js";
 
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
   const expectedRole = String(role || "").trim();
@@ -124,50 +125,10 @@ export function cleanupInternalForcedMessages(messages = []) {
 }
 
 export function sanitizeInternalMessages(ctx = {}) {
-  let changed = false;
-  if (cleanupInternalForcedMessages(ctx?.messages || []) > 0) {
-    changed = true;
-  }
-  const systemMessages = ctx?.agentContext?.payload?.messages?.system;
-  const historyMessages = ctx?.agentContext?.payload?.messages?.history;
-  if (cleanupInternalForcedMessages(systemMessages || []) > 0) {
-    changed = true;
-  }
-  if (cleanupInternalForcedMessages(historyMessages || []) > 0) {
-    changed = true;
-  }
+  const messages = resolveModelMessages(ctx);
+  const changed = cleanupInternalForcedMessages(messages) > 0;
+  if (changed) replaceMessages(ctx, messages);
   return changed;
-}
-
-function resolveInjectedMessageType(messageItem = {}) {
-  if (!messageItem || typeof messageItem !== "object") return "";
-  if (messageItem?.injectedMessage !== true && !String(messageItem?.injectedBy || "").trim()) {
-    return "";
-  }
-  const explicitType = String(
-    messageItem?.injectedMessageType ||
-      messageItem?.injected_message_type ||
-      messageItem?.lc_kwargs?.injectedMessageType ||
-      messageItem?.lc_kwargs?.injected_message_type ||
-      "",
-  ).trim();
-  if (explicitType) return explicitType;
-  const genericType = String(messageItem?.type || messageItem?.lc_kwargs?.type || "").trim();
-  if (genericType && genericType !== "message") return genericType;
-  return String(messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "injected_message").trim();
-}
-
-function collectLatestInjectedMessageIndexes(messages = []) {
-  const latestByType = new Map();
-  const source = Array.isArray(messages) ? messages : [];
-  for (let index = 0; index < source.length; index += 1) {
-    const messageItem = source[index] || {};
-    const type = resolveInjectedMessageType(messageItem);
-    if (!type) continue;
-    const injectedBy = String(messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "").trim();
-    latestByType.set(`${injectedBy || "injected"}:${type}`, index);
-  }
-  return new Set(latestByType.values());
 }
 
 export function isMessageSummarized(messageItem = {}) {
@@ -177,94 +138,6 @@ export function isMessageSummarized(messageItem = {}) {
   return false;
 }
 
-
-function markMessageSummarized(messageItem = null) {
-  if (!messageItem || typeof messageItem !== "object") return false;
-  if (messageItem.summarized === true && messageItem?.lc_kwargs?.summarized === true) return false;
-  messageItem.summarized = true;
-  if (messageItem?.lc_kwargs && typeof messageItem.lc_kwargs === "object") {
-    messageItem.lc_kwargs.summarized = true;
-  }
-  return true;
-}
-
-const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
-
-function resolveToolNamesFromToolCalls(toolCalls = []) {
-  return (Array.isArray(toolCalls) ? toolCalls : [])
-    .map((toolCall = {}) => {
-      if (!toolCall || typeof toolCall !== "object") return "";
-      if (toolCall.name) return String(toolCall.name || "").trim();
-      const fn =
-        toolCall.function && typeof toolCall.function === "object"
-          ? toolCall.function
-          : {};
-      return String(fn.name || "").trim();
-    })
-    .filter(Boolean);
-}
-
-function getMessageToolCalls(messageItem = {}) {
-  if (Array.isArray(messageItem?.tool_calls)) return messageItem.tool_calls;
-  if (Array.isArray(messageItem?.lc_kwargs?.tool_calls)) return messageItem.lc_kwargs.tool_calls;
-  if (Array.isArray(messageItem?.additional_kwargs?.tool_calls)) return messageItem.additional_kwargs.tool_calls;
-  return [];
-}
-
-function resolveToolNameFromMessage(messageItem = {}) {
-  const explicitToolName = String(
-    messageItem?.toolName || messageItem?.tool_name || "",
-  ).trim();
-  if (explicitToolName) return explicitToolName;
-  try {
-    const parsed = JSON.parse(String(messageItem?.content || ""));
-    return String(parsed?.toolName || "").trim();
-  } catch {
-    return "";
-  }
-}
-
-function shouldMarkHarnessSummaryMessage(
-  messageItem = {},
-  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
-) {
-  if (!messageItem || typeof messageItem !== "object") return false;
-  const role = String(messageItem?.role || messageItem?.lc_kwargs?.role || "").trim().toLowerCase();
-  if (role === "system" || role === "user") return false;
-  if (role === "tool") {
-    return resolveToolNameFromMessage(messageItem) !== taskSummaryToolName;
-  }
-  if (role !== "assistant") return false;
-  const toolCallNames = resolveToolNamesFromToolCalls(getMessageToolCalls(messageItem));
-  if (toolCallNames.includes(taskSummaryToolName)) return false;
-  return !String(messageItem?.content || "").trim();
-}
-
-export function markMessagesSummarized(messages = []) {
-  if (!Array.isArray(messages)) return 0;
-  const latestInjectedIndexes = collectLatestInjectedMessageIndexes(messages);
-  let changedCount = 0;
-  for (let index = 0; index < messages.length; index += 1) {
-    const messageItem = messages[index];
-    const injectedType = resolveInjectedMessageType(messageItem);
-    const shouldMark = injectedType
-      ? !latestInjectedIndexes.has(index)
-      : shouldMarkHarnessSummaryMessage(messageItem, {
-          taskSummaryToolName: DEFAULT_TASK_SUMMARY_TOOL_NAME,
-        });
-    if (!shouldMark) continue;
-    if (markMessageSummarized(messageItem)) {
-      changedCount += 1;
-    }
-  }
-  return changedCount;
-}
-
-export function resolveInjectedMessageSummarizer(meta = {}) {
-  return typeof meta?.harness?.markMessagesSummarized === "function"
-    ? meta.harness.markMessagesSummarized
-    : null;
-}
 
 function normalizePromptMessageItem(message = {}) {
   if (isHarnessInjectedMessage(message)) return null;

@@ -59,11 +59,11 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
   assert.equal(Number.isFinite(Number(executionLog?.detail?.durationMs)), true);
   assert.equal(executionLog?.detail?.retryCount, 0);
   assert.equal(
-    firstCtx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
+    firstCtx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
     false,
   );
   assert.equal(
-    firstCtx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    firstCtx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
     true,
   );
   assert.equal(agentContext.payload.harness.state.pending.summary, true);
@@ -73,7 +73,7 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
   const secondCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "before_llm_call", ctx: secondCtx, meta });
   assert.equal(
-    secondCtx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
+    secondCtx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
     true,
   );
 });
@@ -93,11 +93,11 @@ test("inject mode: revision keeps higher priority than overflow summary for cach
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
   assert.equal(
-    ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
+    ctx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
     false,
   );
   assert.equal(
-    ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    ctx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
     true,
   );
 });

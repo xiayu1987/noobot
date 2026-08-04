@@ -12,7 +12,6 @@ import {
   AGENT_LIFECYCLE_STATE,
   bindLifecycleToRuntime,
   createAgentLifecycleMachine,
-  isResumeInitializingFirstModelTurn,
   resolveInitialLifecycleState,
   syncLifecycleRuntimeState,
 } from "../../../src/runtime/lifecycle/state-machine.js";
@@ -49,25 +48,6 @@ test("agent lifecycle machine emits normalized state change payload", () => {
   assert.equal(events[2].data.error, "boom");
   assert.equal(machine.state, "running");
   assert.equal(machine.branchState, "failed");
-});
-
-test("isResumeInitializingFirstModelTurn only guards stopped snapshot resume first turn", () => {
-  assert.equal(
-    isResumeInitializingFirstModelTurn({ resumeFromStoppedSnapshot: true, agentLifecycleState: "resume_initializing" }, 1),
-    true,
-  );
-  assert.equal(
-    isResumeInitializingFirstModelTurn({ resumeFromStoppedSnapshot: true, agentLifecycleState: "running" }, 1),
-    false,
-  );
-  assert.equal(
-    isResumeInitializingFirstModelTurn({ resumeFromStoppedSnapshot: false, agentLifecycleState: "resume_initializing" }, 1),
-    false,
-  );
-  assert.equal(
-    isResumeInitializingFirstModelTurn({ resumeFromStoppedSnapshot: true, agentLifecycleState: "resume_initializing" }, 2),
-    false,
-  );
 });
 
 test("agent lifecycle helpers resolve initial state and sync runtime fields", () => {
@@ -147,6 +127,9 @@ test("agent lifecycle phase methods and terminal branch payloads are standardize
   assert.equal(events.at(-1).data.stoppedSnapshotPersistence.source, "runner_user_stop_catch");
   assert.equal(events.at(-1).data.stoppedSnapshotPersistence.messageCount, 2);
   assert.equal(events.at(-1).data.canResume, true);
+
+  machine.userStop({ error: { type: "user_stop" } });
+  assert.equal(events.at(-1).data.error, "user_stop");
 
   machine.interrupt({ reason: "timeout", stopType: "timeout" });
   assert.equal(events.at(-1).data.state, AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED);

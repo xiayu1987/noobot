@@ -18,9 +18,6 @@ function projectSessionTreeDepth(summary = {}, depth = 0) {
   return {
     ...summary,
     depth: normalizedDepth,
-    toolLogSummaries: Array.isArray(summary?.toolLogSummaries)
-      ? summary.toolLogSummaries.map((item) => ({ ...item, depth: normalizedDepth }))
-      : [],
   };
 }
 

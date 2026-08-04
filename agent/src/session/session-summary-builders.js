@@ -13,7 +13,7 @@ import {
   dedupeAttachmentRefs,
 } from "./transfer-attachment-refs.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 16;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 17;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
@@ -436,13 +436,21 @@ function buildActiveTurnPresentation(lifecycle = null, sessionId = "") {
   };
 }
 
-function buildToolLogSummaries(session = {}) {
+function buildToolArtifactTimelineProjection(session = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const sessionId = String(session?.sessionId || "").trim();
   const toolNameByCallId = new Map();
-  const canonicalArtifactsByCallId = new Map();
-  const logs = [];
+  const artifactByCallId = new Map();
   let totalCount = 0;
+  const routeKeyOf = (message = {}) => {
+    const turnScopeId = String(message?.turnScopeId || "").trim();
+    return sessionId && turnScopeId ? `${sessionId}::${turnScopeId}` : "";
+  };
+  const callKeyOf = (message = {}, toolCallId = "") => {
+    const routeKey = routeKeyOf(message);
+    const normalizedToolCallId = String(toolCallId || "").trim();
+    return routeKey && normalizedToolCallId ? `${routeKey}::${normalizedToolCallId}` : "";
+  };
   for (const message of messages) {
     const role = String(message?.role || "").trim();
     const type = String(message?.type || "").trim();
@@ -452,6 +460,8 @@ function buildToolLogSummaries(session = {}) {
     const turnScopeId = String(message?.turnScopeId || "").trim();
     for (const item of Array.isArray(message?.toolTimeline) ? message.toolTimeline : []) {
       const toolCallId = String(item?.toolCallId || "").trim();
+      const callKey = callKeyOf(message, toolCallId);
+      if (!callKey) continue;
       const resultEvent = item?.resultEvent && typeof item.resultEvent === "object"
         ? item.resultEvent
         : {};
@@ -473,46 +483,104 @@ function buildToolLogSummaries(session = {}) {
           "size", "mimeType", "sourceType", "recognized",
         ]))
         .filter(Boolean);
-      if (toolCallId && (attachments.length || writtenFiles.length)) {
-        canonicalArtifactsByCallId.set(toolCallId, { attachments, writtenFiles });
+      if (attachments.length || writtenFiles.length) {
+        artifactByCallId.set(callKey, {
+          toolCallId,
+          toolName: String(item?.tool || eventLog?.tool || "").trim(),
+          eventId: String(resultEvent?.eventId || "").trim(),
+          sequence: Number(resultEvent?.sequence || 0),
+          sequenceScopeId: String(resultEvent?.sequenceScopeId || "").trim(),
+          authority: String(resultEvent?.authority || "").trim(),
+          sequenceDomain: String(resultEvent?.sequenceDomain || "").trim(),
+          ts: String(resultEvent?.timestamp || resultEvent?.timelineTimestamp || ts).trim(),
+          sessionId,
+          dialogProcessId,
+          parentDialogProcessId,
+          turnScopeId,
+          attachments,
+          writtenFiles,
+        });
       }
     }
     if (type === "tool_call" || (role === "assistant" && Array.isArray(message?.tool_calls))) {
       for (const toolCall of Array.isArray(message?.tool_calls) ? message.tool_calls : []) {
         const toolCallId = String(toolCall?.id || "").trim();
         const toolName = String(toolCall?.function?.name || toolCall?.name || "unknown_tool").trim();
-        if (toolCallId) toolNameByCallId.set(toolCallId, toolName);
+        const callKey = callKeyOf(message, toolCallId);
+        if (callKey) toolNameByCallId.set(callKey, toolName);
         totalCount += 1;
       }
     }
     if (role === "tool" || type === "tool_result") {
       const toolCallId = String(message?.tool_call_id || "").trim();
-      const toolName = toolNameByCallId.get(toolCallId) || String(message?.toolName || "tool_result");
+      const callKey = callKeyOf(message, toolCallId);
+      const canonicalArtifact = callKey ? artifactByCallId.get(callKey) : null;
+      const toolName = toolNameByCallId.get(callKey) ||
+        String(message?.toolName || canonicalArtifact?.toolName || "tool_result");
       totalCount += 1;
-      const canonicalArtifacts = canonicalArtifactsByCallId.get(toolCallId) || {};
       const attachments = dedupeAttachmentRefs([
         ...pickLightAttachments(message),
-        ...(Array.isArray(canonicalArtifacts.attachments) ? canonicalArtifacts.attachments : []),
+        ...(Array.isArray(canonicalArtifact?.attachments) ? canonicalArtifact.attachments : []),
       ]);
-      const writtenFiles = Array.isArray(canonicalArtifacts.writtenFiles)
-        ? canonicalArtifacts.writtenFiles
+      const writtenFiles = Array.isArray(canonicalArtifact?.writtenFiles)
+        ? canonicalArtifact.writtenFiles
         : [];
-      if (!attachments.length && !writtenFiles.length) continue;
-      const summary = {
-        event: "tool_result", type: "tool_result",
-        role: "tool",
+      if (!callKey || (!attachments.length && !writtenFiles.length)) continue;
+      artifactByCallId.set(callKey, {
+        ...canonicalArtifact,
+        toolCallId,
         toolName,
-        text: writtenFiles.length
-          ? `${writtenFiles[0]?.toolName || toolName} ${writtenFiles[0]?.fileName || ""}`.trim()
-          : truncateText(`${toolName}`.trim(), SUMMARY_FILE_NAME_CHARS),
-        ts, sessionId, toolCallId, dialogProcessId, parentDialogProcessId, turnScopeId,
-      };
-      if (attachments.length) summary.attachments = attachments;
-      if (writtenFiles.length) summary.writtenFiles = writtenFiles;
-      logs.push(summary);
+        ts: String(canonicalArtifact?.ts || ts).trim(),
+        sessionId,
+        dialogProcessId,
+        parentDialogProcessId,
+        turnScopeId,
+        attachments,
+        writtenFiles,
+      });
     }
   }
-  return { logs, totalCount };
+  const timelineByRoute = new Map();
+  for (const artifact of artifactByCallId.values()) {
+    const routeKey = routeKeyOf(artifact);
+    if (!routeKey) continue;
+    const log = {
+      event: "tool_result",
+      type: "tool_result",
+      role: "tool",
+      toolName: artifact.toolName,
+      text: artifact.writtenFiles.length
+        ? `${artifact.writtenFiles[0]?.toolName || artifact.toolName} ${artifact.writtenFiles[0]?.fileName || ""}`.trim()
+        : truncateText(`${artifact.toolName}`.trim(), SUMMARY_FILE_NAME_CHARS),
+      ts: artifact.ts,
+      sessionId,
+      toolCallId: artifact.toolCallId,
+      dialogProcessId: artifact.dialogProcessId,
+      parentDialogProcessId: artifact.parentDialogProcessId,
+      turnScopeId: artifact.turnScopeId,
+    };
+    const resultEvent = {
+      ...(artifact.eventId ? { eventId: artifact.eventId } : {}),
+      ...(artifact.sequence > 0 ? { sequence: artifact.sequence } : {}),
+      ...(artifact.sequenceScopeId ? { sequenceScopeId: artifact.sequenceScopeId } : {}),
+      ...(artifact.authority ? { authority: artifact.authority } : {}),
+      ...(artifact.sequenceDomain ? { sequenceDomain: artifact.sequenceDomain } : {}),
+      ...(artifact.ts ? { timestamp: artifact.ts } : {}),
+      ...(artifact.attachments.length ? { attachments: artifact.attachments } : {}),
+      ...(artifact.writtenFiles.length ? { writtenFiles: artifact.writtenFiles } : {}),
+      log,
+    };
+    const timeline = timelineByRoute.get(routeKey) || [];
+    timeline.push({
+      key: `call:${artifact.toolCallId}`,
+      toolCallId: artifact.toolCallId,
+      tool: artifact.toolName,
+      status: "completed",
+      resultEvent,
+    });
+    timelineByRoute.set(routeKey, timeline);
+  }
+  return { timelineByRoute, totalCount };
 }
 
 export function buildSessionDisplaySummary(session = {}) {
@@ -605,9 +673,44 @@ export function buildSessionDisplaySummary(session = {}) {
   const displayMessages = [...displayMessageByIdentity.values()];
   const injectedCount = messages.filter((message) => message?.injectedMessage === true).length;
   const thinkingCount = displayMessages.filter((message) => message?.hasThinkingDetails === true).length;
-  const { logs: toolLogSummaries, totalCount: toolLogCount } = buildToolLogSummaries(session);
+  const {
+    timelineByRoute,
+    totalCount: toolLogCount,
+  } = buildToolArtifactTimelineProjection(session);
+  let unassignedToolArtifactCount = 0;
+  let assignedToolArtifactCount = 0;
+  for (const [routeKey, toolTimeline] of timelineByRoute) {
+    const candidates = displayMessages.filter((message) => (
+      String(message?.role || "").trim() === "assistant" &&
+      `${sessionId}::${String(message?.turnScopeId || "").trim()}` === routeKey
+    ));
+    const dialogProcessIds = new Set(
+      toolTimeline
+        .map((item) => String(item?.resultEvent?.log?.dialogProcessId || "").trim())
+        .filter(Boolean),
+    );
+    const matchingCandidates = dialogProcessIds.size === 1
+      ? candidates.filter((message) => {
+          const dialogProcessId = String(message?.dialogProcessId || "").trim();
+          return !dialogProcessId || dialogProcessIds.has(dialogProcessId);
+        })
+      : candidates;
+    if (matchingCandidates.length !== 1) {
+      unassignedToolArtifactCount += toolTimeline.length;
+      continue;
+    }
+    matchingCandidates[0].toolTimeline = toolTimeline;
+    assignedToolArtifactCount += toolTimeline.length;
+  }
   const attachmentCount = displayMessages.reduce(
-    (count, message) => count + (Array.isArray(message?.attachments) ? message.attachments.length : 0),
+    (count, message) => count + dedupeAttachmentRefs([
+      ...(Array.isArray(message?.attachments) ? message.attachments : []),
+      ...(Array.isArray(message?.toolTimeline) ? message.toolTimeline.flatMap(
+        (item) => Array.isArray(item?.resultEvent?.attachments)
+          ? item.resultEvent.attachments
+          : [],
+      ) : []),
+    ]).length,
     0,
   );
   const turnLifecycleSnapshot = lifecycle
@@ -637,14 +740,14 @@ export function buildSessionDisplaySummary(session = {}) {
     turnStatuses,
     turnLifecycleSnapshot,
     messages: displayMessages,
-    toolLogSummaries,
     stats: {
       messageCount: messages.length,
       displayMessageCount: displayMessages.length,
       injectedMessageCount: injectedCount,
       thinkingMessageCount: thinkingCount,
       toolLogCount,
-      displayToolLogCount: toolLogSummaries.length,
+      displayToolLogCount: assignedToolArtifactCount,
+      unassignedToolArtifactCount,
       hasToolDetails: toolLogCount > 0,
       attachmentCount,
     },

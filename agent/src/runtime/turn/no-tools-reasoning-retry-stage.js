@@ -13,7 +13,6 @@ import {
 import { appendMessage } from "../../context/runtime-state/message-store.js";
 import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
 import { buildReasoningRetrySystemMessage } from "./turn-stage.js";
-import { syncStoppedModelMessageSnapshotCandidate } from "../resume/model-message-snapshot-store.js";
 
 export async function maybeRetryReasoningOnlyNoTools({
   modelResponse,
@@ -55,7 +54,6 @@ export async function maybeRetryReasoningOnlyNoTools({
     mode: "no_tools_reasoning_retry",
     invoke: ({ callbacks }) => {
       const modelMessages = filterForModelContext(messages);
-      syncStoppedModelMessageSnapshotCandidate(runtime, modelMessages);
       return invokeLlm.invoke(modelMessages, {
         callbacks,
         signal: abortSignal,

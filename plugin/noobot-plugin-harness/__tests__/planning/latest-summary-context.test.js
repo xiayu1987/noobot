@@ -11,6 +11,7 @@ import {
   resolveLatestSummaryOutputFullText,
   resolveLatestSummaryRelayText,
 } from "../../src/capabilities/handlers/shared/plan/latest-summary-context.js";
+import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 test("resolveLatestCompleteSummaryText returns summaryFullText as the latest complete summary first", () => {
   const bucket = {
@@ -37,9 +38,9 @@ test("resolveLatestCompleteSummaryText falls back to latest summary guidance out
       { purpose: "summary", content: "1. latest output\n2. same complete summary" },
     ],
   };
-  const ctx = {
+  const ctx = createTestHookContext({}, {
     messages: [{ role: "user", content: "[来自harness外部模型输出/summary]\n1. relay fallback" }],
-  };
+  });
 
   assert.equal(resolveLatestSummaryOutputFullText(bucket), "1. latest output\n2. same complete summary");
   assert.equal(
@@ -49,19 +50,22 @@ test("resolveLatestCompleteSummaryText falls back to latest summary guidance out
 });
 
 test("resolveLatestCompleteSummaryText falls back to latest summary relay then summaryText", () => {
-  const relayCtx = {
+  const relayCtx = createTestHookContext({}, {
     messages: [
       { role: "user", content: "[来自harness外部模型输出/summary]\n1. old relay" },
       { role: "user", content: "[Relay from harness external model/summary]\n1. latest relay\n2. latest relay item" },
     ],
-  };
+  });
   assert.equal(resolveLatestSummaryRelayText(relayCtx), "1. latest relay\n2. latest relay item");
   assert.equal(
     resolveLatestCompleteSummaryText({ bucket: { summaryText: "1. overview fallback" }, ctx: relayCtx }),
     "1. latest relay\n2. latest relay item",
   );
   assert.equal(
-    resolveLatestCompleteSummaryText({ bucket: { summaryText: "1. overview fallback" }, ctx: {} }),
+    resolveLatestCompleteSummaryText({
+      bucket: { summaryText: "1. overview fallback" },
+      ctx: createTestHookContext(),
+    }),
     "1. overview fallback",
   );
 });

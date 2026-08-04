@@ -4,8 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { pruneSummarizedIncrementalMessages } from "../../context/runtime-state/message-store.js";
+import {
+  markMessagesSummarizedByIds,
+  pruneSummarizedIncrementalMessages,
+} from "../../context/runtime-state/message-store.js";
 import { createHash } from "node:crypto";
+import { emitEvent } from "../../events/index.js";
 
 function isSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
@@ -13,106 +17,22 @@ function isSummarized(message = {}) {
 
 function resolveMessageId(message = {}) {
   return String(
-    message?.noobotMessageId ||
-      message?.messageId ||
+    message?.messageUid ||
       message?.additional_kwargs?.noobotMessageId ||
-      message?.additional_kwargs?.messageId ||
-      message?.lc_kwargs?.noobotMessageId ||
-      message?.lc_kwargs?.messageId ||
       message?.lc_kwargs?.additional_kwargs?.noobotMessageId ||
-      message?.lc_kwargs?.additional_kwargs?.messageId ||
       "",
   ).trim();
 }
 
-function resolveRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
-  if (role) return role;
-  const type = String(message?.type || message?.lc_kwargs?.type || "").trim().toLowerCase();
-  if (type === "ai") return "assistant";
-  if (type === "human") return "user";
-  return type;
-}
-
-function resolveContent(message = {}) {
-  return String(message?.content ?? message?.lc_kwargs?.content ?? "");
-}
-
-function resolveToolCallId(message = {}) {
-  return String(
-    message?.tool_call_id || message?.toolCallId || message?.lc_kwargs?.tool_call_id || "",
-  ).trim();
-}
-
-function resolveToolCalls(message = {}) {
-  const calls = Array.isArray(message?.tool_calls)
-    ? message.tool_calls
-    : Array.isArray(message?.lc_kwargs?.tool_calls)
-      ? message.lc_kwargs.tool_calls
-      : [];
-  return calls.map((call = {}) => ({
-    id: String(call?.id || call?.tool_call_id || "").trim(),
-    name: String(call?.name || call?.function?.name || "").trim(),
-  }));
-}
-
-function buildMessageIdentity(message = {}) {
-  return JSON.stringify({
-    role: resolveRole(message),
-    content: resolveContent(message),
-    toolCallId: resolveToolCallId(message),
-    toolCalls: resolveToolCalls(message),
-    injectedMessageType: String(
-      message?.injectedMessageType ||
-        message?.injected_message_type ||
-        message?.additional_kwargs?.injectedMessageType ||
-        message?.lc_kwargs?.additional_kwargs?.injectedMessageType ||
-        "",
-    ).trim(),
-    dialogProcessId: String(
-      message?.dialogProcessId || message?.lc_kwargs?.dialogProcessId || "",
-    ).trim(),
-  });
-}
-
-function createMessageMultisetMarker(messages = [], messageIds = []) {
-  const remainingIds = new Set(
-    (Array.isArray(messageIds) ? messageIds : [])
+function createSummaryCompletionMarker(summaryCompletion = null) {
+  if (!summaryCompletion || typeof summaryCompletion !== "object") return null;
+  if (!Array.isArray(summaryCompletion.summarizedMessageIds)) return null;
+  const summarizedMessageIds = new Set(
+    summaryCompletion.summarizedMessageIds
       .map((id) => String(id || "").trim())
       .filter(Boolean),
   );
-  const remainingByIdentity = new Map();
-  for (const message of Array.isArray(messages) ? messages : []) {
-    const key = buildMessageIdentity(message);
-    remainingByIdentity.set(key, (remainingByIdentity.get(key) || 0) + 1);
-  }
-  return (message) => {
-    const id = resolveMessageId(message);
-    const key = buildMessageIdentity(message);
-    if (id && remainingIds.delete(id)) {
-      const remaining = remainingByIdentity.get(key) || 0;
-      if (remaining === 1) remainingByIdentity.delete(key);
-      else if (remaining > 1) remainingByIdentity.set(key, remaining - 1);
-      return true;
-    }
-    const remaining = remainingByIdentity.get(key) || 0;
-    if (remaining <= 0) return false;
-    if (remaining === 1) remainingByIdentity.delete(key);
-    else remainingByIdentity.set(key, remaining - 1);
-    return true;
-  };
-}
-
-function createSummaryCompletionMarker(summaryCompletion = null) {
-  if (!summaryCompletion || typeof summaryCompletion !== "object") return null;
-  if (
-    !Array.isArray(summaryCompletion.summarizedMessageIds) &&
-    !Array.isArray(summaryCompletion.summarizedMessages)
-  ) return null;
-  return () => createMessageMultisetMarker(
-    summaryCompletion.summarizedMessages,
-    summaryCompletion.summarizedMessageIds,
-  );
+  return () => (message) => summarizedMessageIds.has(resolveMessageId(message));
 }
 
 function compactPromotionSource(message = {}) {
@@ -155,7 +75,6 @@ export async function commitSummaryCheckpoint({
   turnScopeId = "",
   eventListener = null,
   persistenceContext = null,
-  shouldMark = null,
   summaryCompletion = null,
 } = {}) {
   const currentTurnMessages = runtime?.currentTurnMessages;
@@ -165,23 +84,15 @@ export async function commitSummaryCheckpoint({
     !currentTurnMessages ||
     typeof currentTurnMessages.toArray !== "function" ||
     typeof currentTurnMessages.replaceAll !== "function" ||
-    typeof session?.markSessionMessagesSummarized !== "function"
+    typeof session?.commitTurnSummaryCheckpoint !== "function"
   ) {
     return { committed: false, persistedCount: 0, markedCount: 0 };
   }
 
   const turnMessages = currentTurnMessages.toArray();
   const createSummaryMarker = createSummaryCompletionMarker(summaryCompletion);
-  if (createSummaryMarker) {
-    const currentTurnMarker = createSummaryMarker();
-    currentTurnMessages.updateWhere(
-      { summarized: true },
-      (message) => !isSummarized(message) && currentTurnMarker(message),
-    );
-  }
-  const markedTurnMessages = currentTurnMessages.toArray();
   const persistedPrefixCount = Math.min(
-    markedTurnMessages.length,
+    turnMessages.length,
     Math.max(0, Number(runtime?.summaryCheckpointPersistedCount) || 0),
   );
   const durablyPersistedMessageUids = new Set([
@@ -192,10 +103,10 @@ export async function commitSummaryCheckpoint({
       ? runtime.summaryCheckpointPersistedMessageUids
       : []),
   ].map((uid) => String(uid || "").trim()).filter(Boolean));
-  const canUseDurableMessageUids = markedTurnMessages.every((message) => resolveMessageUid(message));
+  const canUseDurableMessageUids = turnMessages.every((message) => resolveMessageUid(message));
   const pendingMessages = canUseDurableMessageUids
-    ? markedTurnMessages.filter((message) => !durablyPersistedMessageUids.has(resolveMessageUid(message)))
-    : markedTurnMessages.slice(persistedPrefixCount);
+    ? turnMessages.filter((message) => !durablyPersistedMessageUids.has(resolveMessageUid(message)))
+    : turnMessages.slice(persistedPrefixCount);
 
   if (pendingMessages.length) {
     await turnPersister.appendAgentMessages({
@@ -209,45 +120,47 @@ export async function commitSummaryCheckpoint({
       eventListener,
       persistenceContext,
     });
-    runtime.summaryCheckpointPersistedCount = markedTurnMessages.length;
+    runtime.summaryCheckpointPersistedCount = turnMessages.length;
     runtime.summaryCheckpointPersistedTotal =
       Math.max(0, Number(runtime?.summaryCheckpointPersistedTotal) || 0) + pendingMessages.length;
   }
 
   const newlyPersistedMessageUids = pendingMessages.map(resolveMessageUid).filter(Boolean);
-  const persistedMessageUids = markedTurnMessages
+  const persistedMessageUids = turnMessages
     .map(resolveMessageUid)
     .filter((messageUid) => durablyPersistedMessageUids.has(messageUid)
       || newlyPersistedMessageUids.includes(messageUid));
-  const summarizedMessageUids = markedTurnMessages
-    .filter(isSummarized)
-    .map(resolveMessageUid)
-    .filter(Boolean);
-  const canCommitExactCheckpoint =
-    typeof session?.commitTurnSummaryCheckpoint === "function" &&
-    Boolean(String(dialogProcessId || "").trim()) &&
-    Boolean(String(turnScopeId || "").trim()) &&
-    persistedMessageUids.length === markedTurnMessages.length &&
-    summarizedMessageUids.length === markedTurnMessages.filter(isSummarized).length;
-  const checkpointResult = canCommitExactCheckpoint
-    ? await session.commitTurnSummaryCheckpoint({
-        userId,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        parentSessionId,
-        persistenceContext,
-        checkpointId: buildCheckpointId({
-          dialogProcessId,
-          turnScopeId,
-          persistedMessageUids,
-          summarizedMessageUids,
-        }),
-        expectedCheckpointRevision: runtime?.summaryCheckpointRevision,
-        persistedMessageUids,
-        summarizedMessageUids,
-      })
-    : null;
+  const summarizedMessageUids = createSummaryMarker
+    ? [...new Set(summaryCompletion.summarizedMessageIds
+        .map((messageUid) => String(messageUid || "").trim())
+        .filter(Boolean))]
+    : turnMessages.filter(isSummarized).map(resolveMessageUid).filter(Boolean);
+  if (
+    !createSummaryMarker ||
+    !String(dialogProcessId || "").trim() ||
+    !String(turnScopeId || "").trim() ||
+    persistedMessageUids.length !== turnMessages.length ||
+    !summarizedMessageUids.length
+  ) {
+    throw new Error("summary checkpoint requires canonical UIDs and complete active Turn identity");
+  }
+  const checkpointResult = await session.commitTurnSummaryCheckpoint({
+    userId,
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    parentSessionId,
+    persistenceContext,
+    checkpointId: buildCheckpointId({
+      dialogProcessId,
+      turnScopeId,
+      persistedMessageUids,
+      summarizedMessageUids,
+    }),
+    expectedCheckpointRevision: runtime?.summaryCheckpointRevision,
+    persistedMessageUids,
+    summarizedMessageUids,
+  });
   if (checkpointResult && Number.isFinite(Number(checkpointResult.checkpointRevision))) {
     runtime.summaryCheckpointRevision = Number(checkpointResult.checkpointRevision);
   }
@@ -259,24 +172,32 @@ export async function commitSummaryCheckpoint({
       ...persistedMessageUids,
     ])];
   }
-  const markedCount = checkpointResult
-    ? Number(checkpointResult.markedCount) || 0
-    : await session.markSessionMessagesSummarized({
-        userId,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        parentSessionId,
-        persistenceContext,
-        shouldMark: createSummaryMarker ? createSummaryMarker() : shouldMark,
-        forceArchive: true,
-      });
-  const committed = pendingMessages.length > 0 || Number(markedCount) > 0;
+  const markedCount = Number(checkpointResult?.markedCount) || 0;
+  const committed = checkpointResult?.committed === true || checkpointResult?.deduplicated === true;
+  emitEvent(eventListener, "summary_checkpoint_committed", {
+    source: String(summaryCompletion?.source || "").trim(),
+    requestedMessageCount: Array.isArray(summaryCompletion?.summarizedMessageIds)
+      ? summaryCompletion.summarizedMessageIds.length
+      : 0,
+    turnMessageCount: turnMessages.length,
+    summarizedMessageCount: summarizedMessageUids.length,
+    persistedMessageCount: pendingMessages.length,
+    markedMessageCount: Number(markedCount) || 0,
+    exactCheckpoint: true,
+  });
   if (!committed) {
-    runtime.summaryCheckpointPersistedCount = markedTurnMessages.length;
-    return { committed: false, persistedCount: pendingMessages.length, markedCount: 0 };
+    throw new Error("summary checkpoint transaction did not commit");
   }
 
+  const currentTurnMarker = createSummaryMarker();
+  currentTurnMessages.updateWhere(
+    { summarized: true },
+    (message) => !isSummarized(message) && currentTurnMarker(message),
+  );
+  if (runtime?.activeMessageContext && typeof runtime.activeMessageContext === "object") {
+    markMessagesSummarizedByIds(runtime.activeMessageContext, summarizedMessageUids);
+  }
+  const markedTurnMessages = currentTurnMessages.toArray();
   const retainedMessages = markedTurnMessages.filter((message) => !isSummarized(message));
   const promotionSources = markedTurnMessages
     .filter(isSummarized)

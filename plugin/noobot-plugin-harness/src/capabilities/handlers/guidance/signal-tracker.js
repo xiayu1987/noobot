@@ -7,12 +7,15 @@ import {
   GUIDANCE_REASON,
   TOOL_NAME_SET,
   ensureHarnessBucket,
-  markMessagesSummarized,
-  resolveInjectedMessageSummarizer,
 } from "./deps.js";
+import { collectDialogScopedMessagesToSummarize } from "@noobot/context-protocol/summary-policy";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import { getMessageId, resolveMessagesByIds } from "../../../core/message-store.js";
+import {
+  getMessageId,
+  resolveMessagesByIds,
+  resolveModelMessageBlocks,
+} from "../../../core/message-store.js";
 import { requestSummaryCheckpointMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
 
 const FAILURE_THRESHOLD = Object.freeze({
@@ -20,138 +23,81 @@ const FAILURE_THRESHOLD = Object.freeze({
   ACCUMULATED: WORKFLOW_PARAMS.guidance.failureThreshold.accumulated,
 });
 
-function resolveBlockMarkSource(ctx = {}) {
-  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" && !Array.isArray(ctx.messageBlocks)
-    ? ctx.messageBlocks
-    : null;
-  if (!blocks) return [];
-  return [
-    ...(Array.isArray(blocks.system) ? blocks.system : []),
-    ...(Array.isArray(blocks.history) ? blocks.history : []),
-    ...(Array.isArray(blocks.incremental) ? blocks.incremental : []),
-  ];
+function resolveSummaryMarkBlocks(ctx = {}) {
+  const blocks = resolveModelMessageBlocks(ctx);
+  return {
+    history: Array.isArray(blocks.history) ? blocks.history : [],
+    incremental: Array.isArray(blocks.incremental) ? blocks.incremental : [],
+  };
+}
+
+function assertSummaryHistoryClosed(history = []) {
+  const pendingHistoryMessages = collectDialogScopedMessagesToSummarize(history, {
+    maxMessages: history.length,
+    limitToProvidedMessagesOnly: true,
+    retentionMessages: history,
+    taskSummaryToolName: "task_summary",
+  });
+  if (!pendingHistoryMessages.length) return;
+  const messageIds = pendingHistoryMessages
+    .map((message) => getMessageId(message))
+    .filter(Boolean);
+  const error = new Error("summary checkpoint history contains messages pending summarization");
+  error.pendingHistoryMessageIds = messageIds;
+  throw error;
 }
 
 export function captureGuidanceSummaryCheckpoint(ctx = {}, state = {}) {
   if (!state || typeof state !== "object") return [];
-  const blockMessages = resolveBlockMarkSource(ctx);
-  const sourceMessages = blockMessages.length
-    ? blockMessages
-    : Array.isArray(ctx?.messages)
-      ? ctx.messages
-      : [];
+  const blocks = resolveSummaryMarkBlocks(ctx);
+  assertSummaryHistoryClosed(blocks.history);
+  const sourceMessages = blocks.incremental;
   const messageIds = [...new Set(
     sourceMessages.map((message) => getMessageId(message)).filter(Boolean),
   )];
   state.pending = state.pending && typeof state.pending === "object"
     ? state.pending
     : {};
-  state.pending.summaryCheckpointMessageCount = sourceMessages.length;
   state.pending.summaryCheckpointMessageIds = messageIds;
   return messageIds;
 }
 
-function resolveScopedMessageBlockMarkSource(ctx = {}, scopedMessages = []) {
-  const blockMessages = resolveBlockMarkSource(ctx);
-  if (!blockMessages.length) return [];
-  const scopedSet = new Set(Array.isArray(scopedMessages) ? scopedMessages : []);
-  if (!scopedSet.size) return blockMessages;
-  return blockMessages.filter((message) => scopedSet.has(message));
-}
-
-function collectSummarizedMessages(messages = []) {
-  return (Array.isArray(messages) ? messages : [])
-    .filter((message) =>
-      message?.summarized === true || message?.lc_kwargs?.summarized === true,
-    );
-}
-
 export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
+  void meta;
   const holder = ensureHarnessBucket(ctx);
-  const summaryCheckpointMessageCountValue =
-    holder?.state?.pending?.summaryCheckpointMessageCount;
   const summaryCheckpointMessageIdsValue =
     holder?.state?.pending?.summaryCheckpointMessageIds;
   const summaryCheckpointMessageIds = Array.isArray(summaryCheckpointMessageIdsValue)
     ? summaryCheckpointMessageIdsValue.map((id) => String(id || "").trim()).filter(Boolean)
     : [];
-  const hasUsableSummaryCheckpointIds = summaryCheckpointMessageIds.length > 0;
-  const summaryCheckpointMessageCountRaw = Number(summaryCheckpointMessageCountValue);
-  const hasSummaryCheckpoint = Number.isFinite(summaryCheckpointMessageCountRaw);
-  const hasUsableSummaryCheckpoint =
-    summaryCheckpointMessageCountValue !== null &&
-    summaryCheckpointMessageCountValue !== undefined &&
-    hasSummaryCheckpoint;
-  const summaryCheckpointMessageCount = hasSummaryCheckpoint
-    ? Math.max(0, Math.trunc(summaryCheckpointMessageCountRaw))
-    : null;
+  const hasSummaryCheckpoint = Array.isArray(summaryCheckpointMessageIdsValue);
 
-  const historyMessages = ctx?.agentContext?.payload?.messages?.history;
-  const currentMessages = ctx?.messages;
-  const injectedSummarizer = resolveInjectedMessageSummarizer(meta);
-  const scopedCurrentMessages = hasUsableSummaryCheckpointIds
+  const blocks = resolveSummaryMarkBlocks(ctx);
+  assertSummaryHistoryClosed(blocks.history);
+  const coveredMessages = blocks.incremental;
+  const scopedCurrentMessages = hasSummaryCheckpoint
     ? resolveMessagesByIds(ctx, summaryCheckpointMessageIds)
-    : hasUsableSummaryCheckpoint && Array.isArray(currentMessages)
-      ? currentMessages.slice(0, Math.min(currentMessages.length, summaryCheckpointMessageCount))
-      : currentMessages;
-  const resolveScopedMessages = (messages = []) => {
-    if (!Array.isArray(messages)) return [];
-    if (hasUsableSummaryCheckpointIds) {
-      return messages.filter((message) => summaryCheckpointMessageIds.includes(getMessageId(message)));
-    }
-    if (hasUsableSummaryCheckpoint) {
-      return messages.slice(0, Math.min(messages.length, summaryCheckpointMessageCount));
-    }
-    return messages;
-  };
-  const safeMark = async (messages = []) => {
-    if (!Array.isArray(messages)) return 0;
-
-    const scopedMessages = resolveScopedMessages(messages);
-    if (!Array.isArray(scopedMessages) || !scopedMessages.length) return 0;
-
-    if (typeof injectedSummarizer === "function") {
-      try {
-        const result = await injectedSummarizer({
-          ctx,
-          messages: scopedMessages,
-          taskSummaryToolName: "task_summary",
-          ...(hasUsableSummaryCheckpoint
-            ? {
-                summaryScope: {
-                  maxMessages: summaryCheckpointMessageCount,
-                  limitToProvidedMessagesOnly: true,
-                },
-              }
-            : {}),
-        });
-        const normalized = Number(result);
-        if (Number.isFinite(normalized)) return normalized;
-      } catch {
-      }
-    }
-    return markMessagesSummarized(scopedMessages);
-  };
-  const currentMarked = await safeMark(currentMessages);
-  const historyMarked = await safeMark(historyMessages);
-  const blockMarked = await safeMark(
-    hasUsableSummaryCheckpointIds || hasUsableSummaryCheckpoint
-      ? resolveScopedMessageBlockMarkSource(ctx, scopedCurrentMessages)
-      : resolveBlockMarkSource(ctx),
-  );
+    : coveredMessages;
+  const scopedSet = new Set(scopedCurrentMessages);
+  const checkpointTargets = coveredMessages.filter((message) => scopedSet.has(message));
+  const summaryTargets = collectDialogScopedMessagesToSummarize(checkpointTargets, {
+    maxMessages: checkpointTargets.length,
+    limitToProvidedMessagesOnly: true,
+    retentionMessages: coveredMessages,
+    taskSummaryToolName: "task_summary",
+  });
   requestSummaryCheckpointMainFlowInstruction(ctx, {
     source: "plugin.summary",
-    summarizedMessages: [...new Set([
-      ...collectSummarizedMessages(scopedCurrentMessages),
-      ...collectSummarizedMessages(resolveScopedMessages(historyMessages)),
-      ...collectSummarizedMessages(resolveScopedMessageBlockMarkSource(ctx, scopedCurrentMessages)),
-    ])],
+    summarizedMessageIds: [...new Set(
+      summaryTargets
+        .map((message) => getMessageId(message))
+        .filter(Boolean),
+    )],
   });
-  if (holder?.state?.pending && (hasUsableSummaryCheckpointIds || hasUsableSummaryCheckpoint)) {
-    holder.state.pending.summaryCheckpointMessageCount = null;
+  if (holder?.state?.pending && hasSummaryCheckpoint) {
     holder.state.pending.summaryCheckpointMessageIds = null;
   }
-  return currentMarked + historyMarked + blockMarked;
+  return summaryTargets.length;
 }
 
 export function markToolSignals(ctx = {}) {

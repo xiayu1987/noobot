@@ -1,0 +1,27 @@
+{
+  "name": "@noobot/context-protocol",
+  "version": "4.1.5",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./message-store": "./src/message-store.js",
+    "./message-identity": "./src/message-identity.js",
+    "./context-diagnostics": "./src/context-diagnostics.js",
+    "./hook-context": "./src/hook-context.js",
+    "./message-policy": "./src/message-policy.js",
+    "./window-reducer": "./src/window-reducer.js",
+    "./block-strategy": "./src/block-strategy.js",
+    "./summary-policy": "./src/summary-policy.js",
+    "./snapshot-policy": "./src/snapshot-policy.js",
+    "./terminal-history-policy": "./src/terminal-history-policy.js"
+  },
+  "scripts": {
+    "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(error=>{console.error(error);process.exit(1)})\"",
+    "test": "node --test __tests__/**/*.test.js"
+  },
+  "dependencies": {
+    "@noobot/shared": "file:../shared"
+  }
+}

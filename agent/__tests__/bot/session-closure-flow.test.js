@@ -34,6 +34,28 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     async appendTurn(payload = {}) {
       persistedTurns.push(payload);
     },
+    async commitTurn(payload = {}) {
+      const messageUid = `sm_${payload.turnScopeId}`;
+      const userMessage = {
+        messageUid,
+        id: payload.messageId || messageUid,
+        messageId: payload.messageId || messageUid,
+        role: "user",
+        type: "message",
+        content: payload.content,
+        userName: payload.userId,
+        sessionId: payload.sessionId,
+        parentSessionId: payload.parentSessionId,
+        dialogProcessId: payload.dialogProcessId,
+        parentDialogProcessId: payload.parentDialogProcessId,
+        turnScopeId: payload.turnScopeId,
+        frontendUserMessage: payload.frontendUserMessage === true,
+        messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
+        attachments: payload.attachments || [],
+      };
+      persistedTurns.push(userMessage);
+      return { userMessage, attachments: userMessage.attachments, version: 1 };
+    },
     async saveCurrentTurnTasks(payload = {}) {
       savedCurrentTurnTasksPayload = payload;
     },
@@ -83,9 +105,10 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       async log() {},
     },
     botManager: {},
-    agentRunner: async ({ agentContext, userMessage }) => {
+    agentRunner: async ({ agentContext, currentUserMessage }) => {
       capturedAgentContext = agentContext;
-      assert.equal(userMessage, "请切换模型并输出附件");
+      assert.equal(currentUserMessage.content, "请切换模型并输出附件");
+      assert.equal(currentUserMessage.messageUid, "sm_turn-closure");
       assert.equal(
         agentContext?.execution?.controllers?.runtime?.runtimeModel,
         "",
@@ -302,6 +325,11 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(typeof fullTurnLog?.data?.content?.preview, "string");
   assert.equal(fullTurnLog?.data?.artifactRef?.source, "session.messages");
   assert.equal(upstreamEvents.length > 0, true, "应向上游持续回传事件");
+  assert.equal(
+    upstreamEvents.find((event) => event?.event === "turn_committed")?.data?.userMessage,
+    userTurn,
+    "turn_committed 应回传唯一持久化用户消息及其 canonical 附件",
+  );
   assert.ok(capturedAgentContext, "agent 应收到构建后的完整上下文");
 });
 
@@ -329,6 +357,28 @@ test("continue mode closed-loop: should build continue context and persist paren
     async appendExecutionLog() {},
     async appendTurn(payload = {}) {
       persistedTurns.push(payload);
+    },
+    async commitTurn(payload = {}) {
+      const messageUid = `sm_${payload.turnScopeId}`;
+      const userMessage = {
+        messageUid,
+        id: payload.messageId || messageUid,
+        messageId: payload.messageId || messageUid,
+        role: "user",
+        type: "message",
+        content: payload.content,
+        userName: payload.userId,
+        sessionId: payload.sessionId,
+        parentSessionId: payload.parentSessionId,
+        dialogProcessId: payload.dialogProcessId,
+        parentDialogProcessId: payload.parentDialogProcessId,
+        turnScopeId: payload.turnScopeId,
+        frontendUserMessage: payload.frontendUserMessage === true,
+        messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
+        attachments: payload.attachments || [],
+      };
+      persistedTurns.push(userMessage);
+      return { userMessage, attachments: userMessage.attachments, version: 1 };
     },
     async saveCurrentTurnTasks() {},
   };

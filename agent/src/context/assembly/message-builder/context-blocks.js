@@ -4,19 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 import { SystemMessage } from "@langchain/core/messages";
-import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
-import { resolveMainModelFinalMessages } from "../../../session/utils/context-window-normalizer.js";
-import { resolveDialogProcessId, resolveMessageDialogProcessId } from "../../session/dialog-process-id-resolver.js";
+import { buildCanonicalMessageBlocks } from "@noobot/context-protocol/block-strategy";
+import { AGENT_MODEL_CONTEXT_POLICY_OPTIONS } from "../../session/message-context-policy.js";
+import { MAIN_MODEL_HISTORY_ROUND_LIMIT } from "../../../session/utils/context-window-normalizer.js";
+import { resolveDialogProcessId } from "../../session/dialog-process-id-resolver.js";
 import { resolveParentSessionId } from "../../parent-session-id-resolver.js";
 import { resolveRuntimeUserMessageAttachments } from "../../../artifacts/index.js";
-import { resolveMessageRole } from "./message-utils.js";
-import { resolveMessageTurnScopeId } from "./user-meta.js";
-import { normalizeUnpairedTaskSummaryToolResults } from "./task-summary.js";
-import { buildHistoryMessages, filterCurrentTurnUserMessageFromHistory } from "./history.js";
+import { buildHistoryMessages } from "./history.js";
+import {
+  canonicalMessageId,
+  emitContextIdentityDebug,
+} from "../../../observability/context-identity-debug.js";
 
 export function buildContextMessageBlocks(
   agentContext,
-  { currentUserMessage = "" } = {},
+  { currentUserMessage = null } = {},
 ) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
   const systemRuntime = runtime?.systemRuntime || {};
@@ -46,17 +48,7 @@ export function buildContextMessageBlocks(
     systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "",
   ).trim();
   fallbackUserMeta.turnScopeId = currentTurnScopeId;
-  const normalizedCurrentUserMessage = String(currentUserMessage || "").trim();
-  const normalizedHistoryMessages = normalizeUnpairedTaskSummaryToolResults(rawHistoryMessages);
-  const historyMessages = normalizedCurrentUserMessage
-    ? filterCurrentTurnUserMessageFromHistory(
-        normalizedHistoryMessages,
-        {
-          turnScopeId: currentTurnScopeId,
-          currentDialogProcessId: systemRuntime?.dialogProcessId,
-        },
-      )
-    : normalizedHistoryMessages;
+  const historyMessages = rawHistoryMessages;
   const resolvedDialogProcessId = resolveDialogProcessId({
     ctx: {
       agentContext: {
@@ -69,37 +61,41 @@ export function buildContextMessageBlocks(
     messages: historyMessages,
   });
   fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
-  const rawIncrementalMessages = [...restoredIncrementalMessages];
-  if (normalizedCurrentUserMessage) {
-    const currentMessageOrigin = String(systemRuntime?.caller || "user").trim().toLowerCase() === "bot"
-      ? "internal"
-      : "user";
-    const currentAlreadyInIncremental = rawIncrementalMessages.some((msg = {}) =>
-      resolveMessageRole(msg) === MESSAGE_ROLE.USER &&
-        resolveMessageDialogProcessId(msg) === fallbackUserMeta.dialogProcessId &&
-        resolveMessageTurnScopeId(msg) === currentTurnScopeId
-    );
-    if (!currentAlreadyInIncremental) {
-      rawIncrementalMessages.push({
-        role: MESSAGE_ROLE.USER,
-        content: normalizedCurrentUserMessage,
-        frontendUserMessage: currentMessageOrigin === "user",
-        messageOrigin: currentMessageOrigin,
-        userName: fallbackUserMeta.userName,
-        attachments: fallbackUserMeta.attachments,
-        sessionId: fallbackUserMeta.sessionId,
-        parentSessionId: fallbackUserMeta.parentSessionId,
-        dialogProcessId: fallbackUserMeta.dialogProcessId,
-        parentDialogProcessId: fallbackUserMeta.parentDialogProcessId,
-        turnScopeId: currentTurnScopeId,
-      });
-    }
-  }
-
-  const resolvedMainBlocks = resolveMainModelFinalMessages({
+  const identity = {
+    userId: runtime?.userId || systemRuntime?.userId,
+    sessionId: systemRuntime?.sessionId,
+    parentSessionId: runtimeParentSessionId,
+    dialogProcessId: resolvedDialogProcessId,
+    turnScopeId: currentTurnScopeId,
+  };
+  const currentCanonicalId = canonicalMessageId(currentUserMessage);
+  emitContextIdentityDebug(runtime?.eventListener, "contextBuildInput", identity, {
+    messageUid: String(currentUserMessage?.messageUid || "").trim(),
+    currentCanonicalId,
+    systemCount: systemMessages.length,
+    historyCount: rawHistoryMessages.length,
+    restoredIncrementalCount: restoredIncrementalMessages.length,
+    attachmentCount: Array.isArray(currentUserMessage?.attachments)
+      ? currentUserMessage.attachments.length
+      : 0,
+  });
+  const resolvedMainBlocks = buildCanonicalMessageBlocks({
     systemMessages,
     historyMessages,
-    incrementalMessages: rawIncrementalMessages,
+    incrementalMessages: restoredIncrementalMessages,
+    currentUserMessage,
+    historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT,
+    policyOptions: AGENT_MODEL_CONTEXT_POLICY_OPTIONS,
+  });
+  emitContextIdentityDebug(runtime?.eventListener, "canonicalBlocksResolved", identity, {
+    currentCanonicalId,
+    currentMessagePresent: Boolean(currentCanonicalId),
+    currentAlreadyInIncremental: restoredIncrementalMessages.some(
+      (message) => canonicalMessageId(message) === currentCanonicalId,
+    ),
+    systemCount: resolvedMainBlocks.system.length,
+    historyCount: resolvedMainBlocks.history.length,
+    incrementalCount: resolvedMainBlocks.incremental.length,
   });
 
   const system = [];
@@ -126,6 +122,14 @@ export function buildContextMessageBlocks(
     includeUserMeta: false,
     allowMessageAttachments: true,
   });
+  const projectedIds = incremental.map(canonicalMessageId).filter(Boolean);
+  emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", identity, {
+    sourceMessageUid: String(currentUserMessage?.messageUid || "").trim(),
+    contentProjectionId: projectedIds.find((id) => id === currentCanonicalId) || "",
+    userMetaProjectionId: projectedIds.find((id) => id === `${currentCanonicalId}::user_meta`) || "",
+    incrementalCount: incremental.length,
+    flatMessageCount: system.length + history.length + incremental.length,
+  });
   return {
     system,
     history,
@@ -137,7 +141,7 @@ export function buildContextMessageBlocks(
 
 export function buildContextMessages(
   agentContext,
-  { currentUserMessage = "" } = {},
+  { currentUserMessage = null } = {},
 ) {
   return buildContextMessageBlocks(agentContext, {
     currentUserMessage,

@@ -183,7 +183,6 @@ export class SessionExecutionEngine {
       mergePluginOptions: (...items) => this._mergePluginOptions(...items),
       createPluginResolveModelMessages: (payload = {}) =>
         this._createPluginResolveModelMessages(payload),
-      createPluginMarkMessagesSummarized: () => this._createPluginMarkMessagesSummarized(),
       createDetachedSubSessionRunner: () => this._createDetachedSubSessionRunner(),
       createGeneratedArtifactPersister: () => this._createGeneratedArtifactPersister(),
       createScopedJsonWriter: () => this._createScopedJsonWriter(),
@@ -217,7 +216,6 @@ export class SessionExecutionEngine {
       assertPersistenceContextIdentity: typeof this.session?.assertPersistenceContextIdentity === "function"
         ? (context = null, identity = {}) => this.session.assertPersistenceContextIdentity(context, identity)
         : null,
-      appendSessionTurn: (payload = {}) => this._appendSessionTurn(payload),
       appendAgentMessages: (payload = {}) => this._appendAgentMessages(payload),
       commitSessionTurn: typeof this.session?.commitTurn === "function"
         ? (payload = {}) => this.session.commitTurn(payload)
@@ -446,6 +444,10 @@ export class SessionExecutionEngine {
         this._mergeRunConfigWithPluginStrategy(payload),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
     });
+  }
+
+  async runDetachedSubSession(payload = {}) {
+    return this._createDetachedSubSessionRunner()(payload);
   }
 
 
@@ -720,10 +722,6 @@ export class SessionExecutionEngine {
 
   _createPluginResolveModelMessages(payload = {}) {
     return this.modelMessageRuntimeHelpers.createResolveModelMessages(payload);
-  }
-
-  _createPluginMarkMessagesSummarized() {
-    return this.modelMessageRuntimeHelpers.createMarkMessagesSummarized();
   }
 
   _prepareBotHookRunConfig({ runConfig = {} } = {}) {

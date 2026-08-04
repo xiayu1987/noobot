@@ -16,12 +16,11 @@ import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { HARNESS_HOOK_POINTS } from "../../src/core/constants.js";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
-import { createPlanningHandler } from "../../src/capabilities/handlers/planning.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
-  markMessagesSummarized,
   relaySeparateModelOutputAsUserMessage,
 } from "../../src/capabilities/handlers/shared.js";
 

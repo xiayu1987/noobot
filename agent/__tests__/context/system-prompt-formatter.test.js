@@ -60,6 +60,36 @@ test("composeSystemInfoSections includes MCP/connectors/attachments when data ex
   assert.equal(joined.includes("Current attachment metadata"), true);
 });
 
+test("composeSystemInfoSections excludes turn identity from every system projection depth", () => {
+  const sections = composeSystemInfoSections({
+    locale: "en-US",
+    dynamicInfo: {
+      sessionId: "session-kept",
+      dialogProcessId: "dialog-secret",
+      currentDialogProcessId: "dialog-current-secret",
+      parentDialogProcessId: "dialog-parent-secret",
+      turnScopeId: "turn-secret",
+      config: { turnScopeId: "turn-config-secret", safeConfirm: true },
+      nested: [{ dialogProcessId: "dialog-nested-secret", value: "kept" }],
+    },
+  });
+
+  const joined = sections.join("\n\n");
+  assert.equal(joined.includes("session-kept"), true);
+  assert.equal(joined.includes("\"safeConfirm\": true"), true);
+  assert.equal(joined.includes("\"value\": \"kept\""), true);
+  for (const forbidden of [
+    "dialogProcessId",
+    "currentDialogProcessId",
+    "parentDialogProcessId",
+    "turnScopeId",
+    "dialog-secret",
+    "turn-secret",
+  ]) {
+    assert.equal(joined.includes(forbidden), false, forbidden);
+  }
+});
+
 test("composeSystemInfoSections adds concise path guidance for only the active path view", () => {
   const regularSandboxSections = composeSystemInfoSections({
     locale: "en-US",

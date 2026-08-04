@@ -6,7 +6,6 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { TASK_STATUS } from "../../bot/async/constants.js";
-import { markCurrentTurnStoreSummarized } from "../../context/session/summarized-message-policy.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
@@ -48,15 +47,8 @@ export function isTaskSummaryMessage(messageItem = {}) {
   return false;
 }
 
-function markCurrentTurnMessagesSummarized(currentTurnMessages = null) {
-  return markCurrentTurnStoreSummarized(currentTurnMessages, {
-    taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
-  });
-}
-
 export function createTaskSummaryTool(ctx = {}) {
   const runtime = getRuntimeFromAgentContext(ctx?.agentContext || {});
-  const currentTurnMessages = runtime?.currentTurnMessages || null;
   const systemRuntime = runtime?.systemRuntime || {};
 
   const taskSummaryTool = new DynamicStructuredTool({
@@ -79,18 +71,12 @@ export function createTaskSummaryTool(ctx = {}) {
       systemRuntime.needsPhaseSummary = false;
       systemRuntime.toolLoopExecutionCount = 0;
       systemRuntime.phaseSummaryLoopCount = 0;
-      const currentTurnSummarizedCount =
-        markCurrentTurnMessagesSummarized(currentTurnMessages);
-
       return toToolJsonResult(
         TASK_SUMMARY_TOOL_NAME,
         {
           ok: true,
           status: TASK_STATUS.COMPLETED,
           message: tTool(runtime, "tools.task_summary.summaryCompletedContinue"),
-          summarizedMessages: {
-            currentTurn: currentTurnSummarizedCount,
-          },
         },
         true,
       );

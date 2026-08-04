@@ -29,6 +29,12 @@ import {
   createAgentContext,
   createPlanningAgentContext,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
+import {
+  createTestHookContext,
+  createTestResolveModelMessages,
+} from "../helpers/public-runtime-fixtures.js";
+
+const resolveModelMessages = createTestResolveModelMessages();
 
 test("revision and refinement have independent MAX_PLAN_UPDATE_ATTEMPTS budgets", () => {
   const state = {
@@ -74,7 +80,8 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
   const beforeCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "before_llm_call", ctx: beforeCtx, meta });
   const afterCtx = {
-    messages: beforeCtx.messages,
+    modelContext: beforeCtx.modelContext,
+    contextProtocolVersion: 1,
     ai: { content: "ADD 1.1 细化步骤A" },
     agentContext,
   };
@@ -136,10 +143,10 @@ test("planning revision followup uses dynamic programming scenario over initial 
       },
     },
   };
-  const ctx = {
+  const ctx = createTestHookContext({
     agentContext,
     messages: [{ role: "user", content: "继续修代码" }],
-  };
+  });
   const revisedPlan = JSON.stringify({
     totalGoal: "修复代码",
     taskOwner: "primary_task_owner",
@@ -156,6 +163,7 @@ test("planning revision followup uses dynamic programming scenario over initial 
   });
   const meta = {
     harness: {
+      resolveModelMessages,
       capabilityModelInvoker: async (payload = {}) => {
         if (payload.purpose === "planning_refinement") return { content: "" };
         return {
@@ -177,7 +185,7 @@ test("planning revision followup uses dynamic programming scenario over initial 
   assert.equal(changed, true);
   assert.equal(agentContext.payload.harness.dynamicPolicyPrompt?.scenario, "programming");
 
-  const followupMessage = ctx.messages.find((item = {}) =>
+  const followupMessage = ctx.modelContext.messages.find((item = {}) =>
     /next_phase_plan_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
@@ -190,7 +198,7 @@ test("planning revision followup uses dynamic programming scenario over initial 
 
 test("runPlanUpdateAfterSummary does not start revision when refinement is already pending", async () => {
   const invocations = [];
-  const ctx = {
+  const ctx = createTestHookContext({
     agentContext: createAgentContext({
       pending: {
         planRefinement: true,
@@ -198,9 +206,10 @@ test("runPlanUpdateAfterSummary does not start revision when refinement is alrea
       },
     }),
     messages: [{ role: "user", content: "继续" }],
-  };
+  });
   const meta = {
     harness: {
+      resolveModelMessages,
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
         return { content: "" };

@@ -12,6 +12,12 @@ import {
   isBotDispatchOutcome,
   resolveBotDispatchOutcome,
 } from "@noobot/shared/bot-dispatch-protocol";
+import { createModelContext } from "@noobot/context-protocol/hook-context";
+import {
+  canonicalMessageId,
+  canonicalMessageIdentityDebugData,
+  emitContextIdentityDebug,
+} from "../../../observability/context-identity-debug.js";
 
 function messageIdentity(message = {}) {
   const messageId = String(
@@ -21,6 +27,13 @@ function messageIdentity(message = {}) {
       "",
   ).trim();
   return messageId;
+}
+
+function summarizedMessageIds(messages = []) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message = {}) => message?.summarized === true)
+    .map((message = {}) => canonicalMessageId(message))
+    .filter(Boolean);
 }
 
 function acceptDispatchedTurnMessages(runtime = {}, messages = []) {
@@ -58,6 +71,7 @@ export async function dispatchAgentTurn({
   runtimeAgentContext,
   abortSignal,
   normalizedMessage,
+  currentUserMessage,
   userMessageAttachments,
   resolvedRunConfig,
   runtimeEventListener,
@@ -69,13 +83,42 @@ export async function dispatchAgentTurn({
   resolvedTurnScopeId,
   syncLifecycleRuntimeState,
 }) {
-const dispatchContextMessages = Array.isArray(runtimeAgentContext?.payload?.messages?.history)
-  ? runtimeAgentContext.payload.messages.history
-  : [];
+  // BEFORE_AGENT_DISPATCH runs before the root Agent constructs its final model
+  // window. At this boundary the prepared session history is the only model
+  // context owned by the dispatcher; system and incremental messages are added
+  // later by the selected execution owner.
+  const dispatchContextMessages = Array.isArray(runtimeAgentContext?.payload?.messages?.history)
+    ? runtimeAgentContext.payload.messages.history
+    : [];
+  const dispatchModelContext = createModelContext({
+    messages: dispatchContextMessages,
+    activeTurnIdentity: {
+      dialogProcessId: String(dialogProcessId || "").trim(),
+      turnScopeId: String(resolvedTurnScopeId || "").trim(),
+    },
+    onCanonicalMessageAdded(message, meta) {
+      emitContextIdentityDebug(
+        runtimeEventListener,
+        "canonicalMessageAdded",
+        {
+          userId: usedSessionId ? String(normalizedMessage?.userId || "").trim() : "",
+          sessionId: usedSessionId,
+          dialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
+        },
+        canonicalMessageIdentityDebugData(message, meta),
+      );
+    },
+    messageBlocks: {
+      system: [],
+      history: dispatchContextMessages,
+      incremental: [],
+    },
+  });
 
-let dispatchClaimed = false;
-let dispatchOwner = null;
-const claimAgentDispatch = ({
+  let dispatchClaimed = false;
+  let dispatchOwner = null;
+  const claimAgentDispatch = ({
   owner = "",
   source = "agent_dispatch",
   executionId = "",
@@ -122,7 +165,7 @@ const beforeAgentDispatchContext = {
   agentContextSummary,
   agentContext: runtimeAgentContext,
   abortSignal,
-  messages: dispatchContextMessages,
+  modelContext: dispatchModelContext,
   attachments: userMessageAttachments,
   userMessageAttachments,
   eventListener: runtimeEventListener,
@@ -225,7 +268,7 @@ if (dispatchOutcome.disposition === BOT_DISPATCH_DISPOSITION.HANDLED) {
     agentResult = await agentRunner({
       errorLogger: errorLogger,
       agentContext: runtimeAgentContext,
-      userMessage: normalizedMessage,
+      currentUserMessage,
     });
   } catch (error) {
     await runBotRuntimeHook({
@@ -242,8 +285,25 @@ if (dispatchOutcome.disposition === BOT_DISPATCH_DISPOSITION.HANDLED) {
     throw error;
   }
 }
+const dispatchedSummarizedMessageIds = summarizedMessageIds(agentResult?.turnMessages);
 const acceptedTurnMessages = acceptDispatchedTurnMessages(dispatchRuntime, agentResult?.turnMessages);
 agentResult.turnMessages = acceptedTurnMessages.messages;
+emitContextIdentityDebug(
+  runtimeEventListener,
+  "completedTurnSummaryAccepted",
+  {
+    sessionId: usedSessionId,
+    dialogProcessId,
+    turnScopeId: resolvedTurnScopeId,
+  },
+  {
+    resultMessageCount: Array.isArray(agentResult?.turnMessages)
+      ? agentResult.turnMessages.length
+      : 0,
+    dispatchedSummarizedMessageIds,
+    acceptedSummarizedMessageIds: summarizedMessageIds(acceptedTurnMessages.messages),
+  },
+);
 emitEvent(runtimeEventListener, "canonical_turn_messages_accepted", {
   sessionId: usedSessionId,
   dialogProcessId,

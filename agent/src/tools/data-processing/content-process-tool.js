@@ -5,7 +5,6 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import {
@@ -19,12 +18,12 @@ import { createMedia2DataTool } from "./media2data-tool.js";
 import { createWeb2DataTool } from "./web2data-tool.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
+import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { normalizeSelectedConnectors } from "../../shared/utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
   SANDBOX_CONFIG,
-  TOOL_CALLER,
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
@@ -101,7 +100,6 @@ export function createContentProcessTool({ agentContext }) {
       const botManager = runtime?.botManager || null;
       const eventListener = runtime?.eventListener || null;
       const signal = runtime?.abortSignal || null;
-      const userInteractionBridge = runtime?.userInteractionBridge || null;
       const userId = String(runtime?.userId || agentContext?.userId || "").trim();
       const sessionId = String(systemRuntime?.sessionId || "").trim();
       const parentSessionId = resolveChildRunParentSessionIdFromRuntime(runtime);
@@ -112,7 +110,7 @@ export function createContentProcessTool({ agentContext }) {
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
       const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
-      if (!botManager || !userId || !sessionId) {
+      if (typeof botManager?.runDetachedSubSession !== "function" || !userId || !sessionId) {
         throw recoverableToolError(
           tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
           {
@@ -130,17 +128,20 @@ export function createContentProcessTool({ agentContext }) {
       }
 
       try {
-        const subSessionId = randomUUID();
-        const subResult = await botManager.runSession({
-          userId,
-          sessionId: subSessionId,
+        const detachedRun = await botManager.runDetachedSubSession({
+          parentContext: agentContext,
           message: composedTask,
-          caller: TOOL_CALLER.BOT,
-          parentSessionId,
-          parentDialogProcessId,
           eventListener,
-          userInteractionBridge,
-          runConfig: {
+          abortSignal: signal,
+          strategy: createAgentDetachedSubSessionStrategy({
+            userId,
+            parentSessionId,
+            parentDialogProcessId,
+          }),
+          metadata: {
+            scope: TOOL_NAME.PROCESS_CONTENT_TASK,
+          },
+          runConfigPatch: {
             allowUserInteraction,
             ...(hasParentStreamingConfig
               ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
@@ -160,8 +161,9 @@ export function createContentProcessTool({ agentContext }) {
                 ? runtime.sharedTools
                 : {},
           },
-          abortSignal: signal,
         });
+        const subSessionId = String(detachedRun?.sessionId || "").trim();
+        const subResult = detachedRun?.result || {};
         const answer = String(subResult?.answer || "").trim();
         const traces = Array.isArray(subResult?.traces) ? subResult.traces : [];
         const messages = Array.isArray(subResult?.messages) ? subResult.messages : [];

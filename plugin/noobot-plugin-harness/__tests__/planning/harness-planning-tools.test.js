@@ -16,6 +16,7 @@ import {
   test,
   waitForFile,
 } from "../helpers/harness-planning-helper.js";
+import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 test("harness planning disables blocked tools (except help) and injects request_task_acceptance tool", async () => {
   const hookManager = createAgentHookManager();
@@ -279,7 +280,7 @@ test("harness request_plan_refinement falls back to closure meta when configurab
     { summary: "阶段完成，细化下一步" },
     {
       configurable: {
-        noobotHookContext: { agentContext },
+        noobotHookContext: createTestHookContext({ agentContext }),
         noobotHookMeta: { systemRuntime: { userId: "u11-r2", sessionId: "s11-r2" } },
       },
     },

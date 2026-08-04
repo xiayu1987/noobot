@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createModelContext } from "@noobot/context-protocol";
 
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
 
@@ -41,7 +42,7 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses main-flow blocks", ()
 
   const resolved = resolver({
     ctx: {
-      messageBlocks: {
+      modelContext: createModelContext({ messageBlocks: {
         system: [{ role: "system", content: "sys" }],
         history: [
           { role: "user", content: "old-u", dialogProcessId: "d1" },
@@ -54,7 +55,7 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses main-flow blocks", ()
           { role: "assistant", content: "drop", summarized: true, dialogProcessId: "d3" },
           { role: "assistant", content: "inc-a", dialogProcessId: "d3" },
         ],
-      },
+      } }),
     },
   });
 
@@ -64,25 +65,42 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses main-flow blocks", ()
   );
 });
 
-test("ModelMessageRuntimeHelpers resolves non-main history from agent payload blocks", () => {
+test("ModelMessageRuntimeHelpers preserves canonical identity across normalized projections", () => {
+  const helpers = new ModelMessageRuntimeHelpers();
+  const resolver = helpers.createResolveModelMessages();
+  const modelContext = createModelContext({ messageBlocks: {
+    system: [],
+    history: [{ role: "user", content: "history", dialogProcessId: "d1", turnScopeId: "t1" }],
+    incremental: [{ role: "user", content: "current", dialogProcessId: "d2", turnScopeId: "t2" }],
+  } });
+  const sourceIds = modelContext.messages.map((message) => message.additional_kwargs.noobotMessageId);
+
+  const resolved = resolver({ ctx: { modelContext } });
+
+  assert.deepEqual(
+    resolved.map((message) => message.additional_kwargs.noobotMessageId),
+    sourceIds,
+  );
+  assert.deepEqual(resolved.map((message) => message.turnScopeId), ["t1", "t2"]);
+});
+
+test("ModelMessageRuntimeHelpers resolves non-main history from authoritative modelContext", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
 
   const resolved = resolver({
     purpose: "planning",
     ctx: {
-      agentContext: {
-        payload: {
-          messages: {
+      modelContext: createModelContext({
+        messageBlocks: {
             system: [{ role: "system", content: "sys" }],
             history: [
               { role: "user", content: "hist-u", dialogProcessId: "d1" },
               { role: "assistant", content: "hist-a", dialogProcessId: "d1" },
             ],
             incremental: [{ role: "user", content: "inc-u", dialogProcessId: "d2" }],
-          },
         },
-      },
+      }),
     },
   });
 
@@ -92,7 +110,7 @@ test("ModelMessageRuntimeHelpers resolves non-main history from agent payload bl
   );
 });
 
-test("ModelMessageRuntimeHelpers does not clip non-main payload blocks even when legacy clip option is enabled", () => {
+test("ModelMessageRuntimeHelpers does not clip authoritative non-main blocks", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
 
@@ -110,15 +128,13 @@ test("ModelMessageRuntimeHelpers does not clip non-main payload blocks even when
   const resolved = resolver({
     purpose: "planning",
     ctx: {
-      agentContext: {
-        payload: {
-          messages: {
+      modelContext: createModelContext({
+        messageBlocks: {
             system: [{ role: "system", content: "sys" }],
             history,
             incremental,
-          },
         },
-      },
+      }),
     },
   });
 
@@ -137,17 +153,16 @@ test("ModelMessageRuntimeHelpers does not clip non-main model context by default
   const resolver = helpers.createResolveModelMessages();
 
   const resolved = resolver({
-    messages: Array.from({ length: 22 }, (_, index) => ({
-      role: "user",
-      content: `m${index + 1}`,
-      dialogProcessId: "dlg-1",
-    })),
     ctx: {
-      agentContext: {
-        execution: {
+      modelContext: createModelContext({ messageBlocks: {
+        system: [],
+        history: [],
+        incremental: Array.from({ length: 22 }, (_, index) => ({
+          role: "user",
+          content: `m${index + 1}`,
           dialogProcessId: "dlg-1",
-        },
-      },
+        })),
+      } }),
     },
   });
 
@@ -162,17 +177,16 @@ test("ModelMessageRuntimeHelpers never clips non-main model context in injected 
   const resolver = helpers.createResolveModelMessages();
 
   const resolved = resolver({
-    messages: Array.from({ length: 22 }, (_, index) => ({
-      role: "user",
-      content: `m${index + 1}`,
-      dialogProcessId: "dlg-1",
-    })),
     ctx: {
-      agentContext: {
-        execution: {
+      modelContext: createModelContext({ messageBlocks: {
+        system: [],
+        history: [],
+        incremental: Array.from({ length: 22 }, (_, index) => ({
+          role: "user",
+          content: `m${index + 1}`,
           dialogProcessId: "dlg-1",
-        },
-      },
+        })),
+      } }),
     },
   });
 
@@ -182,116 +196,34 @@ test("ModelMessageRuntimeHelpers never clips non-main model context in injected 
   );
 });
 
-test("ModelMessageRuntimeHelpers resolveModelMessages filters stale injected messages in no-block fallback", () => {
+test("ModelMessageRuntimeHelpers keeps unsummarized incremental injections append-only", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
 
   const resolved = resolver({
-    messages: [
-      {
+    ctx: {
+      modelContext: createModelContext({ messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{
         role: "user",
         content: "old-injected",
         injectedMessage: true,
         injectedBy: "agentPlugin",
         dialogProcessId: "old",
-      },
-      {
+        }, {
         role: "user",
         content: "new-injected",
         injectedMessage: true,
         injectedBy: "agentPlugin",
         dialogProcessId: "new",
-      },
-      { role: "assistant", content: "normal", dialogProcessId: "new" },
-    ],
-    ctx: {
-      agentContext: {
-        execution: {
-          dialogProcessId: "new",
-        },
-      },
+        }, { role: "assistant", content: "normal", dialogProcessId: "new" }],
+      } }),
     },
   });
 
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
-    ["new-injected", "normal"],
+    ["old-injected", "new-injected", "normal"],
   );
-});
-
-test("ModelMessageRuntimeHelpers markMessagesSummarized supports scoped in-memory marking", async () => {
-  const helpers = new ModelMessageRuntimeHelpers();
-  const markMessagesSummarized = helpers.createMarkMessagesSummarized();
-  const messages = [
-    { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
-    { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
-    { role: "assistant", content: "", tool_calls: [{ id: "c2", function: { name: "execute_script" } }] },
-    { role: "tool", content: '{"toolName":"execute_script","ok":true}' },
-  ];
-
-  const marked = await markMessagesSummarized({
-    messages,
-    summaryScope: {
-      maxMessages: 2,
-      limitToProvidedMessagesOnly: true,
-    },
-  });
-
-  assert.equal(marked, 2);
-  assert.equal(messages[0].summarized, true);
-  assert.equal(messages[1].summarized, true);
-  assert.equal(messages[2].summarized, undefined);
-  assert.equal(messages[3].summarized, undefined);
-});
-
-test("ModelMessageRuntimeHelpers markMessagesSummarized can persist session marking", async () => {
-  let capturedPayload = null;
-  const helpers = new ModelMessageRuntimeHelpers({
-    session: {
-      async markSessionMessagesSummarized(payload = {}) {
-        capturedPayload = payload;
-        return 7;
-      },
-    },
-  });
-  const markMessagesSummarized = helpers.createMarkMessagesSummarized();
-
-  const marked = await markMessagesSummarized({
-    messages: [],
-    ctx: {
-      userId: "u1",
-      sessionId: "s1",
-      parentSessionId: "p1",
-      dialogProcessId: "d1",
-      turnScopeId: "t1",
-    },
-  });
-
-  assert.equal(marked, 7);
-  assert.equal(capturedPayload.userId, "u1");
-  assert.equal(capturedPayload.sessionId, "s1");
-  assert.equal(capturedPayload.parentSessionId, "p1");
-  assert.equal(capturedPayload.dialogProcessId, "d1");
-  assert.equal(capturedPayload.turnScopeId, "t1");
-  assert.equal(typeof capturedPayload.shouldMark, "function");
-});
-
-test("ModelMessageRuntimeHelpers refuses unscoped session summary marking", async () => {
-  let callCount = 0;
-  const helpers = new ModelMessageRuntimeHelpers({
-    session: {
-      async markSessionMessagesSummarized() {
-        callCount += 1;
-        return 1;
-      },
-    },
-  });
-
-  const marked = await helpers.createMarkMessagesSummarized()({
-    messages: [],
-    ctx: { userId: "u1", sessionId: "s1" },
-  });
-
-  assert.equal(marked, 0);
-  assert.equal(callCount, 0);
 });

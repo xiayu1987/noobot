@@ -16,8 +16,6 @@ import {
   BOT_MANAGE_LOG_EVENT,
   BOT_MANAGE_LOG_SOURCE,
   CALLER_ROLE,
-  MESSAGE_ROLE,
-  MESSAGE_TYPE,
   SESSION_ASYNC_STATUS,
 } from "../config/constants.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
@@ -47,6 +45,11 @@ import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { bindAssistantMessageEventStream } from "../../events/message-event-stream.js";
 import { initializeCurrentTurnMessageEventProjection } from "../../events/current-turn-message-event-projection.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
+import {
+  canonicalMessageId,
+  emitContextIdentityDebug,
+} from "../../observability/context-identity-debug.js";
+import { assertTurnCommittedEventData } from "@noobot/shared/turn-commit-protocol";
 
 function currentTurnMessageCheckpointKey(message = {}, index = 0) {
   const messageUid = String(message?.messageUid || "").trim();
@@ -88,7 +91,6 @@ export class SessionExecutionRunner {
     prepareAgentTurnExecution,
     commitSummaryCheckpoint,
     appendAgentMessages,
-    appendSessionTurn,
     assertPersistenceContextIdentity,
     commitSessionTurn,
     stampReusedUserTurnDialogProcessId,
@@ -110,7 +112,6 @@ export class SessionExecutionRunner {
     this.prepareAgentTurnExecution = prepareAgentTurnExecution;
     this.commitSummaryCheckpoint = commitSummaryCheckpoint;
     this.appendAgentMessages = appendAgentMessages;
-    this.appendSessionTurn = appendSessionTurn;
     this.assertPersistenceContextIdentity = assertPersistenceContextIdentity;
     this.commitSessionTurn = commitSessionTurn;
     this.stampReusedUserTurnDialogProcessId = stampReusedUserTurnDialogProcessId;
@@ -203,34 +204,13 @@ export class SessionExecutionRunner {
     let resolvedRuntimeEventListener = eventListener;
     let lifecycle = null;
     let lifecycleRuntime = null;
-    let stoppedSnapshotPersistencePromise = null;
-    let stoppedSnapshotAbortListenerAttached = false;
     const persistStoppedSnapshotFromRuntime = (source = "") => {
-      if (stoppedSnapshotPersistencePromise) return stoppedSnapshotPersistencePromise;
-      stoppedSnapshotPersistencePromise = saveStoppedModelMessageSnapshotCandidate({
+      return saveStoppedModelMessageSnapshotCandidate({
         globalConfig: lifecycleRuntime?.globalConfig || {},
         candidate: lifecycleRuntime?.stoppedModelMessageSnapshotCandidate,
         eventListener: resolvedRuntimeEventListener,
         source,
       });
-      return stoppedSnapshotPersistencePromise;
-    };
-    const attachStoppedSnapshotAbortListener = () => {
-      if (stoppedSnapshotAbortListenerAttached || !abortSignal) return;
-      if (!lifecycleRuntime || typeof lifecycleRuntime !== "object") return;
-      stoppedSnapshotAbortListenerAttached = true;
-      const onAbort = () => {
-        if (isUserStopAbort(null, abortSignal)) {
-          void persistStoppedSnapshotFromRuntime("runner_user_stop_signal");
-        }
-      };
-      if (abortSignal.aborted) {
-        onAbort();
-        return;
-      }
-      if (typeof abortSignal.addEventListener === "function") {
-        abortSignal.addEventListener("abort", onAbort, { once: true });
-      }
     };
     resetAgentContextCompatFieldHitStats();
     const flushCompatFieldHitStats = () => {
@@ -413,8 +393,11 @@ export class SessionExecutionRunner {
         : [];
       buildContextPayload.userMessageAttachments = canonicalAttachments;
       if (preparedTurnInput?.contextBuilder) buildContextPayload.contextBuilder = preparedTurnInput.contextBuilder;
+      let currentUserMessage;
+      let reusedTurnResult = null;
+      let committedTurnResult = null;
       if (resolvedRunConfig?.reuseExistingUserTurn === true) {
-        await this.stampReusedUserTurnDialogProcessId?.({
+        reusedTurnResult = await this.stampReusedUserTurnDialogProcessId?.({
           userId,
           sessionId: usedSessionId,
           parentSessionId,
@@ -423,6 +406,7 @@ export class SessionExecutionRunner {
           attachments: canonicalAttachments,
           ...(persistenceContext ? { persistenceContext } : {}),
         });
+        currentUserMessage = reusedTurnResult?.userMessage;
       } else {
         const turnCommand = createTurnCommand({
           userId,
@@ -438,24 +422,61 @@ export class SessionExecutionRunner {
         });
         const commitPayload = toCommitTurnPayload(turnCommand);
         const commitPayloadWithPersistence = { ...commitPayload, persistenceContext };
-        const commitResult = typeof this.commitSessionTurn === "function"
-          ? await this.commitSessionTurn(commitPayloadWithPersistence)
-          : await this.appendSessionTurn({
-              ...commitPayloadWithPersistence,
-              role: MESSAGE_ROLE.USER,
-              type: MESSAGE_TYPE.MESSAGE,
-              frontendUserMessage: commitPayload.frontendUserMessage === true,
-              messageOrigin: commitPayload.frontendUserMessage === true ? "user" : "internal",
-              eventListener: runtimeEventListener,
-            }).then(() => ({ attachments: canonicalAttachments }));
-        canonicalAttachments.splice(0, canonicalAttachments.length, ...(commitResult?.attachments || []));
-        emitEvent(runtimeEventListener, "turn_committed", {
-          sessionId: commitResult?.sessionId || usedSessionId,
-          sessionVersion: commitResult?.version ?? commitResult?.sessionVersion,
+        if (typeof this.commitSessionTurn !== "function") {
+          throw new Error("commitSessionTurn is required before Context construction");
+        }
+        committedTurnResult = await this.commitSessionTurn(commitPayloadWithPersistence);
+        currentUserMessage = committedTurnResult?.userMessage;
+        canonicalAttachments.splice(0, canonicalAttachments.length, ...(committedTurnResult?.attachments || []));
+        const turnCommittedEvent = assertTurnCommittedEventData({
+          sessionId: committedTurnResult?.sessionId || usedSessionId,
+          sessionVersion: committedTurnResult?.version ?? committedTurnResult?.sessionVersion,
           dialogProcessId,
           turnScopeId: resolvedTurnScopeId,
+          userMessage: currentUserMessage,
         });
+        emitEvent(runtimeEventListener, "turn_committed", turnCommittedEvent);
       }
+      const persistedMessageUid = String(currentUserMessage?.messageUid || "").trim();
+      if (!persistedMessageUid) {
+        throw new Error("persisted current user message identity is required before Context construction");
+      }
+      const contextIdentity = {
+        userId,
+        sessionId: usedSessionId,
+        parentSessionId,
+        dialogProcessId,
+        turnScopeId: resolvedTurnScopeId,
+      };
+      emitContextIdentityDebug(
+        runtimeEventListener,
+        resolvedRunConfig?.reuseExistingUserTurn === true
+          ? "reusedTurnResolved"
+          : "turnCommitted",
+        contextIdentity,
+        {
+          messageUid: persistedMessageUid,
+          persistedMessageId: String(currentUserMessage?.messageId || currentUserMessage?.id || "").trim(),
+          canonicalMessageId: canonicalMessageId(currentUserMessage),
+          role: String(currentUserMessage?.role || "").trim(),
+          frontendUserMessage: currentUserMessage?.frontendUserMessage === true,
+          messageOrigin: String(currentUserMessage?.messageOrigin || "").trim(),
+          contentLength: String(currentUserMessage?.content || "").length,
+          attachmentCount: Array.isArray(currentUserMessage?.attachments)
+            ? currentUserMessage.attachments.length
+            : 0,
+          ...(reusedTurnResult
+            ? {
+                stamped: reusedTurnResult?.stamped === true,
+                reason: String(reusedTurnResult?.reason || "").trim(),
+              }
+            : {}),
+          ...(committedTurnResult
+            ? { deduplicated: committedTurnResult?.deduplicated === true }
+            : {}),
+        },
+      );
+      buildContextPayload.currentUserMessage = currentUserMessage;
       if (typeof this.prepareAgentTurnExecution !== "function") {
         throw new Error("prepareAgentTurnExecution is required");
       }
@@ -493,7 +514,6 @@ export class SessionExecutionRunner {
         });
         applyRuntimeUserMessageAttachments(dispatchRuntime, userMessageAttachments);
         bindLifecycleToRuntime(dispatchRuntime, lifecycle);
-        attachStoppedSnapshotAbortListener();
         initializeCurrentTurnMessageEventProjection(dispatchRuntime, {
           sequenceScopeId: resolvedTurnScopeId,
         });
@@ -698,6 +718,7 @@ export class SessionExecutionRunner {
         runtimeAgentContext,
         abortSignal,
         normalizedMessage,
+        currentUserMessage,
         userMessageAttachments,
         resolvedRunConfig,
         runtimeEventListener,

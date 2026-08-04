@@ -6,6 +6,7 @@
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
+import { createModelContext } from "@noobot/context-protocol";
 
 export function createTestTurnMessagesStore(messages = []) {
   return createCurrentTurnMessagesStore(messages);
@@ -35,6 +36,16 @@ export function prepareTestTurnExecution(modelState = {}, loopState = {}, identi
   if (!runtime || typeof runtime !== "object") {
     throw new Error("test Turn execution requires modelState.runtime");
   }
+  if (loopState.modelContext?.protocolVersion !== 1) {
+    loopState.modelContext = createModelContext({
+      messageStore: loopState.messageStore || null,
+      messages: Array.isArray(loopState.messages) ? loopState.messages : null,
+      messageBlocks: loopState.messageBlocks || null,
+    });
+  }
+  delete loopState.messageStore;
+  delete loopState.messages;
+  delete loopState.messageBlocks;
   loopState.currentTurnMessages = createTestTurnMessagesStore(
     typeof loopState?.currentTurnMessages?.toArray === "function"
       ? loopState.currentTurnMessages.toArray()

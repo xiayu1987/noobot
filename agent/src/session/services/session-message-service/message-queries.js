@@ -5,55 +5,6 @@
  */
 import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 
-export async function markSessionMessagesSummarized({
-    userId,
-    sessionId,
-    dialogProcessId = "",
-    turnScopeId = "",
-    parentSessionId = "",
-    persistenceContext = null,
-    shouldMark = null,
-  } = {}) {
-    const normalizedDialogProcessId = resolveDialogProcessIdFromContext({
-      dialogProcessId,
-    });
-    const normalizedTurnScopeId = String(turnScopeId || "").trim();
-    if (!userId || !sessionId || !normalizedDialogProcessId) return 0;
-    return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    const session = await this.sessionRepo.findById(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
-    if (!session) return 0;
-    const messages = Array.isArray(session.messages) ? session.messages : [];
-    let updatedCount = 0;
-    session.messages = messages.map((messageItem) => {
-      const belongsToDialog =
-        resolveMessageDialogProcessId(messageItem) === normalizedDialogProcessId;
-      const belongsToTurn = !normalizedTurnScopeId ||
-        String(messageItem?.turnScopeId || "").trim() === normalizedTurnScopeId;
-      const shouldUpdate =
-        belongsToDialog && belongsToTurn &&
-        (typeof shouldMark === "function" ? shouldMark(messageItem) : true);
-      if (!shouldUpdate || messageItem?.summarized === true) return messageItem;
-      updatedCount += 1;
-      return { ...messageItem, summarized: true };
-    });
-    if (updatedCount > 0) {
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
-    }
-    return updatedCount;
-    }, parentSessionId, persistenceContext);
-  }
-
 export async function getSessionTurns({
     userId,
     sessionId,
@@ -75,13 +26,29 @@ export async function getSessionTurns({
     return session?.messages || [];
   }
 
-export async function getSessionContextSource({ userId, sessionId }) {
-    const session = await this.sessionRepo.findById(userId, sessionId);
-    return {
-      messages: Array.isArray(session?.messages) ? session.messages : [],
-      dialogOrder: Array.isArray(session?.dialogOrder) ? session.dialogOrder : [],
-    };
-  }
+export async function getSessionContextSource({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    persistenceContext = null,
+  } = {}) {
+    const resolvedParentSessionId = await this._resolveParentSessionId(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+    const session = await this.sessionRepo.findById(
+      userId,
+      sessionId,
+      resolvedParentSessionId,
+      persistenceContext,
+    );
+  return {
+    messages: Array.isArray(session?.messages) ? session.messages : [],
+    turnStatuses: Array.isArray(session?.turnStatuses) ? session.turnStatuses : [],
+  };
+}
 
 export async function getTurnSummaryCheckpointState({
     userId,

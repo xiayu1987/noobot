@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
+import { createModelContext } from "@noobot/context-protocol";
 
 import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
 import { WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
@@ -143,7 +144,7 @@ export function createSemanticTransferTool({ prefix = "att", counterRef = { valu
 }
 
 export function createBaseContext(overrides = {}) {
-  return {
+  const context = {
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
@@ -151,6 +152,13 @@ export function createBaseContext(overrides = {}) {
     runConfig: { locale: "zh-CN" },
     ...overrides,
   };
+  if (!context.modelContext) {
+    context.modelContext = createModelContext({
+      messageBlocks: { system: [], history: [], incremental: [] },
+    });
+  }
+  context.contextProtocolVersion = 1;
+  return context;
 }
 
 export function createContextWithSharedTools(sharedTools = {}, overrides = {}) {
@@ -164,6 +172,12 @@ export function createContextWithSharedTools(sharedTools = {}, overrides = {}) {
 
 export function installTurnMessageEventRuntimeFixture(context = {}) {
   const target = context && typeof context === "object" ? context : {};
+  if (!target.modelContext) {
+    target.modelContext = createModelContext({
+      messageBlocks: { system: [], history: [], incremental: [] },
+    });
+  }
+  target.contextProtocolVersion = 1;
   const runConfig = target.runConfig && typeof target.runConfig === "object"
     ? target.runConfig
     : (target.runConfig = {});

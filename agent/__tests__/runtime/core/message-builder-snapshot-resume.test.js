@@ -11,6 +11,7 @@ import {
   buildContextMessages,
   buildContextMessageBlocks,
 } from "../../../src/context/assembly/message-builder.js";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool or user_meta degradation", () => {
   const toolCallIds = [
@@ -80,7 +81,13 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
         },
       },
     },
-    { currentUserMessage: "继续" },
+    { currentUserMessage: createPersistedCurrentUserMessage("继续", {
+      userName: "admin",
+      sessionId: "1b086a73-8617-4ca0-b0df-e1b741cc33b9",
+      dialogProcessId: "dlg-current-71ad4373-replay",
+      parentDialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
+      turnScopeId: "client-turn:current:71ad4373-replay",
+    }) },
   );
 
   assert.equal(blocks.system.length, 7);
@@ -240,7 +247,14 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
         },
       },
     },
-    { currentUserMessage: "继续" },
+    { currentUserMessage: createPersistedCurrentUserMessage("继续", {
+      userName: "admin",
+      sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
+      dialogProcessId: currentDialogProcessId,
+      parentDialogProcessId: stoppedDialogProcessId,
+      turnScopeId: currentTurnScopeId,
+      attachments: [currentAttachment],
+    }) },
   );
 
   assert.equal(blocks.history[0]?.content, "测试所有工具");
@@ -350,7 +364,14 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
         },
       },
     },
-    { currentUserMessage: "继续" },
+    { currentUserMessage: createPersistedCurrentUserMessage("继续", {
+      userName: "admin",
+      sessionId: "1ec8e12c-6c66-4f93-b4dc-57680c5c627a",
+      dialogProcessId: currentDialogProcessId,
+      parentDialogProcessId: firstResendDialogProcessId,
+      turnScopeId: currentTurnScopeId,
+      attachments: [attachmentC],
+    }) },
   );
 
   const humanMessages = [...blocks.history, ...blocks.incremental]
@@ -429,7 +450,13 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
       },
       payload: { messages: { system: ["snapshot system"], history } },
     },
-    { currentUserMessage: "继续" },
+    { currentUserMessage: createPersistedCurrentUserMessage("继续", {
+      userName: "admin",
+      sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
+      dialogProcessId: "dlg-current-first-continue",
+      turnScopeId: "client-turn:current:first-continue",
+      attachments: [{ attachmentId: "current-attachment", name: "current.txt" }],
+    }) },
   );
 
   assert.equal(blocks.system.length, 1);

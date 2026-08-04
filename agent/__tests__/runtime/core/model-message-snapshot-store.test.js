@@ -13,7 +13,6 @@ import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/
 import {
   saveStoppedModelMessageSnapshot,
   saveStoppedModelMessageSnapshotCandidate,
-  syncStoppedModelMessageSnapshotCandidate,
   loadStoppedModelMessageSnapshot,
   clearStoppedModelMessageSnapshot,
 } from "../../../src/runtime/resume/model-message-snapshot-store.js";
@@ -98,50 +97,6 @@ test("stopped model message snapshot keeps message tool calls and tool results",
     () => loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity }),
     /ENOENT/,
   );
-});
-
-test("stopped snapshot candidate sync never persists projected model input as history", async () => {
-  const workspaceRoot = await createWorkspace();
-  const toolCallingAi = new AIMessage({
-    content: "",
-    additional_kwargs: {
-      tool_calls: [{ id: "call-1", type: "function", function: { name: "execute_script", arguments: "{}" } }],
-    },
-  });
-  const toolResult = new ToolMessage({ content: "tool output", tool_call_id: "call-1" });
-  const runtime = {
-    stoppedModelMessageSnapshotCandidate: {
-      ...identity,
-      messages: [new SystemMessage("system prompt"), new HumanMessage("real user"), toolCallingAi, toolResult],
-      messageBlocks: {
-        system: [new SystemMessage("system prompt")],
-        history: [new HumanMessage("real user"), toolCallingAi, toolResult],
-        incremental: [],
-      },
-    },
-  };
-
-  syncStoppedModelMessageSnapshotCandidate(runtime, [
-    new SystemMessage("system prompt"),
-    new HumanMessage("real user"),
-    new HumanMessage("[用户元信息]\n{}\n[/用户元信息]"),
-    new HumanMessage(""),
-    new HumanMessage("tool output"),
-  ]);
-
-  await saveStoppedModelMessageSnapshotCandidate({
-    globalConfig: { workspaceRoot },
-    candidate: runtime.stoppedModelMessageSnapshotCandidate,
-  });
-  const loaded = await loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity });
-
-  assert.deepEqual(loaded.messageBlocks.history.map((item) => item._getType()), ["human", "ai", "tool"]);
-  assert.equal(loaded.messageBlocks.history.filter((item) => String(item.content || "").includes("[用户元信息]")).length, 0);
-  assert.equal(loaded.messageBlocks.history[1] instanceof AIMessage, true);
-  assert.deepEqual(loaded.messageBlocks.history[1].tool_calls, [{ id: "call-1", name: "execute_script", args: {} }]);
-  assert.equal(loaded.messageBlocks.history[2] instanceof ToolMessage, true);
-  assert.equal(loaded.messageBlocks.history[2].tool_call_id, "call-1");
-  assert.deepEqual(loaded.messages.map((item) => item._getType()), ["system", "human", "ai", "tool"]);
 });
 
 test("stopped model message snapshot v2 preserves ids, summary state, lc metadata and arbitrary fields", async () => {
@@ -242,7 +197,6 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
   const projectedHistory = projectRecoveredMessagesToIdentity(
     [...loaded.messageBlocks.history, ...loaded.messageBlocks.incremental],
     { userName: "admin", sessionId: "session-a", dialogProcessId: "dialog-current", turnScopeId: "turn-current" },
-    { preserveHistoricalRoundIdentity: true, fillMissingHistoricalRoundIdentity: false },
   );
   const projectedInjections = projectedHistory.filter((message) => message.injectedMessage === true);
   assert.deepEqual(projectedInjections.map((message) => [
@@ -252,8 +206,8 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
     message.dialogProcessId,
     message.turnScopeId,
   ]), [
-    ["history injection", "harness-plugin", "guidance", "dialog-history", "turn-history"],
-    ["incremental injection", "harness-plugin", "planning", "dialog-incremental", "turn-incremental"],
+    ["history injection", "harness-plugin", "guidance", "dialog-current", "turn-current"],
+    ["incremental injection", "harness-plugin", "planning", "dialog-current", "turn-current"],
   ]);
 });
 
@@ -283,22 +237,6 @@ test("stopped model message snapshot validates identity on load", async () => {
     () => loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity }),
     /identity mismatch: sessionId/,
   );
-});
-
-test("stopped model message snapshot loads the legacy child-session path", async () => {
-  const workspaceRoot = await createWorkspace();
-  const legacyIdentity = { ...identity, parentSessionId: "" };
-  await saveStoppedModelMessageSnapshot({
-    globalConfig: { workspaceRoot },
-    identity: legacyIdentity,
-    messageBlocks: { system: [new SystemMessage("legacy")], history: [], incremental: [] },
-  });
-
-  const loaded = await loadStoppedModelMessageSnapshot({
-    globalConfig: { workspaceRoot },
-    identity,
-  });
-  assert.equal(loaded.messages[0].content, "legacy");
 });
 
 test("stopped model message snapshot does not recreate a deleted parent session", async () => {
@@ -386,7 +324,7 @@ test("stopped model message snapshot preserves existing harness policy messages"
   ]);
 });
 
-test("stopped model message snapshot preserves legacy snapshot content on load", async () => {
+test("stopped model message snapshot preserves protocol content on load", async () => {
   const workspaceRoot = await createWorkspace();
   await saveStoppedModelMessageSnapshot({
     globalConfig: { workspaceRoot },
@@ -404,23 +342,23 @@ test("stopped model message snapshot preserves legacy snapshot content on load",
     `${identity.sessionId}__${identity.dialogProcessId}__${identity.turnScopeId}.json`,
   );
   const raw = JSON.parse(await fs.readFile(snapshotFile, "utf8"));
-  raw.messageBlocks.system.push({ type: "system", content: "[HARNESS_POLICY_SELECTION]\nlegacy polluted\n[/HARNESS_POLICY_SELECTION]", additional_kwargs: {} });
-  raw.messageBlocks.incremental.push({ type: "human", content: "[HARNESS_DYNAMIC_POLICY_PROMPT]\nlegacy polluted\n[/HARNESS_DYNAMIC_POLICY_PROMPT]", additional_kwargs: {} });
-  raw.messages.push({ type: "system", content: "[HARNESS_SCENARIO_POLICY]\nlegacy polluted\n[/HARNESS_SCENARIO_POLICY]", additional_kwargs: {} });
+  raw.messageBlocks.system.push({ type: "system", content: "[HARNESS_POLICY_SELECTION]\nprotocol content\n[/HARNESS_POLICY_SELECTION]", additional_kwargs: {} });
+  raw.messageBlocks.incremental.push({ type: "human", content: "[HARNESS_DYNAMIC_POLICY_PROMPT]\nprotocol content\n[/HARNESS_DYNAMIC_POLICY_PROMPT]", additional_kwargs: {} });
+  raw.messages.push({ type: "system", content: "[HARNESS_SCENARIO_POLICY]\nprotocol content\n[/HARNESS_SCENARIO_POLICY]", additional_kwargs: {} });
   await fs.writeFile(snapshotFile, JSON.stringify(raw, null, 2), "utf8");
 
   const loaded = await loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity });
   assert.deepEqual(loaded.messageBlocks.system.map((item) => item.content), [
     "system",
-    "[HARNESS_POLICY_SELECTION]\nlegacy polluted\n[/HARNESS_POLICY_SELECTION]",
+    "[HARNESS_POLICY_SELECTION]\nprotocol content\n[/HARNESS_POLICY_SELECTION]",
   ]);
   assert.deepEqual(loaded.messageBlocks.incremental.map((item) => item.content), [
     "ID: keep\nPATCH: keep",
-    "[HARNESS_DYNAMIC_POLICY_PROMPT]\nlegacy polluted\n[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+    "[HARNESS_DYNAMIC_POLICY_PROMPT]\nprotocol content\n[/HARNESS_DYNAMIC_POLICY_PROMPT]",
   ]);
   assert.deepEqual(loaded.messages.map((item) => item.content), [
     "system",
     "ID: keep\nPATCH: keep",
-    "[HARNESS_SCENARIO_POLICY]\nlegacy polluted\n[/HARNESS_SCENARIO_POLICY]",
+    "[HARNESS_SCENARIO_POLICY]\nprotocol content\n[/HARNESS_SCENARIO_POLICY]",
   ]);
 });

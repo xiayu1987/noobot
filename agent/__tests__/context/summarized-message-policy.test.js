@@ -325,7 +325,7 @@ test("model and store projections apply one summarization scope policy", () => {
   );
 });
 
-test("filterSummarizedMessages keeps latest injected message for each injected type", () => {
+test("filterSummarizedMessages preserves every unsummarized injected message", () => {
   const result = filterSummarizedMessages([
     { role: "user", content: "old relay", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "separate_model_relay:planning" },
     { role: "user", content: "planning prompt", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "planning_task" },
@@ -334,6 +334,7 @@ test("filterSummarizedMessages keeps latest injected message for each injected t
   ]);
 
   assert.deepEqual(result.map((item) => item.content), [
+    "old relay",
     "planning prompt",
     "new relay",
     "normal",

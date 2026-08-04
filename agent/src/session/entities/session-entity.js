@@ -308,7 +308,11 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
     const dialogProcessId = String(value.dialogProcessId || "").trim();
     if (!turnScopeId || !dialogProcessId) continue;
     const checkpointRevision = Math.max(0, Number(value.checkpointRevision) || 0);
-    const ownedMessageUids = new Set((Array.isArray(messages) ? messages : [])
+    const sessionMessages = Array.isArray(messages) ? messages : [];
+    const allMessageUids = new Set(sessionMessages
+      .map((message) => String(message?.messageUid || "").trim())
+      .filter(Boolean));
+    const ownedMessageUids = new Set(sessionMessages
       .filter((message) =>
         resolveMessageDialogProcessId(message) === dialogProcessId &&
         String(message?.turnScopeId || "").trim() === turnScopeId)
@@ -324,7 +328,8 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
         .map((uid) => String(uid || "").trim()).filter(Boolean))];
       const summarizedMessageUids = [...new Set((Array.isArray(receipt.summarizedMessageUids) ? receipt.summarizedMessageUids : [])
         .map((uid) => String(uid || "").trim()).filter(Boolean))];
-      if ([...persistedMessageUids, ...summarizedMessageUids].some((uid) => !ownedMessageUids.has(uid))) return null;
+      if (persistedMessageUids.some((uid) => !ownedMessageUids.has(uid))) return null;
+      if (summarizedMessageUids.some((uid) => !allMessageUids.has(uid))) return null;
       return {
         checkpointId,
         checkpointRevision: Math.max(0, Number(receipt.checkpointRevision) || 0),

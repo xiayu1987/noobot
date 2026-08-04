@@ -25,12 +25,17 @@ import {
   resolvePhaseSummaryLoopTurns,
   resolveToolFailureHelpCount,
 } from "./run-config/index.js";
-import { canonicalizeMessageStore } from "../context/runtime-state/message-store.js";
+import { createModelContext } from "@noobot/context-protocol/hook-context";
 import {
   emitModelContextTrace,
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
 } from "../context/runtime-state/context-diagnostics.js";
+import {
+  canonicalMessageId,
+  canonicalMessageIdentityDebugData,
+  emitContextIdentityDebug,
+} from "../observability/context-identity-debug.js";
 
 export function createStateBuilder({
   createChatModelFn = createChatModel,
@@ -46,7 +51,7 @@ export function createStateBuilder({
   resolveHelpPromptLoopTurnsFn = resolveHelpPromptLoopTurns,
   resolveToolFailureHelpCountFn = resolveToolFailureHelpCount,
 } = {}) {
-  return function buildAgentState({ agentContext, userMessage, errorLogger }) {
+  return function buildAgentState({ agentContext, currentUserMessage, errorLogger }) {
     const runtime = getRuntimeFromAgentContext(agentContext);
     const sys = getSystemRuntimeFromRuntime(runtime);
     const globalConfig = runtime.globalConfig || {};
@@ -62,7 +67,7 @@ export function createStateBuilder({
       ? agentContext.payload.tools.registry
       : [];
 
-    normalizeSystemRuntimeCountersFn(sys, userMessage);
+    normalizeSystemRuntimeCountersFn(sys, currentUserMessage.content);
 
     const runConfig = runtime?.runConfig || {};
     const runConfigConfig =
@@ -101,12 +106,12 @@ export function createStateBuilder({
     });
 
     const messageBlocks = buildContextMessageBlocksFn(agentContext, {
-      currentUserMessage: userMessage,
+      currentUserMessage,
     });
     const messages = Array.isArray(messageBlocks?.messages)
       ? messageBlocks.messages
       : buildContextMessagesFn(agentContext, {
-          currentUserMessage: userMessage,
+          currentUserMessage,
         });
 
     const modelState = {
@@ -122,9 +127,34 @@ export function createStateBuilder({
       abortSignal,
     };
 
-    const loopState = {
-      tools,
+    const activeTurnIdentity = {
+      dialogProcessId: String(currentUserMessage?.dialogProcessId || "").trim(),
+      turnScopeId: String(currentUserMessage?.turnScopeId || "").trim(),
+    };
+    if (!activeTurnIdentity.dialogProcessId || !activeTurnIdentity.turnScopeId) {
+      throw new Error("current canonical user message requires dialogProcessId and turnScopeId");
+    }
+    const runtimeDialogProcessId = String(dialogProcessId || sys?.dialogProcessId || "").trim();
+    const runtimeTurnScopeId = String(
+      runConfig?.turnScopeId || sys?.turnScopeId || sys?.config?.turnScopeId || "",
+    ).trim();
+    if (runtimeDialogProcessId && runtimeDialogProcessId !== activeTurnIdentity.dialogProcessId) {
+      throw new Error("current canonical user message dialogProcessId conflicts with runtime identity");
+    }
+    if (runtimeTurnScopeId && runtimeTurnScopeId !== activeTurnIdentity.turnScopeId) {
+      throw new Error("current canonical user message turnScopeId conflicts with runtime identity");
+    }
+    const modelContext = createModelContext({
       messages,
+      activeTurnIdentity,
+      onCanonicalMessageAdded(message, meta) {
+        emitContextIdentityDebug(
+          eventListener,
+          "canonicalMessageAdded",
+          activeTurnIdentity,
+          canonicalMessageIdentityDebugData(message, meta),
+        );
+      },
       messageBlocks:
         messageBlocks && typeof messageBlocks === "object"
           ? {
@@ -135,12 +165,20 @@ export function createStateBuilder({
                 : [],
             }
           : { system: [], history: [], incremental: [] },
+    });
+    if (!modelContext) {
+      throw new Error("agent state requires a versioned modelContext");
+    }
+
+    const loopState = {
+      tools,
+      modelContext,
       traces: [],
       turnMessages: [],
       turnTasks: [],
       currentTurnMessages: runtime?.currentTurnMessages || null,
       currentTurnTasks: runtime?.currentTurnTasks || null,
-      dialogProcessId,
+      dialogProcessId: activeTurnIdentity.dialogProcessId,
       maxTurns:
         Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
           ? maxToolLoopTurns
@@ -153,25 +191,44 @@ export function createStateBuilder({
       toolConsecutiveFailureCount: Number(sys?.toolConsecutiveFailureCount || 0),
       errorLogger,
     };
-    canonicalizeMessageStore(loopState);
-    runtime.activeMessageContext = loopState;
+    runtime.activeMessageContext = modelContext;
     runtime.stoppedModelMessageSnapshotCandidate = {
       userId: String(runtime?.userId || sys?.userId || agentContext?.environment?.identity?.userId || "").trim(),
       sessionId: String(sys?.sessionId || runtime?.sessionId || agentContext?.session?.current?.id || "").trim(),
       parentSessionId: String(sys?.parentSessionId || agentContext?.session?.parent?.id || "").trim(),
-      dialogProcessId: String(dialogProcessId || sys?.dialogProcessId || "").trim(),
-      turnScopeId: String(runConfig?.turnScopeId || sys?.turnScopeId || sys?.config?.turnScopeId || "").trim(),
-      messages: loopState.messages,
-      messageBlocks: loopState.messageBlocks,
+      ...activeTurnIdentity,
+      messages: modelContext.messages,
+      messageBlocks: modelContext.messageBlocks,
     };
+    const sourceMessageUid = String(currentUserMessage?.messageUid || "").trim();
+    const modelMessageIds = modelContext.messages.map(canonicalMessageId).filter(Boolean);
+    const identity = runtime.stoppedModelMessageSnapshotCandidate;
+    emitContextIdentityDebug(eventListener, "modelContextCreated", identity, {
+      sourceMessageUid,
+      contentProjectionFound: modelMessageIds.includes(sourceMessageUid),
+      userMetaProjectionFound: modelMessageIds.includes(`${sourceMessageUid}::user_meta`),
+      contentProjectionId: modelMessageIds.find((id) => id === sourceMessageUid) || "",
+      userMetaProjectionId: modelMessageIds.find((id) => id === `${sourceMessageUid}::user_meta`) || "",
+      messageCount: modelContext.messages.length,
+      systemCount: modelContext.messageBlocks.system.length,
+      historyCount: modelContext.messageBlocks.history.length,
+      incrementalCount: modelContext.messageBlocks.incremental.length,
+    });
+    emitContextIdentityDebug(eventListener, "snapshotCandidateCreated", identity, {
+      sourceMessageUid,
+      currentProjectionFound: modelMessageIds.includes(sourceMessageUid),
+      messageCount: modelMessageIds.length,
+      messageIds: modelMessageIds.slice(-12),
+      truncatedMessageIdCount: Math.max(0, modelMessageIds.length - 12),
+    });
     emitModelContextTrace(runtime, "agent_state_built", {
-      dialogProcessId,
+      dialogProcessId: activeTurnIdentity.dialogProcessId,
       payloadMessages: {
         systemCount: Array.isArray(agentContext?.payload?.messages?.system) ? agentContext.payload.messages.system.length : 0,
         historyCount: Array.isArray(agentContext?.payload?.messages?.history) ? agentContext.payload.messages.history.length : 0,
       },
-      blocks: summarizeDiagnosticBlocks(loopState.messageBlocks),
-      messages: summarizeDiagnosticMessages(loopState.messages),
+      blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
+      messages: summarizeDiagnosticMessages(modelContext.messages),
     });
 
     return { modelState, loopState };

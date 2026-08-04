@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import { filterCurrentTurnMessagesFromHistory } from "@noobot/context-protocol/block-strategy";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { compactToolResultTextForModel } from "../../../transfer/core/compact.js";
 import { resolveMessageRole, resolveMessageToolCalls, resolveMessageToolCallId, toLangChainToolCalls, buildModelMessageIdentityKwargs } from "./message-utils.js";
@@ -14,30 +15,9 @@ export function filterCurrentTurnUserMessageFromHistory(
   historyMessages = [],
   { turnScopeId = "", currentDialogProcessId = "" } = {},
 ) {
-  const normalizedTurnScopeId = String(turnScopeId || "").trim();
-  const normalizedDialogProcessId = String(currentDialogProcessId || "").trim();
-  if (!normalizedTurnScopeId && !normalizedDialogProcessId) return historyMessages;
-  const source = Array.isArray(historyMessages) ? historyMessages : [];
-  const blockedDialogProcessIds = new Set();
-  const blockedTurnScopeIds = new Set();
-  for (const msg of source) {
-    if ((msg?.role || "") !== MESSAGE_ROLE.USER) continue;
-    const messageTurnScopeId = String(msg?.turnScopeId || "").trim();
-    const messageDialogProcessId = String(msg?.dialogProcessId || "").trim();
-    const sameTurn = normalizedTurnScopeId && messageTurnScopeId === normalizedTurnScopeId;
-    const sameDialog =
-      normalizedDialogProcessId && messageDialogProcessId === normalizedDialogProcessId;
-    if (!sameTurn && !sameDialog) continue;
-    if (messageTurnScopeId) blockedTurnScopeIds.add(messageTurnScopeId);
-    if (messageDialogProcessId) blockedDialogProcessIds.add(messageDialogProcessId);
-  }
-  if (!blockedTurnScopeIds.size && !blockedDialogProcessIds.size) return source;
-  return source.filter((msg = {}) => {
-    const messageTurnScopeId = String(msg?.turnScopeId || "").trim();
-    const messageDialogProcessId = String(msg?.dialogProcessId || "").trim();
-    if (messageTurnScopeId && blockedTurnScopeIds.has(messageTurnScopeId)) return false;
-    if (messageDialogProcessId && blockedDialogProcessIds.has(messageDialogProcessId)) return false;
-    return true;
+  return filterCurrentTurnMessagesFromHistory(historyMessages, {
+    currentTurnScopeId: turnScopeId,
+    currentDialogProcessId,
   });
 }
 

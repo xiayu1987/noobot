@@ -141,7 +141,13 @@ function buildStateWithRunConfig(runConfig) {
         tools: { registry: [] },
       },
     },
-    userMessage: { role: "user", content: "hi" },
+    currentUserMessage: {
+      messageUid: "sm_model_selection",
+      role: "user",
+      content: "hi",
+      dialogProcessId: "dialog-model-selection",
+      turnScopeId: "turn-model-selection",
+    },
   });
 
   return received;

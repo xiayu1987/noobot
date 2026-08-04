@@ -16,9 +16,9 @@ agent 主链路目前同时维护多种消息视图：
 
 ## 收敛原则
 
-1. agent 通用层只处理 message id、canonical object、blocks id view，不包含 harness summary/checkpoint 等插件业务策略。
+1. `@noobot/context-protocol` 只处理 message id、canonical object、blocks 投影和模型窗口归约，不包含 harness summary/checkpoint 等插件业务策略。
 2. `loopState.messages` 和 `turnMessages` 仍保持不同语义：前者是模型窗口，后者是当前轮产物。
-3. `messageBlocks` 是视图，不应拥有独立消息状态；保留数组 API 的同时维护 `systemIds/historyIds/incrementalIds`。
+3. `messageBlocks.system/history/incremental` 是 canonical store 的对象数组投影，不拥有独立消息状态；废弃的 `*Ids` 并行视图不再维护。
 4. 写入口逐步收敛到统一 API，先管住构造入口，再收敛 turn loop 中的追加/替换。
 5. 不改变 `agentContext.payload.messages.system` 可能为字符串 channel 的兼容语义。
 
@@ -43,7 +43,7 @@ getMessageId(message)
 验收标准：
 
 - `loopState.messages` 与 `loopState.messageBlocks.*` 中同一逻辑消息共享同一个对象。
-- `loopState.messageBlocks` 同步维护 `systemIds/historyIds/incrementalIds`。
+- `loopState.messageBlocks.*` 只包含 canonical message 对象，不产生并行 `*Ids` 状态。
 - 不改变 `buildContextMessages` / `buildContextMessageBlocks` 的业务输出顺序。
 
 当前进展：
@@ -52,7 +52,7 @@ getMessageId(message)
 - 已在 `state-builder` 生成 `loopState` 后执行 `canonicalizeMessageStore(loopState)`。
 - 已新增 `message-store.test.js` 与 `state-builder-message-context.test.js` 覆盖 canonical 对象、message id 与 block id 视图。
 
-### 阶段 2：plugin/model message resolver 读取 id 视图
+### 阶段 2：plugin/model message resolver 读取 canonical blocks
 
 状态：已完成。
 
@@ -62,13 +62,13 @@ getMessageId(message)
 
 - resolver 不修改源 `messages/messageBlocks`。
 - summarized/filter 读取同一个 canonical 状态。
-- 仍兼容没有 ids 的历史输入。
+- resolver 只解释 canonical blocks，不在对象数组与废弃 ids 视图之间猜测来源。
 
 当前进展：
 
-- `ModelMessageRuntimeHelpers.createResolveModelMessages` 在 blocks 带 `systemIds/historyIds/incrementalIds` 且可解析时，优先从 canonical store materialize 消息。
-- 没有 ids 或 ids 不完整时保持原数组兼容路径。
-- 已新增 `model-message-runtime-message-store.test.js` 覆盖 stale block copy 通过 ids 读取 canonical summarized 状态，且不修改 stale copy。
+- `ModelMessageRuntimeHelpers.createResolveModelMessages` 通过 `@noobot/context-protocol` 的唯一窗口归约入口读取 canonical blocks。
+- 不再保留 `*Ids` fallback；稳定 `messageId` 是实体身份，数组位置和内容不能替代身份。
+- 协议测试覆盖 canonical summarized 状态、跨块稳定身份去重及 legacy 当前用户消息的严格 scope 归约。
 
 ### 阶段 3：turn loop 写入口收敛
 
@@ -85,7 +85,7 @@ getMessageId(message)
 验收标准：
 
 - 主模型窗口新增/替换消息通过统一 API。
-- 需要进入 incremental block 的当前轮消息同步写入 block id 视图。
+- 需要进入 incremental block 的当前轮消息通过统一 store API 同步更新 canonical 投影。
 - `turnMessages/currentTurnMessages` 的落盘语义不被改变。
 
 当前进展：
@@ -101,9 +101,9 @@ getMessageId(message)
 
 ### 阶段 4：守卫与插件复用
 
-状态：进行中。
+状态：已完成。
 
-在 agent 侧增加 boundary test，防止主链路重新裸写 `loopState.messages`。harness 插件在 agent 通用模块稳定后，可再把插件侧 store 适配为复用 agent 通用 API。
+在 agent 侧增加 boundary check，防止主链路重新裸写 `loopState.messages`；Agent、Harness 与 Workflow 统一依赖 `@noobot/context-protocol`，插件不得反向导入 Agent 私有源码。
 
 验收标准：
 
@@ -114,11 +114,12 @@ getMessageId(message)
 
 - 已新增 `message-context-boundary.test.js`，扫描 `agent/core` 下模型窗口写入口。
 - 守卫允许 `message-store`、清理类入口、fallback 兼容 stage 和 `model-only-message` helper；其他主链路新增裸写会失败。
-- harness 插件已将自身 `core/message-store.js` 收敛为 agent 通用 message context API 的 wrapper；summary/checkpoint 策略仍保留在 harness 侧。
+- harness 插件已将自身 `core/message-store.js` 收敛为 `@noobot/context-protocol` wrapper；summary/checkpoint 策略仍保留在 harness 侧。
+- `check-agent-plugin-decoupling` 同时扫描插件生产代码与测试，阻止重新引入 `agent/src/**` 私有路径。
 
 ## 当前执行顺序
 
 1. 阶段 1 已完成：新增通用模块和 state-builder 接入测试。
 2. 阶段 2 已完成：resolver 读取 canonical 状态，同时保留无 ids 输入兼容。
 3. 阶段 3 主路径已完成：内部提示、reasoning retry、最终 assistant 响应、tool result、synthetic tool turn 写入口已收敛；清理类和 fallback 兼容入口保留。
-4. 阶段 4 已完成：已新增 agent boundary 守卫，harness 已切换到 agent 通用 API wrapper。
+4. 阶段 4 已完成：已新增 boundary/依赖方向守卫，Harness 与 Workflow 已切换到公共协议。

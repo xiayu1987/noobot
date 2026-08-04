@@ -76,7 +76,10 @@ export function isSessionLogDebugCategory(category) {
 }
 
 export function resolveSessionLogControlConfig(options = {}) {
-  return resolveRuntimeEventsSessionLogControls(options.env || process.env, options.sessionLogControls || options.controls || options);
+  return resolveRuntimeEventsSessionLogControls(
+    options.env || process.env,
+    options.sessionLogControls || {},
+  );
 }
 
 export function resolveSessionLogClientPolicy(options = {}) {
@@ -85,7 +88,7 @@ export function resolveSessionLogClientPolicy(options = {}) {
     debug: Object.fromEntries(
       Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)
         .filter(([, descriptor]) => descriptor.exposeToClient === true)
-        .map(([debugType, descriptor]) => [debugType, controls[descriptor.controlKey] === true]),
+        .map(([debugType, descriptor]) => [debugType, controls.debug[descriptor.controlKey] === true]),
     ),
     limits: {
       maxDebugQueue: QUANTITY_THRESHOLDS.sessionLog.maxDebugQueueSize,
@@ -122,12 +125,14 @@ export function getSessionLogDebugControlKey(event = {}) {
 }
 
 export function shouldRecordSessionLog(event = {}, options = {}) {
+  const level = String(event?.level || "").trim().toLowerCase();
+  if (["warn", "error", "fatal"].includes(level) || event?.error) return true;
   const control = resolveSessionLogControlConfig(options);
   const category = normalizeSessionLogCategory(event.category || event.type, options.defaultCategory || SESSION_LOG_DEFAULT_CATEGORY);
-  if (control[getSessionLogControlKey(event, category)] === false) return false;
+  if (control.log[getSessionLogControlKey(event, category)] === false) return false;
   if (!isSessionLogDebugEvent({ ...event, category })) return true;
   const debugControlKey = getSessionLogDebugControlKey({ ...event, category });
-  return debugControlKey ? control[debugControlKey] === true : false;
+  return debugControlKey ? control.debug[debugControlKey] === true : false;
 }
 
 export function buildSessionLogRecord(event = {}, options = {}) {

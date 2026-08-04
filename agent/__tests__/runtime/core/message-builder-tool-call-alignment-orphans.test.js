@@ -12,6 +12,7 @@ import {
   buildContextMessageBlocks,
 } from "../../../src/context/assembly/message-builder.js";
 import { MAIN_MODEL_HISTORY_ROUND_LIMIT } from "../../../src/session/utils/context-window-normalizer.js";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 function buildRoundContents(fromRound, toRound) {
   return Array.from(
@@ -96,7 +97,7 @@ test("buildContextMessages drops orphan tool results without matching assistant 
         },
       },
     },
-    { currentUserMessage: "" },
+    { currentUserMessage: null },
   );
 
   const toolMessages = messages.filter((item) => item instanceof ToolMessage);
@@ -137,7 +138,7 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
         },
       },
     },
-    { currentUserMessage: "" },
+    { currentUserMessage: null },
   );
 
   assert.equal(messages.some((item) => item instanceof ToolMessage), false);

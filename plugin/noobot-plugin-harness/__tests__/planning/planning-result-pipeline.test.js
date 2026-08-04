@@ -9,17 +9,19 @@ import assert from "node:assert/strict";
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
 import { LOCALE } from "../../src/capabilities/handlers/shared.js";
 import { processPlanningResult } from "../../src/capabilities/handlers/planning/result-pipeline.js";
+import { replaceMessages } from "../../src/core/message-store.js";
+import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
 
 function createCtx() {
-  return {
+  return createTestHookContext({
     agentContext: {
       payload: {
         harness: {},
       },
     },
-  };
+  });
 }
 
 test("workflow params define plan refinement defaults by scenario mode", () => {
@@ -139,7 +141,11 @@ test("planning result pipeline supports ID+PATCH main plan text", async () => {
 test("planning result pipeline extracts current task goal from planning text protocol", async () => {
   const ctx = createCtx();
   ctx.dialogProcessId = "planning-dp";
-  ctx.messages = [{ role: "user", content: "开始任务" }];
+  ctx.modelContext.activeTurnIdentity = {
+    dialogProcessId: "planning-dp",
+    turnScopeId: "test-turn:planning-dp",
+  };
+  replaceMessages(ctx, [{ role: "user", content: "开始任务" }]);
   const persisted = [];
   ctx.agentContext.execution = {
     controllers: {
@@ -166,7 +172,7 @@ test("planning result pipeline extracts current task goal from planning text pro
 
   assert.equal(result.captured, true);
   assert.equal(ctx.agentContext.payload.harness.currentTaskGoal, "由计划模型确认的当前任务目标");
-  const injectedGoalMessage = ctx.messages.find((item = {}) =>
+  const injectedGoalMessage = ctx.modelContext.messages.find((item = {}) =>
     String(item?.injectedMessageType || "") === "planning_current_task_goal"
   );
   assert.equal(injectedGoalMessage?.role, "system");
@@ -175,11 +181,11 @@ test("planning result pipeline extracts current task goal from planning text pro
   assert.equal(injectedGoalMessage?.dialogProcessId, "planning-dp");
   assert.ok(injectedGoalMessage?.additional_kwargs?.noobotMessageId);
   assert.equal(
-    ctx.messageBlocks.system.includes(injectedGoalMessage),
+    ctx.modelContext.messageBlocks.system.includes(injectedGoalMessage),
     true,
   );
   assert.equal(
-    ctx.messageBlocks.incremental.includes(injectedGoalMessage),
+    ctx.modelContext.messageBlocks.incremental.includes(injectedGoalMessage),
     false,
   );
   assert.match(String(injectedGoalMessage?.content || ""), /\[CURRENT_TASK_GOAL\]/);

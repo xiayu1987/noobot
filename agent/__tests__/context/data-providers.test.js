@@ -189,6 +189,7 @@ test("resolveAttachments reads only userMessageAttachments", async () => {
 test("toConversationMessages preserves model payload fields and attachments", () => {
   const output = toConversationMessages([
     {
+      messageUid: "sm_stable_context_message",
       role: "assistant",
       content: "x",
       userName: "admin",
@@ -210,6 +211,7 @@ test("toConversationMessages preserves model payload fields and attachments", ()
     },
   ]);
   assert.equal(output.length, 1);
+  assert.equal(output[0].messageUid, "sm_stable_context_message");
   assert.deepEqual(output[0].rawModelContent, [{ type: "text", text: "raw" }]);
   assert.equal(output[0].dialogProcessId, "dlg_1");
   assert.equal(output[0].userName, "admin");

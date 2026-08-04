@@ -9,6 +9,7 @@ import { AIMessage } from "@langchain/core/messages";
 
 import { toConversationMessages } from "../../../src/context/session/message-converter.js";
 import { buildContextMessages } from "../../../src/context/assembly/message-builder.js";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 test("buildContextMessages preserves thought-signature payload/tool_calls and omits non-required kwargs", () => {
   const thoughtPayload = [
@@ -38,11 +39,15 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
       modelResponseMetadata: {
         finish_reason: "tool_calls",
       },
+      dialogProcessId: "dialog-thought-signature",
+      turnScopeId: "turn-thought-signature",
     },
     {
       role: "tool",
       content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"阶段小结\"}",
       tool_call_id: "call_task_summary",
+      dialogProcessId: "dialog-thought-signature",
+      turnScopeId: "turn-thought-signature",
     },
   ]);
   const messages = buildContextMessages(
@@ -59,7 +64,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
         },
       },
     },
-    { currentUserMessage: "" },
+    { currentUserMessage: null },
   );
 
   const aiMessage = messages.find((messageItem) => messageItem instanceof AIMessage);
@@ -67,6 +72,9 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   assert.deepEqual(aiMessage.content, thoughtPayload);
   assert.equal(aiMessage.tool_calls?.[0]?.id, "call_task_summary");
   assert.equal(aiMessage.tool_calls?.[0]?.name, "task_summary");
-  assert.deepEqual(aiMessage.additional_kwargs || {}, {});
+  assert.deepEqual(aiMessage.additional_kwargs || {}, {
+    dialogProcessId: "dialog-thought-signature",
+    turnScopeId: "turn-thought-signature",
+  });
   assert.deepEqual(aiMessage.response_metadata || {}, {});
 });

@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
+import { createAgentDetachedSubSessionStrategy } from "../../src/bot/session/detached-subsession-strategy.js";
 
 test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for tool/model switch consistency", () => {
   const engine = new SessionExecutionEngine({});
@@ -110,7 +111,13 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
       },
     },
     message: "node task",
+    strategy: createAgentDetachedSubSessionStrategy({
+      userId: "u1",
+      parentSessionId: "parent-session",
+      parentDialogProcessId: "parent-dialog",
+    }),
   });
 
   assert.equal(capturedRunSessionPayload?.userInteractionBridge, bridge);
+  assert.match(capturedRunSessionPayload?.turnScopeId, /^internal-turn:/);
 });

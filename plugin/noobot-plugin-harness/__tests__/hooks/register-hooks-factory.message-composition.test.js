@@ -8,10 +8,13 @@ import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { appendMessage } from "../../src/core/message-store.js";
-import { resolveMainModelFinalMessages } from "../../../../agent/src/session/utils/context-window-normalizer.js";
+import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
+import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};
+  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
+    ? ctx.modelContext.messageBlocks
+    : {};
   return resolveMainModelFinalMessages({
     systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
     historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
@@ -41,7 +44,7 @@ test("createRegisterHarnessHooks leaves plain messages un-compacted without mess
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      ctx.messages.push({ role: "user", content: "harness prompt" });
+      appendMessage(ctx, { role: "user", content: "harness prompt" }, { block: "incremental" });
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
@@ -62,17 +65,17 @@ test("createRegisterHarnessHooks leaves plain messages un-compacted without mess
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  const ctx = {
+  const ctx = createTestHookContext({}, {
     messages: [
       { role: "system", content: "system context" },
       { role: "user", content: "h1" },
       { role: "user", content: "h2" },
       { role: "user", content: "h3" },
     ],
-  };
+  });
   await handlers.get("before_llm_call")(ctx);
   assert.deepEqual(
-    ctx.messages.map((item) => item.content),
+    ctx.modelContext.messages.map((item) => item.content),
     ["system context", "h1", "h2", "h3", "harness prompt"],
   );
 });
@@ -119,13 +122,7 @@ test("createRegisterHarnessHooks composes by system history incremental message 
     content: "real user message",
     additional_kwargs: { frontendUserMessage: true },
   };
-  const ctx = {
-    messages: [
-      { role: "system", content: "system context" },
-      { role: "user", content: "history-1" },
-      { role: "assistant", content: "history-2" },
-      frontendUser,
-    ],
+  const ctx = createTestHookContext({}, {
     messageBlocks: {
       system: [{ role: "system", content: "system context" }],
       history: [
@@ -134,12 +131,12 @@ test("createRegisterHarnessHooks composes by system history incremental message 
       ],
       incremental: [frontendUser],
     },
-  };
+  });
 
   await handlers.get("before_llm_call")(ctx);
 
   assert.deepEqual(
-    ctx.messages.map((item) => item.content),
+    ctx.modelContext.messages.map((item) => item.content),
     ["system context", "history-1", "history-2", "real user message", "injected incremental"],
   );
 });
@@ -159,7 +156,7 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      ctx.messages.push({ role: "user", content: "injected" });
+      appendMessage(ctx, { role: "user", content: "injected" }, { block: "incremental" });
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
@@ -181,12 +178,7 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  const ctx = {
-    messages: [
-      { role: "system", content: "system" },
-      { role: "assistant", content: "", tool_calls: [{ id: "call_1", function: { name: "write_file" } }] },
-      { role: "tool", content: "{\"ok\":true}", tool_call_id: "call_1" },
-    ],
+  const ctx = createTestHookContext({}, {
     messageBlocks: {
       system: [{ role: "system", content: "system" }],
       history: [],
@@ -195,17 +187,17 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
         { role: "tool", content: "{\"ok\":true}", tool_call_id: "call_1" },
       ],
     },
-  };
+  });
 
   await handlers.get("before_llm_call")(ctx);
 
-  const toolCallMessage = ctx.messages.find((message) => Array.isArray(message?.tool_calls));
+  const toolCallMessage = ctx.modelContext.messages.find((message) => Array.isArray(message?.tool_calls));
   assert.ok(toolCallMessage);
-  assert.equal(ctx.messageBlocks.incremental[0], toolCallMessage);
+  assert.equal(ctx.modelContext.messageBlocks.incremental[0], toolCallMessage);
   assert.ok(toolCallMessage.additional_kwargs.noobotMessageId);
-  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
+  assert.equal(ctx.modelContext.messageBlocks.incrementalIds, undefined);
   toolCallMessage.summarized = true;
-  assert.equal(ctx.messageBlocks.incremental[0].summarized, true);
+  assert.equal(ctx.modelContext.messageBlocks.incremental[0].summarized, true);
 });
 
 test("createRegisterHarnessHooks ignores messages outside agent-provided message blocks", async () => {
@@ -223,8 +215,6 @@ test("createRegisterHarnessHooks ignores messages outside agent-provided message
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      ctx.messages.push({ role: "system", content: "legacy system extra" });
-      ctx.messages.push({ role: "user", content: "legacy incremental extra" });
       appendMessage(ctx, { role: "user", content: "block incremental" }, { block: "incremental" });
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
@@ -247,23 +237,18 @@ test("createRegisterHarnessHooks ignores messages outside agent-provided message
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  const ctx = {
-    messages: [
-      { role: "system", content: "system" },
-      { role: "user", content: "history" },
-      { role: "user", content: "current" },
-    ],
+  const ctx = createTestHookContext({}, {
     messageBlocks: {
       system: [{ role: "system", content: "system" }],
       history: [{ role: "user", content: "history", dialogProcessId: "history-dp" }],
       incremental: [{ role: "user", content: "current" }],
     },
-  };
+  });
 
   await handlers.get("before_llm_call")(ctx);
 
   assert.deepEqual(
-    ctx.messages.map((item) => item.content),
+    ctx.modelContext.messages.map((item) => item.content),
     ["system", "history", "current", "block incremental"],
   );
 });

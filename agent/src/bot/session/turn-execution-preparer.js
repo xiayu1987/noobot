@@ -8,6 +8,7 @@ import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { loadStoppedModelMessageSnapshot } from "../../runtime/resume/model-message-snapshot-store.js";
 import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
+import { projectRecoveredMessagesToIdentity } from "@noobot/context-protocol/snapshot-policy";
 
 
 export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}) {
@@ -150,19 +151,10 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
     parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
     turnScopeId: String(payload?.turnScopeId || runConfig?.turnScopeId || "").trim(),
   };
-  const resumedSystemMessages = projectRecoveredMessagesToIdentity(systemMessages, currentMessageIdentity, {
-    preserveHistoricalRoundIdentity: false,
-  });
-  const resumedHistoryMessages = projectRecoveredMessagesToIdentity(historyMessages, currentMessageIdentity, {
-    preserveHistoricalRoundIdentity: true,
-    fillMissingHistoricalRoundIdentity: false,
-  });
-  const resumedIncrementalMessages = projectRecoveredMessagesToIdentity(incrementalMessages, currentMessageIdentity, {
-    preserveHistoricalRoundIdentity: true,
-    fillMissingHistoricalRoundIdentity: false,
-  });
+  const resumedHistoryMessages = projectRecoveredMessagesToIdentity(historyMessages, currentMessageIdentity);
+  const resumedIncrementalMessages = projectRecoveredMessagesToIdentity(incrementalMessages, currentMessageIdentity);
   const agentContext = await contextBuilder._buildAgentContext(
-    resumedSystemMessages,
+    systemMessages,
     resumedHistoryMessages,
     {
       dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
@@ -185,33 +177,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
   };
 }
 
-export function projectRecoveredMessagesToDialog(messages = [], dialogProcessId = "") {
-  return projectRecoveredMessagesToIdentity(messages, { dialogProcessId });
-}
-
-export function projectRecoveredMessagesToIdentity(messages = [], identity = {}, {
-  preserveHistoricalRoundIdentity = true,
-  fillMissingHistoricalRoundIdentity = true,
-} = {}) {
-  const currentIdentity = Object.fromEntries(
-    ["userName", "sessionId", "parentSessionId", "dialogProcessId", "parentDialogProcessId", "turnScopeId"]
-      .map((field) => [field, String(identity?.[field] || "").trim()]),
-  );
-  return (Array.isArray(messages) ? messages : []).map((message) => {
-    if (!message || typeof message !== "object") return message;
-    for (const field of ["userName", "sessionId", "parentSessionId", "parentDialogProcessId"]) {
-      if (currentIdentity[field]) message[field] = currentIdentity[field];
-    }
-    const shouldFillMissingRoundIdentity = !preserveHistoricalRoundIdentity || fillMissingHistoricalRoundIdentity;
-    if ((!preserveHistoricalRoundIdentity || (shouldFillMissingRoundIdentity && !String(message.dialogProcessId || "").trim())) && currentIdentity.dialogProcessId) {
-      message.dialogProcessId = currentIdentity.dialogProcessId;
-    }
-    if ((!preserveHistoricalRoundIdentity || (shouldFillMissingRoundIdentity && !String(message.turnScopeId || "").trim())) && currentIdentity.turnScopeId) {
-      message.turnScopeId = currentIdentity.turnScopeId;
-    }
-    return message;
-  });
-}
+export { projectRecoveredMessagesToIdentity };
 
 export async function resolveStoppedResumeAttachments(engine, { contextBuilder = null, payload = {} } = {}) {
   if (!contextBuilder) return [];

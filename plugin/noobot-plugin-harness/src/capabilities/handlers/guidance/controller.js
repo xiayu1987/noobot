@@ -48,23 +48,12 @@ import {
 } from "../shared/workflow/pattern.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
-import {
-  HARNESS_MAIN_FLOW_CONTROL_REASON,
-  requestFinalNoToolsMainFlowInstruction,
-} from "../shared/runtime/main-flow-control-instruction.js";
 import { clearIncrementalCapabilityMessageCacheForContext } from "../shared/model/incremental-message-cache.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
-const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
-  ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.guidance.summary.overflowPolicy.enablePruneAfterSummary,
-  PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS:
-    WORKFLOW_PARAMS.guidance.summary.overflowPolicy.pruneTriggerAfterCharSummaryRounds,
-  FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW:
-    WORKFLOW_PARAMS.guidance.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
-});
 
 function isMessageSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
@@ -80,83 +69,11 @@ function resolveUnsummarizedMessageChars(messages = []) {
   }, 0);
 }
 
-function getMessageToolCalls(messageItem = {}) {
-  if (Array.isArray(messageItem?.tool_calls)) return messageItem.tool_calls;
-  if (Array.isArray(messageItem?.lc_kwargs?.tool_calls)) return messageItem.lc_kwargs.tool_calls;
-  if (Array.isArray(messageItem?.additional_kwargs?.tool_calls)) return messageItem.additional_kwargs.tool_calls;
-  return [];
-}
-
 function resolveToolNameFromToolCall(toolCall = {}) {
   if (!toolCall || typeof toolCall !== "object") return "";
   if (toolCall.name) return String(toolCall.name || "").trim();
   const fn = toolCall.function && typeof toolCall.function === "object" ? toolCall.function : {};
   return String(fn.name || "").trim();
-}
-
-function resolveToolCallId(toolCall = {}) {
-  return String(toolCall?.id ?? toolCall?.tool_call_id ?? toolCall?.toolCallId ?? "").trim();
-}
-
-function resolveToolCallIdFromToolMessage(messageItem = {}) {
-  return String(
-    messageItem?.tool_call_id ??
-      messageItem?.toolCallId ??
-      messageItem?.lc_kwargs?.tool_call_id ??
-      "",
-  ).trim();
-}
-
-function setMessageSummarized(messageItem = {}) {
-  if (!messageItem || typeof messageItem !== "object") return false;
-  if (messageItem.summarized === true && messageItem?.lc_kwargs?.summarized === true) return false;
-  messageItem.summarized = true;
-  if (messageItem?.lc_kwargs && typeof messageItem.lc_kwargs === "object") {
-    messageItem.lc_kwargs.summarized = true;
-  }
-  return true;
-}
-
-function discardOldestToolCallPairs(messages = [], charsThreshold = 0) {
-  if (!Array.isArray(messages) || !Number.isFinite(charsThreshold) || charsThreshold <= 0) {
-    return { discardedMessages: 0, charsAfter: resolveUnsummarizedMessageChars(messages) };
-  }
-  let charsAfter = resolveUnsummarizedMessageChars(messages);
-  if (charsAfter <= charsThreshold) return { discardedMessages: 0, charsAfter };
-  let discardedMessages = 0;
-  for (let index = 0; index < messages.length; index += 1) {
-    if (charsAfter <= charsThreshold) break;
-    const message = messages[index];
-    if (!message || typeof message !== "object" || isMessageSummarized(message)) continue;
-    const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
-    if (role !== "assistant") continue;
-    const contentText = extractRawTextContent(message?.content ?? "");
-    if (String(contentText || "").trim()) continue;
-    const toolCallIds = getMessageToolCalls(message)
-      .filter((toolCall) => resolveToolNameFromToolCall(toolCall) !== TASK_SUMMARY_TOOL_NAME)
-      .map((toolCall) => resolveToolCallId(toolCall))
-      .filter(Boolean);
-    if (!toolCallIds.length) continue;
-    const toolResultIndexes = [];
-    for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
-      const maybeToolResult = messages[cursor];
-      if (!maybeToolResult || typeof maybeToolResult !== "object" || isMessageSummarized(maybeToolResult)) continue;
-      const resultRole = String(maybeToolResult?.role || maybeToolResult?.lc_kwargs?.role || "").trim().toLowerCase();
-      if (resultRole !== "tool") continue;
-      const toolCallId = resolveToolCallIdFromToolMessage(maybeToolResult);
-      if (!toolCallId || !toolCallIds.includes(toolCallId)) continue;
-      const explicitToolName = String(maybeToolResult?.toolName || maybeToolResult?.tool_name || "").trim();
-      if (explicitToolName === TASK_SUMMARY_TOOL_NAME) continue;
-      toolResultIndexes.push(cursor);
-    }
-    if (!toolResultIndexes.length) continue;
-    if (setMessageSummarized(message)) discardedMessages += 1;
-    for (const toolIndex of toolResultIndexes) {
-      if (setMessageSummarized(messages[toolIndex])) discardedMessages += 1;
-    }
-    charsAfter = resolveUnsummarizedMessageChars(messages);
-  }
-  return { discardedMessages, charsAfter };
 }
 
 function normalizePositiveInteger(value = 0, fallback = 0) {
@@ -220,53 +137,10 @@ function maybeScheduleGuidanceSummary(ctx = {}) {
     state.counters.lastGuidanceSummaryCounterTurn = normalizedTurn;
   }
   state.counters.summaryTurns = Number(state.counters.summaryTurns || 0) + turnIncrement;
-  let currentChars = resolveUnsummarizedMessageChars(ctx?.messages);
+  const currentChars = resolveUnsummarizedMessageChars(ctx?.modelContext?.messages);
   const threshold = resolveGuidanceSummaryThresholds(ctx);
   const reachedTurnsSummary = state.counters.summaryTurns > threshold.turnsThreshold;
-  let reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
-
-  const pruneEnabled = LLM_SUMMARY_OVERFLOW_POLICY.ENABLE_PRUNE_AFTER_SUMMARY === true;
-  const pruneTriggerRounds = Number(LLM_SUMMARY_OVERFLOW_POLICY.PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS || 1);
-  const canPruneAfterSummary = state.flags?.summaryByCharsPrompted === true && pruneTriggerRounds <= 1;
-  if (reachedCharsSummary && pruneEnabled && canPruneAfterSummary) {
-    const pruneResult = discardOldestToolCallPairs(ctx?.messages, LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD);
-    currentChars = pruneResult.charsAfter;
-    reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
-    if (reachedCharsSummary && LLM_SUMMARY_OVERFLOW_POLICY.FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW === true) {
-      state.flags.overflowForceAcceptancePending = true;
-      const instruction = requestFinalNoToolsMainFlowInstruction(ctx, {
-        reason: HARNESS_MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
-        source: "harness_summary_overflow",
-        detail: {
-          charsThreshold: LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-          unsummarizedChars: currentChars,
-          discardedMessages: pruneResult.discardedMessages,
-        },
-      });
-      if (instruction) {
-        appendCapabilityLog(ctx, {
-          domain: CAPABILITY_DOMAIN.GUIDANCE,
-          event: "main_flow_final_no_tools_instruction_requested",
-          detail: {
-            action: instruction.action,
-            reason: instruction.reason,
-            source: instruction.source,
-            charsThreshold: LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-            unsummarizedChars: currentChars,
-            discardedMessages: pruneResult.discardedMessages,
-          },
-        });
-        state.flags.overflowForceAcceptancePending = false;
-        state.flags.mainFlowFinalNoToolsPending = true;
-      }
-    } else {
-      state.flags.overflowForceAcceptancePending = false;
-      state.flags.mainFlowFinalNoToolsPending = false;
-      state.flags.summaryByCharsPrompted = false;
-    }
-  } else if (state.flags?.overflowForceAcceptancePending !== true) {
-    state.flags.overflowForceAcceptancePending = false;
-  }
+  const reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
 
   if (!reachedTurnsSummary && !reachedCharsSummary) {
     if (!reachedCharsSummary) state.flags.summaryByCharsPrompted = false;
@@ -331,7 +205,7 @@ function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   if (!holder?.state) return false;
   const state = holder.state;
   if (!state.counters || typeof state.counters !== "object") state.counters = {};
-  if (shouldSkipAnalysisForTrailingToolCallContent(ctx?.messages)) return false;
+  if (shouldSkipAnalysisForTrailingToolCallContent(ctx?.modelContext?.messages)) return false;
   if (!isMainPlanReadyForGuidanceAnalysis(holder.bucket, state, meta)) return false;
   if (state.pending?.summary === true) return false;
   if (state.pending?.analysis === true) return false;

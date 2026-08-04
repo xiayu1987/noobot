@@ -33,6 +33,7 @@ import {
 } from "../shared/workflow/prompts.js";
 import { buildPlanChecklistSystemContent } from "../shared/plan/checklist-context.js";
 import { isHarnessInjectedMessage } from "../shared/message/utils.js";
+import { resolveModelMessageBlocks, resolveModelMessages } from "../../../core/message-store.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
@@ -170,14 +171,12 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta 
 }
 
 export function resolveLatestUserMessageText(ctx = {}) {
-  const messages = Array.isArray(ctx?.messages) ? ctx.messages : [];
+  const messages = resolveModelMessages(ctx);
   const latestFrontendFromMessages = resolveLatestUserTextFromMessages(messages, { preferFrontend: true });
   if (latestFrontendFromMessages) return latestFrontendFromMessages;
   const latestFromMessages = resolveLatestUserTextFromMessages(messages);
   if (latestFromMessages) return latestFromMessages;
-  const history = Array.isArray(ctx?.agentContext?.payload?.messages?.history)
-    ? ctx.agentContext.payload.messages.history
-    : [];
+  const history = resolveModelMessageBlocks(ctx).history;
   const latestFrontendFromHistory = resolveLatestUserTextFromMessages(history, { preferFrontend: true });
   if (latestFrontendFromHistory) return latestFrontendFromHistory;
   const latestFromHistory = resolveLatestUserTextFromMessages(history);
@@ -278,8 +277,7 @@ export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
   const { state } = holder;
   const locale = state?.locale || LOCALE.ZH_CN;
   if (state.flags.planningPromptInjected === true) return false;
-  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
-  if (!messages) return false;
+  resolveModelMessages(ctx);
   const messagePlan = buildPlanningMessagePlan(locale, ctx, meta);
   const injectMessages = renderMessagePlanForInject(messagePlan);
   for (const messageItem of injectMessages) {

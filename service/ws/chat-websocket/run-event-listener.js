@@ -15,6 +15,7 @@ import {
   isChildRunEventData,
   parentOwnsChildRunEventData,
 } from "./child-run-events.js";
+import { assertTurnCommittedEventData } from "@noobot/shared/turn-commit-protocol";
 
 export function createRunEventListener({
   sendEvent,
@@ -150,12 +151,12 @@ export function createRunEventListener({
         return;
       }
       if (eventName === "turn_committed") {
-        return sendEvent("turn_committed", {
+        const committedTurn = assertTurnCommittedEventData({
           ...eventData,
           sessionId: String(eventData?.sessionId || sessionId || "").trim(),
           turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
         });
-        return;
+        return sendEvent("turn_committed", committedTurn);
       }
       const childRunEvent = isChildRunEventData(eventData, {
         rootSessionId: sessionId,

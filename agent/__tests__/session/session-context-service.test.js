@@ -8,12 +8,12 @@ import assert from "node:assert/strict";
 
 import { SessionContextService } from "../../src/session/services/session-context-service.js";
 
-function createSessionContextService(messages = [], { globalConfig = {} } = {}) {
+function createSessionContextService(messages = [], { globalConfig = {}, turnStatuses = [] } = {}) {
   return new SessionContextService({
     globalConfig,
     sessionService: {
-      async getSessionTurns() {
-        return messages;
+      async getSessionContextSource() {
+        return { messages, turnStatuses };
       },
     },
   });
@@ -23,13 +23,13 @@ function createIndexedSessionContextService(messages = [], dialogOrder = []) {
   return new SessionContextService({
     sessionService: {
       async getSessionContextSource() {
-        return { messages, dialogOrder };
+        return { messages, turnStatuses: [] };
       },
     },
   });
 }
 
-test("getRecentSessionMessages preserves legacy history without dialog identity", async () => {
+test("getRecentSessionMessages excludes history without dialog identity", async () => {
   const messages = [
     {
       role: "assistant",
@@ -57,7 +57,7 @@ test("getRecentSessionMessages preserves legacy history without dialog identity"
     sessionId: "s1",
   });
 
-  assert.deepEqual(result, messages);
+  assert.deepEqual(result, []);
 });
 
 test("getRecentSessionMessages keeps explicit dialog group content in original order", async () => {
@@ -105,6 +105,145 @@ test("getRecentSessionMessages respects summarized filter before window normaliz
     result.map((messageItem) => messageItem.content),
     ["keep me", "new"],
   );
+});
+
+test("getRecentSessionMessages applies the terminal-history protocol before summarized filtering", async () => {
+  const messages = [
+    {
+      messageUid: "stopped-user",
+      role: "user",
+      content: "停止轮问题",
+      frontendUserMessage: true,
+      summarized: true,
+      dialogProcessId: "dlg_stopped",
+      turnScopeId: "turn_stopped",
+    },
+    {
+      messageUid: "stopped-guidance-old",
+      role: "user",
+      content: "旧 guidance",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+      summarized: true,
+      dialogProcessId: "dlg_stopped",
+      turnScopeId: "turn_stopped",
+    },
+    {
+      messageUid: "stopped-call",
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call-stopped", name: "read" }],
+      dialogProcessId: "dlg_stopped",
+      turnScopeId: "turn_stopped",
+    },
+    {
+      messageUid: "stopped-result",
+      role: "tool",
+      content: "不应进入 history 的工具结果",
+      tool_call_id: "call-stopped",
+      dialogProcessId: "dlg_stopped",
+      turnScopeId: "turn_stopped",
+    },
+    {
+      messageUid: "stopped-guidance-new",
+      role: "user",
+      content: "最新 guidance",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+      summarized: false,
+      dialogProcessId: "dlg_stopped",
+      turnScopeId: "turn_stopped",
+    },
+    {
+      messageUid: "completed-user",
+      role: "user",
+      content: "正常轮问题",
+      summarized: false,
+      dialogProcessId: "dlg_completed",
+      turnScopeId: "turn_completed",
+    },
+    {
+      messageUid: "completed-old-injection",
+      role: "user",
+      content: "正常轮未小结注入 1",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+      summarized: false,
+      dialogProcessId: "dlg_completed",
+      turnScopeId: "turn_completed",
+    },
+    {
+      messageUid: "completed-new-injection",
+      role: "user",
+      content: "正常轮未小结注入 2",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+      summarized: false,
+      dialogProcessId: "dlg_completed",
+      turnScopeId: "turn_completed",
+    },
+  ];
+  const service = createSessionContextService(messages, {
+    turnStatuses: [{
+      status: "user_stopped",
+      reason: "user_stop",
+      description: "用户停止了本轮生成",
+      dialogProcessId: "dlg_stopped",
+      turnScopeId: "turn_stopped",
+    }, {
+      status: "completed",
+      reason: "run_completed",
+      description: "本轮对话已正常完成",
+      dialogProcessId: "dlg_completed",
+      turnScopeId: "turn_completed",
+    }],
+  });
+
+  const result = await service.getRecentSessionMessages({ userId: "u1", sessionId: "s1" });
+
+  assert.deepEqual(result.map((item) => item.messageUid), [
+    "stopped-user",
+    "stopped-guidance-new",
+    "turn_stopped::terminal_status",
+    "completed-user",
+    "completed-old-injection",
+    "completed-new-injection",
+  ]);
+  assert.equal(result[2].role, "user");
+  assert.equal(result[2].terminalHistoryExplanation, true);
+});
+
+test("getRecentSessionMessages projects error and timeout explanations as assistant messages", async () => {
+  const messages = ["error", "timeout"].map((terminalStatus, index) => ({
+    messageUid: `${terminalStatus}-user`,
+    role: "user",
+    content: `${terminalStatus} question`,
+    frontendUserMessage: true,
+    dialogProcessId: `${terminalStatus}-dialog`,
+    turnScopeId: `${terminalStatus}-turn`,
+    summarized: true,
+  }));
+  const turnStatuses = ["error", "timeout"].map((terminalStatus) => ({
+    status: terminalStatus,
+    reason: terminalStatus === "error" ? "run_error" : "run_timeout",
+    description: `${terminalStatus} explanation`,
+    dialogProcessId: `${terminalStatus}-dialog`,
+    turnScopeId: `${terminalStatus}-turn`,
+  }));
+  const service = createSessionContextService(messages, { turnStatuses });
+
+  const result = await service.getRecentSessionMessages({ userId: "u1", sessionId: "s1" });
+
+  assert.deepEqual(result.map((item) => [item.messageUid, item.role]), [
+    ["error-user", "user"],
+    ["error-turn::terminal_status", "assistant"],
+    ["timeout-user", "user"],
+    ["timeout-turn::terminal_status", "assistant"],
+  ]);
 });
 
 test("getRecentSessionMessages keeps latest fixed dialog rounds and all unsummarized injected messages", async () => {
@@ -239,6 +378,35 @@ test("getContextRecords passes current turn filter through recent history", asyn
   );
 });
 
+test("current terminal round is excluded from both authoritative snapshot dimensions", async () => {
+  const messages = [{
+    messageUid: "current-user",
+    role: "user",
+    content: "当前问题",
+    frontendUserMessage: true,
+    dialogProcessId: "dlg_current",
+    turnScopeId: "turn_current",
+  }];
+  const service = createSessionContextService(messages, {
+    turnStatuses: [{
+      status: "user_stopped",
+      reason: "user_stop",
+      description: "用户停止了本轮生成",
+      dialogProcessId: "dlg_current",
+      turnScopeId: "turn_current",
+    }],
+  });
+
+  const result = await service.getContextRecords({
+    userId: "u1",
+    sessionId: "s1",
+    currentDialogProcessId: "dlg_current",
+    currentTurnScopeId: "turn_current",
+  });
+
+  assert.deepEqual(result, []);
+});
+
 test("getRecentSessionMessages selects fixed latest previous dialogProcessId rounds", async () => {
   const messages = [];
   for (const id of ["dlg_1", "dlg_2", "dlg_3", "dlg_4", "dlg_current"]) {
@@ -318,7 +486,7 @@ test("getContextRecords uses fixed latest dialog history", async () => {
   );
 });
 
-test("getRecentSessionMessages follows persisted dialog order instead of artifact order", async () => {
+test("getRecentSessionMessages uses message first occurrence as the only model history order", async () => {
   const messages = [
     { role: "user", content: "d6 user", dialogProcessId: "d6" },
     { role: "assistant", content: "d1 late append", dialogProcessId: "d1" },
@@ -343,7 +511,7 @@ test("getRecentSessionMessages follows persisted dialog order instead of artifac
   });
 
   assert.deepEqual(result.map((messageItem) => messageItem.content), [
-    "d2 user", "d3 user", "d4 user", "d5 user", "d6 user",
+    "d1 late append", "d1 user", "d2 user", "d3 user", "d4 user", "d5 user",
   ]);
 });
 
@@ -353,4 +521,28 @@ test("session context config always uses the central main history round limit", 
   const result = service._sessionContextConfig();
 
   assert.equal(result.historyRoundLimit, 5);
+});
+
+test("session context reads messages and terminal statuses from the same parent-scoped snapshot", async () => {
+  let received = null;
+  const service = new SessionContextService({
+    sessionMessageService: {
+      async getSessionContextSource(payload) {
+        received = payload;
+        return { messages: [], turnStatuses: [] };
+      },
+    },
+  });
+
+  await service.getContextRecords({
+    userId: "u1",
+    sessionId: "child-1",
+    parentSessionId: "parent-1",
+  });
+
+  assert.deepEqual(received, {
+    userId: "u1",
+    sessionId: "child-1",
+    parentSessionId: "parent-1",
+  });
 });

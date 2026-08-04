@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { routeForeignTurnLifecycleEvent } from "../../../../../../src/modules/chat/runtime/engine/turnLifecycleRouter.js";
+import {
+  routeCurrentTurnLifecycleEvent,
+  routeForeignTurnLifecycleEvent,
+} from "../../../../../../src/modules/chat/runtime/engine/turnLifecycleRouter.js";
 
 describe("foreign Turn lifecycle routing", () => {
   it("commits child Session authority envelopes into the canonical Turn registry", () => {
@@ -62,5 +65,103 @@ describe("foreign Turn lifecycle routing", () => {
       reason: "terminal_resolution_applied",
       terminalResolutionScheduled: true,
     });
+  });
+});
+
+describe("committed user Turn routing", () => {
+  it("replaces draft attachments with the canonical committed attachment set", () => {
+    const draftMessage = {
+      id: "frontend-user-1",
+      messageId: "frontend-user-1",
+      role: "user",
+      turnScopeId: "client-turn:1",
+      attachments: [{ clientAttachmentId: "draft-1", name: "old.docx" }],
+    };
+    const activeSession = {
+      value: {
+        id: "session-1",
+        backendSessionId: "session-1",
+        version: 0,
+        messages: [draftMessage],
+      },
+    };
+    const logSessionEvent = vi.fn();
+    const canonicalAttachment = {
+      attachmentId: "attachment-1",
+      clientAttachmentId: "draft-1",
+      sessionId: "session-1",
+      name: "old.docx",
+    };
+
+    expect(routeCurrentTurnLifecycleEvent("turn_committed", {
+      sessionId: "session-1",
+      sessionVersion: 1,
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-turn:1",
+      userMessage: {
+        messageUid: "sm_1",
+        id: "frontend-user-1",
+        messageId: "frontend-user-1",
+        role: "user",
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "client-turn:1",
+        content: "parse attachments",
+        attachments: [canonicalAttachment],
+      },
+    }, {
+      activeSession,
+      findCanonicalMessageById: (_sessionId, messageId) => (
+        messageId === draftMessage.messageId ? draftMessage : null
+      ),
+      makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
+      logSessionEvent,
+      sessionId: "session-1",
+    })).toBe(true);
+
+    expect(activeSession.value.version).toBe(1);
+    expect(draftMessage).toMatchObject({
+      messageUid: "sm_1",
+      messageId: "frontend-user-1",
+      dialogProcessId: "dialog-1",
+      attachments: [canonicalAttachment],
+    });
+    expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: "frontend.turnCommit.userMessageApplied",
+      data: expect.objectContaining({ applied: true, attachmentCount: 1 }),
+    }));
+  });
+
+  it("rejects a commit whose stable message id has no local target", () => {
+    const logSessionEvent = vi.fn();
+    const activeSession = {
+      value: { id: "session-1", backendSessionId: "session-1", version: 0, messages: [] },
+    };
+
+    expect(routeCurrentTurnLifecycleEvent("turn_committed", {
+      sessionId: "session-1",
+      sessionVersion: 1,
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-turn:1",
+      userMessage: {
+        messageUid: "sm_1",
+        messageId: "missing-user",
+        role: "user",
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "client-turn:1",
+        attachments: [],
+      },
+    }, {
+      activeSession,
+      findCanonicalMessageById: () => null,
+      logSessionEvent,
+      sessionId: "session-1",
+    })).toBe(true);
+
+    expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: "frontend.turnCommit.userMessageRejected",
+      data: expect.objectContaining({ reason: "committed_user_target_missing" }),
+    }));
   });
 });

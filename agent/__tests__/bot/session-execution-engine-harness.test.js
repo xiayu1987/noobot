@@ -14,6 +14,7 @@ import { SessionExecutionEngine } from "../../src/bot/session/session-execution-
 import { createStateCommitter } from "../../src/runtime/tool-execution/state-committer.js";
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
 import { createAgentHookManager } from "../../src/extensions/hooks/index.js";
+import { createModelContext, getMessageId } from "@noobot/context-protocol";
 
 function createWorkspaceService(baseDir) {
   return {
@@ -136,28 +137,85 @@ test("RunConfigPluginPreparer.prepareAgentPluginRunConfig registers harness plug
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
-    messages,
-    messageBlocks: {
-      system: [],
-      history: [],
-      incremental: messages,
-    },
+    contextProtocolVersion: 1,
+    modelContext: createModelContext({
+      messageBlocks: { system: [], history: [], incremental: messages },
+    }),
   };
   await prepared.hookManager.emit("before_llm_call", hookCtx);
 
-  assert.equal(hookCtx.messages[0].role, "system");
-  assert.match(hookCtx.messages[0].content, /\[HARNESS_POLICY_SELECTION\]/);
-  assert.match(hookCtx.messages[0].content, /policy_prompt = harness_policy\/general/);
-  assert.doesNotMatch(hookCtx.messages[0].content, /execution_first|risk_first/);
-  assert.equal(hookCtx.messages[1].role, "user");
-  assert.equal(hookCtx.messages[1].content, "hello");
-  assert.equal(hookCtx.messageBlocks.system[0], hookCtx.messages[0]);
-  assert.equal(hookCtx.messageBlocks.incremental[0], hookCtx.messages[1]);
+  const resolvedMessages = hookCtx.modelContext.messages;
+  const resolvedBlocks = hookCtx.modelContext.messageBlocks;
+  assert.equal(resolvedMessages[0].role, "system");
+  assert.match(resolvedMessages[0].content, /\[HARNESS_POLICY_SELECTION\]/);
+  assert.match(resolvedMessages[0].content, /policy_prompt = harness_policy\/general/);
+  assert.doesNotMatch(resolvedMessages[0].content, /execution_first|risk_first/);
+  assert.equal(resolvedMessages[1].role, "user");
+  assert.equal(resolvedMessages[1].content, "hello");
+  assert.equal(resolvedBlocks.system[0], resolvedMessages[0]);
+  assert.equal(resolvedBlocks.incremental[0], resolvedMessages[1]);
 
   const eventsPath = path.join(tempRoot, "u1", "runtime", "harness", "runs", "d1", "events.jsonl");
   const promptsPath = path.join(tempRoot, "u1", "runtime", "harness", "runs", "d1", "prompts.jsonl");
   assert.match(await fs.readFile(eventsPath, "utf8"), /before_llm_call/);
   assert.match(await fs.readFile(promptsPath, "utf8"), /noobot-harness-policy/);
+});
+
+test("Harness before_llm_call preserves canonical ids and block ownership across agent normalization", async () => {
+  const tempRoot = await createTempRoot();
+  const engine = new SessionExecutionEngine({
+    workspaceService: createWorkspaceService(tempRoot),
+  });
+  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
+    userId: "u-identity",
+    runConfig: {
+      plugins: {
+        harness: {
+          enabled: true,
+          mode: "on",
+          trace: false,
+          planning: { enabled: false },
+          guidance: { enabled: false },
+          acceptance: { enabled: false },
+          review: { enabled: false },
+        },
+      },
+    },
+  });
+  const modelContext = createModelContext({
+    messageBlocks: {
+      system: [{ role: "system", content: "system" }],
+      history: [
+        { role: "user", content: "history-user", dialogProcessId: "d-history", turnScopeId: "t-history" },
+        { role: "assistant", content: "history-assistant", dialogProcessId: "d-history", turnScopeId: "t-history" },
+      ],
+      incremental: [
+        { role: "user", content: "current-user", dialogProcessId: "d-current", turnScopeId: "t-current" },
+        { role: "assistant", content: "current-assistant", dialogProcessId: "d-current", turnScopeId: "t-current" },
+      ],
+    },
+  });
+  const historyIds = modelContext.messageBlocks.history.map(getMessageId);
+  const incrementalIds = modelContext.messageBlocks.incremental.map(getMessageId);
+  const hookCtx = {
+    userId: "u-identity",
+    sessionId: "s-identity",
+    dialogProcessId: "d-current",
+    turnScopeId: "t-current",
+    contextProtocolVersion: 1,
+    modelContext,
+  };
+
+  await prepared.hookManager.emit("before_llm_call", hookCtx);
+
+  assert.deepEqual(modelContext.messageBlocks.history.map(getMessageId), historyIds);
+  assert.deepEqual(modelContext.messageBlocks.incremental.map(getMessageId), incrementalIds);
+  assert.deepEqual(
+    modelContext.messageBlocks.incremental.map((message) => message.content),
+    ["current-user", "current-assistant"],
+  );
+  assert.equal(new Set(modelContext.messages.map(getMessageId)).size, modelContext.messages.length);
+  assert.equal(historyIds.some((id) => incrementalIds.includes(id)), false);
 });
 
 test("RunConfigPluginPreparer.prepareAgentPluginRunConfig reuses existing hookManager instead of replacing it", () => {
@@ -288,6 +346,28 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     async appendTurn(payload = {}) {
       persistedTurns.push(payload);
     },
+    async commitTurn(payload = {}) {
+      const messageUid = `sm_${payload.turnScopeId}`;
+      const userMessage = {
+        messageUid,
+        id: payload.messageId || messageUid,
+        messageId: payload.messageId || messageUid,
+        role: "user",
+        type: "message",
+        content: payload.content,
+        userName: payload.userId,
+        sessionId: payload.sessionId,
+        parentSessionId: payload.parentSessionId,
+        dialogProcessId: payload.dialogProcessId,
+        parentDialogProcessId: payload.parentDialogProcessId,
+        turnScopeId: payload.turnScopeId,
+        frontendUserMessage: payload.frontendUserMessage === true,
+        messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
+        attachments: payload.attachments || [],
+      };
+      persistedTurns.push(userMessage);
+      return { userMessage, attachments: userMessage.attachments, version: 1 };
+    },
     async saveCurrentTurnTasks(payload = {}) {
       savedCurrentTurnTasksPayload = payload;
     },
@@ -317,16 +397,20 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     },
     errorLogger: { async log() {} },
     botManager: {},
-    agentRunner: async ({ agentContext, userMessage }) => {
+    agentRunner: async ({ agentContext, currentUserMessage }) => {
       capturedRuntime = agentContext?.execution?.controllers?.runtime || null;
-      capturedAgentUserMessage = userMessage;
-      const messages = [{ role: "user", content: userMessage }];
+      capturedAgentUserMessage = currentUserMessage.content;
+      assert.equal(currentUserMessage.messageUid, "sm_turn-scope-smoke");
+      const messages = [currentUserMessage];
       await capturedRuntime.hookManager.emit("before_llm_call", {
         userId: "u1",
         sessionId,
         dialogProcessId: capturedRuntime.systemRuntime.dialogProcessId,
         agentContext,
-        messages,
+        contextProtocolVersion: 1,
+        modelContext: createModelContext({
+          messageBlocks: { system: [], history: [], incremental: messages },
+        }),
       });
       return {
         output: "ok from fake agent",

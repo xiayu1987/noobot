@@ -137,28 +137,46 @@ function hasConnectorData(connectorStatusSection = {}) {
   return hasSelectedConnector;
 }
 
-function stripEmptySelectedConnectors(dynamicInfo = {}) {
+const TURN_IDENTITY_SYSTEM_FIELDS = new Set([
+  "dialogProcessId",
+  "currentDialogProcessId",
+  "parentDialogProcessId",
+  "turnScopeId",
+]);
+
+function omitTurnIdentityFromSystemValue(value) {
+  if (Array.isArray(value)) return value.map(omitTurnIdentityFromSystemValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !TURN_IDENTITY_SYSTEM_FIELDS.has(key))
+      .map(([key, item]) => [key, omitTurnIdentityFromSystemValue(item)]),
+  );
+}
+
+function normalizeDynamicInfoForSystem(dynamicInfo = {}) {
   if (!dynamicInfo || typeof dynamicInfo !== "object" || Array.isArray(dynamicInfo)) {
     return {};
   }
+  const systemDynamicInfo = omitTurnIdentityFromSystemValue(dynamicInfo);
   const config =
-    dynamicInfo?.config && typeof dynamicInfo.config === "object" && !Array.isArray(dynamicInfo.config)
-      ? dynamicInfo.config
+    systemDynamicInfo?.config && typeof systemDynamicInfo.config === "object" && !Array.isArray(systemDynamicInfo.config)
+      ? systemDynamicInfo.config
       : null;
-  if (!config) return dynamicInfo;
+  if (!config) return systemDynamicInfo;
   const selectedConnectors =
     config?.selectedConnectors &&
     typeof config.selectedConnectors === "object" &&
     !Array.isArray(config.selectedConnectors)
       ? config.selectedConnectors
       : null;
-  if (!selectedConnectors) return dynamicInfo;
+  if (!selectedConnectors) return systemDynamicInfo;
   const hasSelectedConnector = Object.values(selectedConnectors).some((connectorName) =>
     hasValue(String(connectorName || "").trim()),
   );
-  if (hasSelectedConnector) return dynamicInfo;
+  if (hasSelectedConnector) return systemDynamicInfo;
   return {
-    ...dynamicInfo,
+    ...systemDynamicInfo,
     config: Object.fromEntries(
       Object.entries(config).filter(([configKey]) => configKey !== "selectedConnectors"),
     ),
@@ -207,7 +225,7 @@ export function composeSystemInfoSections({
   ).trim();
   const emptyValueText = String(contextPromptI18n?.emptyValueText || "(none)").trim();
   const normalizedSystemPrompt = String(systemPrompt || "").trim();
-  const normalizedDynamicInfo = stripEmptySelectedConnectors(dynamicInfo);
+  const normalizedDynamicInfo = normalizeDynamicInfoForSystem(dynamicInfo);
   const normalizedWorkspaceSection = buildWorkspaceDirectorySection({
     workspaceDirectories,
     workspaceDirectoryDescriptions,

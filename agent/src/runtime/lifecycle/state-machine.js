@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
+
 export const AGENT_LIFECYCLE_STATE = Object.freeze({
   INITIALIZING: "initializing",
   RESUME_INITIALIZING: "resume_initializing",
@@ -39,11 +41,6 @@ function normalizeText(value = "") {
 
 function isBranchState(state = "") {
   return Object.values(AGENT_LIFECYCLE_BRANCH_STATE).includes(state);
-}
-
-function normalizeErrorMessage(error) {
-  if (!error) return "";
-  return String(error?.message || error || "").trim();
 }
 
 function normalizeStoppedSnapshotPersistence(value = null) {
@@ -167,7 +164,7 @@ export function createAgentLifecycleMachine({
         ...extra,
         stopType: "user_stop",
         canResume: normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence).status === "saved",
-        error: normalizeText(reason || error),
+        error: resolveErrorMessage(reason || error),
         stoppedSnapshotPersistence: normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence),
       });
     },
@@ -176,14 +173,14 @@ export function createAgentLifecycleMachine({
         ...extra,
         stopType: normalizeText(stopType) || "interrupted",
         canResume: false,
-        error: normalizeText(reason || error),
+        error: resolveErrorMessage(reason || error),
         stoppedSnapshotPersistence: normalizeStoppedSnapshotPersistence(stoppedSnapshotPersistence),
       });
     },
     fail({ error = "", ...extra } = {}) {
       return emit(AGENT_LIFECYCLE_BRANCH_STATE.FAILED, {
         ...extra,
-        error: normalizeErrorMessage(error),
+        error: resolveErrorMessage(error),
       });
     },
     get state() {

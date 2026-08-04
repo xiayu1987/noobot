@@ -41,6 +41,7 @@ import {
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
 import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
+import { resolveModelMessageBlocks, resolveModelMessages } from "../../../core/message-store.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
@@ -108,14 +109,10 @@ function normalizePlanningTextContent(content = "") {
 
 
 function collectAgentStyleHistoryMessages(ctx = {}) {
-  const history = Array.isArray(ctx?.agentContext?.payload?.messages?.history)
-    ? ctx.agentContext.payload.messages.history
-    : [];
+  const history = resolveModelMessageBlocks(ctx).history;
   const source = history.length
     ? history
-    : Array.isArray(ctx?.messages)
-      ? ctx.messages
-      : [];
+    : resolveModelMessages(ctx);
 
   return source
     .map((msg = {}) => {

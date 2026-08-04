@@ -134,7 +134,7 @@ test("harness planning followup uses text deliverable-batch policy in text scena
 
   await hookManager.emit("before_llm_call", ctx);
 
-  const followupMessage = ctx.messages.find((item = {}) =>
+  const followupMessage = ctx.modelContext.messages.find((item = {}) =>
     /planning_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
@@ -242,7 +242,7 @@ test("harness planning followup uses dynamic programming scenario over initial t
   const dynamicPolicyPrompt = ctx.agentContext.payload.harness.dynamicPolicyPrompt || {};
   assert.equal(dynamicPolicyPrompt.scenario, "programming");
 
-  const followupMessage = ctx.messages.find((item = {}) =>
+  const followupMessage = ctx.modelContext.messages.find((item = {}) =>
     /planning_followup/.test(String(item?.content || "")),
   );
   const followupText = String(followupMessage?.content || "");
@@ -393,7 +393,7 @@ test("harness separate-model plan relay includes operation directory for main ag
 
   await hookManager.emit("before_llm_call", ctx);
 
-  const relayMessage = ctx.messages.find((item = {}) =>
+  const relayMessage = ctx.modelContext.messages.find((item = {}) =>
     /Harness operation dir/.test(String(item?.content || "")),
   );
   const relayText = String(relayMessage?.content || "");

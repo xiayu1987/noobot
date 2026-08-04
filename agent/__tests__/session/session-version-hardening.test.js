@@ -201,34 +201,50 @@ test("continue identity round-trips only when it matches the authoritative conti
   );
 });
 
-test("internal append and summarization use mutation lock without changing public version", async () => {
+test("internal append and summary checkpoint use mutation lock without changing public version", async () => {
   const h = harness({
     version: 7,
     revision: 7,
     messages: [
-      { role: "user", content: "q", turnScopeId: "t", dialogProcessId: "dp" },
-      { role: "user", content: "historical", turnScopeId: "old", dialogProcessId: "dp-old" },
+      { messageUid: "sm_q", role: "user", content: "q", turnScopeId: "t", dialogProcessId: "dp" },
+      { messageUid: "sm_old", role: "user", content: "historical", turnScopeId: "old", dialogProcessId: "dp-old" },
     ],
+    turnLifecycle: {
+      activeTurnScopeId: "t",
+      turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
+    },
   });
   await h.service.appendTurn({ userId: "u1", sessionId: "s1", role: "assistant", content: "a", turnScopeId: "t", dialogProcessId: "dp" });
-  await h.service.markSessionMessagesSummarized({ userId: "u1", sessionId: "s1", dialogProcessId: "dp" });
+  const targetUid = h.get().messages.find((message) => message.content === "a").messageUid;
+  await h.service.commitTurnSummaryCheckpoint({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "t",
+    checkpointId: "cp-lock",
+    summarizedMessageUids: [targetUid],
+  });
   assert.equal(h.get().version, 7); assert.equal(h.get().revision, 7);
-  assert.equal(h.get().messages.filter((m) => m.dialogProcessId === "dp").every((m) => m.summarized), true);
+  assert.equal(h.get().messages.find((m) => m.messageUid === targetUid).summarized, true);
+  assert.equal(h.get().messages.find((m) => m.messageUid === "sm_q").summarized, undefined);
   assert.equal(h.get().messages.find((m) => m.dialogProcessId === "dp-old").summarized, undefined);
   assert.equal(h.locks(), 2);
 });
 
-test("summarization without a dialog scope fails closed", async () => {
+test("summary checkpoint without complete transaction identity fails closed", async () => {
   const h = harness({
-    messages: [{ role: "user", content: "historical", dialogProcessId: "dp-old" }],
+    messages: [{ messageUid: "sm_old", role: "user", content: "historical", dialogProcessId: "dp-old" }],
   });
 
-  const marked = await h.service.markSessionMessagesSummarized({
+  const result = await h.service.commitTurnSummaryCheckpoint({
     userId: "u1",
     sessionId: "s1",
+    checkpointId: "cp-missing-scope",
+    summarizedMessageUids: ["sm_old"],
   });
 
-  assert.equal(marked, 0);
+  assert.equal(result.committed, false);
+  assert.equal(result.reason, "missing_checkpoint_identity");
   assert.equal(h.get().messages[0].summarized, undefined);
   assert.equal(h.locks(), 0);
 });
@@ -269,19 +285,103 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
   assert.equal("sequence" in h.get().turnSummaryCheckpoints.t, false);
 });
 
-test("turn summary checkpoints reject cross-turn messages and terminal turns", async () => {
-  const crossTurn = harness({
-    messages: [{ messageUid: "sm_old", role: "assistant", content: "old", dialogProcessId: "old", turnScopeId: "old-t" }],
+test("turn summary checkpoints reject a split assistant tool-call and result pair", async () => {
+  const h = harness({
+    messages: [
+      {
+        messageUid: "sm_call",
+        role: "assistant",
+        content: "",
+        dialogProcessId: "dp",
+        turnScopeId: "t",
+        tool_calls: [{ id: "call_1", function: { name: "read_file", arguments: "{}" } }],
+      },
+      {
+        messageUid: "sm_result",
+        role: "tool",
+        content: "result",
+        dialogProcessId: "dp",
+        turnScopeId: "t",
+        tool_call_id: "call_1",
+      },
+    ],
     turnLifecycle: {
       activeTurnScopeId: "t",
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
     },
   });
-  await assert.rejects(crossTurn.service.commitTurnSummaryCheckpoint({
+
+  await assert.rejects(h.service.commitTurnSummaryCheckpoint({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "t",
+    checkpointId: "cp-split",
+    persistedMessageUids: ["sm_call", "sm_result"],
+    summarizedMessageUids: ["sm_result"],
+  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT");
+
+  assert.equal(h.get().messages.some((message) => message.summarized === true), false);
+});
+
+test("turn summary checkpoints allow exact historical summary targets but keep persistence scoped", async () => {
+  const crossTurn = harness({
+    messages: [
+      { messageUid: "sm_current", role: "assistant", content: "current", dialogProcessId: "dp", turnScopeId: "t" },
+      { messageUid: "sm_old", role: "assistant", content: "old", dialogProcessId: "old", turnScopeId: "old-t" },
+    ],
+    turnLifecycle: {
+      activeTurnScopeId: "t",
+      turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
+    },
+  });
+  const historical = await crossTurn.service.commitTurnSummaryCheckpoint({
     userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
     checkpointId: "cp-cross", summarizedMessageUids: ["sm_old"],
-  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT");
+  });
+  assert.equal(historical.committed, true);
+  assert.equal(crossTurn.get().messages.find((message) => message.messageUid === "sm_old").summarized, true);
+  assert.deepEqual(
+    crossTurn.get().turnSummaryCheckpoints.t.receipts[0].summarizedMessageUids,
+    ["sm_old"],
+  );
+  const replay = await crossTurn.service.commitTurnSummaryCheckpoint({
+    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
+    checkpointId: "cp-cross", summarizedMessageUids: ["sm_old"],
+  });
+  assert.equal(replay.deduplicated, true);
 
+  await assert.rejects(crossTurn.service.commitTurnSummaryCheckpoint({
+    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
+    checkpointId: "cp-cross-persist", persistedMessageUids: ["sm_old"],
+  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT");
+});
+
+test("turn summary checkpoints validate historical tool pairs inside their original round", async () => {
+  const h = harness({
+    messages: [
+      {
+        messageUid: "sm_old_call", role: "assistant", content: "", dialogProcessId: "old", turnScopeId: "old-t",
+        tool_calls: [{ id: "call_1", function: { name: "read_file", arguments: "{}" } }],
+      },
+      {
+        messageUid: "sm_old_result", role: "tool", content: "result", dialogProcessId: "old", turnScopeId: "old-t",
+        tool_call_id: "call_1",
+      },
+    ],
+    turnLifecycle: {
+      activeTurnScopeId: "t",
+      turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
+    },
+  });
+
+  await assert.rejects(h.service.commitTurnSummaryCheckpoint({
+    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
+    checkpointId: "cp-old-split", summarizedMessageUids: ["sm_old_result"],
+  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT");
+});
+
+test("terminal turn checkpoints only mark already persisted canonical messages", async () => {
   const terminal = harness({
     messages: [{ messageUid: "sm_done", role: "assistant", content: "done", dialogProcessId: "dp", turnScopeId: "t" }],
     turnLifecycle: {
@@ -289,10 +389,19 @@ test("turn summary checkpoints reject cross-turn messages and terminal turns", a
       turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "completed" } },
     },
   });
-  await assert.rejects(terminal.service.commitTurnSummaryCheckpoint({
+  const committed = await terminal.service.commitTurnSummaryCheckpoint({
     userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
     checkpointId: "cp-terminal", summarizedMessageUids: ["sm_done"],
-  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_TERMINAL");
+  });
+  assert.equal(committed.committed, true);
+  assert.equal(terminal.get().messages[0].summarized, true);
+
+  await assert.rejects(terminal.service.commitTurnSummaryCheckpoint({
+    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "t",
+    checkpointId: "cp-terminal-persist",
+    persistedMessageUids: ["sm_done"],
+    summarizedMessageUids: ["sm_done"],
+  }), (error) => error.code === "TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE");
 });
 
 test("turn summary checkpoint receipts reject stale revisions and are pruned with removed turns", async () => {

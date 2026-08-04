@@ -38,17 +38,19 @@ Based on latest examples:
 | `NOOBOT_RUNTIME_EVENT_TRANSPORT_LOG` | boolean | `true` | Whether runtime-events records transport session logs. |
 | `NOOBOT_RUNTIME_EVENT_AGENT_PROXY_LOG` | boolean | `true` | Whether runtime-events records agent-proxy session logs. |
 | `NOOBOT_RUNTIME_EVENT_SYSTEM_LOG` | boolean | `true` | Whether runtime-events records system session logs. |
-| `NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG` | boolean | `true` | Whether runtime-events records state-machine debug events. |
-| `NOOBOT_RUNTIME_EVENT_RESEND_DEBUG` | boolean | `true` | Whether runtime-events records resend debug events. |
-| `NOOBOT_RUNTIME_EVENT_STOP_DEBUG` | boolean | `true` | Whether runtime-events records stop debug events. |
+| `NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG` | boolean | `false` | Whether runtime-events records state-machine debug events. |
+| `NOOBOT_RUNTIME_EVENT_RESEND_DEBUG` | boolean | `false` | Whether runtime-events records resend debug events. |
+| `NOOBOT_RUNTIME_EVENT_STOP_DEBUG` | boolean | `false` | Whether runtime-events records stop debug events. |
 | `NOOBOT_RUNTIME_EVENT_SESSION_LOG_WS_DEBUG` | boolean | `false` | Whether runtime-events records session log WebSocket debug events. |
+| `NOOBOT_RUNTIME_EVENT_CONTEXT_IDENTITY_DEBUG` | boolean | `true` | Whether runtime-events records persisted-message identity, Context assembly, model projection, and stopped-snapshot diagnostics. |
 
 Session log WebSocket:
 - Endpoint: `/logs/ws` on the backend, usually reached by the frontend through `/api/logs/ws` and by agent-proxy through the backend upstream.
 - Auth: reuses the existing API key WebSocket authentication.
 - Storage: backend writes one directory per `sessionId`, and one JSONL file per category (`state`, `message`, `interaction`, `transport`, `agent-proxy`, `system`); debug logs are further split by `data.debugType` into `debug-<debugType>.jsonl`, or `debug.jsonl` when no explicit `debugType` is present.
 - Main fields: `source`, `category`, `event`, `sessionId`, optional `dialogProcessId` / `turnScopeId`, and compact `data` payloads for state-machine, message-flow, frontend/backend interaction, and agent-proxy events.
-- Control: frontend and agent-proxy only send events through the log WebSocket. Runtime-events is the single control point that decides whether to record by the specific business-type switches in `runtime-events-config.mjs`. Core state-machine, resend, and stop diagnostics default to enabled and can still be explicitly disabled by operators.
+- Control: frontend and agent-proxy only send events through the log WebSocket. Runtime-events is the single control point that decides whether to record by the specific business-type switches in `runtime-events-config.mjs`.
+- Internal session log controls are grouped as `sessionLogControls.log.*` and `sessionLogControls.debug.*`. Flat control fields are not part of the protocol.
 
 ---
 
@@ -151,7 +153,7 @@ Model history is fixed by the agent runtime: it keeps the latest 5 `dialogProces
 | `tools.web_search.search_engine.endpoints.search.custom_param_format` | string | Description of the custom endpoint parameter |
 
 Large-context length defaults:
-- Phase-summary character threshold: 225000
+- Phase-summary character threshold: 220000
 - Semantic-transfer direct threshold: 30000 chars
 - Semantic-transfer tool-result inline threshold: 30000 chars
 - Semantic-transfer tool-input overflow threshold: 30000 chars

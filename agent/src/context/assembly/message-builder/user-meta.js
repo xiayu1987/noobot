@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HumanMessage } from "@langchain/core/messages";
+import { deriveMessageProjectionId } from "@noobot/context-protocol/message-store";
 import { tEngine } from "../../../runtime/i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { getTransferAttachmentMetas } from "../../../transfer/storage/consumer.js";
@@ -129,6 +130,10 @@ export function buildHumanMessagesForUser(
   );
   const isFrontendUserMessage = msg?.frontendUserMessage === true;
   const identityKwargs = buildModelMessageIdentityKwargs(msg, fallbackMeta);
+  const userMetaMessageId = deriveMessageProjectionId(
+    identityKwargs.noobotMessageId,
+    "user_meta",
+  );
   const contentMessage = isFrontendUserMessage
     ? new HumanMessage({
         content: contentText,
@@ -150,6 +155,7 @@ export function buildHumanMessagesForUser(
     }),
     additional_kwargs: {
       ...identityKwargs,
+      ...(userMetaMessageId ? { noobotMessageId: userMetaMessageId } : {}),
       noobotInternalMessageType: "user_meta",
     },
   });

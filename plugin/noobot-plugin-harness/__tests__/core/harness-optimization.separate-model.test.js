@@ -16,14 +16,14 @@ import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { HARNESS_HOOK_POINTS } from "../../src/core/constants.js";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
-import { createPlanningHandler } from "../../src/capabilities/handlers/planning.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
-  markMessagesSummarized,
   relaySeparateModelOutputAsUserMessage,
 } from "../../src/capabilities/handlers/shared.js";
+import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 
 
@@ -80,7 +80,7 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
 
   assert.equal(invokerCalls, 1);
   assert.equal(
-    ctx.messages.filter((item = {}) =>
+    ctx.modelContext.messages.filter((item = {}) =>
       String(item?.content || "").includes("[来自harness外部模型输出/planning]"),
     ).length,
     1,
@@ -89,7 +89,7 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
 });
 
 test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when enabled", () => {
-  const ctx = { messages: [] };
+  const ctx = createTestHookContext();
   const payload = {
     purpose: "planning",
     content: '{"taskOwner":"admin","taskChecklist":[{"index":1,"task":"x","owner":"admin"}]}',
@@ -101,13 +101,13 @@ test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when
 
   assert.equal(first, true);
   assert.equal(second, false);
-  assert.equal(ctx.messages.length, 1);
-  assert.equal(ctx.messages[0]?.role, "user");
-  assert.match(String(ctx.messages[0]?.content || ""), /\[来自harness外部模型输出\/planning\]/);
+  assert.equal(ctx.modelContext.messages.length, 1);
+  assert.equal(ctx.modelContext.messages[0]?.role, "user");
+  assert.match(String(ctx.modelContext.messages[0]?.content || ""), /\[来自harness外部模型输出\/planning\]/);
 });
 
 test("relaySeparateModelOutputAsUserMessage preserves oversized relay content when transfer refs exist", () => {
-  const ctx = { messages: [] };
+  const ctx = createTestHookContext();
   const content = `HEAD-${"x".repeat(2400)}-TAIL`;
   const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
     purpose: "planning_refinement",
@@ -124,8 +124,8 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
   });
 
   assert.equal(relayed, true);
-  assert.equal(ctx.messages.length, 1);
-  const message = ctx.messages[0] || {};
+  assert.equal(ctx.modelContext.messages.length, 1);
+  const message = ctx.modelContext.messages[0] || {};
   assert.equal(message.role, "user");
   const relayContent = String(message?.content || "");
   assert.equal(relayContent, `[来自harness外部模型输出/planning_refinement]\n${content}`);
@@ -138,11 +138,10 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
 
 test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", async () => {
   const runtime = createCapabilityRuntime({ handlers: {} });
-  const ctx = {
+  const ctx = createTestHookContext({
     dialogProcessId: "dialog-old",
-    messages: [],
     agentContext: { payload: {} },
-  };
+  });
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_TURN, ctx, {});
   await runtime.runHook(HARNESS_HOOK_POINTS.AFTER_TURN, ctx, {});
@@ -154,7 +153,7 @@ test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", 
   });
 
   assert.equal(relayed, false);
-  assert.equal(ctx.messages.length, 0);
+  assert.equal(ctx.modelContext.messages.length, 0);
 });
 
 test("planning separate_model uses injected resolveModelMessages from harness meta", async () => {
@@ -179,8 +178,8 @@ test("planning separate_model uses injected resolveModelMessages from harness me
         const source = Array.isArray(messages) && messages.length
           ? messages
           : [
-              ...(resolverCtx.messageBlocks?.history || []),
-              ...(resolverCtx.messageBlocks?.incremental || []),
+              ...(resolverCtx.modelContext.messageBlocks?.history || []),
+              ...(resolverCtx.modelContext.messageBlocks?.incremental || []),
             ];
         return source.filter((item) =>
           String(item?.content || "").includes("keep-me"),

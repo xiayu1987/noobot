@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 
 test("inject-mode summary defaults to injecting full summary to main agent without attachment", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -65,7 +65,7 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
   assert.equal(Array.isArray(harnessBucket.summaryDetailAttachments), true);
   assert.equal(harnessBucket.summaryDetailAttachments.length, 0);
   assert.equal(
-    ctx.messages.some(
+    ctx.modelContext.messages.some(
       (item = {}) =>
         String(item?.role || "") === "user" &&
         String(item?.content || "").includes("[SUMMARY_DETAIL]") &&
@@ -74,7 +74,7 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
     true,
   );
   assert.equal(
-    ctx.messages.some((item = {}) => String(item?.content || "").includes("DETAIL_PATH:")),
+    ctx.modelContext.messages.some((item = {}) => String(item?.content || "").includes("DETAIL_PATH:")),
     false,
   );
 });
@@ -186,7 +186,7 @@ test("inject-mode summary can save detail as attachment and inject detail path t
   assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);
   assert.doesNotMatch(String(harnessBucket.summaryText || ""), /SUMMARY_DETAIL/);
 
-  const injectedDetailPathMessage = [...ctx.messages]
+  const injectedDetailPathMessage = [...ctx.modelContext.messages]
     .reverse()
     .find(
       (item = {}) =>
@@ -202,7 +202,7 @@ test("inject-mode summary can save detail as attachment and inject detail path t
   assert.equal(injectedDetailPathMessage?.transferResult, undefined);
 
   assert.doesNotMatch(
-    ctx.messages.map((item = {}) => String(item?.content || "")).join("\n"),
+    ctx.modelContext.messages.map((item = {}) => String(item?.content || "")).join("\n"),
     /summary_pending/,
   );
 });

@@ -69,27 +69,21 @@ export function requestFinalNoToolsMainFlowInstruction(
 
 export function requestSummaryCheckpointMainFlowInstruction(
   ctx = {},
-  { source = "plugin.summary", summarizedMessages = [] } = {},
+  { source = "plugin.summary", summarizedMessageIds = [] } = {},
 ) {
   const runtime = resolveAgentRuntimeFromHookContext(ctx);
   if (!runtime) return null;
   if (!asObject(runtime.systemRuntime)) runtime.systemRuntime = {};
-  const messages = (Array.isArray(summarizedMessages) ? summarizedMessages : [])
-    .filter((message) => message && typeof message === "object");
-  const summarizedMessageIds = [...new Set(messages
-    .map((message) => String(
-      message?.additional_kwargs?.noobotMessageId ||
-        message?.lc_kwargs?.additional_kwargs?.noobotMessageId ||
-        message?.noobotMessageId ||
-        message?.messageId ||
-        "",
-    ).trim())
-    .filter(Boolean))];
+  const canonicalMessageIds = [...new Set(
+    (Array.isArray(summarizedMessageIds) ? summarizedMessageIds : [])
+      .map((id) => String(id || "").trim())
+      .filter(Boolean),
+  )];
+  if (!canonicalMessageIds.length) return null;
   const instruction = {
     action: HARNESS_MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,
     source: String(source || "plugin.summary").trim(),
-    summarizedMessageIds,
-    summarizedMessages: messages,
+    summarizedMessageIds: canonicalMessageIds,
   };
   const pending = Array.isArray(runtime.systemRuntime.mainFlowControlInstructions)
     ? runtime.systemRuntime.mainFlowControlInstructions

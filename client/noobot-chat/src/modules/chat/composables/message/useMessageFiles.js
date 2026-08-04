@@ -13,9 +13,7 @@ import {
   getMessageDialogProcessId,
   getMessageTurnScopeId,
   isAssistantWithoutTurnScope,
-  isSameMessageRound,
   normalizeTurnMeta,
-  shouldCollectAttachmentsFromMessage,
 } from "../../model/messageIdentity.js";
 import { getMessageAttachments as resolveRenderableMessageAttachments } from "../../model/messageModel.js";
 import {
@@ -25,32 +23,6 @@ import {
   selectCompletedToolArtifacts,
 } from "../../runtime/engine/toolTimeline.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
-
-function tryParseJsonContent(content = "") {
-  try {
-    return JSON.parse(String(content || ""));
-  } catch {
-    return null;
-  }
-}
-
-function parseToolFileResult(content = "") {
-  const parsed = tryParseJsonContent(content);
-  if (!parsed) return null;
-  const toolName = String(parsed?.toolName || "").trim();
-  if (!["write_file"].includes(toolName)) return null;
-  if (parsed?.ok === false) return null;
-  if (toolName === "write_file" && String(parsed?.state || "").toUpperCase() !== "OK") {
-    return null;
-  }
-  const resolvedPath = String(parsed?.resolvedPath || parsed?.path || "").trim();
-  const fileName = String(parsed?.fileName || "").trim();
-  if (!resolvedPath || !fileName) return null;
-  const out = { toolName, resolvedPath, fileName };
-  if (typeof parsed?.isSandbox === "boolean") out.isSandbox = parsed.isSandbox;
-  else if (typeof parsed?.sandboxEnabled === "boolean") out.isSandbox = parsed.sandboxEnabled;
-  return out;
-}
 
 function resolveBaseName(filePath = "") {
   const normalized = String(filePath || "").trim().replaceAll("\\", "/");
@@ -111,18 +83,6 @@ function getMessageScopeIdentity(messageItem = {}) {
   };
 }
 
-function flattenSessionMessagesWithSessionId(sessionDocs = []) {
-  return (Array.isArray(sessionDocs) ? sessionDocs : []).flatMap((sessionDoc) => {
-    const sessionId = getMessageSessionId(sessionDoc);
-    const messages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
-    return messages.map((messageItem) =>
-      getMessageSessionId(messageItem) || !sessionId
-        ? messageItem
-        : { ...messageItem, sessionId },
-    );
-  });
-}
-
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -174,19 +134,6 @@ function filterAttachmentsForMessage(attachments = [], messageItem = {}) {
   return (Array.isArray(attachments) ? attachments : []).filter((attachmentItem) =>
     isAttachmentOwnedByMessage(attachmentItem, messageItem),
   );
-}
-
-function isSameExplicitTurnScope(targetMessage = {}, candidateMessage = {}) {
-  const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
-  if (!targetTurnScopeId) return false;
-  const candidateTurnScopeId = getMessageTurnScopeId(candidateMessage);
-  if (candidateTurnScopeId !== targetTurnScopeId) return false;
-  const targetSessionId = getMessageSessionId(targetMessage);
-  const candidateSessionId = getMessageSessionId(candidateMessage);
-  if (targetSessionId && candidateSessionId && targetSessionId !== candidateSessionId) {
-    return false;
-  }
-  return true;
 }
 
 function isFreshPendingAssistant(messageItem = {}) {
@@ -436,8 +383,6 @@ function logDisplayedAttachmentsSummary({
 
 export function useMessageFiles({
   getMessageItem = () => ({}),
-  getAllMessages = () => [],
-  getSessionDocs = () => [],
   getUserId = () => "",
 } = {}) {
   function resolveRelativeWorkspacePath(absolutePath = "") {

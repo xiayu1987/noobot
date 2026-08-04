@@ -180,3 +180,39 @@ test("appendLog mirrors session execution logs to runtime-events session events"
   assert.equal(records[0].data.type, "tool_call");
   assert.equal(records[0].data.tool, "read_file");
 });
+
+test("appendLog mirrors context identity diagnostics to their dedicated runtime-events file", async () => {
+  const workspaceRoot = await makeTempDir();
+  const sessionRepository = createInMemorySessionRepository();
+  const repo = new ExecutionLogRepository({ sessionRepository, workspaceRoot });
+
+  await repo.appendLog("u1", "s1", {
+    dialogProcessId: "d1",
+    event: "agent.contextIdentity.modelContextCreated",
+    category: "context_identity",
+    type: "context_identity_debug",
+    data: {
+      debugType: "context-identity",
+      turnScopeId: "t1",
+      sourceMessageUid: "sm_1",
+      contentProjectionId: "sm_1",
+      userMetaProjectionId: "sm_1::user_meta",
+    },
+  }, "p1");
+
+  const runtimeEventFile = path.join(
+    workspaceRoot,
+    "u1",
+    "runtime",
+    "session",
+    "p1",
+    "events",
+    "debug-context-identity.jsonl",
+  );
+  const records = await readJsonLines(runtimeEventFile);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].dialogProcessId, "d1");
+  assert.equal(records[0].turnScopeId, "t1");
+  assert.equal(records[0].data.sourceMessageUid, "sm_1");
+  assert.equal(records[0].data.userMetaProjectionId, "sm_1::user_meta");
+});

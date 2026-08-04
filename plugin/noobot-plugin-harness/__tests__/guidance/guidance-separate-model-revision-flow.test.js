@@ -60,7 +60,7 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
   assert.equal(
-    ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    ctx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
     false,
   );
 });
@@ -89,7 +89,7 @@ test("separate_model mode: pending revision runs by separate model without promp
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
   assert.equal(invocations.some((item = {}) => item.purpose === "planning_revision"), true);
   assert.equal(
-    ctx.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    ctx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
     false,
   );
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
@@ -135,11 +135,11 @@ test("separate_model simultaneous plan update follows up with summary before ana
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(
-    ctx.messages.some((item = {}) => item?.pluginFlow === "analysis" && String(item?.content || "").includes("疑点")),
+    ctx.modelContext.messages.some((item = {}) => item?.pluginFlow === "analysis" && String(item?.content || "").includes("疑点")),
     false,
   );
   assert.equal(
-    ctx.messages.some((item = {}) => item?.purpose === "summary" && String(item?.content || "").includes("小结完成")),
+    ctx.modelContext.messages.some((item = {}) => item?.purpose === "summary" && String(item?.content || "").includes("小结完成")),
     true,
   );
   const executionLog = agentContext.payload.harness.logs.guidance.find(

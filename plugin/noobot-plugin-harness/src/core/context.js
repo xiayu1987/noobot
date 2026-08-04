@@ -6,8 +6,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import {
+  resolveAuthoritativeModelContext,
+  resolveHookClientEmitter,
+} from "@noobot/context-protocol/hook-context";
+
 import { createCapabilityRuntime } from "../capabilities/runtime.js";
-import { resolveHookClientEmitter } from "../../../../agent/src/extensions/hooks/client-channel.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { safeId } from "../data/record-builders.js";
 import { DEFAULT_OPTIONS, normalizeOptions } from "./options.js";
@@ -23,51 +27,6 @@ export function normalizePlanningGuidance(options = {}) {
 
 export function extractRuntime(ctx = {}) {
   return ctx?.agentContext?.execution?.controllers?.runtime || null;
-}
-
-function resolvePayloadMessageBlocks(payloadMessages = null) {
-  if (!payloadMessages || typeof payloadMessages !== "object" || Array.isArray(payloadMessages)) {
-    return null;
-  }
-  return {
-    system: Array.isArray(payloadMessages.system) ? payloadMessages.system : [],
-    history: Array.isArray(payloadMessages.history) ? payloadMessages.history : [],
-    incremental: Array.isArray(payloadMessages.incremental) ? payloadMessages.incremental : [],
-  };
-}
-
-function flattenMessageBlocks(blocks = null) {
-  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) return [];
-  return [
-    ...(Array.isArray(blocks.system) ? blocks.system : []),
-    ...(Array.isArray(blocks.history) ? blocks.history : []),
-    ...(Array.isArray(blocks.incremental) ? blocks.incremental : []),
-  ];
-}
-
-function shouldUseAgentContextMessageFallback(point = "") {
-  const normalizedPoint = String(point || "").trim().toLowerCase();
-  return normalizedPoint === "before_final_output";
-}
-
-function resolveUnifiedMessageBlocks(ctx = {}, { includeAgentContextMessages = false } = {}) {
-  if (ctx?.messageBlocks && typeof ctx.messageBlocks === "object" && !Array.isArray(ctx.messageBlocks)) {
-    return resolvePayloadMessageBlocks(ctx.messageBlocks);
-  }
-  if (!includeAgentContextMessages) return null;
-  return (
-    resolvePayloadMessageBlocks(ctx?.agentContext?.payload?.messages) ||
-    resolvePayloadMessageBlocks(ctx?.runtimeAgentContext?.payload?.messages)
-  );
-}
-
-function resolveUnifiedMessages(ctx = {}, { includeAgentContextMessages = false } = {}) {
-  if (Array.isArray(ctx?.messages)) return ctx.messages;
-  if (Array.isArray(ctx?.result?.modelMessages)) return ctx.result.modelMessages;
-  if (Array.isArray(ctx?.result?.turnMessages)) return ctx.result.turnMessages;
-  const blocks = resolveUnifiedMessageBlocks(ctx, { includeAgentContextMessages });
-  const flattened = flattenMessageBlocks(blocks);
-  return flattened.length ? flattened : null;
 }
 
 function resolveUnifiedCalls(ctx = {}) {
@@ -90,15 +49,14 @@ export function normalizeHookContextProtocol(point = "", ctx = {}) {
   const normalizedPoint = String(point || ctx?.point || "").trim();
   if (normalizedPoint && !ctx.point) ctx.point = normalizedPoint;
 
-  const includeAgentContextMessages = shouldUseAgentContextMessageFallback(normalizedPoint);
-  const unifiedMessageBlocks = resolveUnifiedMessageBlocks(ctx, { includeAgentContextMessages });
-  if (unifiedMessageBlocks && (!ctx.messageBlocks || typeof ctx.messageBlocks !== "object" || Array.isArray(ctx.messageBlocks))) {
-    ctx.messageBlocks = unifiedMessageBlocks;
-  }
-
-  const unifiedMessages = resolveUnifiedMessages(ctx, { includeAgentContextMessages });
-  if (unifiedMessages && !Array.isArray(ctx.messages)) {
-    ctx.messages = unifiedMessages;
+  const authoritative = resolveAuthoritativeModelContext(ctx);
+  if (authoritative) {
+    // The harness adapter resolves the authoritative modelContext itself. Do
+    // not pass the resolved payload back through the adapter, because that
+    // adapter intentionally accepts a Hook Context and would try to resolve
+    // modelContext a second time. Canonicalize the Hook Context once so all
+    // protocol views continue to share the same store.
+    canonicalizeMessageStore(ctx);
   }
 
   const unifiedCalls = resolveUnifiedCalls(ctx);
@@ -115,7 +73,6 @@ export function normalizeHookContextProtocol(point = "", ctx = {}) {
     ctx.toolName = String(ctx.call.name || "").trim();
   }
 
-  canonicalizeMessageStore(ctx);
   return ctx;
 }
 

@@ -5,12 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-
-import { runAgentTurn } from "../../../src/runtime/engine.js";
-import { loadStoppedModelMessageSnapshot } from "../../../src/runtime/resume/model-message-snapshot-store.js";
+import {
+  assertHookExecutionSucceeded,
+  runAgentTurn,
+} from "../../../src/runtime/engine.js";
+import { createAgentHookManager } from "../../../src/extensions/hooks/index.js";
 
 function createAbortedSignal() {
   const controller = new AbortController();
@@ -18,14 +17,17 @@ function createAbortedSignal() {
   return controller.signal;
 }
 
-test("runAgentTurn persists user stopped model message snapshot from engine user stop catch", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-engine-stop-snapshot-"));
+test("runAgentTurn completes terminal hooks before the runner seals a stopped snapshot", async () => {
   const events = [];
+  const abortHookContexts = [];
+  const errorHookContexts = [];
+  const hookManager = createAgentHookManager();
+  hookManager.on("on_abort", (context) => abortHookContexts.push(context));
+  hookManager.on("on_error", (context) => errorHookContexts.push(context));
   const runtime = {
     userId: "admin",
     sessionId: "session-engine-stop",
     globalConfig: {
-      workspaceRoot,
       defaultModelAlias: "test_model",
       providers: {
         test_model: {
@@ -40,6 +42,7 @@ test("runAgentTurn persists user stopped model message snapshot from engine user
     userConfig: {},
     runConfig: { turnScopeId: "turn-engine-stop" },
     abortSignal: createAbortedSignal(),
+    hookManager,
     eventListener: {
       onEvent(event) {
         events.push(event);
@@ -77,36 +80,42 @@ test("runAgentTurn persists user stopped model message snapshot from engine user
   };
 
   await assert.rejects(
-    () => runAgentTurn({ agentContext, userMessage: "stop after snapshot candidate" }),
+    () => runAgentTurn({
+      agentContext,
+      currentUserMessage: {
+        messageUid: "sm_engine_stop",
+        role: "user",
+        content: "stop after snapshot candidate",
+        dialogProcessId: "dialog-engine-stop",
+        turnScopeId: "turn-engine-stop",
+      },
+    }),
     (error) => error?.name === "AbortError",
   );
 
-  const snapshot = await loadStoppedModelMessageSnapshot({
-    globalConfig: runtime.globalConfig,
-    identity: {
-      userId: "admin",
-      sessionId: "session-engine-stop",
-      parentSessionId: "parent-session-engine-stop",
-      dialogProcessId: "dialog-engine-stop",
-      turnScopeId: "turn-engine-stop",
-    },
-  });
+  assert.equal(events.some((event) => event?.event === "stopped_model_message_snapshot_saved"), false);
+  assert.ok(runtime.stoppedModelMessageSnapshotCandidate.messageBlocks.incremental.some(
+    (message) => String(message.content || "").includes("stop after snapshot candidate"),
+  ));
+  assert.equal(abortHookContexts.length, 1);
+  assert.equal(errorHookContexts.length, 1);
+  assert.equal(abortHookContexts[0].contextProtocolVersion, 1);
+  assert.equal(errorHookContexts[0].contextProtocolVersion, 1);
+  assert.equal(abortHookContexts[0].modelContext, runtime.activeMessageContext);
+  assert.equal(errorHookContexts[0].modelContext, runtime.activeMessageContext);
+});
 
-  assert.equal(snapshot.userId, "admin");
-  assert.equal(snapshot.sessionId, "session-engine-stop");
-  assert.equal(snapshot.parentSessionId, "parent-session-engine-stop");
-  assert.equal(snapshot.dialogProcessId, "dialog-engine-stop");
-  assert.equal(snapshot.turnScopeId, "turn-engine-stop");
-  assert.ok(snapshot.messages.some((message) => String(message.content || "").includes("stop after snapshot candidate")));
-  assert.ok(snapshot.messageBlocks.incremental.some((message) => String(message.content || "").includes("stop after snapshot candidate")));
-
-  const savedEvent = events.find((event) => event?.event === "stopped_model_message_snapshot_saved");
-  assert.equal(savedEvent?.data?.source, "engine_user_stop_catch");
-  assert.deepEqual(savedEvent?.data?.identity, {
-    userId: "admin",
-    sessionId: "session-engine-stop",
-    parentSessionId: "parent-session-engine-stop",
-    dialogProcessId: "dialog-engine-stop",
-    turnScopeId: "turn-engine-stop",
-  });
+test("before_final_output hook failures are a final-result gate", () => {
+  const failure = new Error("before_final_output rejected");
+  assert.throws(
+    () => assertHookExecutionSucceeded({
+      point: "before_final_output",
+      errors: [{ ok: false, error: failure }],
+    }),
+    (error) => error === failure,
+  );
+  assert.doesNotThrow(() => assertHookExecutionSucceeded({
+    point: "before_final_output",
+    errors: [],
+  }));
 });

@@ -4,78 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { withHookRuntimeMeta } from "../../extensions/hooks/index.js";
-import {
-  buildContextMessages,
-  buildContextMessageBlocks,
-} from "../../context/assembly/message-builder.js";
 import { emitEvent } from "../../events/index.js";
 import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../../context/runtime-state/context-diagnostics.js";
+import {
+  attachModelContext,
+  validateHookContextProtocol,
+} from "@noobot/context-protocol/hook-context";
 
 function asObject(value = null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function resolveHookMessages(raw = {}) {
-  if (Array.isArray(raw?.messages)) return raw.messages;
-  if (Array.isArray(raw?.modelMessages)) return raw.modelMessages;
-  if (Array.isArray(raw?.loopState?.messages)) return raw.loopState.messages;
-  if (Array.isArray(raw?.result?.modelMessages)) return raw.result.modelMessages;
-  if (!raw?.agentContext) return null;
-  try {
-    return buildContextMessages(raw.agentContext, {
-      currentUserMessage: String(raw?.userMessage || ""),
-    });
-  } catch {
-    return null;
-  }
-}
-
-function isMessageBlocks(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value);
-}
-
-function normalizeBlockList(value = []) {
-  return Array.isArray(value) ? value : [];
-}
-
-function hasBlockMessages(blocks = null, blockName = "") {
-  return normalizeBlockList(blocks?.[blockName]).length > 0;
-}
-
-function resolveAgentContextMessageBlocks(raw = {}) {
-  if (!raw?.agentContext) return null;
-  try {
-    return buildContextMessageBlocks(raw.agentContext, {
-      currentUserMessage: String(raw?.userMessage || ""),
-    });
-  } catch {
-    return null;
-  }
-}
-
-function mergeMessageBlocksWithAgentContext(rawBlocks = null, contextBlocks = null) {
-  if (!isMessageBlocks(rawBlocks)) return contextBlocks;
-  if (!isMessageBlocks(contextBlocks)) return rawBlocks;
-  const needsSystem = !hasBlockMessages(rawBlocks, "system") && hasBlockMessages(contextBlocks, "system");
-  const needsHistory = !hasBlockMessages(rawBlocks, "history") && hasBlockMessages(contextBlocks, "history");
-  const needsIncremental = !hasBlockMessages(rawBlocks, "incremental") && hasBlockMessages(contextBlocks, "incremental");
-  if (!needsSystem && !needsHistory && !needsIncremental) return rawBlocks;
-  return {
-    ...rawBlocks,
-    system: needsSystem ? normalizeBlockList(contextBlocks.system) : normalizeBlockList(rawBlocks.system),
-    history: needsHistory ? normalizeBlockList(contextBlocks.history) : normalizeBlockList(rawBlocks.history),
-    incremental: needsIncremental ? normalizeBlockList(contextBlocks.incremental) : normalizeBlockList(rawBlocks.incremental),
-  };
-}
-
-function resolveHookMessageBlocks(raw = {}) {
-  const rawBlocks = isMessageBlocks(raw?.messageBlocks)
-    ? raw.messageBlocks
-    : isMessageBlocks(raw?.loopState?.messageBlocks)
-      ? raw.loopState.messageBlocks
-      : null;
-  const contextBlocks = resolveAgentContextMessageBlocks(raw);
-  return mergeMessageBlocksWithAgentContext(rawBlocks, contextBlocks);
 }
 
 function resolveCalls(raw = {}) {
@@ -95,9 +32,16 @@ function resolveCall(raw = {}) {
 
 export function buildHookContext(point = "", runtime = {}, raw = {}) {
   const safeRaw = asObject(raw);
+  const {
+    modelContext: suppliedModelContext,
+    messages: _legacyMessages,
+    messageBlocks: _legacyMessageBlocks,
+    messageStore: _legacyMessageStore,
+    ...hookFields
+  } = safeRaw;
   const call = resolveCall(safeRaw);
   const merged = {
-    ...safeRaw,
+    ...hookFields,
     point: String(point || safeRaw?.point || "").trim(),
     phase: safeRaw?.phase ?? null,
     status: safeRaw?.status ?? null,
@@ -105,9 +49,6 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
     endedAt: safeRaw?.endedAt ?? null,
     durationMs: Number.isFinite(Number(safeRaw?.durationMs)) ? Number(safeRaw.durationMs) : null,
     agentContext: safeRaw?.agentContext ?? null,
-    messageStore: safeRaw?.messageStore ?? safeRaw?.loopState?.messageStore ?? null,
-    messages: resolveHookMessages(safeRaw),
-    messageBlocks: resolveHookMessageBlocks(safeRaw),
     result: safeRaw?.result ?? null,
     error: safeRaw?.error ?? null,
     turn: Number.isFinite(Number(safeRaw?.turn)) ? Number(safeRaw.turn) : null,
@@ -121,6 +62,7 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
     payload: safeRaw?.payload ?? null,
   };
   const context = withHookRuntimeMeta(runtime, merged);
+  attachModelContext(context, suppliedModelContext?.protocolVersion ? suppliedModelContext : null);
   if (String(point || "").trim() === "before_llm_call") {
     emitModelContextTrace(runtime, "hook_context_built", {
       point: String(point || "").trim(),
@@ -128,8 +70,8 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
       turn: context.turn,
       rawHadMessages: Array.isArray(safeRaw?.messages),
       rawHadMessageBlocks: Boolean(safeRaw?.messageBlocks && typeof safeRaw.messageBlocks === "object"),
-      contextBlocks: summarizeDiagnosticBlocks(context.messageBlocks),
-      contextMessages: summarizeDiagnosticMessages(context.messages),
+      contextBlocks: summarizeDiagnosticBlocks(context.modelContext?.messageBlocks),
+      contextMessages: summarizeDiagnosticMessages(context.modelContext?.messages),
     });
   }
   validateHookContext(point, runtime, context);
@@ -148,6 +90,7 @@ function validateHookContext(point = "", runtime = {}, context = {}) {
   const normalizedPoint = String(point || "").trim();
   if (!normalizedPoint) return;
   const warnings = [];
+  warnings.push(...validateHookContextProtocol(context, { point: normalizedPoint }).warnings);
   const requireArray = (key) => {
     if (context?.[key] == null) return;
     if (!Array.isArray(context[key])) warnings.push(`${key} should be array`);
@@ -172,7 +115,9 @@ function validateHookContext(point = "", runtime = {}, context = {}) {
     normalizedPoint === "after_llm_call" ||
     normalizedPoint === "llm_call_error"
   ) {
-    requireArray("messages");
+    if (context.modelContext?.messages != null && !Array.isArray(context.modelContext.messages)) {
+      warnings.push("modelContext.messages should be array");
+    }
   }
   if (
     normalizedPoint === "before_tool_calls" ||
