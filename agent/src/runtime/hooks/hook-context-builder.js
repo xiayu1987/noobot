@@ -11,6 +11,7 @@ import {
   attachModelContext,
   validateHookContextProtocol,
 } from "@noobot/context-protocol/hook-context";
+import { emitAgentContextProtocolDebug } from "../../observability/agent-context-protocol-debug.js";
 
 function asObject(value = null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -33,11 +34,13 @@ function resolveCall(raw = {}) {
 
 export function buildHookContext(point = "", runtime = {}, raw = {}) {
   const safeRaw = asObject(raw);
+  for (const forbiddenField of ["messages", "messageBlocks", "messageStore"]) {
+    if (Object.prototype.hasOwnProperty.call(safeRaw, forbiddenField)) {
+      throw new TypeError(`Hook Context V2 forbids top-level ${forbiddenField}`);
+    }
+  }
   const {
     modelContext: suppliedModelContext,
-    messages: _legacyMessages,
-    messageBlocks: _legacyMessageBlocks,
-    messageStore: _legacyMessageStore,
     ...hookFields
   } = safeRaw;
   const call = resolveCall(safeRaw);
@@ -64,6 +67,17 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
   };
   const context = withHookRuntimeMeta(runtime, merged);
   attachModelContext(context, suppliedModelContext?.protocolVersion ? suppliedModelContext : null);
+  emitAgentContextProtocolDebug(runtime?.eventListener || null, "hookDocumentConsumed", {
+    userId: context?.agentContext?.context?.identity?.userId,
+    sessionId: context?.agentContext?.context?.identity?.sessionId,
+    dialogProcessId: context?.modelContext?.activeTurnIdentity?.dialogProcessId,
+    turnScopeId: context?.modelContext?.activeTurnIdentity?.turnScopeId,
+  }, {
+    consumer: `hook:${context.point}`,
+    contextProtocolVersion: context.contextProtocolVersion,
+    modelContextProtocolVersion: Number(context.modelContext?.protocolVersion || 0),
+    messageCount: Array.isArray(context.modelContext?.messages) ? context.modelContext.messages.length : 0,
+  });
   if (String(point || "").trim() === "before_llm_call") {
     emitModelContextTrace(runtime, "hook_context_built", {
       point: String(point || "").trim(),

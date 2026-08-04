@@ -5,9 +5,9 @@
  */
 
 import {
-  markMessagesSummarizedByIds,
-  pruneSummarizedIncrementalMessages,
-} from "@noobot/context-protocol/message-store";
+  markContextMessagesSummarized as markMessagesSummarizedByIds,
+  pruneContextSummarizedIncremental as pruneSummarizedIncrementalMessages,
+} from "@noobot/context-protocol/context-mutation";
 import { createHash } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
 

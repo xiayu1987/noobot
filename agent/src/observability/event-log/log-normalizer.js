@@ -19,6 +19,9 @@ function resolveErrorType(rawEvent = "") {
 }
 
 export function classifyExecutionEvent(event = "") {
+  if (String(event || "").startsWith("agent.contextProtocol.")) {
+    return { category: "agent_context_protocol", type: "agent_context_protocol_debug" };
+  }
   if (String(event || "").startsWith("agent.context.")) {
     return { category: "agent_context", type: "agent_context_debug" };
   }

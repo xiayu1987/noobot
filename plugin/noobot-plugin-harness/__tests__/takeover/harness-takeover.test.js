@@ -17,7 +17,7 @@ import { createModelContext } from "@noobot/context-protocol";
 function withModelContext(ctx = {}, { messages = [], messageBlocks = null } = {}) {
   return {
     ...ctx,
-    contextProtocolVersion: 1,
+    contextProtocolVersion: 2,
     modelContext: createModelContext({ messages, messageBlocks }),
   };
 }

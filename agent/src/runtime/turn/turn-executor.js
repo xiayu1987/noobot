@@ -45,9 +45,10 @@ import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { maybeCreateRequiredToolChoiceUnsupportedFallbackAi } from "./tool-choice-fallback-stage.js";
 import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
 import {
-  appendMessage,
-  replaceMessageProjection,
-} from "@noobot/context-protocol/message-store";
+  appendContextMessage as appendMessage,
+  replaceContextProjection as replaceMessageProjection,
+} from "@noobot/context-protocol/context-mutation";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context-schema";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
 import {
   summarizeDiagnosticBlocks,
@@ -75,8 +76,8 @@ function normalizeBlockList(value = []) {
 
 function requireLoopStateModelContext(loopState = {}) {
   const modelContext = loopState?.modelContext;
-  if (modelContext?.protocolVersion !== 1) {
-    throw new Error("agent loop requires modelContext protocolVersion=1");
+  if (modelContext?.protocolVersion !== MODEL_CONTEXT_PROTOCOL_VERSION) {
+    throw new Error(`agent loop requires modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`);
   }
   return modelContext;
 }

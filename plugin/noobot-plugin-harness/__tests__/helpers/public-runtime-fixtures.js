@@ -89,19 +89,18 @@ export function ensureTestHookContext(ctx = {}) {
   stampRoundIdentity(ctx.messages);
   stampRoundIdentity(ctx.messageBlocks?.history);
   stampRoundIdentity(ctx.messageBlocks?.incremental);
-  if (ctx.modelContext?.protocolVersion !== 1) {
+  if (ctx.modelContext?.protocolVersion !== 2) {
     const explicitMessageBlocks = ctx.messageBlocks || (
       !ctx.messageStore && !Array.isArray(ctx.messages)
         ? { system: [], history: [], incremental: [] }
         : null
     );
     ctx.modelContext = createModelContext({
-      messageStore: ctx.messageStore || null,
       messages: explicitMessageBlocks ? null : (Array.isArray(ctx.messages) ? ctx.messages : null),
       messageBlocks: explicitMessageBlocks,
       activeTurnIdentity,
     });
-    ctx.contextProtocolVersion = 1;
+    ctx.contextProtocolVersion = 2;
   }
   if (!ctx.modelContext.activeTurnIdentity) {
     ctx.modelContext.activeTurnIdentity = activeTurnIdentity;
@@ -115,12 +114,11 @@ export function ensureTestHookContext(ctx = {}) {
 }
 
 export function createTestModelContext({
-  messageStore = null,
   messages = null,
   messageBlocks = null,
   activeTurnIdentity = null,
 } = {}) {
-  return createModelContext({ messageStore, messages, messageBlocks, activeTurnIdentity });
+  return createModelContext({ messages, messageBlocks, activeTurnIdentity });
 }
 
 export function createTestHookContext(ctx = {}, context = {}) {
@@ -250,8 +248,8 @@ export function createTestHookManager() {
 export function createTestResolveModelMessages() {
   return ({ ctx = {} } = {}) => {
     const modelContext = ctx?.modelContext;
-    if (modelContext?.protocolVersion !== 1) {
-      throw new Error("test model resolver requires modelContext protocolVersion=1");
+    if (modelContext?.protocolVersion !== 2) {
+      throw new Error("test model resolver requires modelContext protocolVersion=2");
     }
     const blocks = modelContext.messageBlocks;
     if (!blocks || typeof blocks !== "object") {

@@ -3,6 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  getModelContextRuntime,
+  resetModelContextMessageStore,
+} from "./model-context-runtime.js";
+import { deriveContextMessageProjectionId } from "./message-codec.js";
 
 function normalizeList(value) {
   return Array.isArray(value) ? value : [];
@@ -81,10 +86,7 @@ function resolveMessageId(message = {}) {
 }
 
 export function deriveMessageProjectionId(sourceMessageId = "", projectionType = "") {
-  const sourceId = String(sourceMessageId || "").trim();
-  const type = String(projectionType || "").trim();
-  if (!sourceId || !type) return "";
-  return `${sourceId}::${type}`;
+  return deriveContextMessageProjectionId(sourceMessageId, projectionType);
 }
 
 function ensureMessageMetadata(message = {}) {
@@ -157,16 +159,13 @@ function canonicalEntityShape(message = {}) {
 }
 
 function resolveStore(holder = {}) {
-  if (holder?.messageStore && typeof holder.messageStore === "object" && !Array.isArray(holder.messageStore)) {
-    if (!(holder.messageStore.byId instanceof Map)) holder.messageStore.byId = new Map();
-    if (!Array.isArray(holder.messageStore.messages)) holder.messageStore.messages = [];
-    if (!Number.isFinite(Number(holder.messageStore.nextId))) {
-      holder.messageStore.nextId = holder.messageStore.messages.length + 1;
-    }
-    return holder.messageStore;
+  const runtime = getModelContextRuntime(holder);
+  const store = runtime.messageStore;
+  if (!(store.byId instanceof Map)) store.byId = new Map();
+  if (!Array.isArray(store.messages)) store.messages = [];
+  if (!Number.isFinite(Number(store.nextId))) {
+      store.nextId = store.messages.length + 1;
   }
-  const store = { messages: [], byId: new Map(), nextId: 1 };
-  holder.messageStore = store;
   return store;
 }
 
@@ -252,9 +251,10 @@ function prepareNewCanonicalEntities(holder = {}, store = null, messages = []) {
 }
 
 function notifyCanonicalEntitiesAdded(holder = {}, messages = [], meta = {}) {
-  if (typeof holder?.onCanonicalMessageAdded !== "function") return;
+  const observer = getModelContextRuntime(holder).onCanonicalMessageAdded;
+  if (typeof observer !== "function") return;
   for (const message of normalizeList(messages)) {
-    holder.onCanonicalMessageAdded(message, meta);
+    observer(message, meta);
   }
 }
 
@@ -318,9 +318,7 @@ export function markMessagesSummarizedByIds(holder = {}, ids = []) {
 
 export function replaceMessages(holder = {}, messages = []) {
   if (!holder || typeof holder !== "object") return [];
-  const store = holder.messageStore && typeof holder.messageStore === "object"
-    ? resolveStore(holder)
-    : (canonicalizeMessageStore(holder) || resolveStore(holder));
+  const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const addedEntities = prepareNewCanonicalEntities(holder, store, messages);
   const canonicalMessages = canonicalizeList(store, messages);
   if (!Array.isArray(holder.messages)) holder.messages = [];
@@ -363,9 +361,7 @@ export function replaceMessages(holder = {}, messages = []) {
  */
 export function replaceMessageProjection(holder = {}, messages = []) {
   if (!holder || typeof holder !== "object") return [];
-  const store = holder.messageStore && typeof holder.messageStore === "object"
-    ? resolveStore(holder)
-    : (canonicalizeMessageStore(holder) || resolveStore(holder));
+  const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const canonicalMessages = canonicalizeList(store, messages);
   if (!Array.isArray(holder.messages)) holder.messages = [];
   holder.messages.splice(0, holder.messages.length, ...canonicalMessages);
@@ -391,11 +387,7 @@ export function pruneSummarizedIncrementalMessages(holder = {}) {
     syncBlockIds(blocks);
   }
 
-  holder.messageStore = {
-    messages: [],
-    byId: new Map(),
-    nextId: 1,
-  };
+  resetModelContextMessageStore(holder);
   canonicalizeMessageStore(holder);
   return removedCount;
 }
@@ -406,9 +398,7 @@ export function writeMessageBlocks(holder = {}, blocks = {}) {
     holder.messageBlocks && typeof holder.messageBlocks === "object" && !Array.isArray(holder.messageBlocks)
       ? holder.messageBlocks
       : {};
-  const store = holder.messageStore && typeof holder.messageStore === "object"
-    ? resolveStore(holder)
-    : (canonicalizeMessageStore(holder) || resolveStore(holder));
+  const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const addedEntities = prepareNewCanonicalEntities(holder, store, [
     ...normalizeList(blocks.system),
     ...normalizeList(blocks.history),

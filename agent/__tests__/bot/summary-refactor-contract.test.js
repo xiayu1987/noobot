@@ -12,10 +12,10 @@ import { createCurrentTurnMessagesStore } from "../../src/context/session/curren
 import { filterForModelContext } from "../../src/context/session/message-context-policy.js";
 import { resolveMainModelFinalMessages } from "../../src/session/utils/context-window-normalizer.js";
 import {
-  appendMessage,
-  canonicalizeMessageStore,
-  pruneSummarizedIncrementalMessages,
-} from "@noobot/context-protocol/message-store";
+  appendContextMessage as appendMessage,
+  pruneContextSummarizedIncremental as pruneSummarizedIncrementalMessages,
+} from "@noobot/context-protocol/context-mutation";
+import { createModelContext } from "@noobot/context-protocol/hook-context";
 import * as mainFlowControl from "../../src/runtime/main-flow-control.js";
 
 function message(id, value = {}) {
@@ -49,8 +49,7 @@ test("model input after memory release equals the pre-refactor full-memory model
 });
 
 test("model input remains deeply equal to pre-refactor block filtering across two checkpoints", () => {
-  const holder = {
-    messages: [],
+  const holder = createModelContext({
     messageBlocks: {
       system: [{
         role: "system",
@@ -74,13 +73,7 @@ test("model input remains deeply equal to pre-refactor block filtering across tw
         { role: "assistant", content: "first-tail" },
       ],
     },
-  };
-  holder.messages = [
-    ...holder.messageBlocks.system,
-    ...holder.messageBlocks.history,
-    ...holder.messageBlocks.incremental,
-  ];
-  canonicalizeMessageStore(holder);
+  });
   const resolve = () => resolveMainModelFinalMessages({
     systemMessages: holder.messageBlocks.system,
     historyMessages: holder.messageBlocks.history,

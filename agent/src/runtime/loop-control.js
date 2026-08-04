@@ -15,7 +15,7 @@ import {
 } from "./constants/index.js";
 import { REQUEST_HELP_TOOL_NAME } from "../tools/collaboration/request-help-tool.js";
 import { extractMessageTextContent } from "../context/session/message-content-utils.js";
-import { appendMessage } from "@noobot/context-protocol/message-store";
+import { appendContextMessage as appendMessage } from "@noobot/context-protocol/context-mutation";
 import {
   MAIN_FLOW_CONTROL_REASON,
   requestMainFlowFinalNoToolsTurn,

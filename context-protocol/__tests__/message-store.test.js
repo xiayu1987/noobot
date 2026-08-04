@@ -16,6 +16,15 @@ import {
   resolveMessagesByIds,
   writeMessageBlocks,
 } from "../src/message-store.js";
+import {
+  attachModelContextRuntime,
+  resolveCanonicalContextMessages,
+} from "../src/model-context-runtime.js";
+
+function attachRuntime(holder, options = {}) {
+  attachModelContextRuntime(holder, options);
+  return holder;
+}
 
 test("derived projections receive a deterministic identity distinct from their source", () => {
   assert.equal(deriveMessageProjectionId("sm_user", "user_meta"), "sm_user::user_meta");
@@ -25,24 +34,25 @@ test("derived projections receive a deterministic identity distinct from their s
 test("persisted entities use messageUid as their canonical context identity", () => {
   const message = { messageUid: "sm_injected", role: "user", content: "injected" };
   const holder = { messages: [message] };
+  attachRuntime(holder);
 
   canonicalizeMessageStore(holder);
 
   assert.equal(getMessageId(message), "sm_injected");
   assert.equal(message.additional_kwargs.noobotMessageId, "sm_injected");
-  assert.equal(holder.messageStore.byId.get("sm_injected"), message);
+  assert.equal(resolveCanonicalContextMessages(holder)[0], message);
 });
 
 test("persisted and canonical identities cannot diverge", () => {
   assert.throws(
-    () => canonicalizeMessageStore({
+    () => canonicalizeMessageStore(attachRuntime({
       messages: [{
         messageUid: "sm_persisted",
         role: "user",
         content: "injected",
         additional_kwargs: { noobotMessageId: "am_parallel" },
       }],
-    }),
+    })),
     /messageUid conflicts with canonical noobotMessageId/,
   );
 });
@@ -61,6 +71,7 @@ test("canonical store rejects one identity assigned to different message entitie
       },
     ],
   };
+  attachRuntime(holder);
 
   assert.throws(
     () => canonicalizeMessageStore(holder),
@@ -82,13 +93,14 @@ test("canonical store reserves explicit ids before assigning ids to unidentified
       incremental: [],
     },
   };
+  attachRuntime(holder);
 
   canonicalizeMessageStore(holder);
 
   assert.equal(getMessageId(holder.messageBlocks.system[0]), "am_2");
   assert.equal(getMessageId(holder.messageBlocks.history[0]), "am_1");
-  assert.equal(holder.messageStore.byId.get("am_1"), holder.messageBlocks.history[0]);
-  assert.equal(holder.messageStore.byId.get("am_2"), holder.messageBlocks.system[0]);
+  assert.equal(resolveCanonicalContextMessages(holder).includes(holder.messageBlocks.history[0]), true);
+  assert.equal(resolveCanonicalContextMessages(holder).includes(holder.messageBlocks.system[0]), true);
 });
 
 test("agent message store canonicalizes messages and block views", () => {
@@ -102,6 +114,7 @@ test("agent message store canonicalizes messages and block views", () => {
       incremental: [currentForMessages],
     },
   };
+  attachRuntime(holder);
 
   canonicalizeMessageStore(holder);
 
@@ -112,6 +125,7 @@ test("agent message store canonicalizes messages and block views", () => {
 
 test("agent message store append and replace keep block arrays synchronized", () => {
   const holder = { messages: [], messageBlocks: { system: [], history: [], incremental: [] } };
+  attachRuntime(holder);
   const appended = appendMessage(holder, { role: "user", content: "hello" }, { block: "incremental" });
 
   assert.equal(holder.messages[0], appended);
@@ -146,6 +160,7 @@ test("append atomically assigns the authoritative active turn identity", () => {
     messages: [],
     messageBlocks: { system: [], history: [], incremental: [] },
   };
+  attachRuntime(holder);
 
   const appended = appendMessage(holder, {
     role: "assistant",
@@ -171,6 +186,7 @@ test("append rejects partial canonical round identities when no active turn exis
     messages: [],
     messageBlocks: { system: [], history: [], incremental: [] },
   };
+  attachRuntime(holder);
   assert.throws(
     () => appendMessage(holder, {
       role: "tool",
@@ -200,6 +216,7 @@ test("replace and block writes bind only newly registered entities to the active
     messages: [historical],
     messageBlocks: { system: [], history: [historical], incremental: [] },
   };
+  attachRuntime(holder, { onCanonicalMessageAdded: holder.onCanonicalMessageAdded });
   canonicalizeMessageStore(holder);
   const prepended = {
     role: "user",
@@ -235,6 +252,7 @@ test("agent message store partial block writes preserve untouched blocks", () =>
     messages: [],
     messageBlocks: { system: [], history: [], incremental: [] },
   };
+  attachRuntime(holder);
   const system = appendMessage(holder, { role: "system", content: "sys" }, { block: "system" });
 
   writeMessageBlocks(holder, {
@@ -263,6 +281,7 @@ test("agent message store ignores provider and business ids for block identity",
       incremental: [],
     },
   };
+  attachRuntime(holder);
 
   canonicalizeMessageStore(holder);
 
@@ -284,6 +303,7 @@ test("agent message store advances next id when hydrating existing message ids",
       incremental: [],
     },
   };
+  attachRuntime(holder);
 
   canonicalizeMessageStore(holder);
   const canonicalSystemMessage = holder.messageBlocks.system[0];
@@ -307,6 +327,7 @@ test("agent message store replaceMessages does not rewrite message block ownersh
       incremental: [{ role: "user", content: "cur", dialogProcessId: "d2" }],
     },
   };
+  attachRuntime(holder);
   holder.messages = [
     ...holder.messageBlocks.system,
     ...holder.messageBlocks.history,
@@ -342,6 +363,7 @@ test("summary pruning clears only incremental blocks and rebuilds canonical inde
       incremental: [summarizedIncremental, activeIncremental],
     },
   };
+  attachRuntime(holder);
   canonicalizeMessageStore(holder);
   const removedIncrementalId = getMessageId(holder.messageBlocks.incremental[0]);
 
@@ -351,8 +373,8 @@ test("summary pruning clears only incremental blocks and rebuilds canonical inde
   assert.deepEqual(holder.messageBlocks.history.map((item = {}) => item.content), ["history-summary"]);
   assert.deepEqual(holder.messageBlocks.incremental.map((item = {}) => item.content), ["latest-summary"]);
   assert.deepEqual(resolveMessagesByIds(holder, [removedIncrementalId]), []);
-  assert.equal(holder.messageStore.messages.some((item = {}) => item.content === "old-increment"), false);
-  assert.equal(holder.messageStore.messages.some((item = {}) => item.content === "history-summary"), true);
+  assert.equal(resolveCanonicalContextMessages(holder).some((item = {}) => item.content === "old-increment"), false);
+  assert.equal(resolveCanonicalContextMessages(holder).some((item = {}) => item.content === "history-summary"), true);
 });
 
 test("summary pruning preserves every unmarked incremental message byte-for-byte and in order", () => {
@@ -374,6 +396,7 @@ test("summary pruning preserves every unmarked incremental message byte-for-byte
       ],
     },
   };
+  attachRuntime(holder);
   canonicalizeMessageStore(holder);
   const expectedIncremental = structuredClone(
     holder.messageBlocks.incremental.filter((message) => message.summarized !== true),

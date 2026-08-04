@@ -4,52 +4,41 @@
  * SPDX-License-Identifier: MIT
  */
 
-function text(value) {
-  return String(value || "").trim();
-}
+import {
+  readContextMessageField,
+  resolveContextMessageDialogProcessId,
+  resolveContextMessageFlags,
+  resolveContextMessageId,
+  resolveContextMessageRole,
+  recoverContextTaskSummaryToolResult,
+  resolveContextToolCallId,
+  resolveContextToolCalls,
+} from "./message-codec.js";
+
+function text(value) { return String(value || "").trim(); }
 
 export function readMessageField(message = {}, field = "") {
-  const key = text(field);
-  if (!key || !message || typeof message !== "object") return "";
-  return text(
-    message?.[key] ??
-      message?.additional_kwargs?.[key] ??
-      message?.lc_kwargs?.[key] ??
-      message?.lc_kwargs?.additional_kwargs?.[key] ??
-      "",
-  );
+  return readContextMessageField(message, field);
 }
 
 export function resolveMessageId(message = {}) {
-  return readMessageField(message, "noobotMessageId");
+  return resolveContextMessageId(message);
 }
 
 export function resolveMessageDialogProcessId(message = {}) {
-  return readMessageField(message, "dialogProcessId") || readMessageField(message, "dialogId");
+  return resolveContextMessageDialogProcessId(message);
 }
 
 export function resolveMessageRole(message = {}) {
-  const role = text(message?.role || message?.lc_kwargs?.role).toLowerCase();
-  if (role) return role;
-  const type = text(
-    message?.type || message?.lc_kwargs?.type ||
-      (typeof message?._getType === "function" ? message._getType() : ""),
-  ).toLowerCase();
-  return ({ ai: "assistant", human: "user", system: "system", tool: "tool" })[type] || "";
+  return resolveContextMessageRole(message);
 }
 
 export function getMessageToolCalls(message = {}) {
-  if (Array.isArray(message?.tool_calls)) return message.tool_calls;
-  if (Array.isArray(message?.lc_kwargs?.tool_calls)) return message.lc_kwargs.tool_calls;
-  if (Array.isArray(message?.additional_kwargs?.tool_calls)) return message.additional_kwargs.tool_calls;
-  return [];
+  return resolveContextToolCalls(message);
 }
 
 export function resolveToolCallId(value = {}) {
-  return text(
-    value?.id ?? value?.tool_call_id ?? value?.toolCallId ?? value?.call_id ??
-      value?.lc_kwargs?.tool_call_id ?? value?.lc_kwargs?.toolCallId ?? "",
-  );
+  return resolveContextToolCallId(value);
 }
 
 export function isSystemLikeMessageRole(role = "") {
@@ -58,9 +47,7 @@ export function isSystemLikeMessageRole(role = "") {
 }
 
 export function isMessageSummarized(message = {}) {
-  return message?.summarized === true || message?.lc_kwargs?.summarized === true ||
-    message?.additional_kwargs?.summarized === true ||
-    message?.lc_kwargs?.additional_kwargs?.summarized === true;
+  return resolveContextMessageFlags(message).summarized;
 }
 
 export function isCurrentSystemContextMessage(message = {}) {
@@ -68,10 +55,7 @@ export function isCurrentSystemContextMessage(message = {}) {
 }
 
 export function isInjectedMessage(message = {}) {
-  if (!message || typeof message !== "object") return false;
-  if (readMessageField(message, "injectedMessage").toLowerCase() === "true") return true;
-  if (readMessageField(message, "injectedBy")) return true;
-  return false;
+  return resolveContextMessageFlags(message).injected;
 }
 
 export function resolveInjectedMessageType(message = {}) {
@@ -93,7 +77,7 @@ export function shouldKeepForModelContext(message = {}) {
 }
 
 export function filterForModelContext(messages = [], {
-  recoverUnpairedToolResult = null,
+  recoverUnpairedToolResult = recoverContextTaskSummaryToolResult,
 } = {}) {
   const kept = (Array.isArray(messages) ? messages : []).filter((message) => {
     const placeholder = message?.turnStatusPlaceholder === true || Boolean(

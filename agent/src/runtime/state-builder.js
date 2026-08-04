@@ -37,6 +37,7 @@ import {
   canonicalMessageIdentityDebugData,
   emitContextIdentityDebug,
 } from "../observability/context-identity-debug.js";
+import { emitAgentContextProtocolDebug } from "../observability/agent-context-protocol-debug.js";
 
 export function createStateBuilder({
   createChatModelFn = createChatModel,
@@ -148,6 +149,19 @@ export function createStateBuilder({
           canonicalMessageIdentityDebugData(message, meta),
         );
       },
+      onMutationConsumed(result) {
+        emitAgentContextProtocolDebug(
+          eventListener,
+          "mutationConsumed",
+          { ...context.identity, ...activeTurnIdentity },
+          {
+            consumer: "agent-runtime",
+            commandType: result.commandType,
+            commandId: result.commandId,
+            revision: result.revision,
+          },
+        );
+      },
       messageBlocks:
         messageBlocks && typeof messageBlocks === "object"
           ? {
@@ -162,6 +176,14 @@ export function createStateBuilder({
     if (!modelContext) {
       throw new Error("agent state requires a versioned modelContext");
     }
+    emitAgentContextProtocolDebug(eventListener, "documentCreated", context.identity, {
+      consumer: "agent-state-builder",
+      revision: 0,
+      blockCounts: Object.fromEntries(
+        Object.entries(modelContext.messageBlocks).map(([name, blockMessages]) => [name, blockMessages.length]),
+      ),
+      messageCount: modelContext.messages.length,
+    });
 
     const loopState = {
       tools,

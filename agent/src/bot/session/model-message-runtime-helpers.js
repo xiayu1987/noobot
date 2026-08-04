@@ -9,6 +9,7 @@ import {
 import { normalizeMessageForModelRuntime } from "./session-execution-engine-utils.js";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
 import { summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context-schema";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
@@ -20,8 +21,8 @@ const PLUGIN_DEEP_MERGE_KEYS = new Set([
 
 function requireAuthoritativeMessageBlocks(ctx = {}) {
   const modelContext = ctx?.modelContext;
-  if (Number(modelContext?.protocolVersion) !== 1) {
-    throw new Error("resolveModelMessages requires context protocol modelContext v1");
+  if (Number(modelContext?.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) {
+    throw new Error(`resolveModelMessages requires modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`);
   }
   const blocks = modelContext?.messageBlocks;
   if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) {

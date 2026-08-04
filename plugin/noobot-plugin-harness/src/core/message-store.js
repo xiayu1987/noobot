@@ -4,20 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  appendMessage as protocolAppendMessage,
-  canonicalizeMessageStore as protocolCanonicalizeMessageStore,
-  getMessageId,
-  replaceMessageProjection as protocolReplaceMessageProjection,
-  replaceMessages as protocolReplaceMessages,
-  resolveMessagesByIds as protocolResolveMessagesByIds,
-  writeMessageBlocks as protocolWriteMessageBlocks,
-} from "@noobot/context-protocol/message-store";
+  appendContextMessage,
+  replaceContextMessages,
+  replaceContextProjection,
+  writeContextBlocks,
+} from "@noobot/context-protocol/context-mutation";
+import { resolveContextMessageId } from "@noobot/context-protocol/message-codec";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context-schema";
 import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/hook-context";
 
 function resolveHolder(ctx = {}) {
   const modelContext = resolveAuthoritativeModelContext(ctx);
   if (!modelContext) {
-    throw new TypeError("Harness model-message operations require contextProtocolVersion=1 modelContext");
+    throw new TypeError(`Harness model-message operations require modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`);
   }
   return modelContext;
 }
@@ -34,18 +33,31 @@ export function resolveModelMessages(ctx = {}) {
 export function resolveModelMessageBlocks(ctx = {}) {
   const modelContext = resolveHolder(ctx);
   if (!modelContext.messageBlocks || typeof modelContext.messageBlocks !== "object") {
-    modelContext.messageBlocks = { system: [], history: [], incremental: [] };
+    throw new TypeError("Harness modelContext requires canonical messageBlocks");
   }
   return modelContext.messageBlocks;
 }
 
 export {
-  getMessageId,
+  resolveContextMessageId as getMessageId,
 };
 
-export const appendMessage = (ctx, ...args) => protocolAppendMessage(resolveHolder(ctx), ...args);
-export const canonicalizeMessageStore = (ctx, ...args) => protocolCanonicalizeMessageStore(resolveHolder(ctx), ...args);
-export const replaceMessages = (ctx, ...args) => protocolReplaceMessages(resolveHolder(ctx), ...args);
-export const replaceMessageProjection = (ctx, ...args) => protocolReplaceMessageProjection(resolveHolder(ctx), ...args);
-export const resolveMessagesByIds = (ctx, ...args) => protocolResolveMessagesByIds(resolveHolder(ctx), ...args);
-export const writeMessageBlocks = (ctx, ...args) => protocolWriteMessageBlocks(resolveHolder(ctx), ...args);
+export const appendMessage = (ctx, ...args) => appendContextMessage(resolveHolder(ctx), ...args);
+export const replaceMessages = (ctx, ...args) => replaceContextMessages(resolveHolder(ctx), ...args);
+export const replaceMessageProjection = (ctx, ...args) => replaceContextProjection(resolveHolder(ctx), ...args);
+export const writeMessageBlocks = (ctx, ...args) => writeContextBlocks(resolveHolder(ctx), ...args);
+export const resolveMessagesByIds = (ctx, ids = []) => {
+  const wanted = new Set((Array.isArray(ids) ? ids : []).map((id) => String(id || "").trim()));
+  const modelContext = resolveHolder(ctx);
+  const candidates = [
+    ...resolveModelMessages(ctx),
+    ...Object.values(modelContext.messageBlocks).flatMap((messages) => Array.isArray(messages) ? messages : []),
+  ];
+  const seen = new Set();
+  return candidates.filter((message) => {
+    const id = resolveContextMessageId(message);
+    if (!wanted.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+};
