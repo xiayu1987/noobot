@@ -12,6 +12,7 @@ import { createSubSessionMessageRegistry, createSubSessionStore } from "./chatSt
 import { createWorkflowStore } from "./chatStoreWorkflows.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import { projectTurnRuntimeToMessages } from "../runtime/engine/turnProjectionStore.js";
+import { findSessionByAnyId, promoteSessionIdentityToBackendId } from "../model/sessionIdentity.js";
 
 export const useChatStore = defineStore("chat", () => {
   const input=ref(""); const uploadFiles=ref([]);
@@ -47,6 +48,18 @@ export const useChatStore = defineStore("chat", () => {
       const turn=result?.turn;
       const sessionId=String(turn?.sessionId||"").trim();
       const parentSessionId=String(turn?.parentSessionId||"").trim();
+      if(result?.aliasPromoted===true){
+        const sessionItem=findSessionByAnyId(sessions.value,String(result?.previousSessionId||"").trim());
+        if(sessionItem){
+          const promotion=promoteSessionIdentityToBackendId({
+            sessionItem,
+            backendSessionId:sessionId,
+            activeSessionId:activeSessionId.value,
+          });
+          activeSessionId.value=promotion.nextActiveSessionId;
+          sessions.value=[...sessions.value];
+        }
+      }
       const existingSubSession=Boolean(sessionId&&subSessions?.selectSubSessionMessages(sessionId));
       logWorkflowDiagnostics("frontend.turnRuntime.commitProjectionEvaluated",()=>({
         sessionId:parentSessionId||sessionId,

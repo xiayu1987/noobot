@@ -23,4 +23,12 @@ describe("SessionListPanel", () => {
     expect(sessionListPanelSource).not.toContain("function getSessionHoverTitle(sessionItem = {})");
     expect(sessionListPanelSource).not.toContain(':title="getSessionHoverTitle(sessionItem)"');
   });
+
+  it("projects status from the authoritative Turn Runtime Registry", () => {
+    expect(sessionListPanelSource).toContain("selectSessionTurnRuntime(props.turnRuntimeRegistry, sessionId)");
+    expect(sessionListPanelSource).toContain('if (sessionStatus.terminal === "error") return "error";');
+    expect(sessionListPanelSource).toContain('if (sessionStatus.terminal) return "done";');
+    expect(sessionListPanelSource).toContain('if (sessionStatus.sending) return "running";');
+    expect(sessionListPanelSource).not.toContain("currentTaskStatus");
+  });
 });

@@ -114,7 +114,6 @@ export function createSessionDetailApplicator({
     ).trim();
     const hasMessageSnapshot = Array.isArray(mainSessionDoc.messages);
     sessionItem.currentTaskId = mainSessionDoc.currentTaskId || "";
-    sessionItem.currentTaskStatus = "idle";
     // Keep the authoritative lifecycle snapshot attached to the canonical
     // session object.  sessionLifecycleHydration is the single consumer that
     // projects it into turnRuntimeRegistry; dropping it here makes a detail
