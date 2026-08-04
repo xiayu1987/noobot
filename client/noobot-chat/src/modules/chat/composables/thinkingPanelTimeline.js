@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, ref, watch } from "vue";
-import { isPluginInjectedMessage } from "../model/messageModel.js";
 import {
   getMessageDialogProcessId,
   getMessageRole,
@@ -52,14 +51,18 @@ export function useThinkingTimeline(
   const timelineMessage = (messageItem = {}) => messageItem;
   const thinkingDetailLoadingKey = ref("");
   const loadedThinkingDetail = ref(null);
-  const injectedMessages = computed(() =>
-    getInjectedMessagesForMessage(props.messageItem),
+  const thinkingContentItems = computed(() =>
+    selectActivityTimelineLogs(timelineMessage(props.messageItem))
+      .map((item = {}) => ({
+        ...item,
+        content: String(item?.output || item?.text || "").trim(),
+      }))
+      .filter((item = {}) => item.content),
   );
   const hasThinking = computed(
     () => {
       const detailMessageItem = loadedThinkingDetail.value?.messageItem;
-      return hasThinkingLogs(detailMessageItem || props.messageItem) ||
-        injectedMessages.value.length > 0;
+      return hasThinkingLogs(detailMessageItem || props.messageItem);
     },
   );
   const EXECUTION_LOG_DISPLAY_LIMIT =
@@ -186,14 +189,6 @@ export function useThinkingTimeline(
     ),
   );
 
-  function isFreshPendingAssistant(messageItem = {}) {
-    return (
-      getMessageRole(messageItem) === "assistant" &&
-      messageItem?.pending === true &&
-      messageItem?.hasFirstStreamEvent !== true
-    );
-  }
-
   function getExecutionLogs(messageItem = {}) {
     const realtimeLogs = getRealtimeLogs(messageItem);
     if (realtimeLogs.length > 0) return realtimeLogs;
@@ -295,8 +290,7 @@ export function useThinkingTimeline(
     );
     return (
       getAllRealtimeLogs(messageItem).length > 0 ||
-      completedLogs.length > 0 ||
-      injectedMessages.value.length > 0
+      completedLogs.length > 0
     );
   }
 
@@ -545,39 +539,6 @@ export function useThinkingTimeline(
     return getRuntimeView(messageItem).running;
   }
 
-  function isSameFrontendTurnScope(target = {}, candidate = {}) {
-    const targetTurnScopeId = getMessageTurnScopeId(target);
-    const candidateTurnScopeId = getMessageTurnScopeId(candidate);
-    if (targetTurnScopeId && candidateTurnScopeId) {
-      const targetSessionId = getMessageSessionId(target);
-      const candidateSessionId = getMessageSessionId(candidate);
-      return (
-        targetTurnScopeId === candidateTurnScopeId &&
-        (!targetSessionId ||
-          !candidateSessionId ||
-          targetSessionId === candidateSessionId)
-      );
-    }
-    return false;
-  }
-
-  function getInjectedMessagesForMessage(messageItem = {}) {
-    if (!messageItem || getMessageRole(messageItem) !== "assistant") return [];
-    if (isFreshPendingAssistant(messageItem)) return [];
-    const dialogProcessId = getMessageDialogProcessId(messageItem);
-    const candidateMessages = Array.isArray(props.allMessages)
-      ? props.allMessages
-      : [];
-    return candidateMessages.filter((item = {}) => {
-      if (!isPluginInjectedMessage(item)) return false;
-      if (isSameFrontendTurnScope(messageItem, item)) return true;
-      if (!getMessageTurnScopeId(messageItem) && dialogProcessId) {
-        return getMessageDialogProcessId(item) === dialogProcessId;
-      }
-      return !getMessageTurnScopeId(messageItem) && !dialogProcessId;
-    });
-  }
-
   function getCompletedToolLogsForMessage(messageItem = {}) {
     const seen = new Set();
     return getAllCompletedLogs(messageItem)
@@ -599,7 +560,7 @@ export function useThinkingTimeline(
   }
 
   return {
-    injectedMessages,
+    thinkingContentItems,
     hasThinking,
     loadedThinkingDetail,
     currentExecutionLogs,

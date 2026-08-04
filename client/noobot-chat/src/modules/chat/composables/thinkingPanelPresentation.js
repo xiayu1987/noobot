@@ -24,14 +24,6 @@ export function createThinkingPanelPresentation({
   const timelineMessage = (messageItem = {}) => messageItem;
   const detailExpansionTick = ref(0);
 
-  function formatInjectedMessageTitle(messageItem = {}, messageIndex = 0) {
-    const timeText = String(messageItem?.ts || "").trim();
-    const sourceText = String(
-      messageItem?.injectedBy || translate("message.injectedSourcePlugin"),
-    ).trim();
-    return `${messageIndex + 1}. ${sourceText}${timeText ? ` · ${timeText}` : ""}`;
-  }
-
   function groupCompletedToolLogs(messageItem = {}) {
     const toolLogs = getCompletedToolLogsForMessage(messageItem)
       .map((logItem, sourceIndex) => ({ logItem, sourceIndex }))
@@ -126,6 +118,5 @@ export function createThinkingPanelPresentation({
     getThinkingDetailItemKey,
     isThinkingDetailExpanded,
     toggleThinkingDetailExpanded,
-    formatInjectedMessageTitle,
   };
 }

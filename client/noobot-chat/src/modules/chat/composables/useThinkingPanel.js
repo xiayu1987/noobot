@@ -25,7 +25,7 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
   });
 
   return {
-    injectedMessages: timeline.injectedMessages,
+    thinkingContentItems: timeline.thinkingContentItems,
     hasThinking: timeline.hasThinking,
     translate,
     getThinkingDurationLabel: runtime.getThinkingDurationLabel,
@@ -46,6 +46,5 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
     getThinkingDetailItemKey: presentation.getThinkingDetailItemKey,
     isThinkingDetailExpanded: presentation.isThinkingDetailExpanded,
     toggleThinkingDetailExpanded: presentation.toggleThinkingDetailExpanded,
-    formatInjectedMessageTitle: presentation.formatInjectedMessageTitle,
   };
 }

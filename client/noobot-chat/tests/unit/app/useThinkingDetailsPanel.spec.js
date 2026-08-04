@@ -111,26 +111,14 @@ describe("useThinkingDetailsPanel request isolation", () => {
       }],
     };
     const activeSession = ref({ messages: [canonicalMessage] });
-    const injectedMessage = {
-      role: "assistant",
-      sessionId: "session-1",
-      turnScopeId: "turn-1",
-      injectedMessage: true,
-      content: "injected guidance",
-    };
-    const fetcher = vi.fn(async () => ({
-      messageItem: canonicalMessage,
-      allMessages: [canonicalMessage, injectedMessage],
-      sessionDocs: [],
-    }));
+    const fetcher = vi.fn();
     const panel = createPanel(fetcher, activeSession);
 
     await panel.openThinkingDetailsPanel({ messageItem: staleSummary, allMessages: [staleSummary] });
 
     expect(panel.thinkingDetailsMessageItem.value).toEqual(canonicalMessage);
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(1);
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(panel.thinkingDetailsAllMessages.value).toContainEqual(injectedMessage);
+    expect(fetcher).not.toHaveBeenCalled();
 
     const updatedCanonicalMessage = {
       ...canonicalMessage,
@@ -146,8 +134,28 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     expect(panel.thinkingDetailsMessageItem.value).toEqual(updatedCanonicalMessage);
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline[0].status).toBe("completed");
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(panel.thinkingDetailsAllMessages.value).toContainEqual(injectedMessage);
+    expect(fetcher).not.toHaveBeenCalled();
+    const thinkingActivity = {
+      eventId: "guidance:two",
+      event: "guidance_analysis_response",
+      sequence: 3,
+      sequenceScopeId: "presentation-1",
+      authority: "authoritative",
+      sequenceDomain: "message-event",
+      output: "new realtime guidance",
+    };
+    const nextCanonicalMessage = {
+      ...updatedCanonicalMessage,
+      activityTimeline: [thinkingActivity],
+    };
+    activeSession.value = {
+      messages: [nextCanonicalMessage],
+    };
+    await nextTick();
+    await nextTick();
+
+    expect(panel.thinkingDetailsMessageItem.value.activityTimeline).toEqual([thinkingActivity]);
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("keeps the complete detail response authoritative for a completed turn", async () => {

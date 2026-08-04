@@ -162,6 +162,12 @@ export function useThinkingDetailsPanel({
       .find((candidate = {}) => isSameThinkingTurn(messageItem, candidate)) || null;
   }
 
+  function getLiveSessionMessages() {
+    return Array.isArray(activeSession?.value?.messages)
+      ? activeSession.value.messages
+      : [];
+  }
+
   function buildDetailWatchKey() {
     if (!thinkingDetailsVisible.value) return "";
     const messageItem = thinkingDetailsMessageItem.value || {};
@@ -196,7 +202,10 @@ export function useThinkingDetailsPanel({
       selectedSource: activeMessageItem ? "active-session" : "payload",
       hasLocalThinkingDetails,
     }));
-    const needsFullDetail = Boolean(initialMessageItem && payload?.skipFetch !== true);
+    const usesLiveSession = initialMessageItem?.pending === true;
+    const needsFullDetail = Boolean(
+      initialMessageItem && !usesLiveSession && payload?.skipFetch !== true,
+    );
     let loadedThinkingDetail = null;
     if (needsFullDetail) {
       try {
@@ -214,15 +223,19 @@ export function useThinkingDetailsPanel({
       } catch (error) {
         if (openRequestVersion !== detailRequestVersion) return;
         notify?.({ type: "warning", message: error?.message || translate?.("chat.loadSessionDetailFailed") });
+        return;
       }
+      if (!loadedThinkingDetail?.messageItem) return;
     }
-    const detailPayload = loadedThinkingDetail
-      ? {
-        messageItem: loadedThinkingDetail.messageItem,
-        allMessages: loadedThinkingDetail.allMessages,
-        sessionDocs: getSessionDocsFromDetail(loadedThinkingDetail),
-      }
-      : { ...payload, ...initialPayload, messageItem: initialMessageItem };
+    const detailPayload = usesLiveSession
+      ? { messageItem: initialMessageItem, allMessages: getLiveSessionMessages() }
+      : loadedThinkingDetail
+        ? {
+          messageItem: loadedThinkingDetail.messageItem,
+          allMessages: loadedThinkingDetail.allMessages,
+          sessionDocs: getSessionDocsFromDetail(loadedThinkingDetail),
+        }
+        : { ...payload, ...initialPayload, messageItem: initialMessageItem };
     const { messageItem, allMessages } = resolveThinkingDetailsPanelPayload(detailPayload, fallbackPayload);
     const sessionDocs = getSessionDocsFromDetail(detailPayload);
     if (!messageItem) return;
@@ -255,14 +268,15 @@ export function useThinkingDetailsPanel({
       const turnScopeId = String(currentMessage?.turnScopeId || currentMessage?.turn_scope_id || "").trim();
       if (!dialogProcessId && !turnScopeId) return;
       const sourceMessage = findActiveCanonicalMessage(currentMessage);
-      if (sourceMessage?.pending === true && hasCanonicalTimeline(sourceMessage)) {
+      if (sourceMessage?.pending === true) {
         detailRequestVersion += 1;
         thinkingDetailsMessageItem.value = sourceMessage;
+        thinkingDetailsAllMessages.value = getLiveSessionMessages();
         logThinkingPanelState("frontend.thinkingReplay.detailPanelCanonicalSynchronized", () => ({
           sessionId: activeSessionId?.value,
           source: summarizeThinkingTimeline(sourceMessage),
-          preservedAllMessageCount: thinkingDetailsAllMessages.value.length,
-          preservedInjectedMessageCount: thinkingDetailsAllMessages.value
+          liveAllMessageCount: thinkingDetailsAllMessages.value.length,
+          liveInjectedMessageCount: thinkingDetailsAllMessages.value
             .filter((item = {}) => item?.injectedMessage === true).length,
         }));
         return;
