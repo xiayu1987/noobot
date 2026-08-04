@@ -85,7 +85,10 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
     ).length,
     1,
   );
-  assert.equal(ctx.agentContext.payload.harness.state.flags.planningSeparateModelInFlight, false);
+  assert.equal(
+    ctx.agentContext.bindings.extensions.harness.state.flags.planningSeparateModelInFlight,
+    false,
+  );
 });
 
 test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when enabled", () => {

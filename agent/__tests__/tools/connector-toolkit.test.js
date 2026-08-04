@@ -113,7 +113,7 @@ test("connector-toolkit/inspect_connectors: 应返回连接器汇总", async () 
   };
 
   const tools = createConnectorTools({
-    agentContext: { runtime },
+    agentContext: { bindings: { runtime } },
   });
   const inspectTool = tools.find((tool) => tool?.name === "inspect_connectors");
   assert.ok(inspectTool, "inspect_connectors 工具应存在");
@@ -185,7 +185,7 @@ test("connector-toolkit/database_connect_connector: 交互补全应携带 pendin
   };
 
   const tools = createConnectorTools({
-    agentContext: { runtime },
+    agentContext: { bindings: { runtime } },
   });
   const connectTool = tools.find((tool) => tool?.name === "database_connect_connector");
   assert.ok(connectTool, "database_connect_connector 工具应存在");
@@ -217,7 +217,7 @@ test("connector-toolkit/access_connector: 未显式勾选但仅有一个已连�
       executed = payload;
     },
   });
-  const tools = createConnectorTools({ agentContext: { runtime } });
+  const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
 
@@ -244,7 +244,7 @@ test("connector-toolkit/access_connector: 未显式勾选但指定已连接 conn
       executed = payload;
     },
   });
-  const tools = createConnectorTools({ agentContext: { runtime } });
+  const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
 
@@ -277,7 +277,7 @@ test("connector-toolkit/access_connector: command_file_path 应可读取文件�
         executed = payload;
       },
     });
-    const tools = createConnectorTools({ agentContext: { runtime } });
+    const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
@@ -317,7 +317,7 @@ test("connector-toolkit/access_connector: command_file_path 相对路径基于 d
         allowedRoots: [workspaceRoot],
       },
     };
-    const tools = createConnectorTools({ agentContext: { runtime } });
+    const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
@@ -343,7 +343,7 @@ test("connector-toolkit/access_connector: command 与 command_file_path 同时�
       connectorType: "database",
       connectorName: "db-main",
     });
-    const tools = createConnectorTools({ agentContext: { runtime } });
+    const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
@@ -382,7 +382,7 @@ test("connector-toolkit/access_connector: command_file_path 越界应拒绝", as
         },
       },
     });
-    const tools = createConnectorTools({ agentContext: { runtime } });
+    const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
@@ -435,7 +435,7 @@ test("connector-toolkit/access_connector: 超级管理员 command_file_path 可�
     runtime.userId = "admin";
     runtime.systemRuntime.userId = "admin";
     runtime.systemRuntime.isSuperUser = true;
-    const tools = createConnectorTools({ agentContext: { runtime } });
+    const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
@@ -473,7 +473,7 @@ test("connector-toolkit/access_connector: command_file_path 后缀不在白名�
         },
       },
     });
-    const tools = createConnectorTools({ agentContext: { runtime } });
+    const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
@@ -515,7 +515,7 @@ test("connector-toolkit/access_connector: command_file_path 超过大小限制�
         },
       },
     });
-    const tools = createConnectorTools({ agentContext: { runtime } });
+    const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
@@ -611,7 +611,7 @@ test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 
     userConfig: {},
   };
 
-  const tools = createConnectorTools({ agentContext: { runtime } });
+  const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
   const payload = parseToolJson(await accessTool.invoke({
@@ -691,7 +691,7 @@ test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字
     userConfig: {},
   };
 
-  const tools = createConnectorTools({ agentContext: { runtime } });
+  const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
   const payload = parseToolJson(await accessTool.invoke({
@@ -749,7 +749,7 @@ test("connector-toolkit/access_connector(email): stdout 非 JSON 时不应注入
     userConfig: {},
   };
 
-  const tools = createConnectorTools({ agentContext: { runtime } });
+  const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
   const payload = parseToolJson(await accessTool.invoke({

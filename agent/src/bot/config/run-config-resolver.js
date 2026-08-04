@@ -65,8 +65,8 @@ export class RunConfigResolver {
   }
 
   applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
-    const sourceTools = Array.isArray(agentContext?.payload?.tools?.registry)
-      ? agentContext.payload.tools.registry
+    const sourceTools = Array.isArray(agentContext?.bindings?.tools)
+      ? agentContext.bindings.tools
       : [];
     if (!sourceTools.length) return agentContext;
     const alwaysIncludedToolNames = this.resolveAlwaysIncludedToolNames(runConfig);
@@ -140,12 +140,9 @@ export class RunConfigResolver {
 
     return {
       ...agentContext,
-      payload: {
-        ...(agentContext?.payload || {}),
-        tools: {
-          ...(agentContext?.payload?.tools || {}),
-          registry: dedupedTools,
-        },
+      bindings: {
+        ...(agentContext?.bindings || {}),
+        tools: dedupedTools,
       },
     };
   }

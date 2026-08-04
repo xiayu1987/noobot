@@ -81,7 +81,7 @@ function buildPatchFailurePayload({
 }
 
 function resolveFileToolIsSandbox(agentContext = {}) {
-  const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const runtime = agentContext?.bindings?.runtime || {};
   const globalCfg = runtime?.globalConfig?.tools?.execute_script && typeof runtime.globalConfig.tools.execute_script === "object"
     ? runtime.globalConfig.tools.execute_script
     : {};
@@ -201,7 +201,7 @@ async function preparePatchExecution({ format = "", patch = "", strip = 1, root 
 
 export function createFileTool({ agentContext }) {
   const isSandbox = resolveFileToolIsSandbox(agentContext);
-  const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const runtime = agentContext?.bindings?.runtime || {};
   const abortSignal = runtime?.abortSignal || null;
   const readFileTool = new DynamicStructuredTool({
     name: TOOL_NAME.READ_FILE,

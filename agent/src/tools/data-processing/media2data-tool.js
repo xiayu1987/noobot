@@ -526,8 +526,7 @@ export function createMedia2DataTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
-  const basePath =
-    agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
+  const basePath = String(runtime.basePath || "").trim();
   if (!basePath) return [];
 
   const media2dataTool = new DynamicStructuredTool({

@@ -12,7 +12,7 @@ function normalizePath(value = "") {
 }
 
 function resolveRuntime(ctx = {}) {
-  return ctx?.agentContext?.execution?.controllers?.runtime || null;
+  return ctx?.agentContext?.bindings?.runtime || null;
 }
 
 function sanitizeSandboxUserPart(input = "") {
@@ -72,8 +72,8 @@ function resolveHostBasePath(ctx = {}, runtime = null) {
     runtime?.basePath ||
       runtime?.systemRuntime?.staticInfo?.basePath ||
       ctx?.basePath ||
-      ctx?.agentContext?.environment?.workspace?.hostBasePath ||
-      ctx?.agentContext?.environment?.workspace?.basePath ||
+      ctx?.agentContext?.context?.environment?.workspace?.hostBasePath ||
+      ctx?.agentContext?.context?.environment?.workspace?.basePath ||
       "",
   );
 }
@@ -109,8 +109,8 @@ function resolveSandboxWorkdir(ctx = {}, runtime = null, hostWorkdir = "") {
   return normalizePath(
     runtime?.systemRuntime?.staticInfo?.sandbox?.defaultWorkdir ||
       runtime?.systemRuntime?.staticInfo?.defaultWorkdir ||
-      ctx?.agentContext?.environment?.staticInfo?.sandbox?.defaultWorkdir ||
-      ctx?.agentContext?.environment?.staticInfo?.defaultWorkdir ||
+      ctx?.agentContext?.context?.environment?.staticInfo?.sandbox?.defaultWorkdir ||
+      ctx?.agentContext?.context?.environment?.staticInfo?.defaultWorkdir ||
       resolveSandboxWorkdirFallback(runtime || {}) ||
       "",
   );
@@ -122,7 +122,7 @@ export function resolveOperationDirectoryContext(ctx = {}) {
   const relativePath = DEFAULT_OPERATION_RELATIVE_PATH;
   const hostWorkdir = hostBasePath
     ? normalizePath(path.join(hostBasePath, relativePath))
-    : normalizePath(ctx?.agentContext?.environment?.workspace?.cwd || "");
+    : normalizePath(ctx?.agentContext?.context?.environment?.workspace?.cwd || "");
   const sandboxEnabled = isSandboxEnabled(runtime || {});
   const sandboxWorkdir = resolveSandboxWorkdir(ctx, runtime, hostWorkdir);
   const activeView = sandboxEnabled && sandboxWorkdir ? "sandbox" : "non_sandbox";

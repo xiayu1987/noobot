@@ -31,9 +31,7 @@ function resolveUserId({ runtime = {}, agentContext = null, userId = "" } = {}) 
     userId ||
       runtime?.systemRuntime?.userId ||
       runtime?.userId ||
-      agentContext?.userId ||
-      agentContext?.environment?.identity?.userId ||
-      agentContext?.environment?.userId,
+      agentContext?.context?.identity?.userId,
   );
 }
 
@@ -42,10 +40,7 @@ function resolveSessionId({ runtime = {}, agentContext = null, sessionId = "" } 
     sessionId ||
       runtime?.systemRuntime?.sessionId ||
       runtime?.sessionId ||
-      agentContext?.sessionId ||
-      agentContext?.session?.current?.id ||
-      agentContext?.session?.id ||
-      agentContext?.session?.current?.sessionId,
+      agentContext?.context?.identity?.sessionId,
   );
 }
 
@@ -66,7 +61,7 @@ function resolveTurnScope({ runtime = {}, agentContext = null, sessionId = "", m
     turnScope: {
       sessionId,
       turnScopeId: meta?.turnScopeId || producer?.turnScopeId || systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || runConfig?.turnScopeId,
-      dialogProcessId: meta?.dialogProcessId || producer?.dialogProcessId || systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || agentContext?.dialogProcessId,
+      dialogProcessId: meta?.dialogProcessId || producer?.dialogProcessId || agentContext?.context?.identity?.dialogProcessId || systemRuntime?.dialogProcessId,
     },
   });
 }
@@ -108,15 +103,13 @@ function createFallbackAttachmentService(runtime = {}) {
 }
 
 function resolveWorkspaceBasePath({ runtime = {}, agentContext = null } = {}) {
-  return normalizeString(runtime?.basePath || agentContext?.environment?.workspace?.basePath);
+  return normalizeString(runtime?.basePath);
 }
 
 function resolveRuntimeIsSandbox({ runtime = {}, agentContext = null } = {}) {
   const scriptConfig = runtime?.globalConfig?.tools?.execute_script && typeof runtime.globalConfig.tools.execute_script === "object"
     ? runtime.globalConfig.tools.execute_script
-    : agentContext?.runtime?.globalConfig?.tools?.execute_script && typeof agentContext.runtime.globalConfig.tools.execute_script === "object"
-      ? agentContext.runtime.globalConfig.tools.execute_script
-      : {};
+    : {};
   return scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
 }
 

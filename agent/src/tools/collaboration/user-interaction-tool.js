@@ -6,7 +6,6 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { recoverableToolError } from "../../shared/errors/index.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
@@ -178,7 +177,7 @@ export function createUserInteractionTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const bridge = runtime.userInteractionBridge || null;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  const dialogProcessId = resolveDialogProcessIdFromContext({ runtime });
+  const dialogProcessId = String(runtime?.systemRuntime?.dialogProcessId || "").trim();
   const sessionId = String(systemRuntime.sessionId || "").trim();
   const fieldSchema = z.object({
     name: z.string().min(1).describe(tTool(runtime, "tools.user_interaction.fieldName")),

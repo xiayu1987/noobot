@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { canonicalizeMessageStore } from "./message-store.js";
-
-export const CONTEXT_PROTOCOL_VERSION = 1;
+import {
+  HOOK_CONTEXT_PROTOCOL_VERSION,
+  MODEL_CONTEXT_PROTOCOL_VERSION,
+} from "./agent-context-schema.js";
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -79,7 +81,7 @@ export function createModelContext({
         : null;
   if (!blocks && !resolvedMessages && !messageStore) return null;
   const modelContext = {
-    protocolVersion: CONTEXT_PROTOCOL_VERSION,
+    protocolVersion: MODEL_CONTEXT_PROTOCOL_VERSION,
     activeTurnIdentity: normalizeActiveTurnIdentity(activeTurnIdentity),
     onCanonicalMessageAdded:
       typeof onCanonicalMessageAdded === "function" ? onCanonicalMessageAdded : null,
@@ -105,26 +107,26 @@ export function createModelContext({
 
 export function attachModelContext(context = {}, modelContext = null) {
   if (!context || typeof context !== "object") return context;
-  context.contextProtocolVersion = CONTEXT_PROTOCOL_VERSION;
+  context.contextProtocolVersion = HOOK_CONTEXT_PROTOCOL_VERSION;
   context.modelContext = modelContext;
   return context;
 }
 
 export function resolveAuthoritativeModelContext(context = {}) {
   const modelContext = asObject(context?.modelContext);
-  if (modelContext?.protocolVersion === CONTEXT_PROTOCOL_VERSION) return modelContext;
+  if (modelContext?.protocolVersion === MODEL_CONTEXT_PROTOCOL_VERSION) return modelContext;
   return null;
 }
 
 export function validateHookContextProtocol(context = {}, { point = "" } = {}) {
   const warnings = [];
   const version = Number(context?.contextProtocolVersion);
-  if (version !== CONTEXT_PROTOCOL_VERSION) warnings.push("contextProtocolVersion must equal 1");
+  if (version !== HOOK_CONTEXT_PROTOCOL_VERSION) warnings.push("contextProtocolVersion must equal 1");
   const modelContext = context?.modelContext;
   if (modelContext != null) {
     if (!asObject(modelContext)) warnings.push("modelContext should be object");
     else {
-      if (Number(modelContext.protocolVersion) !== CONTEXT_PROTOCOL_VERSION) warnings.push("modelContext.protocolVersion must equal 1");
+      if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) warnings.push("modelContext.protocolVersion must equal 1");
       const activeTurnIdentity = modelContext.activeTurnIdentity;
       if (activeTurnIdentity != null && (
         !asObject(activeTurnIdentity) ||

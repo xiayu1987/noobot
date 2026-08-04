@@ -39,7 +39,7 @@ test("request_help: model invoke receives runtime abort signal", async () => {
     userConfig: {},
     systemRuntime: {},
   };
-  const [tool] = createRequestHelpTool({ agentContext: { runtime } });
+  const [tool] = createRequestHelpTool({ agentContext: { bindings: { runtime } } });
 
   const result = await tool.invoke({
     helpContent: "Need help with a long task",

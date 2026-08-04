@@ -64,6 +64,7 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'timeline-pipeline' } }), 'timelinePipeline');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-proxy-route' } }), 'agentProxyRoute');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'context-identity' } }), 'contextIdentity');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-context' } }), 'agentContext');
 
   const record = buildSessionLogRecord({
     source: 'frontend',

@@ -4,23 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
-export function buildAgentContext(basePath = "") {
-  return {
-    environment: {
-      workspace: { basePath },
-    },
-    execution: {
-      controllers: {
-        runtime: {
-          basePath,
-          globalConfig: {},
-          userConfig: {},
-          sharedTools: {},
-        },
-      },
-    },
-  };
+export function buildAgentContext(basePath = "", runtime = {}, options = {}) {
+  return createTestAgentExecutionScope({
+    basePath,
+    globalConfig: {},
+    userConfig: {},
+    sharedTools: {},
+    ...runtime,
+  }, options);
 }
 
 export async function readJsonl(filePath) {

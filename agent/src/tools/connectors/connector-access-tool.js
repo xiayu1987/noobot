@@ -9,7 +9,7 @@ import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike 
 import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
-  resolveChildRunParentSessionIdFromRuntime,
+  getChildRunParentSessionIdFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -18,7 +18,6 @@ import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 import { createConnectorTools } from "./connector-toolkit.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import {
   SANDBOX_CONFIG,
@@ -43,8 +42,8 @@ export function createConnectorAccessTool({ agentContext }) {
   const userId = String(runtime?.userId || agentContext?.userId || "").trim();
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const sessionId = String(systemRuntime?.sessionId || "").trim();
-  const parentSessionId = resolveChildRunParentSessionIdFromRuntime(runtime);
-  const parentDialogProcessId = resolveDialogProcessIdFromContext({ runtime });
+  const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
+  const parentDialogProcessId = String(runtime?.systemRuntime?.dialogProcessId || "").trim();
   const allowUserInteraction =
     systemRuntime?.config?.allowUserInteraction !== false;
   const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
@@ -92,7 +91,7 @@ export function createConnectorAccessTool({ agentContext }) {
       }
       try {
         const detachedRun = await botManager.runDetachedSubSession({
-          parentContext: agentContext,
+          parentExecutionScope: agentContext,
           message: normalizedTask,
           systemMessages: [connectorSubSessionSystemPrompt].filter(Boolean),
           eventListener,

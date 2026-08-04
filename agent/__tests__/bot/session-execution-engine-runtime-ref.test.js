@@ -8,28 +8,18 @@ import assert from "node:assert/strict";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { createAgentDetachedSubSessionStrategy } from "../../src/bot/session/detached-subsession-strategy.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for tool/model switch consistency", () => {
   const engine = new SessionExecutionEngine({});
   const runtime = { runtimeModel: "" };
-  const agentContext = {
-    execution: {
-      controllers: {
-        runtime,
-      },
-    },
-    payload: {
-      tools: {
-        registry: [],
-      },
-    },
-  };
+  const agentContext = createTestAgentExecutionScope(runtime);
 
   const abortSignal = { aborted: false };
   const out = engine.agentRuntimeFacade.buildRunTurnContext(agentContext, abortSignal);
 
   assert.equal(
-    out.execution.controllers.runtime,
+    out.bindings.runtime,
     runtime,
     "runtime 引用应保持一致，避免工具侧与模型侧状态分叉",
   );
@@ -37,7 +27,7 @@ test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for 
 
   runtime.runtimeModel = "gpt_5_3_codex";
   assert.equal(
-    out.execution.controllers.runtime.runtimeModel,
+    out.bindings.runtime.runtimeModel,
     "gpt_5_3_codex",
     "同一引用下，工具修改 runtimeModel 后模型侧可见",
   );
@@ -95,20 +85,12 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
 
   const runner = engine._createDetachedSubSessionRunner();
   await runner({
+    parentExecutionScope: createTestAgentExecutionScope({ userInteractionBridge: bridge }),
     parentContext: {
       userId: "u1",
       sessionId: "parent-session",
       dialogProcessId: "parent-dialog",
       runConfig: {},
-      agentContext: {
-        execution: {
-          controllers: {
-            runtime: {
-              userInteractionBridge: bridge,
-            },
-          },
-        },
-      },
     },
     message: "node task",
     strategy: createAgentDetachedSubSessionStrategy({

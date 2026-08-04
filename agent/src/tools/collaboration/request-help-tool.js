@@ -288,7 +288,7 @@ async function invokeHelpModel({
 function resolveMemoryHelpPaths(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath = normalizeName(
-    agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
+    agentContext?.context?.environment?.workspace?.basePath || runtime?.basePath || "",
   );
   if (!basePath) return {};
   const memoryDir = path.join(basePath, MEMORY_PATHS.MEMORY_DIR);

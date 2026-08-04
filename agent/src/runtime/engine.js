@@ -12,7 +12,6 @@ import { runAgentRuntimeHook, AGENT_HOOK_POINTS } from "../extensions/hooks/inde
 import { isAbortError } from "./utils/error-utils.js";
 import { buildHookContext } from "./hooks/hook-context-builder.js";
 import { emitEvent } from "../events/index.js";
-import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
 import {
   emitMessageEvent,
@@ -102,7 +101,7 @@ export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {}
   const event = emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
     text: finalOutput,
     output: finalOutput,
-    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
+    dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     category: "model",
     type: "authoritative_final_content",
     source: "before_final_output_committed",
@@ -181,7 +180,7 @@ export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime =
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   emitMessageEvent(eventListener, runtime, "llm_delta", {
     text: appendedText,
-    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
+    dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
     category: "model",
     type: "final_output_append_delta",
@@ -205,7 +204,7 @@ export function assertHookExecutionSucceeded(hookResult = {}, point = "") {
 }
 
 export async function runAgentTurn({ agentContext, currentUserMessage, errorLogger = null }) {
-  const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const runtime = agentContext?.bindings?.runtime || {};
   const userMessage = String(currentUserMessage?.content || "");
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();

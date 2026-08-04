@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createAgentCollabTool } from "../../src/tools/collaboration/agent-collab-tool.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function parseToolJson(text = "") {
   return JSON.parse(String(text || "{}"));
@@ -70,10 +71,7 @@ function createAgentContext({
   };
 
   return {
-    agentContext: {
-      userId: "primary-user",
-      runtime,
-    },
+    agentContext: createTestAgentExecutionScope(runtime),
     events,
     runCalls,
   };

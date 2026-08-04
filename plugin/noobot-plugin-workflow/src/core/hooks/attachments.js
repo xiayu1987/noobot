@@ -29,7 +29,7 @@ export function resolveWorkflowInputAttachments(ctx = {}) {
   const candidates = [
     ctx?.attachments,
     ctx?.userMessageAttachments,
-    agentContext?.session?.current?.attachments,
+    agentContext?.bindings?.runtime?.userMessageAttachments,
   ];
   for (const candidate of candidates) {
     if (Array.isArray(candidate) && candidate.length) return candidate;

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -354,17 +355,11 @@ test("SessionExecutionEngine resolveModelMessages normalizes LangChain messages 
       new AIMessage("收到，准备规划"),
     ],
       context: {
-      agentContext: {
-        execution: {
-          controllers: {
-            runtime: {
+      agentContext: createTestAgentExecutionScope({
               systemRuntime: {
                 currentTurnUserMessage: "查找最适合组织的人",
               },
-            },
-          },
-        },
-      },
+            }),
       },
     }),
   });

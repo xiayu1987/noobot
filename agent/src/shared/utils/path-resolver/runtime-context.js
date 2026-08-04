@@ -19,8 +19,7 @@ function resolveRuntimeHostRoot({
     runtimeBasePath ||
       workspacePath ||
       runtime?.basePath ||
-      agentContext?.environment?.workspace?.basePath ||
-      agentContext?.environment?.staticInfo?.basePath ||
+      agentContext?.context?.environment?.workspace?.basePath ||
       "",
   ).trim();
 }
@@ -101,7 +100,7 @@ function objectOrEmpty(value) {
 }
 
 function resolveStaticPathDirectories({ runtime = {}, agentContext = null } = {}) {
-  const contextStaticInfo = objectOrEmpty(agentContext?.environment?.staticInfo);
+  const contextStaticInfo = objectOrEmpty(agentContext?.context?.environment?.staticInfo);
   const runtimeStaticInfo = objectOrEmpty(runtime?.systemRuntime?.staticInfo);
   return objectOrEmpty(contextStaticInfo.directories || runtimeStaticInfo.directories);
 }

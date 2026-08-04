@@ -5,7 +5,7 @@
  */
 
 function resolveRuntime(ctx = {}) {
-  return ctx?.agentContext?.execution?.controllers?.runtime || null;
+  return ctx?.agentContext?.bindings?.runtime || null;
 }
 
 function callResolver(resolver, ...args) {

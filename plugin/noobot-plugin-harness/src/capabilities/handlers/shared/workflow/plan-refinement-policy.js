@@ -26,7 +26,7 @@ function resolveExplicitPlanRefinementEnabledFromSource(source = {}) {
 }
 
 export function resolveExplicitPlanRefinementEnabled(ctx = {}, meta = {}) {
-  const harnessPayload = ctx?.agentContext?.payload?.harness;
+  const harnessPayload = ctx?.agentContext?.bindings?.extensions?.harness;
   const sources = [
     meta?.harness,
     meta,

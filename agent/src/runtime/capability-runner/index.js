@@ -16,6 +16,7 @@ import { filterForModelContext } from "../../context/session/message-context-pol
 import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
+  getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
@@ -88,8 +89,7 @@ function resolveAllowPolicy(input = []) {
 }
 
 function resolveToolsFromContext(ctx = {}, allowPolicy = { allowAll: false, allowSet: new Set() }) {
-  const registry = ctx?.agentContext?.payload?.tools?.registry;
-  if (!Array.isArray(registry)) return [];
+  const registry = getToolsFromAgentContext(ctx.agentContext);
   const tools = registry.filter((tool) => String(tool?.name || "").trim());
   if (allowPolicy?.allowAll === true) return tools;
   if (!allowPolicy?.allowSet?.size) return [];

@@ -311,7 +311,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
     domain = CAPABILITY_DOMAIN.PLANNING,
   } = {},
 ) {
-  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
+  const runtime = ctx?.agentContext?.bindings?.runtime || null;
   const attachmentService = runtime?.attachmentService || null;
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
   const text = String(content || "").trim();

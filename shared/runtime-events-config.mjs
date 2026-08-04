@@ -46,6 +46,7 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
       agentProxyRoute: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_ROUTE_DEBUG",
       workflowDiagnostics: "NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG",
       contextIdentity: "NOOBOT_RUNTIME_EVENT_CONTEXT_IDENTITY_DEBUG",
+      agentContext: "NOOBOT_RUNTIME_EVENT_AGENT_CONTEXT_DEBUG",
     },
   },
   hookRuntimeEvents: {
@@ -92,6 +93,7 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
       agentProxyRoute: false,
       workflowDiagnostics: false,
       contextIdentity: true,
+      agentContext: true,
     },
   },
   hookRuntimeEvents: {
@@ -138,6 +140,7 @@ export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
   "agent-proxy-route": { controlKey: "agentProxyRoute", exposeToClient: false },
   "workflow-diagnostics": { controlKey: "workflowDiagnostics", exposeToClient: true },
   "context-identity": { controlKey: "contextIdentity", exposeToClient: false },
+  "agent-context": { controlKey: "agentContext", exposeToClient: false },
 });
 
 export const HOOK_RUNTIME_EVENT_VERBOSE_VALUES = deepFreeze([
@@ -245,6 +248,13 @@ export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
       options.sessionLogControls || {},
     );
     return controls.debug.contextIdentity === true;
+  }
+  if (String(event?.category || "").trim().toLowerCase() === "agent_context") {
+    const controls = resolveRuntimeEventsSessionLogControls(
+      options.env || process.env,
+      options.sessionLogControls || {},
+    );
+    return controls.debug.agentContext === true;
   }
   const eventName = String(
     typeof event === "string" ? event : event?.event || event?.name || "",

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { resolveEffectiveModelSpec } from "../../src/runtime/run-config/config-resolver.js";
 import { createStateBuilder } from "../../src/runtime/state-builder.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 const globalConfig = {
   providers: {
@@ -129,18 +130,16 @@ function buildStateWithRunConfig(runConfig) {
   });
 
   builder({
-    agentContext: {
-      runtime: {
+    agentContext: createTestAgentExecutionScope({
         globalConfig,
         userConfig: {},
         runConfig,
-        systemRuntime: {},
-      },
-      payload: {
-        messages: { history: [] },
-        tools: { registry: [] },
-      },
-    },
+        systemRuntime: {
+          sessionId: "s1",
+          dialogProcessId: "dialog-model-selection",
+          turnScopeId: "turn-model-selection",
+        },
+      }),
     currentUserMessage: {
       messageUid: "sm_model_selection",
       role: "user",

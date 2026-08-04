@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { ensureTestAgentExecutionScope } from "../helpers/public-runtime-fixtures.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -82,6 +83,7 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
     },
   };
   const meta = { harness: { pendingTtlHookTurns: 1 } };
+  ensureTestAgentExecutionScope(ctx);
 
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
@@ -214,7 +216,15 @@ test("inferFsmTarget uses rule table consistently", () => {
   const toPlanning = inferFsmTarget(HARNESS_HOOK_POINTS.BEFORE_TURN, {}, HARNESS_FSM_STATES.IDLE);
   const toPlanned = inferFsmTarget(
     HARNESS_HOOK_POINTS.AFTER_LLM_CALL,
-    { agentContext: { payload: { harness: { taskChecklist: [{ task: "x" }] } } } },
+    {
+      agentContext: {
+        bindings: {
+          runtime: {},
+          tools: [],
+          extensions: { harness: { taskChecklist: [{ task: "x" }] } },
+        },
+      },
+    },
     HARNESS_FSM_STATES.PLANNING,
   );
   const toolCallsToPlanned = inferFsmTarget(

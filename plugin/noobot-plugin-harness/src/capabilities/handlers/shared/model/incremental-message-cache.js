@@ -18,9 +18,7 @@ const capabilityMessageCache = new Map();
 function resolveSessionKey(ctx = {}) {
   return String(
     ctx?.sessionId ||
-      ctx?.agentContext?.sessionId ||
-      ctx?.agentContext?.payload?.sessionId ||
-      ctx?.agentContext?.execution?.sessionId ||
+      ctx?.agentContext?.context?.identity?.sessionId ||
       "",
   ).trim();
 }

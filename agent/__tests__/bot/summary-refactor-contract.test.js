@@ -15,7 +15,7 @@ import {
   appendMessage,
   canonicalizeMessageStore,
   pruneSummarizedIncrementalMessages,
-} from "../../src/context/runtime-state/message-store.js";
+} from "@noobot/context-protocol/message-store";
 import * as mainFlowControl from "../../src/runtime/main-flow-control.js";
 
 function message(id, value = {}) {

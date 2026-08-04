@@ -50,7 +50,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   const { bucket, state } = holder;
   if (state.flags.checklistArtifactsAttached === true) return false;
 
-  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
+  const runtime = ctx?.agentContext?.bindings?.runtime || null;
   const attachmentService = runtime?.attachmentService || null;
   if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
     return false;

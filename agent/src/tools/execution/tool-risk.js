@@ -5,7 +5,6 @@
  */
 import { z } from "zod";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tTool } from "../core/tool-i18n.js";
@@ -67,7 +66,7 @@ export async function confirmCriticalToolOperation({
   const result = await bridge.requestUserInteraction({
     content: confirmationContent(runtime, { toolName, operation, target, reason, riskLevel }),
     fields: [],
-    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
+    dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     requireEncryption: false,
     sessionId: String(systemRuntime?.sessionId || "").trim(),
     toolName,

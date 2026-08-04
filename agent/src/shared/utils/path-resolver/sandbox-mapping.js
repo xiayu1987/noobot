@@ -19,7 +19,7 @@ export function resolveRuntimeUserId({ runtime = {}, agentContext = null, userId
     userId ||
       runtime?.systemRuntime?.userId ||
       runtime?.userId ||
-      agentContext?.environment?.identity?.userId ||
+      agentContext?.context?.identity?.userId ||
       "",
   ).trim();
 }
@@ -204,8 +204,8 @@ export function resolveSandboxPath({
   const sandboxRoot = String(
     runtime?.systemRuntime?.staticInfo?.sandboxRoot ||
       runtime?.systemRuntime?.staticInfo?.sandbox?.sandboxRoot ||
-      agentContext?.environment?.staticInfo?.sandboxRoot ||
-      agentContext?.environment?.staticInfo?.sandbox?.sandboxRoot ||
+      agentContext?.context?.environment?.staticInfo?.sandboxRoot ||
+      agentContext?.context?.environment?.staticInfo?.sandbox?.sandboxRoot ||
       "",
   ).trim();
   if (!sandboxMode && !sandboxRoot) return "";
@@ -215,7 +215,7 @@ export function resolveSandboxPath({
 
   const sandboxUserRoot = resolveSandboxUserRoot(runtime);
   const hostBasePath = String(
-    runtime?.basePath || agentContext?.environment?.workspace?.basePath || "",
+    runtime?.basePath || "",
   ).trim();
   const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
   if (sandboxUserRoot && normalizedHostBasePath && normalizedHostPath) {
@@ -263,7 +263,7 @@ export function resolveHostPath({
 
   const sandboxUserRoot = resolveSandboxUserRoot(runtime);
   const hostBasePath = String(
-    runtime?.basePath || agentContext?.environment?.workspace?.basePath || "",
+    runtime?.basePath || "",
   ).trim();
   const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
   const normalizedSandboxUserRoot = normalizeSlashPath(sandboxUserRoot);
@@ -277,8 +277,8 @@ export function resolveHostPath({
   const sandboxRoot = String(
     runtime?.systemRuntime?.staticInfo?.sandboxRoot ||
       runtime?.systemRuntime?.staticInfo?.sandbox?.sandboxRoot ||
-      agentContext?.environment?.staticInfo?.sandboxRoot ||
-      agentContext?.environment?.staticInfo?.sandbox?.sandboxRoot ||
+      agentContext?.context?.environment?.staticInfo?.sandboxRoot ||
+      agentContext?.context?.environment?.staticInfo?.sandbox?.sandboxRoot ||
       "",
   ).trim();
   const normalizedSandboxRoot = normalizeSlashPath(sandboxRoot);

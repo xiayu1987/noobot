@@ -62,15 +62,11 @@ test("buildHarnessInjectedMessage includes dialogProcessId when provided", () =>
   assert.equal(message.dialogProcessId, "dlg_1");
 });
 
-test("resolveDialogProcessIdFromContext reads nested execution dialogProcessId", () => {
+test("resolveDialogProcessIdFromContext reads the explicit hook identity", () => {
   const dialogProcessId = resolveDialogProcessIdFromContext({
-    agentContext: {
-      execution: {
-        dialogProcessId: "dlg_nested",
-      },
-    },
+    dialogProcessId: "dlg_explicit",
   });
-  assert.equal(dialogProcessId, "dlg_nested");
+  assert.equal(dialogProcessId, "dlg_explicit");
 });
 
 

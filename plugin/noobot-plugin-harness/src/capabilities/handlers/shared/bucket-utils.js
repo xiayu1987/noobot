@@ -151,8 +151,9 @@ export function ensureHarnessBucket(ctx = {}) {
   const agentContext =
     ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
   if (!agentContext) return null;
-  const payload = ensureObjectField(agentContext, "payload");
-  const bucket = ensureObjectField(payload, "harness");
+  const bindings = ensureObjectField(agentContext, "bindings");
+  const extensions = ensureObjectField(bindings, "extensions");
+  const bucket = ensureObjectField(extensions, "harness");
   const state = ensureObjectField(bucket, "state");
   const legacyStateVersion =
     Number.isFinite(Number(state.__harnessBucketVersion))

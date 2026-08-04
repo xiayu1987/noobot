@@ -13,10 +13,7 @@ function normalizeView(view = "") {
 
 function resolveHostPlatform(agentContext = null) {
   return normalizePlatform(
-    agentContext?.environment?.os?.platform ||
-    agentContext?.environment?.platform ||
-    agentContext?.platform ||
-    "",
+    agentContext?.context?.environment?.os?.platform || "",
   );
 }
 

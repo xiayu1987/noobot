@@ -7,11 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildTools } from "../../src/tools/index.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function createContext({ globalConfig = {}, userConfig = {}, runtimePatch = {} } = {}) {
   return {
-    agentContext: {
-      runtime: {
+    agentContext: createTestAgentExecutionScope({
         globalConfig,
         userConfig,
         systemRuntime: {
@@ -20,8 +20,7 @@ function createContext({ globalConfig = {}, userConfig = {}, runtimePatch = {} }
           config: { allowUserInteraction: true },
         },
         ...runtimePatch,
-      },
-    },
+    }),
   };
 }
 

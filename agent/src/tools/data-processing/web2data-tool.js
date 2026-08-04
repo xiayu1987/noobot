@@ -20,8 +20,7 @@ import { isUrl, normalizeProcessMode, sanitizeArtifactBaseName, tWeb } from "./w
 export { runWebToDataPipeline } from "./web2data/pipeline.js";
 export function createWeb2DataTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const basePath =
-    agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
+  const basePath = String(runtime.basePath || "").trim();
   const effectiveConfig = mergeConfig(
     runtime?.globalConfig || {},
     runtime?.userConfig || {},

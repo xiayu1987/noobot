@@ -23,8 +23,7 @@ export async function runWebToDataPipeline({
   concurrency = DEFAULT_CONCURRENCY,
 }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const basePath =
-    agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
+  const basePath = String(runtime.basePath || "").trim();
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
   if (!basePath) {

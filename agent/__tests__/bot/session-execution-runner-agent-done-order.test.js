@@ -18,6 +18,7 @@ import {
   AGENT_LIFECYCLE_STATE,
 } from "../../src/runtime/lifecycle/state-machine.js";
 import { loadStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function createRunner({
   callOrder,
@@ -73,22 +74,12 @@ function createRunner({
       ...inputRunConfig,
       ...runConfig,
     }),
-    prepareAgentTurnExecution: prepareAgentTurnExecution || (async () => ({
-      agentContext: {
-        execution: {
-          controllers: {
-            runtime: defaultRuntime,
-          },
-        },
-      },
-      runtimeAgentContext: {
-        execution: {
-          controllers: {
-            runtime: defaultRuntime,
-          },
-        },
-      },
-    })),
+    prepareAgentTurnExecution: prepareAgentTurnExecution || (async () => {
+      const agentContext = createTestAgentExecutionScope(defaultRuntime, {
+        identity: { dialogProcessId: "dialog-1", turnScopeId: "turn-default" },
+      });
+      return { agentContext, runtimeAgentContext: agentContext };
+    }),
     commitSessionTurn: async (payload = {}) => {
       callOrder.push("appendSessionTurn");
       const messageUid = `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
@@ -469,22 +460,8 @@ test("runSession keeps resume snapshot identity separate from current run identi
         attachmentMetas: [],
         currentTurnMessages: createCurrentTurnMessagesStore([]),
       };
-      return {
-        agentContext: {
-          execution: {
-            controllers: {
-              runtime,
-            },
-          },
-        },
-        runtimeAgentContext: {
-          execution: {
-            controllers: {
-              runtime,
-            },
-          },
-        },
-      };
+      const agentContext = createTestAgentExecutionScope(runtime);
+      return { agentContext, runtimeAgentContext: agentContext };
     },
     finalizeRunSession: async ({ dialogProcessId, turnScopeId, lifecycle }) => {
       captured.finalize = { dialogProcessId, turnScopeId };

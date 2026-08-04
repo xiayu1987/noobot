@@ -26,10 +26,9 @@ import { assertNotAborted } from "../utils/error-utils.js";
 import { processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
-import { appendMessage } from "../../context/runtime-state/message-store.js";
+import { appendMessage } from "@noobot/context-protocol/message-store";
 import {
   clearMainFlowFinalNoToolsTurnInstruction,
   consumeMainFlowFinalNoToolsTurnInstruction,
@@ -395,7 +394,7 @@ export function createTurnOrchestrator({
           hasTools: Array.isArray(tools) && tools.length > 0,
           sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
           parentSessionId: resolveParentSessionId({ runtime }),
-          dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
+          dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
         },
       });
       throw error;

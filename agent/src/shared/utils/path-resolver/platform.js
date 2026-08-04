@@ -50,13 +50,9 @@ export function normalizePathPlatform(platform = "") {
   return normalizePlatform(platform);
 }
 
-export function resolvePathPlatformFromContext(agentContext = {}, fallback = process.platform) {
+export function resolvePathPlatformFromContext(agentContext = {}) {
   return normalizePlatform(
-    agentContext?.environment?.os?.platform ||
-    agentContext?.environment?.platform ||
-    agentContext?.platform ||
-    fallback ||
-    "",
+    agentContext?.context?.environment?.os?.platform || "",
   );
 }
 
@@ -65,8 +61,8 @@ export function isCaseInsensitivePathPlatform(platform = "") {
   return normalized === PATH_PLATFORMS.WINDOWS || normalized === PATH_PLATFORMS.MACOS;
 }
 
-export function isCaseInsensitivePathContext(agentContext = {}, fallback = process.platform) {
-  return isCaseInsensitivePathPlatform(resolvePathPlatformFromContext(agentContext, fallback));
+export function isCaseInsensitivePathContext(agentContext = {}) {
+  return isCaseInsensitivePathPlatform(resolvePathPlatformFromContext(agentContext));
 }
 export function detectPathPlatform(value = "", platformHint = "") {
   const hinted = normalizePlatform(platformHint);

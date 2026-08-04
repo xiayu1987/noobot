@@ -224,7 +224,7 @@ export class AgentContextFactory {
       agentContext,
       runConfig,
     );
-    const runtime = getRuntimeFromAgentContext(scopedAgentContext, runtimeHookCarrier);
+    const runtime = getRuntimeFromAgentContext(scopedAgentContext);
     const completedAtMs = Date.now();
     await runAgentRuntimeHook({
       runtime,
@@ -236,7 +236,7 @@ export class AgentContextFactory {
         durationMs: completedAtMs - buildStartedAtMs,
         status: "success",
         messageCount:
-          scopedAgentContext?.payload?.messages?.history?.length || 0,
+          scopedAgentContext?.context?.modelContext?.messageBlocks?.history?.length || 0,
         agentContext: scopedAgentContext,
       },
       eventListener,
@@ -244,7 +244,7 @@ export class AgentContextFactory {
     emitEvent(eventListener, "context_ready", {
       sessionId,
       messageCount:
-        scopedAgentContext?.payload?.messages?.history?.length || 0,
+        scopedAgentContext?.context?.modelContext?.messageBlocks?.history?.length || 0,
     });
     return scopedAgentContext;
   }
@@ -252,24 +252,6 @@ export class AgentContextFactory {
   buildRunTurnAgentContext(agentContext = {}, abortSignal = null) {
     const runtimeRef = getRuntimeFromAgentContext(agentContext);
     runtimeRef.abortSignal = abortSignal;
-    return {
-      ...agentContext,
-      execution: {
-        ...(agentContext?.execution || {}),
-        controllers: {
-          ...(agentContext?.execution?.controllers || {}),
-          runtime: runtimeRef,
-        },
-      },
-      payload: {
-        ...(agentContext?.payload || {}),
-        tools: {
-          ...(agentContext?.payload?.tools || {}),
-          registry: Array.isArray(agentContext?.payload?.tools?.registry)
-            ? agentContext.payload.tools.registry
-            : [],
-        },
-      },
-    };
+    return agentContext;
   }
 }

@@ -21,6 +21,7 @@ import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { CONNECTOR_TYPE, TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
+import { getRuntimeFromAgentContext, getToolsFromAgentContext } from "../context/agent-context-accessor.js";
 export {
   setToolBuilderAdapter,
   getToolBuilderAdapter,
@@ -220,17 +221,13 @@ function resolveMaxSubAgentDepth(_effectiveConfig = {}) {
 }
 
 async function buildToolsDefault(ctx) {
-  const runtime =
-    ctx?.agentContext?.runtime ||
-    ctx?.agentContext?.execution?.controllers?.runtime ||
-    {};
+  const runtime = getRuntimeFromAgentContext(ctx.agentContext);
   const effectiveConfig = mergeConfig(
     runtime?.globalConfig || {},
     runtime?.userConfig || {},
   );
   const allowUserInteraction =
-    ctx?.agentContext?.runtime?.systemRuntime?.config?.allowUserInteraction !==
-    false;
+    runtime?.systemRuntime?.config?.allowUserInteraction !== false;
   const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(
     effectiveConfig,
   );
@@ -277,11 +274,8 @@ async function filterToolsByRuntimePolicy({
 }) {
   const sourceTools = Array.isArray(tools)
     ? tools
-    : Array.isArray(agentContext?.payload?.tools?.registry)
-      ? agentContext.payload.tools.registry
-      : [];
-  const runtime =
-    agentContext?.runtime || agentContext?.execution?.controllers?.runtime || {};
+    : getToolsFromAgentContext(agentContext);
+  const runtime = getRuntimeFromAgentContext(agentContext);
   const sessionId = String(
     runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
   ).trim();

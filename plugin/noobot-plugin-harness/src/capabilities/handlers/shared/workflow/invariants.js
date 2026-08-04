@@ -13,7 +13,7 @@ function ensureObject(source = {}) {
 }
 
 export function enforceWorkflowInvariants(ctx = {}, { domain = "" } = {}) {
-  const harness = ctx?.agentContext?.payload?.harness;
+  const harness = ctx?.agentContext?.bindings?.extensions?.harness;
   if (!harness || typeof harness !== "object") return false;
   const state = ensureObject(harness.state);
   harness.state = state;

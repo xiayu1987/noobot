@@ -651,9 +651,6 @@ assertFileContains("plugin/noobot-plugin-harness/src/core/model-message-context.
   },
 ]);
 
-assertFileContains("agent/src/context/runtime-state/message-store.js", [
-  { name: "agent message-store delegates to context protocol", pattern: /export\s+\*\s+from\s+["']@noobot\/context-protocol\/message-store["']/ },
-]);
 const messageStoreText = assertFileContains("context-protocol/src/message-store.js", [
   { name: "persisted message uid owns canonical entity identity", pattern: /function\s+resolveMessageId[\s\S]*?const\s+persistedMessageUid\s*=\s*String\(message\?\.messageUid[\s\S]*?return\s+canonicalMessageId\s*\|\|\s*persistedMessageUid/ },
   { name: "persisted and context identities cannot diverge", pattern: /canonicalMessageId\s*&&\s*persistedMessageUid\s*&&\s*canonicalMessageId\s*!==\s*persistedMessageUid[\s\S]*?persisted messageUid conflicts with canonical noobotMessageId/ },

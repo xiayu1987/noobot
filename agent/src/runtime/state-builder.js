@@ -10,10 +10,11 @@ import {
   buildContextMessages,
   buildContextMessageBlocks,
 } from "../context/assembly/message-builder.js";
-import { resolveDialogProcessId } from "../context/session/dialog-process-id-resolver.js";
 import {
+  getAgentContextEnvelope,
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
+  getToolsFromAgentContext,
 } from "../context/agent-context-accessor.js";
 import { DEFAULT_MAX_TOOL_LOOP_TURNS } from "./constants/index.js";
 import {
@@ -26,11 +27,11 @@ import {
   resolveToolFailureHelpCount,
 } from "./run-config/index.js";
 import { createModelContext } from "@noobot/context-protocol/hook-context";
+import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
 import {
-  emitModelContextTrace,
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
-} from "../context/runtime-state/context-diagnostics.js";
+} from "@noobot/context-protocol/context-diagnostics";
 import {
   canonicalMessageId,
   canonicalMessageIdentityDebugData,
@@ -53,19 +54,15 @@ export function createStateBuilder({
 } = {}) {
   return function buildAgentState({ agentContext, currentUserMessage, errorLogger }) {
     const runtime = getRuntimeFromAgentContext(agentContext);
+    const context = getAgentContextEnvelope(agentContext);
     const sys = getSystemRuntimeFromRuntime(runtime);
     const globalConfig = runtime.globalConfig || {};
     const userConfig = runtime.userConfig || {};
     const effectiveConfig = mergeConfigFn(globalConfig, userConfig);
     const eventListener = runtime.eventListener || null;
     const abortSignal = runtime.abortSignal || null;
-    const dialogProcessId = resolveDialogProcessId({
-      ctx: { runtime, systemRuntime: sys, agentContext },
-      messages: agentContext?.payload?.messages?.history,
-    });
-    const tools = Array.isArray(agentContext?.payload?.tools?.registry)
-      ? agentContext.payload.tools.registry
-      : [];
+    const dialogProcessId = context.identity.dialogProcessId;
+    const tools = getToolsFromAgentContext(agentContext);
 
     normalizeSystemRuntimeCountersFn(sys, currentUserMessage.content);
 
@@ -193,9 +190,9 @@ export function createStateBuilder({
     };
     runtime.activeMessageContext = modelContext;
     runtime.stoppedModelMessageSnapshotCandidate = {
-      userId: String(runtime?.userId || sys?.userId || agentContext?.environment?.identity?.userId || "").trim(),
-      sessionId: String(sys?.sessionId || runtime?.sessionId || agentContext?.session?.current?.id || "").trim(),
-      parentSessionId: String(sys?.parentSessionId || agentContext?.session?.parent?.id || "").trim(),
+      userId: context.identity.userId,
+      sessionId: context.identity.sessionId,
+      parentSessionId: context.identity.parentSessionId,
       ...activeTurnIdentity,
       messages: modelContext.messages,
       messageBlocks: modelContext.messageBlocks,
@@ -224,8 +221,8 @@ export function createStateBuilder({
     emitModelContextTrace(runtime, "agent_state_built", {
       dialogProcessId: activeTurnIdentity.dialogProcessId,
       payloadMessages: {
-        systemCount: Array.isArray(agentContext?.payload?.messages?.system) ? agentContext.payload.messages.system.length : 0,
-        historyCount: Array.isArray(agentContext?.payload?.messages?.history) ? agentContext.payload.messages.history.length : 0,
+        systemCount: context.modelContext.messageBlocks.system.length,
+        historyCount: context.modelContext.messageBlocks.history.length,
       },
       blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
       messages: summarizeDiagnosticMessages(modelContext.messages),

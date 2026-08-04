@@ -60,11 +60,11 @@ export default async function weatherServiceHandler({
   queryString = {},
   body = {},
 }) {
-  const fetcher = agentContext?.runtime?.sharedTools?.fetch;
+  const fetcher = agentContext?.bindings?.runtime?.sharedTools?.fetch;
   if (typeof fetcher !== "function") {
     return {
       ok: false,
-      error: "fetch missing in agentContext.runtime.sharedTools",
+      error: "fetch missing in agentContext.bindings.runtime.sharedTools",
     };
   }
   const hint = formatHint(endpointCfg);

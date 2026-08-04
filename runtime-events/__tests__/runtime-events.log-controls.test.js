@@ -117,6 +117,40 @@ test('runtime-events writer separates debug session logs by debug type', async (
   assert.equal((await readJsonl(resend.file))[0].category, 'debug');
 });
 
+test('agent context debug logs default on and use their own file', async () => {
+  const root = await tempRoot();
+  const recorded = await writeRuntimeEvent({
+    source: 'agent',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    event: 'agent.context.executionScopeCreated',
+    userId: 'admin',
+    sessionId: 'session-agent-context',
+    data: { debugType: 'agent-context', envelope: { protocolVersion: 1 } },
+  }, { root, includeProcess: false });
+
+  assert.equal(recorded.ok, true);
+  assert.equal(recorded.skipped, undefined);
+  assert.match(recorded.file, /session-agent-context\/debug-agent-context\.jsonl$/);
+
+  const disabled = await writeRuntimeEvent({
+    source: 'agent',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    event: 'agent.context.executionScopeCreated',
+    userId: 'admin',
+    sessionId: 'session-agent-context-disabled',
+    data: { debugType: 'agent-context' },
+  }, {
+    root,
+    includeProcess: false,
+    sessionLogControls: { debug: { agentContext: false } },
+  });
+  assert.equal(disabled.skipped, true);
+});
+
 test('runtime-events writer filters debug session logs by business debug control', async () => {
   const root = await tempRoot();
   const skipped = await writeRuntimeEvent({

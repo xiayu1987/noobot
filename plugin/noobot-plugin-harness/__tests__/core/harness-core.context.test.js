@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  ensureTestAgentExecutionScope,
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
@@ -47,6 +48,7 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
       },
     },
   };
+  ensureTestAgentExecutionScope(ctx);
   ctx.agentContext.payload.harness.state.__harnessBucketVersion = 1;
 
   const first = ensureHarnessBucket(ctx);

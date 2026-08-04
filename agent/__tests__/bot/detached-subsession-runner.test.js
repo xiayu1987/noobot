@@ -22,6 +22,7 @@ import { CALLER_ROLE } from "../../src/bot/config/constants.js";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { createSessionServices } from "../../src/session/index.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function createDeps(overrides = {}) {
   const calls = {
@@ -117,6 +118,18 @@ function createParentContext(extra = {}) {
   };
 }
 
+function createParentExecutionScope(runtimePatch = {}) {
+  return createTestAgentExecutionScope({
+    userId: "u1",
+    systemRuntime: {
+      sessionId: "parent1",
+      dialogProcessId: "parent-dialog",
+      turnScopeId: "parent-turn",
+    },
+    ...runtimePatch,
+  });
+}
+
 function createCompleteStrategy(overrides = {}) {
   const turnScopeId = String(overrides.turnScopeId || "turn-1").trim();
   return {
@@ -138,6 +151,8 @@ test("detached sub-session delegates execution and persistence to the main runne
   const events = [];
   const runner = createDetachedSubSessionRunner(deps);
   const result = await runner({
+    parentExecutionScope: createParentExecutionScope(),
+    parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext(),
     message: "hello",
     attachments: [{ name: "a.txt" }],
@@ -180,7 +195,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.runConfig.executionKind, "agent");
   assert.equal(payload.runConfig.parentExecutionId, "workflow:root");
   assert.equal(payload.runConfig.rootExecutionId, "workflow:root");
-  assert.equal(payload.runConfig.systemRuntimePatch.durableParentSessionId, "parent1");
+  assert.equal(payload.runConfig.systemRuntimePatch, undefined);
   assert.equal(payload.parentAsyncResultContainer, null);
   assert.ok(payload.persistenceContext);
   assert.equal(calls.persistencePayloads[0].sessionId, "sub1");
@@ -253,7 +268,8 @@ test("detached sub-session rejects an incomplete persistence and identity strate
 
   await assert.rejects(
     runner({
-      parentContext: createParentContext(),
+      parentExecutionScope: createParentExecutionScope(),
+    parentContext: createParentContext(),
       message: "hello",
       strategy: {
         userId: "u1",
@@ -342,6 +358,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   });
 
   await createDetachedSubSessionRunner({ ...deps, now: fixedNow })({
+    parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext(),
     message: "hello",
     runConfigPatch: { turnScopeId: "turn-persisted" },
@@ -382,7 +399,8 @@ test("detached sub-session rejects a runner result with a second dialog identity
 
   await assert.rejects(
     runner({
-      parentContext: createParentContext(),
+      parentExecutionScope: createParentExecutionScope(),
+    parentContext: createParentContext(),
       message: "hello",
       strategy: createCompleteStrategy({
         dialogProcessId: "authoritative-dialog",
@@ -417,6 +435,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext({
       runConfig: {
         streaming: true,
@@ -478,6 +497,7 @@ test("detached sub-session preserves child-owned transaction fields from its pat
   const runner = createDetachedSubSessionRunner(deps);
 
   await runner({
+    parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext({
       runConfig: { expectedVersion: 7, idempotencyKey: "root-command" },
     }),
@@ -512,7 +532,8 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   const runner = createDetachedSubSessionRunner(deps);
   await assert.rejects(
     () => runner({
-      parentContext: createParentContext(),
+      parentExecutionScope: createParentExecutionScope(),
+    parentContext: createParentContext(),
       strategy: createCompleteStrategy({
         turnScopeId: "internal-turn:abort-test",
         executionId: "agent:internal-turn:abort-test",
@@ -575,7 +596,12 @@ test("createDetachedSubSessionRunner requires userId and parentSessionId", async
   const { deps } = createDeps();
   const runner = createDetachedSubSessionRunner(deps);
   await assert.rejects(
-    () => runner({ parentContext: { userId: "u1" } }),
+    () => runner({
+      parentExecutionScope: createParentExecutionScope(),
+      parentContext: {
+        userId: "u1",
+      },
+    }),
     /sub-session runner requires userId and parentSessionId/,
   );
 });
@@ -593,7 +619,8 @@ test("createDetachedSubSessionRunner aborts before execution when signal is alre
   });
   const runner = createDetachedSubSessionRunner(deps);
   await assert.rejects(
-    () => runner({ parentContext: createParentContext(), abortSignal: controller.signal }),
+    () => runner({ parentExecutionScope: createParentExecutionScope(),
+      parentContext: createParentContext(), abortSignal: controller.signal }),
     /bot plugin sub-session aborted/,
   );
   assert.equal(runCalled, false);
@@ -609,6 +636,7 @@ test("createDetachedSubSessionRunner falls back to empty userConfig when loading
   });
   const runner = createDetachedSubSessionRunner(deps);
   await runner({
+    parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext(),
     strategy: createCompleteStrategy(),
   });

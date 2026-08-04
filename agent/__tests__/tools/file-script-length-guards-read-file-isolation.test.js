@@ -40,7 +40,7 @@ test("read_file: should map docker sandbox /workspace/<userId> path to user work
       args: { riskLevel: "low", filePath: "/workspace/primary-user/runtime/ops_workdir/result.json" },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -87,7 +87,7 @@ test("read_file: regular user cannot read another user workspace through /worksp
       args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -115,7 +115,7 @@ test("read_file: configured super user id does not bypass isolation when runtime
   const runnerResult = await executeToolCall({
     call: { id: "call_missing_super_flag", name: "read_file", args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" } },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -141,7 +141,7 @@ test("read_file: non-true super user runtime flag does not bypass isolation", as
   const runnerResult = await executeToolCall({
     call: { id: "call_non_true_super_flag", name: "read_file", args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" } },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -185,7 +185,7 @@ test("read_file: configured super user can read another user workspace through /
       args: { riskLevel: "low", filePath: "/workspace/other-user/visible.txt" },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -232,7 +232,7 @@ test("read_file: sandboxed super user in docker user scope cannot read another u
       args: { riskLevel: "low", filePath: "/workspace/other-user/hidden.txt" },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -265,7 +265,7 @@ test("read_file: regular user cannot read an absolute file outside allowed roots
       args: { riskLevel: "low", filePath: outsideFile },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -299,7 +299,7 @@ test("read_file: super user can read an absolute file outside workspace root", a
       args: { riskLevel: "low", filePath: outsideFile },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -352,7 +352,7 @@ test("read_file: super user cannot use host absolute paths outside sandbox roots
       args: { riskLevel: "low", filePath: outsideFile },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -396,7 +396,7 @@ test("read_file: configured super user cross-workspace read still respects mustE
       args: { riskLevel: "low", filePath: "/workspace/other-user/missing.txt" },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -441,7 +441,7 @@ test("read_file: should allow mapped sandbox path that points to mounted host di
       args: { riskLevel: "low", filePath: "/project/sandbox-mounted.txt" },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);
@@ -498,7 +498,7 @@ test("read_file: should allow docker mount target path under /project", async ()
       args: { riskLevel: "low", filePath: "/project/agent/src/tools/execution/file-tool.js" },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);

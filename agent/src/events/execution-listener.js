@@ -16,10 +16,7 @@ function enrichEventData(rawData = {}, defaults = {}) {
   const eventData = rawData && typeof rawData === "object" ? rawData : {};
   return {
     ...eventData,
-    dialogProcessId: resolveDialogProcessIdFromContext({
-      dialogProcessId: eventData?.dialogProcessId,
-      currentDialogProcessId: defaults.dialogProcessId,
-    }),
+    dialogProcessId: String(eventData?.dialogProcessId || defaults.dialogProcessId || "").trim(),
     sessionId: String(eventData?.sessionId || defaults.sessionId || ""),
     turnScopeId: String(eventData?.turnScopeId || defaults.turnScopeId || ""),
     parentSessionId: resolveParentSessionId({

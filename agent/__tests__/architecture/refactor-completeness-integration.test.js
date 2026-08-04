@@ -14,11 +14,6 @@ import {
   resolveSkillModelSpec
 } from '../../src/models/resolver/index.js';
 
-const mockWorkspaceService = {
-  getWorkspacePath: async (sessionId) => `/workspace/${sessionId}`
-};
-const { ContextBuilder } = await import("../../src/bot/session/context-builder.js");
-
 function createBaseGlobalConfig(overrides = {}) {
   return {
     defaultModel: 'openai:gpt-4',
@@ -67,25 +62,6 @@ function createBaseUserConfig(overrides = {}) {
 
 describe('8. 综合集成测试', () => {
   describe('完整执行流程数据流', () => {
-    it('Context 构建 → 模型解析 → 配置合并 应连贯工作', async () => {
-      const builder = new ContextBuilder(mockWorkspaceService);
-      const context = await builder.build('integration-test-1', { name: 'programming' }, { allow: ['execute_script'] });
-
-      assert.ok(context.sessionId, 'Context 应包含 sessionId');
-      assert.ok(context.workspacePath, 'Context 应包含 workspacePath');
-      assert.ok(context.scenario, 'Context 应包含 scenario');
-
-      const globalConfig = createBaseGlobalConfig({ defaultProvider: 'openai' });
-      const userConfig = createBaseUserConfig({});
-      const modelSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
-
-      assert.ok(modelSpec !== null, '应能解析到模型 spec');
-
-      assert.equal(typeof context.sessionId, 'string', 'sessionId 类型正确');
-      assert.equal(typeof modelSpec.alias, 'string', 'model alias 类型正确');
-      assert.equal(typeof modelSpec.model, 'string', 'model name 类型正确');
-    });
-
     it('配置优先级链应正确影响模型选择', () => {
       const globalConfig = createBaseGlobalConfig({ defaultProvider: 'openai' });
 

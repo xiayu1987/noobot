@@ -75,7 +75,7 @@ export function ensureTaskAcceptanceTool(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const registry = ctx?.agentContext?.payload?.tools?.registry;
+  const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return false;
   if (registry.some((tool) => String(tool?.name || "").trim() === TASK_ACCEPTANCE_TOOL_NAME)) {
     return false;

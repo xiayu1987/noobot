@@ -89,7 +89,7 @@ test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
         },
       },
     },
-  }).execution.controllers.runtime;
+  }).bindings.runtime;
   const runnerResult = await executeToolCall({
     call: {
       id: "call_write_non_sandbox",
@@ -144,7 +144,7 @@ test("write_file: 启用沙箱返回沙箱路径视角", async () => {
         },
       },
     },
-  }).execution.controllers.runtime;
+  }).bindings.runtime;
   const runnerResult = await executeToolCall({
     call: {
       id: "call_write_sandbox",
@@ -186,7 +186,7 @@ test("write_file: super user can write an absolute file outside workspace root",
       args: { riskLevel: "low", filePath: outsideFile, content: "write-outside" },
     },
     tool,
-    runtime: agentContext.execution.controllers.runtime,
+    runtime: agentContext.bindings.runtime,
     agentContext,
   });
   const result = parseToolResult(runnerResult.toolResultText);

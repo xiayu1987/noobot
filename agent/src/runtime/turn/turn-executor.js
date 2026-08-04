@@ -47,12 +47,12 @@ import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stag
 import {
   appendMessage,
   replaceMessageProjection,
-} from "../../context/runtime-state/message-store.js";
+} from "@noobot/context-protocol/message-store";
+import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
 import {
-  emitModelContextTrace,
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
-} from "../../context/runtime-state/context-diagnostics.js";
+} from "@noobot/context-protocol/context-diagnostics";
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";

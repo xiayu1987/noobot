@@ -390,15 +390,14 @@ function resolveOverflowSessionId({
   return String(
     sessionId ||
       runtime?.systemRuntime?.sessionId ||
-      agentContext?.session?.current?.id ||
-      agentContext?.execution?.controllers?.runtime?.systemRuntime?.sessionId ||
+      agentContext?.context?.identity?.sessionId ||
       "",
   ).trim();
 }
 
 function resolveSemanticTransferOutputDir({ runtime = {}, agentContext = null, sessionId = "" } = {}) {
   const basePath = String(
-    agentContext?.environment?.workspace?.basePath || runtime?.basePath || "",
+    runtime?.basePath || "",
   ).trim();
   const sessionDirName = normalizeOverflowSessionDirName(
     resolveOverflowSessionId({ sessionId, runtime, agentContext }),

@@ -38,8 +38,8 @@ import { resolveModelMessageBlocks, resolveModelMessages } from "../../../core/m
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
 function resolvePlanningToolCatalog(ctx = {}, locale = LOCALE.ZH_CN) {
-  const registry = Array.isArray(ctx?.agentContext?.payload?.tools?.registry)
-    ? ctx.agentContext.payload.tools.registry
+  const registry = Array.isArray(ctx?.agentContext?.bindings?.tools)
+    ? ctx.agentContext.bindings.tools
     : [];
   const fallbackDescription = translateI18nText(
     locale,
@@ -184,10 +184,9 @@ export function resolveLatestUserMessageText(ctx = {}) {
   const fallbackCandidates = [
     ctx?.userMessage,
     ctx?.message,
-    ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.currentTurnUserMessage,
+    ctx?.agentContext?.bindings?.runtime?.systemRuntime?.currentTurnUserMessage,
     ctx?.latestUserGoal,
-    ctx?.agentContext?.payload?.latestUserGoal,
-    ctx?.agentContext?.payload?.context?.latestUserGoal,
+    ctx?.agentContext?.bindings?.extensions?.latestUserGoal,
   ];
   for (const candidate of fallbackCandidates) {
     const text = String(candidate || "").trim();
@@ -207,8 +206,8 @@ export function buildPlanningMessagePlan(
     includeWorkflowPolicy = false,
   } = {},
 ) {
-  const bucket = ctx?.agentContext?.payload?.harness && typeof ctx.agentContext.payload.harness === "object"
-    ? ctx.agentContext.payload.harness
+  const bucket = ctx?.agentContext?.bindings?.extensions?.harness && typeof ctx.agentContext.bindings.extensions.harness === "object"
+    ? ctx.agentContext.bindings.extensions.harness
     : {};
   const planChecklistContent = buildPlanChecklistSystemContent({
     locale,

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -398,7 +399,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     errorLogger: { async log() {} },
     botManager: {},
     agentRunner: async ({ agentContext, currentUserMessage }) => {
-      capturedRuntime = agentContext?.execution?.controllers?.runtime || null;
+      capturedRuntime = agentContext?.bindings?.runtime || null;
       capturedAgentUserMessage = currentUserMessage.content;
       assert.equal(currentUserMessage.messageUid, "sm_turn-scope-smoke");
       const messages = [currentUserMessage];
@@ -509,13 +510,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
     basePath: path.join(tempRoot, "u1"),
     systemRuntime: { userId: "u1", sessionId, dialogProcessId },
   };
-  const agentContext = {
-    execution: {
-      dialogProcessId,
-      controllers: { runtime },
-    },
-    environment: { identity: { userId: "u1" }, workspace: { basePath: runtime.basePath } },
-  };
+  const agentContext = createTestAgentExecutionScope(runtime);
 
   const successCall = { id: "call_ok", name: "demo_tool", args: { x: 1 } };
   const successResult = await executeToolCall({

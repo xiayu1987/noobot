@@ -474,6 +474,7 @@ export async function runNodeAgent({
         ? Math.max(1000, Math.floor(Number(options.nodeAgentTimeoutMs)))
         : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_NODE_AGENT_TIMEOUT_MS;
       const subSessionRunPromise = Promise.resolve(options.subSessionRunner({
+          parentExecutionScope: ctx?.agentContext || null,
           parentContext: ctx,
           abortSignal: resolveWorkflowAbortSignal(ctx),
           message: hookPayload.agentInstruction,

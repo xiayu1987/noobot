@@ -216,7 +216,7 @@ async function recordLibreOfficeParseFailed({
   const userId = String(runtime?.userId || "").trim();
   const systemRuntime = runtime?.systemRuntime || {};
   const sessionId = String(systemRuntime?.sessionId || systemRuntime?.rootSessionId || "").trim();
-  const dialogProcessId = String(systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || "").trim();
+  const dialogProcessId = String(systemRuntime?.dialogProcessId || "").trim();
   const turnScopeId = String(systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "").trim();
   if (!userId || !sessionId) return { ok: true, skipped: true };
   const inputValue = String(inputFile || "");

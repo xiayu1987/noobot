@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { createMcpTool } from "../../src/tools/execution/mcp-tool.js";
 import { AGENT_DETACHED_SESSION_ROOT } from "../../src/bot/session/detached-subsession-strategy.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 function createJsonResponse(payload = {}, { status = 200, headers = {} } = {}) {
   return {
@@ -98,7 +99,7 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
     userConfig: {},
     sharedTools: { fetch: createMcpFetch() },
   };
-  const [tool] = createMcpTool({ agentContext: { userId: "primary-user", runtime } });
+  const [tool] = createMcpTool({ agentContext: createTestAgentExecutionScope(runtime) });
   const raw = await tool.invoke({ mcpName: "fake", task: "do something" });
   const payload = JSON.parse(String(raw || "{}"));
   assert.equal(payload.ok, true);

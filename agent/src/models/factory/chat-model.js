@@ -352,27 +352,7 @@ function resolveContextObject(options = {}) {
 
 function resolveHeaderSessionId(options = {}) {
   const context = resolveContextObject(options);
-  const contextRuntime =
-    context?.runtime && typeof context.runtime === "object" ? context.runtime : {};
-  const contextAgentContext =
-    context?.agentContext && typeof context.agentContext === "object"
-      ? context.agentContext
-      : {};
-  const value = String(
-    context?.sessionId ||
-      options?.sessionId ||
-      contextRuntime?.systemRuntime?.sessionId ||
-      options?.runtime?.systemRuntime?.sessionId ||
-      contextRuntime?.sessionId ||
-      options?.runtime?.sessionId ||
-      contextAgentContext?.sessionId ||
-      options?.agentContext?.sessionId ||
-      contextAgentContext?.session?.current?.sessionId ||
-      options?.agentContext?.session?.current?.sessionId ||
-      contextAgentContext?.session?.id ||
-      options?.agentContext?.session?.id ||
-      "",
-  ).trim();
+  const value = String(context?.sessionId || "").trim();
   return value.slice(0, 200);
 }
 

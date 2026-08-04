@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -62,17 +63,7 @@ test("state-builder canonicalizes model messages and block views through one sto
   runtime.eventListener = {
     onEvent: (event) => identityEvents.push(event),
   };
-  const agentContext = {
-      payload: {
-        messages: { history: [] },
-        tools: { registry: [] },
-      },
-      execution: {
-        controllers: {
-          runtime,
-        },
-      },
-    };
+  const agentContext = createTestAgentExecutionScope(runtime);
 
   const { loopState } = buildAgentState({
     agentContext,
@@ -96,7 +87,7 @@ test("state-builder canonicalizes model messages and block views through one sto
     dialogProcessId: "dlg-1",
     turnScopeId: "turn-1",
   });
-  assert.deepEqual(agentContext.execution.controllers.runtime.stoppedModelMessageSnapshotCandidate, {
+  assert.deepEqual(agentContext.bindings.runtime.stoppedModelMessageSnapshotCandidate, {
     userId: "admin",
     sessionId: "s1",
     parentSessionId: "parent-s1",

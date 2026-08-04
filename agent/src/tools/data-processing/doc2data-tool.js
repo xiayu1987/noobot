@@ -83,7 +83,7 @@ async function recordDoc2DataLibreOfficeFallback({
     runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
   ).trim();
   const systemRuntime = runtime?.systemRuntime || {};
-  const dialogProcessId = String(systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || "").trim();
+  const dialogProcessId = String(systemRuntime?.dialogProcessId || "").trim();
   const turnScopeId = String(systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "").trim();
   if (!sessionId) return { ok: true, skipped: true };
   const inputValue = String(inputFile || "");
@@ -112,7 +112,7 @@ async function recordDoc2DataLibreOfficeFallback({
 
 export function createDoc2DataTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const basePath = agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
+  const basePath = String(runtime.basePath || "").trim();
   const globalConfig = runtime.globalConfig || {};
   const userConfig = runtime.userConfig || {};
   if (!basePath) return [];

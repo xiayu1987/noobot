@@ -20,11 +20,7 @@ function asObject(value) {
 export function resolveAgentRuntimeFromHookContext(ctx = {}) {
   const agentContext = asObject(ctx?.agentContext);
   if (!agentContext) return null;
-  return (
-    asObject(agentContext?.execution?.controllers?.runtime) ||
-    asObject(agentContext?.runtime) ||
-    null
-  );
+  return asObject(agentContext?.bindings?.runtime);
 }
 
 export function resolveAgentSystemRuntimeFromHookContext(ctx = {}) {

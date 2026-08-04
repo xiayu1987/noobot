@@ -16,7 +16,7 @@ test("user_interaction: should forward lifecycle/ackMode defaults to bridge", as
   const calls = [];
   const tools = createUserInteractionTool({
     agentContext: {
-      runtime: {
+      bindings: { runtime: {
         userInteractionBridge: {
           async requestUserInteraction(payload = {}) {
             calls.push(payload);
@@ -30,7 +30,7 @@ test("user_interaction: should forward lifecycle/ackMode defaults to bridge", as
           dialogProcessId: "dp-1",
           sessionId: "s-1",
         },
-      },
+      } },
     },
   });
 
@@ -72,7 +72,7 @@ test("user_interaction: should tolerate unescaped quotes inside fields string de
   const calls = [];
   const tools = createUserInteractionTool({
     agentContext: {
-      runtime: {
+      bindings: { runtime: {
         userInteractionBridge: {
           async requestUserInteraction(payload = {}) {
             calls.push(payload);
@@ -86,7 +86,7 @@ test("user_interaction: should tolerate unescaped quotes inside fields string de
           dialogProcessId: "dp-quote",
           sessionId: "s-quote",
         },
-      },
+      } },
     },
   });
 

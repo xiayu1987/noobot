@@ -26,7 +26,7 @@ export function normalizePlanningGuidance(options = {}) {
 }
 
 export function extractRuntime(ctx = {}) {
-  return ctx?.agentContext?.execution?.controllers?.runtime || null;
+  return ctx?.agentContext?.bindings?.runtime || null;
 }
 
 function resolveUnifiedCalls(ctx = {}) {
@@ -81,7 +81,7 @@ export function extractBasePath(ctx = {}, options = {}) {
     options.basePath ||
       ctx.basePath ||
       extractRuntime(ctx)?.basePath ||
-      ctx?.agentContext?.environment?.workspace?.basePath ||
+      ctx?.agentContext?.context?.environment?.workspace?.basePath ||
       "",
   ).trim();
 }

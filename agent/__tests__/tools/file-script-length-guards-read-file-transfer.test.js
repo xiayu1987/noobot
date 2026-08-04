@@ -55,7 +55,7 @@ test("read_file: 大文件原始结果由 semantic-transfer 转为沙箱视角 o
       },
     },
   });
-  const runtime = agentContext.execution.controllers.runtime;
+  const runtime = agentContext.bindings.runtime;
   const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);

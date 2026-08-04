@@ -3,85 +3,53 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveDialogProcessIdFromContext } from "./session/dialog-process-id-resolver.js";
-import { resolveParentSessionId } from "./parent-session-id-resolver.js";
 
-function asObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+import { getAgentContextIdentity } from "@noobot/context-protocol/agent-context-accessors";
+import { getAgentContextEnvelope } from "./agent-execution-scope.js";
+
+export { getAgentContextEnvelope } from "./agent-execution-scope.js";
+
+export function getRuntimeFromAgentContext(scope = {}) {
+  const runtime = scope?.bindings?.runtime;
+  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
+    throw new TypeError("agent execution scope bindings.runtime is required");
+  }
+  return runtime;
+}
+
+export function getToolsFromAgentContext(scope = {}) {
+  const tools = scope?.bindings?.tools;
+  if (!Array.isArray(tools)) {
+    throw new TypeError("agent execution scope bindings.tools must be an array");
+  }
+  return tools;
 }
 
 export function getSystemRuntimeFromRuntime(runtime = {}) {
-  return asObject(runtime?.systemRuntime) || {};
+  const systemRuntime = runtime?.systemRuntime;
+  return systemRuntime && typeof systemRuntime === "object" ? systemRuntime : {};
 }
 
-export function getRuntimeFromAgentContext(agentContext = {}, fallbackRuntime = null) {
-  const context = asObject(agentContext) || {};
-  const runtimeFromController = asObject(context?.execution?.controllers?.runtime);
-  if (runtimeFromController) return runtimeFromController;
-  const runtimeFromTopLevel = asObject(context?.runtime);
-  if (runtimeFromTopLevel) return runtimeFromTopLevel;
-  return asObject(fallbackRuntime) || {};
+export function getSystemRuntimeFromAgentContext(scope = {}) {
+  return getSystemRuntimeFromRuntime(getRuntimeFromAgentContext(scope));
 }
 
-export function getSystemRuntimeFromAgentContext(agentContext = {}, fallbackRuntime = null) {
-  const runtime = getRuntimeFromAgentContext(agentContext, fallbackRuntime);
-  return getSystemRuntimeFromRuntime(runtime);
+export function getDialogProcessIdFromRuntime(runtime = {}) {
+  return String(getSystemRuntimeFromRuntime(runtime).dialogProcessId || "").trim();
 }
 
-export function getSessionIdsFromAgentContext(agentContext = {}, fallbackRuntime = null) {
-  const context = asObject(agentContext) || {};
-  const runtime = getRuntimeFromAgentContext(context, fallbackRuntime);
-  const systemRuntime = getSystemRuntimeFromAgentContext(context, runtime);
-  const parentSessionId = resolveParentSessionId({
-    context: {
-      parentSessionId: context?.session?.parent?.id,
-      runtime,
-      agentContext: context,
-    },
-    runtime,
-    agentContext: context,
-  });
-  return {
-    userId: String(
-      context?.environment?.identity?.userId || runtime?.userId || systemRuntime?.userId || "",
-    ).trim(),
-    sessionId: String(
-      context?.session?.current?.id || systemRuntime?.sessionId || "",
-    ).trim(),
-    parentSessionId,
-    rootSessionId: String(
-      context?.session?.root?.id || systemRuntime?.rootSessionId || "",
-    ).trim(),
-  };
+export function getSessionIdsFromAgentContext(scope = {}) {
+  return getAgentContextIdentity(getAgentContextEnvelope(scope));
 }
 
-export function resolveChildRunParentSessionIdFromRuntime(runtime = {}) {
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  return String(
-    systemRuntime?.childRunParentSessionId ||
-      systemRuntime?.durableParentSessionId ||
-      systemRuntime?.sessionId ||
-      "",
-  ).trim();
+export function getChildRunParentSessionIdFromAgentContext(scope = {}) {
+  return getSessionIdsFromAgentContext(scope).rootSessionId;
 }
 
-export function getBasePathFromAgentContext(agentContext = {}, fallbackRuntime = null) {
-  const context = asObject(agentContext) || {};
-  const runtime = getRuntimeFromAgentContext(context, fallbackRuntime);
-  return String(
-    context?.environment?.workspace?.basePath || runtime?.basePath || "",
-  ).trim();
+export function getBasePathFromAgentContext(scope = {}) {
+  return String(getAgentContextEnvelope(scope)?.environment?.workspace?.basePath || "").trim();
 }
 
-export function getDialogProcessIdFromAgentContext(
-  agentContext = {},
-  fallbackRuntime = null,
-) {
-  const context = asObject(agentContext) || {};
-  const runtime = getRuntimeFromAgentContext(context, fallbackRuntime);
-  const fromContext = resolveDialogProcessIdFromContext({
-    agentContext: context,
-  });
-  if (fromContext) return fromContext;
-  return resolveDialogProcessIdFromContext({ runtime });
+export function getDialogProcessIdFromAgentContext(scope = {}) {
+  return getAgentContextIdentity(getAgentContextEnvelope(scope)).dialogProcessId;
 }

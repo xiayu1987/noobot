@@ -103,9 +103,9 @@ export function buildHarnessInjectedMessage(
 
 export function resolveCurrentTurnMessagesStore(ctx = {}) {
   const runtime =
-    ctx?.agentContext?.execution?.controllers?.runtime &&
-    typeof ctx.agentContext.execution.controllers.runtime === "object"
-      ? ctx.agentContext.execution.controllers.runtime
+    ctx?.agentContext?.bindings?.runtime &&
+    typeof ctx.agentContext.bindings.runtime === "object"
+      ? ctx.agentContext.bindings.runtime
       : {};
   const store = runtime?.currentTurnMessages;
   return store && typeof store.push === "function" ? store : null;

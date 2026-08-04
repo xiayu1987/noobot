@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -59,25 +60,7 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
       toolConsecutiveFailureCount: 0,
     },
   };
-  const agentContext = {
-    payload: {
-      messages: {
-        system: [],
-        history: [],
-      },
-      tools: { registry: [] },
-    },
-    execution: {
-      controllers: { runtime },
-    },
-    environment: {
-      identity: { userId: "admin" },
-    },
-    session: {
-      current: { id: "session-engine-stop" },
-      parent: { id: "parent-session-engine-stop" },
-    },
-  };
+  const agentContext = createTestAgentExecutionScope(runtime);
 
   await assert.rejects(
     () => runAgentTurn({

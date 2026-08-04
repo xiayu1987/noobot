@@ -30,7 +30,7 @@ export function isTextScenarioText(value = "") {
 }
 
 export function resolveRunConfigCandidatesFromContext(ctx = {}) {
-  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || ctx?.runtime || null;
+  const runtime = ctx?.agentContext?.bindings?.runtime || null;
   return [
     ctx?.runConfig,
     runtime?.runConfig,

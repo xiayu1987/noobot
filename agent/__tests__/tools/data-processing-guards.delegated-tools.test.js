@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -62,10 +63,7 @@ test("process_content_task: detached runtime uses durable parent session", async
   const calls = [];
   const botManager = createDetachedBotManager(calls);
   const tools = createContentProcessTool({
-    agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
+    agentContext: createTestAgentExecutionScope({
             basePath,
             userId: "primary-user",
             globalConfig: {},
@@ -74,13 +72,10 @@ test("process_content_task: detached runtime uses durable parent session", async
             sharedTools: {},
             systemRuntime: {
               sessionId: "detached-node-session",
-              childRunParentSessionId: "root-plugin-session",
+              rootSessionId: "root-plugin-session",
               config: {},
             },
-          },
-        },
-      },
-    },
+          }),
   });
   const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK);
   assert.ok(tool);
@@ -93,7 +88,7 @@ test("process_content_task: detached runtime uses durable parent session", async
 
   assert.equal(calls.length, 1);
   assertAgentDetachedStrategy(calls[0]?.strategy, "root-plugin-session");
-  assert.equal(calls[0]?.parentContext?.execution?.controllers?.runtime?.botManager, botManager);
+  assert.equal(calls[0]?.parentExecutionScope?.bindings?.runtime?.botManager, botManager);
   assert.equal(result.sessionId, "child-session");
   assert.equal(result.parentSessionId, "root-plugin-session");
 });
@@ -103,10 +98,7 @@ test("process_content_task: 透传父 runConfig 显式 streaming=false 到子 se
   const calls = [];
   const botManager = createDetachedBotManager(calls);
   const tools = createContentProcessTool({
-    agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
+    agentContext: createTestAgentExecutionScope({
             basePath,
             userId: "primary-user",
             globalConfig: {},
@@ -119,10 +111,7 @@ test("process_content_task: 透传父 runConfig 显式 streaming=false 到子 se
                 streaming: false,
               },
             },
-          },
-        },
-      },
-    },
+          }),
   });
   const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK);
   assert.ok(tool);
@@ -143,10 +132,7 @@ test("process_content_task: 缺省 modelName 时继承父运行时模型", async
   const calls = [];
   const botManager = createDetachedBotManager(calls);
   const tools = createContentProcessTool({
-    agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
+    agentContext: createTestAgentExecutionScope({
             basePath,
             userId: "primary-user",
             runtimeModel: "gpt_5_6",
@@ -158,10 +144,7 @@ test("process_content_task: 缺省 modelName 时继承父运行时模型", async
               sessionId: "parent-session",
               config: {},
             },
-          },
-        },
-      },
-    },
+          }),
   });
   const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK);
   assert.ok(tool);
@@ -182,10 +165,7 @@ test("process_content_task: 显式 modelName 优先于父运行时模型", async
   const calls = [];
   const botManager = createDetachedBotManager(calls);
   const tools = createContentProcessTool({
-    agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
+    agentContext: createTestAgentExecutionScope({
             basePath,
             userId: "primary-user",
             runtimeModel: "gpt_5_6",
@@ -197,10 +177,7 @@ test("process_content_task: 显式 modelName 优先于父运行时模型", async
               sessionId: "parent-session",
               config: {},
             },
-          },
-        },
-      },
-    },
+          }),
   });
   const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK);
   assert.ok(tool);
@@ -221,10 +198,7 @@ test("process_connector_tool: detached runtime uses durable parent session", asy
   const calls = [];
   const botManager = createDetachedBotManager(calls);
   const tools = createConnectorAccessTool({
-    agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
+    agentContext: createTestAgentExecutionScope({
             userId: "primary-user",
             globalConfig: {},
             userConfig: {},
@@ -238,13 +212,10 @@ test("process_connector_tool: detached runtime uses durable parent session", asy
             },
             systemRuntime: {
               sessionId: "detached-node-session",
-              childRunParentSessionId: "root-plugin-session",
+              rootSessionId: "root-plugin-session",
               config: {},
             },
-          },
-        },
-      },
-    },
+          }),
   });
   const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONNECTOR_TOOL);
   assert.ok(tool);
@@ -265,10 +236,7 @@ test("process_connector_tool: 透传父 runConfig 显式 streaming=false 到子 
   const calls = [];
   const botManager = createDetachedBotManager(calls);
   const tools = createConnectorAccessTool({
-    agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
+    agentContext: createTestAgentExecutionScope({
             userId: "primary-user",
             globalConfig: {},
             userConfig: {},
@@ -286,10 +254,7 @@ test("process_connector_tool: 透传父 runConfig 显式 streaming=false 到子 
                 streaming: false,
               },
             },
-          },
-        },
-      },
-    },
+          }),
   });
   const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONNECTOR_TOOL);
   assert.ok(tool);
