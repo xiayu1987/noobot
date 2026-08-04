@@ -47,7 +47,7 @@ function buildPayloadPreview(point, ctx = {}, options = {}) {
   const maxPreviewChars = options.maxPreviewChars || LENGTH_THRESHOLDS.display.harnessPreviewChars;
   if (point === "before_llm_call" || point === "after_llm_call") {
     return {
-      messageCount: Array.isArray(ctx.messages) ? ctx.messages.length : undefined,
+      messageCount: Array.isArray(ctx?.modelContext?.messages) ? ctx.modelContext.messages.length : undefined,
       toolChoice: ctx.toolChoice,
       hasToolCalls: ctx.hasToolCalls,
       callCount: Array.isArray(ctx.calls) ? ctx.calls.length : undefined,
@@ -140,11 +140,11 @@ export function buildContextSnapshot({ ctx = {}, pluginName = "", pluginVersion 
       connectors: agentContext?.session?.current?.connectors || {},
     },
     payload: {
-      systemMessageCount: Array.isArray(agentContext?.payload?.messages?.system)
-        ? agentContext.payload.messages.system.length
+      systemMessageCount: Array.isArray(ctx?.modelContext?.messageBlocks?.system)
+        ? ctx.modelContext.messageBlocks.system.length
         : 0,
-      historyMessageCount: Array.isArray(agentContext?.payload?.messages?.history)
-        ? agentContext.payload.messages.history.length
+      historyMessageCount: Array.isArray(ctx?.modelContext?.messageBlocks?.history)
+        ? ctx.modelContext.messageBlocks.history.length
         : 0,
     },
   };

@@ -5,15 +5,23 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
 
 import {
   createDetachedSubSessionRunner,
   createDetachedTerminalReceipt,
   createScopedSubSessionEventListener,
 } from "../../src/bot/session/detached-subsession-runner.js";
+import {
+  AGENT_DETACHED_SESSION_ROOT,
+  createAgentDetachedSubSessionStrategy,
+} from "../../src/bot/session/detached-subsession-strategy.js";
 import { CALLER_ROLE } from "../../src/bot/config/constants.js";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
+import { createSessionServices } from "../../src/session/index.js";
 
 function createDeps(overrides = {}) {
   const calls = {
@@ -106,6 +114,22 @@ function createParentContext(extra = {}) {
     dialogProcessId: "parent-dialog",
     runConfig: { base: true },
     ...extra,
+  };
+}
+
+function createCompleteStrategy(overrides = {}) {
+  const turnScopeId = String(overrides.turnScopeId || "turn-1").trim();
+  return {
+    userId: "u1",
+    sessionId: "sub1",
+    parentSessionId: "parent1",
+    parentDialogProcessId: "parent-dialog",
+    dialogProcessId: "sub-dialog",
+    turnScopeId,
+    executionId: `agent:${turnScopeId}`,
+    relativeDir: "runtime/workflow/session/root/node-a",
+    allowedRoot: "runtime/workflow/session",
+    ...overrides,
   };
 }
 
@@ -223,6 +247,58 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.deepEqual(result.result.turnTasks, [{ taskId: "t1" }]);
 });
 
+test("detached sub-session rejects an incomplete persistence and identity strategy", async () => {
+  const { deps } = createDeps();
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await assert.rejects(
+    runner({
+      parentContext: createParentContext(),
+      message: "hello",
+      strategy: {
+        userId: "u1",
+        parentSessionId: "parent1",
+      },
+    }),
+    /detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, executionId, relativeDir and allowedRoot/,
+  );
+});
+
+test("agent detached strategy resolves through the authoritative scoped persistence location", async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-agent-detached-scope-"));
+  try {
+    const strategy = createAgentDetachedSubSessionStrategy({
+      userId: "u1",
+      parentSessionId: "parent1",
+      parentDialogProcessId: "parent-dialog",
+    });
+    const services = createSessionServices({ workspaceRoot });
+    const persistenceContext = services.createScopedPersistenceContext({
+      userId: strategy.userId,
+      sessionId: strategy.sessionId,
+      parentSessionId: strategy.parentSessionId,
+      scopeId: strategy.executionId,
+      relativeDir: strategy.relativeDir,
+      allowedRoot: strategy.allowedRoot,
+    });
+    const scope = await persistenceContext.locationResolver.resolveSessionScope(
+      strategy.userId,
+      strategy.sessionId,
+      strategy.parentSessionId,
+    );
+
+    assert.equal(strategy.allowedRoot, AGENT_DETACHED_SESSION_ROOT);
+    assert.equal(strategy.relativeDir, `${AGENT_DETACHED_SESSION_ROOT}/${strategy.sessionId}`);
+    assert.equal(
+      scope.sessionDir,
+      path.join(workspaceRoot, "u1", AGENT_DETACHED_SESSION_ROOT, strategy.sessionId),
+    );
+    assert.equal(scope.resolvedParentSessionId, "parent1");
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 test("detached sub-session persists its complete authoritative lifecycle outbox", async () => {
   let persisted = null;
   const fixedNow = () => "2026-07-30T12:53:35.738Z";
@@ -269,11 +345,11 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     parentContext: createParentContext(),
     message: "hello",
     runConfigPatch: { turnScopeId: "turn-persisted" },
-    strategy: {
+    strategy: createCompleteStrategy({
       sessionId: "sub-persisted",
-      parentSessionId: "parent1",
-      dialogProcessId: "sub-dialog",
-    },
+      turnScopeId: "turn-persisted",
+      executionId: "agent:turn-persisted",
+    }),
   });
 
   assert.deepEqual(
@@ -308,11 +384,10 @@ test("detached sub-session rejects a runner result with a second dialog identity
     runner({
       parentContext: createParentContext(),
       message: "hello",
-      strategy: {
-        sessionId: "sub1",
+      strategy: createCompleteStrategy({
         dialogProcessId: "authoritative-dialog",
         executionId: "agent:turn-identity-mismatch",
-      },
+      }),
       eventListener: { onEvent: (event) => events.push(event) },
     }),
     (error) => (
@@ -366,12 +441,10 @@ test("detached sub-session does not inherit parent turn transaction identity", a
       presentationMessageId: "root-presentation-message-from-patch",
       assistantMessageId: "root-assistant-message-from-patch",
     },
-    strategy: {
-      sessionId: "sub1",
+    strategy: createCompleteStrategy({
+      turnScopeId: "child-turn",
       executionId: "agent:child-turn",
-      relativeDir: "runtime/workflow/session/root/node-a",
-      allowedRoot: "runtime/workflow/session",
-    },
+    }),
   });
 
   const runConfig = calls.runSessionPayloads[0].runConfig;
@@ -414,7 +487,10 @@ test("detached sub-session preserves child-owned transaction fields from its pat
       idempotencyKey: "child-command",
       thinkingStartedAt: "2026-07-26T12:30:00.000Z",
     },
-    strategy: { sessionId: "sub1" },
+    strategy: createCompleteStrategy({
+      turnScopeId: "child-turn",
+      executionId: "agent:child-turn",
+    }),
   });
 
   const runConfig = calls.runSessionPayloads[0].runConfig;
@@ -437,11 +513,10 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   await assert.rejects(
     () => runner({
       parentContext: createParentContext(),
-      strategy: {
-        sessionId: "sub1",
-        relativeDir: "runtime/workflow/session/root/node-a",
-        allowedRoot: "runtime/workflow/session",
-      },
+      strategy: createCompleteStrategy({
+        turnScopeId: "internal-turn:abort-test",
+        executionId: "agent:internal-turn:abort-test",
+      }),
     }),
     (error) => error === abortError,
   );
@@ -456,7 +531,11 @@ test("detached sub-session propagates main runner abort and failure contracts", 
     ],
   );
   const stoppedLifecycle = calls.lifecyclePayloads.at(-1);
-  assert.equal(stoppedLifecycle.completionCommitId, "sub1:stop-completed");
+  assert.match(stoppedLifecycle.turnScopeId, /^internal-turn:/);
+  assert.equal(
+    stoppedLifecycle.completionCommitId,
+    `${stoppedLifecycle.turnScopeId}:stop-completed`,
+  );
   assert.deepEqual(stoppedLifecycle.terminalStatus, {
     command: "user_stopped",
     description: "子 Agent 已停止",
@@ -531,11 +610,7 @@ test("createDetachedSubSessionRunner falls back to empty userConfig when loading
   const runner = createDetachedSubSessionRunner(deps);
   await runner({
     parentContext: createParentContext(),
-    strategy: {
-      sessionId: "sub1",
-      relativeDir: "runtime/workflow/session/root/node-a",
-      allowedRoot: "runtime/workflow/session",
-    },
+    strategy: createCompleteStrategy(),
   });
   assert.deepEqual(calls.prepareRunConfigPayload.userConfig, {});
 });

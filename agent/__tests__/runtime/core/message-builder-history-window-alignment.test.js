@@ -11,6 +11,7 @@ import {
   buildContextMessageBlocks,
 } from "../../../src/context/assembly/message-builder.js";
 import { MAIN_MODEL_HISTORY_ROUND_LIMIT } from "../../../src/session/utils/context-window-normalizer.js";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 function buildRoundContents(fromRound, toRound) {
   return Array.from(
@@ -82,7 +83,7 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
         },
       },
     },
-    { currentUserMessage: "" },
+    { currentUserMessage: null },
   );
 
   assert.equal(messages.some((item) => item?.content === "当前对话注入"), true);
@@ -105,7 +106,7 @@ test("buildContextMessages applies main model recent round window by default", (
         },
       },
     },
-    { currentUserMessage: "" },
+    { currentUserMessage: null },
   );
 
   assert.deepEqual(
@@ -141,7 +142,7 @@ test("buildContextMessages keeps harness plugin history aligned with main recent
         },
       },
     },
-    { currentUserMessage: "" },
+    { currentUserMessage: null },
   );
 
   assert.deepEqual(

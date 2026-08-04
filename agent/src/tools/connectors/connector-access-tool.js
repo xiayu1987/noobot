@@ -5,7 +5,6 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
 import {
   getRuntimeFromAgentContext,
@@ -20,9 +19,9 @@ import { isAbortError } from "../../shared/utils/error-utils.js";
 import { createConnectorTools } from "./connector-toolkit.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
+import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import {
   SANDBOX_CONFIG,
-  TOOL_CALLER,
   TOOL_NAME,
   TOOL_RESULT_STATUS,
 } from "../constants/index.js";
@@ -41,7 +40,6 @@ export function createConnectorAccessTool({ agentContext }) {
   const botManager = runtime?.botManager || null;
   const eventListener = runtime?.eventListener || null;
   const signal = runtime?.abortSignal || null;
-  const userInteractionBridge = runtime?.userInteractionBridge || null;
   const userId = String(runtime?.userId || agentContext?.userId || "").trim();
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const sessionId = String(systemRuntime?.sessionId || "").trim();
@@ -73,7 +71,7 @@ export function createConnectorAccessTool({ agentContext }) {
           code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
         });
       }
-      if (!botManager || !userId || !sessionId) {
+      if (typeof botManager?.runDetachedSubSession !== "function" || !userId || !sessionId) {
         throw recoverableToolError(
           tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
           {
@@ -93,18 +91,21 @@ export function createConnectorAccessTool({ agentContext }) {
         );
       }
       try {
-        const subSessionId = randomUUID();
-        const subResult = await botManager.runSession({
-          userId,
-          sessionId: subSessionId,
+        const detachedRun = await botManager.runDetachedSubSession({
+          parentContext: agentContext,
           message: normalizedTask,
           systemMessages: [connectorSubSessionSystemPrompt].filter(Boolean),
-          caller: TOOL_CALLER.BOT,
-          parentSessionId,
-          parentDialogProcessId,
           eventListener,
-          userInteractionBridge,
-          runConfig: {
+          abortSignal: signal,
+          strategy: createAgentDetachedSubSessionStrategy({
+            userId,
+            parentSessionId,
+            parentDialogProcessId,
+          }),
+          metadata: {
+            scope: TOOL_NAME.PROCESS_CONNECTOR_TOOL,
+          },
+          runConfigPatch: {
             allowUserInteraction,
             ...(hasParentStreamingConfig
               ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
@@ -129,8 +130,9 @@ export function createConnectorAccessTool({ agentContext }) {
                 ? runtime.sharedTools
                 : {},
           },
-          abortSignal: signal,
         });
+        const subSessionId = String(detachedRun?.sessionId || "").trim();
+        const subResult = detachedRun?.result || {};
         const answer = String(subResult?.answer || "").trim();
         const traces = Array.isArray(subResult?.traces) ? subResult.traces : [];
         const usedTools = Array.from(

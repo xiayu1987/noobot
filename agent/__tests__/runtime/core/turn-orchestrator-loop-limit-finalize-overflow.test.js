@@ -174,12 +174,12 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
     String(finalizePromptMessage.content || ""),
     /停止继续调用工具|Stop calling tools|toolLoopLimitFinalizePrompt/i,
   );
-  const promptInBlocks = loopState.messageBlocks.incremental.find(
+  const promptInBlocks = loopState.modelContext.messageBlocks.incremental.find(
     (message) => message === finalizePromptMessage,
   );
   assert.equal(promptInBlocks, finalizePromptMessage);
   assert.ok(finalizePromptMessage.additional_kwargs.noobotMessageId);
-  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
+  assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
 });
 
 test("phaseSummaryNoToolsNextTurn enforces one no-tools round even when tools are available", async () => {
@@ -277,17 +277,18 @@ test("post-summary char overflow enters final no-tools before the next with-tool
     },
   ]);
 
-  const loopState = createLoopState({ maxTurns: 3, tool: taskSummaryTool });
-  loopState.phaseSummaryMessageCharsThreshold = 10;
-  loopState.messages.push(longUserMessage);
-  loopState.messageBlocks.incremental.push(longUserMessage);
-
   const modelState = createModelState(llm);
+  const loopState = createLoopState({ maxTurns: 3, tool: taskSummaryTool });
+  prepareTestTurnExecution(modelState, loopState, "post-summary-char-overflow");
+  loopState.phaseSummaryMessageCharsThreshold = 10;
+  loopState.modelContext.messages.push(longUserMessage);
+  loopState.modelContext.messageBlocks.incremental.push(longUserMessage);
+
   modelState.runtime.systemRuntime.needsPhaseSummary = false;
   modelState.runtime.systemRuntime.phaseSummaryByCharsPrompted = true;
   modelState.runtime.systemRuntime.phaseSummaryLoopCount = 0;
 
-  const result = await runFunctionCallLoop({
+  const result = await runFunctionCallLoopProduction({
     modelState,
     loopState,
     turn: 1,

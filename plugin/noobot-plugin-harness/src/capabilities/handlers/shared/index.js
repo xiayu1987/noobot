@@ -61,8 +61,6 @@ export {
   cleanupInternalForcedMessages,
   extractRawTextContent,
   isMessageSummarized,
-  markMessagesSummarized,
-  resolveInjectedMessageSummarizer,
   safeJsonStringify,
   sanitizeInternalMessages,
 } from "./message/utils.js";

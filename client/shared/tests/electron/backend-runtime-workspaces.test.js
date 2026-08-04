@@ -17,6 +17,7 @@ test("desktop backend runtime follows the complete production workspace dependen
   for (const requiredWorkspace of [
     "event-protocol",
     "authoritative-state",
+    "context-protocol",
     "service",
     "agent",
     "agent-proxy",

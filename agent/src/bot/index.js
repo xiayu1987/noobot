@@ -186,6 +186,10 @@ export class BotManager {
     return this.sessionRunner.runSession(payload);
   }
 
+  async runDetachedSubSession(payload = {}) {
+    return this.sessionRunner.runDetachedSubSession(payload);
+  }
+
   async resolveExecutionIntent(payload = {}) {
     return this.sessionRunner.resolveExecutionIntent(payload);
   }

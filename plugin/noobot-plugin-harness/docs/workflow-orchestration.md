@@ -158,9 +158,7 @@ Unified observation/lifecycle entry:
   - Turn-based: `state.counters.summaryTurns > LLM_SUMMARY_THRESHOLD` (`8`)
   - Char-based: `unsummarized_chars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD` (`200000`)
   - Tool-burst: `after_tool_calls` when enabled and call count reaches the summary threshold
-- Overflow prune policy (`SUMMARY_POLICY.OVERFLOW_POLICY`):
-  - `ENABLE_PRUNE_AFTER_SUMMARY`
-  - `PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS`
+- Post-summary overflow policy (`SUMMARY_POLICY.OVERFLOW_POLICY`):
   - `FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW`
 - Analysis trigger:
   - `state.counters.analysisTurns >= ANALYSIS_TRIGGER_TURNS_THRESHOLD`

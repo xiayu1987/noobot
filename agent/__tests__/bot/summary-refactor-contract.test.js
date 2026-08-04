@@ -16,14 +16,12 @@ import {
   canonicalizeMessageStore,
   pruneSummarizedIncrementalMessages,
 } from "../../src/context/runtime-state/message-store.js";
-import {
-  markCurrentTurnArraySummarized,
-} from "../../src/context/session/summarized-message-policy.js";
 import * as mainFlowControl from "../../src/runtime/main-flow-control.js";
 
 function message(id, value = {}) {
   return {
     ...value,
+    messageUid: id,
     additional_kwargs: {
       ...(value.additional_kwargs || {}),
       noobotMessageId: id,
@@ -31,79 +29,8 @@ function message(id, value = {}) {
   };
 }
 
-function projectSummaryState(messages = []) {
-  return messages.map((item) => ({
-    id: item.additional_kwargs?.noobotMessageId || "",
-    summarized: item.summarized === true,
-    lcSummarized: item.lc_kwargs?.summarized === true,
-  }));
-}
-
-test("summary marking remains byte-for-byte aligned with the pre-refactor policy result", async () => {
-  const source = [
-    message("system", { role: "system", content: "policy" }),
-    message("user", { role: "user", content: "request" }),
-    message("old-injected", {
-      role: "user",
-      content: "old relay",
-      injectedMessage: true,
-      injectedBy: "harness",
-      injectedMessageType: "summary",
-    }),
-    message("tool-call", {
-      role: "assistant",
-      content: "",
-      tool_calls: [{ id: "call-1", function: { name: "read_file" } }],
-    }),
-    message("tool-result", {
-      role: "tool",
-      content: "result",
-      tool_call_id: "call-1",
-    }),
-    message("latest-injected", {
-      role: "user",
-      content: "latest relay",
-      injectedMessage: true,
-      injectedBy: "harness",
-      injectedMessageType: "summary",
-    }),
-    message("summary-call", {
-      role: "assistant",
-      content: "",
-      tool_calls: [{ id: "summary-1", function: { name: "task_summary" } }],
-    }),
-    message("summary-result", {
-      role: "tool",
-      content: '{"toolName":"task_summary","ok":true}',
-      tool_call_id: "summary-1",
-    }),
-  ];
-  const expected = markCurrentTurnArraySummarized(structuredClone(source));
-  const actual = structuredClone(source);
-
-  await new ModelMessageRuntimeHelpers().createMarkMessagesSummarized()({ messages: actual });
-
-  assert.deepEqual(projectSummaryState(actual), projectSummaryState(expected));
-  assert.deepEqual(
-    actual.map(({ summarized, lc_kwargs, ...rest }) => rest),
-    source.map(({ summarized, lc_kwargs, ...rest }) => rest),
-    "marking must not change message content, order, ids, or metadata",
-  );
-});
-
-test("summary marking keeps the exact pre-refactor summarized-field semantics", async () => {
-  const actual = [message("m1", {
-    role: "system",
-    content: "old",
-    additional_kwargs: { summarized: true },
-  })];
-
-  const marked = await new ModelMessageRuntimeHelpers().createMarkMessagesSummarized()({
-    messages: actual,
-  });
-
-  assert.equal(marked, 1);
-  assert.equal(actual[0].summarized, true);
+test("plugin runtime exposes no direct summarized-message mutation port", () => {
+  assert.equal(new ModelMessageRuntimeHelpers().createMarkMessagesSummarized, undefined);
 });
 
 test("model input after memory release equals the pre-refactor full-memory model input", async () => {
@@ -197,7 +124,7 @@ test("staged checkpoints plus final tail equal the pre-refactor one-shot turn se
   const persistedStages = [];
   const runtime = {
     currentTurnMessages: createCurrentTurnMessagesStore([
-      message("m1", { role: "assistant", content: "M1", summarized: true }),
+      message("m1", { role: "assistant", content: "M1" }),
       message("m2", { role: "assistant", content: "M2" }),
     ]),
   };
@@ -206,7 +133,11 @@ test("staged checkpoints plus final tail equal the pre-refactor one-shot turn se
       persistedStages.push(...structuredClone(messages));
     },
   };
-  const session = { async markSessionMessagesSummarized() { return 1; } };
+  const session = {
+    async commitTurnSummaryCheckpoint() {
+      return { committed: true, markedCount: 1, checkpointRevision: 1 };
+    },
+  };
 
   await commitSummaryCheckpoint({
     session,
@@ -214,8 +145,11 @@ test("staged checkpoints plus final tail equal the pre-refactor one-shot turn se
     runtime,
     userId: "u1",
     sessionId: "s1",
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
+    summaryCompletion: { summarizedMessageIds: ["m1"] },
   });
-  runtime.currentTurnMessages.push(message("m3", { role: "assistant", content: "M3", summarized: true }));
+  runtime.currentTurnMessages.push(message("m3", { role: "assistant", content: "M3" }));
   runtime.currentTurnMessages.push(message("m4", { role: "assistant", content: "M4" }));
   await commitSummaryCheckpoint({
     session,
@@ -223,6 +157,9 @@ test("staged checkpoints plus final tail equal the pre-refactor one-shot turn se
     runtime,
     userId: "u1",
     sessionId: "s1",
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
+    summaryCompletion: { summarizedMessageIds: ["m3"] },
   });
   runtime.currentTurnMessages.push(message("m5", { role: "assistant", content: "M5" }));
   const persistedPrefix = Number(runtime.summaryCheckpointPersistedCount) || 0;
@@ -236,7 +173,8 @@ test("staged checkpoints plus final tail equal the pre-refactor one-shot turn se
 
 test("summary notifications use the existing main-flow command channel", () => {
   assert.equal(typeof mainFlowControl.requestMainFlowSummaryCheckpoint, "function");
-  assert.equal(typeof mainFlowControl.consumeMainFlowSummaryCheckpoint, "function");
+  assert.equal(typeof mainFlowControl.peekMainFlowSummaryCheckpoint, "function");
+  assert.equal(typeof mainFlowControl.acknowledgeMainFlowSummaryCheckpoint, "function");
   const runtime = { systemRuntime: {} };
 
   mainFlowControl.requestMainFlowSummaryCheckpoint(runtime, {
@@ -244,11 +182,12 @@ test("summary notifications use the existing main-flow command channel", () => {
     summarizedMessageIds: ["m1", "m2"],
   });
 
-  assert.deepEqual(mainFlowControl.consumeMainFlowSummaryCheckpoint(runtime), {
+  assert.deepEqual(mainFlowControl.peekMainFlowSummaryCheckpoint(runtime), {
     action: "summary_checkpoint",
     source: "task_summary",
     summarizedMessageIds: ["m1", "m2"],
   });
+  assert.equal(mainFlowControl.acknowledgeMainFlowSummaryCheckpoint(runtime), true);
   assert.equal(runtime.systemRuntime.mainFlowControlInstructions, undefined);
 });
 
@@ -267,11 +206,12 @@ test("summary checkpoint command is not lost when the existing channel also carr
     mainFlowControl.peekMainFlowFinalNoToolsTurnInstruction(runtime)?.action,
     "final_no_tools_turn",
   );
-  assert.deepEqual(mainFlowControl.consumeMainFlowSummaryCheckpoint(runtime), {
+  assert.deepEqual(mainFlowControl.peekMainFlowSummaryCheckpoint(runtime), {
     action: "summary_checkpoint",
     source: "plugin.summary",
     summarizedMessageIds: ["m1"],
   });
+  assert.equal(mainFlowControl.acknowledgeMainFlowSummaryCheckpoint(runtime), true);
   assert.equal(
     mainFlowControl.peekMainFlowFinalNoToolsTurnInstruction(runtime)?.action,
     "final_no_tools_turn",

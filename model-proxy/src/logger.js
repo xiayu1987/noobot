@@ -194,6 +194,7 @@ function createLogger({
     sessionId = unknownSessionId,
     parentSessionId = '',
     cacheDiagnostics = {},
+    bodyComplete = true,
   } = {}) {
     const logEntry = `
 === ${new Date().toLocaleString()} ===
@@ -206,6 +207,7 @@ URL: ${sanitizeUrl(req.url)}
 Method: ${req.method}
 Headers: ${JSON.stringify(sanitizeHeaders(req.headers), null, 2)}
 CacheDiagnostics: ${JSON.stringify(cacheDiagnostics, null, 2)}
+BodyComplete: ${bodyComplete === true}
 Body:
 ${bodyText}
 ========================
@@ -213,10 +215,13 @@ ${bodyText}
     appendLog(logEntry, modelName, flowName, sessionId, parentSessionId);
   }
 
-  function logResponse({
-    proxyRes,
+  function logTerminal({
+    outcome = 'error',
+    status,
+    headers = {},
     bodyText = '',
     rawBodyText = bodyText,
+    error = null,
     modelName = unknownModelName,
     flowName = unknownFlowName,
     sessionId = unknownSessionId,
@@ -226,14 +231,16 @@ ${bodyText}
     const cacheDiagnostics = normalizeUsageCacheDiagnostics(responseObject);
     const logEntry = `
 --- ${new Date().toLocaleString()} ---
-[Response]
+[Terminal]
+Outcome: ${String(outcome || 'error').trim() || 'error'}
 Model: ${modelName}
 Flow: ${flowName}
 SessionId: ${sessionId}
 ParentSessionId: ${parentSessionId || '[root]'}
-Status: ${proxyRes.statusCode}
-Headers: ${JSON.stringify(sanitizeHeaders(proxyRes.headers), null, 2)}
+Status: ${Number.isFinite(Number(status)) ? Number(status) : '[none]'}
+Headers: ${JSON.stringify(sanitizeHeaders(headers), null, 2)}
 CacheDiagnostics: ${JSON.stringify(cacheDiagnostics, null, 2)}
+Error: ${error ? JSON.stringify(error, null, 2) : '[none]'}
 Body:
 ${bodyText}
 ----------------
@@ -246,7 +253,7 @@ ${bodyText}
   return {
     appendLog,
     logRequest,
-    logResponse,
+    logTerminal,
   };
 }
 

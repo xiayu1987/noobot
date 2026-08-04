@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { ContextBuilder } from "../../src/context/index.js";
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
+import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
 
 function createBuilderForNormalizationTest() {
   return new ContextBuilder({
@@ -160,6 +161,42 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
   );
 });
 
+test("buildInitialContext keeps turn identity in runtime but excludes it from system text", async () => {
+  const builder = new ContextBuilder({
+    config: { globalConfig: {}, userConfig: {} },
+    serviceContainer: {
+      sessionManager: null,
+      memoryService: null,
+      attachmentService: null,
+      skillService: null,
+      eventListener: null,
+      botManager: null,
+      userInteractionBridge: null,
+    },
+    sessionContext: {
+      userId: "u1",
+      sessionId: "s1",
+      caller: "user",
+      parentSessionId: "",
+      userMessageAttachments: [],
+      runConfig: { turnScopeId: "turn-runtime-only" },
+      abortSignal: null,
+      parentAsyncResultContainer: null,
+    },
+  });
+
+  const context = await builder.buildInitialContext({ dialogProcessId: "dialog-runtime-only" });
+  const runtime = context.execution.controllers.runtime.systemRuntime;
+  const systemText = context.payload.messages.system.join("\n");
+
+  assert.equal(runtime.dialogProcessId, "dialog-runtime-only");
+  assert.equal(runtime.turnScopeId, "turn-runtime-only");
+  assert.equal(systemText.includes("dialogProcessId"), false);
+  assert.equal(systemText.includes("turnScopeId"), false);
+  assert.equal(systemText.includes("dialog-runtime-only"), false);
+  assert.equal(systemText.includes("turn-runtime-only"), false);
+});
+
 test("buildInitialContext keeps super user identity in system message when system_runtime is excluded", async () => {
   const configuredSuperUserId = "system-owner";
   const builder = new ContextBuilder({
@@ -211,13 +248,17 @@ test("buildContextMessageBlocks prefers runtime userMessageAttachments for user 
             userId: "u1",
             userMessageAttachments: [{ attachmentId: "att_input", name: "input.png" }],
             attachments: [{ attachmentId: "att_legacy", name: "legacy.png" }],
-            systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
+            systemRuntime: { sessionId: "s1", dialogProcessId: "dp1", turnScopeId: "turn-1" },
           },
         },
       },
       payload: { messages: { system: [], history: [] } },
     },
-    { currentUserMessage: "hello" },
+    { currentUserMessage: createPersistedCurrentUserMessage("hello", {
+      dialogProcessId: "dp1",
+      turnScopeId: "turn-1",
+      attachments: [{ attachmentId: "att_input", name: "input.png" }],
+    }) },
   );
   const metaMessage = blocks.incremental.find(
     (item) => item?.additional_kwargs?.noobotInternalMessageType === "user_meta",

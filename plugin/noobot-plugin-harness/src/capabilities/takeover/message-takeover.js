@@ -12,24 +12,10 @@ import {
   HARNESS_INJECTION_MESSAGE_ROLE,
 } from "../handlers/shared/constants.js";
 import {
-  appendMessage,
-  replaceMessages,
+  resolveModelMessageBlocks,
+  resolveModelMessages,
   writeMessageBlocks,
 } from "../../core/message-store.js";
-
-function resolveTakeoverTargets(ctx = {}, target = "auto") {
-  const targets = [];
-  if ((target === "auto" || target === "ctx_messages") && Array.isArray(ctx?.messages)) {
-    targets.push({ type: "ctx_messages", messages: ctx.messages });
-  }
-  if (
-    (target === "auto" || target === "agent_system") &&
-    Array.isArray(ctx?.agentContext?.payload?.messages?.system)
-  ) {
-    targets.push({ type: "agent_system", messages: ctx.agentContext.payload.messages.system });
-  }
-  return targets;
-}
 
 function resolveInternalMessageType(message = {}) {
   return String(
@@ -68,8 +54,8 @@ function findAfterLeadingSystemIndex(messages = []) {
   return index;
 }
 
-function removeInternalForcedMessages(messages = [], directive = {}) {
-  if (!Array.isArray(messages)) return 0;
+function filterInternalForcedMessages(messages = [], directive = {}) {
+  if (!Array.isArray(messages)) return { messages: [], removed: 0 };
   const removeAll = directive?.cancelInternalForcedMessages === true;
   const removeTypesInput =
     directive?.removeInternalMessageTypes ||
@@ -79,18 +65,12 @@ function removeInternalForcedMessages(messages = [], directive = {}) {
   const removeTypes = Array.isArray(removeTypesInput)
     ? new Set(removeTypesInput.map((item) => String(item || "").trim()).filter(Boolean))
     : new Set();
-  if (!removeAll && !removeTypes.size) return 0;
-
-  let removed = 0;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const marker = resolveInternalMessageType(messages[index]);
-    if (!marker) continue;
-    if (removeAll || removeTypes.has(marker)) {
-      messages.splice(index, 1);
-      removed += 1;
-    }
-  }
-  return removed;
+  if (!removeAll && !removeTypes.size) return { messages: [...messages], removed: 0 };
+  const retained = messages.filter((message) => {
+    const marker = resolveInternalMessageType(message);
+    return !marker || (!removeAll && !removeTypes.has(marker));
+  });
+  return { messages: retained, removed: messages.length - retained.length };
 }
 
 function buildTakeoverMessage(directive = {}) {
@@ -112,34 +92,6 @@ function buildTakeoverMessage(directive = {}) {
   };
 }
 
-function applyAgentSystemTakeover(messages = [], directive = {}, { preserveLeadingSystem = true } = {}) {
-  if (!Array.isArray(messages)) return false;
-  const removed = removeInternalForcedMessages(messages, directive);
-  const takeoverMessage = buildTakeoverMessage(directive);
-  if (!takeoverMessage) return removed > 0;
-  const mode = String(directive?.mode || "prepend").trim();
-  const dedupe = directive?.dedupe !== false;
-  const { id, messageContent, message: nextMessage } = takeoverMessage;
-  if (dedupe && isMessageInjected(messages, id, messageContent)) {
-    return removed > 0;
-  }
-
-  if (mode === "replace") {
-    messages.splice(0, messages.length, nextMessage);
-    return true;
-  }
-  if (mode === "append") {
-    messages.push(nextMessage);
-    return true;
-  }
-  if (preserveLeadingSystem) {
-    messages.splice(findAfterLeadingSystemIndex(messages), 0, nextMessage);
-  } else {
-    messages.unshift(nextMessage);
-  }
-  return true;
-}
-
 function isSystemLikeRole(role = "") {
   const normalized = String(role || "").trim().toLowerCase();
   return normalized === "system" || normalized === "developer";
@@ -149,46 +101,88 @@ function resolveBlockForMessage(message = {}) {
   return isSystemLikeRole(resolveMessageRole(message)) ? "system" : "incremental";
 }
 
+function cloneBlocks(blocks = {}) {
+  return {
+    system: Array.isArray(blocks.system) ? [...blocks.system] : [],
+    history: Array.isArray(blocks.history) ? [...blocks.history] : [],
+    incremental: Array.isArray(blocks.incremental) ? [...blocks.incremental] : [],
+  };
+}
+
+function removeInternalForcedMessagesFromBlocks(blocks = {}, directive = {}, blockNames = []) {
+  let removed = 0;
+  for (const blockName of blockNames) {
+    const result = filterInternalForcedMessages(blocks[blockName], directive);
+    blocks[blockName] = result.messages;
+    removed += result.removed;
+  }
+  return removed;
+}
+
 function applyCtxMessagesTakeover(ctx = {}, directive = {}) {
-  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
-  if (!messages) return false;
-  const removed = removeInternalForcedMessages(messages, directive);
+  const currentMessages = resolveModelMessages(ctx);
+  const blocks = cloneBlocks(resolveModelMessageBlocks(ctx));
+  const removed = removeInternalForcedMessagesFromBlocks(
+    blocks,
+    directive,
+    ["system", "history", "incremental"],
+  );
   const takeoverMessage = buildTakeoverMessage(directive);
   if (!takeoverMessage) {
-    if (removed) replaceMessages(ctx, messages);
+    if (removed) writeMessageBlocks(ctx, blocks);
     return removed > 0;
   }
   const mode = String(directive?.mode || "prepend").trim();
   const dedupe = directive?.dedupe !== false;
   const { id, messageContent, message: nextMessage } = takeoverMessage;
-  if (dedupe && isMessageInjected(messages, id, messageContent)) return false;
+  if (dedupe && isMessageInjected(currentMessages, id, messageContent)) {
+    if (removed) writeMessageBlocks(ctx, blocks);
+    return removed > 0;
+  }
   const block = resolveBlockForMessage(nextMessage);
 
   if (mode === "replace") {
-    if (block === "system" && ctx?.messageBlocks && typeof ctx.messageBlocks === "object") {
-      writeMessageBlocks(ctx, { system: [nextMessage], history: [], incremental: [] });
-      replaceMessages(ctx, [nextMessage]);
-    } else {
-      replaceMessages(ctx, [nextMessage]);
-    }
-    return true;
-  }
-  if (mode === "append") {
-    appendMessage(ctx, nextMessage, { block });
-    return true;
-  }
-  if (block === "system" && ctx?.messageBlocks && typeof ctx.messageBlocks === "object") {
-    const blocks = ctx.messageBlocks;
     writeMessageBlocks(ctx, {
-      system: [nextMessage, ...(Array.isArray(blocks.system) ? blocks.system : [])],
-      history: Array.isArray(blocks.history) ? blocks.history : [],
-      incremental: Array.isArray(blocks.incremental) ? blocks.incremental : [],
+      system: block === "system" ? [nextMessage] : [],
+      history: [],
+      incremental: block === "incremental" ? [nextMessage] : [],
     });
     return true;
   }
-  const nextMessages = [...messages];
-  nextMessages.splice(findAfterLeadingSystemIndex(nextMessages), 0, nextMessage);
-  replaceMessages(ctx, nextMessages);
+  if (mode === "append") {
+    blocks[block].push(nextMessage);
+    writeMessageBlocks(ctx, blocks);
+    return true;
+  }
+  if (block === "system") {
+    blocks.system.splice(findAfterLeadingSystemIndex(blocks.system), 0, nextMessage);
+    writeMessageBlocks(ctx, blocks);
+    return true;
+  }
+  blocks.incremental.unshift(nextMessage);
+  writeMessageBlocks(ctx, blocks);
+  return true;
+}
+
+function applyAgentSystemTakeover(ctx = {}, directive = {}) {
+  const blocks = cloneBlocks(resolveModelMessageBlocks(ctx));
+  const removed = removeInternalForcedMessagesFromBlocks(blocks, directive, ["system"]);
+  const takeoverMessage = buildTakeoverMessage(directive);
+  if (!takeoverMessage) {
+    if (removed) writeMessageBlocks(ctx, blocks);
+    return removed > 0;
+  }
+  const mode = String(directive?.mode || "prepend").trim();
+  const dedupe = directive?.dedupe !== false;
+  const { id, messageContent, message: nextMessage } = takeoverMessage;
+  if (dedupe && isMessageInjected(blocks.system, id, messageContent)) {
+    if (removed) writeMessageBlocks(ctx, blocks);
+    return removed > 0;
+  }
+  if (mode === "replace") blocks.system = [nextMessage];
+  else if (mode === "append") blocks.system.push(nextMessage);
+  else blocks.system.unshift(nextMessage);
+  writeMessageBlocks(ctx, blocks);
   return true;
 }
 
@@ -196,15 +190,10 @@ export function applyMessageTakeover(_point = "", ctx = {}, takeover = {}) {
   if (!takeover || typeof takeover !== "object") return false;
   if (takeover.enabled === false) return false;
   const target = String(takeover?.target || "auto").trim();
-  const targets = resolveTakeoverTargets(ctx, target);
-  if (!targets.length) return false;
-  let changed = false;
-  for (const item of targets) {
-    if (item.type === "ctx_messages") {
-      changed = applyCtxMessagesTakeover(ctx, takeover) || changed;
-      continue;
-    }
-    changed = applyAgentSystemTakeover(item.messages, takeover, { preserveLeadingSystem: false }) || changed;
-  }
-  return changed;
+  if (target === "ctx_messages") return applyCtxMessagesTakeover(ctx, takeover);
+  if (target === "agent_system") return applyAgentSystemTakeover(ctx, takeover);
+  if (target !== "auto") return false;
+  // The former auto target wrote two independent message sources. With the
+  // versioned model context there is one authority, so auto applies once to it.
+  return applyCtxMessagesTakeover(ctx, takeover);
 }

@@ -9,11 +9,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
-import { ModelMessageRuntimeHelpers } from "../../../../agent/src/bot/session/model-message-runtime-helpers.js";
+import {
+  createTestHookContext,
+  createTestHookManager as createAgentHookManager,
+} from "../helpers/public-runtime-fixtures.js";
+import { TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
@@ -29,8 +32,17 @@ function assertFlatCapabilityMessages(messages = []) {
 }
 
 
-test("model-context rules 2 note: harness-side summary marking policy remains unchanged", async () => {
-  const ctx = {
+test("harness summary selection does not mutate canonical messages before commit", async () => {
+  const ctx = createTestHookContext({
+    agentContext: {
+      payload: {
+        harness: {
+          state: { flags: {}, counters: {}, signals: {}, pending: {} },
+          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+        },
+      },
+    },
+  }, {
     messages: [
       { role: "user", content: "用户当前输入" },
       {
@@ -50,24 +62,15 @@ test("model-context rules 2 note: harness-side summary marking policy remains un
         tool_call_id: "call-summary",
       },
     ],
-    agentContext: {
-      payload: {
-        messages: { history: [] },
-        harness: {
-          state: { flags: {}, counters: {}, signals: {}, pending: {} },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
-        },
-      },
-    },
-  };
+  });
 
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
 
-  assert.equal(markedCount, 2);
-  assert.equal(ctx.messages[1]?.summarized, true);
-  assert.equal(ctx.messages[2]?.summarized, true);
-  assert.equal(ctx.messages[3]?.summarized, undefined);
-  assert.equal(ctx.messages[4]?.summarized, undefined);
+  assert.ok(markedCount >= 2);
+  assert.equal(ctx.modelContext.messages[1]?.summarized, undefined);
+  assert.equal(ctx.modelContext.messages[2]?.summarized, undefined);
+  assert.equal(ctx.modelContext.messages[3]?.summarized, undefined);
+  assert.equal(ctx.modelContext.messages[4]?.summarized, undefined);
 });
 
 
@@ -103,5 +106,3 @@ test("harness review reports failed or inconsistent semantic acceptance", async 
   assert.equal(report.summary.semanticValidationConsistent, null);
   assert.equal(report.summary.issues.includes("acceptance_semantic_validation_failed_or_inconsistent"), false);
 });
-
-

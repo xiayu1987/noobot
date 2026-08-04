@@ -19,7 +19,9 @@ function mapExecutionLogToSessionChannelCategory(normalizedLog = {}) {
   const category = String(normalizedLog?.category || "").trim().toLowerCase();
   if (category === "tool") return RUNTIME_EVENT_CATEGORIES.INTERACTION;
   if (category === "error") return RUNTIME_EVENT_CATEGORIES.SYSTEM;
-  if (category === "semantic_transfer") return RUNTIME_EVENT_CATEGORIES.DEBUG;
+  if (["semantic_transfer", "context_identity"].includes(category)) {
+    return RUNTIME_EVENT_CATEGORIES.DEBUG;
+  }
   return RUNTIME_EVENT_CATEGORIES.SYSTEM;
 }
 
@@ -45,6 +47,7 @@ export class ExecutionLogRepository {
       sessionId,
       parentSessionId,
       dialogProcessId: resolveMessageDialogProcessId(normalizedLog),
+      turnScopeId: String(normalizedLog?.data?.turnScopeId || "").trim(),
       source: "agent",
       category: mapExecutionLogToSessionChannelCategory(normalizedLog),
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,

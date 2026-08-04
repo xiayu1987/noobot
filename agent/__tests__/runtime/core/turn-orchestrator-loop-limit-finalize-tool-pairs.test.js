@@ -255,17 +255,17 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
     .filter((message) => String(message?._getType?.() || "") === "ai")
     .map((message) => (Array.isArray(message.tool_calls) ? message.tool_calls.length : 0));
   assert.equal(assistantToolCallCounts.at(-1), 3);
-  const incrementalToolCallIds = loopState.messageBlocks.incremental
+  const incrementalToolCallIds = loopState.modelContext.messageBlocks.incremental
     .filter((message) => Array.isArray(message?.tool_calls))
     .flatMap((message) => message.tool_calls.map((call) => call.id).filter(Boolean));
   assert.deepEqual(incrementalToolCallIds.slice(-3), ["call_1", "call_2", "call_3"]);
-  const incrementalToolResultIds = loopState.messageBlocks.incremental
+  const incrementalToolResultIds = loopState.modelContext.messageBlocks.incremental
     .filter((message) => String(message?._getType?.() || "") === "tool")
     .map((message) => message.tool_call_id)
     .filter(Boolean);
   assert.deepEqual(incrementalToolResultIds.slice(-3), ["call_1", "call_2", "call_3"]);
   assert.ok(
-    loopState.messageBlocks.incremental
+    loopState.modelContext.messageBlocks.incremental
       .slice(-6)
       .every((message) => message.additional_kwargs?.noobotMessageId),
   );

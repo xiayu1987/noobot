@@ -5,23 +5,20 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createModelContext } from "@noobot/context-protocol";
 
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
-import { canonicalizeMessageStore } from "../../src/context/runtime-state/message-store.js";
 
 test("ModelMessageRuntimeHelpers resolveModelMessages uses explicit block arrays only", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
   const canonicalIncremental = { role: "assistant", content: "drop-by-id", summarized: true };
-  const ctx = {
-    messages: [{ role: "system", content: "sys" }, canonicalIncremental],
-    messageBlocks: {
+  const ctx = { modelContext: createModelContext({ messageBlocks: {
       system: [{ role: "system", content: "sys" }],
       history: [],
       incremental: [canonicalIncremental],
     },
-  };
-  canonicalizeMessageStore(ctx);
+  }) };
 
   const resolved = resolver({ ctx });
 
@@ -34,23 +31,15 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses explicit block arrays
 test("ModelMessageRuntimeHelpers ignores stray block id views", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
-  const ctx = {
-    messages: [],
-    messageBlocks: {
+  const ctx = { modelContext: createModelContext({ messageBlocks: {
       system: [{ role: "system", content: "sys" }],
       history: [{ role: "user", content: "hist", dialogProcessId: "d1" }],
       incremental: [{ role: "user", content: "cur", dialogProcessId: "d2" }],
     },
-  };
-  ctx.messages = [
-    ...ctx.messageBlocks.system,
-    ...ctx.messageBlocks.history,
-    ...ctx.messageBlocks.incremental,
-  ];
-  canonicalizeMessageStore(ctx);
-  ctx.messageBlocks.systemIds = ["stale-system-id"];
-  ctx.messageBlocks.historyIds = ["stale-history-id"];
-  ctx.messageBlocks.incrementalIds = ["stale-incremental-id"];
+  }) };
+  ctx.modelContext.messageBlocks.systemIds = ["stale-system-id"];
+  ctx.modelContext.messageBlocks.historyIds = ["stale-history-id"];
+  ctx.modelContext.messageBlocks.incrementalIds = ["stale-incremental-id"];
 
   const resolved = resolver({ ctx, purpose: "main_agent" });
 

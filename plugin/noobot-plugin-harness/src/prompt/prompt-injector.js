@@ -13,7 +13,12 @@ import {
   buildHarnessInjectedMessage,
   persistHarnessMessageToCurrentTurn,
 } from "../capabilities/handlers/shared/message/injected-message-utils.js";
-import { replaceMessages, writeMessageBlocks } from "../core/message-store.js";
+import {
+  replaceMessages,
+  resolveModelMessageBlocks,
+  resolveModelMessages,
+  writeMessageBlocks,
+} from "../core/message-store.js";
 const HARNESS_MARKERS = new Map();
 
 const injectedPromptCache = new WeakMap();
@@ -189,17 +194,15 @@ function removePromptMessagesFromList(messages = [], id = "", { removeSystem = f
 function normalizeSystemPromptPlacement(ctx = {}, id = "") {
   const promptId = String(id || "").trim();
   if (!promptId) return;
-  removePromptMessagesFromList(ctx?.messages, promptId, { removeSystem: false });
-  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
-  if (!blocks) return;
+  removePromptMessagesFromList(resolveModelMessages(ctx), promptId, { removeSystem: false });
+  const blocks = resolveModelMessageBlocks(ctx);
   removePromptMessagesFromList(blocks.history, promptId, { removeSystem: true });
   removePromptMessagesFromList(blocks.incremental, promptId, { removeSystem: true });
   removePromptMessagesFromList(blocks.system, promptId, { removeSystem: false });
 }
 
 function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = new Set()) {
-  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
-  if (!blocks) return 0;
+  const blocks = resolveModelMessageBlocks(ctx);
   const promptIdSet = ids instanceof Set ? ids : new Set(Array.isArray(ids) ? ids : []);
   if (!promptIdSet.size) return 0;
   const nextBlocks = {
@@ -222,7 +225,7 @@ function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = n
   }
   if (changed) {
     writeMessageBlocks(ctx, nextBlocks);
-    rebuildInjectedPromptCache(ctx.messageBlocks.system);
+    rebuildInjectedPromptCache(resolveModelMessageBlocks(ctx).system);
   }
   return changed;
 }
@@ -259,8 +262,7 @@ function persistPromptMessagesToCurrentTurn(ctx = {}, promptMessages = []) {
 }
 
 export function injectSystemMessages(ctx = {}, options = {}) {
-  const messages = Array.isArray(ctx.messages) ? ctx.messages : null;
-  if (!messages) return false;
+  const messages = resolveModelMessages(ctx);
   let nextMessages = [...messages];
 
   const promptEntries = normalizePromptEntries(
@@ -340,7 +342,7 @@ export function injectSystemMessages(ctx = {}, options = {}) {
     nextMessages.push(item);
   }
   replaceMessages(ctx, nextMessages);
-  const updatedMessages = Array.isArray(ctx.messages) ? ctx.messages : messages;
+  const updatedMessages = resolveModelMessages(ctx);
 
   const promptMessages = [...prependItems, ...afterSystemItems, ...appendItems];
   if (injected) {

@@ -9,12 +9,11 @@ import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
 import { readFinalStreamingResultMeta } from "./turn/turn-result-aggregator.js";
 import { runAgentRuntimeHook, AGENT_HOOK_POINTS } from "../extensions/hooks/index.js";
-import { isAbortError, isUserStopAbort } from "./utils/error-utils.js";
+import { isAbortError } from "./utils/error-utils.js";
 import { buildHookContext } from "./hooks/hook-context-builder.js";
 import { emitEvent } from "../events/index.js";
 import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
-import { saveStoppedModelMessageSnapshotCandidate } from "./resume/model-message-snapshot-store.js";
 import {
   emitMessageEvent,
 } from "../events/message-event-stream.js";
@@ -196,8 +195,18 @@ export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime =
   return true;
 }
 
-export async function runAgentTurn({ agentContext, userMessage, errorLogger = null }) {
+export function assertHookExecutionSucceeded(hookResult = {}, point = "") {
+  const failure = (Array.isArray(hookResult?.errors) ? hookResult.errors : [])
+    .map((item) => item?.error || item)
+    .find(Boolean);
+  if (!failure) return hookResult;
+  if (failure instanceof Error) throw failure;
+  throw new Error(`hook failed: ${String(point || hookResult?.point || "unknown").trim() || "unknown"}`);
+}
+
+export async function runAgentTurn({ agentContext, currentUserMessage, errorLogger = null }) {
   const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const userMessage = String(currentUserMessage?.content || "");
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
   await runAgentRuntimeHook({
@@ -211,11 +220,12 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
       userMessage,
     }),
   });
-  const { modelState, loopState } = buildAgentState({ agentContext, userMessage, errorLogger });
+  const { modelState, loopState } = buildAgentState({ agentContext, currentUserMessage, errorLogger });
+  const modelContext = loopState.modelContext;
   try {
     const result = await runFunctionCallLoop({ modelState, loopState, turn: 1 });
     const beforeFinalAtMs = Date.now();
-    await runAgentRuntimeHook({
+    const beforeFinalHookResult = await runAgentRuntimeHook({
       runtime,
       point: AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
       context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT, runtime, {
@@ -227,8 +237,10 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
         agentContext,
         userMessage,
         result,
+        modelContext,
       }),
     });
+    assertHookExecutionSucceeded(beforeFinalHookResult, AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT);
     const endedAtMs = Date.now();
     await runAgentRuntimeHook({
       runtime,
@@ -242,19 +254,12 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
         agentContext,
         userMessage,
         result,
+        modelContext,
       }),
     });
     return result;
   } catch (error) {
     const failedAtMs = Date.now();
-    if (isUserStopAbort(error, runtime?.abortSignal) || isUserStopAbort(error?.cause, runtime?.abortSignal)) {
-      await saveStoppedModelMessageSnapshotCandidate({
-        globalConfig: runtime?.globalConfig || {},
-        candidate: runtime?.stoppedModelMessageSnapshotCandidate,
-        eventListener: runtime?.eventListener || null,
-        source: "engine_user_stop_catch",
-      });
-    }
     if (isAbortError(error) || isAbortError(error?.cause)) {
       await runAgentRuntimeHook({
         runtime,
@@ -268,6 +273,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
           agentContext,
           userMessage,
           error,
+          modelContext,
         }),
       });
     }
@@ -283,6 +289,7 @@ export async function runAgentTurn({ agentContext, userMessage, errorLogger = nu
         agentContext,
         userMessage,
         error,
+        modelContext,
       }),
     });
     throw error;

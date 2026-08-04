@@ -9,7 +9,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
+import {
+  createTestHookContext,
+  createTestHookManager as createAgentHookManager,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
 import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
@@ -75,33 +78,39 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
 });
 
 
-test("normalizeHookContextProtocol exposes agentContext payload messages for before_final_output", () => {
-  const ctx = {
+test("normalizeHookContextProtocol preserves explicit modelContext over agent payload messages", () => {
+  const ctx = createTestHookContext({
     agentContext: {
       payload: {
         messages: {
-          system: [{ role: "system", content: "system ctx" }],
-          history: [{ role: "user", content: "history ctx" }],
-          incremental: [{ role: "assistant", content: "incremental ctx" }],
+          system: [{ role: "system", content: "ignored payload system" }],
+          history: [],
+          incremental: [],
         },
       },
     },
-  };
+  }, {
+    messageBlocks: {
+      system: [{ role: "system", content: "system ctx" }],
+      history: [{ role: "user", content: "history ctx" }],
+      incremental: [{ role: "assistant", content: "incremental ctx" }],
+    },
+  });
 
   normalizeHookContextProtocol("before_final_output", ctx);
 
   assert.equal(ctx.point, "before_final_output");
-  assert.deepEqual(ctx.messageBlocks.system.map(({ role, content }) => ({ role, content })), [
+  assert.deepEqual(ctx.modelContext.messageBlocks.system.map(({ role, content }) => ({ role, content })), [
     { role: "system", content: "system ctx" },
   ]);
-  assert.deepEqual(ctx.messageBlocks.history.map(({ role, content }) => ({ role, content })), [
+  assert.deepEqual(ctx.modelContext.messageBlocks.history.map(({ role, content }) => ({ role, content })), [
     { role: "user", content: "history ctx" },
   ]);
-  assert.deepEqual(ctx.messageBlocks.incremental.map(({ role, content }) => ({ role, content })), [
+  assert.deepEqual(ctx.modelContext.messageBlocks.incremental.map(({ role, content }) => ({ role, content })), [
     { role: "assistant", content: "incremental ctx" },
   ]);
-  assert.ok(ctx.messageBlocks.system[0].additional_kwargs?.noobotMessageId);
-  assert.deepEqual(ctx.messages.map((item = {}) => item.content), [
+  assert.ok(ctx.modelContext.messageBlocks.system[0].additional_kwargs?.noobotMessageId);
+  assert.deepEqual(ctx.modelContext.messages.map((item = {}) => item.content), [
     "system ctx",
     "history ctx",
     "incremental ctx",
@@ -119,7 +128,7 @@ test("normalizeHookContextProtocol canonicalizes messages and messageBlocks thro
     content: "",
     tool_calls: [{ id: "call_1", function: { name: "write_file" } }],
   };
-  const ctx = {
+  const ctx = createTestHookContext({}, {
     messages: [
       { role: "user", content: "task" },
       ctxMessage,
@@ -132,17 +141,17 @@ test("normalizeHookContextProtocol canonicalizes messages and messageBlocks thro
         blockCopy,
       ],
     },
-  };
+  });
 
   normalizeHookContextProtocol("before_llm_call", ctx);
 
-  assert.equal(ctx.messages[1], ctx.messageBlocks.incremental[1]);
-  assert.ok(ctx.messages[1].additional_kwargs?.noobotMessageId);
+  assert.equal(ctx.modelContext.messages[1], ctx.modelContext.messageBlocks.incremental[1]);
+  assert.ok(ctx.modelContext.messages[1].additional_kwargs?.noobotMessageId);
   assert.equal(
-    ctx.messages[1].additional_kwargs.noobotMessageId,
-    ctx.messageBlocks.incremental[1].additional_kwargs.noobotMessageId,
+    ctx.modelContext.messages[1].additional_kwargs.noobotMessageId,
+    ctx.modelContext.messageBlocks.incremental[1].additional_kwargs.noobotMessageId,
   );
-  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
-  ctx.messages[1].summarized = true;
-  assert.equal(ctx.messageBlocks.incremental[1].summarized, true);
+  assert.equal(ctx.modelContext.messageBlocks.incrementalIds, undefined);
+  ctx.modelContext.messages[1].summarized = true;
+  assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, true);
 });

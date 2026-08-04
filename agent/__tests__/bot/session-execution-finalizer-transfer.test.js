@@ -305,3 +305,96 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
   assert.deepEqual(appendedMessages.map((message) => message.messageUid), ["sm_tail"]);
   assert.deepEqual(result.messages.map((message) => message.messageUid), ["sm_old", "sm_retained", "sm_tail"]);
 });
+
+test("SessionExecutionFinalizer persists canonical summary-state changes for an existing durable UID", async () => {
+  const appendedMessages = [];
+  const events = [];
+  const finalizer = new SessionExecutionFinalizer({
+    session: {
+      async upsertTurnTiming() {},
+      async saveCurrentTurnTasks() {},
+      async getExecutionBundle() { return { logs: [] }; },
+    },
+    turnPersister: {
+      buildDefaultAssistantTurn: () => ({}),
+      async appendAgentMessages({ messages = [] }) { appendedMessages.push(...messages); },
+    },
+    resolveMemoryPostProcessAsyncEnabled: () => true,
+    runMemoryPostProcessFlow: async () => {},
+    upsertParentAsyncTask: () => {},
+  });
+
+  const result = await finalizer.finalizeRunSession({
+    userId: "u1",
+    sessionId: "s1",
+    persistedTurnMessageUids: ["sm_guidance"],
+    persistedTurnMessages: [{
+      messageUid: "sm_guidance",
+      role: "user",
+      content: "guidance",
+      summarized: false,
+    }],
+    agentResult: {
+      turnMessages: [{
+        messageUid: "sm_guidance",
+        role: "user",
+        content: "guidance",
+        summarized: true,
+      }],
+      turnTasks: [],
+    },
+    runtimeEventListener: {
+      onEvent(event) { events.push(event); },
+    },
+  });
+
+  assert.equal(appendedMessages.length, 1);
+  assert.equal(appendedMessages[0].messageUid, "sm_guidance");
+  assert.equal(appendedMessages[0].summarized, true);
+  assert.equal(result.messages.length, 1);
+  assert.equal(result.messages[0].messageUid, "sm_guidance");
+  assert.equal(result.messages[0].summarized, true);
+  const persistencePlan = events.find(
+    (event = {}) => event.event === "agent.contextIdentity.completedTurnSummaryPersistencePlanned",
+  );
+  assert.ok(persistencePlan);
+  assert.deepEqual(persistencePlan.data.activeSummarizedMessageIds, ["sm_guidance"]);
+  assert.deepEqual(persistencePlan.data.durableSummarizedMessageIds, []);
+  assert.deepEqual(persistencePlan.data.persistedSummarizedMessageIds, ["sm_guidance"]);
+});
+
+test("SessionExecutionFinalizer rejects a persisted UID without a durable journal entity", async () => {
+  let appendCalled = false;
+  const finalizer = new SessionExecutionFinalizer({
+    session: {
+      async saveCurrentTurnTasks() {},
+      async getExecutionBundle() { return { logs: [] }; },
+    },
+    turnPersister: {
+      buildDefaultAssistantTurn: () => ({}),
+      async appendAgentMessages() { appendCalled = true; },
+    },
+    resolveMemoryPostProcessAsyncEnabled: () => true,
+    runMemoryPostProcessFlow: async () => {},
+    upsertParentAsyncTask: () => {},
+  });
+
+  await assert.rejects(
+    finalizer.finalizeRunSession({
+      userId: "u1",
+      sessionId: "s1",
+      persistedTurnMessageUids: ["sm_missing"],
+      persistedTurnMessages: [],
+      agentResult: {
+        turnMessages: [{
+          messageUid: "sm_missing",
+          role: "assistant",
+          content: "canonical",
+        }],
+        turnTasks: [],
+      },
+    }),
+    /persisted turn message is missing from the durable journal: sm_missing/,
+  );
+  assert.equal(appendCalled, false);
+});

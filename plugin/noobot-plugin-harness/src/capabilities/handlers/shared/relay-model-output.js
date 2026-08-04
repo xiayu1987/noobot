@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { resolveModelMessages } from "../../../core/message-store.js";
 import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "./i18n.js";
 import { injectMessageWithPolicy } from "./message/injection-utils.js";
@@ -29,7 +30,7 @@ export function relaySeparateModelOutputAsUserMessage(
     transferPayload = null,
   } = {},
 ) {
-  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
+  const messages = resolveModelMessages(ctx);
   const text = String(content || "").trim();
   if (!text) return false;
   const prefix = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {

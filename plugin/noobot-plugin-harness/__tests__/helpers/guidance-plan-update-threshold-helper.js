@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
-import { createPlanningHandler } from "../../src/capabilities/handlers/planning.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { canAttemptPlanRevision } from "../../src/capabilities/handlers/planning/revision-engine.js";
 import { runPlanUpdateAfterSummary } from "../../src/capabilities/handlers/guidance/model-runner.js";
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";

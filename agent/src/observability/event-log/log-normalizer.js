@@ -19,6 +19,9 @@ function resolveErrorType(rawEvent = "") {
 }
 
 export function classifyExecutionEvent(event = "") {
+  if (String(event || "").startsWith("agent.contextIdentity.")) {
+    return { category: "context_identity", type: "context_identity_debug" };
+  }
   if (SEMANTIC_TRANSFER_EVENTS.has(String(event || "").trim())) {
     return { category: "semantic_transfer", type: "semantic_transfer" };
   }

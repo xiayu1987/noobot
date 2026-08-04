@@ -62,11 +62,24 @@ export function createDetachedSubSessionRunner({
       throw new Error("sub-session runner requires userId and parentSessionId");
     }
 
-    const subSessionId = String(strategy?.sessionId || "").trim() || randomUUID();
-    const subDialogProcessId = String(strategy?.dialogProcessId || "").trim() || randomUUID();
-    const turnScopeId = String(
-      runConfigPatch?.turnScopeId || strategy?.turnScopeId || metadata?.turnScopeId || "",
-    ).trim();
+    const subSessionId = String(strategy?.sessionId || "").trim();
+    const subDialogProcessId = String(strategy?.dialogProcessId || "").trim();
+    const turnScopeId = String(strategy?.turnScopeId || "").trim();
+    const executionId = String(strategy?.executionId || "").trim();
+    const relativeDir = String(strategy?.relativeDir || "").trim();
+    const allowedRoot = String(strategy?.allowedRoot || "").trim();
+    if (
+      !subSessionId ||
+      !subDialogProcessId ||
+      !turnScopeId ||
+      !executionId ||
+      !relativeDir ||
+      !allowedRoot
+    ) {
+      throw new TypeError(
+        "detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, executionId, relativeDir and allowedRoot",
+      );
+    }
     const scopedEventListener = createScopedSubSessionEventListener(eventListener, {
       userId,
       sessionId: subSessionId,
@@ -85,9 +98,7 @@ export function createDetachedSubSessionRunner({
       runConfigPatch,
       disabledPlugins: strategy?.disabledPlugins || [],
     });
-    mergedRunConfig.executionId = String(
-      strategy?.executionId || metadata?.executionId || `agent:${turnScopeId || subSessionId}`,
-    ).trim();
+    mergedRunConfig.executionId = executionId;
     mergedRunConfig.executionKind = "agent";
     mergedRunConfig.parentExecutionId = String(strategy?.parentExecutionId || metadata?.parentExecutionId || "").trim();
     mergedRunConfig.rootExecutionId = String(
@@ -139,8 +150,6 @@ export function createDetachedSubSessionRunner({
     });
     emitEvent(eventListener, "plugin_runtime_resolved", runtimePluginState);
 
-    const relativeDir = String(strategy?.relativeDir || "").trim();
-    const allowedRoot = String(strategy?.allowedRoot || "").trim();
     const lifecycle = typeof session.getSessionLifecycle === "function"
       ? await session.getSessionLifecycle({ userId, sessionId: subSessionId })
       : null;

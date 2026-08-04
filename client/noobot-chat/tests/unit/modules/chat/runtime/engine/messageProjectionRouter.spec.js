@@ -50,6 +50,23 @@ function contextFor(messages, logSessionEvent = vi.fn()) {
 }
 
 describe("live canonical message projection", () => {
+  it("records ordinary non-message routing decisions as debug diagnostics", () => {
+    const logSessionEvent = vi.fn();
+
+    expect(routeMessageProjectionEvent("agent_done", {}, contextFor([], logSessionEvent))).toBe(false);
+
+    expect(logSessionEvent).toHaveBeenCalledOnce();
+    expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
+      category: "transport",
+      level: "debug",
+      event: "frontend.messageEvent.routeEvaluated",
+      data: expect.objectContaining({
+        channelEvent: "agent_done",
+        shouldProjectMain: false,
+      }),
+    }));
+  });
+
   it("rejects a split presentation identity without creating a second assistant entity", () => {
     const messages = [{
       id: "assistant-message-1",

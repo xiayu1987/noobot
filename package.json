@@ -19,6 +19,7 @@
     "client/startup",
     "client/shared",
     "runtime-events",
+    "context-protocol",
     "sanitize",
     "client/windows",
     "client/mac"

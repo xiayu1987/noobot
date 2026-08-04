@@ -29,7 +29,7 @@ export function routeMessageProjectionEvent(event, data, context) {
   const messageEvent = data?.event || {};
   const shouldProjectMain = shouldProjectMainSessionEvent(event, data || {});
   logSessionEvent({
-    category: "transport", level: shouldProjectMain ? "debug" : "warn",
+    category: "transport", level: "debug",
     event: "frontend.messageEvent.routeEvaluated",
     sessionId: messageEvent.sessionId || sessionId,
     dialogProcessId: messageEvent.dialogProcessId || "",

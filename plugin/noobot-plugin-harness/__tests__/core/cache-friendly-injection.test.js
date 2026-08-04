@@ -8,10 +8,16 @@ import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { injectMessageWithPolicy } from "../../src/capabilities/handlers/shared/message/injection-utils.js";
-import { resolveMainModelFinalMessages } from "../../../../agent/src/session/utils/context-window-normalizer.js";
+import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
+import {
+  createTestHookContext,
+  createTestResolveModelMessages,
+} from "../helpers/public-runtime-fixtures.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};
+  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
+    ? ctx.modelContext.messageBlocks
+    : {};
   return resolveMainModelFinalMessages({
     systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
     historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
@@ -20,7 +26,7 @@ function resolveFromBlocks({ ctx = {} } = {}) {
 }
 
 test("dynamic harness main-flow system injections stay in system block", () => {
-  const ctx = { messages: [] };
+  const ctx = createTestHookContext();
   const result = injectMessageWithPolicy(ctx, {
     role: "system",
     content: "dynamic planning context",
@@ -29,15 +35,15 @@ test("dynamic harness main-flow system injections stay in system block", () => {
   });
 
   assert.equal(result.injected, true);
-  assert.equal(ctx.messages.length, 1);
-  assert.equal(ctx.messages[0]?.role, "system");
-  assert.equal(ctx.messages[0]?.injectedMessage, true);
-  assert.equal(ctx.messages[0]?.injectedBy, "harness-plugin");
-  assert.ok(ctx.messages[0]?.additional_kwargs?.noobotMessageId);
-  assert.equal(ctx.messageBlocks.system[0], ctx.messages[0]);
-  assert.deepEqual(ctx.messageBlocks.incremental, []);
-  assert.equal(ctx.messageBlocks.systemIds, undefined);
-  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
+  assert.equal(ctx.modelContext.messages.length, 1);
+  assert.equal(ctx.modelContext.messages[0]?.role, "system");
+  assert.equal(ctx.modelContext.messages[0]?.injectedMessage, true);
+  assert.equal(ctx.modelContext.messages[0]?.injectedBy, "harness-plugin");
+  assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.noobotMessageId);
+  assert.equal(ctx.modelContext.messageBlocks.system[0], ctx.modelContext.messages[0]);
+  assert.deepEqual(ctx.modelContext.messageBlocks.incremental, []);
+  assert.equal(ctx.modelContext.messageBlocks.systemIds, undefined);
+  assert.equal(ctx.modelContext.messageBlocks.incrementalIds, undefined);
 });
 
 test("dynamic harness system injections compose before history", async () => {
@@ -76,7 +82,7 @@ test("dynamic harness system injections compose before history", async () => {
       capabilityToolAllowlistByPurpose: {},
       acceptance: {},
       review: {},
-      resolveModelMessages: resolveFromBlocks,
+      resolveModelMessages: createTestResolveModelMessages(),
     },
     capabilityRuntime: {
       async runHook(_point, _ctx, payload = {}) {
@@ -93,19 +99,19 @@ test("dynamic harness system injections compose before history", async () => {
     content: "current user",
     additional_kwargs: { frontendUserMessage: true },
   };
-  const ctx = {
+  const ctx = createTestHookContext({}, {
     messages: [system, history, currentUser],
     messageBlocks: {
       system: [system],
       history: [history],
       incremental: [currentUser],
     },
-  };
+  });
 
   await handlers.get("before_llm_call")(ctx);
 
   assert.deepEqual(
-    ctx.messages.map((item) => `${item.role}:${item.content}`),
+    ctx.modelContext.messages.map((item) => `${item.role}:${item.content}`),
     [
       "system:stable system",
       "system:dynamic planning context",
@@ -113,7 +119,7 @@ test("dynamic harness system injections compose before history", async () => {
       "user:current user",
     ],
   );
-  assert.equal(ctx.messageBlocks.system.at(-1)?.content, "dynamic planning context");
+  assert.equal(ctx.modelContext.messageBlocks.system.at(-1)?.content, "dynamic planning context");
 });
 
 test("main model incremental context keeps unsummarized same-type harness relays append-only", () => {

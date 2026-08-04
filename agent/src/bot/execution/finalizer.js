@@ -21,6 +21,10 @@ import {
 } from "../../session/transfer-attachment-refs.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
+import {
+  canonicalMessageId,
+  emitContextIdentityDebug,
+} from "../../observability/context-identity-debug.js";
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "doc_to_data_tool",
   "media_to_data_tool",
@@ -51,6 +55,13 @@ function shouldPromoteSemanticTransferAttachmentToAssistant(attachmentItem = {})
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function summarizedMessageIds(messages = []) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message = {}) => message?.summarized === true)
+    .map((message = {}) => canonicalMessageId(message))
+    .filter(Boolean);
 }
 
 function resolveTransferEnvelopesFromMessage(messageItem = {}) {
@@ -260,19 +271,46 @@ export class SessionExecutionFinalizer {
       ? persistedTurnMessages.length
       : persistedActivePrefixCount;
     const promotedTurnMessages = promotedMessages.slice(promotionSourceCount);
-    const originalMessagesByUid = new Map([
-      ...(Array.isArray(persistedTurnMessages) ? persistedTurnMessages : []),
-      ...activeTurnMessages,
-    ].map((message = {}) => [String(message.messageUid || "").trim(), message])
-      .filter(([messageUid]) => messageUid));
+    const persistedMessagesByUid = new Map(
+      (Array.isArray(persistedTurnMessages) ? persistedTurnMessages : [])
+        .map((message = {}) => [String(message.messageUid || "").trim(), message])
+        .filter(([messageUid]) => messageUid),
+    );
+    for (const messageUid of persistedUidSet) {
+      if (!persistedMessagesByUid.has(messageUid)) {
+        throw new Error(
+          `persisted turn message is missing from the durable journal: ${messageUid}`,
+        );
+      }
+    }
     const messagesToPersist = persistedUidSet.size > 0
       ? promotedTurnMessages.filter((message = {}) => {
           const messageUid = String(message.messageUid || "").trim();
           if (!messageUid || !persistedUidSet.has(messageUid)) return true;
-          const original = originalMessagesByUid.get(messageUid);
-          return original ? JSON.stringify(original) !== JSON.stringify(message) : false;
+          const persistedMessage = persistedMessagesByUid.get(messageUid);
+          return JSON.stringify(persistedMessage) !== JSON.stringify(message);
         })
       : promotedMessages.slice(promotionSourceCount + persistedResultPrefixCount);
+    emitContextIdentityDebug(
+      runtimeEventListener,
+      "completedTurnSummaryPersistencePlanned",
+      {
+        userId,
+        sessionId,
+        parentSessionId,
+        dialogProcessId,
+        turnScopeId,
+      },
+      {
+        activeMessageCount: activeTurnMessages.length,
+        durableMessageCount: persistedMessagesByUid.size,
+        persistedUidCount: persistedUidSet.size,
+        messageToPersistCount: messagesToPersist.length,
+        activeSummarizedMessageIds: summarizedMessageIds(activeTurnMessages),
+        durableSummarizedMessageIds: summarizedMessageIds(persistedTurnMessages),
+        persistedSummarizedMessageIds: summarizedMessageIds(messagesToPersist),
+      },
+    );
     const thinkingFinishedAt = this.now();
 
     lifecycle?.enterPersisting?.();

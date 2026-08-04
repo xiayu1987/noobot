@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../events/index.js";
+import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { classifyEngineError } from "./error-classifier.js";
 
 function resolveErrorStatus(error = {}) {
@@ -71,7 +72,7 @@ export function buildEngineErrorPayload({
     error?.cause?.error?.type ??
     undefined;
   const name = String(error?.name || error?.cause?.name || "").trim();
-  const message = String(error?.message || error || "").trim();
+  const message = resolveErrorMessage(error);
   const requestId = resolveRequestId(error);
 
   return {

@@ -30,7 +30,7 @@ import {
   createPlanningAgentContext,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
 
-test("separate_model summary uses checkpointed summary scope when marking messages", async () => {
+test("separate_model summary uses the canonical checkpoint protocol", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   let markedCalled = 0;
   const agentContext = createAgentContext({
@@ -38,6 +38,10 @@ test("separate_model summary uses checkpointed summary scope when marking messag
       summary: true,
     },
   });
+  agentContext.execution = {
+    dialogProcessId: "dp-1",
+    controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
+  };
   const meta = {
     harness: {
       planningGuidanceMode: "separate_model",
@@ -64,7 +68,15 @@ test("separate_model summary uses checkpointed summary scope when marking messag
     agentContext,
   };
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
-  assert.equal(markedCalled >= 1, true);
+  assert.equal(markedCalled, 0);
+  assert.equal(ctx.modelContext.messageBlocks.incremental[0].summarized, undefined);
+  assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, undefined);
+  assert.deepEqual(
+    new Set(agentContext.execution.controllers.runtime.systemRuntime
+      .mainFlowControlInstructions[0].summarizedMessageIds),
+    new Set(ctx.modelContext.messageBlocks.incremental.slice(0, 2).map((message) =>
+      message.additional_kwargs.noobotMessageId)),
+  );
 });
 
 test("separate_model summary request includes previous summary after complete plan checklist", async () => {

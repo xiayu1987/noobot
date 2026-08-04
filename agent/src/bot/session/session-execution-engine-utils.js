@@ -14,6 +14,12 @@ import {
 } from "../../context/session/dialog-process-id-resolver.js";
 import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
 import { getTransferAttachmentMetas } from "../../transfer/storage/consumer.js";
+import {
+  getMessageId,
+  isInjectedMessage,
+  readMessageField,
+  resolveInjectedMessageType,
+} from "@noobot/context-protocol";
 
 export function normalizePluginSelectorSet(keys = []) {
   return new Set(normalizeTrimmedStringList(keys));
@@ -46,6 +52,13 @@ export function normalizeMessageForModelRuntime(messageItem = {}) {
       messageItem?.additional_kwargs?.summarized === true ||
       messageItem?.lc_kwargs?.additional_kwargs?.summarized === true,
   };
+  const noobotMessageId = getMessageId(messageItem);
+  if (noobotMessageId) {
+    normalized.additional_kwargs = {
+      ...(normalized.additional_kwargs || {}),
+      noobotMessageId,
+    };
+  }
   const toolCalls = Array.isArray(messageItem?.tool_calls)
     ? messageItem.tool_calls
     : Array.isArray(messageItem?.lc_kwargs?.tool_calls)
@@ -73,6 +86,8 @@ export function normalizeMessageForModelRuntime(messageItem = {}) {
   }
   const dialogProcessId = resolveMessageDialogProcessId(messageItem);
   if (dialogProcessId) normalized.dialogProcessId = dialogProcessId;
+  const turnScopeId = readMessageField(messageItem, "turnScopeId");
+  if (turnScopeId) normalized.turnScopeId = turnScopeId;
   return applyNormalizedMessageFlags(normalized, messageItem);
 }
 
@@ -120,20 +135,12 @@ export function normalizeTrimmedStringList(input = []) {
 }
 
 export function applyNormalizedMessageFlags(normalized = {}, messageItem = {}) {
-  if (messageItem?.injectedMessage === true || messageItem?.lc_kwargs?.injectedMessage === true) {
+  if (isInjectedMessage(messageItem)) {
     normalized.injectedMessage = true;
   }
-  const injectedBy = String(
-    messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "",
-  ).trim();
+  const injectedBy = readMessageField(messageItem, "injectedBy");
   if (injectedBy) normalized.injectedBy = injectedBy;
-  const injectedMessageType = String(
-    messageItem?.injectedMessageType ||
-      messageItem?.injected_message_type ||
-      messageItem?.lc_kwargs?.injectedMessageType ||
-      messageItem?.lc_kwargs?.injected_message_type ||
-      "",
-  ).trim();
+  const injectedMessageType = resolveInjectedMessageType(messageItem);
   if (injectedMessageType) normalized.injectedMessageType = injectedMessageType;
   if (isFrontendUserMessageFlagged(messageItem)) {
     normalized.frontendUserMessage = true;
@@ -184,12 +191,6 @@ export async function persistSnapshotJsonFiles({
   });
 }
 
-function isInjectedMessageLike(messageItem = {}) {
-  if (!messageItem || typeof messageItem !== "object") return false;
-  if (messageItem?.injectedMessage === true || messageItem?.lc_kwargs?.injectedMessage === true) return true;
-  return Boolean(String(messageItem?.injectedBy || messageItem?.lc_kwargs?.injectedBy || "").trim());
-}
-
 function isFrontendUserMessageFlagged(messageItem = {}) {
   return (
     messageItem?.frontendUserMessage === true ||
@@ -209,7 +210,7 @@ function resolveCurrentTurnDialogProcessIdFromMessages(messages = []) {
   }
   for (let index = source.length - 1; index >= 0; index -= 1) {
     const item = source[index] || {};
-    if (!isInjectedMessageLike(item)) continue;
+    if (!isInjectedMessage(item)) continue;
     const dialogProcessId = resolveMessageDialogProcessId(item);
     if (dialogProcessId) return dialogProcessId;
   }

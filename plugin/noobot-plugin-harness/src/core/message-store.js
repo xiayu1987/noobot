@@ -4,45 +4,48 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  appendMessage,
-  canonicalizeMessageStore,
+  appendMessage as protocolAppendMessage,
+  canonicalizeMessageStore as protocolCanonicalizeMessageStore,
   getMessageId,
-  replaceMessages,
-  resolveMessagesByIds,
-  writeMessageBlocks,
-} from "../../../../agent/src/context/runtime-state/message-store.js";
+  replaceMessageProjection as protocolReplaceMessageProjection,
+  replaceMessages as protocolReplaceMessages,
+  resolveMessagesByIds as protocolResolveMessagesByIds,
+  writeMessageBlocks as protocolWriteMessageBlocks,
+} from "@noobot/context-protocol/message-store";
+import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/hook-context";
 
-function isSummarized(message = {}) {
-  return message?.summarized === true ||
-    message?.lc_kwargs?.summarized === true ||
-    message?.additional_kwargs?.summarized === true ||
-    message?.lc_kwargs?.additional_kwargs?.summarized === true;
+function resolveHolder(ctx = {}) {
+  const modelContext = resolveAuthoritativeModelContext(ctx);
+  if (!modelContext) {
+    throw new TypeError("Harness model-message operations require contextProtocolVersion=1 modelContext");
+  }
+  return modelContext;
 }
 
-function markMessageSummarized(message = null) {
-  if (!message || typeof message !== "object") return false;
-  if (isSummarized(message)) return false;
-  message.summarized = true;
-  if (message.lc_kwargs && typeof message.lc_kwargs === "object") {
-    message.lc_kwargs.summarized = true;
+export function resolveModelContext(ctx = {}) {
+  return resolveHolder(ctx);
+}
+
+export function resolveModelMessages(ctx = {}) {
+  const modelContext = resolveHolder(ctx);
+  return Array.isArray(modelContext.messages) ? modelContext.messages : [];
+}
+
+export function resolveModelMessageBlocks(ctx = {}) {
+  const modelContext = resolveHolder(ctx);
+  if (!modelContext.messageBlocks || typeof modelContext.messageBlocks !== "object") {
+    modelContext.messageBlocks = { system: [], history: [], incremental: [] };
   }
-  return true;
+  return modelContext.messageBlocks;
 }
 
 export {
-  appendMessage,
-  canonicalizeMessageStore,
   getMessageId,
-  replaceMessages,
-  resolveMessagesByIds,
-  writeMessageBlocks,
 };
 
-export function markSummarized(ctx = {}, ids = []) {
-  const messages = resolveMessagesByIds(ctx, ids);
-  let changedCount = 0;
-  for (const message of messages) {
-    if (markMessageSummarized(message)) changedCount += 1;
-  }
-  return changedCount;
-}
+export const appendMessage = (ctx, ...args) => protocolAppendMessage(resolveHolder(ctx), ...args);
+export const canonicalizeMessageStore = (ctx, ...args) => protocolCanonicalizeMessageStore(resolveHolder(ctx), ...args);
+export const replaceMessages = (ctx, ...args) => protocolReplaceMessages(resolveHolder(ctx), ...args);
+export const replaceMessageProjection = (ctx, ...args) => protocolReplaceMessageProjection(resolveHolder(ctx), ...args);
+export const resolveMessagesByIds = (ctx, ...args) => protocolResolveMessagesByIds(resolveHolder(ctx), ...args);
+export const writeMessageBlocks = (ctx, ...args) => protocolWriteMessageBlocks(resolveHolder(ctx), ...args);

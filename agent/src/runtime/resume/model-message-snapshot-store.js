@@ -7,6 +7,11 @@ import fs from "node:fs/promises";
 import { filePath as path } from "../../shared/utils/path-resolver.js";
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { isWorkspaceSessionDeleted } from "@noobot/runtime-events";
+import {
+  createModelContextSnapshot,
+  hydrateModelContextSnapshot,
+  normalizeSnapshotIdentity,
+} from "@noobot/context-protocol/snapshot-policy";
 
 function cleanId(value = "") {
   return String(value || "").trim().replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -23,19 +28,6 @@ function snapshotPath(identity = {}, globalConfig = {}) {
     ? `${cleanId(identity.sessionId)}__`
     : "";
   return path.join(snapshotDir({ globalConfig, ...identity }), `${childPrefix}${cleanId(identity.dialogProcessId)}__${cleanId(identity.turnScopeId)}.json`);
-}
-
-function legacySnapshotPath(identity = {}, globalConfig = {}) {
-  const legacyIdentity = { ...identity, parentSessionId: "" };
-  return path.join(
-    snapshotDir({ globalConfig, ...legacyIdentity }),
-    `${cleanId(identity.dialogProcessId)}__${cleanId(identity.turnScopeId)}.json`,
-  );
-}
-
-function messageType(message = {}) {
-  if (typeof message?._getType === "function") return message._getType();
-  return String(message?.type || message?.role || message?.lc_kwargs?.type || "").toLowerCase();
 }
 
 function cloneJson(value) {
@@ -55,48 +47,6 @@ const LANGCHAIN_SERIALIZATION_KEYS = new Set([
   "lc_secrets",
 ]);
 
-function serializeMessage(message = {}) {
-  const type = messageType(message);
-  const rawKwargs = message?.additional_kwargs || message?.lc_kwargs?.additional_kwargs || {};
-  const normalizedType = type === "system"
-    ? "system"
-    : type === "ai" || type === "assistant"
-      ? "ai"
-      : type === "tool" || type === "tool_result"
-        ? "tool"
-        : "human";
-  const raw = {};
-  const serialized = {
-    raw,
-    type: normalizedType,
-    content: typeof message?.content === "string" ? message.content : message?.content ?? "",
-    additional_kwargs: cloneJson(rawKwargs) || {},
-    lc_kwargs: cloneJson(message?.lc_kwargs) || {},
-    summarized: message?.summarized === true || message?.lc_kwargs?.summarized === true || rawKwargs?.summarized === true,
-  };
-  for (const key of Object.keys(message || {})) {
-    if (
-      key in serialized
-      || ["content", "additional_kwargs", "lc_kwargs"].includes(key)
-      || LANGCHAIN_SERIALIZATION_KEYS.has(key)
-      || String(key || "").startsWith("lc_")
-    ) continue;
-    const value = cloneJson(message[key]);
-    if (value !== undefined) serialized.raw[key] = value;
-  }
-  if (normalizedType === "ai") {
-    if (Array.isArray(message?.tool_calls)) serialized.tool_calls = cloneJson(message.tool_calls) || [];
-    if (Array.isArray(message?.invalid_tool_calls)) serialized.invalid_tool_calls = cloneJson(message.invalid_tool_calls) || [];
-  }
-  if (normalizedType === "tool") {
-    serialized.tool_call_id = message?.tool_call_id || message?.lc_kwargs?.tool_call_id || message?.additional_kwargs?.tool_call_id || "";
-    if (message?.name) serialized.name = message.name;
-    if (message?.status) serialized.status = message.status;
-    if (message?.artifact !== undefined) serialized.artifact = cloneJson(message.artifact);
-  }
-  return serialized;
-}
-
 function deserializeMessage(item = {}) {
   const payload = { content: item?.content ?? "", additional_kwargs: cloneJson(item?.additional_kwargs) || {} };
   let message;
@@ -114,54 +64,18 @@ function deserializeMessage(item = {}) {
     artifact: cloneJson(item?.artifact),
   });
   else message = new HumanMessage(payload);
-  const raw = item?.raw && typeof item.raw === "object" ? cloneJson(item.raw) : null;
-  if (raw) {
-    for (const [key, value] of Object.entries(raw)) {
-      if (
-        !["content", "additional_kwargs", "tool_calls", "invalid_tool_calls", "tool_call_id"].includes(key)
-        && !LANGCHAIN_SERIALIZATION_KEYS.has(key)
-        && !String(key || "").startsWith("lc_")
-      ) {
-        try { message[key] = value; } catch {}
-      }
+  for (const [key, value] of Object.entries(item || {})) {
+    if (
+      !["content", "additional_kwargs", "tool_calls", "invalid_tool_calls", "tool_call_id"].includes(key)
+      && !LANGCHAIN_SERIALIZATION_KEYS.has(key)
+      && !String(key || "").startsWith("lc_")
+    ) {
+      try { message[key] = cloneJson(value); } catch {}
     }
-    message.additional_kwargs = { ...(raw.additional_kwargs || {}), ...(message.additional_kwargs || {}) };
-    if (raw.lc_kwargs && typeof raw.lc_kwargs === "object") message.lc_kwargs = raw.lc_kwargs;
   }
   if (item?.lc_kwargs && typeof item.lc_kwargs === "object") message.lc_kwargs = cloneJson(item.lc_kwargs);
-  if (item?.summarized === true || raw?.summarized === true || raw?.lc_kwargs?.summarized === true) message.summarized = true;
+  if (item?.summarized === true || item?.lc_kwargs?.summarized === true) message.summarized = true;
   return message;
-}
-
-export function syncStoppedModelMessageSnapshotCandidate(runtime = {}, modelMessages = []) {
-  const candidate = runtime?.stoppedModelMessageSnapshotCandidate;
-  if (!candidate || !Array.isArray(modelMessages)) return candidate || null;
-  return runtime.stoppedModelMessageSnapshotCandidate;
-}
-
-function serializeList(list = []) {
-  return (Array.isArray(list) ? list : []).map(serializeMessage).filter(Boolean);
-}
-
-function composeMessagesFromBlocks(messageBlocks = {}) {
-  if (!messageBlocks || typeof messageBlocks !== "object" || Array.isArray(messageBlocks)) return [];
-  return [
-    ...(Array.isArray(messageBlocks.system) ? messageBlocks.system : []),
-    ...(Array.isArray(messageBlocks.history) ? messageBlocks.history : []),
-    ...(Array.isArray(messageBlocks.incremental) ? messageBlocks.incremental : []),
-  ];
-}
-
-function deserializeList(list = []) {
-  return (Array.isArray(list) ? list : []).map(deserializeMessage);
-}
-
-function assertIdentity(snapshot = {}, identity = {}) {
-  for (const key of ["userId", "sessionId", "dialogProcessId", "turnScopeId"]) {
-    if (String(snapshot?.[key] || "").trim() !== String(identity?.[key] || "").trim()) {
-      throw new Error(`Stopped model message snapshot identity mismatch: ${key}`);
-    }
-  }
 }
 
 function countSnapshotMessages(candidate = {}) {
@@ -176,6 +90,54 @@ function countSnapshotMessages(candidate = {}) {
   };
 }
 
+function readMessageField(message = {}, field = "") {
+  return String(
+    message?.[field] ||
+      message?.additional_kwargs?.[field] ||
+      message?.lc_kwargs?.additional_kwargs?.[field] ||
+      "",
+  ).trim();
+}
+
+function snapshotMessageId(message = {}) {
+  return readMessageField(message, "noobotMessageId") ||
+    String(message?.messageUid || message?.messageId || message?.id || "").trim();
+}
+
+function summarizeSnapshotRoundIdentity(candidate = {}) {
+  const blocks = candidate?.messageBlocks && typeof candidate.messageBlocks === "object"
+    ? candidate.messageBlocks
+    : {};
+  const summary = {};
+  const partialMessageIds = [];
+  const missingScopedMessageIds = [];
+  for (const blockName of ["system", "history", "incremental"]) {
+    const blockSummary = { total: 0, complete: 0, missing: 0, partial: 0 };
+    for (const message of Array.isArray(blocks?.[blockName]) ? blocks[blockName] : []) {
+      blockSummary.total += 1;
+      const dialogProcessId = readMessageField(message, "dialogProcessId");
+      const turnScopeId = readMessageField(message, "turnScopeId");
+      const presentCount = Number(Boolean(dialogProcessId)) + Number(Boolean(turnScopeId));
+      if (presentCount === 2) blockSummary.complete += 1;
+      else if (presentCount === 1) {
+        blockSummary.partial += 1;
+        partialMessageIds.push(snapshotMessageId(message));
+      } else {
+        blockSummary.missing += 1;
+        if (blockName !== "system") missingScopedMessageIds.push(snapshotMessageId(message));
+      }
+    }
+    summary[blockName] = blockSummary;
+  }
+  return {
+    blocks: summary,
+    partialMessageIds: partialMessageIds.filter(Boolean).slice(-20),
+    truncatedPartialMessageIdCount: Math.max(0, partialMessageIds.filter(Boolean).length - 20),
+    missingScopedMessageIds: missingScopedMessageIds.filter(Boolean).slice(-20),
+    truncatedMissingScopedMessageIdCount: Math.max(0, missingScopedMessageIds.filter(Boolean).length - 20),
+  };
+}
+
 function buildSnapshotPersistenceResult({ status, source = "", reason = "", identity = {}, missingIdentityFields = [], error = "", candidate = null } = {}) {
   return {
     status,
@@ -185,17 +147,12 @@ function buildSnapshotPersistenceResult({ status, source = "", reason = "", iden
     ...(Array.isArray(missingIdentityFields) && missingIdentityFields.length ? { missingIdentityFields } : {}),
     ...(error ? { error: String(error || "") } : {}),
     ...countSnapshotMessages(candidate || {}),
+    roundIdentityAudit: summarizeSnapshotRoundIdentity(candidate || {}),
   };
 }
 
 export async function saveStoppedModelMessageSnapshot({ globalConfig = {}, identity = {}, messages = [], messageBlocks = {} } = {}) {
-  const normalizedIdentity = {
-    userId: String(identity.userId || "").trim(),
-    sessionId: String(identity.sessionId || "").trim(),
-    parentSessionId: String(identity.parentSessionId || "").trim(),
-    dialogProcessId: String(identity.dialogProcessId || "").trim(),
-    turnScopeId: String(identity.turnScopeId || "").trim(),
-  };
+  const normalizedIdentity = normalizeSnapshotIdentity(identity);
   if (!normalizedIdentity.userId || !normalizedIdentity.sessionId || !normalizedIdentity.dialogProcessId || !normalizedIdentity.turnScopeId) return null;
   const workspaceRoot = String(globalConfig?.workspaceRoot || process.cwd()).trim();
   const guardedSessionIds = [...new Set([
@@ -209,20 +166,7 @@ export async function saveStoppedModelMessageSnapshot({ globalConfig = {}, ident
       sessionId,
     })) return null;
   }
-  const now = new Date().toISOString();
-  const factSourceMessages = composeMessagesFromBlocks(messageBlocks);
-  const snapshot = {
-    version: 2,
-    ...normalizedIdentity,
-    createdAt: now,
-    updatedAt: now,
-    messageBlocks: {
-      system: serializeList(messageBlocks.system),
-      history: serializeList(messageBlocks.history),
-      incremental: serializeList(messageBlocks.incremental),
-    },
-    messages: serializeList(factSourceMessages),
-  };
+  const snapshot = createModelContextSnapshot({ identity: normalizedIdentity, messageBlocks });
   const filePath = snapshotPath(normalizedIdentity, globalConfig);
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(snapshot, null, 2), "utf8");
@@ -324,51 +268,19 @@ export async function loadStoppedModelMessageSnapshot({
   identity = {},
   allowMissing = false,
 } = {}) {
-  const normalizedIdentity = {
-    userId: String(identity.userId || "").trim(),
-    sessionId: String(identity.sessionId || "").trim(),
-    parentSessionId: String(identity.parentSessionId || "").trim(),
-    dialogProcessId: String(identity.dialogProcessId || "").trim(),
-    turnScopeId: String(identity.turnScopeId || "").trim(),
-  };
-  const filePaths = [...new Set([
-    snapshotPath(normalizedIdentity, globalConfig),
-    legacySnapshotPath(normalizedIdentity, globalConfig),
-  ])];
+  const normalizedIdentity = normalizeSnapshotIdentity(identity);
   let raw;
-  let lastError;
-  for (const filePath of filePaths) {
-    try {
-      raw = await fs.readFile(filePath, "utf8");
-      break;
-    } catch (error) {
-      lastError = error;
-      if (error?.code !== "ENOENT") throw error;
-    }
+  try {
+    raw = await fs.readFile(snapshotPath(normalizedIdentity, globalConfig), "utf8");
+  } catch (error) {
+    if (allowMissing === true && error?.code === "ENOENT") return null;
+    throw error;
   }
-  if (raw === undefined) {
-    if (allowMissing === true && lastError?.code === "ENOENT") return null;
-    throw lastError;
-  }
-  const snapshot = JSON.parse(raw);
-  assertIdentity(snapshot, normalizedIdentity);
-  return {
-    ...snapshot,
-    messageBlocks: {
-      system: deserializeList(snapshot?.messageBlocks?.system),
-      history: deserializeList(snapshot?.messageBlocks?.history),
-      incremental: deserializeList(snapshot?.messageBlocks?.incremental),
-    },
-    messages: deserializeList(snapshot?.messages),
-  };
+  return hydrateModelContextSnapshot(JSON.parse(raw), normalizedIdentity, {
+    deserializeMessage,
+  });
 }
 
 export async function clearStoppedModelMessageSnapshot({ globalConfig = {}, identity = {} } = {}) {
-  const filePaths = [...new Set([
-    snapshotPath(identity, globalConfig),
-    legacySnapshotPath(identity, globalConfig),
-  ])];
-  await Promise.all(filePaths.map(async (filePath) => {
-    try { await fs.rm(filePath, { force: true }); } catch {}
-  }));
+  await fs.rm(snapshotPath(identity, globalConfig), { force: true });
 }

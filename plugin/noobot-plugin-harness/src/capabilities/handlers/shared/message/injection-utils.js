@@ -9,7 +9,12 @@ import {
   buildHarnessInjectedMessage,
 } from "./injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
-import { appendMessage, replaceMessages } from "../../../../core/message-store.js";
+import {
+  appendMessage,
+  replaceMessages,
+  resolveModelMessageBlocks,
+  resolveModelMessages,
+} from "../../../../core/message-store.js";
 
 function hasPendingToolCallPair(messages = []) {
   if (!Array.isArray(messages) || !messages.length) return false;
@@ -40,7 +45,7 @@ function hasPendingToolCallPair(messages = []) {
 }
 
 function resolveSystemContextMessages(ctx = {}) {
-  const list = ctx?.agentContext?.payload?.messages?.system;
+  const list = resolveModelMessageBlocks(ctx).system;
   return Array.isArray(list) ? list : null;
 }
 
@@ -86,9 +91,9 @@ export function injectMessageWithPolicy(
     persistToCurrentTurn = true,
   } = {},
 ) {
-  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
+  const messages = resolveModelMessages(ctx);
   const normalizedContent = String(content || "").trim();
-  if (!messages || !normalizedContent) return { injected: false, target: "none" };
+  if (!normalizedContent) return { injected: false, target: "none" };
   if (isHarnessAgentTurnEnded(ctx)) {
     return { injected: false, target: "none", blockedByTurnEnded: true };
   }
@@ -121,7 +126,7 @@ export function injectMessageWithPolicy(
       if (dedupe && dedupeExists(systemContextMessages, message)) {
         return { injected: false, target: "agent_system", deduped: true };
       }
-      systemContextMessages.push(normalizedContent);
+      appendMessage(ctx, message, { block: "system" });
       persistHarnessMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
       return { injected: true, target: "agent_system" };
     }

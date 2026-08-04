@@ -10,7 +10,7 @@ import {
   HARNESS_INJECTED_MESSAGE_FLAG_VALUE,
   HARNESS_INJECTION_MESSAGE_ROLE,
 } from "../capabilities/handlers/shared/constants.js";
-import { appendMessage } from "../core/message-store.js";
+import { appendMessage, resolveModelMessages } from "../core/message-store.js";
 
 function isSystemLikeRole(role = "") {
   const normalized = String(role || "").trim().toLowerCase();
@@ -18,7 +18,7 @@ function isSystemLikeRole(role = "") {
 }
 
 export async function messageTakeoverHandler(ctx, directive) {
-  const messages = Array.isArray(ctx.messages) ? ctx.messages : [];
+  const messages = resolveModelMessages(ctx);
   const content = directive?.content || directive?.text;
   if (!content) return { applied: false, reason: "No content specified" };
   const role = HARNESS_INJECTION_MESSAGE_ROLE;

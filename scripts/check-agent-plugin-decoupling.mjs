@@ -29,6 +29,7 @@ function statExists(filePath) {
 
 const ROOT = resolveRepoRoot();
 const TARGET_ROOT = path.join(ROOT, "agent", "src");
+const PLUGIN_ROOT = path.join(ROOT, "plugin");
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx"]);
 const IGNORE_PATH_PARTS = [
   `${path.sep}node_modules${path.sep}`,
@@ -36,10 +37,9 @@ const IGNORE_PATH_PARTS = [
   `${path.sep}dist${path.sep}`,
   `${path.sep}build${path.sep}`,
   `${path.sep}coverage${path.sep}`,
-  `${path.sep}__tests__${path.sep}`,
 ];
 
-const COUPLING_REGEX = /harness|workflow|Harness|Workflow|HARNESS|WORKFLOW|来自harness外部模型输出|Relay from harness/g;
+const IMPORT_SPECIFIER_REGEX = /(?:\bfrom\s*|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/g;
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
@@ -61,14 +61,15 @@ function walk(dir, out = []) {
   return out;
 }
 
-function collectMatches(text = "") {
+function collectImportMatches(text = "", isViolation = () => false) {
   const matches = [];
-  const lines = text.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    const found = [...line.matchAll(COUPLING_REGEX)].map((item) => item[0]);
-    if (!found.length) continue;
-    matches.push({ line: i + 1, terms: found, text: line.trim() });
+  for (const match of text.matchAll(IMPORT_SPECIFIER_REGEX)) {
+    const specifier = String(match[1] || "").trim();
+    if (!isViolation(specifier)) continue;
+    const offset = Number(match.index) || 0;
+    const line = text.slice(0, offset).split(/\r?\n/).length;
+    const sourceLine = text.split(/\r?\n/)[line - 1] || "";
+    matches.push({ line, terms: [specifier], text: sourceLine.trim() });
   }
   return matches;
 }
@@ -78,10 +79,22 @@ const violations = [];
 for (const file of walk(TARGET_ROOT)) {
   const relPath = toPosix(path.relative(ROOT, file));
   const text = readFileSync(file, "utf8");
-  const matches = collectMatches(text);
+  const matches = collectImportMatches(text, (specifier) =>
+    /(?:^|[/@])noobot-plugin-(?:harness|workflow)(?:[/]|$)/i.test(specifier) ||
+    /(?:^|\/)plugin\/noobot-plugin-(?:harness|workflow)(?:\/|$)/i.test(specifier),
+  );
   const count = matches.reduce((sum, item) => sum + item.terms.length, 0);
   if (!count) continue;
   violations.push({ relPath, count, matches });
+}
+
+if (statExists(PLUGIN_ROOT)) {
+  for (const file of walk(PLUGIN_ROOT)) {
+    const relPath = toPosix(path.relative(ROOT, file));
+    const text = readFileSync(file, "utf8");
+    const matches = collectImportMatches(text, (specifier) => /(?:^|\/)agent\/src\//.test(specifier));
+    if (matches.length) violations.push({ relPath, count: matches.length, matches });
+  }
 }
 
 if (violations.length) {

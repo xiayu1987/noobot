@@ -124,7 +124,7 @@ test('workspace runtime events do not create an unpersisted session directory', 
     source: 'frontend', scope: 'session', category: 'debug', level: 'debug',
     event: 'frontend.workflowRender.draft', userId: 'admin', sessionId: 'draft-session',
     workspaceRoot, data: { debugType: 'workflow-diagnostics' },
-  }, { includeProcess: false, workflowDiagnosticsDebug: true });
+  }, { includeProcess: false, sessionLogControls: { debug: { workflowDiagnostics: true } } });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, true);
@@ -200,7 +200,7 @@ test('runtime-events writer records normal session logs when their control is en
     event: 'chat.message',
     userId: 'admin',
     sessionId: 'session-log-default',
-  }, { root, includeProcess: false, messageLog: true });
+  }, { root, includeProcess: false, sessionLogControls: { log: { message: true } } });
 
   assert.equal(result.ok, true);
   assert.equal(result.skipped, undefined);

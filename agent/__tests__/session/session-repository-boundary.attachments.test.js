@@ -177,6 +177,87 @@ test("session display summary derives attachments from transfer envelopes", () =
   assert.equal("pathView" in summary.messages[0].transferEnvelopes[0].files[0], false);
 });
 
+test("session display summary binds completed tool artifacts to one explicit assistant turn", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "s-tool-artifacts",
+    messages: [
+      {
+        id: "assistant-one",
+        role: "assistant",
+        content: "first result",
+        turnScopeId: "turn-one",
+        dialogProcessId: "dialog-one",
+        toolTimeline: [{
+          key: "call:call-one",
+          toolCallId: "call-one",
+          tool: "execute_script",
+          status: "completed",
+          resultEvent: {
+            eventId: "event-one",
+            attachments: [{ attachmentId: "artifact-one", name: "stdout.txt" }],
+            writtenFiles: [{ toolName: "write_file", resolvedPath: "/tmp/result.txt", fileName: "result.txt" }],
+          },
+        }],
+      },
+      {
+        id: "assistant-two",
+        role: "assistant",
+        content: "second result",
+        turnScopeId: "turn-two",
+        dialogProcessId: "dialog-two",
+      },
+      {
+        role: "tool",
+        type: "tool_result",
+        tool_call_id: "call-one",
+        toolName: "execute_script",
+        turnScopeId: "turn-one",
+        dialogProcessId: "dialog-one",
+        attachments: [{ attachmentId: "artifact-one", name: "stdout.txt" }],
+      },
+    ],
+  });
+
+  const first = summary.messages.find((item) => item.id === "assistant-one");
+  const second = summary.messages.find((item) => item.id === "assistant-two");
+  assert.equal("toolLogSummaries" in summary, false);
+  assert.equal(first.toolTimeline.length, 1);
+  assert.equal(first.toolTimeline[0].resultEvent.attachments[0].attachmentId, "artifact-one");
+  assert.equal(first.toolTimeline[0].resultEvent.writtenFiles[0].fileName, "result.txt");
+  assert.equal(second.toolTimeline, undefined);
+  assert.equal(summary.stats.displayToolLogCount, 1);
+  assert.equal(summary.stats.unassignedToolArtifactCount, 0);
+  assert.equal(summary.stats.attachmentCount, 1);
+});
+
+test("session display summary does not guess ownership for an unmatched tool artifact turn", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "s-unmatched-artifact",
+    messages: [
+      {
+        id: "assistant-one",
+        role: "assistant",
+        content: "first result",
+        turnScopeId: "turn-one",
+        dialogProcessId: "dialog-one",
+      },
+      {
+        role: "tool",
+        type: "tool_result",
+        tool_call_id: "call-other",
+        turnScopeId: "turn-other",
+        dialogProcessId: "dialog-other",
+        attachments: [{ attachmentId: "artifact-other", name: "other.txt" }],
+      },
+    ],
+  });
+
+  assert.equal(summary.messages[0].toolTimeline, undefined);
+  assert.equal(summary.stats.displayToolLogCount, 0);
+  assert.equal(summary.stats.unassignedToolArtifactCount, 1);
+  assert.equal(summary.stats.attachmentCount, 0);
+});
+
 test("session artifact persistence should normalize attachment fields before writing", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s-attachments");

@@ -244,6 +244,87 @@ test("session save writes the display summary once", async () => {
   });
 });
 
+test("summary checkpoint receipts survive turn-journal persistence with historical targets", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const sessionId = "checkpoint-receipt";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId });
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+
+    const repository = runtime.repositories.sessionRepository;
+    const session = await repository.findById(userId, sessionId, "");
+    session.messages = [
+      {
+        messageUid: "sm_historical",
+        role: "assistant",
+        content: "historical guidance",
+        dialogProcessId: "dialog-old",
+        turnScopeId: "turn-old",
+      },
+      {
+        messageUid: "sm_current",
+        role: "user",
+        content: "current request",
+        dialogProcessId: "dialog-current",
+        turnScopeId: "turn-current",
+      },
+    ];
+    session.turnLifecycle = {
+      activeTurnScopeId: "turn-current",
+      turns: {
+        "turn-current": {
+          turnScopeId: "turn-current",
+          dialogProcessId: "dialog-current",
+          messageId: "message-current",
+          presentationMessageId: "presentation-current",
+          state: "processing",
+        },
+      },
+    };
+    await repository.save(userId, session, "");
+
+    const checkpoint = {
+      userId,
+      sessionId,
+      dialogProcessId: "dialog-current",
+      turnScopeId: "turn-current",
+      checkpointId: "checkpoint-with-history",
+      summarizedMessageUids: ["sm_historical"],
+    };
+    const committed = await runtime.sessionMessageService.commitTurnSummaryCheckpoint(checkpoint);
+    assert.equal(committed.committed, true);
+
+    const sessionFile = path.join(
+      workspaceRoot,
+      userId,
+      "runtime",
+      "session",
+      sessionId,
+      "session.json",
+    );
+    const manifest = JSON.parse(await readFile(sessionFile, "utf8"));
+    assert.equal("messages" in manifest, false);
+    assert.deepEqual(
+      manifest.turnSummaryCheckpoints["turn-current"].receipts[0].summarizedMessageUids,
+      ["sm_historical"],
+    );
+
+    const reloaded = await repository.findById(userId, sessionId, "");
+    assert.equal(
+      reloaded.messages.find((message) => message.messageUid === "sm_historical").summarized,
+      true,
+    );
+    assert.deepEqual(
+      reloaded.turnSummaryCheckpoints["turn-current"].receipts[0].summarizedMessageUids,
+      ["sm_historical"],
+    );
+    const replay = await runtime.sessionMessageService.commitTurnSummaryCheckpoint(checkpoint);
+    assert.equal(replay.deduplicated, true);
+  });
+});
+
 test("concurrent saves for different sessions preserve every sessions summary entry", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
@@ -657,6 +738,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
       {
         id: "a1",
         role: "assistant",
+        turnScopeId: "turn-scope-u1",
+        dialogProcessId: "dp-u1",
         content: longAssistantContent,
         activityTimeline: [{
           eventId: "activity-1", event: "thinking", sequence: 1,
@@ -702,6 +785,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         role: "tool",
         type: "tool_result",
         turnScopeId: "turn-scope-u1",
+        dialogProcessId: "dp-u1",
         tool_call_id: "call-1",
         content: JSON.stringify({
           toolName: "write_file",
@@ -839,17 +923,20 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.toolLogCount, 5);
     assert.equal(summary.stats.displayToolLogCount, 1);
     assert.equal(summary.stats.hasToolDetails, true);
-    assert.equal(summary.toolLogSummaries.length, 1);
-    assert.equal(summary.toolLogSummaries[0].type, "tool_result");
-    assert.equal(summary.toolLogSummaries[0].turnScopeId, "turn-scope-u1");
-    assert.deepEqual(summary.toolLogSummaries[0].writtenFiles, [{
+    assert.equal("toolLogSummaries" in summary, false);
+    const assistantMessage = summary.messages.find((item) => item.id === "a1");
+    assert.equal(assistantMessage.toolTimeline.length, 1);
+    assert.equal(assistantMessage.toolTimeline[0].status, "completed");
+    assert.equal(assistantMessage.toolTimeline[0].resultEvent.log.type, "tool_result");
+    assert.equal(assistantMessage.toolTimeline[0].resultEvent.log.turnScopeId, "turn-scope-u1");
+    assert.deepEqual(assistantMessage.toolTimeline[0].resultEvent.writtenFiles, [{
       toolName: "write_file",
       resolvedPath: "/workspace/u1/project/a.txt",
       fileName: "a.txt",
       sourceType: "tool",
       recognized: false,
     }]);
-    assert.equal(JSON.stringify(summary.toolLogSummaries).includes("ordinary tool result"), false);
+    assert.equal(JSON.stringify(assistantMessage.toolTimeline).includes("ordinary tool result"), false);
 
     const userMessage = summary.messages.find((item) => item.id === "u1");
     assert.equal(userMessage.turnScopeId, "turn-scope-u1");
@@ -867,7 +954,6 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("id" in userMessage.attachments[0], false);
     assert.equal("type" in userMessage.attachments[0], false);
     assert.equal("source" in userMessage.attachments[0], false);
-    const assistantMessage = summary.messages.find((item) => item.id === "a1");
     assert.equal(assistantMessage.content, longAssistantContent);
     assert.equal(assistantMessage.content.endsWith(assistantContentTail), true);
     assert.equal(assistantMessage.content.includes(`${assistantContentTail}…`), false);
@@ -952,7 +1038,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(displayData.summary, true);
     assert.equal(displayData.sessions.length, 1);
     assert.equal(displayData.sessions[0].depth, 2);
-    assert.equal(displayData.sessions[0].toolLogSummaries.every((item) => item.depth === 2), true);
+    assert.equal("toolLogSummaries" in displayData.sessions[0], false);
     summary = JSON.parse(await readFile(summaryFile, "utf8"));
     assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
     assert.equal(summary.sessionId, "B");

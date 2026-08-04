@@ -31,7 +31,11 @@ import {
   persistHarnessMessageToCurrentTurn,
 } from "../shared/message/injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../shared/runtime/dialog-process-id.js";
-import { appendMessage } from "../../../core/message-store.js";
+import {
+  appendMessage,
+  replaceMessages,
+  resolveModelMessages,
+} from "../../../core/message-store.js";
 import { isHarnessInjectedMessage } from "../shared/message/utils.js";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
@@ -92,13 +96,9 @@ function removeCurrentTaskGoalInjectedMessagesFromList(messages = []) {
 }
 
 function removeCurrentTaskGoalInjectedMessages(ctx = {}) {
-  let removed = removeCurrentTaskGoalInjectedMessagesFromList(ctx?.messages);
-  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
-  if (blocks) {
-    removed += removeCurrentTaskGoalInjectedMessagesFromList(blocks.system);
-    removed += removeCurrentTaskGoalInjectedMessagesFromList(blocks.history);
-    removed += removeCurrentTaskGoalInjectedMessagesFromList(blocks.incremental);
-  }
+  const messages = resolveModelMessages(ctx);
+  const removed = removeCurrentTaskGoalInjectedMessagesFromList(messages);
+  if (removed) replaceMessages(ctx, messages);
   return removed;
 }
 
@@ -111,9 +111,8 @@ function buildCurrentTaskGoalSystemContent(currentTaskGoal = "") {
 }
 
 function injectCurrentTaskGoalSystemMessage(ctx = {}, currentTaskGoal = "") {
-  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
   const normalizedGoal = String(currentTaskGoal || "").trim();
-  if (!messages || !normalizedGoal) return false;
+  if (!normalizedGoal) return false;
   removeCurrentTaskGoalInjectedMessages(ctx);
   const message = buildHarnessInjectedMessage(
     buildCurrentTaskGoalSystemContent(normalizedGoal),

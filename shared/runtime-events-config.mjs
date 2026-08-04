@@ -18,30 +18,35 @@ export const RUNTIME_EVENTS_CONFIG_ENVS = deepFreeze({
     maxArchives: "NOOBOT_RUNTIME_EVENTS_MAX_ARCHIVES",
   },
   sessionLogControls: {
-    stateLog: "NOOBOT_RUNTIME_EVENT_STATE_LOG",
-    messageLog: "NOOBOT_RUNTIME_EVENT_MESSAGE_LOG",
-    interactionLog: "NOOBOT_RUNTIME_EVENT_INTERACTION_LOG",
-    transportLog: "NOOBOT_RUNTIME_EVENT_TRANSPORT_LOG",
-    agentProxyLog: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_LOG",
-    systemLog: "NOOBOT_RUNTIME_EVENT_SYSTEM_LOG",
-    stateMachineDebug: "NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG",
-    resendDebug: "NOOBOT_RUNTIME_EVENT_RESEND_DEBUG",
-    stopDebug: "NOOBOT_RUNTIME_EVENT_STOP_DEBUG",
-    sessionLogWsDebug: "NOOBOT_RUNTIME_EVENT_SESSION_LOG_WS_DEBUG",
-    frontendStopContinueDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_STOP_CONTINUE_DEBUG",
-    frontendReconnectTimingDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_RECONNECT_TIMING_DEBUG",
-    frontendThinkingReplayDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_THINKING_REPLAY_DEBUG",
-    timelinePipelineDebug: "NOOBOT_RUNTIME_EVENT_TIMELINE_PIPELINE_DEBUG",
-    frontendToolLogWindowDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_TOOL_LOG_WINDOW_DEBUG",
-    frontendTerminalResolutionDebug: "NOOBOT_RUNTIME_EVENT_FRONTEND_TERMINAL_RESOLUTION_DEBUG",
-    agentProxyRouteDebug: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_ROUTE_DEBUG",
-    workflowDiagnosticsDebug: "NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG",
-    frontendLifecycleLog: "NOOBOT_RUNTIME_EVENT_FRONTEND_LIFECYCLE_LOG",
-    agentProxyHttpLog: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_HTTP_LOG",
-    agentProxyWebSocketLog: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_WEBSOCKET_LOG",
-    agentProxyRouteLog: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_ROUTE_LOG",
-    backendWebSocketLog: "NOOBOT_RUNTIME_EVENT_BACKEND_WEBSOCKET_LOG",
-    backendLifecycleLog: "NOOBOT_RUNTIME_EVENT_BACKEND_LIFECYCLE_LOG",
+    log: {
+      state: "NOOBOT_RUNTIME_EVENT_STATE_LOG",
+      message: "NOOBOT_RUNTIME_EVENT_MESSAGE_LOG",
+      interaction: "NOOBOT_RUNTIME_EVENT_INTERACTION_LOG",
+      transport: "NOOBOT_RUNTIME_EVENT_TRANSPORT_LOG",
+      agentProxy: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_LOG",
+      system: "NOOBOT_RUNTIME_EVENT_SYSTEM_LOG",
+      frontendLifecycle: "NOOBOT_RUNTIME_EVENT_FRONTEND_LIFECYCLE_LOG",
+      agentProxyHttp: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_HTTP_LOG",
+      agentProxyWebSocket: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_WEBSOCKET_LOG",
+      agentProxyRoute: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_ROUTE_LOG",
+      backendWebSocket: "NOOBOT_RUNTIME_EVENT_BACKEND_WEBSOCKET_LOG",
+      backendLifecycle: "NOOBOT_RUNTIME_EVENT_BACKEND_LIFECYCLE_LOG",
+    },
+    debug: {
+      stateMachine: "NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG",
+      resend: "NOOBOT_RUNTIME_EVENT_RESEND_DEBUG",
+      stop: "NOOBOT_RUNTIME_EVENT_STOP_DEBUG",
+      sessionLogWs: "NOOBOT_RUNTIME_EVENT_SESSION_LOG_WS_DEBUG",
+      frontendStopContinue: "NOOBOT_RUNTIME_EVENT_FRONTEND_STOP_CONTINUE_DEBUG",
+      frontendReconnectTiming: "NOOBOT_RUNTIME_EVENT_FRONTEND_RECONNECT_TIMING_DEBUG",
+      frontendThinkingReplay: "NOOBOT_RUNTIME_EVENT_FRONTEND_THINKING_REPLAY_DEBUG",
+      timelinePipeline: "NOOBOT_RUNTIME_EVENT_TIMELINE_PIPELINE_DEBUG",
+      frontendToolLogWindow: "NOOBOT_RUNTIME_EVENT_FRONTEND_TOOL_LOG_WINDOW_DEBUG",
+      frontendTerminalResolution: "NOOBOT_RUNTIME_EVENT_FRONTEND_TERMINAL_RESOLUTION_DEBUG",
+      agentProxyRoute: "NOOBOT_RUNTIME_EVENT_AGENT_PROXY_ROUTE_DEBUG",
+      workflowDiagnostics: "NOOBOT_RUNTIME_EVENT_WORKFLOW_DIAGNOSTICS_DEBUG",
+      contextIdentity: "NOOBOT_RUNTIME_EVENT_CONTEXT_IDENTITY_DEBUG",
+    },
   },
   hookRuntimeEvents: {
     mode: "NOOBOT_HOOK_RUNTIME_EVENTS_MODE",
@@ -59,30 +64,35 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
     maxArchives: 20,
   },
   sessionLogControls: {
-    stateLog: true,
-    messageLog: true,
-    interactionLog: true,
-    transportLog: true,
-    agentProxyLog: true,
-    systemLog: true,
-    stateMachineDebug: true,
-    resendDebug: true,
-    stopDebug: true,
-    sessionLogWsDebug: false,
-    frontendStopContinueDebug: false,
-    frontendReconnectTimingDebug: false,
-    frontendThinkingReplayDebug: false,
-    timelinePipelineDebug: true,
-    frontendToolLogWindowDebug: false,
-    frontendTerminalResolutionDebug: false,
-    agentProxyRouteDebug: false,
-    workflowDiagnosticsDebug: true,
-    frontendLifecycleLog: true,
-    agentProxyHttpLog: true,
-    agentProxyWebSocketLog: true,
-    agentProxyRouteLog: true,
-    backendWebSocketLog: true,
-    backendLifecycleLog: true,
+    log: {
+      state: true,
+      message: true,
+      interaction: true,
+      transport: true,
+      agentProxy: true,
+      system: true,
+      frontendLifecycle: true,
+      agentProxyHttp: true,
+      agentProxyWebSocket: true,
+      agentProxyRoute: true,
+      backendWebSocket: true,
+      backendLifecycle: true,
+    },
+    debug: {
+      stateMachine: false,
+      resend: false,
+      stop: false,
+      sessionLogWs: false,
+      frontendStopContinue: false,
+      frontendReconnectTiming: false,
+      frontendThinkingReplay: false,
+      timelinePipeline: false,
+      frontendToolLogWindow: false,
+      frontendTerminalResolution: false,
+      agentProxyRoute: false,
+      workflowDiagnostics: false,
+      contextIdentity: true,
+    },
   },
   hookRuntimeEvents: {
     mode: "summary",
@@ -100,33 +110,34 @@ export const RUNTIME_EVENTS_EXECUTION_LOG_EVENT_CONTROLS = deepFreeze({
 });
 
 export const RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS = deepFreeze({
-  state: "stateLog",
-  message: "messageLog",
-  interaction: "interactionLog",
-  transport: "transportLog",
-  "agent-proxy": "agentProxyLog",
-  system: "systemLog",
-  "frontend-lifecycle": "frontendLifecycleLog",
-  "agent-proxy-http": "agentProxyHttpLog",
-  "agent-proxy-websocket": "agentProxyWebSocketLog",
-  "agent-proxy-route": "agentProxyRouteLog",
-  "backend-websocket": "backendWebSocketLog",
-  "backend-lifecycle": "backendLifecycleLog",
+  state: "state",
+  message: "message",
+  interaction: "interaction",
+  transport: "transport",
+  "agent-proxy": "agentProxy",
+  system: "system",
+  "frontend-lifecycle": "frontendLifecycle",
+  "agent-proxy-http": "agentProxyHttp",
+  "agent-proxy-websocket": "agentProxyWebSocket",
+  "agent-proxy-route": "agentProxyRoute",
+  "backend-websocket": "backendWebSocket",
+  "backend-lifecycle": "backendLifecycle",
 });
 
 export const RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES = deepFreeze({
-  "state-machine": { controlKey: "stateMachineDebug", exposeToClient: true },
-  resend: { controlKey: "resendDebug", exposeToClient: true },
-  stop: { controlKey: "stopDebug", exposeToClient: true },
-  "session-log-ws": { controlKey: "sessionLogWsDebug", exposeToClient: false },
-  "stop-continue": { controlKey: "frontendStopContinueDebug", exposeToClient: true },
-  "reconnect-timing": { controlKey: "frontendReconnectTimingDebug", exposeToClient: true },
-  "thinking-replay": { controlKey: "frontendThinkingReplayDebug", exposeToClient: true },
-  "timeline-pipeline": { controlKey: "timelinePipelineDebug", exposeToClient: false },
-  "tool-log-window": { controlKey: "frontendToolLogWindowDebug", exposeToClient: true },
-  "terminal-resolution": { controlKey: "frontendTerminalResolutionDebug", exposeToClient: true },
-  "agent-proxy-route": { controlKey: "agentProxyRouteDebug", exposeToClient: false },
-  "workflow-diagnostics": { controlKey: "workflowDiagnosticsDebug", exposeToClient: true },
+  "state-machine": { controlKey: "stateMachine", exposeToClient: true },
+  resend: { controlKey: "resend", exposeToClient: true },
+  stop: { controlKey: "stop", exposeToClient: true },
+  "session-log-ws": { controlKey: "sessionLogWs", exposeToClient: false },
+  "stop-continue": { controlKey: "frontendStopContinue", exposeToClient: true },
+  "reconnect-timing": { controlKey: "frontendReconnectTiming", exposeToClient: true },
+  "thinking-replay": { controlKey: "frontendThinkingReplay", exposeToClient: true },
+  "timeline-pipeline": { controlKey: "timelinePipeline", exposeToClient: false },
+  "tool-log-window": { controlKey: "frontendToolLogWindow", exposeToClient: true },
+  "terminal-resolution": { controlKey: "frontendTerminalResolution", exposeToClient: true },
+  "agent-proxy-route": { controlKey: "agentProxyRoute", exposeToClient: false },
+  "workflow-diagnostics": { controlKey: "workflowDiagnostics", exposeToClient: true },
+  "context-identity": { controlKey: "contextIdentity", exposeToClient: false },
 });
 
 export const HOOK_RUNTIME_EVENT_VERBOSE_VALUES = deepFreeze([
@@ -192,9 +203,12 @@ export function resolveRuntimeEventsStorageConfig(env = process.env) {
 export function resolveRuntimeEventsSessionLogControls(env = process.env, overrides = {}) {
   const defaults = RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls;
   const envs = RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls;
-  const result = {};
-  for (const key of Object.keys(defaults)) {
-    result[key] = overrides[key] ?? resolveBooleanEnv(env, envs[key], defaults[key]);
+  const result = { log: {}, debug: {} };
+  for (const domain of ["log", "debug"]) {
+    for (const key of Object.keys(defaults[domain])) {
+      result[domain][key] = overrides?.[domain]?.[key]
+        ?? resolveBooleanEnv(env, envs[domain][key], defaults[domain][key]);
+    }
   }
   return result;
 }
@@ -224,6 +238,13 @@ export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
     ) {
       return true;
     }
+  }
+  if (String(event?.category || "").trim().toLowerCase() === "context_identity") {
+    const controls = resolveRuntimeEventsSessionLogControls(
+      options.env || process.env,
+      options.sessionLogControls || {},
+    );
+    return controls.debug.contextIdentity === true;
   }
   const eventName = String(
     typeof event === "string" ? event : event?.event || event?.name || "",

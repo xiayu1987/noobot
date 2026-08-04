@@ -138,6 +138,7 @@ export function createStateCommitter({
       modelAlias = "",
       modelName = "",
       messageId = "",
+      messageUid = "",
       presentationMessageId = "",
       chatPresentation = false,
     } = {}) {
@@ -159,8 +160,9 @@ export function createStateCommitter({
           ? [{ ...canonicalModelContent, log: canonicalModelContent }]
           : []),
       ];
+      const canonicalMessageUid = String(messageUid || "").trim() || createSessionMessageUid();
       const assistantMessage = {
-        messageUid: createSessionMessageUid(),
+        messageUid: canonicalMessageUid,
         role: "assistant",
         content: String(content || ""),
         type,
@@ -191,6 +193,10 @@ export function createStateCommitter({
             : null,
       };
       applyAuthoritativeMessageId(assistantMessage, messageId);
+      if (!assistantMessage.additional_kwargs || typeof assistantMessage.additional_kwargs !== "object") {
+        assistantMessage.additional_kwargs = {};
+      }
+      assistantMessage.additional_kwargs.noobotMessageId = canonicalMessageUid;
       await runAgentRuntimeHook({
         runtime,
         point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
@@ -270,6 +276,7 @@ export function createStateCommitter({
       const toolMessage = new ToolMessage({
         tool_call_id: resolvedCallId,
         content: normalizedToolResultText,
+        additional_kwargs: { noobotMessageId: messageUid },
       });
       if (messageHolder && typeof messageHolder === "object") {
         appendMessage(messageHolder, toolMessage, { block: "incremental" });

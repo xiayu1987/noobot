@@ -160,9 +160,7 @@ Harness 调用 Agent 时不再维护独立上下文窗口：
   - 轮次触发：`state.counters.summaryTurns > LLM_SUMMARY_THRESHOLD`（默认 `8`）
   - 字符触发：`unsummarized_chars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD`（默认 `200000`）
   - 工具爆发触发：启用后在 `after_tool_calls` 根据工具调用数量触发
-- 溢出裁剪策略（`SUMMARY_POLICY.OVERFLOW_POLICY`）：
-  - `ENABLE_PRUNE_AFTER_SUMMARY`
-  - `PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS`
+- 小结后仍溢出的处理策略（`SUMMARY_POLICY.OVERFLOW_POLICY`）：
   - `FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW`
 - Analysis 触发：
   - `state.counters.analysisTurns >= ANALYSIS_TRIGGER_TURNS_THRESHOLD`

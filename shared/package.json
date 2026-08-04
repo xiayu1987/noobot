@@ -11,6 +11,7 @@
     "./bot-dispatch-protocol": "./bot-dispatch-protocol.mjs",
     "./message-event-protocol": "./message-event-protocol.mjs",
     "./turn-replacement-protocol": "./turn-replacement-protocol.mjs",
+    "./turn-commit-protocol": "./turn-commit-protocol.mjs",
     "./turn-scope-identity": "./turn-scope-identity.mjs",
     "./workflow-runtime-event-protocol": "./workflow-runtime-event-protocol.mjs",
     "./time-thresholds": "./time-thresholds.mjs",

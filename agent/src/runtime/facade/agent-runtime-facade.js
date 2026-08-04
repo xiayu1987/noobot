@@ -86,10 +86,10 @@ export class AgentRuntimeFacade {
     };
   }
 
-  async runTurn({ agentContext, userMessage, errorLogger = null } = {}) {
+  async runTurn({ agentContext, currentUserMessage, errorLogger = null } = {}) {
     return this.turnRunner({
       agentContext,
-      userMessage,
+      currentUserMessage,
       errorLogger,
     });
   }

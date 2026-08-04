@@ -29,6 +29,59 @@ function checkpointConflict(message = "", code = "TURN_SUMMARY_CHECKPOINT_CONFLI
   return error;
 }
 
+function resolveToolCalls(message = {}) {
+  if (Array.isArray(message?.tool_calls)) return message.tool_calls;
+  if (Array.isArray(message?.lc_kwargs?.tool_calls)) return message.lc_kwargs.tool_calls;
+  return [];
+}
+
+function resolveToolCallId(message = {}) {
+  return String(
+    message?.tool_call_id ||
+      message?.toolCallId ||
+      message?.lc_kwargs?.tool_call_id ||
+      "",
+  ).trim();
+}
+
+function toolPairKey(message = {}, callId = "") {
+  return [
+    resolveMessageDialogProcessId(message),
+    String(message?.turnScopeId || "").trim(),
+    String(callId || "").trim(),
+  ].join("\u0000");
+}
+
+function assertSummarizedToolPairClosure(messages = [], summarizedMessageUids = []) {
+  const summarizedSet = new Set(summarizedMessageUids);
+  const callOwnerById = new Map();
+  const resultUidsByCallId = new Map();
+  for (const message of messages) {
+    const messageUid = String(message?.messageUid || "").trim();
+    if (!messageUid) continue;
+    for (const call of resolveToolCalls(message)) {
+      const callId = String(call?.id || call?.tool_call_id || "").trim();
+      if (callId) callOwnerById.set(toolPairKey(message, callId), messageUid);
+    }
+    const resultCallId = resolveToolCallId(message);
+    if (!resultCallId) continue;
+    const pairKey = toolPairKey(message, resultCallId);
+    const resultUids = resultUidsByCallId.get(pairKey) || [];
+    resultUids.push(messageUid);
+    resultUidsByCallId.set(pairKey, resultUids);
+  }
+  for (const [pairKey, ownerUid] of callOwnerById.entries()) {
+    const pairUids = [ownerUid, ...(resultUidsByCallId.get(pairKey) || [])];
+    const selectedCount = pairUids.filter((messageUid) => summarizedSet.has(messageUid)).length;
+    if (selectedCount === 0 || selectedCount === pairUids.length) continue;
+    const callId = pairKey.slice(pairKey.lastIndexOf("\u0000") + 1);
+    throw checkpointConflict(
+      `summary checkpoint splits tool call pair: ${callId}`,
+      "TURN_SUMMARY_CHECKPOINT_TOOL_PAIR_SPLIT",
+    );
+  }
+}
+
 export async function commitTurnSummaryCheckpoint({
   userId,
   sessionId,
@@ -69,8 +122,15 @@ export async function commitTurnSummaryCheckpoint({
     if (lifecycleTurn && resolveMessageDialogProcessId(lifecycleTurn) !== normalizedDialogProcessId) {
       throw checkpointConflict("checkpoint does not own the lifecycle turn", "TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT");
     }
-    if (lifecycleTurn && isTerminalTurnLifecycleState(lifecycleTurn.state)) {
-      throw checkpointConflict("checkpoint cannot modify a terminal turn", "TURN_SUMMARY_CHECKPOINT_TERMINAL");
+    if (
+      lifecycleTurn &&
+      isTerminalTurnLifecycleState(lifecycleTurn.state) &&
+      normalizedPersistedUids.length
+    ) {
+      throw checkpointConflict(
+        "terminal checkpoint cannot persist additional messages",
+        "TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE",
+      );
     }
     const activeTurnScopeId = String(session?.turnLifecycle?.activeTurnScopeId || "").trim();
     if (activeTurnScopeId && activeTurnScopeId !== normalizedTurnScopeId) {
@@ -116,18 +176,29 @@ export async function commitTurnSummaryCheckpoint({
       const messageUid = String(message?.messageUid || "").trim();
       if (messageUid && requestedUids.has(messageUid)) messagesByUid.set(messageUid, message);
     }
-    for (const messageUid of requestedUids) {
+    const resolvedMessageUids = [...messagesByUid.keys()];
+    const unresolvedMessageUids = [...requestedUids].filter((messageUid) => !messagesByUid.has(messageUid));
+    if (unresolvedMessageUids.length) {
+      const error = checkpointConflict(
+        `checkpoint contains ${unresolvedMessageUids.length} missing message UIDs`,
+        "TURN_SUMMARY_CHECKPOINT_MESSAGE_MISSING",
+      );
+      error.requestedMessageIds = [...requestedUids];
+      error.resolvedMessageIds = resolvedMessageUids;
+      error.unresolvedMessageIds = unresolvedMessageUids;
+      throw error;
+    }
+    for (const messageUid of normalizedPersistedUids) {
       const message = messagesByUid.get(messageUid);
-      if (!message) {
-        throw checkpointConflict(`checkpoint message does not exist: ${messageUid}`, "TURN_SUMMARY_CHECKPOINT_MESSAGE_MISSING");
-      }
       if (
         resolveMessageDialogProcessId(message) !== normalizedDialogProcessId ||
         String(message?.turnScopeId || "").trim() !== normalizedTurnScopeId
       ) {
-        throw checkpointConflict(`checkpoint message is outside the current turn: ${messageUid}`, "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT");
+        throw checkpointConflict(`persisted checkpoint message is outside the current turn: ${messageUid}`, "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT");
       }
     }
+
+    assertSummarizedToolPairClosure(session.messages, normalizedSummarizedUids);
 
     const summarizedSet = new Set(normalizedSummarizedUids);
     let markedCount = 0;

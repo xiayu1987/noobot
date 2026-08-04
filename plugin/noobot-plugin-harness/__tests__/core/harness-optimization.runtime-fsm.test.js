@@ -16,14 +16,14 @@ import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { HARNESS_HOOK_POINTS } from "../../src/core/constants.js";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
-import { createPlanningHandler } from "../../src/capabilities/handlers/planning.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
-  markMessagesSummarized,
   relaySeparateModelOutputAsUserMessage,
 } from "../../src/capabilities/handlers/shared.js";
+import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 
 
@@ -139,11 +139,11 @@ test("takeover priority pipeline keeps higher priority takeover effective", asyn
     },
   });
 
-  const ctx = { messages: [{ role: "user", content: "hello" }] };
+  const ctx = createTestHookContext({}, { messages: [{ role: "user", content: "hello" }] });
   await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT, ctx, {});
 
-  assert.match(String(ctx.messages[0]?.content || ""), /guidance/);
-  assert.match(String(ctx.messages[1]?.content || ""), /planning/);
+  assert.match(String(ctx.modelContext.messages[0]?.content || ""), /guidance/);
+  assert.match(String(ctx.modelContext.messages[1]?.content || ""), /planning/);
 });
 
 test("capability runtime skips disabled planning guidance and acceptance handlers", async () => {
@@ -175,7 +175,9 @@ test("capability runtime skips disabled planning guidance and acceptance handler
     },
   });
 
-  const ctx = { messages: [{ role: "user", content: "hello" }], toolPolicy: {} };
+  const ctx = createTestHookContext({ toolPolicy: {} }, {
+    messages: [{ role: "user", content: "hello" }],
+  });
   const hooksWithDisabledCapabilities = [
     HARNESS_HOOK_POINTS.BEFORE_TURN,
     HARNESS_HOOK_POINTS.BEFORE_LLM_CALL,
@@ -203,8 +205,8 @@ test("capability runtime skips disabled planning guidance and acceptance handler
   assert.equal(calls.includes("planning"), false);
   assert.equal(calls.includes("guidance"), false);
   assert.equal(calls.includes("acceptance"), false);
-  assert.equal(String(ctx.messages[0]?.content || "").includes("planning"), false);
-  assert.equal(String(ctx.messages[0]?.content || "").includes("guidance"), false);
+  assert.equal(String(ctx.modelContext.messages[0]?.content || "").includes("planning"), false);
+  assert.equal(String(ctx.modelContext.messages[0]?.content || "").includes("guidance"), false);
   assert.deepEqual(ctx.toolPolicy, {});
 });
 

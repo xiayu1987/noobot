@@ -7,6 +7,7 @@ import {
   MAIN_MODEL_HISTORY_ROUND_LIMIT,
   resolveMainModelHistoryMessages,
 } from "../utils/context-window-normalizer.js";
+import { projectTerminalHistoryMessages } from "@noobot/context-protocol/terminal-history-policy";
 
 export class SessionContextService {
   constructor({
@@ -24,15 +25,15 @@ export class SessionContextService {
     };
   }
 
-  async _getSessionContextSource({ userId, sessionId }) {
-    if (this.sessionMessageService?.getSessionContextSource) {
-      return this.sessionMessageService.getSessionContextSource({ userId, sessionId });
+  async _getSessionContextSource({ userId, sessionId, parentSessionId = "" }) {
+    if (!this.sessionMessageService?.getSessionContextSource) {
+      throw new Error("session Context requires the authoritative messages and turnStatuses snapshot");
     }
-    if (!this.sessionMessageService?.getSessionTurns) return { messages: [], dialogOrder: [] };
-    return {
-      messages: await this.sessionMessageService.getSessionTurns({ userId, sessionId }),
-      dialogOrder: [],
-    };
+    return this.sessionMessageService.getSessionContextSource({
+      userId,
+      sessionId,
+      parentSessionId,
+    });
   }
 
   _filterCurrentTurnMessages(messages = [], { currentTurnScopeId = "" } = {}) {
@@ -66,6 +67,7 @@ export class SessionContextService {
   async getRecentSessionMessages({
     userId,
     sessionId,
+    parentSessionId = "",
     userConfig = {},
     limit = null,
     currentTurnScopeId = "",
@@ -74,21 +76,29 @@ export class SessionContextService {
     void userConfig;
     void limit;
     const config = this._sessionContextConfig(userConfig);
-    const source = await this._getSessionContextSource({ userId, sessionId });
+    const source = await this._getSessionContextSource({ userId, sessionId, parentSessionId });
     const messages = this._filterCurrentRunMessages(
       source.messages,
       { currentTurnScopeId, currentDialogProcessId },
     );
+    const turnStatuses = this._filterCurrentRunMessages(
+      source.turnStatuses,
+      { currentTurnScopeId, currentDialogProcessId },
+    );
+    const terminalHistoryMessages = projectTerminalHistoryMessages({
+      messages,
+      turnStatuses,
+    });
     return resolveMainModelHistoryMessages({
-      sourceMessages: messages,
+      sourceMessages: terminalHistoryMessages,
       historyLimit: config.historyRoundLimit,
-      dialogOrder: source.dialogOrder,
     });
   }
 
   async getContextRecords({
     userId,
     sessionId,
+    parentSessionId = "",
     userConfig = {},
     currentTurnScopeId = "",
     currentDialogProcessId = "",
@@ -97,6 +107,7 @@ export class SessionContextService {
     return this.getRecentSessionMessages({
       userId,
       sessionId,
+      parentSessionId,
       userConfig,
       limit: config.historyRoundLimit,
       currentTurnScopeId,

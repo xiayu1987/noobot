@@ -61,24 +61,20 @@ export function resolveCapabilityModelName(meta = {}, { purpose = "", domain = "
 
 export function resolveCapabilityModelMessages(
   meta = {},
-  { ctx = {}, purpose = "", messages = [] } = {},
+  { ctx = {}, purpose = "" } = {},
 ) {
-  const hasExplicitMessages = Array.isArray(messages) && messages.length > 0;
-  const sourceMessages = hasExplicitMessages ? messages : [];
   const resolver = meta?.harness?.resolveModelMessages;
-  if (typeof resolver === "function") {
-    try {
-      const resolved = resolver({
-        ctx,
-        purpose: String(purpose || "").trim(),
-        messages: hasExplicitMessages ? sourceMessages : [],
-      });
-      if (Array.isArray(resolved)) return resolved;
-    } catch {
-      return sourceMessages;
-    }
+  if (typeof resolver !== "function") {
+    throw new Error("capability model messages require the authoritative modelContext resolver");
   }
-  return sourceMessages;
+  const resolved = resolver({
+    ctx,
+    purpose: String(purpose || "").trim(),
+  });
+  if (!Array.isArray(resolved)) {
+    throw new Error("authoritative modelContext resolver must return a message array");
+  }
+  return resolved;
 }
 
 export function resolveCapabilityToolAllowlist(meta = {}, purpose = "") {

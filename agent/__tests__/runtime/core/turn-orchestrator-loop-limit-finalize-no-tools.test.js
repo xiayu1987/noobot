@@ -137,7 +137,7 @@ test("when model returns no tool calls, return directly without a retry prompt",
   assert.equal(capturedInvocations.length, 1);
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
   assert.equal(events.some((item) => item?.event === "tool_choice_required_retry_prompted"), false);
-  const retryPrompt = loopState.messageBlocks.incremental.find((messageItem) => {
+  const retryPrompt = loopState.modelContext.messageBlocks.incremental.find((messageItem) => {
     const marker =
       messageItem?.additional_kwargs?.noobotInternalMessageType ||
       messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
@@ -145,7 +145,7 @@ test("when model returns no tool calls, return directly without a retry prompt",
     return marker === "tool_choice_required_retry_prompt";
   });
   assert.equal(retryPrompt, undefined);
-  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
+  assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
 });
 
 test("safeConfirm does not force tool calls", async () => {

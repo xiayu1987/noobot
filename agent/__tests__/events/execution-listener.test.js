@@ -97,6 +97,36 @@ test("execution listener persists events in source order and exposes a durabilit
   assert.deepEqual(calls, [4, 5]);
 });
 
+test("execution listener classifies context identity diagnostics under one protocol category", async () => {
+  const persisted = [];
+  const listener = createExecutionEventListener({
+    sessionManager: {
+      appendExecutionLog: async (record) => persisted.push(record),
+    },
+    userId: "user-a",
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    upstream: { dialogProcessId: "dialog-a", onEvent: async () => true },
+  });
+
+  await listener.onEvent({
+    event: "agent.contextIdentity.modelContextCreated",
+    data: {
+      debugType: "context-identity",
+      dialogProcessId: "dialog-a",
+      turnScopeId: "turn-a",
+      sourceMessageUid: "sm_1",
+    },
+  });
+  await listener.flushPersistence();
+
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].category, "context_identity");
+  assert.equal(persisted[0].type, "context_identity_debug");
+  assert.equal(persisted[0].data.debugType, "context-identity");
+  assert.equal(persisted[0].data.sourceMessageUid, "sm_1");
+});
+
 test("execution listener exposes rejected asynchronous upstream delivery at the final barrier", async () => {
   const listener = createExecutionEventListener({
     sessionId: "session-a",

@@ -11,6 +11,60 @@ import {
   resolveFinalResponseBodyText,
 } from './response-body.js';
 
+function normalizeTerminalError(error = null) {
+  if (!error) return null;
+  return {
+    name: String(error?.name || '').trim() || undefined,
+    message: String(error?.message || error?.code || error?.type || '').trim() || undefined,
+    code: String(error?.code || '').trim() || undefined,
+  };
+}
+
+function createRequestLogLifecycle({ logger, context = {} } = {}) {
+  let requestLogged = false;
+  let terminalLogged = false;
+  let pendingTerminal = null;
+
+  function writeTerminal(terminal = {}) {
+    if (terminalLogged) return false;
+    terminalLogged = true;
+    logger.logTerminal({ ...context, ...terminal });
+    return true;
+  }
+
+  function recordRequest(request = {}) {
+    if (requestLogged) return false;
+    requestLogged = true;
+    logger.logRequest({ ...context, ...request });
+    if (pendingTerminal) {
+      const terminal = pendingTerminal;
+      pendingTerminal = null;
+      writeTerminal(terminal);
+    }
+    return true;
+  }
+
+  function settle(terminal = {}) {
+    if (terminalLogged || pendingTerminal) return false;
+    if (!requestLogged) {
+      pendingTerminal = terminal;
+      return true;
+    }
+    return writeTerminal(terminal);
+  }
+
+  return {
+    recordRequest,
+    settle,
+    get requestLogged() {
+      return requestLogged;
+    },
+    get terminalLogged() {
+      return terminalLogged;
+    },
+  };
+}
+
 function createHeaderExtractors({
   modelNameHeaderKey,
   parentSessionIdHeaderKey,
@@ -73,34 +127,40 @@ function createProxyServer({
     secure: false,
   });
 
-  function logRequestStream(req) {
+  function createRequestContext(req) {
+    return {
+      modelName: headerExtractors.extractModelNameFromHeaders(req?.headers) || unknownModelName,
+      flowName: headerExtractors.extractFlowFromHeaders(req?.headers) || unknownFlowName,
+      sessionId: headerExtractors.extractSessionIdFromHeaders(req?.headers) || unknownSessionId,
+      parentSessionId: headerExtractors.extractParentSessionIdFromHeaders(req?.headers),
+    };
+  }
+
+  function logRequestStream(req, lifecycle, context) {
     const chunks = [];
-    req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-    req.on('end', () => {
-      const bodyBuffer = Buffer.concat(chunks);
-      const bodyText = bodyBuffer.toString('utf8');
-      const modelName = headerExtractors.extractModelNameFromHeaders(req?.headers) || unknownModelName;
-      const flowName = headerExtractors.extractFlowFromHeaders(req?.headers) || unknownFlowName;
-      const sessionId = headerExtractors.extractSessionIdFromHeaders(req?.headers) || unknownSessionId;
-      const parentSessionId = headerExtractors.extractParentSessionIdFromHeaders(req?.headers);
-      req.__logModelName = modelName;
-      req.__logFlowName = flowName;
-      req.__logSessionId = sessionId;
-      req.__logParentSessionId = parentSessionId;
-      logger.logRequest({
+    let bodyComplete = false;
+    const recordRequest = () => {
+      const bodyText = Buffer.concat(chunks).toString('utf8');
+      lifecycle.recordRequest({
         req,
         bodyText,
-        modelName,
-        flowName,
-        sessionId,
-        parentSessionId,
+        bodyComplete,
         cacheDiagnostics: buildRequestCacheDiagnostics({
           bodyText,
-          modelName,
-          flowName,
-          sessionId,
-          parentSessionId,
+          ...context,
         }),
+      });
+    };
+    req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    req.on('end', () => {
+      bodyComplete = true;
+      recordRequest();
+    });
+    req.on('aborted', () => {
+      recordRequest();
+      lifecycle.settle({
+        outcome: 'client_aborted',
+        error: { message: 'Client aborted before completing the request body.' },
       });
     });
   }
@@ -112,6 +172,25 @@ function createProxyServer({
       chunks.push(Buffer.from(chunk));
     });
 
+    const lifecycle = req.__requestLogLifecycle;
+    proxyRes.on('aborted', () => {
+      lifecycle?.settle({
+        outcome: 'upstream_aborted',
+        status: proxyRes.statusCode,
+        headers: proxyRes.headers,
+        error: { message: 'Upstream response was aborted.' },
+      });
+    });
+
+    proxyRes.on('error', (error) => {
+      lifecycle?.settle({
+        outcome: 'upstream_error',
+        status: proxyRes.statusCode,
+        headers: proxyRes.headers,
+        error: normalizeTerminalError(error),
+      });
+    });
+
     proxyRes.on('end', async () => {
       try {
         const raw = Buffer.concat(chunks);
@@ -121,29 +200,30 @@ function createProxyServer({
           text,
           proxyRes.headers['content-type'],
         );
-        logger.logResponse({
-          proxyRes,
+        lifecycle?.settle({
+          outcome: 'response',
+          status: proxyRes.statusCode,
+          headers: proxyRes.headers,
           bodyText: finalText,
           rawBodyText: text,
-          modelName: req.__logModelName || unknownModelName,
-          flowName: req.__logFlowName || unknownFlowName,
-          sessionId: req.__logSessionId || unknownSessionId,
-          parentSessionId: String(req.__logParentSessionId || '').trim(),
         });
       } catch (error) {
-        logger.appendLog(
-          `\n[Response Log Error] ${new Date().toLocaleString()} ${error.stack || error}\n`,
-          req.__logModelName || unknownModelName,
-          req.__logFlowName || unknownFlowName,
-          req.__logSessionId || unknownSessionId,
-          req.__logParentSessionId || '',
-        );
+        lifecycle?.settle({
+          outcome: 'response_decode_error',
+          status: proxyRes.statusCode,
+          headers: proxyRes.headers,
+          error: normalizeTerminalError(error),
+        });
       }
     });
   });
 
   proxy.on('error', (err, req, res) => {
     console.error(`[model-proxy:${localPort}] Proxy error:`, err);
+    req?.__requestLogLifecycle?.settle({
+      outcome: 'proxy_error',
+      error: normalizeTerminalError(err),
+    });
     if (res && !res.headersSent) {
       res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('Bad Gateway');
@@ -153,7 +233,17 @@ function createProxyServer({
   });
 
   const server = http.createServer((req, res) => {
-    logRequestStream(req);
+    const context = createRequestContext(req);
+    const lifecycle = createRequestLogLifecycle({ logger, context });
+    req.__requestLogLifecycle = lifecycle;
+    logRequestStream(req, lifecycle, context);
+    res.on('close', () => {
+      if (res.writableEnded) return;
+      lifecycle.settle({
+        outcome: 'client_aborted',
+        error: { message: 'Client disconnected before the response completed.' },
+      });
+    });
     proxy.web(req, res);
   });
 
@@ -167,4 +257,5 @@ function createProxyServer({
 export {
   createHeaderExtractors,
   createProxyServer,
+  createRequestLogLifecycle,
 };

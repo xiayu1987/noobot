@@ -9,7 +9,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
+import {
+  createTestHookContext,
+  createTestHookManager as createAgentHookManager,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
 import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
@@ -30,14 +33,13 @@ test("harness policy prompt is promoted to system when stale policy exists in me
     injectedBy: "harness-plugin",
     injectedMessageType: "harness_prompt:noobot-harness-policy",
   };
-  const ctx = {
-    messages: [{ role: "user", content: "current compacted window without policy" }],
+  const ctx = createTestHookContext({}, {
     messageBlocks: {
       system: [],
       history: [],
       incremental: [policyMessage],
     },
-  };
+  });
 
   await injectPrompt("before_llm_call", ctx, {
     enabled: true,
@@ -48,20 +50,20 @@ test("harness policy prompt is promoted to system when stale policy exists in me
   });
 
   assert.equal(
-    ctx.messages.filter((item = {}) =>
+    ctx.modelContext.messages.filter((item = {}) =>
       item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
     ).length,
     1,
   );
-  assert.equal(ctx.messages[0]?.role, "system");
+  assert.equal(ctx.modelContext.messages[0]?.role, "system");
   assert.equal(
-    ctx.messageBlocks.system.filter((item = {}) =>
+    ctx.modelContext.messageBlocks.system.filter((item = {}) =>
       item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy",
     ).length,
     1,
   );
   assert.equal(
-    ctx.messageBlocks.incremental.filter((item = {}) =>
+    ctx.modelContext.messageBlocks.incremental.filter((item = {}) =>
       item?.[HARNESS_PROMPT_INJECTION_ID_FIELD] === "noobot-harness-policy" ||
         String(item?.content || "").includes("noobot-harness-policy"),
     ).length,
@@ -71,7 +73,9 @@ test("harness policy prompt is promoted to system when stale policy exists in me
 
 test("harness policy prompt matrix exposes scenario without workflow mode", async () => {
   const buildInjectedPolicy = async (extraOptions = {}, ctxPatch = {}) => {
-    const ctx = { messages: [{ role: "user", content: "hello" }], ...ctxPatch };
+    const ctx = createTestHookContext(ctxPatch, {
+      messages: [{ role: "user", content: "hello" }],
+    });
     await injectPrompt("before_llm_call", ctx, {
       enabled: true,
       promptPolicy: true,
@@ -80,7 +84,7 @@ test("harness policy prompt matrix exposes scenario without workflow mode", asyn
       writePrompts: false,
       ...extraOptions,
     });
-    return String(ctx.messages[0]?.content || "");
+    return String(ctx.modelContext.messages[0]?.content || "");
   };
 
   const generalPrompt = await buildInjectedPolicy();
@@ -136,12 +140,8 @@ test("harness policy prompt is not reinjected during stopped snapshot resume ini
     "policy_prompt = harness_policy/programming",
     "[/HARNESS_POLICY_SELECTION]",
   ].join("\n");
-  const ctx = {
+  const ctx = createTestHookContext({
     turn: 1,
-    messages: [
-      { role: "system", content: existingPolicy },
-      { role: "user", content: "ID: dialog-a\nPATCH: continue" },
-    ],
     agentContext: {
       execution: {
         controllers: {
@@ -153,7 +153,12 @@ test("harness policy prompt is not reinjected during stopped snapshot resume ini
         },
       },
     },
-  };
+  }, {
+    messages: [
+      { role: "system", content: existingPolicy },
+      { role: "user", content: "ID: dialog-a\nPATCH: continue" },
+    ],
+  });
 
   await injectPrompt("before_llm_call", ctx, {
     enabled: true,
@@ -163,7 +168,7 @@ test("harness policy prompt is not reinjected during stopped snapshot resume ini
     writePrompts: false,
   });
 
-  const policyMessages = ctx.messages.filter((message = {}) =>
+  const policyMessages = ctx.modelContext.messages.filter((message = {}) =>
     String(message.content || "").includes("HARNESS_POLICY_SELECTION"),
   );
   assert.equal(policyMessages.length, 1);
@@ -177,12 +182,8 @@ test("harness policy prompt is not reinjected after stopped snapshot blocks are 
     "policy_prompt = harness_policy/programming",
     "[/HARNESS_POLICY_SELECTION]",
   ].join("\n");
-  const ctx = {
+  const ctx = createTestHookContext({
     turn: 2,
-    messages: [
-      { role: "system", content: existingPolicy },
-      { role: "user", content: "继续" },
-    ],
     agentContext: {
       execution: {
         controllers: {
@@ -197,7 +198,12 @@ test("harness policy prompt is not reinjected after stopped snapshot blocks are 
         },
       },
     },
-  };
+  }, {
+    messages: [
+      { role: "system", content: existingPolicy },
+      { role: "user", content: "继续" },
+    ],
+  });
 
   await injectPrompt("before_llm_call", ctx, {
     enabled: true,
@@ -207,7 +213,7 @@ test("harness policy prompt is not reinjected after stopped snapshot blocks are 
     writePrompts: false,
   });
 
-  const policyMessages = ctx.messages.filter((message = {}) =>
+  const policyMessages = ctx.modelContext.messages.filter((message = {}) =>
     String(message.content || "").includes("HARNESS_POLICY_SELECTION"),
   );
   assert.equal(policyMessages.length, 1);
@@ -215,9 +221,8 @@ test("harness policy prompt is not reinjected after stopped snapshot blocks are 
 });
 
 test("harness policy prompt is injected for normal first llm call", async () => {
-  const ctx = {
+  const ctx = createTestHookContext({
     turn: 1,
-    messages: [{ role: "user", content: "hello" }],
     agentContext: {
       execution: {
         controllers: {
@@ -228,7 +233,7 @@ test("harness policy prompt is injected for normal first llm call", async () => 
         },
       },
     },
-  };
+  }, { messages: [{ role: "user", content: "hello" }] });
 
   await injectPrompt("before_llm_call", ctx, {
     enabled: true,
@@ -239,7 +244,7 @@ test("harness policy prompt is injected for normal first llm call", async () => 
   });
 
   assert.equal(
-    ctx.messages.some((message = {}) => String(message.content || "").includes("HARNESS_POLICY_SELECTION")),
+    ctx.modelContext.messages.some((message = {}) => String(message.content || "").includes("HARNESS_POLICY_SELECTION")),
     true,
   );
 });

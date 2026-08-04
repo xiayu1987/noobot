@@ -19,6 +19,7 @@ export function toConversationMessages(sessionRecords = []) {
     const attachments = Array.isArray(item.attachments) ? item.attachments : [];
     const transferEnvelopes = normalizeTransferEnvelopesFromRecord(item);
     return {
+      messageUid: String(item?.messageUid || "").trim(),
       role: item.role || "user",
       content: item.content || "",
       rawModelContent:
@@ -38,7 +39,12 @@ export function toConversationMessages(sessionRecords = []) {
       injectedBy: item.injectedBy || "",
       injectedMessageType: item.injectedMessageType || item.injected_message_type || "",
       frontendUserMessage: item.frontendUserMessage === true,
+      messageOrigin: item.messageOrigin || "",
       pluginMessage: item.pluginMessage === true,
+      terminalHistoryProjection: item.terminalHistoryProjection === true,
+      terminalHistoryExplanation: item.terminalHistoryExplanation === true,
+      terminalStatus: item.terminalStatus || "",
+      terminalReason: item.terminalReason || "",
       tool_calls: Array.isArray(item.tool_calls) ? item.tool_calls : [],
       tool_call_id: item.tool_call_id || "",
       modelAdditionalKwargs:

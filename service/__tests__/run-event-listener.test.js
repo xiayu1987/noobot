@@ -30,6 +30,15 @@ test("run-event-listener forwards committed session version as a first-class eve
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       sessionVersion: 7,
+      userMessage: {
+        messageUid: "sm_1",
+        messageId: "frontend-user-1",
+        role: "user",
+        sessionId: "root-session",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+        attachments: [{ attachmentId: "attachment-1", sessionId: "root-session" }],
+      },
     },
   });
 
@@ -40,6 +49,15 @@ test("run-event-listener forwards committed session version as a first-class eve
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
       sessionVersion: 7,
+      userMessage: {
+        messageUid: "sm_1",
+        messageId: "frontend-user-1",
+        role: "user",
+        sessionId: "root-session",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+        attachments: [{ attachmentId: "attachment-1", sessionId: "root-session" }],
+      },
     },
   }]);
 });

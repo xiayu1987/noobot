@@ -9,7 +9,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
+import {
+  createTestHookContext,
+  createTestHookManager as createAgentHookManager,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
 import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
@@ -40,25 +43,29 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
       controllers: { runtime: { basePath, userId: "u1", systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" } } },
     },
     session: { current: { id: "s1", attachments: [], connectors: {} }, parent: { id: "", caller: "user" } },
-    payload: { messages: { system: [], history: [{ role: "user", content: "hi" }] } },
+    payload: {},
   };
 
-  await hookManager.emit("after_context_build", {
+  await hookManager.emit("after_context_build", createTestHookContext({
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp1",
     caller: "user",
     status: "success",
     agentContext,
-  });
-  await hookManager.emit("after_turn", {
+  }, {
+    messageBlocks: { system: [], history: [{ role: "user", content: "hi" }], incremental: [] },
+  }));
+  await hookManager.emit("after_turn", createTestHookContext({
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp1",
     caller: "user",
     status: "success",
     agentContext,
-  });
+  }, {
+    messageBlocks: { system: [], history: [{ role: "user", content: "hi" }], incremental: [] },
+  }));
 
   const runDir = path.join(basePath, "runtime", "harness", "runs", "dp1");
   assert.equal(await exists(path.join(runDir, "harness-run.json")), true);

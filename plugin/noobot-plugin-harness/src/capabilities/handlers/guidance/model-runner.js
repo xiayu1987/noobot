@@ -374,7 +374,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     state.counters.consecutiveToolFailures = 0;
     state.counters.totalToolFailures = 0;
   } else if (allowAnalysis && state.pending.analysis === true) {
-    if (shouldSkipAnalysisForTrailingToolCallContent(ctx?.messages)) {
+    if (shouldSkipAnalysisForTrailingToolCallContent(ctx?.modelContext?.messages)) {
       return false;
     }
     purpose = "guidance";

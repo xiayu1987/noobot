@@ -12,14 +12,18 @@ import {
   markPromptAsInjected,
 } from "../../src/prompt/prompt-injector.js";
 import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
+import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 test("injectSystemMessages skips already injected prompt IDs and injects missing ones", () => {
-  const messages = [
-    { role: "system", content: "<!-- noobot-harness-policy -->\npolicy" },
-    { role: "user", content: "hello" },
-  ];
+  const ctx = createTestHookContext({}, {
+    messages: [
+      { role: "system", content: "<!-- noobot-harness-policy -->\npolicy" },
+      { role: "user", content: "hello" },
+    ],
+  });
+  const messages = ctx.modelContext.messages;
   const changed = injectSystemMessages(
-    { messages },
+    ctx,
     {
       prompts: [
         { id: "noobot-harness-policy", content: "policy", priority: 100, mode: "prepend" },
@@ -48,13 +52,16 @@ test("markPromptAsInjected updates cache without rescanning", () => {
 });
 
 test("replace mode refreshes cache after removing old harness prompts", () => {
-  const messages = [
-    { role: "system", content: "<!-- noobot-harness-policy -->\npolicy" },
-    { role: "system", content: "<!-- noobot-harness-final-response -->\nfinal" },
-    { role: "user", content: "hi" },
-  ];
+  const ctx = createTestHookContext({}, {
+    messages: [
+      { role: "system", content: "<!-- noobot-harness-policy -->\npolicy" },
+      { role: "system", content: "<!-- noobot-harness-final-response -->\nfinal" },
+      { role: "user", content: "hi" },
+    ],
+  });
+  const messages = ctx.modelContext.messages;
   const changed = injectSystemMessages(
-    { messages },
+    ctx,
     {
       prompts: [{ id: "noobot-harness-replaced", content: "replaced", mode: "replace", priority: 90 }],
     },
@@ -66,12 +73,15 @@ test("replace mode refreshes cache after removing old harness prompts", () => {
 });
 
 test("after_system mode preserves leading system messages", () => {
-  const messages = [
-    { role: "system", content: "system context" },
-    { role: "user", content: "user task" },
-  ];
+  const ctx = createTestHookContext({}, {
+    messages: [
+      { role: "system", content: "system context" },
+      { role: "user", content: "user task" },
+    ],
+  });
+  const messages = ctx.modelContext.messages;
   const changed = injectSystemMessages(
-    { messages },
+    ctx,
     {
       prompts: [{ id: "noobot-harness-policy", content: "policy", mode: "after_system", priority: 90 }],
     },
@@ -90,34 +100,34 @@ test("injectSystemMessages writes back through message store", () => {
     { role: "system", content: "system context" },
     userMessage,
   ];
-  const ctx = {
+  const ctx = createTestHookContext({}, {
     messages,
     messageBlocks: {
       system: [{ role: "system", content: "system context" }],
       history: [],
       incremental: [userMessage],
     },
-  };
+  });
 
   const changed = injectSystemMessages(ctx, {
     prompts: [{ id: "noobot-harness-policy", content: "policy", mode: "after_system", priority: 90 }],
   });
 
   assert.equal(changed, true);
-  assert.ok(ctx.messages[1]?.additional_kwargs?.noobotMessageId);
-  assert.equal(ctx.messages[2], ctx.messageBlocks.incremental[0]);
-  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
+  assert.ok(ctx.modelContext.messages[1]?.additional_kwargs?.noobotMessageId);
+  assert.equal(ctx.modelContext.messages[2], ctx.modelContext.messageBlocks.incremental[0]);
+  assert.equal(ctx.modelContext.messageBlocks.incrementalIds, undefined);
 });
 
 test("injectSystemMessages syncs system block arrays through message store", () => {
-  const ctx = {
+  const ctx = createTestHookContext({}, {
     messages: [{ role: "user", content: "user task" }],
     messageBlocks: {
       system: [],
       history: [],
       incremental: [{ role: "user", content: "user task" }],
     },
-  };
+  });
 
   const changed = injectSystemMessages(ctx, {
     prompts: [{ id: "noobot-harness-policy", content: "policy", mode: "prepend", priority: 90 }],
@@ -126,8 +136,8 @@ test("injectSystemMessages syncs system block arrays through message store", () 
   });
 
   assert.equal(changed, true);
-  assert.equal(ctx.messageBlocks.system.length, 1);
-  assert.equal(ctx.messageBlocks.system[0], ctx.messages[0]);
-  assert.ok(ctx.messages[0].additional_kwargs.noobotMessageId);
-  assert.equal(ctx.messageBlocks.systemIds, undefined);
+  assert.equal(ctx.modelContext.messageBlocks.system.length, 1);
+  assert.equal(ctx.modelContext.messageBlocks.system[0], ctx.modelContext.messages[0]);
+  assert.ok(ctx.modelContext.messages[0].additional_kwargs.noobotMessageId);
+  assert.equal(ctx.modelContext.messageBlocks.systemIds, undefined);
 });

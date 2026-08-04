@@ -5,8 +5,7 @@
  */
 import { HumanMessage } from "@langchain/core/messages";
 import {
-  markCurrentTurnModelMessagesSummarized,
-  markCurrentTurnStoreSummarized,
+  collectScopedMessagesToSummarize,
 } from "../../context/session/summarized-message-policy.js";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
@@ -78,14 +77,15 @@ export function createTurnOrchestrator({
   }
 
   function removeLastAssistantToolCallMessage({ loopState: targetLoopState, turnMessageStore = null } = {}) {
-    const lastMessage = Array.isArray(targetLoopState?.messages)
-      ? targetLoopState.messages[targetLoopState.messages.length - 1]
+    const modelMessages = targetLoopState?.modelContext?.messages;
+    const lastMessage = Array.isArray(modelMessages)
+      ? modelMessages[modelMessages.length - 1]
       : null;
     const lastToolCalls = Array.isArray(lastMessage?.tool_calls)
       ? lastMessage.tool_calls
       : [];
     if (lastToolCalls.length) {
-      targetLoopState.messages.pop();
+      modelMessages.pop();
     }
     if (turnMessageStore && typeof turnMessageStore.removeLast === "function") {
       turnMessageStore.removeLast(
@@ -166,7 +166,7 @@ export function createTurnOrchestrator({
       }
 
       if (isOverMaxTurns && loopState?.loopLimitFinalizePrompted !== true) {
-        appendMessage(loopState, new HumanMessage({
+        appendMessage(loopState.modelContext, new HumanMessage({
           content: tEngine(runtime, "toolLoopLimitFinalizePrompt", { maxTurns }),
           additional_kwargs: {
             noobotInternalMessageType: "tool_loop_limit_finalize_prompt",
@@ -236,7 +236,7 @@ export function createTurnOrchestrator({
       if (!calls.length) {
         if (isOverMaxTurns) {
           loopState.toolChoiceRetryPrompted = false;
-          removeToolChoiceRequiredRetryPrompts(loopState.messages);
+          removeToolChoiceRequiredRetryPrompts(loopState.modelContext.messages);
           return buildLoopResultFn({
             output: aiContentText,
             assistantMessageId: withToolsResult.assistantMessageId,
@@ -244,12 +244,12 @@ export function createTurnOrchestrator({
             loopState,
             turnTaskStore,
             turnMessageStore,
-            modelMessages: loopState.messages,
+            modelMessages: loopState.modelContext.messages,
             finalStreaming: withToolsResult.finalStreaming,
           });
         }
         loopState.toolChoiceRetryPrompted = false;
-        removeToolChoiceRequiredRetryPrompts(loopState.messages);
+        removeToolChoiceRequiredRetryPrompts(loopState.modelContext.messages);
         return buildLoopResultFn({
           output: aiContentText,
           assistantMessageId: withToolsResult.assistantMessageId,
@@ -257,7 +257,7 @@ export function createTurnOrchestrator({
           loopState,
           turnTaskStore,
           turnMessageStore,
-          modelMessages: loopState.messages,
+          modelMessages: loopState.modelContext.messages,
           finalStreaming: withToolsResult.finalStreaming,
         });
       }
@@ -266,7 +266,7 @@ export function createTurnOrchestrator({
       const taskSummaryCall = resolveTaskSummaryCall(calls);
       if (calls.length > 1 && taskSummaryCall) {
         removeLastAssistantToolCallMessage({ loopState, turnMessageStore });
-        appendMessage(loopState, new HumanMessage({
+        appendMessage(loopState.modelContext, new HumanMessage({
           content: tEngine(runtime, "taskSummarySingleToolPrompt"),
           additional_kwargs: {
             noobotInternalMessageType: "task_summary_single_tool_retry_prompt",
@@ -327,7 +327,7 @@ export function createTurnOrchestrator({
       loopState.turnTasks = turnTaskStore.toArray();
 
       if (hasTaskSummaryCall) {
-        removePhaseSummaryPromptMessagesFn(loopState.messages, runtime);
+        removePhaseSummaryPromptMessagesFn(loopState.modelContext.messages, runtime);
       }
 
       maybeRequestPhaseSummaryFn({ modelState, loopState, toolCallResults });
@@ -339,20 +339,19 @@ export function createTurnOrchestrator({
       });
 
       if (hasTaskSummaryCall) {
-        markCurrentTurnModelMessagesSummarized(loopState.messages, {
+        const incrementalMessages = Array.isArray(loopState?.modelContext?.messageBlocks?.incremental)
+          ? loopState.modelContext.messageBlocks.incremental
+          : [];
+        const summaryTargets = collectScopedMessagesToSummarize(incrementalMessages, {
+          maxMessages: incrementalMessages.length,
+          limitToProvidedMessagesOnly: true,
+          retentionMessages: incrementalMessages,
           taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
-        });
-        markCurrentTurnStoreSummarized(turnMessageStore, {
-          taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
-        });
-        const summarizedMessages = loopState.messages.filter((message) =>
-          message?.summarized === true || message?.lc_kwargs?.summarized === true,
-        );
+        }).messages;
         requestMainFlowSummaryCheckpoint(runtime, {
           source: "task_summary",
-          summarizedMessages,
-          summarizedMessageIds: summarizedMessages.map((message) => String(
-            message?.additional_kwargs?.noobotMessageId || message?.messageId || "",
+          summarizedMessageIds: summaryTargets.map((message) => String(
+            message?.messageUid || message?.additional_kwargs?.noobotMessageId || "",
           ).trim()).filter(Boolean),
         });
         await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });

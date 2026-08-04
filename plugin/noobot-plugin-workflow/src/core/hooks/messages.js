@@ -8,6 +8,8 @@ import { WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_SEMANTIC } from "../constants.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { resolveWorkflowAgentContext } from "./runtime.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/hook-context";
+import { materializeModelContext } from "@noobot/context-protocol/window-reducer";
 
 export function resolveAssistantOutput(agentResult = {}) {
   const direct = String(agentResult?.output || agentResult?.answer || "").trim();
@@ -191,11 +193,11 @@ export function normalizeWorkflowSemanticContextMessage(message = {}, locale = "
 }
 
 export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {}, locale = "zh-CN" } = {}) {
+  const modelContext = resolveAuthoritativeModelContext(ctx);
   const fallbackMessages = (() => {
-    const agentContext = resolveWorkflowAgentContext(ctx);
-    const direct = Array.isArray(ctx?.messages) ? ctx.messages : [];
+    const direct = Array.isArray(modelContext?.messages) ? modelContext.messages : [];
     if (direct.length) return direct;
-    const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : null;
+    const blocks = modelContext?.messageBlocks;
     if (blocks) {
       const system = Array.isArray(blocks.system) ? blocks.system : [];
       const history = Array.isArray(blocks.history) ? blocks.history : [];
@@ -223,14 +225,8 @@ export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {},
       }
       return [...system, ...conversationSeed];
     }
-    const historyFromAgentContext = Array.isArray(agentContext?.payload?.messages?.history)
-      ? agentContext.payload.messages.history
-      : [];
-    if (historyFromAgentContext.length) return historyFromAgentContext;
-    const historyFromSession = Array.isArray(agentContext?.session?.messages)
-      ? agentContext.session.messages
-      : [];
-    if (historyFromSession.length) return historyFromSession;
+    const materialized = materializeModelContext(modelContext);
+    if (materialized.messages.length) return materialized.messages;
     return [];
   })();
   if (typeof options?.resolveModelMessages === "function") {

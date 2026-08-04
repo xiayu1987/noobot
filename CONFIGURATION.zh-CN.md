@@ -38,17 +38,19 @@
 | `NOOBOT_RUNTIME_EVENT_TRANSPORT_LOG` | boolean | `true` | runtime-events 是否记录传输类 session 日志。 |
 | `NOOBOT_RUNTIME_EVENT_AGENT_PROXY_LOG` | boolean | `true` | runtime-events 是否记录 agent-proxy 类 session 日志。 |
 | `NOOBOT_RUNTIME_EVENT_SYSTEM_LOG` | boolean | `true` | runtime-events 是否记录系统类 session 日志。 |
-| `NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG` | boolean | `true` | runtime-events 是否记录状态机专项 debug。 |
-| `NOOBOT_RUNTIME_EVENT_RESEND_DEBUG` | boolean | `true` | runtime-events 是否记录重发专项 debug。 |
-| `NOOBOT_RUNTIME_EVENT_STOP_DEBUG` | boolean | `true` | runtime-events 是否记录停止专项 debug。 |
+| `NOOBOT_RUNTIME_EVENT_STATE_MACHINE_DEBUG` | boolean | `false` | runtime-events 是否记录状态机专项 debug。 |
+| `NOOBOT_RUNTIME_EVENT_RESEND_DEBUG` | boolean | `false` | runtime-events 是否记录重发专项 debug。 |
+| `NOOBOT_RUNTIME_EVENT_STOP_DEBUG` | boolean | `false` | runtime-events 是否记录停止专项 debug。 |
 | `NOOBOT_RUNTIME_EVENT_SESSION_LOG_WS_DEBUG` | boolean | `false` | runtime-events 是否记录 session 日志 WebSocket 专项 debug。 |
+| `NOOBOT_RUNTIME_EVENT_CONTEXT_IDENTITY_DEBUG` | boolean | `true` | runtime-events 是否记录持久化消息身份、Context 组装、模型投影和停止快照诊断。 |
 
 Session 日志 WebSocket：
 - 入口：后端 `/logs/ws`，前端通常通过 `/api/logs/ws` 访问，agent-proxy 通过后端 upstream 访问。
 - 鉴权：复用现有 API key WebSocket 鉴权。
 - 存储：后端按 `sessionId` 建目录，并按分类写 JSONL 文件（`state`、`message`、`interaction`、`transport`、`agent-proxy`、`system`）；debug 日志按 `data.debugType` 继续拆分为 `debug-<debugType>.jsonl`，没有明确 `debugType` 时写入 `debug.jsonl`。
 - 主要字段：`source`、`category`、`event`、`sessionId`，可选 `dialogProcessId` / `turnScopeId`，以及用于状态机、消息流、前后端交互和 agent-proxy 事件的精简 `data` 载荷。
-- 控制：前端和 agent-proxy 只通过日志 WebSocket 发送事件；是否记录统一由 runtime-events 按 `runtime-events-config.mjs` 中的具体业务小类型开关决定。状态机、重发和停止等核心诊断默认开启，运维仍可显式关闭。
+- 控制：前端和 agent-proxy 只通过日志 WebSocket 发送事件；是否记录统一由 runtime-events 按 `runtime-events-config.mjs` 中的具体业务小类型开关决定。
+- 内部 session 日志开关按 `sessionLogControls.log.*` 与 `sessionLogControls.debug.*` 分组；扁平开关字段不属于协议。
 
 ---
 
@@ -151,7 +153,7 @@ Session 日志 WebSocket：
 | `tools.web_search.search_engine.endpoints.search.custom_param_format` | string | 自定义端点参数说明 |
 
 大上下文长度阈值默认值：
-- 阶段小结字符阈值：225000
+- 阶段小结字符阈值：220000
 - semantic-transfer 直传阈值：30000 字符
 - semantic-transfer 工具结果 inline 阈值：30000 字符
 - semantic-transfer 工具输入 overflow 阈值：30000 字符

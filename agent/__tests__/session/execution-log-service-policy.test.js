@@ -99,3 +99,29 @@ test("ExecutionLogService can enable full turn diagnostics through centralized c
   assert.equal(harness.resolvedScopeCount, 1);
   assert.equal(harness.appendedLogs.length, 1);
 });
+
+test("ExecutionLogService applies the context identity debug switch without a flat fallback", async () => {
+  const disabled = createService({
+    env: {},
+    sessionLogControls: { debug: { contextIdentity: false } },
+  });
+  const skipped = await disabled.service.appendExecutionLog({
+    userId: "u1",
+    sessionId: "s1",
+    event: "agent.contextIdentity.contextBuildInput",
+    category: "context_identity",
+    data: { debugType: "context-identity" },
+  });
+  assert.equal(skipped.skipped, true);
+  assert.equal(disabled.resolvedScopeCount, 0);
+
+  const flatOverride = createService({ env: {}, contextIdentityDebug: false });
+  const appended = await flatOverride.service.appendExecutionLog({
+    userId: "u1",
+    sessionId: "s1",
+    event: "agent.contextIdentity.contextBuildInput",
+    category: "context_identity",
+    data: { debugType: "context-identity" },
+  });
+  assert.equal(appended.appended, true);
+});

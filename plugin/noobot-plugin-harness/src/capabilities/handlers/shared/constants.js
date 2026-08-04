@@ -22,9 +22,6 @@ export const LLM_SUMMARY_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.turnsThres
 export const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD =
   WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 export const LLM_SUMMARY_OVERFLOW_POLICY = Object.freeze({
-  ENABLE_PRUNE_AFTER_SUMMARY: WORKFLOW_PARAMS.guidance.summary.overflowPolicy.enablePruneAfterSummary,
-  PRUNE_TRIGGER_AFTER_CHAR_SUMMARY_ROUNDS:
-    WORKFLOW_PARAMS.guidance.summary.overflowPolicy.pruneTriggerAfterCharSummaryRounds,
   FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW:
     WORKFLOW_PARAMS.guidance.summary.overflowPolicy.forceAcceptanceWhenStillOverflow,
 });
@@ -145,7 +142,6 @@ export const DEFAULT_HARNESS_PENDING = Object.freeze({
   guidance: null,
   analysis: false,
   summary: false,
-  summaryCheckpointMessageCount: null,
   summaryCheckpointMessageIds: null,
   planRevision: false,
   planRevisionContext: null,

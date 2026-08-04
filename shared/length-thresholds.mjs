@@ -24,6 +24,7 @@ const LENGTH_TIERS = deepFreeze({
     cleanedText: 120000,
     wrappedPayload: 200000,
     mainContext: 25000,
+    phaseSummary: 220000,
     externalToolHeavy: 350000,
   },
   displayChars: {
@@ -73,7 +74,7 @@ const LENGTH_TIERS = deepFreeze({
 
 export const LENGTH_THRESHOLDS = deepFreeze({
   context: {
-    phaseSummaryMessageChars: LENGTH_TIERS.chars.mainContext,
+    phaseSummaryMessageChars: LENGTH_TIERS.chars.phaseSummary,
 
     harnessSummaryMessageChars: LENGTH_TIERS.chars.externalToolHeavy,
   },

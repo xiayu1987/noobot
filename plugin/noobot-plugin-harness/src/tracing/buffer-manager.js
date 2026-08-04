@@ -218,8 +218,10 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
   const refreshPolicyPrompt = point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL &&
     shouldRefreshPolicyPromptForDynamicChange(ctx, activeDynamicPolicyPrompt);
 
-  const alreadyInCurrentMessages = Array.isArray(ctx?.messages) &&
-    isHarnessPromptAlreadyInjected(ctx.messages, id);
+  const currentMessages = ctx?.modelContext?.protocolVersion === 1 && Array.isArray(ctx.modelContext.messages)
+    ? ctx.modelContext.messages
+    : [];
+  const alreadyInCurrentMessages = isHarnessPromptAlreadyInjected(currentMessages, id);
   if (alreadyInCurrentMessages && point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return;
 
   const isPolicyPrompt = point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL;

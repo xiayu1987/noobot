@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createModelContext } from "@noobot/context-protocol";
 
 import {
   createMockBotHookManager,
@@ -75,11 +76,13 @@ test("workflow semantic planning passes conversation context before current user
     dialogProcessId: "d1",
     userMessage: "请基于前文生成工作流",
     runConfig: { locale: "zh-CN" },
-    messages: [
-      { role: "user", content: "前文：我要处理报销审批" },
-      { role: "assistant", content: "已记录报销审批背景" },
-      { role: "user", content: "请基于前文生成工作流", frontendUserMessage: true },
-    ],
+    modelContext: createModelContext({
+      messages: [
+        { role: "user", content: "前文：我要处理报销审批" },
+        { role: "assistant", content: "已记录报销审批背景" },
+        { role: "user", content: "请基于前文生成工作流", frontendUserMessage: true },
+      ],
+    }),
   });
 
   assert.equal(invokerCalls.length, 1);
@@ -144,15 +147,17 @@ test("workflow semantic planning falls back to messageBlocks context when ctx.me
     dialogProcessId: "d1",
     userMessage: "请根据上下文继续生成工作流",
     runConfig: { locale: "zh-CN" },
-    messages: [],
-    messageBlocks: {
-      system: [{ role: "system", content: "你是流程专家" }],
-      history: [
-        { role: "user", content: "背景：这是采购审批流程" },
-        { role: "assistant", content: "收到采购审批背景" },
-      ],
-      incremental: [{ role: "user", content: "请继续" }],
-    },
+    modelContext: createModelContext({
+      messages: [],
+      messageBlocks: {
+        system: [{ role: "system", content: "你是流程专家" }],
+        history: [
+          { role: "user", content: "背景：这是采购审批流程" },
+          { role: "assistant", content: "收到采购审批背景" },
+        ],
+        incremental: [{ role: "user", content: "请继续" }],
+      },
+    }),
   });
 
   assert.equal(invokerCalls.length, 1);
@@ -313,7 +318,7 @@ test("workflow semantic planning reads available tools from the canonical agentC
 
 
 
-test("workflow semantic planning reads canonical agentContext history when ctx.messages is empty", async () => {
+test("workflow semantic planning reads authoritative modelContext history", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const invokerCalls = [];
@@ -358,7 +363,22 @@ test("workflow semantic planning reads canonical agentContext history when ctx.m
     dialogProcessId: "d1",
     userMessage: "请结合上下文生成工作流",
     runConfig: { locale: "zh-CN" },
-    messages: [],
+    contextProtocolVersion: 1,
+    modelContext: {
+      protocolVersion: 1,
+      messages: [
+        { role: "user", content: "历史背景：审批流程包含财务复核" },
+        { role: "assistant", content: "已记录财务复核约束" },
+      ],
+      messageBlocks: {
+        system: [],
+        history: [
+          { role: "user", content: "历史背景：审批流程包含财务复核" },
+          { role: "assistant", content: "已记录财务复核约束" },
+        ],
+        incremental: [],
+      },
+    },
     agentContext: {
       payload: {
         messages: {

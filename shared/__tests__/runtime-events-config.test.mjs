@@ -23,25 +23,22 @@ import {
 } from '../runtime-events-config.mjs';
 
 test('session log registries reference controls with defaults and environment keys', () => {
-  const registeredControlKeys = [
-    ...Object.values(RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS),
-    ...Object.values(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)
-      .map((descriptor) => descriptor.controlKey),
-  ];
-  for (const controlKey of registeredControlKeys) {
+  for (const controlKey of Object.values(RUNTIME_EVENTS_SESSION_LOG_CONTROL_KEYS)) {
     assert.equal(
-      typeof RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls[controlKey],
+      typeof RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls.log[controlKey],
       'boolean',
       `${controlKey} should have a boolean default`,
     );
     assert.equal(
-      typeof RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls[controlKey],
+      typeof RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.log[controlKey],
       'string',
       `${controlKey} should have an environment key`,
     );
   }
   for (const [debugType, descriptor] of Object.entries(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES)) {
     assert.equal(typeof descriptor.exposeToClient, 'boolean', `${debugType} should declare client exposure`);
+    assert.equal(typeof RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls.debug[descriptor.controlKey], 'boolean');
+    assert.equal(typeof RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug[descriptor.controlKey], 'string');
   }
 });
 
@@ -104,33 +101,43 @@ test('runtime-events storage cleanup can be disabled with zero values', () => {
 });
 
 test('session log controls honor explicit environment values independently of defaults', () => {
-  for (const [controlKey, envName] of Object.entries(
-    RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls,
-  )) {
-    assert.equal(
-      resolveRuntimeEventsSessionLogControls({ [envName]: 'off' })[controlKey],
-      false,
-      `${controlKey} should resolve an explicit off value`,
-    );
-    assert.equal(
-      resolveRuntimeEventsSessionLogControls({ [envName]: 'on' })[controlKey],
-      true,
-      `${controlKey} should resolve an explicit on value`,
-    );
+  for (const domain of ['log', 'debug']) {
+    for (const [controlKey, envName] of Object.entries(
+      RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls[domain],
+    )) {
+      assert.equal(
+        resolveRuntimeEventsSessionLogControls({ [envName]: 'off' })[domain][controlKey],
+        false,
+        `${domain}.${controlKey} should resolve an explicit off value`,
+      );
+      assert.equal(
+        resolveRuntimeEventsSessionLogControls({ [envName]: 'on' })[domain][controlKey],
+        true,
+        `${domain}.${controlKey} should resolve an explicit on value`,
+      );
+    }
   }
 });
 
-test('turn recovery diagnostics are enabled by default and remain explicitly configurable', () => {
+test('context identity diagnostics default on while other diagnostics retain their defaults', () => {
   const defaults = resolveRuntimeEventsSessionLogControls({});
-  assert.equal(defaults.resendDebug, true);
-  assert.equal(defaults.stopDebug, true);
+  assert.equal(defaults.debug.contextIdentity, true);
+  assert.equal(defaults.debug.resend, false);
+  assert.equal(defaults.debug.stop, false);
 
   const disabled = resolveRuntimeEventsSessionLogControls({
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.resendDebug]: 'false',
-    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.stopDebug]: 'false',
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.contextIdentity]: 'false',
   });
-  assert.equal(disabled.resendDebug, false);
-  assert.equal(disabled.stopDebug, false);
+  assert.equal(disabled.debug.contextIdentity, false);
+});
+
+test('session log controls do not accept the removed flat override protocol', () => {
+  const controls = resolveRuntimeEventsSessionLogControls({}, {
+    messageLog: false,
+    contextIdentityDebug: false,
+  });
+  assert.equal(controls.log.message, true);
+  assert.equal(controls.debug.contextIdentity, true);
 });
 
 test('hook runtime-events mode defaults to summary and recognizes verbose values', () => {

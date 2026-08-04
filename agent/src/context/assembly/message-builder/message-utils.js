@@ -72,14 +72,29 @@ export function toLangChainToolCalls(toolCalls = []) {
 }
 
 export function buildModelMessageIdentityKwargs(msg = {}, fallbackMeta = {}) {
+  const noobotMessageId = String(
+    msg?.messageUid ||
+      msg?.noobotMessageId ||
+      msg?.additional_kwargs?.noobotMessageId ||
+      "",
+  ).trim();
   const dialogProcessId = String(
-    msg?.dialogProcessId || fallbackMeta?.dialogProcessId || "",
+    msg?.dialogProcessId ||
+      msg?.additional_kwargs?.dialogProcessId ||
+      msg?.lc_kwargs?.additional_kwargs?.dialogProcessId ||
+      "",
   ).trim();
   const parentDialogProcessId = String(
     msg?.parentDialogProcessId || fallbackMeta?.parentDialogProcessId || "",
   ).trim();
-  const turnScopeId = String(msg?.turnScopeId || fallbackMeta?.turnScopeId || "").trim();
+  const turnScopeId = String(
+    msg?.turnScopeId ||
+      msg?.additional_kwargs?.turnScopeId ||
+      msg?.lc_kwargs?.additional_kwargs?.turnScopeId ||
+      "",
+  ).trim();
   return {
+    ...(noobotMessageId ? { noobotMessageId } : {}),
     ...(dialogProcessId ? { dialogProcessId } : {}),
     ...(parentDialogProcessId ? { parentDialogProcessId } : {}),
     ...(turnScopeId ? { turnScopeId } : {}),

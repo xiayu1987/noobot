@@ -17,6 +17,7 @@ import {
   HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM,
 } from "../constants.js";
 import { resolveDialogProcessIdFromContext } from "../runtime/dialog-process-id.js";
+import { createMessageUid } from "@noobot/context-protocol/message-identity";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -41,6 +42,7 @@ export function buildHarnessInjectedMessage(
 ) {
   const normalizedRole = String(role || "").trim().toLowerCase();
   const message = {
+    messageUid: createMessageUid(),
     role: normalizedRole || HARNESS_INJECTION_MESSAGE_ROLE,
     content: String(content || ""),
     [HARNESS_INJECTED_MESSAGE_FLAG_FIELD]: HARNESS_INJECTED_MESSAGE_FLAG_VALUE,

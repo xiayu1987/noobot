@@ -7,8 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { WORKFLOW_PARAMS } from "../../src/core/workflow-params.js";
-import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 
 const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold;
 
@@ -35,7 +34,7 @@ async function runGuidanceSummaryRound(guidanceHandler, { messages, agentContext
   await finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext, content });
 }
 
-test("guidance summary capture marks oldest tool-call pair after a char-overflow summary round", async () => {
+test("guidance summary capture leaves tool-call pair unchanged until checkpoint commit", async () => {
   const guidanceHandler = createGuidanceHandler({
     shouldProcessPrimaryToolHooks: () => true,
   });
@@ -68,19 +67,16 @@ test("guidance summary capture marks oldest tool-call pair after a char-overflow
   assert.equal(messages[2].summarized, undefined);
 
   await finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext });
-  assert.equal(messages[1].summarized, true);
-  assert.equal(messages[2].summarized, true);
+  assert.equal(messages[1].summarized, undefined);
+  assert.equal(messages[2].summarized, undefined);
   assert.equal(
     agentContext.payload.harness.state.flags.overflowForceAcceptancePending,
     false,
   );
 });
 
-test("overflow after harness summary requests agent main-flow final no-tools instead of local forced acceptance", async () => {
+test("overflow after harness summary schedules the harness summary flow again without marking messages", async () => {
   const guidanceHandler = createGuidanceHandler({
-    shouldProcessPrimaryToolHooks: () => true,
-  });
-  const acceptanceHandler = createAcceptanceHandler({
     shouldProcessPrimaryToolHooks: () => true,
   });
   const agentContext = {
@@ -115,79 +111,10 @@ test("overflow after harness summary requests agent main-flow final no-tools ins
     meta: {},
   });
   assert.equal(agentContext.payload.harness.state.flags.overflowForceAcceptancePending, false);
-  assert.equal(agentContext.payload.harness.state.flags.mainFlowFinalNoToolsPending, true);
-  assert.equal(
-    agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction?.action,
-    "final_no_tools_turn",
-  );
-  assert.equal(
-    agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction?.reason,
-    "context_overflow_after_summary",
-  );
-  assert.equal(
-    agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction?.source,
-    "harness_summary_overflow",
-  );
-
-  const beforeToolCallsCtx = {
-    agentContext,
-    calls: [{ name: "read_file", args: { path: "a.txt" } }],
-  };
-  await acceptanceHandler({
-    capability: "acceptance",
-    point: "before_tool_calls",
-    ctx: beforeToolCallsCtx,
-    meta: {},
-  });
-  assert.equal(beforeToolCallsCtx.calls.length, 1);
-  assert.equal(beforeToolCallsCtx.calls[0].name, "read_file");
-  assert.deepEqual(beforeToolCallsCtx.calls[0].args, { path: "a.txt" });
-  const acceptanceLogs = agentContext.payload.harness.logs.acceptance;
-  const beforeToolCallsExecutionLog = acceptanceLogs.find((item = {}) =>
-    item?.event === "workflow_execution_result" && item?.detail?.point === "before_tool_calls"
-  );
-  assert.equal(
-    beforeToolCallsExecutionLog?.detail?.requestedAction,
-    "acceptance_tool_guard_before_tool_calls",
-  );
-
-  const beforeToolCallCtx = {
-    agentContext,
-    call: { name: "read_file", args: { path: "b.txt" } },
-  };
-  await acceptanceHandler({
-    capability: "acceptance",
-    point: "before_tool_call",
-    ctx: beforeToolCallCtx,
-    meta: {},
-  });
-  assert.equal(beforeToolCallCtx.call.name, "read_file");
-  assert.deepEqual(beforeToolCallCtx.call.args, { path: "b.txt" });
-  const beforeToolCallExecutionLog = acceptanceLogs.find((item = {}) =>
-    item?.event === "workflow_execution_result" && item?.detail?.point === "before_tool_call"
-  );
-  assert.equal(
-    beforeToolCallExecutionLog?.detail?.requestedAction,
-    "acceptance_tool_guard_before_tool_call",
-  );
-
-  const beforeLlmCallCtx = {
-    agentContext,
-    messages: [{ role: "user", content: "继续处理" }],
-  };
-  await acceptanceHandler({
-    capability: "acceptance",
-    point: "before_llm_call",
-    ctx: beforeLlmCallCtx,
-    meta: {},
-  });
-  assert.equal(beforeLlmCallCtx.messages.at(-1)?.role, "user");
-  assert.equal(beforeLlmCallCtx.messages.at(-1)?.injectedMessage, undefined);
-  const beforeLlmCallExecutionLog = acceptanceLogs.find((item = {}) =>
-    item?.event === "workflow_execution_result" && item?.detail?.point === "before_llm_call"
-  );
-  assert.equal(
-    beforeLlmCallExecutionLog?.detail?.requestedAction,
-    "none",
-  );
+  assert.equal(agentContext.payload.harness.state.flags.mainFlowFinalNoToolsPending, false);
+  assert.equal(agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(agentContext.payload.harness.state.flags.guidanceSummaryMarkPending, true);
+  assert.equal(agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstruction, undefined);
+  assert.equal(messages[1].summarized, undefined);
+  assert.equal(messages[2].summarized, undefined);
 });

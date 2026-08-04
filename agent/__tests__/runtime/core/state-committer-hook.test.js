@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { createStateCommitter } from "../../../src/runtime/tool-execution/state-committer.js";
 import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../../src/extensions/hooks/index.js";
+import { createModelContext } from "@noobot/context-protocol";
 
 function createInMemoryTurnStore() {
   return {
@@ -160,13 +161,16 @@ test("state-committer checkpoints assistant and tool records with presentation i
 
 test("state-committer writes tool result through message store when holder is provided", async () => {
   const turnMessageStore = createInMemoryTurnStore();
-  const loopState = {
-    messages: [],
+  const modelContext = createModelContext({
+    activeTurnIdentity: {
+      dialogProcessId: "dp_store_tool",
+      turnScopeId: "turn-store-tool",
+    },
     messageBlocks: { system: [], history: [], incremental: [] },
-  };
+  });
   const committer = createStateCommitter({
-    messages: loopState.messages,
-    messageHolder: loopState,
+    messages: modelContext.messages,
+    messageHolder: modelContext,
     traces: [],
     turnMessageStore,
     dialogProcessId: "dp_store_tool",
@@ -178,11 +182,16 @@ test("state-committer writes tool result through message store when holder is pr
     toolResultText: "store_tool_result",
   });
 
-  assert.equal(loopState.messages.length, 1);
-  assert.equal(loopState.messages[0]?.content, "store_tool_result");
-  assert.equal(loopState.messageBlocks.incremental[0], loopState.messages[0]);
-  assert.ok(loopState.messages[0].additional_kwargs.noobotMessageId);
-  assert.equal(loopState.messageBlocks.incrementalIds, undefined);
+  assert.equal(modelContext.messages.length, 1);
+  assert.equal(modelContext.messages[0]?.content, "store_tool_result");
+  assert.equal(modelContext.messageBlocks.incremental[0], modelContext.messages[0]);
+  assert.equal(
+    modelContext.messages[0].additional_kwargs.noobotMessageId,
+    turnMessageStore.items[0].messageUid,
+  );
+  assert.equal(modelContext.messageBlocks.incrementalIds, undefined);
+  assert.equal(modelContext.messages[0]?.dialogProcessId, "dp_store_tool");
+  assert.equal(modelContext.messages[0]?.turnScopeId, "turn-store-tool");
   assert.equal(turnMessageStore.items[0]?.content, "store_tool_result");
 });
 

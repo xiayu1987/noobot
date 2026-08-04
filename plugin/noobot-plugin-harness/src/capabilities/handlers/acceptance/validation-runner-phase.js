@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
+import { resolveModelMessages } from "../../../core/message-store.js";
 import {
   CAPABILITY_DOMAIN,
   LOCALE,
@@ -45,7 +46,7 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
   if (!holder) return false;
   const { bucket, state } = holder;
   if (state.pending.phaseAcceptance !== true) return false;
-  const messages = Array.isArray(ctx?.messages) ? ctx.messages : null;
+  const messages = resolveModelMessages(ctx);
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
   const {

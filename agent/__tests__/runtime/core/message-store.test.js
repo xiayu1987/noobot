@@ -17,14 +17,14 @@ import {
 } from "../../../src/context/runtime-state/message-store.js";
 
 test("agent message store canonicalizes messages and block views", () => {
+  const system = { role: "system", content: "sys" };
   const currentForMessages = { role: "user", content: "current" };
-  const currentForBlocks = { role: "user", content: "current" };
   const holder = {
-    messages: [{ role: "system", content: "sys" }, currentForMessages],
+    messages: [system, currentForMessages],
     messageBlocks: {
-      system: [{ role: "system", content: "sys" }],
+      system: [system],
       history: [],
-      incremental: [currentForBlocks],
+      incremental: [currentForMessages],
     },
   };
 
@@ -44,11 +44,14 @@ test("agent message store append and replace keep block arrays synchronized", ()
   assert.ok(getMessageId(appended));
   assert.equal(holder.messageBlocks.incrementalIds, undefined);
 
-  replaceMessages(holder, [{ role: "system", content: "sys" }, { role: "user", content: "hello" }]);
+  const replacement = replaceMessages(holder, [
+    { role: "system", content: "sys" },
+    appended,
+  ]);
   writeMessageBlocks(holder, {
-    system: [{ role: "system", content: "sys" }],
+    system: [replacement[0]],
     history: [],
-    incremental: [{ role: "user", content: "hello" }],
+    incremental: [replacement[1]],
   });
 
   assert.equal(holder.messages[1], holder.messageBlocks.incremental[0]);
@@ -80,15 +83,15 @@ test("agent message store partial block writes preserve untouched blocks", () =>
   assert.equal(holder.messageBlocks.systemIds, undefined);
 });
 
-test("agent message store ignores provider id fields for block identity", () => {
+test("agent message store ignores provider and business ids for block identity", () => {
   const holder = {
     messages: [
-      { role: "system", content: "sys", id: "provider-collision" },
-      { role: "user", content: "hist", id: "provider-collision" },
+      { role: "system", content: "sys", id: "provider-collision", messageId: "business-collision" },
+      { role: "user", content: "hist", id: "provider-collision", messageId: "business-collision" },
     ],
     messageBlocks: {
-      system: [{ role: "system", content: "sys", id: "provider-collision" }],
-      history: [{ role: "user", content: "hist", id: "provider-collision" }],
+      system: [{ role: "system", content: "sys", id: "provider-collision", messageId: "business-collision" }],
+      history: [{ role: "user", content: "hist", id: "provider-collision", messageId: "business-collision" }],
       incremental: [],
     },
   };
@@ -115,9 +118,15 @@ test("agent message store advances next id when hydrating existing message ids",
   };
 
   canonicalizeMessageStore(holder);
+  const canonicalSystemMessage = holder.messageBlocks.system[0];
   replaceMessages(holder, [
-    { role: "system", content: "sys", additional_kwargs: { noobotInternalMessageType: "system_context" } },
-    { role: "user", content: "new-without-id", dialogProcessId: "d-new" },
+    canonicalSystemMessage,
+    {
+      role: "user",
+      content: "new-without-id",
+      dialogProcessId: "d-new",
+      turnScopeId: "t-new",
+    },
   ]);
 
   assert.deepEqual(holder.messages.map((item = {}) => getMessageId(item)), ["am_1", "am_3"]);
@@ -143,9 +152,9 @@ test("agent message store replaceMessages does not rewrite message block ownersh
   canonicalizeMessageStore(holder);
 
   replaceMessages(holder, [
-    { role: "system", content: "sys" },
-    { role: "user", content: "hist", dialogProcessId: "d1" },
-    { role: "user", content: "cur", dialogProcessId: "d2" },
+    holder.messageBlocks.system[0],
+    holder.messageBlocks.history[0],
+    holder.messageBlocks.incremental[0],
   ]);
 
   assert.deepEqual(holder.messageBlocks.system.map((item = {}) => item.content), ["sys"]);

@@ -74,18 +74,7 @@ test("resolveDialogProcessIdFromContext reads nested execution dialogProcessId",
 });
 
 
-test("resolveCapabilityModelMessages preserves fallback messages and resolver output without plugin-side filtering", () => {
-  const fallback = resolveCapabilityModelMessages(
-    {},
-    {
-      messages: [
-        { role: "user", content: "keep" },
-        { role: "assistant", content: "summarized-fallback", summarized: true },
-      ],
-    },
-  );
-  assert.deepEqual(fallback.map((item) => item.content), ["keep", "summarized-fallback"]);
-
+test("resolveCapabilityModelMessages preserves authoritative resolver output without plugin-side filtering", () => {
   const resolved = resolveCapabilityModelMessages(
     {
       harness: {
@@ -95,12 +84,12 @@ test("resolveCapabilityModelMessages preserves fallback messages and resolver ou
         ],
       },
     },
-    { messages: [{ role: "user", content: "ignored" }] },
+    { ctx: { modelContext: { protocolVersion: 1 } } },
   );
   assert.deepEqual(resolved.map((item) => item.content), ["keep-resolved", "summarized-resolved"]);
 });
 
-test("resolveCapabilityModelMessages lets injected resolver use messageBlocks when messages are not explicit", () => {
+test("resolveCapabilityModelMessages delegates the authoritative modelContext to the injected resolver", () => {
   let capturedPayload = null;
   const resolved = resolveCapabilityModelMessages(
     {
@@ -108,25 +97,27 @@ test("resolveCapabilityModelMessages lets injected resolver use messageBlocks wh
         resolveModelMessages: (payload = {}) => {
           capturedPayload = payload;
           return [
-            ...(payload.ctx?.messageBlocks?.history || []),
-            ...(payload.ctx?.messageBlocks?.incremental || []),
+            ...(payload.ctx?.modelContext?.messageBlocks?.history || []),
+            ...(payload.ctx?.modelContext?.messageBlocks?.incremental || []),
           ];
         },
       },
     },
     {
       ctx: {
-        messages: [{ role: "user", content: "history-only" }],
-        messageBlocks: {
+        modelContext: {
+          protocolVersion: 1,
+          messageBlocks: {
           history: [{ role: "user", content: "history-from-block" }],
           incremental: [{ role: "assistant", content: "incremental-from-block" }],
+          },
         },
       },
       purpose: "phase_acceptance",
     },
   );
 
-  assert.deepEqual(capturedPayload.messages, []);
+  assert.equal(Object.hasOwn(capturedPayload, "messages"), false);
   assert.deepEqual(resolved.map((item) => item.content), [
     "history-from-block",
     "incremental-from-block",
@@ -698,39 +689,14 @@ test("buildCapabilityModelMessages assigns origin to every capability message", 
 });
 
 
-test("resolveCapabilityModelMessages fallback preserves provided messages without clipping", () => {
-  const result = resolveCapabilityModelMessages(
-    {},
-    {
-      messages: [
-        { role: "assistant", content: "summarized", summarized: true },
-        ...Array.from({ length: 22 }, (_, index) => ({
-          role: "user",
-          content: `m${index + 1}`,
-        })),
-      ],
-    },
-  );
-
-  assert.deepEqual(
-    result.map((item) => item.content),
-    ["summarized", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
+test("resolveCapabilityModelMessages requires the authoritative resolver", () => {
+  assert.throws(
+    () => resolveCapabilityModelMessages({}, { ctx: {} }),
+    /authoritative modelContext resolver/,
   );
 });
 
-test("resolveCapabilityModelMessages does not filter and does not use payload fallback", () => {
-  const explicit = resolveCapabilityModelMessages(
-    {},
-    {
-      messages: [
-        { role: "assistant", content: "drop-explicit", summarized: true },
-        { role: "tool", content: "drop-lc", lc_kwargs: { summarized: true } },
-        { role: "user", content: "keep-explicit" },
-      ],
-    },
-  );
-  assert.deepEqual(explicit.map((item) => item.content), ["drop-explicit", "drop-lc", "keep-explicit"]);
-
+test("resolveCapabilityModelMessages does not filter resolver output or use payload fallback", () => {
   const resolved = resolveCapabilityModelMessages(
     {
       harness: {
@@ -742,35 +708,20 @@ test("resolveCapabilityModelMessages does not filter and does not use payload fa
     },
     {
       ctx: {
-        messages: [
-          { role: "assistant", content: "drop-source", summarized: true },
-          { role: "user", content: "keep-source" },
-        ],
+        modelContext: { protocolVersion: 1, messageBlocks: { system: [], history: [], incremental: [] } },
       },
       purpose: "analysis",
     },
   );
   assert.deepEqual(resolved.map((item) => item.content), ["drop-resolver", "keep-resolver"]);
 
-  const payloadFallback = resolveCapabilityModelMessages(
-    {},
-    {
-      ctx: {
-        agentContext: {
-          payload: {
-            messages: {
-              history: [
-                { role: "assistant", content: "drop-payload", summarized: true },
-                { role: "user", content: "keep-payload" },
-              ],
-            },
-          },
-        },
-      },
+  assert.throws(
+    () => resolveCapabilityModelMessages({}, {
+      ctx: { agentContext: { payload: { messages: { history: [{ role: "user", content: "payload" }] } } } },
       purpose: "phase_acceptance",
-    },
+    }),
+    /authoritative modelContext resolver/,
   );
-  assert.deepEqual(payloadFallback.map((item) => item.content), []);
 });
 
 test("buildModelMessagesWithStructuredEnvelope does not clip agent context in plugin structured envelope", () => {

@@ -9,11 +9,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
-import { ModelMessageRuntimeHelpers } from "../../../../agent/src/bot/session/model-message-runtime-helpers.js";
+import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
+import { TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 

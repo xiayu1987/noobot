@@ -68,7 +68,6 @@ function createPreparer({
     mergePluginOptions: (...items) =>
       items.reduce((acc, item) => ({ ...acc, ...(item && typeof item === "object" ? item : {}) }), {}),
     createPluginResolveModelMessages: () => () => [],
-    createPluginMarkMessagesSummarized: () => async () => 0,
     createBotSubSessionRunner: () => async () => ({}),
     createGeneratedArtifactPersister: () => async () => [],
     createBotPluginScopedJsonWriter: () => async () => ({}),
@@ -137,7 +136,7 @@ test("RunConfigPluginPreparer resolves agent plugin options with workspace baseP
   assert.equal(options.timeoutMs, AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS);
   assert.equal(typeof options.resolveModelMessages, "function");
   assert.equal(options.resolveMessageBlock, undefined);
-  assert.equal(typeof options.markMessagesSummarized, "function");
+  assert.equal(options.markMessagesSummarized, undefined);
   assert.equal(typeof options.capabilityModelInvoker, "function");
 });
 

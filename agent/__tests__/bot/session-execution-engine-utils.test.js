@@ -65,12 +65,13 @@ test("session-execution-engine-utils normalizes plugin messages from plain and l
       },
     },
     role: "tool",
-    additional_kwargs: { summarized: true },
+    additional_kwargs: { summarized: true, noobotMessageId: "am_runtime" },
     injectedMessage: true,
     injectedBy: "agentPlugin",
     injectedMessageType: "planning",
     frontendUserMessage: true,
     dialogProcessId: "d1",
+    turnScopeId: "t1",
   });
 
   assert.equal(normalized.role, "tool");
@@ -83,7 +84,26 @@ test("session-execution-engine-utils normalizes plugin messages from plain and l
   assert.equal(normalized.injectedMessageType, "planning");
   assert.equal(normalized.frontendUserMessage, true);
   assert.equal(normalized.dialogProcessId, "d1");
+  assert.equal(normalized.turnScopeId, "t1");
+  assert.equal(normalized.additional_kwargs.noobotMessageId, "am_runtime");
   assert.equal(normalizeMessageForModelRuntime({ content: "no-role" }), null);
+});
+
+test("session-execution-engine-utils preserves restored canonical injection metadata", () => {
+  const normalized = normalizeMessageForModelRuntime({
+    role: "user",
+    content: "restored guidance",
+    additional_kwargs: {
+      noobotMessageId: "sm_restored_guidance",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "separate_model_relay:guidance",
+    },
+  });
+
+  assert.equal(normalized.injectedMessage, true);
+  assert.equal(normalized.injectedBy, "harness-plugin");
+  assert.equal(normalized.injectedMessageType, "separate_model_relay:guidance");
 });
 
 test("session-execution-engine-utils applies normalized message flags", () => {

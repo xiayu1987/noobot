@@ -9,9 +9,18 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
+import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
+import { createModelContext } from "@noobot/context-protocol";
+
+function withModelContext(ctx = {}, { messages = [], messageBlocks = null } = {}) {
+  return {
+    ...ctx,
+    contextProtocolVersion: 1,
+    modelContext: createModelContext({ messages, messageBlocks }),
+  };
+}
 
 test("harness capability hook can take over tool calls", async () => {
   const hookManager = createAgentHookManager();
@@ -37,7 +46,7 @@ test("harness capability hook can take over tool calls", async () => {
     },
   );
 
-  const ctx = {
+  const ctx = withModelContext({
     userId: "u4",
     sessionId: "s4",
     dialogProcessId: "dp4",
@@ -47,7 +56,7 @@ test("harness capability hook can take over tool calls", async () => {
       { name: "web_search", args: { q: "abc" } },
       { name: "request_help", args: {} },
     ],
-  };
+  });
 
   await hookManager.emit("before_tool_calls", ctx);
   assert.equal(ctx.calls.length, 1);
@@ -78,24 +87,17 @@ test("harness capability hook can force inject system message in mid hooks", asy
     },
   );
 
-  const ctx = {
+  const ctx = withModelContext({
     userId: "u5",
     sessionId: "s5",
     dialogProcessId: "dp5",
     calls: [{ name: "wait", args: { seconds: 1 } }],
-    agentContext: {
-      payload: {
-        messages: {
-          system: [{ role: "system", content: "existing system message" }],
-        },
-      },
-    },
-  };
+  }, { messageBlocks: { system: [{ role: "system", content: "existing system message" }], history: [], incremental: [] } });
 
   await hookManager.emit("before_tool_calls", ctx);
-  assert.equal(ctx.agentContext.payload.messages.system.length, 2);
+  assert.equal(ctx.modelContext.messageBlocks.system.length, 2);
   assert.match(
-    String(ctx.agentContext.payload.messages.system[0]?.content || ""),
+    String(ctx.modelContext.messageBlocks.system[0]?.content || ""),
     /harness-mid-hook-guard/,
   );
 });
@@ -124,7 +126,7 @@ test("harness capability hook can take over and remove agent internal forced mes
     },
   );
 
-  const ctx = {
+  const ctx = withModelContext({
     userId: "u6",
     sessionId: "s6",
     dialogProcessId: "dp6",
@@ -139,7 +141,7 @@ test("harness capability hook can take over and remove agent internal forced mes
         },
       },
     },
-    messages: [
+  }, { messages: [
       {
         role: "user",
         content: "internal retry prompt",
@@ -148,14 +150,13 @@ test("harness capability hook can take over and remove agent internal forced mes
         },
       },
       { role: "user", content: "real user message" },
-    ],
-  };
+    ] });
 
   await hookManager.emit("before_llm_call", ctx);
-  assert.equal(ctx.messages.length, 2);
-  assert.match(String(ctx.messages[0]?.content || ""), /harness-replace-retry-prompt/);
+  assert.equal(ctx.modelContext.messages.length, 2);
+  assert.match(String(ctx.modelContext.messages[0]?.content || ""), /harness-replace-retry-prompt/);
   assert.equal(
-    ctx.messages.some(
+    ctx.modelContext.messages.some(
       (msg) => msg?.additional_kwargs?.noobotInternalMessageType === "tool_choice_required_retry_prompt",
     ),
     false,
@@ -185,7 +186,7 @@ test("harness message takeover keeps system context before injected ctx messages
     },
   );
 
-  const ctx = {
+  const ctx = withModelContext({
     userId: "u7",
     sessionId: "s7",
     dialogProcessId: "dp7",
@@ -200,16 +201,15 @@ test("harness message takeover keeps system context before injected ctx messages
         },
       },
     },
-    messages: [
+  }, { messages: [
       { role: "system", content: "system context" },
       { role: "user", content: "real user message" },
-    ],
-  };
+    ] });
 
   await hookManager.emit("before_llm_call", ctx);
-  assert.equal(ctx.messages[0]?.content, "system context");
-  assert.match(String(ctx.messages[1]?.content || ""), /harness-current-turn-note/);
-  assert.equal(ctx.messages[2]?.content, "real user message");
+  assert.equal(ctx.modelContext.messages[0]?.content, "system context");
+  assert.match(String(ctx.modelContext.messages[1]?.content || ""), /harness-current-turn-note/);
+  assert.equal(ctx.modelContext.messages[2]?.content, "real user message");
 });
 
 test("harness ctx message takeover writes through message store views", async () => {
@@ -235,7 +235,7 @@ test("harness ctx message takeover writes through message store views", async ()
     },
   );
 
-  const ctx = {
+  const ctx = withModelContext({
     userId: "u8",
     sessionId: "s8",
     dialogProcessId: "dp8",
@@ -250,24 +250,22 @@ test("harness ctx message takeover writes through message store views", async ()
         },
       },
     },
-    messages: [{ role: "user", content: "real user message" }],
-    messageBlocks: {
+  }, { messages: [{ role: "user", content: "real user message" }], messageBlocks: {
       system: [],
       history: [],
       incremental: [{ role: "user", content: "real user message" }],
-    },
-  };
+    } });
 
   await hookManager.emit("before_llm_call", ctx);
 
-  assert.equal(ctx.messages.length, 2);
-  assert.match(String(ctx.messages[1]?.content || ""), /harness-store-note/);
-  assert.equal(ctx.messageBlocks.system[0], ctx.messages[1]);
-  assert.equal(ctx.messageBlocks.incremental[0], ctx.messages[0]);
-  assert.ok(ctx.messages[0]?.additional_kwargs?.noobotMessageId);
-  assert.ok(ctx.messages[1]?.additional_kwargs?.noobotMessageId);
-  assert.equal(ctx.messageBlocks.systemIds, undefined);
-  assert.equal(ctx.messageBlocks.incrementalIds, undefined);
+  assert.equal(ctx.modelContext.messages.length, 2);
+  assert.match(String(ctx.modelContext.messages[0]?.content || ""), /harness-store-note/);
+  assert.equal(ctx.modelContext.messageBlocks.system[0], ctx.modelContext.messages[0]);
+  assert.equal(ctx.modelContext.messageBlocks.incremental[0], ctx.modelContext.messages[1]);
+  assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.noobotMessageId);
+  assert.ok(ctx.modelContext.messages[1]?.additional_kwargs?.noobotMessageId);
+  assert.equal(ctx.modelContext.messageBlocks.systemIds, undefined);
+  assert.equal(ctx.modelContext.messageBlocks.incrementalIds, undefined);
 });
 
 test("harness agent system takeover does not write ctx message store", async () => {
@@ -293,32 +291,27 @@ test("harness agent system takeover does not write ctx message store", async () 
     },
   );
 
-  const ctx = {
+  const ctx = withModelContext({
     userId: "u9",
     sessionId: "s9",
     dialogProcessId: "dp9",
-    messages: [{ role: "user", content: "real user message" }],
-    messageBlocks: {
-      system: [],
+    agentContext: { payload: {} },
+  }, { messages: [
+      { role: "system", content: "existing system message" },
+      { role: "user", content: "real user message" },
+    ], messageBlocks: {
+      system: [{ role: "system", content: "existing system message" }],
       history: [],
       incremental: [{ role: "user", content: "real user message" }],
-    },
-    agentContext: {
-      payload: {
-        messages: {
-          system: [{ role: "system", content: "existing system message" }],
-        },
-      },
-    },
-  };
+    } });
 
   await hookManager.emit("before_tool_calls", ctx);
 
-  assert.equal(ctx.messages.length, 1);
-  assert.equal(ctx.messageBlocks.incremental.length, 1);
-  assert.equal(ctx.agentContext.payload.messages.system.length, 2);
+  assert.equal(ctx.modelContext.messages.length, 3);
+  assert.equal(ctx.modelContext.messageBlocks.incremental.length, 1);
+  assert.equal(ctx.modelContext.messageBlocks.system.length, 2);
   assert.match(
-    String(ctx.agentContext.payload.messages.system[1]?.content || ""),
+    String(ctx.modelContext.messageBlocks.system[1]?.content || ""),
     /harness-agent-system-only/,
   );
 });
@@ -351,11 +344,11 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
     role: "user",
     content: "<!-- harness-existing-note -->\nexisting takeover note",
   };
-  const ctx = {
+  const ctx = withModelContext({
     userId: "u10",
     sessionId: "s10",
     dialogProcessId: "dp10",
-    messages: [
+  }, { messages: [
       {
         role: "user",
         content: "internal retry prompt",
@@ -364,8 +357,7 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
         },
       },
       existingInjected,
-    ],
-    messageBlocks: {
+    ], messageBlocks: {
       system: [],
       history: [],
       incremental: [
@@ -378,16 +370,15 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
         },
         existingInjected,
       ],
-    },
-  };
+    } });
 
   await hookManager.emit("before_llm_call", ctx);
 
-  assert.equal(ctx.messages.length, 1);
-  assert.equal(ctx.messages[0], existingInjected);
-  assert.ok(ctx.messages[0]?.additional_kwargs?.noobotMessageId);
+  assert.equal(ctx.modelContext.messages.length, 1);
+  assert.equal(ctx.modelContext.messages[0], existingInjected);
+  assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.noobotMessageId);
   assert.equal(
-    ctx.messages.some(
+    ctx.modelContext.messages.some(
       (msg) => msg?.additional_kwargs?.noobotInternalMessageType === "tool_choice_required_retry_prompt",
     ),
     false,

@@ -56,18 +56,12 @@ function normalizeSummaryCheckpointInstruction(instruction = null) {
     summarizedMessageIds: (Array.isArray(value.summarizedMessageIds)
       ? value.summarizedMessageIds
       : []).map((id) => String(id || "").trim()).filter(Boolean),
-    ...(Array.isArray(value.summarizedMessages) && value.summarizedMessages.length
-      ? {
-          summarizedMessages: value.summarizedMessages
-            .filter((message) => message && typeof message === "object"),
-        }
-      : {}),
   };
 }
 
 export function requestMainFlowSummaryCheckpoint(
   runtime = {},
-  { source = "", summarizedMessageIds = [], summarizedMessages = [] } = {},
+  { source = "", summarizedMessageIds = [] } = {},
 ) {
   const systemRuntime = ensureSystemRuntime(runtime);
   if (!systemRuntime) return null;
@@ -75,10 +69,8 @@ export function requestMainFlowSummaryCheckpoint(
     action: MAIN_FLOW_CONTROL_ACTION.SUMMARY_CHECKPOINT,
     source,
     summarizedMessageIds,
-    ...(Array.isArray(summarizedMessages) && summarizedMessages.length
-      ? { summarizedMessages }
-      : {}),
   });
+  if (!instruction.summarizedMessageIds.length) return null;
   const pending = Array.isArray(systemRuntime.mainFlowControlInstructions)
     ? systemRuntime.mainFlowControlInstructions
     : [];
@@ -87,7 +79,7 @@ export function requestMainFlowSummaryCheckpoint(
   return instruction;
 }
 
-export function consumeMainFlowSummaryCheckpoint(runtimeOrSystemRuntime = {}) {
+export function peekMainFlowSummaryCheckpoint(runtimeOrSystemRuntime = {}) {
   const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
   if (!systemRuntime) return null;
   const pending = Array.isArray(systemRuntime.mainFlowControlInstructions)
@@ -97,11 +89,21 @@ export function consumeMainFlowSummaryCheckpoint(runtimeOrSystemRuntime = {}) {
   const instruction = pendingIndex >= 0
     ? normalizeSummaryCheckpointInstruction(pending[pendingIndex])
     : normalizeSummaryCheckpointInstruction(systemRuntime.mainFlowControlInstruction);
-  if (!instruction) return null;
+  return instruction;
+}
+
+export function acknowledgeMainFlowSummaryCheckpoint(runtimeOrSystemRuntime = {}) {
+  const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
+  if (!systemRuntime) return false;
+  const pending = Array.isArray(systemRuntime.mainFlowControlInstructions)
+    ? systemRuntime.mainFlowControlInstructions
+    : [];
+  const pendingIndex = pending.findIndex((item) => normalizeSummaryCheckpointInstruction(item));
+  if (pendingIndex < 0) return false;
   if (pendingIndex >= 0) pending.splice(pendingIndex, 1);
   if (pending.length) systemRuntime.mainFlowControlInstructions = pending;
   else delete systemRuntime.mainFlowControlInstructions;
-  return instruction;
+  return true;
 }
 
 export function requestMainFlowFinalNoToolsTurn(

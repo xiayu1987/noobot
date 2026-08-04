@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { appendMessage } from "../../src/core/message-store.js";
 
 import {
   createGuidanceHandler,
@@ -42,8 +43,8 @@ test("separate_model analysis uses aligned agent context then user request and u
     harness: {
       planningGuidanceMode: "separate_model",
       resolveModelMessages: ({ ctx: resolverCtx = {} } = {}) => [
-        ...(resolverCtx.messageBlocks?.history || []),
-        ...(resolverCtx.messageBlocks?.incremental || []),
+        ...(resolverCtx.modelContext.messageBlocks?.history || []),
+        ...(resolverCtx.modelContext.messageBlocks?.incremental || []),
       ],
       capabilityModelInvoker: async (payload = {}) => {
         capturedPayload = payload;
@@ -98,7 +99,7 @@ test("separate_model analysis uses aligned agent context then user request and u
   assert.match(String(responsibilityMessage?.content || ""), /分析|analysis/i);
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);
   assert.equal(
-    ctx.messages.some((item = {}) =>
+    ctx.modelContext.messages.some((item = {}) =>
       String(item?.injectedMessageType || "").includes("guidance") &&
       item?.purpose === "guidance" &&
       item?.pluginFlow === "analysis" &&
@@ -136,13 +137,13 @@ test("separate_model skips analysis when trailing assistant tool call has conten
   assert.equal(invocations.length, 0);
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
 
-  ctx.messages.push({ role: "tool", content: "读取完成", tool_call_id: "call-1" });
+  appendMessage(ctx, { role: "tool", content: "读取完成", tool_call_id: "call-1" }, { block: "incremental" });
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
 
   assert.equal(invocations.length, 0);
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
 
-  ctx.messages[0].content = "";
+  ctx.modelContext.messages[0].content = "";
   await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
 
   assert.equal(invocations.length, 1);
@@ -209,7 +210,7 @@ test("separate_model guidance pending triggers guidance invoker without analysis
   assert.equal(agentContext.payload.harness.state.counters.consecutiveToolFailures, 0);
   assert.equal(agentContext.payload.harness.state.counters.totalToolFailures, 0);
   assert.equal(
-    ctx.messages.some((item = {}) =>
+    ctx.modelContext.messages.some((item = {}) =>
       item?.purpose === "guidance" &&
       item?.pluginFlow === undefined &&
       String(item?.content || "").includes("建议先确认失败工具"),

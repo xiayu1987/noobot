@@ -9,11 +9,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
-import { ModelMessageRuntimeHelpers } from "../../../../agent/src/bot/session/model-message-runtime-helpers.js";
+import {
+  createTestHookContext,
+  createTestHookManager as createAgentHookManager,
+  TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
@@ -117,6 +120,7 @@ test("harness active request_task_acceptance semantic validation receives agent 
       trace: false,
       promptPolicy: false,
       acceptance: { semanticValidation: true },
+      resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         return { content: JSON.stringify({ status: "pass", consistent: true, checklistCoverage: [], missingItems: [], unsupportedClaims: [], suggestions: [] }) };
@@ -138,9 +142,17 @@ test("harness active request_task_acceptance semantic validation receives agent 
       },
     },
   };
-  await hookManager.emit("before_turn", { agentContext });
+  await hookManager.emit("before_turn", createTestHookContext({ agentContext }));
   const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
-  const raw = await tool.invoke({ mode: "active" }, { configurable: { noobotHookContext: { agentContext, result: { output: "done" } }, noobotHookMeta: hookManager.runtime } });
+  const raw = await tool.invoke(
+    { mode: "active" },
+    {
+      configurable: {
+        noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
+        noobotHookMeta: hookManager.runtime,
+      },
+    },
+  );
   const result = typeof raw === "string" ? JSON.parse(raw) : raw;
   assert.equal(invocations.length, 2);
   assert.equal(invocations[0].purpose, "phase_acceptance");
@@ -163,6 +175,7 @@ test("harness active request_task_acceptance falls back to closure meta when con
       trace: false,
       promptPolicy: false,
       acceptance: { semanticValidation: true },
+      resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         return {
@@ -193,13 +206,13 @@ test("harness active request_task_acceptance falls back to closure meta when con
       },
     },
   };
-  await hookManager.emit("before_turn", { agentContext });
+  await hookManager.emit("before_turn", createTestHookContext({ agentContext }));
   const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
   const raw = await tool.invoke(
     { mode: "active" },
     {
       configurable: {
-        noobotHookContext: { agentContext, result: { output: "done" } },
+        noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
         noobotHookMeta: { systemRuntime: { userId: "u1", sessionId: "s1" } },
       },
     },

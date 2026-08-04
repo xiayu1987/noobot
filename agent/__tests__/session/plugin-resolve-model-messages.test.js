@@ -5,14 +5,18 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createModelContext } from "@noobot/context-protocol";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 
-test("_createPluginResolveModelMessages reads dialogProcessId from execution context", () => {
+test("_createPluginResolveModelMessages uses authoritative modelContext blocks", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
-    messages: [
+    ctx: { modelContext: createModelContext({ messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [
       {
         role: "user",
         content: "[agent-plugin-relay/planning]\\nold",
@@ -30,26 +34,21 @@ test("_createPluginResolveModelMessages reads dialogProcessId from execution con
         dialogProcessId: "dlg_new",
       },
       { role: "assistant", content: "normal" },
-    ],
-    ctx: {
-      agentContext: {
-        execution: {
-          dialogProcessId: "dlg_new",
-        },
-      },
-    },
+      ],
+    } }) },
   });
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
-    ["[agent-plugin-relay/planning]\\nnew", "normal"],
+    ["[agent-plugin-relay/planning]\\nold", "[agent-plugin-relay/planning]\\nnew", "normal"],
   );
 });
 
-test("_createPluginResolveModelMessages falls back to latest message dialogProcessId", () => {
+test("_createPluginResolveModelMessages keeps unsummarized injected blocks append-only", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
-    messages: [
+    ctx: { modelContext: createModelContext({ messageBlocks: {
+      system: [], history: [], incremental: [
       {
         role: "user",
         content: "[agent-plugin-relay/planning]\\nold",
@@ -67,35 +66,29 @@ test("_createPluginResolveModelMessages falls back to latest message dialogProce
         dialogProcessId: "dlg_new",
       },
       { role: "assistant", content: "normal", dialogProcessId: "dlg_new" },
-    ],
-    ctx: {},
+      ],
+    } }) },
   });
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
-    ["[agent-plugin-relay/planning]\\nnew", "normal"],
+    ["[agent-plugin-relay/planning]\\nold", "[agent-plugin-relay/planning]\\nnew", "normal"],
   );
 });
 
-test("_createPluginResolveModelMessages accepts agentPluginOptions payload", () => {
+test("_createPluginResolveModelMessages accepts a versioned modelContext", () => {
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const resolver = engine._createPluginResolveModelMessages();
 
   const resolved = resolver({
-    messages: [
-      { role: "user", content: "legacy-compatible", dialogProcessId: "dlg_legacy" },
-    ],
-    ctx: {
-      agentContext: {
-        execution: {
-          dialogProcessId: "dlg_legacy",
-        },
-      },
-    },
+    ctx: { modelContext: createModelContext({ messageBlocks: {
+      system: [], history: [],
+      incremental: [{ role: "user", content: "protocol-compatible", dialogProcessId: "dlg" }],
+    } }) },
   });
 
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
-    ["legacy-compatible"],
+    ["protocol-compatible"],
   );
 });
 
@@ -103,19 +96,14 @@ test("_createPluginResolveModelMessages no longer clips agent context to plugin 
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
-    messages: [
+    ctx: { modelContext: createModelContext({ messageBlocks: {
+      system: [], history: [], incremental: [
       { role: "user", content: "u1", dialogProcessId: "dlg_new" },
       { role: "assistant", content: "a1", dialogProcessId: "dlg_new" },
       { role: "user", content: "u2", dialogProcessId: "dlg_new" },
       { role: "assistant", content: "a2", dialogProcessId: "dlg_new" },
-    ],
-    ctx: {
-      agentContext: {
-        execution: {
-          dialogProcessId: "dlg_new",
-        },
-      },
-    },
+      ],
+    } }) },
   });
   assert.deepEqual(
     resolved.map((item = {}) => item.content),
@@ -128,9 +116,8 @@ test("_createPluginResolveModelMessages uses main-flow blocks when available", (
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const resolver = engine._createPluginResolveModelMessages();
   const resolved = resolver({
-    messages: [],
     ctx: {
-      messageBlocks: {
+      modelContext: createModelContext({ messageBlocks: {
         system: [{ role: "system", content: "sys" }],
         history: [
           { role: "user", content: "u1-first", dialogProcessId: "d1" },
@@ -143,7 +130,7 @@ test("_createPluginResolveModelMessages uses main-flow blocks when available", (
           { role: "assistant", content: "drop", summarized: true },
           { role: "assistant", content: "inc2" },
         ],
-      },
+      } }),
     },
   });
 
@@ -157,11 +144,7 @@ test("_createPluginResolveModelMessages does not mutate source messages or messa
   const engine = new SessionExecutionEngine({ globalConfig: {} });
   const resolver = engine._createPluginResolveModelMessages({ agentPluginOptions: {} });
   const ctx = {
-    messages: [
-      { role: "system", content: "ctx-sys" },
-      { role: "user", content: "ctx-u" },
-    ],
-    messageBlocks: {
+    modelContext: createModelContext({ messageBlocks: {
       system: [{ role: "system", content: "sys" }],
       history: [
         { role: "user", content: "u1", dialogProcessId: "d1" },
@@ -173,7 +156,7 @@ test("_createPluginResolveModelMessages does not mutate source messages or messa
         { role: "user", content: "current", dialogProcessId: "d3" },
         { role: "assistant", content: "current-a", dialogProcessId: "d3" },
       ],
-    },
+    } }),
   };
   const before = JSON.stringify(ctx);
 
@@ -184,8 +167,8 @@ test("_createPluginResolveModelMessages does not mutate source messages or messa
     ["sys", "u1", "a1", "u2", "a2", "current", "current-a"],
   );
   assert.equal(JSON.stringify(ctx), before);
-  assert.deepEqual(ctx.messageBlocks.history.map((item) => item.content), ["u1", "a1", "u2", "a2"]);
-  assert.equal(ctx.messageBlocks.history.length, 4);
-  assert.deepEqual(ctx.messageBlocks.incremental.map((item) => item.content), ["current", "current-a"]);
-  assert.equal(ctx.messageBlocks.incremental.length, 2);
+  assert.deepEqual(ctx.modelContext.messageBlocks.history.map((item) => item.content), ["u1", "a1", "u2", "a2"]);
+  assert.equal(ctx.modelContext.messageBlocks.history.length, 4);
+  assert.deepEqual(ctx.modelContext.messageBlocks.incremental.map((item) => item.content), ["current", "current-a"]);
+  assert.equal(ctx.modelContext.messageBlocks.incremental.length, 2);
 });

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, watch } from "vue";
-import { buildViewMessage, foldConversationMessages } from "noobot-chat/plugin-api/session-domain";
+import { buildViewMessage } from "noobot-chat/plugin-api/session-domain";
 import { buildSessionDetailProjection } from "noobot-chat/plugin-api/session-domain";
 
 export function useWorkflowNodeMessages({
@@ -67,9 +67,6 @@ export function useWorkflowNodeMessages({
         messages: Array.isArray(selectedNodeMessages.value)
           ? selectedNodeMessages.value
           : [],
-        toolLogSummaries: Array.isArray(summary?.toolLogSummaries)
-          ? summary.toolLogSummaries
-          : [],
       },
     ];
   });
@@ -82,9 +79,6 @@ export function useWorkflowNodeMessages({
     },
     sessionDocs: selectedNodeSessionDocs.value,
     makeViewMessage: buildNodeViewMessage,
-    foldMessagesForView: (messages = []) => foldConversationMessages(messages, buildNodeViewMessage),
-    applyToolLogs: true,
-    toolSessionDocs: selectedNodeToolSessionDocs.value,
   }));
 
   const rawNodeSessionMessages = computed(() =>

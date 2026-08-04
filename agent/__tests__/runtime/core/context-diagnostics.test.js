@@ -5,42 +5,15 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  isModelContextTraceEnabled,
-} from "../../../src/context/runtime-state/context-diagnostics.js";
-
-function withArgv(argv = [], fn = () => {}) {
-  const originalArgv = process.argv;
-  process.argv = ["node", "test", ...argv];
-  try {
-    return fn();
-  } finally {
-    process.argv = originalArgv;
-  }
-}
+import { emitModelContextTrace } from "../../../src/context/runtime-state/context-diagnostics.js";
 
 describe("context diagnostics", () => {
-  it("keeps model context trace disabled by default", () => {
-    withArgv([], () => {
-      assert.equal(isModelContextTraceEnabled(), false);
-    });
-  });
-
-  it("allows runtime config to enable model context trace", () => {
-    assert.equal(isModelContextTraceEnabled({ modelContextTrace: true }), true);
-    assert.equal(isModelContextTraceEnabled({ systemRuntime: { modelContextTrace: "enabled" } }), true);
-  });
-
-  it("allows argv to enable model context trace", () => {
-    withArgv(["--model-context-trace"], () => {
-      assert.equal(isModelContextTraceEnabled(), true);
-    });
-  });
-
-  it("allows explicit config and argv to disable model context trace", () => {
-    assert.equal(isModelContextTraceEnabled({ modelContextTrace: false }), false);
-    withArgv(["--no-model-context-trace"], () => {
-      assert.equal(isModelContextTraceEnabled(), false);
-    });
+  it("always emits model context trace without a runtime switch", () => {
+    const events = [];
+    const eventListener = { onEvent(envelope) { events.push(envelope); } };
+    assert.equal(emitModelContextTrace({ eventListener }, "resolved", { count: 2 }), true);
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.event, "model_context_trace");
+    assert.deepEqual(events[0]?.data, { stage: "resolved", count: 2 });
   });
 });

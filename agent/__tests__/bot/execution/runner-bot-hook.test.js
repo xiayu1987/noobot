@@ -73,8 +73,8 @@ function createRunner({
   prepareTurnInput = null,
   appendAgentMessages = async () => {},
   getSessionTurns = null,
-  commitSessionTurn = null,
-  stampReusedUserTurnDialogProcessId = async () => {},
+  commitSessionTurn = async () => ({}),
+  stampReusedUserTurnDialogProcessId = async () => ({}),
   assertPersistenceContextIdentity = null,
 } = {}) {
   const initializeCanonicalRunSessionRuntime = async (payload = {}) => {
@@ -143,6 +143,48 @@ function createRunner({
       turnMessages: store.toArray(),
     };
   };
+  const commitCanonicalUserMessage = async (payload = {}) => {
+    const result = await commitSessionTurn(payload) || {};
+    return {
+      ...result,
+      attachments: Array.isArray(result.attachments) ? result.attachments : payload.attachments || [],
+      userMessage: result.userMessage || {
+        messageUid: `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`,
+        role: "user",
+        type: "message",
+        content: payload.content,
+        userName: payload.userId,
+        sessionId: payload.sessionId,
+        parentSessionId: payload.parentSessionId,
+        dialogProcessId: payload.dialogProcessId,
+        parentDialogProcessId: payload.parentDialogProcessId,
+        turnScopeId: payload.turnScopeId,
+        frontendUserMessage: payload.frontendUserMessage === true,
+        messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
+        attachments: payload.attachments || [],
+      },
+    };
+  };
+  const stampCanonicalReusedUserMessage = async (payload = {}) => {
+    const result = await stampReusedUserTurnDialogProcessId(payload) || {};
+    return {
+      ...result,
+      userMessage: result.userMessage || {
+        messageUid: `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`,
+        role: "user",
+        type: "message",
+        content: "edited",
+        userName: payload.userId,
+        sessionId: payload.sessionId,
+        parentSessionId: payload.parentSessionId,
+        dialogProcessId: payload.dialogProcessId,
+        turnScopeId: payload.turnScopeId,
+        frontendUserMessage: true,
+        messageOrigin: "user",
+        attachments: payload.attachments || [],
+      },
+    };
+  };
   return new SessionExecutionRunner({
     agentRunner: runCanonicalAgent,
     errorLogger: { async log() {} },
@@ -159,8 +201,8 @@ function createRunner({
     getSessionTurns,
     appendSessionTurn: async () => {},
     assertPersistenceContextIdentity,
-    commitSessionTurn,
-    stampReusedUserTurnDialogProcessId,
+    commitSessionTurn: commitCanonicalUserMessage,
+    stampReusedUserTurnDialogProcessId: stampCanonicalReusedUserMessage,
     finalizeRunSession: async () => ({ answer: "ok" }),
     upsertParentAsyncTask: () => {},
     now: () => new Date().toISOString(),
@@ -504,10 +546,27 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   assert.match(beforeDispatchContext?.runConfig?.presentationMessageId, /^msg_/);
   assert.equal(beforeDispatchContext?.runtimeAgentContext, undefined);
   assert.equal(typeof beforeDispatchContext?.agentContextSummary, "object");
-  assert.deepEqual(beforeDispatchContext?.messages, [
-    { role: "user", content: "history user" },
-    { role: "assistant", content: "history assistant" },
-  ]);
+  assert.equal(beforeDispatchContext?.messages, undefined);
+  assert.deepEqual(
+    beforeDispatchContext?.modelContext?.messages.map(({ role, content }) => ({ role, content })),
+    [
+      { role: "user", content: "history user" },
+      { role: "assistant", content: "history assistant" },
+    ],
+  );
+  assert.equal(beforeDispatchContext?.modelContext?.protocolVersion, 1);
+  assert.deepEqual({
+    ...beforeDispatchContext?.modelContext?.messageBlocks,
+    history: beforeDispatchContext?.modelContext?.messageBlocks?.history
+      .map(({ role, content }) => ({ role, content })),
+  }, {
+    system: [],
+    history: [
+      { role: "user", content: "history user" },
+      { role: "assistant", content: "history assistant" },
+    ],
+    incremental: [],
+  });
 });
 
 test("before-dispatch capability events use the bound Turn message domain", async () => {
@@ -833,10 +892,20 @@ test("SessionExecutionRunner passes prepared turnScopeId into context building",
       };
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
+    commitSessionTurn: async (payload = {}) => {
+      appendedTurnScopeId = payload.turnScopeId;
+      return {
+        attachments: [],
+        userMessage: {
+          messageUid: "sm_prepared",
+          role: "user",
+          content: payload.content,
+          dialogProcessId: payload.dialogProcessId,
+          turnScopeId: payload.turnScopeId,
+        },
+      };
+    },
   });
-  runner.appendSessionTurn = async ({ turnScopeId = "" } = {}) => {
-    appendedTurnScopeId = turnScopeId;
-  };
 
   await runner.runSession({
     userId: "u1",
@@ -861,10 +930,20 @@ test("SessionExecutionRunner merges top-level turnScopeId before context buildin
       };
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
+    commitSessionTurn: async (payload = {}) => {
+      appendedTurnScopeId = payload.turnScopeId;
+      return {
+        attachments: [],
+        userMessage: {
+          messageUid: "sm_top_level",
+          role: "user",
+          content: payload.content,
+          dialogProcessId: payload.dialogProcessId,
+          turnScopeId: payload.turnScopeId,
+        },
+      };
+    },
   });
-  runner.appendSessionTurn = async ({ turnScopeId = "" } = {}) => {
-    appendedTurnScopeId = turnScopeId;
-  };
 
   await runner.runSession({
     userId: "u1",

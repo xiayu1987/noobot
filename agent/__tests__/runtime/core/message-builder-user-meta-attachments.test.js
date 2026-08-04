@@ -10,6 +10,7 @@ import {
   buildContextMessages,
   buildHumanMessagesForUser,
 } from "../../../src/context/assembly/message-builder.js";
+import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 function findUserMetaMessage(messages) {
   return messages.find((message) => String(message?.content || "").startsWith("[用户元信息]"));
@@ -47,7 +48,14 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
       },
       payload: { messages: { system: [], history: [] } },
     },
-    { currentUserMessage: "hello" },
+    { currentUserMessage: createPersistedCurrentUserMessage("hello", {
+      attachments: [{
+        attachmentId: "att-a",
+        name: "AI 体系现状概览.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        size: 1407731,
+      }],
+    }) },
   );
 
   const metaMessage = findUserMetaMessage(messages);
@@ -76,7 +84,7 @@ test("buildContextMessages preserves explicit empty current userMessageAttachmen
       },
       payload: { messages: { system: [], history: [] } },
     },
-    { currentUserMessage: "hello" },
+    { currentUserMessage: createPersistedCurrentUserMessage("hello") },
   );
 
   const metaMessage = findUserMetaMessage(messages);
@@ -106,7 +114,7 @@ test("buildContextMessages does not treat runtime attachments bucket as current 
       },
       payload: { messages: { system: [], history: [] } },
     },
-    { currentUserMessage: "hello" },
+    { currentUserMessage: createPersistedCurrentUserMessage("hello") },
   );
 
   const metaMessage = findUserMetaMessage(messages);
@@ -138,7 +146,9 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
       },
       payload: { messages: { system: [], history: [] } },
     },
-    { currentUserMessage: "hello" },
+    { currentUserMessage: createPersistedCurrentUserMessage("hello", {
+      attachments: [{ attachmentId: "current-user-input", name: "current.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }],
+    }) },
   );
 
   const metaMessage = findUserMetaMessage(messages);
@@ -182,7 +192,7 @@ test("buildContextMessages does not use fallback meta attachments as current use
         },
       },
     },
-    { currentUserMessage: "hello" },
+    { currentUserMessage: createPersistedCurrentUserMessage("hello") },
   );
 
   const metaMessage = findUserMetaMessage(messages);
@@ -192,36 +202,35 @@ test("buildContextMessages does not use fallback meta attachments as current use
 });
 
 test("buildContextMessages preserves rich attachment fields in user meta", () => {
+  const richAttachment = {
+    attachmentId: "att-rich",
+    name: "AI 体系现状概览.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    attachmentSource: "user",
+    sessionId: "session-rich",
+    path: "/workspace/admin/runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
+    relativePath: "runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
+    sandboxPath: "/workspace/admin/runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
+    previewUrl: "/preview/att-rich",
+    downloadUrl: "/download/att-rich",
+    parsedResultUrl: "/download/parsed-rich",
+    parsedResultName: "AI 体系现状概览.txt",
+    parsedResultAttachmentId: "parsed-rich",
+    transferFilePath: "runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
+    size: 1407731,
+    parsedResult: {
+      attachmentId: "parsed-rich",
+      path: "/workspace/admin/runtime/attach/scoped/session-rich/user/parsed-rich/AI 体系现状概览.txt",
+      relativePath: "runtime/attach/scoped/session-rich/user/parsed-rich/AI 体系现状概览.txt",
+    },
+  };
   const messages = buildContextMessages(
     {
       execution: {
         controllers: {
           runtime: {
             userId: "admin",
-            userMessageAttachments: [
-              {
-                attachmentId: "att-rich",
-                name: "AI 体系现状概览.docx",
-                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                attachmentSource: "user",
-                sessionId: "session-rich",
-                path: "/workspace/admin/runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
-                relativePath: "runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
-                sandboxPath: "/workspace/admin/runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
-                previewUrl: "/preview/att-rich",
-                downloadUrl: "/download/att-rich",
-                parsedResultUrl: "/download/parsed-rich",
-                parsedResultName: "AI 体系现状概览.txt",
-                parsedResultAttachmentId: "parsed-rich",
-                transferFilePath: "runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
-                size: 1407731,
-                parsedResult: {
-                  attachmentId: "parsed-rich",
-                  path: "/workspace/admin/runtime/attach/scoped/session-rich/user/parsed-rich/AI 体系现状概览.txt",
-                  relativePath: "runtime/attach/scoped/session-rich/user/parsed-rich/AI 体系现状概览.txt",
-                },
-              },
-            ],
+            userMessageAttachments: [richAttachment],
             systemRuntime: {
               sessionId: "session-rich",
               dialogProcessId: "dialog-rich",
@@ -231,7 +240,12 @@ test("buildContextMessages preserves rich attachment fields in user meta", () =>
       },
       payload: { messages: { system: [], history: [] } },
     },
-    { currentUserMessage: "hello" },
+    { currentUserMessage: createPersistedCurrentUserMessage("hello", {
+      userName: "admin",
+      sessionId: "session-rich",
+      dialogProcessId: "dialog-rich",
+      attachments: [richAttachment],
+    }) },
   );
 
   const metaMessage = findUserMetaMessage(messages);
@@ -347,7 +361,13 @@ test("buildContextMessages keeps complete metadata per historical user turn with
         },
       },
     },
-    { currentUserMessage: "current turn" },
+    { currentUserMessage: createPersistedCurrentUserMessage("current turn", {
+      userName: "current-admin",
+      sessionId: "current-session",
+      dialogProcessId: "current-dialog",
+      turnScopeId: "current-turn",
+      attachments: [{ attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" }],
+    }) },
   );
 
   const metas = messages
@@ -425,7 +445,7 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
       },
       payload: { messages: { system: [], history } },
     },
-    { currentUserMessage: "current" },
+    { currentUserMessage: createPersistedCurrentUserMessage("current") },
   );
 
   const historicalBodies = messages.filter(
@@ -498,7 +518,7 @@ test("buildContextMessages discards restored user_meta projections before rebuil
         },
       },
     },
-    { currentUserMessage: "" },
+    { currentUserMessage: null },
   );
 
   assert.equal(messages.filter((message) => message?.content === "hello").length, 1);
@@ -551,7 +571,13 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
         },
       },
     },
-    { currentUserMessage: "continue" },
+    { currentUserMessage: createPersistedCurrentUserMessage("continue", {
+      userName: "admin",
+      sessionId: "s1",
+      dialogProcessId: "dialog-continue",
+      turnScopeId: "turn-continue",
+      attachments: [{ attachmentId: "attachment-b", name: "continue.docx" }],
+    }) },
   );
 
   const bodies = messages.filter((message) =>
@@ -639,7 +665,14 @@ test("buildContextMessages does not project frontend user metadata for internal 
       },
       payload: { messages: { system: [], history: [] } },
     },
-    { currentUserMessage: "current internal task" },
+    { currentUserMessage: createPersistedCurrentUserMessage("current internal task", {
+      userName: "admin",
+      sessionId: "child",
+      dialogProcessId: "dialog-child",
+      turnScopeId: "internal-turn:current",
+      frontendUserMessage: false,
+      messageOrigin: "internal",
+    }) },
   );
   assert.equal(currentMessages.some((message) => message?.content === "current internal task"), true);
   assert.equal(

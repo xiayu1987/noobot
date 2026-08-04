@@ -6,6 +6,7 @@
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { applyLatestSessionVersion, getCurrentSessionVersion, isNewerSessionVersion } from "./sessionVersionManager.js";
+import { validateTurnCommittedEventData } from "@noobot/shared/turn-commit-protocol";
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
   const { activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
@@ -92,7 +93,14 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
 }
 
 export function routeCurrentTurnLifecycleEvent(event, data, context) {
-  const { activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
+  const {
+    activeSession,
+    applyTurnLifecycleEnvelope,
+    findCanonicalMessageById,
+    logSessionEvent,
+    makeViewMessage,
+    sessionId,
+  } = context;
   if (normalizeTrimmedString(event).toLowerCase() === StreamEventEnum.TURN_LIFECYCLE) {
     const result = applyTurnLifecycleEnvelope?.(data);
     const logReduction = (reduction = {}) => {
@@ -137,8 +145,56 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
   if (event !== "turn_committed") return false;
   const eventSessionId = normalizeTrimmedString(data?.sessionId);
   const targetSessionId = normalizeTrimmedString(activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId);
-  if (eventSessionId === targetSessionId && isNewerSessionVersion(data?.sessionVersion, getCurrentSessionVersion(activeSession))) {
-    applyLatestSessionVersion(activeSession.value, { version: data.sessionVersion, revision: data.sessionVersion });
+  const committedUserMessage = data?.userMessage;
+  const committedMessageId = normalizeTrimmedString(committedUserMessage?.messageId);
+  const validation = validateTurnCommittedEventData(data);
+  let applied = false;
+  let reason = "";
+  if (!validation.ok) {
+    reason = `protocol:${validation.errors[0]}`;
+  } else if (eventSessionId !== targetSessionId) {
+    reason = "committed_session_mismatch";
+  } else {
+    const targetMessage = findCanonicalMessageById?.(targetSessionId, committedMessageId);
+    if (!targetMessage) {
+      reason = "committed_user_target_missing";
+    } else {
+      const projectedMessage = typeof makeViewMessage === "function"
+        ? makeViewMessage(committedUserMessage)
+        : committedUserMessage;
+      Object.assign(targetMessage, projectedMessage);
+      targetMessage.attachments = Array.isArray(projectedMessage?.attachments)
+        ? projectedMessage.attachments.map((attachment) => ({ ...attachment }))
+        : [];
+      if (isNewerSessionVersion(data?.sessionVersion, getCurrentSessionVersion(activeSession))) {
+        applyLatestSessionVersion(activeSession.value, {
+          version: data.sessionVersion,
+          revision: data.sessionVersion,
+        });
+      }
+      applied = true;
+      reason = "applied";
+    }
   }
+  logSessionEvent?.({
+    category: applied ? "message" : "state",
+    level: applied ? "info" : "warn",
+    event: applied
+      ? "frontend.turnCommit.userMessageApplied"
+      : "frontend.turnCommit.userMessageRejected",
+    sessionId: eventSessionId || targetSessionId,
+    dialogProcessId: data?.dialogProcessId || "",
+    turnScopeId: data?.turnScopeId || "",
+    data: {
+      applied,
+      reason,
+      messageId: committedMessageId,
+      messageUid: normalizeTrimmedString(committedUserMessage?.messageUid),
+      attachmentCount: Array.isArray(committedUserMessage?.attachments)
+        ? committedUserMessage.attachments.length
+        : 0,
+      sessionVersion: Number(data?.sessionVersion || 0),
+    },
+  });
   return true;
 }

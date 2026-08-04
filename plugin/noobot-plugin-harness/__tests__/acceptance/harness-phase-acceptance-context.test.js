@@ -9,11 +9,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createAgentHookManager } from "../../../../agent/src/extensions/hooks/index.js";
-import { ModelMessageRuntimeHelpers } from "../../../../agent/src/bot/session/model-message-runtime-helpers.js";
+import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
+import { TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { createAcceptanceHandler } from "../../src/capabilities/handlers/acceptance.js";
-import { createGuidanceHandler } from "../../src/capabilities/handlers/guidance.js";
+import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
@@ -58,30 +58,30 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   });
 
   assert.equal(before.changed, true);
-  const planContextIndex = ctx.messages.findIndex((item = {}) =>
+  const planContextIndex = ctx.modelContext.messages.findIndex((item = {}) =>
     /harness-acceptance-main-plan/.test(String(item?.content || "")),
   );
-  const protocolIndex = ctx.messages.findIndex((item = {}) =>
+  const protocolIndex = ctx.modelContext.messages.findIndex((item = {}) =>
     /acceptance_patch_v1/.test(String(item?.content || "")),
   );
-  const requestIndex = ctx.messages.findIndex((item = {}) =>
+  const requestIndex = ctx.modelContext.messages.findIndex((item = {}) =>
     /harness-phase-acceptance-request/.test(String(item?.content || "")),
   );
-  const responsibilityIndex = ctx.messages.findIndex((item = {}) =>
+  const responsibilityIndex = ctx.modelContext.messages.findIndex((item = {}) =>
     /请根据上下文进行「阶段验收」，按文本协议返回（如果有）。/.test(String(item?.content || "")),
   );
-  assert.equal(ctx.messages[protocolIndex].role, "system");
-  assert.equal(ctx.messages[planContextIndex].role, "user");
-  assert.match(String(ctx.messages[planContextIndex].content), /计划清单上下文|Plan checklist context/);
-  assert.match(String(ctx.messages[planContextIndex].content), /核心实现/);
-  assert.equal(ctx.messages[planContextIndex].injectedMessage, true);
-  assert.equal(ctx.messages[planContextIndex].injectedBy, "harness-plugin");
-  assert.equal(ctx.messages[requestIndex].role, "user");
-  assert.doesNotMatch(String(ctx.messages[requestIndex].content), /acceptance_patch_v1/);
-  assert.match(String(ctx.messages[protocolIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
-  assert.match(String(ctx.messages[protocolIndex].content), /evidence=\[简短证据\]/);
-  assert.equal(ctx.messages[requestIndex].injectedMessage, true);
-  assert.equal(ctx.messages[requestIndex].injectedBy, "harness-plugin");
+  assert.equal(ctx.modelContext.messages[protocolIndex].role, "system");
+  assert.equal(ctx.modelContext.messages[planContextIndex].role, "user");
+  assert.match(String(ctx.modelContext.messages[planContextIndex].content), /计划清单上下文|Plan checklist context/);
+  assert.match(String(ctx.modelContext.messages[planContextIndex].content), /核心实现/);
+  assert.equal(ctx.modelContext.messages[planContextIndex].injectedMessage, true);
+  assert.equal(ctx.modelContext.messages[planContextIndex].injectedBy, "harness-plugin");
+  assert.equal(ctx.modelContext.messages[requestIndex].role, "user");
+  assert.doesNotMatch(String(ctx.modelContext.messages[requestIndex].content), /acceptance_patch_v1/);
+  assert.match(String(ctx.modelContext.messages[protocolIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
+  assert.match(String(ctx.modelContext.messages[protocolIndex].content), /evidence=\[简短证据\]/);
+  assert.equal(ctx.modelContext.messages[requestIndex].injectedMessage, true);
+  assert.equal(ctx.modelContext.messages[requestIndex].injectedBy, "harness-plugin");
   assert.equal(
     planContextIndex > -1 && requestIndex > planContextIndex && responsibilityIndex > requestIndex,
     true,
@@ -422,13 +422,13 @@ test("phase acceptance separate model drops historical summary relays and passes
 });
 
 
-test("phase acceptance separate model uses messageBlocks incremental when ctx.messages is history-only", async () => {
+test("phase acceptance separate model uses messageBlocks incremental when ctx.modelContext.messages is history-only", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const resolveModelMessages = new ModelMessageRuntimeHelpers().createResolveModelMessages();
   const invocations = [];
   const ctx = {
     messages: [
-      { role: "user", content: "history-only-visible-in-ctx.messages", dialogProcessId: "dlg_old" },
+      { role: "user", content: "history-only-visible-in-ctx.modelContext.messages", dialogProcessId: "dlg_old" },
     ],
     messageBlocks: {
       system: [],

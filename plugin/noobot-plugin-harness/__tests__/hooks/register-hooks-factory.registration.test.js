@@ -8,10 +8,10 @@ import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { appendMessage } from "../../src/core/message-store.js";
-import { resolveMainModelFinalMessages } from "../../../../agent/src/session/utils/context-window-normalizer.js";
+import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.messageBlocks && typeof ctx.messageBlocks === "object" ? ctx.messageBlocks : {};
+  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object" ? ctx.modelContext.messageBlocks : {};
   return resolveMainModelFinalMessages({
     systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
     historyMessages: Array.isArray(blocks.history) ? blocks.history : [],

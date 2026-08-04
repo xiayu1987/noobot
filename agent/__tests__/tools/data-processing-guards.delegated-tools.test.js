@@ -26,23 +26,41 @@ import { createWeb2DataTool } from "../../src/tools/data-processing/web2data-too
 import { createConnectorAccessTool } from "../../src/tools/connectors/connector-access-tool.js";
 import { ERROR_CODE } from "../../src/shared/errors/constants.js";
 import { TOOL_NAME } from "../../src/tools/constants/index.js";
+import { AGENT_DETACHED_SESSION_ROOT } from "../../src/bot/session/detached-subsession-strategy.js";
 import { buildAgentContext } from "./data-processing-guards.test-helpers.js";
 
+function createDetachedBotManager(calls = []) {
+  return {
+    async runDetachedSubSession(payload = {}) {
+      calls.push(payload);
+      return {
+        sessionId: "child-session",
+        result: {
+          sessionId: "child-session",
+          answer: "ok",
+          traces: [],
+          messages: [],
+          dialogProcessId: "child-dialog",
+        },
+      };
+    },
+  };
+}
+
+function assertAgentDetachedStrategy(strategy = {}, parentSessionId = "") {
+  assert.equal(strategy.parentSessionId, parentSessionId);
+  assert.match(strategy.sessionId, /^[0-9a-f-]{36}$/);
+  assert.match(strategy.dialogProcessId, /^[0-9a-f-]{36}$/);
+  assert.match(strategy.turnScopeId, /^internal-turn:[0-9a-f-]{36}$/);
+  assert.equal(strategy.executionId, `agent:${strategy.turnScopeId}`);
+  assert.equal(strategy.allowedRoot, AGENT_DETACHED_SESSION_ROOT);
+  assert.equal(strategy.relativeDir, `${AGENT_DETACHED_SESSION_ROOT}/${strategy.sessionId}`);
+}
 
 test("process_content_task: detached runtime uses durable parent session", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-content-"));
   const calls = [];
-  const botManager = {
-    async runSession(payload = {}) {
-      calls.push(payload);
-      return {
-        sessionId: payload.sessionId,
-        answer: "ok",
-        traces: [],
-        messages: [],
-      };
-    },
-  };
+  const botManager = createDetachedBotManager(calls);
   const tools = createContentProcessTool({
     agentContext: {
       execution: {
@@ -74,25 +92,16 @@ test("process_content_task: detached runtime uses durable parent session", async
   const result = JSON.parse(resultText);
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.parentSessionId, "root-plugin-session");
-  assert.equal(calls[0]?.sessionId, result.sessionId);
+  assertAgentDetachedStrategy(calls[0]?.strategy, "root-plugin-session");
+  assert.equal(calls[0]?.parentContext?.execution?.controllers?.runtime?.botManager, botManager);
+  assert.equal(result.sessionId, "child-session");
   assert.equal(result.parentSessionId, "root-plugin-session");
 });
 
 test("process_content_task: 透传父 runConfig 显式 streaming=false 到子 session", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-content-streaming-"));
   const calls = [];
-  const botManager = {
-    async runSession(payload = {}) {
-      calls.push(payload);
-      return {
-        sessionId: payload.sessionId,
-        answer: "ok",
-        traces: [],
-        messages: [],
-      };
-    },
-  };
+  const botManager = createDetachedBotManager(calls);
   const tools = createContentProcessTool({
     agentContext: {
       execution: {
@@ -126,23 +135,13 @@ test("process_content_task: 透传父 runConfig 显式 streaming=false 到子 se
 
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.runConfig?.streaming, false);
+  assert.equal(calls[0]?.runConfigPatch?.streaming, false);
 });
 
 test("process_content_task: 缺省 modelName 时继承父运行时模型", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-content-model-"));
   const calls = [];
-  const botManager = {
-    async runSession(payload = {}) {
-      calls.push(payload);
-      return {
-        sessionId: payload.sessionId,
-        answer: "ok",
-        traces: [],
-        messages: [],
-      };
-    },
-  };
+  const botManager = createDetachedBotManager(calls);
   const tools = createContentProcessTool({
     agentContext: {
       execution: {
@@ -175,23 +174,13 @@ test("process_content_task: 缺省 modelName 时继承父运行时模型", async
 
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.runConfig?.runtimeModel, "gpt_5_6");
+  assert.equal(calls[0]?.runConfigPatch?.runtimeModel, "gpt_5_6");
 });
 
 test("process_content_task: 显式 modelName 优先于父运行时模型", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-content-model-priority-"));
   const calls = [];
-  const botManager = {
-    async runSession(payload = {}) {
-      calls.push(payload);
-      return {
-        sessionId: payload.sessionId,
-        answer: "ok",
-        traces: [],
-        messages: [],
-      };
-    },
-  };
+  const botManager = createDetachedBotManager(calls);
   const tools = createContentProcessTool({
     agentContext: {
       execution: {
@@ -225,22 +214,12 @@ test("process_content_task: 显式 modelName 优先于父运行时模型", async
 
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.runConfig?.runtimeModel, "custom-model");
+  assert.equal(calls[0]?.runConfigPatch?.runtimeModel, "custom-model");
 });
 
 test("process_connector_tool: detached runtime uses durable parent session", async () => {
   const calls = [];
-  const botManager = {
-    async runSession(payload = {}) {
-      calls.push(payload);
-      return {
-        sessionId: payload.sessionId,
-        answer: "ok",
-        traces: [],
-        messages: [],
-      };
-    },
-  };
+  const botManager = createDetachedBotManager(calls);
   const tools = createConnectorAccessTool({
     agentContext: {
       execution: {
@@ -274,7 +253,7 @@ test("process_connector_tool: detached runtime uses durable parent session", asy
   const result = JSON.parse(resultText);
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.parentSessionId, "root-plugin-session");
+  assertAgentDetachedStrategy(calls[0]?.strategy, "root-plugin-session");
   assert.equal(
     String(calls[0]?.systemMessages?.[0] || ""),
     "可处理连接器相关任务（数据库/终端/邮箱）。连接信息由系统连接器自动处理，无需提供或询问连接信息",
@@ -284,17 +263,7 @@ test("process_connector_tool: detached runtime uses durable parent session", asy
 
 test("process_connector_tool: 透传父 runConfig 显式 streaming=false 到子 session", async () => {
   const calls = [];
-  const botManager = {
-    async runSession(payload = {}) {
-      calls.push(payload);
-      return {
-        sessionId: payload.sessionId,
-        answer: "ok",
-        traces: [],
-        messages: [],
-      };
-    },
-  };
+  const botManager = createDetachedBotManager(calls);
   const tools = createConnectorAccessTool({
     agentContext: {
       execution: {
@@ -330,5 +299,5 @@ test("process_connector_tool: 透传父 runConfig 显式 streaming=false 到子 
 
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.runConfig?.streaming, false);
+  assert.equal(calls[0]?.runConfigPatch?.streaming, false);
 });

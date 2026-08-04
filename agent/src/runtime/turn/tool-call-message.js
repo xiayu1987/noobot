@@ -42,15 +42,19 @@ export function buildAssistantModelMessageForToolCalls({
   ai = {},
   contentText = "",
   toolCalls = [],
+  noobotMessageId = "",
 } = {}) {
   const rawContent =
     typeof ai?.content === "string" || Array.isArray(ai?.content)
       ? ai.content
       : String(contentText || "");
+  const additionalKwargs = clonePlainObjectWithoutToolCalls(ai?.additional_kwargs) || {};
+  const canonicalMessageId = String(noobotMessageId || "").trim();
+  if (canonicalMessageId) additionalKwargs.noobotMessageId = canonicalMessageId;
   return new AIMessage({
     content: rawContent,
     tool_calls: formatToolCallsForLangChain(toolCalls),
-    additional_kwargs: clonePlainObjectWithoutToolCalls(ai?.additional_kwargs) || {},
+    additional_kwargs: additionalKwargs,
     response_metadata: clonePlainObjectWithoutToolCalls(ai?.response_metadata) || {},
   });
 }

@@ -271,7 +271,7 @@ test("resolveMainModelHistoryMessages selects recent user dialogs when artifact 
   ]);
 });
 
-test("resolveMainModelHistoryMessages uses authoritative dialog ordinal over timestamps", () => {
+test("resolveMainModelHistoryMessages ignores external dialog order and uses first occurrence", () => {
   const sourceMessages = [
     { role: "user", content: "second", dialogProcessId: "d2", ts: "2026-07-27T01:00:00Z" },
     { role: "user", content: "first", dialogProcessId: "d1", ts: "2026-07-27T02:00:00Z" },
@@ -284,10 +284,10 @@ test("resolveMainModelHistoryMessages uses authoritative dialog ordinal over tim
       { dialogProcessId: "d2", dialogOrdinal: 2 },
     ],
   });
-  assert.deepEqual(result.map((item) => item.content), ["second"]);
+  assert.deepEqual(result.map((item) => item.content), ["first"]);
 });
 
-test("resolveMainModelHistoryMessages preserves legacy messages without dialogProcessId", () => {
+test("resolveMainModelHistoryMessages excludes messages without dialogProcessId or dialogId", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
       { role: "user", content: "u1-first" },
@@ -299,10 +299,7 @@ test("resolveMainModelHistoryMessages preserves legacy messages without dialogPr
     ],
   });
 
-  assert.deepEqual(
-    result.map((item) => item.content),
-    ["u1-first", "u1-second", "a1", "u2", "a2"],
-  );
+  assert.deepEqual(result, []);
 });
 
 test("resolveMainModelHistoryMessages keeps unsummarized injected messages in ordinary history", () => {

@@ -20,6 +20,7 @@ import {
 import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
 import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
+import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/hook-context";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import {
   resolveNonThinkingCallOverrides,
@@ -43,15 +44,17 @@ import { finalizeNoToolsStreamingTurn } from "./no-tools-final-stream-stage.js";
 import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { maybeCreateRequiredToolChoiceUnsupportedFallbackAi } from "./tool-choice-fallback-stage.js";
 import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
-import { appendMessage, replaceMessages } from "../../context/runtime-state/message-store.js";
+import {
+  appendMessage,
+  replaceMessageProjection,
+} from "../../context/runtime-state/message-store.js";
 import {
   emitModelContextTrace,
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
 } from "../../context/runtime-state/context-diagnostics.js";
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
-import { isResumeInitializingFirstModelTurn } from "../lifecycle/state-machine.js";
-import { syncStoppedModelMessageSnapshotCandidate } from "../resume/model-message-snapshot-store.js";
+import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
 import {
   applyAuthoritativeMessageId,
@@ -70,55 +73,49 @@ function normalizeBlockList(value = []) {
   return Array.isArray(value) ? value : [];
 }
 
-function isMessageBlocks(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value);
+function requireLoopStateModelContext(loopState = {}) {
+  const modelContext = loopState?.modelContext;
+  if (modelContext?.protocolVersion !== 1) {
+    throw new Error("agent loop requires modelContext protocolVersion=1");
+  }
+  return modelContext;
 }
 
-function reconcileHookContextToLoopState(loopState = {}, hookContext = {}) {
-  if (!loopState || typeof loopState !== "object" || !hookContext || typeof hookContext !== "object") {
-    return loopState;
+function assertHookContextRetainsModelContext(loopState = {}, hookContext = {}) {
+  const expected = requireLoopStateModelContext(loopState);
+  const modelContext = resolveAuthoritativeModelContext(hookContext);
+  if (modelContext !== expected) {
+    throw new Error("before_llm_call must retain the authoritative modelContext entity");
   }
-  if (isMessageBlocks(hookContext.messageBlocks) && hookContext.messageBlocks !== loopState.messageBlocks) {
-    loopState.messageBlocks = hookContext.messageBlocks;
-  }
-  if (Array.isArray(hookContext.messages) && Array.isArray(loopState.messages) && hookContext.messages !== loopState.messages) {
-    replaceMessages(loopState, hookContext.messages);
-  }
-  return loopState;
+  return expected;
 }
-
 
 function traceLoopStateContext(runtime = {}, stage = "", loopState = {}, extra = {}) {
+  const modelContext = requireLoopStateModelContext(loopState);
   emitModelContextTrace(runtime, stage, {
     turn: extra.turn,
     mode: extra.mode,
     dialogProcessId: loopState?.dialogProcessId || "",
-    blocks: summarizeDiagnosticBlocks(loopState?.messageBlocks),
-    messages: summarizeDiagnosticMessages(loopState?.messages),
+    blocks: summarizeDiagnosticBlocks(modelContext.messageBlocks),
+    messages: summarizeDiagnosticMessages(modelContext.messages),
     ...extra,
   });
 }
 
 function syncMessagesFromBlocks(loopState = {}) {
-  const blocks =
-    loopState?.messageBlocks &&
-    typeof loopState.messageBlocks === "object" &&
-    !Array.isArray(loopState.messageBlocks)
-      ? loopState.messageBlocks
-      : null;
-  if (!blocks || !Array.isArray(loopState?.messages)) return loopState?.messages || [];
+  const modelContext = requireLoopStateModelContext(loopState);
+  const blocks = modelContext.messageBlocks;
+  if (!blocks || typeof blocks !== "object" || !Array.isArray(modelContext.messages)) {
+    throw new Error("modelContext requires canonical messages and messageBlocks");
+  }
   const resolved = resolveMainModelFinalMessages({
     systemMessages: normalizeBlockList(blocks.system),
     historyMessages: normalizeBlockList(blocks.history),
     incrementalMessages: normalizeBlockList(blocks.incremental),
   });
   const composed = Array.isArray(resolved?.messages) ? resolved.messages : [];
-  replaceMessages(loopState, composed);
-  return loopState.messages;
-}
-
-function shouldSkipBeforeLlmHookMessageAdoption(runtime = {}, turn = 0) {
-  return isResumeInitializingFirstModelTurn(runtime, turn);
+  replaceMessageProjection(modelContext, composed);
+  return modelContext.messages;
 }
 
 export async function invokeNoToolsTurn({
@@ -127,8 +124,9 @@ export async function invokeNoToolsTurn({
   turn,
   forceToolChoiceNone = false,
 }) {
+  const modelContext = requireLoopStateModelContext(loopState);
+  const messages = modelContext.messages;
   const {
-    messages,
     traces,
     turnMessages,
     currentTurnMessages,
@@ -149,9 +147,7 @@ export async function invokeNoToolsTurn({
     status: "start",
     startedAt: llmStartedAt,
     forceToolChoiceNone,
-    messages,
-    messageStore: loopState.messageStore,
-    messageBlocks: loopState.messageBlocks,
+    modelContext,
     maxTurns: Number(loopState?.maxTurns || 0),
     agentContext: modelState?.agentContext || null,
   });
@@ -163,13 +159,12 @@ export async function invokeNoToolsTurn({
   emitModelContextTrace(runtime, "before_llm_hook_context_output", {
     turn,
     mode: "no_tools",
-    hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.messageBlocks),
-    hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.messages),
+    hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.modelContext?.messageBlocks),
+    hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.modelContext?.messages),
   });
-  if (!shouldSkipBeforeLlmHookMessageAdoption(runtime, turn)) {
-    reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
-    syncMessagesFromBlocks(loopState);
-  }
+  assertHookContextRetainsModelContext(loopState, beforeLlmHookContext);
+  await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
+  syncMessagesFromBlocks(loopState);
   traceLoopStateContext(runtime, "before_llm_final_composed", loopState, { turn, mode: "no_tools" });
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
@@ -183,7 +178,6 @@ export async function invokeNoToolsTurn({
       mode: "no_tools",
       invoke: ({ callbacks }) => {
         const modelMessages = filterForModelContext(messages);
-        syncStoppedModelMessageSnapshotCandidate(runtime, modelMessages);
         emitModelContextTrace(runtime, "llm_invoke_messages", {
           turn,
           mode: "no_tools",
@@ -215,9 +209,7 @@ export async function invokeNoToolsTurn({
         endedAt: new Date(Date.now()).toISOString(),
         durationMs: Date.now() - llmStartedAtMs,
         error,
-        messages,
-        messageStore: loopState.messageStore,
-        messageBlocks: loopState.messageBlocks,
+        modelContext,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
       }),
@@ -238,9 +230,7 @@ export async function invokeNoToolsTurn({
       durationMs: llmEndedAtMs - llmStartedAtMs,
       hasToolCalls: false,
       modelResponse,
-      messages,
-      messageStore: loopState.messageStore,
-      messageBlocks: loopState.messageBlocks,
+      modelContext,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
@@ -254,7 +244,7 @@ export async function invokeNoToolsTurn({
     modelResponse,
     responseContentText,
     messages,
-    messageHolder: loopState,
+    messageHolder: modelContext,
     invokeLlm,
     modelState,
     runtime,
@@ -270,7 +260,7 @@ export async function invokeNoToolsTurn({
   const finalStreamingTurn = await finalizeNoToolsStreamingTurn({
     modelState,
     messages,
-    messageHolder: loopState,
+    messageHolder: modelContext,
     modelResponse,
     responseContentText,
     turn,
@@ -310,8 +300,9 @@ export async function invokeNoToolsTurn({
 }
 
 export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
+  const modelContext = requireLoopStateModelContext(loopState);
+  const messages = modelContext.messages;
   const {
-    messages,
     traces,
     tools,
     turnMessages,
@@ -355,9 +346,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     startedAt: llmStartedAt,
     toolChoice: configuredToolChoice || "",
     toolNames: boundTools.map((tool) => String(tool?.name || "").trim()).filter(Boolean),
-    messages,
-    messageStore: loopState.messageStore,
-    messageBlocks: loopState.messageBlocks,
+    modelContext,
     maxTurns: Number(loopState?.maxTurns || 0),
     agentContext: modelState?.agentContext || null,
   });
@@ -369,13 +358,12 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   emitModelContextTrace(runtime, "before_llm_hook_context_output", {
     turn,
     mode: "with_tools",
-    hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.messageBlocks),
-    hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.messages),
+    hookBlocks: summarizeDiagnosticBlocks(beforeLlmHookContext.modelContext?.messageBlocks),
+    hookMessages: summarizeDiagnosticMessages(beforeLlmHookContext.modelContext?.messages),
   });
-  if (!shouldSkipBeforeLlmHookMessageAdoption(runtime, turn)) {
-    reconcileHookContextToLoopState(loopState, beforeLlmHookContext);
-    syncMessagesFromBlocks(loopState);
-  }
+  assertHookContextRetainsModelContext(loopState, beforeLlmHookContext);
+  await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
+  syncMessagesFromBlocks(loopState);
   traceLoopStateContext(runtime, "before_llm_final_composed", loopState, { turn, mode: "with_tools" });
 
   const mainFlowFinalNoToolsInstruction =
@@ -414,9 +402,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
         durationMs: Date.now() - llmStartedAtMs,
         toolChoice: configuredToolChoice || "",
         error,
-        messages,
-        messageStore: loopState.messageStore,
-        messageBlocks: loopState.messageBlocks,
+        modelContext,
         maxTurns: Number(loopState?.maxTurns || 0),
         agentContext: modelState?.agentContext || null,
       }),
@@ -440,7 +426,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     calls,
     aiContentText,
     messages,
-    messageHolder: loopState,
+    messageHolder: modelContext,
     invokeBoundLlmWithToolChoice,
     eventListener,
     turn,
@@ -474,9 +460,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       toolChoice: configuredToolChoice || "",
       ai,
       calls,
-      messages,
-      messageStore: loopState.messageStore,
-      messageBlocks: loopState.messageBlocks,
+      modelContext,
       maxTurns: Number(loopState?.maxTurns || 0),
       agentContext: modelState?.agentContext || null,
     }),
@@ -494,11 +478,17 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     ai = finalStreamResult.ai || ai;
     aiContentText = finalStreamResult.text || aiContentText;
   }
-  appendMessage(loopState, calls.length
+  const assistantMessageUid = createSessionMessageUid();
+  if (!calls.length) {
+    if (!ai.additional_kwargs || typeof ai.additional_kwargs !== "object") ai.additional_kwargs = {};
+    ai.additional_kwargs.noobotMessageId = assistantMessageUid;
+  }
+  appendMessage(modelContext, calls.length
     ? buildAssistantModelMessageForToolCalls({
         ai,
         contentText: aiContentText,
         toolCalls: calls,
+        noobotMessageId: assistantMessageUid,
       })
     : ai, { block: "incremental" });
 
@@ -508,7 +498,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   const stateCommitter = createStateCommitter({
     messages,
-    messageHolder: loopState,
+    messageHolder: modelContext,
     traces,
     turnMessageStore,
     dialogProcessId,
@@ -526,6 +516,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     modelAlias: currentModelInfo.modelAlias,
     modelName: currentModelInfo.modelName,
     messageId: assistantMessageId,
+    messageUid: assistantMessageUid,
     presentationMessageId,
     chatPresentation: calls.length === 0,
   });

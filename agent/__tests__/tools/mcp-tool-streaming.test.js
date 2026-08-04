@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createMcpTool } from "../../src/tools/execution/mcp-tool.js";
+import { AGENT_DETACHED_SESSION_ROOT } from "../../src/bot/session/detached-subsession-strategy.js";
 
 function createJsonResponse(payload = {}, { status = 200, headers = {} } = {}) {
   return {
@@ -68,9 +69,12 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
   const runtime = {
     userId: "primary-user",
     botManager: {
-      async runSession(payload = {}) {
+      async runDetachedSubSession(payload = {}) {
         runCalls.push(payload);
-        return { answer: "done", traces: [], messages: [], dialogProcessId: "dp_child" };
+        return {
+          sessionId: "child-session",
+          result: { answer: "done", traces: [], messages: [], dialogProcessId: "dp_child" },
+        };
       },
     },
     systemRuntime: {
@@ -99,5 +103,17 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
   const payload = JSON.parse(String(raw || "{}"));
   assert.equal(payload.ok, true);
   assert.equal(runCalls.length, 1);
-  assert.equal(runCalls[0]?.runConfig?.streaming, false);
+  assert.equal(runCalls[0]?.runConfigPatch?.streaming, false);
+  assert.match(runCalls[0]?.strategy?.sessionId, /^[0-9a-f-]{36}$/);
+  assert.match(runCalls[0]?.strategy?.dialogProcessId, /^[0-9a-f-]{36}$/);
+  assert.match(runCalls[0]?.strategy?.turnScopeId, /^internal-turn:[0-9a-f-]{36}$/);
+  assert.equal(
+    runCalls[0]?.strategy?.executionId,
+    `agent:${runCalls[0].strategy.turnScopeId}`,
+  );
+  assert.equal(runCalls[0]?.strategy?.allowedRoot, AGENT_DETACHED_SESSION_ROOT);
+  assert.equal(
+    runCalls[0]?.strategy?.relativeDir,
+    `${AGENT_DETACHED_SESSION_ROOT}/${runCalls[0].strategy.sessionId}`,
+  );
 });

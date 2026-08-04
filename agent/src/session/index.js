@@ -386,10 +386,6 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.stampReusedUserTurnDialogProcessId(payload);
     },
 
-    async markSessionMessagesSummarized(payload = {}) {
-      return sessionMessageService.markSessionMessagesSummarized(payload);
-    },
-
     async commitTurnSummaryCheckpoint(payload = {}) {
       return sessionMessageService.commitTurnSummaryCheckpoint(payload);
     },
@@ -398,8 +394,8 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.getSessionTurns(payload);
     },
 
-    async getSessionContextSource({ userId, sessionId }) {
-      return sessionMessageService.getSessionContextSource({ userId, sessionId });
+    async getSessionContextSource(payload = {}) {
+      return sessionMessageService.getSessionContextSource(payload);
     },
 
     async getTurnSummaryCheckpointState(payload = {}) {
