@@ -363,9 +363,9 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
     dialogProcessId: "d1",
     userMessage: "请结合上下文生成工作流",
     runConfig: { locale: "zh-CN" },
-    contextProtocolVersion: 1,
+    contextProtocolVersion: 2,
     modelContext: {
-      protocolVersion: 1,
+      protocolVersion: 2,
       messages: [
         { role: "user", content: "历史背景：审批流程包含财务复核" },
         { role: "assistant", content: "已记录财务复核约束" },
@@ -399,4 +399,3 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
   assert.equal(semanticMessages[1]?.content, "已记录财务复核约束");
   assert.match(String(semanticMessages.at(-1)?.content || ""), /当前用户消息:\n请结合上下文生成工作流/);
 });
-

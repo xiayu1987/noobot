@@ -23,7 +23,7 @@ function createEnvelope(overrides = {}) {
     environment: { workspace: { cwd: "/workspace" } },
     execution: { caller: "user", flags: {} },
     modelContext: {
-      protocolVersion: 1,
+      protocolVersion: 2,
       activeTurnIdentity: { dialogProcessId: "d1", turnScopeId: "t1" },
       messageBlocks: { system: [], history: [], incremental: [] },
     },

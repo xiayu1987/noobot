@@ -7,7 +7,11 @@
   "exports": {
     ".": "./src/index.js",
     "./message-store": "./src/message-store.js",
+    "./model-context-runtime": "./src/model-context-runtime.js",
+    "./context-mutation": "./src/context-mutation.js",
     "./message-identity": "./src/message-identity.js",
+    "./message-codec": "./src/message-codec.js",
+    "./context-policy": "./src/context-policy.js",
     "./context-diagnostics": "./src/context-diagnostics.js",
     "./hook-context": "./src/hook-context.js",
     "./message-policy": "./src/message-policy.js",

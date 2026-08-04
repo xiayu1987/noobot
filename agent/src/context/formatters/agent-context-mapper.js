@@ -89,7 +89,7 @@ export function mapToAgentContextSchema({
       selectedConnectors,
     },
     modelContext: {
-      protocolVersion: 1,
+      protocolVersion: 2,
       activeTurnIdentity: {
         dialogProcessId: String(dialogProcessId || "").trim(),
         turnScopeId: String(turnScopeId || "").trim(),

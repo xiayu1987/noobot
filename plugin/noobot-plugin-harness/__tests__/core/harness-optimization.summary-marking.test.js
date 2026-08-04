@@ -24,7 +24,7 @@ import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared
 import {
   relaySeparateModelOutputAsUserMessage,
 } from "../../src/capabilities/handlers/shared.js";
-import { replaceMessageProjection } from "../../src/core/message-store.js";
+import { appendMessage, replaceMessageProjection } from "../../src/core/message-store.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 function stampRoundIdentity(messages = [], dialogProcessId = "dp-1", turnScopeId = "turn-1") {
@@ -35,6 +35,8 @@ function stampRoundIdentity(messages = [], dialogProcessId = "dp-1", turnScopeId
 test("relayed injections keep one identity across context and current-turn persistence", () => {
   const persisted = [];
   const ctx = createTestHookContext({
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
     agentContext: {
       execution: {
         controllers: {
@@ -85,6 +87,8 @@ test("summary checkpoint requests restored incremental messages missing from the
   stampRoundIdentity([restoredCall, restoredResult, resumedCall]);
   const state = { pending: {} };
   const ctx = createTestHookContext({
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
     agentContext: {
       execution: {
         dialogProcessId: "dp-1",
@@ -260,6 +264,8 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
   stampRoundIdentity([oldGuidance, latestGuidance, oldSummary]);
   const state = { pending: {} };
   const ctx = createTestHookContext({
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
     agentContext: {
       execution: {
         dialogProcessId: "dp-1",
@@ -288,10 +294,8 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
     injectedMessageType: "separate_model_relay:summary",
     additional_kwargs: { noobotMessageId: "completed-summary" },
   };
-  stampRoundIdentity([completedSummary]);
-  ctx.modelContext.messageBlocks.incremental.push(completedSummary);
-  ctx.modelContext.messages.push(completedSummary);
-  ctx.modelContext.messageStore.byId.set("completed-summary", completedSummary);
+  Object.assign(completedSummary, ctx.modelContext.activeTurnIdentity);
+  appendMessage(ctx, completedSummary, { block: "incremental" });
 
   await markGuidanceSummarizedMessages(ctx, {});
 

@@ -11,7 +11,7 @@ import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../extensions/hooks/i
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
-import { appendMessage } from "@noobot/context-protocol/message-store";
+import { appendContextMessage as appendMessage } from "@noobot/context-protocol/context-mutation";
 import {
   applyAuthoritativeMessageId,
   currentAssistantPresentationMessageId,

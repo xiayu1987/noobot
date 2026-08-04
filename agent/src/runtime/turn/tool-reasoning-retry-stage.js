@@ -5,7 +5,7 @@
  */
 import { emitEvent } from "../../events/index.js";
 import { extractAiReasoningText } from "../llm-invoker.js";
-import { appendMessage } from "@noobot/context-protocol/message-store";
+import { appendContextMessage as appendMessage } from "@noobot/context-protocol/context-mutation";
 import { buildReasoningRetrySystemMessage } from "./turn-stage.js";
 import { normalizeToolTurnAi } from "./tool-call-retry-stage.js";
 

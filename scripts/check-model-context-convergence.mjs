@@ -297,6 +297,7 @@ if (latestInjectionPolicyHits.length) {
 const summarizedMutationAllowed = new Set([
   SUMMARY_POLICY_PATH,
   "context-protocol/src/message-store.js",
+  "context-protocol/src/context-mutation.js",
   "context-protocol/src/snapshot-policy.js",
   "agent/src/runtime/resume/model-message-snapshot-store.js",
   "agent/src/bot/session/summary-checkpoint-committer.js",
@@ -329,6 +330,7 @@ if (summarizedMutationHits.length) {
 const summaryMutationCallAllowed = new Set([
   SUMMARY_POLICY_PATH,
   "context-protocol/src/message-store.js",
+  "context-protocol/src/context-mutation.js",
   "agent/src/context/session/summarized-message-policy.js",
   "agent/src/runtime/turn/turn-result-aggregator.js",
   "agent/src/bot/session/summary-checkpoint-committer.js",
@@ -370,8 +372,8 @@ assertFileContains("context-protocol/src/window-reducer.js", [
   { name: "cross-block identity requires canonical message id", pattern: /const explicitId = resolveMessageId\(message\);[\s\S]*?return explicitId \? `id:\$\{explicitId\}` : ""/ },
 ]);
 const messagePolicyText = assertFileContains("context-protocol/src/message-policy.js", [
-  { name: "message policy resolves only canonical noobot id", pattern: /export\s+function\s+resolveMessageId[\s\S]*?return\s+readMessageField\(message,\s*["']noobotMessageId["']\)/ },
-  { name: "injected marker uses canonical field reader", pattern: /readMessageField\(message,\s*["']injectedMessage["']\)/ },
+  { name: "message policy delegates canonical identity to codec", pattern: /return\s+resolveContextMessageId\(message\)/ },
+  { name: "injected marker delegates to canonical flags", pattern: /return\s+resolveContextMessageFlags\(message\)\.injected/ },
 ]);
 const policyResolveIdMatch = messagePolicyText.match(/export\s+function\s+resolveMessageId[\s\S]*?\n}/);
 if (policyResolveIdMatch && /readMessageField\(message,\s*["'](?:id|messageId)["']\)/.test(policyResolveIdMatch[0])) {

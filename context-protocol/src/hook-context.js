@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { canonicalizeMessageStore } from "./message-store.js";
+import { attachModelContextRuntime } from "./model-context-runtime.js";
 import {
   HOOK_CONTEXT_PROTOCOL_VERSION,
   MODEL_CONTEXT_PROTOCOL_VERSION,
@@ -60,11 +61,11 @@ function normalizeActiveTurnIdentity(identity = null) {
 }
 
 export function createModelContext({
-  messageStore = null,
   messages = null,
   messageBlocks = null,
   activeTurnIdentity = null,
   onCanonicalMessageAdded = null,
+  onMutationConsumed = null,
 } = {}) {
   const explicitBlocks = normalizeBlocks(messageBlocks);
   const blocks = explicitBlocks || (Array.isArray(messages) ? resolveInitialBlocks(messages) : null);
@@ -79,13 +80,10 @@ export function createModelContext({
       : blocks
         ? [...blocks.system, ...blocks.history, ...blocks.incremental]
         : null;
-  if (!blocks && !resolvedMessages && !messageStore) return null;
+  if (!blocks && !resolvedMessages) return null;
   const modelContext = {
     protocolVersion: MODEL_CONTEXT_PROTOCOL_VERSION,
     activeTurnIdentity: normalizeActiveTurnIdentity(activeTurnIdentity),
-    onCanonicalMessageAdded:
-      typeof onCanonicalMessageAdded === "function" ? onCanonicalMessageAdded : null,
-    messageStore,
     // When blocks are explicit, hydrate their entity identities before
     // materializing the flat projection. Hydrating the flat list first would
     // assign two ids to legacy copies of the same scoped message and prevent
@@ -93,6 +91,7 @@ export function createModelContext({
     messages: explicitBlocks ? null : resolvedMessages,
     messageBlocks: blocks,
   };
+  attachModelContextRuntime(modelContext, { onCanonicalMessageAdded, onMutationConsumed });
   canonicalizeMessageStore(modelContext);
   if (explicitBlocks) {
     modelContext.messages = [
@@ -121,12 +120,12 @@ export function resolveAuthoritativeModelContext(context = {}) {
 export function validateHookContextProtocol(context = {}, { point = "" } = {}) {
   const warnings = [];
   const version = Number(context?.contextProtocolVersion);
-  if (version !== HOOK_CONTEXT_PROTOCOL_VERSION) warnings.push("contextProtocolVersion must equal 1");
+  if (version !== HOOK_CONTEXT_PROTOCOL_VERSION) warnings.push(`contextProtocolVersion must equal ${HOOK_CONTEXT_PROTOCOL_VERSION}`);
   const modelContext = context?.modelContext;
   if (modelContext != null) {
     if (!asObject(modelContext)) warnings.push("modelContext should be object");
     else {
-      if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) warnings.push("modelContext.protocolVersion must equal 1");
+      if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) warnings.push(`modelContext.protocolVersion must equal ${MODEL_CONTEXT_PROTOCOL_VERSION}`);
       const activeTurnIdentity = modelContext.activeTurnIdentity;
       if (activeTurnIdentity != null && (
         !asObject(activeTurnIdentity) ||

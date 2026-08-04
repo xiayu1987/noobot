@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
+import { createModelContext } from "@noobot/context-protocol/hook-context";
 
 test("summary checkpoint persists unmodified messages before atomically marking exact UIDs", async () => {
   const messages = [
@@ -176,12 +177,7 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
   ];
   const runtime = {
     currentTurnMessages: createCurrentTurnMessagesStore(turnMessages),
-    activeMessageContext: {
-      messages: turnMessages.map((message) => ({
-        ...message,
-        summarized: true,
-        additional_kwargs: { noobotMessageId: message.messageUid },
-      })),
+    activeMessageContext: createModelContext({
       messageBlocks: {
         system: [],
         history: [],
@@ -191,7 +187,7 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
           additional_kwargs: { noobotMessageId: message.messageUid },
         })),
       },
-    },
+    }),
   };
   const persisted = [];
   let checkpointPayload = null;

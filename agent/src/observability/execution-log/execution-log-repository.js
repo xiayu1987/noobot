@@ -19,7 +19,7 @@ function mapExecutionLogToSessionChannelCategory(normalizedLog = {}) {
   const category = String(normalizedLog?.category || "").trim().toLowerCase();
   if (category === "tool") return RUNTIME_EVENT_CATEGORIES.INTERACTION;
   if (category === "error") return RUNTIME_EVENT_CATEGORIES.SYSTEM;
-  if (["semantic_transfer", "context_identity", "agent_context"].includes(category)) {
+  if (["semantic_transfer", "context_identity", "agent_context", "agent_context_protocol"].includes(category)) {
     return RUNTIME_EVENT_CATEGORIES.DEBUG;
   }
   return RUNTIME_EVENT_CATEGORIES.SYSTEM;

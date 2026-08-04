@@ -10,7 +10,7 @@ import {
   invokeLlmWithTransientRetry,
   normalizeAiTextContent,
 } from "../llm-invoker.js";
-import { appendMessage } from "@noobot/context-protocol/message-store";
+import { appendContextMessage as appendMessage } from "@noobot/context-protocol/context-mutation";
 import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
 import { buildReasoningRetrySystemMessage } from "./turn-stage.js";
 

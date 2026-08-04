@@ -17,7 +17,6 @@ import { safeId } from "../data/record-builders.js";
 import { DEFAULT_OPTIONS, normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
-import { canonicalizeMessageStore } from "./message-store.js";
 
 export function normalizePlanningGuidance(options = {}) {
   if (options.planningGuidanceMode === "separate_model" && !options.capabilityModelInvoker) {
@@ -49,15 +48,7 @@ export function normalizeHookContextProtocol(point = "", ctx = {}) {
   const normalizedPoint = String(point || ctx?.point || "").trim();
   if (normalizedPoint && !ctx.point) ctx.point = normalizedPoint;
 
-  const authoritative = resolveAuthoritativeModelContext(ctx);
-  if (authoritative) {
-    // The harness adapter resolves the authoritative modelContext itself. Do
-    // not pass the resolved payload back through the adapter, because that
-    // adapter intentionally accepts a Hook Context and would try to resolve
-    // modelContext a second time. Canonicalize the Hook Context once so all
-    // protocol views continue to share the same store.
-    canonicalizeMessageStore(ctx);
-  }
+  resolveAuthoritativeModelContext(ctx);
 
   const unifiedCalls = resolveUnifiedCalls(ctx);
   if (unifiedCalls && !Array.isArray(ctx.calls)) {

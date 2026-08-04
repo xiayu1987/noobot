@@ -13,6 +13,10 @@ import {
 } from "./message-policy.js";
 import { isTaskSummaryToolMessage } from "./summary-policy.js";
 import { resolveModelFinalMessages } from "./window-reducer.js";
+import {
+  extractContextTaskSummary,
+  recoverContextTaskSummaryToolResult,
+} from "./message-codec.js";
 
 function text(value) {
   return String(value || "").trim();
@@ -23,17 +27,7 @@ function messageTurnScopeId(message = {}) {
 }
 
 export function extractTaskSummaryText(message = {}) {
-  const raw = String(message?.content ?? message?.lc_kwargs?.content ?? "").trim();
-  if (!raw) return "";
-  try {
-    const parsed = JSON.parse(raw);
-    return text(
-      parsed?.phaseSummary || parsed?.phase_summary || parsed?.summaryContent ||
-        parsed?.summary_content || (typeof parsed?.summary === "string" ? parsed.summary : "") || raw,
-    );
-  } catch {
-    return raw;
-  }
+  return extractContextTaskSummary(message);
 }
 
 export function createHistoryRoundIdentityResolver(messages = []) {
@@ -59,17 +53,7 @@ export function normalizeUnpairedTaskSummaryToolResults(messages = []) {
     if (resolveMessageRole(message) !== "tool" || !isTaskSummaryToolMessage(message)) return message;
     const toolCallId = resolveToolCallId(message);
     if (toolCallId && knownToolCallIds.has(toolCallId)) return message;
-    const summary = extractTaskSummaryText(message);
-    if (!summary) return message;
-    return {
-      role: "user",
-      content: `[阶段小结]\n${summary}`,
-      dialogProcessId: resolveMessageDialogProcessId(message),
-      parentDialogProcessId: readMessageField(message, "parentDialogProcessId"),
-      turnScopeId: messageTurnScopeId(message),
-      summarized: false,
-      phaseSummaryMemory: true,
-    };
+    return recoverContextTaskSummaryToolResult(message) || message;
   });
 }
 
