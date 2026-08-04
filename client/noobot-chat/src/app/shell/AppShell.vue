@@ -483,6 +483,7 @@ const drawerPanels = computed(() =>
       :loading-sessions="loadingSessions"
       :sessions="sessions"
       :active-session-id="activeSessionId"
+      :turn-runtime-registry="turnRuntimeRegistry"
       :active-session="activeSession || {}"
       :title="activeSession?.title || translate('common.session')"
       :is-super-admin="isSuperAdmin"

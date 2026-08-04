@@ -8,10 +8,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { ElMessageBox } from "element-plus";
 import { ChatDotRound, Delete, EditPen } from "@element-plus/icons-vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { selectSessionTurnRuntime } from "../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 
 const props = defineProps({
   sessions: { type: Array, default: () => [] },
   activeSessionId: { type: String, default: "" },
+  turnRuntimeRegistry: { type: Object, default: () => ({}) },
   sending: { type: Boolean, default: false },
   collapsed: { type: Boolean, default: false },
   isMobile: { type: Boolean, default: false },
@@ -113,6 +115,15 @@ function formatSessionStatus(status = "") {
   return translate(statusKeyMap[normalized] || "common.statusIdle");
 }
 
+function sessionRuntimeStatus(sessionItem = {}) {
+  const sessionId = String(sessionItem.backendSessionId || sessionItem.id || "").trim();
+  const sessionStatus = selectSessionTurnRuntime(props.turnRuntimeRegistry, sessionId);
+  if (sessionStatus.terminal === "error") return "error";
+  if (sessionStatus.terminal) return "done";
+  if (sessionStatus.sending) return "running";
+  return "idle";
+}
+
 function formatSessionTime(value = "") {
   const timeMs = Date.parse(value || "");
   if (!Number.isFinite(timeMs)) return "";
@@ -184,7 +195,7 @@ watch(
                   <div class="session-info">
                     <div class="title">{{ sessionItem.title }}</div>
                     <div class="sid">
-                      <span class="status-dot" :class="sessionItem.currentTaskStatus"></span>
+                      <span class="status-dot" :class="sessionRuntimeStatus(sessionItem)"></span>
                       #{{ sessionItem.backendSessionId ? sessionItem.backendSessionId.slice(0, 8) : translate("common.notStarted") }}
                     </div>
                   </div>
@@ -216,8 +227,8 @@ watch(
                   <li>
                     <span class="k">{{ translate("common.sessionStatus") }}</span>
                     <span class="v">
-                      <span class="status-dot" :class="sessionItem.currentTaskStatus"></span>
-                      {{ formatSessionStatus(sessionItem.currentTaskStatus) }}
+                      <span class="status-dot" :class="sessionRuntimeStatus(sessionItem)"></span>
+                      {{ formatSessionStatus(sessionRuntimeStatus(sessionItem)) }}
                     </span>
                   </li>
                   <li>

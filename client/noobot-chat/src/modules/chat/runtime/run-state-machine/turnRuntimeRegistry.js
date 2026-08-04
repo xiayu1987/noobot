@@ -607,6 +607,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   }
   let current = findTurnByScope(next, turnScopeId, { sessionId: requestedSessionId });
   let aliasPromoted = false;
+  let previousSessionId = "";
   if (!current && requestedSessionId && canPromoteOptimisticTurnSession(event)) {
     const matchingTurns = findTurnsByScope(next, turnScopeId);
     if (matchingTurns.length > 1) {
@@ -617,6 +618,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
       if (route && (turnKey(route.turnScopeId) !== turnScopeId || text(route.sessionId) !== text(existingTurn.sessionId))) {
         return observation({ turn: existingTurn, canonicalSessionId: requestedSessionId, applied: false, reason: "dialog_process_identity_conflict" });
       }
+      previousSessionId = text(existingTurn.sessionId);
       current = promoteTurnSession(next, existingTurn, requestedSessionId);
       if (!current) return observation({ turn: existingTurn, canonicalSessionId: requestedSessionId, applied: false, reason: "session_identity_conflict" });
       aliasPromoted = true;
@@ -624,7 +626,7 @@ export function applyTurnRuntimeEvent(registry, rawEvent = {}) {
   }
   const sessionId = text(requestedSessionId || current?.sessionId);
   const ignoresDialogRoute = event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED;
-  const result = (values = {}) => observation({ canonicalSessionId: sessionId, aliasPromoted, ...values });
+  const result = (values = {}) => observation({ canonicalSessionId: sessionId, aliasPromoted, previousSessionId, ...values });
   if (!sessionId) return result({ turn: current, applied: false, reason: "missing_session_identity" });
   if (current?.sessionId && current.sessionId !== sessionId) return result({ turn: current, applied: false, reason: "session_identity_conflict" });
   if (!ignoresDialogRoute && current?.dialogProcessId && event.dialogProcessId && current.dialogProcessId !== event.dialogProcessId) return result({ turn: current, applied: false, reason: "dialog_process_identity_conflict" });

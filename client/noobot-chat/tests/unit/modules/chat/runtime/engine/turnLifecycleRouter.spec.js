@@ -10,6 +10,29 @@ import {
 } from "../../../../../../src/modules/chat/runtime/engine/turnLifecycleRouter.js";
 
 describe("foreign Turn lifecycle routing", () => {
+  it("keeps a newly assigned backend Session on the main Turn route", () => {
+    const applyTurnLifecycleEnvelope = vi.fn();
+    const logSessionEvent = vi.fn();
+    const data = {
+      sessionId: "backend-session",
+      parentSessionId: "",
+      turnScopeId: "client-turn:1",
+      eventType: "turn.action_accepted",
+      sequence: 1,
+    };
+
+    expect(routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
+      activeSession: { value: { id: "local-session", backendSessionId: "" } },
+      applyTurnLifecycleEnvelope,
+      logSessionEvent,
+      sessionId: "local-session",
+    })).toBe(false);
+    expect(applyTurnLifecycleEnvelope).not.toHaveBeenCalled();
+    expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ route: "main" }),
+    }));
+  });
+
   it("commits child Session authority envelopes into the canonical Turn registry", () => {
     const applyTurnLifecycleEnvelope = vi.fn();
     const data = {

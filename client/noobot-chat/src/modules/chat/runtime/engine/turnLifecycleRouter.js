@@ -14,6 +14,11 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
   if (transportEvent === StreamEventEnum.TURN_LIFECYCLE) {
     const eventSessionId = normalizeTrimmedString(data?.sessionId);
     const mainSessionId = normalizeTrimmedString(activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId);
+    const parentSessionId = normalizeTrimmedString(data?.parentSessionId);
+    const isChildLifecycle = Boolean(
+      eventSessionId && mainSessionId && eventSessionId !== mainSessionId &&
+      parentSessionId && parentSessionId === mainSessionId,
+    );
     logSessionEvent?.({
       category: "debug",
       level: "debug",
@@ -23,10 +28,10 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
       dialogProcessId: data?.dialogProcessId || "",
       turnScopeId: data?.turnScopeId || "",
       data: {
-        route: eventSessionId && mainSessionId && eventSessionId !== mainSessionId ? "child" : "main",
+        route: isChildLifecycle ? "child" : "main",
         eventSessionId,
         mainSessionId,
-        parentSessionId: normalizeTrimmedString(data?.parentSessionId),
+        parentSessionId,
         eventType: normalizeTrimmedString(data?.eventType).toLowerCase(),
         revision: Number(data?.revision || 0),
         sequence: Number(data?.sequence || 0),
@@ -34,7 +39,7 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
         reducerAvailable: typeof applyTurnLifecycleEnvelope === "function",
       },
     });
-    if (eventSessionId && mainSessionId && eventSessionId !== mainSessionId) {
+    if (isChildLifecycle) {
       const result = applyTurnLifecycleEnvelope?.(data);
       const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"]
         .includes(normalizeTrimmedString(data?.eventType).toLowerCase());

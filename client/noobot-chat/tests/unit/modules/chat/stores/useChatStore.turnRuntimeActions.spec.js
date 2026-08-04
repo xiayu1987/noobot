@@ -51,6 +51,50 @@ describe("useChatStore turn runtime actions", () => {
     expect(runtime.value.startedAt).toBe("2026-07-21T10:00:00.000Z");
   });
 
+  it("promotes the optimistic session list identity when the backend assigns a session id", () => {
+    setActivePinia(createPinia());
+    const store = useChatStore();
+    store.sessions = [{
+      id: "local-session",
+      backendSessionId: "",
+      isLocal: true,
+      title: "New session",
+      messages: [],
+    }];
+    store.activeSessionId = "local-session";
+
+    store.applyTurnRuntimeEvent({
+      type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
+      sessionId: "local-session",
+      turnScopeId: "client-turn:identity:promotion",
+      dialogProcessId: "dp-identity-promotion",
+      updatedAt: "2026-07-21T10:00:00.000Z",
+    });
+    const result = store.applyTurnRuntimeEvent({
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      sessionId: "backend-session",
+      turnScopeId: "client-turn:identity:promotion",
+      dialogProcessId: "dp-identity-promotion",
+      state: "sending",
+      seq: 1,
+      updatedAt: "2026-07-21T10:00:01.000Z",
+    });
+
+    expect(result).toMatchObject({
+      applied: true,
+      aliasPromoted: true,
+      previousSessionId: "local-session",
+    });
+    expect(store.sessions).toHaveLength(1);
+    expect(store.sessions[0]).toMatchObject({
+      id: "backend-session",
+      backendSessionId: "backend-session",
+      isLocal: false,
+    });
+    expect(store.activeSessionId).toBe("backend-session");
+    expect(store.activeSession).toBe(store.sessions[0]);
+  });
+
   it("keeps startedAt and terminal time monotonic while repeated maintenance is zero-submit", () => {
     setActivePinia(createPinia());
     const store = useChatStore();

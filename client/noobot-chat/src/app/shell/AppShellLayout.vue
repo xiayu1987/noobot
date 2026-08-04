@@ -29,6 +29,7 @@ defineProps({
   loadingSessions: { type: Boolean, default: false },
   sessions: { type: Array, default: () => [] },
   activeSessionId: { type: String, default: "" },
+  turnRuntimeRegistry: { type: Object, default: () => ({}) },
   activeSession: { type: Object, default: () => ({}) },
   title: { type: String, default: "" },
   isSuperAdmin: { type: Boolean, default: false },
@@ -145,6 +146,7 @@ defineExpose({
       :loading-sessions="loadingSessions"
       :sessions="sessions"
       :active-session-id="activeSessionId"
+      :turn-runtime-registry="turnRuntimeRegistry"
       @toggle-sidebar="emit('toggle-sidebar')"
       @update:user-id="emit('update:user-id', $event)"
       @update:connect-code="emit('update:connect-code', $event)"

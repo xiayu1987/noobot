@@ -30,6 +30,7 @@ const props = defineProps({
   loadingSessions: { type: Boolean, default: false },
   sessions: { type: Array, default: () => [] },
   activeSessionId: { type: String, default: "" },
+  turnRuntimeRegistry: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits([
@@ -153,6 +154,7 @@ const { translate } = useLocale();
     <SessionListPanel
       :sessions="sessions"
       :active-session-id="activeSessionId"
+      :turn-runtime-registry="turnRuntimeRegistry"
       :sending="sending"
       :collapsed="sidebarCollapsed && !isMobile"
       :is-mobile="isMobile"
