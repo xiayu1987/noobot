@@ -13,6 +13,7 @@ const defaultSourceRoots = [
   "agent",
   "agent-proxy",
   "client",
+  "hook-protocol",
   "i18n",
   "model-proxy",
   "plugin",

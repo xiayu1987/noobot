@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
 
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
-import { createAgentHookManager } from "../../../src/extensions/hooks/index.js";
+import { createHookManager } from "@noobot/hook-protocol";
 import {
   createTestTurnMessagesStore,
   prepareTestTurnExecution,
@@ -181,15 +181,15 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
 
   const loopState = createLoopState({ maxTurns: 10, tool });
   const modelState = createModelState(llm);
-  const hookManager = createAgentHookManager();
+  const hookManager = createHookManager();
   const beforeLlmContexts = [];
   const afterLlmContexts = [];
   const beforeToolCallContexts = [];
   const afterToolCallContexts = [];
-  hookManager.on("before_llm_call", (ctx = {}) => beforeLlmContexts.push(ctx));
-  hookManager.on("after_llm_call", (ctx = {}) => afterLlmContexts.push(ctx));
-  hookManager.on("before_tool_calls", (ctx = {}) => beforeToolCallContexts.push(ctx));
-  hookManager.on("after_tool_calls", (ctx = {}) => afterToolCallContexts.push(ctx));
+  hookManager.on("agent.before_llm_call", (ctx = {}) => beforeLlmContexts.push(ctx));
+  hookManager.on("agent.after_llm_call", (ctx = {}) => afterLlmContexts.push(ctx));
+  hookManager.on("agent.before_tool_calls", (ctx = {}) => beforeToolCallContexts.push(ctx));
+  hookManager.on("agent.after_tool_calls", (ctx = {}) => afterToolCallContexts.push(ctx));
   modelState.runtime.hookManager = hookManager;
   modelState.runtime.systemRuntime.config = { safeConfirm: false };
   const result = await runFunctionCallLoop({

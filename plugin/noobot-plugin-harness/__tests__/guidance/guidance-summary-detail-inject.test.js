@@ -56,7 +56,7 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
     },
   };
 
-  await handler({ capability: "guidance", point: "after_llm_call", ctx, meta: {} });
+  await handler({ capability: "guidance", point: "agent.after_llm_call", ctx, meta: {} });
 
   const harnessBucket = ctx?.agentContext?.payload?.harness || {};
   assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);
@@ -180,7 +180,7 @@ test("inject-mode summary can save detail as attachment and inject detail path t
   };
   const meta = { harness: { summaryDetailSaveToAttachment: true } };
 
-  await handler({ capability: "guidance", point: "after_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.after_llm_call", ctx, meta });
 
   const harnessBucket = ctx?.agentContext?.payload?.harness || {};
   assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);

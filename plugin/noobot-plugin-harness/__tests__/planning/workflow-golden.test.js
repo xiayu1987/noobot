@@ -236,9 +236,9 @@ test("golden: phase_acceptance can run when only summary is pending", async () =
     },
   });
   const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
-  await handler({ capability: "acceptance", point: "before_llm_call", ctx, meta: {} });
+  await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
   const decisionLog = agentContext.payload.harness.logs.acceptance.find(
-    (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "before_llm_call",
+    (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "agent.before_llm_call",
   );
   assert.equal(decisionLog?.detail?.chosenReason, "phase_acceptance_pending");
   assert.match(
@@ -258,9 +258,9 @@ test("golden: overflow force acceptance wins priority at before_llm_call", async
     },
   });
   const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
-  await handler({ capability: "acceptance", point: "before_llm_call", ctx, meta: {} });
+  await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
   const decisionLog = agentContext.payload.harness.logs.acceptance.find(
-    (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "before_llm_call",
+    (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "agent.before_llm_call",
   );
   assert.equal(decisionLog?.detail?.chosenAction, "forced_acceptance");
   assert.equal(decisionLog?.detail?.chosenReason, "overflow_force_acceptance");
@@ -277,12 +277,12 @@ test("golden: planningCaptured=false blocks phase_acceptance execution", async (
     },
   });
   const ctx = { agentContext, messages: [{ role: "user", content: "继续" }] };
-  await handler({ capability: "acceptance", point: "before_llm_call", ctx, meta: {} });
+  await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx, meta: {} });
   const decisionLog = agentContext.payload.harness.logs.acceptance.find(
-    (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "before_llm_call",
+    (item = {}) => item?.event === "workflow_priority_decision" && item?.detail?.point === "agent.before_llm_call",
   );
   const executionLog = agentContext.payload.harness.logs.acceptance.find(
-    (item = {}) => item?.event === "workflow_execution_result" && item?.detail?.point === "before_llm_call",
+    (item = {}) => item?.event === "workflow_execution_result" && item?.detail?.point === "agent.before_llm_call",
   );
   assert.equal(decisionLog?.detail?.chosenReason, "phase_acceptance_blocked");
   assert.equal(executionLog?.detail?.executedPrimary, false);

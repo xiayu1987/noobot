@@ -38,7 +38,7 @@ test("harness planning prompt includes current tool names and descriptions", asy
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
   const planningPromptMessage = messages.find((item = {}) =>
     /harness-planning-bootstrap/.test(String(item?.content || "")),
   );
@@ -81,7 +81,7 @@ test("harness initial planning keeps scenario policy out of text protocol and re
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   const planningIndex = messages.findIndex((item = {}) =>
     /harness-planning-bootstrap/.test(String(item?.content || "")),
@@ -132,7 +132,7 @@ test("harness planning followup uses text deliverable-batch policy in text scena
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   const followupMessage = ctx.modelContext.messages.find((item = {}) =>
     /planning_followup/.test(String(item?.content || "")),
@@ -185,7 +185,7 @@ test("harness planning captures dynamic policy prompt protocol from separate mod
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   const dynamicPolicyPrompt = ctx.agentContext.payload.harness.dynamicPolicyPrompt || {};
   assert.equal(dynamicPolicyPrompt.scenario, "text");
@@ -237,7 +237,7 @@ test("harness planning followup uses dynamic programming scenario over initial t
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   const dynamicPolicyPrompt = ctx.agentContext.payload.harness.dynamicPolicyPrompt || {};
   assert.equal(dynamicPolicyPrompt.scenario, "programming");
@@ -288,7 +288,7 @@ test("harness planning separate model keeps latest user goal in planning context
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
   assert.equal(invocations.length >= 1, true);
   const allMessagesText = invocations[0].messages.map((item = {}) => String(item?.content || "")).join("\n");
   assert.match(allMessagesText, /查找最适合组织的人/);
@@ -341,7 +341,7 @@ test("harness planning operation directory uses sandbox view without losing host
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   const contextMessage = messages.find((item = {}) =>
     /"operationDirectory"/.test(String(item?.content || "")),
@@ -391,7 +391,7 @@ test("harness separate-model plan relay includes operation directory for main ag
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   const relayMessage = ctx.modelContext.messages.find((item = {}) =>
     /Harness operation dir/.test(String(item?.content || "")),

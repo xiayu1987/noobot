@@ -11,7 +11,6 @@ import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -28,7 +27,7 @@ test("harness plugin injects prompt into before_llm_call messages", async () => 
   registerNoobotPlugin({ hookManager }, { basePath, trace: false });
   const messages = [{ role: "user", content: "hello" }];
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     userId: "u2",
     sessionId: "s2",
     dialogProcessId: "dp2",
@@ -59,14 +58,14 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
     },
   );
 
-  await hookManager.emit("before_turn", {
+  await hookManager.emit("agent.before_turn", {
     userId: "u3",
     sessionId: "s3",
     dialogProcessId: "dp3",
     caller: "user",
     status: "start",
   });
-  await hookManager.emit("after_turn", {
+  await hookManager.emit("agent.after_turn", {
     userId: "u3",
     sessionId: "s3",
     dialogProcessId: "dp3",
@@ -74,25 +73,25 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
     status: "success",
   });
 
-  assert.equal(calls.includes("before_turn"), true);
+  assert.equal(calls.includes("agent.before_turn"), true);
   const runDir = path.join(basePath, "runtime", "harness", "runs", "dp3");
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(Array.isArray(manifest?.capabilities?.domains), true);
   assert.equal(typeof manifest?.capabilities?.hookMap, "object");
   assert.equal(
-    manifest?.capabilities?.hookMap?.acceptance?.includes("before_llm_call"),
+    manifest?.capabilities?.hookMap?.acceptance?.includes("agent.before_llm_call"),
     true,
   );
   assert.equal(
-    manifest?.capabilities?.hookMap?.acceptance?.includes("after_llm_call"),
+    manifest?.capabilities?.hookMap?.acceptance?.includes("agent.after_llm_call"),
     true,
   );
   assert.equal(
-    manifest?.capabilities?.hookMap?.guidance?.includes("after_llm_call"),
+    manifest?.capabilities?.hookMap?.guidance?.includes("agent.after_llm_call"),
     true,
   );
   assert.equal(
-    manifest?.capabilities?.hookMap?.guidance?.includes("after_tool_calls"),
+    manifest?.capabilities?.hookMap?.guidance?.includes("agent.after_tool_calls"),
     true,
   );
 });

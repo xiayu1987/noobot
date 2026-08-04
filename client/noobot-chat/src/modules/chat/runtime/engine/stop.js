@@ -66,7 +66,7 @@ function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "
   };
 }
 
-function buildStopPayload({ activeSession, session: targetSession, pendingAssistantMessage, turnRuntime, execution } = {}) {
+function buildStopPayload({ activeSession, session: targetSession, pendingAssistantMessage, turnRuntime } = {}) {
   const session = targetSession || activeSession?.value || {};
   const dialogProcessId = normalizeTrimmedString(turnRuntime?.dialogProcessId);
   const turnScopeId = normalizeTrimmedString(turnRuntime?.turnScopeId);
@@ -83,12 +83,10 @@ function buildStopPayload({ activeSession, session: targetSession, pendingAssist
       turnScopeId,
     },
     concurrency: {
-      expectedTurnRevision: Number.isFinite(Number(execution?.revision))
-        ? Number(execution.revision)
-        : undefined,
+      expectedTurnRevision: turnRuntime.revision,
     },
     stop: {
-      executionId: normalizeTrimmedString(execution?.executionId),
+      executionId: normalizeTrimmedString(turnRuntime.executionId),
       partialAssistant: {
         content: String(pendingAssistantMessage?.content || ""),
         dialogProcessId,
@@ -147,7 +145,6 @@ export function stopSending({
     session,
     pendingAssistantMessage,
     turnRuntime,
-    execution,
   });
   logStopDebug("stop.payload", () => ({
     sessionId: stopPayload.identity.sessionId,

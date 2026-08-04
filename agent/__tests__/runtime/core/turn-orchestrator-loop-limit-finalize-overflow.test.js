@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
 
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
-import { createAgentHookManager } from "../../../src/extensions/hooks/index.js";
+import { createHookManager } from "@noobot/hook-protocol";
 import {
   createTestTurnMessagesStore,
   prepareTestTurnExecution,
@@ -233,8 +233,8 @@ test("main flow final-no-tools instruction from before_llm hook skips with-tools
   ]);
 
   const modelState = createModelState(llm);
-  const hookManager = createAgentHookManager();
-  hookManager.on("before_llm_call", (ctx = {}) => {
+  const hookManager = createHookManager();
+  hookManager.on("agent.before_llm_call", (ctx = {}) => {
     if (ctx.mode !== "with_tools") return;
     modelState.runtime.systemRuntime.mainFlowControlInstruction = {
       action: "final_no_tools_turn",

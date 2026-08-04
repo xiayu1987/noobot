@@ -2,11 +2,11 @@
 
 `@noobot/agent-transport-protocol` is the strict command contract from the frontend to the Agent transport boundary. The frontend, HTTP service, WebSocket service, and Agent proxy use the same constructors and parser.
 
-## V1 envelope
+## V2 envelope
 
 ```js
 {
-  protocolVersion: 1,
+  protocolVersion: 2,
   commandType,
   commandId,
   identity: {
@@ -30,6 +30,7 @@ Supported commands are exported through `AGENT_COMMAND`. Each command has one ca
 - Unknown top-level fields, unknown nested protocol fields, irrelevant command sections, legacy actions, and unsupported protocol versions are rejected.
 - `pluginModelConfig`, attachment entries, and interaction response bodies are intentionally opaque payloads owned by their respective plugin, attachment, and interaction contracts.
 - Proxy lifecycle controls such as join, reconnect, and lifecycle receipts remain outside this Agent command protocol.
+- `turn.stop` requires the current positive authoritative turn revision in `concurrency.expectedTurnRevision`. Revision `0` is reserved for creating a new turn and is invalid for stop commands.
 
 There is no V0 adapter or flat-payload compatibility path. Protocol changes require a new explicit protocol version.
 

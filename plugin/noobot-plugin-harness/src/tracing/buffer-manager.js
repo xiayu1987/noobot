@@ -19,10 +19,10 @@ import {
 } from "../capabilities/profile.js";
 import {
   HARNESS_FLUSH_REASONS,
-  HARNESS_HOOK_POINTS,
   HARNESS_RUN_STATUS,
   HARNESS_TERMINAL_RUN_STATUSES,
 } from "../core/constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { createRunPaths, ensureRunDir } from "../core/context.js";
 import { advanceFsmState } from "../fsm/state-machine.js";
 import {
@@ -107,16 +107,16 @@ function isStoppedSnapshotResumeInitializingFirstLlmCall(ctx = {}) {
 
 function resolveFlushReasonByPoint(point = "") {
   if (
-    point === HARNESS_HOOK_POINTS.AFTER_TURN ||
-    point === HARNESS_HOOK_POINTS.ON_ABORT ||
-    point === HARNESS_HOOK_POINTS.ON_ERROR
+    point === HOOK_POINT.AGENT.AFTER_TURN ||
+    point === HOOK_POINT.AGENT.ON_ABORT ||
+    point === HOOK_POINT.AGENT.ON_ERROR
   ) {
     return HARNESS_FLUSH_REASONS.TERMINAL;
   }
   if (
-    point === HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR ||
-    point === HARNESS_HOOK_POINTS.LLM_CALL_ERROR ||
-    point === HARNESS_HOOK_POINTS.TOOL_CALL_ERROR
+    point === HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR ||
+    point === HOOK_POINT.AGENT.LLM_CALL_ERROR ||
+    point === HOOK_POINT.AGENT.TOOL_CALL_ERROR
   ) {
     return HARNESS_FLUSH_REASONS.ERROR;
   }
@@ -194,37 +194,37 @@ export async function updateManifest(paths, ctx = {}, patch = {}, options = {}, 
 export async function injectPrompt(point, ctx, options, plugin = {}) {
   if (!options.enabled || !options.promptPolicy) return;
   if (
-    point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL &&
+    point === HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
     isStoppedSnapshotResumeInitializingFirstLlmCall(ctx)
   ) {
     return;
   }
   const id =
-    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
+    point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT
       ? "noobot-harness-final-response"
       : "noobot-harness-policy";
   const locale = resolveHarnessLocale(ctx);
-  const resolveDefaultPrompt = () => (point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
+  const resolveDefaultPrompt = () => (point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT
     ? translateI18nText(locale, HARNESS_I18N_KEYSET.SYSTEM_PROMPT.FINAL_RESPONSE)
     : buildDefaultPolicyPrompt(locale, ctx, options));
   const configuredPrompt = String(
-    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText,
+    point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText,
   ).trim();
   const content = configuredPrompt || resolveDefaultPrompt();
   if (!content) return;
-  const activeDynamicPolicyPrompt = point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL
+  const activeDynamicPolicyPrompt = point === HOOK_POINT.AGENT.BEFORE_LLM_CALL
     ? resolveActiveDynamicPolicyPromptFromContext(ctx)
     : null;
-  const refreshPolicyPrompt = point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL &&
+  const refreshPolicyPrompt = point === HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
     shouldRefreshPolicyPromptForDynamicChange(ctx, activeDynamicPolicyPrompt);
 
   const currentMessages = ctx?.modelContext?.protocolVersion === 2 && Array.isArray(ctx.modelContext.messages)
     ? ctx.modelContext.messages
     : [];
   const alreadyInCurrentMessages = isHarnessPromptAlreadyInjected(currentMessages, id);
-  if (alreadyInCurrentMessages && point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return;
+  if (alreadyInCurrentMessages && point !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return;
 
-  const isPolicyPrompt = point === HARNESS_HOOK_POINTS.BEFORE_LLM_CALL;
+  const isPolicyPrompt = point === HOOK_POINT.AGENT.BEFORE_LLM_CALL;
   const injected = injectSystemMessages(ctx, {
     skipIds: new Set(),
     prompts: [{
@@ -311,7 +311,7 @@ export async function traceHook(point, ctx, options, plugin = {}) {
     );
   }
 
-  if (point === HARNESS_HOOK_POINTS.AFTER_CONTEXT_BUILD && options.writeContextSnapshot) {
+  if (point === HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD && options.writeContextSnapshot) {
     await writeJson(
       paths.contextSnapshot,
       buildTraceContextSnapshot({
@@ -323,11 +323,11 @@ export async function traceHook(point, ctx, options, plugin = {}) {
   }
 
   const terminalStatus =
-    point === HARNESS_HOOK_POINTS.AFTER_TURN
+    point === HOOK_POINT.AGENT.AFTER_TURN
       ? HARNESS_RUN_STATUS.SUCCESS
-      : point === HARNESS_HOOK_POINTS.ON_ERROR || point === HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR
+      : point === HOOK_POINT.AGENT.ON_ERROR || point === HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR
         ? HARNESS_RUN_STATUS.ERROR
-        : point === HARNESS_HOOK_POINTS.ON_ABORT
+        : point === HOOK_POINT.AGENT.ON_ABORT
           ? HARNESS_RUN_STATUS.ABORT
           : null;
 

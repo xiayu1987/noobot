@@ -688,7 +688,7 @@ assertFileContains("agent/src/runtime/hooks/hook-context-builder.js", [
 ]);
 
 assertFileContains("agent/src/runtime/turn/turn-executor.js", [
-  { name: "before_llm hook passes authoritative modelContext", pattern: /const\s+modelContext\s*=\s*requireLoopStateModelContext\(loopState\)[\s\S]*?buildHookContext\(AGENT_HOOK_POINTS\.BEFORE_LLM_CALL[\s\S]*?modelContext,/ },
+  { name: "before_llm hook passes authoritative modelContext", pattern: /const\s+modelContext\s*=\s*requireLoopStateModelContext\(loopState\)[\s\S]*?buildHookContext\(HOOK_POINT\.AGENT\.BEFORE_LLM_CALL[\s\S]*?modelContext,/ },
   { name: "before_llm hook cannot replace authoritative entity", pattern: /assertHookContextRetainsModelContext\(loopState,\s*beforeLlmHookContext\)/ },
 ]);
 

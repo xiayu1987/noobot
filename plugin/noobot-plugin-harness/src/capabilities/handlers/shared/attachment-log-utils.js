@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { ensureHarnessBucket } from "./bucket-utils.js";
@@ -402,7 +403,7 @@ export async function appendCapabilityModelTraceLog(
   const sink = typeof meta?.harness?.runTraceSink === "function" ? meta.harness.runTraceSink : null;
   if (sink) {
     await sink({
-      point: ctx?.point || "before_llm_call",
+      point: ctx?.point || HOOK_POINT.AGENT.BEFORE_LLM_CALL,
       timestamp: new Date().toISOString(),
       userId: ctx?.userId || undefined,
       sessionId: ctx?.sessionId || undefined,

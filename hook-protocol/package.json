@@ -1,0 +1,16 @@
+{
+  "name": "@noobot/hook-protocol",
+  "version": "4.1.5",
+  "private": true,
+  "type": "module",
+  "description": "Authoritative Noobot hook protocol and in-process runtime",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./points": "./src/points.mjs",
+    "./runtime": "./src/runtime.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.mjs"
+  }
+}

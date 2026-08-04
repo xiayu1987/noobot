@@ -8,15 +8,27 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionExecutionRunner } from "../../../src/bot/execution/runner.js";
-import {
-  BOT_HOOK_POINTS,
-  createBotHookManager,
-} from "../../../src/bot/hook/index.js";
+import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
 import { createBotDispatchHandled } from "@noobot/shared/bot-dispatch-protocol";
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
 
 const NOOP_EVENT_LISTENER = Object.freeze({ onEvent() {} });
+
+function createTestBotHookManager() {
+  const manager = createHookManager();
+  let handlerSequence = 0;
+  return Object.freeze({
+    ...manager,
+    on(point, handler, options = {}) {
+      handlerSequence += 1;
+      return manager.on(point, handler, {
+        ...options,
+        id: options.id || `test.bot-handler.${handlerSequence}`,
+      });
+    },
+  });
+}
 
 function canonicalMessageIdForTest(message = {}, activeAssistantMessageId = "") {
   if (message?.role === "assistant" && activeAssistantMessageId) return activeAssistantMessageId;
@@ -40,7 +52,7 @@ function createCanonicalHandledResult(context = {}, output = "") {
 }
 
 function createRunner({
-  botHookManager = createBotHookManager(),
+  botHookManager = createTestBotHookManager(),
   agentRunner = async () => ({
     output: "ok",
     traces: [],
@@ -496,19 +508,19 @@ test("SessionExecutionRunner validates scoped persistence identity before execut
 });
 
 test("SessionExecutionRunner emits bot orchestration hooks", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   const events = [];
   let beforeDispatchContext = null;
   let capturedBuildContextPayload = null;
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_SESSION_RUN, () => events.push("before_session_run"));
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
-    events.push("before_agent_dispatch");
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_SESSION_RUN, () => events.push("bot.before_session_run"));
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
+    events.push("bot.before_agent_dispatch");
     beforeDispatchContext = ctx;
   });
-  botHookManager.on(BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH, () =>
-    events.push("after_agent_dispatch"),
+  botHookManager.on(HOOK_POINT.BOT.AFTER_AGENT_DISPATCH, () =>
+    events.push("bot.after_agent_dispatch"),
   );
-  botHookManager.on(BOT_HOOK_POINTS.AFTER_SESSION_RUN, () => events.push("after_session_run"));
+  botHookManager.on(HOOK_POINT.BOT.AFTER_SESSION_RUN, () => events.push("bot.after_session_run"));
   const runner = createRunner({
     botHookManager,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
@@ -538,10 +550,10 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
 
   assert.equal(result.answer, "ok");
   assert.deepEqual(events, [
-    "before_session_run",
-    "before_agent_dispatch",
-    "after_agent_dispatch",
-    "after_session_run",
+    "bot.before_session_run",
+    "bot.before_agent_dispatch",
+    "bot.after_agent_dispatch",
+    "bot.after_session_run",
   ]);
   assert.deepEqual(capturedBuildContextPayload?.userMessageAttachments, [{ attachmentId: "att1", sessionId: "s1" }]);
   assert.equal(capturedBuildContextPayload?.attachmentMetas, undefined);
@@ -567,7 +579,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
       { role: "assistant", content: "history assistant" },
     ],
   );
-  assert.equal(beforeDispatchContext?.modelContext?.protocolVersion, 1);
+  assert.equal(beforeDispatchContext?.modelContext?.protocolVersion, 2);
   assert.deepEqual({
     ...beforeDispatchContext?.modelContext?.messageBlocks,
     history: beforeDispatchContext?.modelContext?.messageBlocks?.history
@@ -583,7 +595,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
 });
 
 test("before-dispatch capability events use the bound Turn message domain", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   const events = [];
   const capabilityModelInvoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
@@ -593,7 +605,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
       },
     }),
   });
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
     await capabilityModelInvoker({
       purpose: "workflow_semantic",
       domain: "workflow",
@@ -637,12 +649,12 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
 });
 
 test("before-dispatch takeover can claim root processing before the hook completes", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   const lifecycleStates = [];
   let releaseHook;
   const hookGate = new Promise((resolve) => { releaseHook = resolve; });
   let claimedInsideHook = false;
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
     claimedInsideHook = ctx.claimAgentDispatch({ owner: "test_takeover", source: "test_takeover" });
     await hookGate;
     return createBotDispatchHandled({
@@ -673,9 +685,9 @@ test("before-dispatch takeover can claim root processing before the hook complet
 });
 
 test("before-dispatch takeover publishes immutable execution ownership metadata once", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   const lifecycleStates = [];
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
     assert.equal(ctx.claimAgentDispatch({
       owner: "workflow",
       source: "workflow_takeover",
@@ -715,10 +727,10 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
 });
 
 test("structured dispatch outcome routes exclusively to the workflow owner", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   const events = [];
   let rootAgentCalls = 0;
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
     ctx.claimAgentDispatch({
       owner: "workflow",
       source: "workflow_router",
@@ -763,9 +775,9 @@ test("structured dispatch outcome routes exclusively to the workflow owner", asy
 });
 
 test("a handled workflow failure terminates the root Turn without Agent fallback", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
     ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router", executionKind: "workflow" });
     return createBotDispatchHandled({
       owner: "workflow",
@@ -788,9 +800,9 @@ test("a handled workflow failure terminates the root Turn without Agent fallback
 });
 
 test("a claimed dispatch hook failure cannot fall back to the root Agent", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
     ctx.claimAgentDispatch({ source: "workflow_router", executionKind: "workflow" });
     throw new Error("workflow owner failed");
   });
@@ -810,9 +822,9 @@ test("a claimed dispatch hook failure cannot fall back to the root Agent", async
 });
 
 test("a claimed dispatch cannot pass the same task back to the root Agent", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
     ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router", executionKind: "workflow" });
     return undefined;
   });
@@ -832,9 +844,9 @@ test("a claimed dispatch cannot pass the same task back to the root Agent", asyn
 });
 
 test("a structured dispatch takeover must claim ownership before returning handled", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, () => (
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, () => (
     createBotDispatchHandled({ owner: "workflow", result: { output: "done" } })
   ));
   const runner = createRunner({
@@ -960,8 +972,8 @@ test("SessionExecutionRunner merges top-level turnScopeId before context buildin
 test("SessionExecutionRunner commits a normal send for a new turn in an existing session", async () => {
   let committedPayload = null;
   let beforeRunContext = null;
-  const botHookManager = createBotHookManager();
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_SESSION_RUN, (context = {}) => {
+  const botHookManager = createTestBotHookManager();
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_SESSION_RUN, (context = {}) => {
     beforeRunContext = context;
   });
   const runner = createRunner({
@@ -998,8 +1010,8 @@ test("SessionExecutionRunner commits a normal send for a new turn in an existing
 test("SessionExecutionRunner commits continue only for a stopped snapshot resume", async () => {
   let committedPayload = null;
   let beforeRunContext = null;
-  const botHookManager = createBotHookManager();
-  botHookManager.on(BOT_HOOK_POINTS.BEFORE_SESSION_RUN, (context = {}) => {
+  const botHookManager = createTestBotHookManager();
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_SESSION_RUN, (context = {}) => {
     beforeRunContext = context;
   });
   const runner = createRunner({
@@ -1153,10 +1165,10 @@ test("SessionExecutionRunner stamps reused user with generated dialogProcessId a
 });
 
 test("SessionExecutionRunner emits bot error hooks", async () => {
-  const botHookManager = createBotHookManager();
+  const botHookManager = createTestBotHookManager();
   const events = [];
-  botHookManager.on(BOT_HOOK_POINTS.AGENT_DISPATCH_ERROR, () => events.push("agent_dispatch_error"));
-  botHookManager.on(BOT_HOOK_POINTS.SESSION_RUN_ERROR, () => events.push("session_run_error"));
+  botHookManager.on(HOOK_POINT.BOT.AGENT_DISPATCH_ERROR, () => events.push("bot.agent_dispatch_error"));
+  botHookManager.on(HOOK_POINT.BOT.SESSION_RUN_ERROR, () => events.push("bot.session_run_error"));
   const runner = createRunner({
     botHookManager,
     agentRunner: async () => {
@@ -1174,7 +1186,7 @@ test("SessionExecutionRunner emits bot error hooks", async () => {
       }),
     /mock agent failure/,
   );
-  assert.deepEqual(events, ["agent_dispatch_error", "session_run_error"]);
+  assert.deepEqual(events, ["bot.agent_dispatch_error", "bot.session_run_error"]);
 });
 
 test("SessionExecutionRunner does not let currentSessionModelAlias override selectedModel", async () => {

@@ -3,8 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createAgentHookManager } from "../../extensions/hooks/index.js";
-import { createBotHookManager } from "../hook/index.js";
+import { createHookManager } from "@noobot/hook-protocol";
 import { mergeConfig } from "../../config/index.js";
 import { resolvePluginRegisterByCapability } from "../../extensions/plugins/plugin-loader.js";
 import { resolvePluginExecutionIntentDeclaration } from "@noobot/plugin-runtime";
@@ -38,6 +37,7 @@ export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS =
   TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
   TIME_THRESHOLDS.capability.separateModelMinTimeoutMs;
+const hookManagerRegistrations = new WeakMap();
 
 function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
   const scopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
@@ -270,10 +270,9 @@ export class RunConfigPluginPreparer {
       pluginName: agentPluginKey,
       capability: PLUGIN_CAPABILITY.AGENT_REGISTER,
       managerKey: "hookManager",
-      hooksKey: "hooks",
       runtimeKey: PLUGIN_SLOT_KEY.AGENT,
       registrationFlag: PLUGIN_REGISTRATION_FLAG.AGENT,
-      createManager: createAgentHookManager,
+      createManager: createHookManager,
     });
   }
 
@@ -401,10 +400,9 @@ export class RunConfigPluginPreparer {
       pluginName: botPluginKey,
       capability: PLUGIN_CAPABILITY.BOT_REGISTER,
       managerKey: "botHookManager",
-      hooksKey: "botHooks",
       runtimeKey: PLUGIN_SLOT_KEY.BOT,
       registrationFlag: PLUGIN_REGISTRATION_FLAG.BOT,
-      createManager: createBotHookManager,
+      createManager: createHookManager,
     });
   }
 
@@ -413,8 +411,7 @@ export class RunConfigPluginPreparer {
     const botHookManager = selectHookManager({
       runConfig,
       managerKey: "botHookManager",
-      hooksKey: "botHooks",
-      createManager: createBotHookManager,
+      createManager: createHookManager,
     });
     return {
       ...runConfig,
@@ -428,7 +425,6 @@ export class RunConfigPluginPreparer {
     pluginName = "",
     capability = "",
     managerKey = "",
-    hooksKey = "",
     runtimeKey = "",
     registrationFlag = "",
     createManager = null,
@@ -436,7 +432,6 @@ export class RunConfigPluginPreparer {
     const manager = selectHookManager({
       runConfig,
       managerKey,
-      hooksKey,
       createManager,
     });
     const pluginApi = this.buildPluginRegisterApi({
@@ -446,7 +441,8 @@ export class RunConfigPluginPreparer {
       runConfig,
     });
     const registrationFlags = normalizeRegistrationFlags([registrationFlag]);
-    const alreadyRegistered = registrationFlags.some((flag) => manager?.[flag] === true);
+    const registeredFlags = hookManagerRegistrations.get(manager) || new Set();
+    const alreadyRegistered = registrationFlags.some((flag) => registeredFlags.has(flag));
     if (!alreadyRegistered) {
       const registerPlugin = resolvePluginRegisterByCapability(
         this.loadedDynamicPlugins,
@@ -455,22 +451,16 @@ export class RunConfigPluginPreparer {
       if (typeof registerPlugin === "function") {
         debugPluginPreparer("register plugin", { pluginName, capability, runtimeKey });
         registerPlugin(pluginApi, options);
-        defineRegistrationFlags(manager, registrationFlags);
+        for (const registrationFlagName of registrationFlags) {
+          registeredFlags.add(registrationFlagName);
+        }
+        hookManagerRegistrations.set(manager, registeredFlags);
       } else {
         debugPluginPreparer("register plugin missing", { pluginName, capability, runtimeKey });
       }
     } else if (typeof pluginApi?.policy?.appendDenyToolNames === "function") {
       pluginApi.policy.appendDenyToolNames(options?.denyToolNames || []);
     }
-    const existingRuntimeMeta =
-      manager?.runtime && typeof manager.runtime === "object" ? manager.runtime : {};
-    manager.runtime = {
-      ...existingRuntimeMeta,
-      [runtimeKey]:
-        options && typeof options === "object"
-          ? options
-          : existingRuntimeMeta[runtimeKey],
-    };
     const pluginToolPolicyPatch = pluginApi?.policy?.getToolPolicyPatch?.() || {};
     const shouldAttachToolPolicy =
       (runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object") ||
@@ -508,9 +498,6 @@ export class RunConfigPluginPreparer {
     });
     return {
       hookManager,
-      hooks: hookManager,
-      botHookManager: hookManager,
-      botHooks: hookManager,
       policy,
       runtime: {
         plugin: safePluginName,
@@ -551,18 +538,6 @@ function normalizeRegistrationFlags(flags = []) {
     .map((flag) => String(flag || "").trim())
     .filter(Boolean);
 }
-
-function defineRegistrationFlags(manager = null, flags = []) {
-  if (!manager || typeof manager !== "object") return;
-  for (const flag of normalizeRegistrationFlags(flags)) {
-    Object.defineProperty(manager, flag, {
-      value: true,
-      enumerable: false,
-      configurable: true,
-    });
-  }
-}
-
 
 function resolveBotPluginKey(pluginRuntime = {}) {
   return String(

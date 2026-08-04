@@ -13,7 +13,8 @@ import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { transferSemanticContent } from "../../transfer/transfer/semantic-transfer.js";
@@ -106,17 +107,10 @@ function deriveToolInputTransferMeta(inputTransfer = {}) {
 }
 
 function resolveToolHookMeta(runtime = {}) {
-  const runtimeMeta =
-    runtime?.hookManager?.runtime && typeof runtime.hookManager.runtime === "object"
-      ? runtime.hookManager.runtime
-      : null;
-  if (runtimeMeta) {
-    return {
-      ...runtimeMeta,
-      runtime,
-    };
-  }
-  return { runtime };
+  const plugins = runtime?.runConfig?.plugins && typeof runtime.runConfig.plugins === "object"
+    ? runtime.runConfig.plugins
+    : {};
+  return { ...plugins, runtime };
 }
 
 function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
@@ -161,8 +155,8 @@ export async function executeToolCall({
     });
     await runAgentRuntimeHook({
       runtime,
-      point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
-      context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, runtime, {
+      point: HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+      context: buildHookContext(HOOK_POINT.AGENT.AFTER_TOOL_CALL, runtime, {
         phase: "tool_call",
         executionScope,
         turn,
@@ -190,8 +184,8 @@ export async function executeToolCall({
   let rawToolResultText = "";
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.BEFORE_TOOL_CALL,
-    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TOOL_CALL, runtime, {
+    point: HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
+    context: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, runtime, {
       phase: "tool_call",
       executionScope,
       turn,
@@ -231,8 +225,8 @@ export async function executeToolCall({
         toolResultText = compactToolResultTextForModel(toolResultText);
         await runAgentRuntimeHook({
           runtime,
-          point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
-          context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, runtime, {
+          point: HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+          context: buildHookContext(HOOK_POINT.AGENT.AFTER_TOOL_CALL, runtime, {
             phase: "tool_call",
             executionScope,
             turn,
@@ -265,7 +259,7 @@ export async function executeToolCall({
     rawResult = await tool.invoke(call?.args || {}, {
       signal: abortSignal,
       configurable: {
-        noobotHookContext: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TOOL_CALL, runtime, {
+        noobotHookContext: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, runtime, {
           phase: "tool_call",
           executionScope,
           turn,
@@ -309,8 +303,8 @@ export async function executeToolCall({
     if (isAbort || isFatal) throw error;
     await runAgentRuntimeHook({
       runtime,
-      point: AGENT_HOOK_POINTS.TOOL_CALL_ERROR,
-      context: buildHookContext(AGENT_HOOK_POINTS.TOOL_CALL_ERROR, runtime, {
+      point: HOOK_POINT.AGENT.TOOL_CALL_ERROR,
+      context: buildHookContext(HOOK_POINT.AGENT.TOOL_CALL_ERROR, runtime, {
         phase: "tool_call",
         executionScope,
         turn,
@@ -387,8 +381,8 @@ export async function executeToolCall({
   }
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.AFTER_TOOL_CALL,
-    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, runtime, {
+    point: HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+    context: buildHookContext(HOOK_POINT.AGENT.AFTER_TOOL_CALL, runtime, {
       phase: "tool_call",
       executionScope,
       turn,

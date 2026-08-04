@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@noobot/context-protocol": "file:../../context-protocol",
+    "@noobot/hook-protocol": "file:../../hook-protocol",
     "@noobot/shared": "file:../../shared",
     "workflow": "file:../../workflow"
   },

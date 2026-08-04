@@ -11,7 +11,6 @@ import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -30,12 +29,12 @@ test("harness plugin rejects illegal FSM transitions and audits state commits", 
     { basePath, promptPolicy: false, manifestDebounceMs: 0 },
   );
 
-  await hookManager.emit("before_tool_calls", {
+  await hookManager.emit("agent.before_tool_calls", {
     userId: "u-fsm",
     sessionId: "s-fsm",
     dialogProcessId: "dp-fsm",
   });
-  await hookManager.emit("on_error", {
+  await hookManager.emit("agent.on_error", {
     userId: "u-fsm",
     sessionId: "s-fsm",
     dialogProcessId: "dp-fsm",
@@ -76,7 +75,7 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
       { hookManager },
       { basePath, promptPolicy: false, manifestDebounceMs: 0 },
     );
-    await hookManager.emit("after_llm_call", {
+    await hookManager.emit("agent.after_llm_call", {
       userId: "u-resume",
       sessionId: "s-resume",
       dialogProcessId: "dp-resume",
@@ -121,7 +120,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
   const cases = [
     {
       name: "idle -> planning",
-      point: "before_turn",
+      point: "agent.before_turn",
       ctx: {},
       expectedState: "planning",
       expectedAccepted: true,
@@ -129,7 +128,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
     },
     {
       name: "planning -> planned from LLM tool calls",
-      point: "after_llm_call",
+      point: "agent.after_llm_call",
       ctx: {
         hasToolCalls: true,
         calls: [{ id: "call-1", name: "read_file", args: {} }],
@@ -140,7 +139,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
     },
     {
       name: "planned -> executing",
-      point: "before_tool_calls",
+      point: "agent.before_tool_calls",
       ctx: {},
       expectedState: "executing",
       expectedAccepted: true,
@@ -148,7 +147,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
     },
     {
       name: "executing -> verifying",
-      point: "before_final_output",
+      point: "agent.before_final_output",
       ctx: { result: { output: "ok" } },
       expectedState: "verifying",
       expectedAccepted: true,
@@ -156,7 +155,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
     },
     {
       name: "verifying -> done",
-      point: "after_turn",
+      point: "agent.after_turn",
       ctx: {},
       expectedState: "done",
       expectedAccepted: true,
@@ -164,7 +163,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
     },
     {
       name: "done -X-> executing should be rejected",
-      point: "before_tool_calls",
+      point: "agent.before_tool_calls",
       ctx: {},
       expectedState: "done",
       expectedAccepted: false,
@@ -219,12 +218,12 @@ test("harness FSM remains planning when checklist is absent", async () => {
   const runId = "dp-fsm-stay";
   const runDir = path.join(basePath, "runtime", "harness", "runs", runId);
 
-  await hookManager.emit("before_turn", {
+  await hookManager.emit("agent.before_turn", {
     userId: "u-fsm-stay",
     sessionId: "s-fsm-stay",
     dialogProcessId: runId,
   });
-  await hookManager.emit("after_llm_call", {
+  await hookManager.emit("agent.after_llm_call", {
     userId: "u-fsm-stay",
     sessionId: "s-fsm-stay",
     dialogProcessId: runId,

@@ -42,7 +42,7 @@ test("harness review keeps its report internal by default", async () => {
   };
   const result = { output: "done" };
 
-  await hookManager.emit("before_final_output", {
+  await hookManager.emit("agent.before_final_output", {
     userId: "u12",
     sessionId: "s12",
     dialogProcessId: "dp12",
@@ -54,7 +54,7 @@ test("harness review keeps its report internal by default", async () => {
   assert.doesNotMatch(String(result.output), /Harness-Review/);
   assert.equal(Array.isArray(agentContext.payload.harness.reviewReports), true);
   assert.equal(agentContext.payload.harness.reviewReports.length, 1);
-  assert.equal(agentContext.payload.harness.lastReviewReport.point, "before_final_output");
+  assert.equal(agentContext.payload.harness.lastReviewReport.point, "agent.before_final_output");
   assert.equal(
     agentContext.payload.harness.lastReviewReport.summary.issues.includes("planning_not_captured"),
     true,
@@ -85,7 +85,7 @@ test("harness review attaches to final output only when explicitly enabled", asy
   const result = { output: "done" };
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
 
-  await hookManager.emit("before_final_output", {
+  await hookManager.emit("agent.before_final_output", {
     userId: "u12-opt-in",
     sessionId: "s12-opt-in",
     dialogProcessId: "dp12-opt-in",
@@ -107,7 +107,7 @@ test("harness before_final_output capability runtime runs once", async () => {
       promptPolicy: false,
       capabilityHandlers: {
         acceptance: async ({ point, ctx }) => {
-          if (point === "before_final_output") {
+          if (point === "agent.before_final_output") {
             count += 1;
             ctx.result.output = `${ctx.result.output}|acceptance-${count}`;
           }
@@ -119,7 +119,7 @@ test("harness before_final_output capability runtime runs once", async () => {
   );
 
   const result = { output: "done" };
-  await hookManager.emit("before_final_output", {
+  await hookManager.emit("agent.before_final_output", {
     userId: "u13",
     sessionId: "s13",
     dialogProcessId: "dp13",
@@ -203,7 +203,7 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     },
   };
 
-  const result = await handler({ capability: "acceptance", point: "before_final_output", ctx, meta: {} });
+  const result = await handler({ capability: "acceptance", point: "agent.before_final_output", ctx, meta: {} });
   assert.equal(result.status, "active");
   const finalAssistant = ctx.result.turnMessages?.[0] || {};
   const transferAttachmentIds = (Array.isArray(finalAssistant.transferEnvelopes)
@@ -242,7 +242,7 @@ test("harness finalResponseGuard false skips final policy injection but keeps re
 
   const result = { output: "done" };
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
-  await hookManager.emit("before_final_output", {
+  await hookManager.emit("agent.before_final_output", {
     userId: "u14",
     sessionId: "s14",
     dialogProcessId: "dp14",
@@ -253,7 +253,7 @@ test("harness finalResponseGuard false skips final policy injection but keeps re
   assert.doesNotMatch(String(result.output), /noobot-harness-final-response/);
   assert.doesNotMatch(String(result.output), /Harness-Review/);
   assert.equal(agentContext.payload.harness.reviewReports.length, 1);
-  assert.equal(agentContext.payload.harness.lastReviewReport.point, "before_final_output");
+  assert.equal(agentContext.payload.harness.lastReviewReport.point, "agent.before_final_output");
 });
 
 test("harness promptPolicy false still traces before_llm_call", async () => {
@@ -261,7 +261,7 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { basePath, promptPolicy: false, trace: true });
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     executionScope: "primary",
     userId: "u15",
     sessionId: "s15",
@@ -272,7 +272,7 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
   const eventsFile = path.join(basePath, "runtime", "harness", "runs", "dp15", "events.jsonl");
   assert.equal(await waitForFile(eventsFile), true);
   const events = (await fs.readFile(eventsFile, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
-  assert.equal(events.some((event) => event.point === "before_llm_call"), true);
+  assert.equal(events.some((event) => event.point === "agent.before_llm_call"), true);
 });
 
 test("harness review records reports on error and abort hooks", async () => {
@@ -280,14 +280,14 @@ test("harness review records reports on error and abort hooks", async () => {
   registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
 
-  await hookManager.emit("on_error", {
+  await hookManager.emit("agent.on_error", {
     userId: "u16",
     sessionId: "s16",
     dialogProcessId: "dp16",
     error: new Error("boom"),
     agentContext,
   });
-  await hookManager.emit("on_abort", {
+  await hookManager.emit("agent.on_abort", {
     userId: "u16",
     sessionId: "s16",
     dialogProcessId: "dp16",
@@ -316,7 +316,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   };
   const messages = [{ role: "user", content: "请处理附件并验收" }];
 
-  await hookManager.emit("before_turn", {
+  await hookManager.emit("agent.before_turn", {
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
@@ -328,7 +328,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
     true,
   );
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
@@ -341,7 +341,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   assert.equal(String(planningPromptMessage?.role || ""), "user");
   assert.match(String(planningPromptMessage?.content || ""), /harness-planning-bootstrap/);
 
-  await hookManager.emit("after_llm_call", {
+  await hookManager.emit("agent.after_llm_call", {
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
@@ -353,7 +353,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
 
   for (let i = 0; i < 3; i += 1) {
-    await hookManager.emit("after_tool_call", {
+    await hookManager.emit("agent.after_tool_call", {
       userId: "flow-user",
       sessionId: "flow-session",
       dialogProcessId: "flow-dp",
@@ -368,7 +368,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
     "consecutive_failures",
   );
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
@@ -381,7 +381,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   assert.match(String(guidancePromptMessage?.content || ""), /工具失败达到阈值/);
   assert.equal(agentContext.payload.harness.state.pending.guidance, null);
 
-  await hookManager.emit("after_tool_call", {
+  await hookManager.emit("agent.after_tool_call", {
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
@@ -400,7 +400,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
   assert.equal(agentContext.payload.harness.state.flags.acceptanceRequested, true);
 
   const result = { output: "任务完成" };
-  await hookManager.emit("before_final_output", {
+  await hookManager.emit("agent.before_final_output", {
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
@@ -427,7 +427,7 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
 
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
   const result = { output: "done" };
-  await hookManager.emit("before_final_output", {
+  await hookManager.emit("agent.before_final_output", {
     userId: "u17",
     sessionId: "s17",
     dialogProcessId: "dp17",
@@ -473,7 +473,7 @@ test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn
     },
   };
 
-  await hookManager.emit("before_turn", {
+  await hookManager.emit("agent.before_turn", {
     userId: "u17-reset",
     sessionId: "s17-reset",
     dialogProcessId: "dp17-reset",
@@ -504,7 +504,7 @@ test("harness forced acceptance is owned by acceptance without appending to fina
   };
   const result = { output: "done" };
 
-  await hookManager.emit("before_final_output", {
+  await hookManager.emit("agent.before_final_output", {
     userId: "u18",
     sessionId: "s18",
     dialogProcessId: "dp18",

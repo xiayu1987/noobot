@@ -169,7 +169,7 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
   assert.deepEqual(resolvePreferredAttachments({ attachmentMetas: [{ attachmentId: "legacy" }] }), []);
 });
 
-test("session-execution-engine-utils selects hook manager with priority and factory fallback", () => {
+test("session-execution-engine-utils selects only the canonical manager or creates one", () => {
   const manager = { kind: "manager" };
   const hooks = { kind: "hooks", on() {} };
   const created = { kind: "created" };
@@ -178,7 +178,6 @@ test("session-execution-engine-utils selects hook manager with priority and fact
     selectHookManager({
       runConfig: { hookManager: manager, hooks },
       managerKey: "hookManager",
-      hooksKey: "hooks",
       createManager: () => created,
     }),
     manager,
@@ -187,16 +186,14 @@ test("session-execution-engine-utils selects hook manager with priority and fact
     selectHookManager({
       runConfig: { hooks },
       managerKey: "hookManager",
-      hooksKey: "hooks",
       createManager: () => created,
     }),
-    hooks,
+    created,
   );
   assert.equal(
     selectHookManager({
       runConfig: {},
       managerKey: "hookManager",
-      hooksKey: "hooks",
       createManager: () => created,
     }),
     created,

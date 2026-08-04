@@ -5,8 +5,8 @@
  */
 
 import { emitEvent } from "../../../events/index.js";
-import { isAbortError } from "../../../shared/utils/error-utils.js";
-import { BOT_HOOK_POINTS, runBotRuntimeHook } from "../../hook/index.js";
+import { runBotRuntimeHook } from "../../hook/index.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import {
   BOT_DISPATCH_DISPOSITION,
   isBotDispatchOutcome,
@@ -175,35 +175,15 @@ const beforeAgentDispatchContext = {
 };
 const beforeAgentDispatchResult = await runBotRuntimeHook({
   runtime: botHookRuntime,
-  point: BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH,
+  point: HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH,
   context: beforeAgentDispatchContext,
   eventListener: runtimeEventListener,
 });
-const beforeAgentDispatchAbortError = (Array.isArray(beforeAgentDispatchResult?.errors)
-  ? beforeAgentDispatchResult.errors
-  : []
-)
-  .map((item) => item?.error || item)
-  .find((error) => isAbortError(error));
-if (beforeAgentDispatchAbortError) {
-  throw beforeAgentDispatchAbortError;
-}
-const beforeAgentDispatchErrors = (Array.isArray(beforeAgentDispatchResult?.errors)
-  ? beforeAgentDispatchResult.errors
-  : []
-).map((item) => item?.error || item).filter(Boolean);
-if (dispatchClaimed && beforeAgentDispatchErrors.length) {
-  throw beforeAgentDispatchErrors[0];
-}
 let agentResult = null;
 const dispatchOutcome = resolveBotDispatchOutcome(beforeAgentDispatchResult);
-const hasStructuredHandledOutcome = (Array.isArray(beforeAgentDispatchResult?.results)
-  ? beforeAgentDispatchResult.results
-  : []
-).some((item) => (
-  item?.ok === true &&
-  isBotDispatchOutcome(item?.result) &&
-  item.result.disposition === BOT_DISPATCH_DISPOSITION.HANDLED
+const hasStructuredHandledOutcome = beforeAgentDispatchResult.outcomes.some((outcome) => (
+  isBotDispatchOutcome(outcome?.value) &&
+  outcome.value.disposition === BOT_DISPATCH_DISPOSITION.HANDLED
 ));
 if (dispatchClaimed && dispatchOutcome.disposition === BOT_DISPATCH_DISPOSITION.PASS) {
   const error = new Error("claimed bot dispatch cannot be released to the root Agent");
@@ -275,7 +255,7 @@ if (dispatchOutcome.disposition === BOT_DISPATCH_DISPOSITION.HANDLED) {
   } catch (error) {
     await runBotRuntimeHook({
       runtime: botHookRuntime,
-      point: BOT_HOOK_POINTS.AGENT_DISPATCH_ERROR,
+      point: HOOK_POINT.BOT.AGENT_DISPATCH_ERROR,
       context: {
         ...botHookBase,
         userMessage: normalizedMessage,
@@ -320,7 +300,7 @@ emitEvent(runtimeEventListener, "canonical_turn_messages_accepted", {
 });
 await runBotRuntimeHook({
   runtime: botHookRuntime,
-  point: BOT_HOOK_POINTS.AFTER_AGENT_DISPATCH,
+  point: HOOK_POINT.BOT.AFTER_AGENT_DISPATCH,
   context: {
     ...botHookBase,
     userMessage: normalizedMessage,

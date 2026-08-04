@@ -12,6 +12,29 @@ import {
   validateHookContextProtocol,
 } from "@noobot/context-protocol/hook-context";
 import { emitAgentContextProtocolDebug } from "../../observability/agent-context-protocol-debug.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
+
+const MODEL_HOOK_POINTS = new Set([
+  HOOK_POINT.AGENT.BEFORE_TURN,
+  HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+  HOOK_POINT.AGENT.AFTER_TURN,
+  HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+  HOOK_POINT.AGENT.AFTER_LLM_CALL,
+  HOOK_POINT.AGENT.LLM_CALL_ERROR,
+]);
+const TOOL_CALL_COLLECTION_HOOK_POINTS = new Set([
+  HOOK_POINT.AGENT.BEFORE_TOOL_CALLS,
+  HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
+]);
+const TOOL_CALL_HOOK_POINTS = new Set([
+  HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
+  HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+  HOOK_POINT.AGENT.TOOL_CALL_ERROR,
+]);
+const STATE_COMMIT_HOOK_POINTS = new Set([
+  HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
+  HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
+]);
 
 function asObject(value = null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -78,7 +101,7 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
     modelContextProtocolVersion: Number(context.modelContext?.protocolVersion || 0),
     messageCount: Array.isArray(context.modelContext?.messages) ? context.modelContext.messages.length : 0,
   });
-  if (String(point || "").trim() === "before_llm_call") {
+  if (String(point || "").trim() === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
     emitModelContextTrace(runtime, "hook_context_built", {
       point: String(point || "").trim(),
       mode: context.mode,
@@ -122,36 +145,19 @@ function validateHookContext(point = "", runtime = {}, context = {}) {
     if (typeof context[key] !== "string") warnings.push(`${key} should be string`);
   };
 
-  if (
-    normalizedPoint === "before_turn" ||
-    normalizedPoint === "before_final_output" ||
-    normalizedPoint === "after_turn" ||
-    normalizedPoint === "before_llm_call" ||
-    normalizedPoint === "after_llm_call" ||
-    normalizedPoint === "llm_call_error"
-  ) {
+  if (MODEL_HOOK_POINTS.has(normalizedPoint)) {
     if (context.modelContext?.messages != null && !Array.isArray(context.modelContext.messages)) {
       warnings.push("modelContext.messages should be array");
     }
   }
-  if (
-    normalizedPoint === "before_tool_calls" ||
-    normalizedPoint === "after_tool_calls"
-  ) {
+  if (TOOL_CALL_COLLECTION_HOOK_POINTS.has(normalizedPoint)) {
     requireArray("calls");
   }
-  if (
-    normalizedPoint === "before_tool_call" ||
-    normalizedPoint === "after_tool_call" ||
-    normalizedPoint === "tool_call_error"
-  ) {
+  if (TOOL_CALL_HOOK_POINTS.has(normalizedPoint)) {
     requireObject("call");
     requireString("toolName");
   }
-  if (
-    normalizedPoint === "before_state_commit" ||
-    normalizedPoint === "after_state_commit"
-  ) {
+  if (STATE_COMMIT_HOOK_POINTS.has(normalizedPoint)) {
     requireString("commitType");
     if (context?.payload == null) {
       warnings.push("payload should be present");

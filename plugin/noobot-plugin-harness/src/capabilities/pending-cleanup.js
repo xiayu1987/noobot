@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { CAPABILITY_DOMAIN, appendCapabilityLog, ensureHarnessBucket } from "./handlers/shared.js";
-import { HARNESS_HOOK_POINTS } from "../core/constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const DEFAULT_PENDING_TTL_HOOK_TURNS = TURN_THRESHOLDS.harness.pendingTtlHookTurns;
@@ -24,11 +24,11 @@ const TRACKED_CAPTURE_FLAG_KEYS = Object.freeze([
   "acceptanceSemanticValidationCapturePending",
 ]);
 const HOOK_TURN_TICK_POINTS = new Set([
-  HARNESS_HOOK_POINTS.BEFORE_LLM_CALL,
-  HARNESS_HOOK_POINTS.AFTER_LLM_CALL,
-  HARNESS_HOOK_POINTS.AFTER_TOOL_CALL,
-  HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
-  HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
+  HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+  HOOK_POINT.AGENT.AFTER_LLM_CALL,
+  HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+  HOOK_POINT.AGENT.TOOL_CALL_ERROR,
+  HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
 ]);
 
 function normalizePendingTtlHookTurns(meta = {}) {

@@ -263,7 +263,7 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
       dialogProcessId: "dp-stop",
       turnScopeId: "turn-stop",
     },
-    concurrency: {},
+    concurrency: { expectedTurnRevision: 1 },
     stop: {},
   }));
   assert.equal(forwarded, true);
@@ -314,7 +314,7 @@ test("forwardToUpstream reports a closed upstream without throwing", () => {
         sessionId: "session-closed-upstream",
         turnScopeId: "turn-closed-upstream",
       },
-      concurrency: {},
+      concurrency: { expectedTurnRevision: 1 },
       stop: {},
     })), false);
   });

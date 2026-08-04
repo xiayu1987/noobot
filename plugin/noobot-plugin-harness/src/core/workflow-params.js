@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
@@ -371,7 +372,7 @@ export const WORKFLOW_PARAMS = deepFreeze({
     },
   },
   review: {
-    hooks: ["before_final_output", "on_error", "on_abort"],
+    hooks: [HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, HOOK_POINT.AGENT.ON_ERROR, HOOK_POINT.AGENT.ON_ABORT],
     decisions: {
       action: {
         reviewReport: "review_report",

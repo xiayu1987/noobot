@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { ensureTaskAcceptanceTool } from "../acceptance.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
@@ -120,12 +121,12 @@ function consumePlanningTurnIncrement(state = {}, ctx = {}) {
 export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => true } = {}) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
     if (
-      ["before_llm_call", "after_llm_call", "after_tool_calls", "before_final_output"].includes(point) &&
+      [HOOK_POINT.AGENT.BEFORE_LLM_CALL, HOOK_POINT.AGENT.AFTER_LLM_CALL, HOOK_POINT.AGENT.AFTER_TOOL_CALLS, HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT].includes(point) &&
       !shouldProcessPrimaryToolHooks(ctx)
     ) {
       return { capability, point, status: "active", changed: false };
     }
-    if (point === "before_llm_call") {
+    if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
       const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.PLANNING }) === true;
       let setupChanged = invariantChanged;
       const holder = ensureHarnessBucket(ctx);
@@ -313,7 +314,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
 
       const lifecycle = await runWorkflowLifecycle(ctx, {
         domain: CAPABILITY_DOMAIN.PLANNING,
-        point: "before_llm_call",
+        point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
         mode,
         resolveDecision: () => ({
           chosenAction: PLANNING_DECISION.action.planningBootstrap,
@@ -357,12 +358,12 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       });
       return { capability, point, status: "active", changed: lifecycle.execution.changed };
     }
-    if (point === "after_llm_call") {
+    if (point === HOOK_POINT.AGENT.AFTER_LLM_CALL) {
       const mode = resolveWorkflowMode(meta);
       const holder = ensureHarnessBucket(ctx);
       const lifecycle = await runWorkflowLifecycle(ctx, {
         domain: CAPABILITY_DOMAIN.PLANNING,
-        point: "after_llm_call",
+        point: HOOK_POINT.AGENT.AFTER_LLM_CALL,
         mode,
         resolveDecision: () => ({
           chosenAction: PLANNING_DECISION.action.planningCapture,

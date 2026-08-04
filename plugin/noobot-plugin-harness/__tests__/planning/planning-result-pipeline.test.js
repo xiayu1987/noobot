@@ -33,7 +33,7 @@ test("workflow params define plan refinement defaults by scenario mode", () => {
 test("planning result pipeline captures plan text directly", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: "1. 解析附件\n2. 执行核心任务",
     locale: LOCALE.ZH_CN,
   });
@@ -60,7 +60,7 @@ test("planning result pipeline disables plan refinement by default in programmin
   };
 
   const result = await processPlanningResult(ctx, {}, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: "1. 解析附件\n2. 执行核心任务",
     locale: LOCALE.ZH_CN,
   });
@@ -79,7 +79,7 @@ test("planning result pipeline allows explicit plan refinement enablement in pro
   };
 
   const result = await processPlanningResult(ctx, { harness: { planRefinementEnabled: true } }, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: "1. 解析附件\n2. 执行核心任务",
     locale: LOCALE.ZH_CN,
   });
@@ -95,7 +95,7 @@ test("planning result pipeline allows explicit plan refinement enablement in pro
 test("planning result pipeline honors explicit plan refinement disablement outside programming scenario", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, { harness: { planRefinementEnabled: false } }, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: "1. 解析附件\n2. 执行核心任务",
     locale: LOCALE.ZH_CN,
   });
@@ -113,7 +113,7 @@ test("planning result pipeline enables plan refinement by default in text scenar
     scenarioProfile: { key: "text", name: "文本" },
   };
   const result = await processPlanningResult(ctx, {}, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: "1. 梳理文本\n2. 输出结果",
     locale: LOCALE.ZH_CN,
   });
@@ -126,7 +126,7 @@ test("planning result pipeline enables plan refinement by default in text scenar
 test("planning result pipeline supports ID+PATCH main plan text", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: "ADD [1] 解析附件\nADD [2] 执行核心任务",
     locale: LOCALE.ZH_CN,
   });
@@ -203,7 +203,7 @@ test("planning result pipeline extracts current task goal from planning text pro
 test("planning result pipeline schedules retry when payload has no main plan", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: '{"taskChecklist":[{index:1,task:"解析附件"}]}',
     locale: LOCALE.ZH_CN,
   });
@@ -217,7 +217,7 @@ test("planning result pipeline schedules retry when payload has no main plan", a
 test("planning result pipeline rejects sub-plan-only patch payload", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: "UPDATE 2.8 标记完成\nUPDATE 2.9 标记完成",
     locale: LOCALE.ZH_CN,
   });
@@ -235,7 +235,7 @@ test("planning result pipeline applies default checklist when retry exhausted", 
   };
 
   const result = await processPlanningResult(ctx, {}, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: "",
     locale: LOCALE.ZH_CN,
   });
@@ -256,7 +256,7 @@ test("planning result pipeline applies default checklist when retry exhausted", 
 test("planning result pipeline keeps waiting when malformed payload is non-empty", async () => {
   const ctx = createCtx();
   const result = await processPlanningResult(ctx, {}, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: '{"taskChecklist":[{bad json}]}',
     locale: LOCALE.ZH_CN,
   });
@@ -274,7 +274,7 @@ test("planning result pipeline records english fallback reason label", async () 
   };
 
   const result = await processPlanningResult(ctx, {}, {
-    source: "after_llm_call",
+    source: "agent.after_llm_call",
     rawText: '{"taskChecklist":[{bad json}]}',
     locale: LOCALE.EN_US,
   });

@@ -3,13 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { ensureHarnessBucket } from "../bucket-utils.js";
 import { resolveDialogProcessIdFromContext } from "./dialog-process-id.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { clearIncrementalCapabilityMessageCacheForContext } from "../model/incremental-message-cache.js";
 
-const TURN_END_POINTS = new Set(["after_turn", "on_abort", "on_error"]);
-const TURN_START_POINTS = new Set(["before_turn", "before_context_build"]);
+const TURN_END_POINTS = new Set([HOOK_POINT.AGENT.AFTER_TURN, HOOK_POINT.AGENT.ON_ABORT, HOOK_POINT.AGENT.ON_ERROR]);
+const TURN_START_POINTS = new Set([HOOK_POINT.AGENT.BEFORE_TURN, HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD]);
 const MAX_COMPLETED_DIALOG_IDS = QUANTITY_THRESHOLDS.harness.completedDialogIds;
 
 function resolveDialogProcessId(ctx = {}) {

@@ -38,8 +38,8 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
   };
 
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
-    flushPoints: ["after_turn"],
+    tracePoints: ["agent.before_llm_call"],
+    flushPoints: ["agent.after_turn"],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: (_ctx, event, data) => {
       calls.push(["emit", event, data?.point]);
@@ -88,12 +88,12 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
 
   const disposers = registerHarnessHooks({ hookManager, options, capabilityRuntime, plugin });
   assert.equal(disposers.length, 2);
-  assert.equal(handlers.get("before_llm_call")?.opts?.id, `${plugin.name}.trace.before_llm_call`);
-  assert.equal(handlers.get("after_turn")?.opts?.id, `${plugin.name}.flush.after_turn`);
+  assert.equal(handlers.get("agent.before_llm_call")?.opts?.id, `${plugin.name}.trace.agent.before_llm_call`);
+  assert.equal(handlers.get("agent.after_turn")?.opts?.id, `${plugin.name}.flush.agent.after_turn`);
 
-  const traceResult = await handlers.get("before_llm_call").handler({ userId: "u1" });
+  const traceResult = await handlers.get("agent.before_llm_call").handler({ userId: "u1" });
   assert.deepEqual(traceResult, { fsmState: "planning", fsmRejected: false });
-  await handlers.get("after_turn").handler();
+  await handlers.get("agent.after_turn").handler();
 
   assert.deepEqual(
     calls
@@ -128,7 +128,7 @@ test("createRegisterHarnessHooks emits hook_error and rethrows when trace handle
   };
 
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_turn"],
+    tracePoints: ["agent.before_turn"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: (_ctx, event, data) => {
@@ -160,7 +160,7 @@ test("createRegisterHarnessHooks emits hook_error and rethrows when trace handle
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  await assert.rejects(() => handlers.get("before_turn")({}), /boom/);
+  await assert.rejects(() => handlers.get("agent.before_turn")({}), /boom/);
   assert.equal(progressEvents.some((item) => item.event === "hook_error"), true);
   assert.equal(progressEvents.at(-1)?.data?.error, "safe_error");
 });

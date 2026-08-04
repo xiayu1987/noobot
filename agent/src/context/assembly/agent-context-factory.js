@@ -6,7 +6,8 @@
 
 import { ContextBuilder } from "../index.js";
 import { emitEvent } from "../../events/index.js";
-import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 import { getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
@@ -158,10 +159,7 @@ export class AgentContextFactory {
         runConfig?.hookManager && typeof runConfig.hookManager === "object"
           ? runConfig.hookManager
           : null,
-      hooks:
-        runConfig?.hooks && typeof runConfig.hooks === "object"
-          ? runConfig.hooks
-          : null,
+      abortSignal: runConfig?.abortSignal || null,
     };
 
     const contextHookBase = this._buildContextHookBase({
@@ -177,7 +175,7 @@ export class AgentContextFactory {
 
     await runAgentRuntimeHook({
       runtime: runtimeHookCarrier,
-      point: AGENT_HOOK_POINTS.BEFORE_CONTEXT_BUILD,
+      point: HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
       context: {
         ...contextHookBase,
         startedAt: buildStartedAt,
@@ -206,7 +204,7 @@ export class AgentContextFactory {
       const failedAtMs = Date.now();
       await runAgentRuntimeHook({
         runtime: runtimeHookCarrier,
-        point: AGENT_HOOK_POINTS.CONTEXT_BUILD_ERROR,
+        point: HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
         context: {
           ...contextHookBase,
           startedAt: buildStartedAt,
@@ -228,7 +226,7 @@ export class AgentContextFactory {
     const completedAtMs = Date.now();
     await runAgentRuntimeHook({
       runtime,
-      point: AGENT_HOOK_POINTS.AFTER_CONTEXT_BUILD,
+      point: HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD,
       context: {
         ...contextHookBase,
         startedAt: buildStartedAt,

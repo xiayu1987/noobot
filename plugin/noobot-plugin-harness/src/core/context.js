@@ -7,7 +7,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
-  resolveAuthoritativeModelContext,
   resolveHookClientEmitter,
 } from "@noobot/context-protocol/hook-context";
 
@@ -26,45 +25,6 @@ export function normalizePlanningGuidance(options = {}) {
 
 export function extractRuntime(ctx = {}) {
   return ctx?.agentContext?.bindings?.runtime || null;
-}
-
-function resolveUnifiedCalls(ctx = {}) {
-  if (Array.isArray(ctx?.calls)) return ctx.calls;
-  if (Array.isArray(ctx?.call)) return ctx.call;
-  return null;
-}
-
-function resolveUnifiedCall(ctx = {}) {
-  if (ctx?.call && typeof ctx.call === "object" && !Array.isArray(ctx.call)) return ctx.call;
-  if (Array.isArray(ctx?.calls) && ctx.calls.length) {
-    const first = ctx.calls[0];
-    if (first && typeof first === "object" && !Array.isArray(first)) return first;
-  }
-  return null;
-}
-
-export function normalizeHookContextProtocol(point = "", ctx = {}) {
-  if (!ctx || typeof ctx !== "object") return ctx;
-  const normalizedPoint = String(point || ctx?.point || "").trim();
-  if (normalizedPoint && !ctx.point) ctx.point = normalizedPoint;
-
-  resolveAuthoritativeModelContext(ctx);
-
-  const unifiedCalls = resolveUnifiedCalls(ctx);
-  if (unifiedCalls && !Array.isArray(ctx.calls)) {
-    ctx.calls = unifiedCalls;
-  }
-
-  const unifiedCall = resolveUnifiedCall(ctx);
-  if (unifiedCall && (!ctx.call || typeof ctx.call !== "object" || Array.isArray(ctx.call))) {
-    ctx.call = unifiedCall;
-  }
-
-  if (!ctx.toolName && ctx?.call?.name) {
-    ctx.toolName = String(ctx.call.name || "").trim();
-  }
-
-  return ctx;
 }
 
 export function extractBasePath(ctx = {}, options = {}) {
@@ -132,7 +92,7 @@ export function emitHarnessHookProgress(ctx = {}, event = "", data = {}) {
 }
 
 export function resolveHookManager(api = {}) {
-  return api.hookManager || api.hooks || api.manager || api?.runtime?.hookManager || api?.runConfig?.hookManager || null;
+  return api.hookManager || null;
 }
 
 export function createPluginRuntimeContextFactory(deps = {}) {

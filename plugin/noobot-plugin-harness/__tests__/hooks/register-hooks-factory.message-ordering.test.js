@@ -36,7 +36,7 @@ test("createRegisterHarnessHooks keeps message block order and lets incremental 
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -94,7 +94,7 @@ test("createRegisterHarnessHooks keeps message block order and lets incremental 
     },
   });
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
 
   const exactUserIndexes = ctx.modelContext.messages
     .map((item, index) => ({ item, index }))
@@ -116,7 +116,7 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -185,7 +185,7 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
     },
   });
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
 
   const exactUserIndexes = ctx.modelContext.messages
     .map((item, index) => ({ item, index }))
@@ -219,7 +219,7 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -286,7 +286,7 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
     },
   });
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -311,7 +311,7 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -359,7 +359,7 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
     },
   });
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
     ["system context", "harness current-turn injection", "tool burst 1", "tool burst 2", "tool burst 3"],
@@ -378,7 +378,7 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
     message.summarized = true;
   }
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
     ["system context", "harness current-turn injection"],
@@ -394,7 +394,7 @@ test("createRegisterHarnessHooks keeps multiple empty assistant tool-call messag
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -440,7 +440,7 @@ test("createRegisterHarnessHooks keeps multiple empty assistant tool-call messag
     },
   });
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
 
   const assistantIds = ctx.modelContext.messages
     .filter((item) => item.role === "assistant")

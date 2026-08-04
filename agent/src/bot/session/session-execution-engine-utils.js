@@ -137,18 +137,10 @@ export function applyNormalizedMessageFlags(normalized = {}, messageItem = {}) {
 export function selectHookManager({
   runConfig = {},
   managerKey = "",
-  hooksKey = "",
   createManager = null,
 } = {}) {
   if (runConfig?.[managerKey] && typeof runConfig[managerKey] === "object") {
     return runConfig[managerKey];
-  }
-  if (
-    runConfig?.[hooksKey] &&
-    typeof runConfig[hooksKey] === "object" &&
-    typeof runConfig[hooksKey].on === "function"
-  ) {
-    return runConfig[hooksKey];
   }
   return typeof createManager === "function" ? createManager() : null;
 }

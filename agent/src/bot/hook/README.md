@@ -1,40 +1,16 @@
-# Bot Hook System (bot/hook)
+# Bot Hook Runtime Adapter
 
-Bot hooks are used for **session orchestration / multi-agent management** at bot-manage layer.
-Bot dispatch points expose `agentContextSummary` (not full `agentContext`) to keep orchestration API stable.
+This directory adapts `@noobot/hook-protocol` to Bot session orchestration and
+telemetry. It does not define a Bot-specific Manager or duplicate point list.
+Runtime resolution accepts only `runtime.botHookManager`.
 
-## Hook points
-
-- `before_session_run`
-- `before_agent_dispatch`
-- `after_agent_dispatch`
-- `agent_dispatch_error`
-- `after_session_run`
-- `session_run_error`
-
-## Registration
-
-```js
-import { createBotHookManager, BOT_HOOK_POINTS } from "noobot-agent/bot-manage/hook";
-
-const botHookManager = createBotHookManager();
-botHookManager.on(BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH, async (ctx) => {
-  // orchestration policy / routing / audit
-});
-
-await botManager.runSession({
-  userId,
-  sessionId,
-  message,
-  runConfig: {
-    botHookManager,
-  },
-});
-```
+Bot dispatch contexts expose `agentContextSummary`, not the mutable full Agent
+context. Register handlers with `createHookManager` and `HOOK_POINT.BOT` from
+`@noobot/hook-protocol`.
 
 ## Dispatch takeover
 
-A `before_agent_dispatch` hook is an execution router. A hook that replaces the
+A `HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH` hook is an execution router. A handler that replaces the
 main Agent must:
 
 1. call `ctx.claimAgentDispatch({ owner, source, executionId, executionKind,
@@ -56,6 +32,4 @@ A structured `handled` outcome without an earlier claim, a claim followed by
 `pass`, or a claim/outcome owner mismatch is a dispatch protocol violation and
 fails the Turn.
 
-`ctx.skipAgentDispatch` and `ctx.overrideAgentResult` remain read-only
-compatibility inputs for older plugins. New plugins must use the structured
-outcome contract.
+The structured dispatch outcome is the only takeover contract.

@@ -55,9 +55,9 @@ export function isBotDispatchOutcome(value = null) {
 }
 
 export function resolveBotDispatchOutcome(hookResult = {}) {
-  const outcomes = (Array.isArray(hookResult?.results) ? hookResult.results : [])
-    .filter((item) => item?.ok === true && isBotDispatchOutcome(item?.result))
-    .map((item) => item.result);
+  const outcomes = (Array.isArray(hookResult?.outcomes) ? hookResult.outcomes : [])
+    .map((outcome) => outcome?.value)
+    .filter(isBotDispatchOutcome);
   const handled = outcomes.filter((item) => item.disposition === BOT_DISPATCH_DISPOSITION.HANDLED);
   if (handled.length > 1) {
     const error = new Error(`bot dispatch ownership conflict: ${handled.map((item) => item.owner).join(",")}`);

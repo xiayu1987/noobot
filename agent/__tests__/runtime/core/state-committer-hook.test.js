@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createStateCommitter } from "../../../src/runtime/tool-execution/state-committer.js";
-import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../../src/extensions/hooks/index.js";
+import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext } from "@noobot/context-protocol";
 
 function createInMemoryTurnStore() {
@@ -39,19 +39,19 @@ function installEmptyMessageEventMaterializer(runtime = {}) {
 
 test("state-committer emits before/after hooks for assistant message commit", async () => {
   const hookCalls = [];
-  const hookManager = createAgentHookManager();
+  const hookManager = createHookManager();
   const runtime = installEmptyMessageEventMaterializer({ hookManager });
   const turnMessageStore = createInMemoryTurnStore();
 
-  hookManager.on(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
+  hookManager.on(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "assistant_message") return;
     hookCalls.push(`before:${ctx.commitType}`);
     ctx.payload.content = `[hooked]${ctx.payload.content}`;
-  });
-  hookManager.on(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
+  }, { id: "test.assistant-commit.before" });
+  hookManager.on(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "assistant_message") return;
     hookCalls.push(`after:${ctx.commitType}`);
-  });
+  }, { id: "test.assistant-commit.after" });
 
   const committer = createStateCommitter({
     messages: [],
@@ -75,21 +75,21 @@ test("state-committer emits before/after hooks for assistant message commit", as
 
 test("state-committer emits before/after hooks for tool result commit", async () => {
   const hookCalls = [];
-  const hookManager = createAgentHookManager();
+  const hookManager = createHookManager();
   const runtime = { hookManager };
   const turnMessageStore = createInMemoryTurnStore();
   const traces = [];
   const messages = [];
 
-  hookManager.on(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
+  hookManager.on(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "tool_result") return;
     hookCalls.push(`before:${ctx.commitType}`);
     ctx.payload.content = "tool_result_overridden_by_hook";
-  });
-  hookManager.on(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
+  }, { id: "test.tool-commit.before" });
+  hookManager.on(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "tool_result") return;
     hookCalls.push(`after:${ctx.commitType}`);
-  });
+  }, { id: "test.tool-commit.after" });
 
   const committer = createStateCommitter({
     messages,
@@ -275,11 +275,11 @@ test("state-committer persists transferEnvelopes only", async () => {
 
 test("state-committer emits before/after hooks for attachment commit", async () => {
   const hookCalls = [];
-  const hookManager = createAgentHookManager();
+  const hookManager = createHookManager();
   const runtime = { hookManager, attachments: [] };
   const turnMessageStore = createInMemoryTurnStore();
 
-  hookManager.on(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, async (ctx = {}) => {
+  hookManager.on(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "attachments") return;
     hookCalls.push(`before:${ctx.commitType}`);
     ctx.payload.attachments.push({
@@ -287,11 +287,11 @@ test("state-committer emits before/after hooks for attachment commit", async () 
       name: "b.png",
       mimeType: "image/png",
     });
-  });
-  hookManager.on(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, async (ctx = {}) => {
+  }, { id: "test.attachment-commit.before" });
+  hookManager.on(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, async (ctx = {}) => {
     if (ctx.commitType !== "attachments") return;
     hookCalls.push(`after:${ctx.commitType}`);
-  });
+  }, { id: "test.attachment-commit.after" });
 
   const committer = createStateCommitter({
     turnMessageStore,

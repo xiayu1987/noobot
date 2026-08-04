@@ -95,10 +95,6 @@ export function buildRuntimeContext({
     runConfig?.hookManager && typeof runConfig.hookManager === "object"
       ? runConfig.hookManager
       : null;
-  const runtimeHooks =
-    runConfig?.hooks && typeof runConfig.hooks === "object"
-      ? runConfig.hooks
-      : null;
   return {
     userId: String(userId || "").trim(),
     basePath: String(basePath || "").trim(),
@@ -121,7 +117,6 @@ export function buildRuntimeContext({
         : {},
     sharedTools: passthroughSharedTools,
     hookManager: runtimeHookManager,
-    hooks: runtimeHooks,
     childAsyncResultContainers: [],
     parentAsyncResultContainer:
       parentAsyncResultContainer && typeof parentAsyncResultContainer === "object"

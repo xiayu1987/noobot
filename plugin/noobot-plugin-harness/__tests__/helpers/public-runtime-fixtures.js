@@ -8,6 +8,7 @@ import {
   createModelContext,
   resolveModelFinalMessages,
 } from "@noobot/context-protocol";
+import { createHookManager } from "@noobot/hook-protocol";
 
 let testScopeSequence = 0;
 
@@ -161,88 +162,15 @@ function resolveTurnScopeId(ctx = {}) {
   ).trim();
 }
 
-/**
- * Public-contract hook host used by plugin tests. It intentionally models only
- * the host port exposed to plugins and does not import Agent internals.
- */
 export function createTestHookManager() {
-  const registry = new Map();
-  let sequence = 0;
-
-  function on(point = "", handler = null, options = {}) {
-    const normalizedPoint = String(point || "").trim();
-    if (!normalizedPoint || typeof handler !== "function") {
-      throw new Error("hook point and handler are required");
-    }
-    const handlers = registry.get(normalizedPoint) || [];
-    const item = {
-      id: String(options?.id || `${normalizedPoint}_${handlers.length + 1}`),
-      handler,
-      once: options?.once === true,
-      priority: Number.isFinite(Number(options?.priority)) ? Number(options.priority) : 0,
-      sequence: ++sequence,
-    };
-    handlers.push(item);
-    handlers.sort((left, right) => right.priority - left.priority || left.sequence - right.sequence);
-    registry.set(normalizedPoint, handlers);
-    return () => off(normalizedPoint, item.id);
-  }
-
-  function once(point = "", handler = null, options = {}) {
-    return on(point, handler, { ...options, once: true });
-  }
-
-  function off(point = "", id = "") {
-    const normalizedPoint = String(point || "").trim();
-    const handlers = registry.get(normalizedPoint) || [];
-    const next = handlers.filter((item) => item.id !== String(id || ""));
-    if (next.length === handlers.length) return false;
-    if (next.length) registry.set(normalizedPoint, next);
-    else registry.delete(normalizedPoint);
-    return true;
-  }
-
-  function clear(point = "") {
-    const normalizedPoint = String(point || "").trim();
-    if (normalizedPoint) registry.delete(normalizedPoint);
-    else registry.clear();
-  }
-
-  function list(point = "") {
-    const normalizedPoint = String(point || "").trim();
-    if (normalizedPoint) return [...(registry.get(normalizedPoint) || [])];
-    return [...registry.entries()].map(([registeredPoint, handlers]) => ({
-      point: registeredPoint,
-      handlers: [...handlers],
-    }));
-  }
-
-  async function run(point = "", context = {}) {
-    const normalizedPoint = String(point || "").trim();
-    const handlers = [...(registry.get(normalizedPoint) || [])];
-    ensureTestHookContext(context);
-    const results = [];
-    const errors = [];
-    for (const item of handlers) {
-      try {
-        const value = await item.handler(context);
-        results.push({ ok: true, id: item.id, value });
-      } catch (error) {
-        errors.push(error);
-        results.push({ ok: false, id: item.id, error });
-      } finally {
-        if (item.once) off(normalizedPoint, item.id);
-      }
-    }
-    return { point: normalizedPoint, context, results, errors };
-  }
-
-  async function emit(point = "", context = {}) {
-    const outcome = await run(point, context);
-    return outcome.results.filter((item) => item.ok).map((item) => item.value);
-  }
-
-  return { on, once, off, clear, list, run, emit };
+  const manager = createHookManager();
+  return Object.freeze({
+    ...manager,
+    async emit(point, context = {}, options = {}) {
+      ensureTestHookContext(context);
+      return manager.emit(point, context, options);
+    },
+  });
 }
 
 export function createTestResolveModelMessages() {

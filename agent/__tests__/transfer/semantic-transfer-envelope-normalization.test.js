@@ -150,13 +150,13 @@ test("validateTransferEnvelope reports invalid and accepts valid envelopes", asy
   assert.ok(invalid.errors.length > 0);
 });
 test("semantic-transfer emits validation event and hook", async () => {
-  const { createAgentHookManager, AGENT_HOOK_POINTS } = await import("../../src/extensions/hooks/index.js");
+  const { createHookManager, HOOK_POINT } = await import("@noobot/hook-protocol");
   const events = [];
   const hooks = [];
-  const hookManager = createAgentHookManager();
-  hookManager.on(AGENT_HOOK_POINTS.SEMANTIC_TRANSFER_VALIDATION, async (ctx = {}) => {
+  const hookManager = createHookManager();
+  hookManager.on(HOOK_POINT.AGENT.SEMANTIC_TRANSFER_VALIDATION, async (ctx = {}) => {
     hooks.push(ctx);
-  });
+  }, { id: "test.semantic_transfer_validation" });
   const runtime = {
     hookManager,
     eventListener: {

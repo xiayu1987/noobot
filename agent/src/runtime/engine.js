@@ -8,7 +8,8 @@
 import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
 import { readFinalStreamingResultMeta } from "./turn/turn-result-aggregator.js";
-import { runAgentRuntimeHook, AGENT_HOOK_POINTS } from "../extensions/hooks/index.js";
+import { runAgentRuntimeHook } from "../extensions/hooks/index.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { isAbortError } from "./utils/error-utils.js";
 import { buildHookContext } from "./hooks/hook-context-builder.js";
 import { emitEvent } from "../events/index.js";
@@ -194,15 +195,6 @@ export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime =
   return true;
 }
 
-export function assertHookExecutionSucceeded(hookResult = {}, point = "") {
-  const failure = (Array.isArray(hookResult?.errors) ? hookResult.errors : [])
-    .map((item) => item?.error || item)
-    .find(Boolean);
-  if (!failure) return hookResult;
-  if (failure instanceof Error) throw failure;
-  throw new Error(`hook failed: ${String(point || hookResult?.point || "unknown").trim() || "unknown"}`);
-}
-
 export async function runAgentTurn({ agentContext, currentUserMessage, errorLogger = null }) {
   const runtime = agentContext?.bindings?.runtime || {};
   const userMessage = String(currentUserMessage?.content || "");
@@ -210,8 +202,8 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
   const startedAt = new Date(startedAtMs).toISOString();
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.BEFORE_TURN,
-    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TURN, runtime, {
+    point: HOOK_POINT.AGENT.BEFORE_TURN,
+    context: buildHookContext(HOOK_POINT.AGENT.BEFORE_TURN, runtime, {
       phase: "agent_turn",
       status: "start",
       startedAt,
@@ -224,10 +216,10 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
   try {
     const result = await runFunctionCallLoop({ modelState, loopState, turn: 1 });
     const beforeFinalAtMs = Date.now();
-    const beforeFinalHookResult = await runAgentRuntimeHook({
+    await runAgentRuntimeHook({
       runtime,
-      point: AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
-      context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT, runtime, {
+      point: HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+      context: buildHookContext(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, runtime, {
         phase: "agent_turn",
         status: "success",
         startedAt,
@@ -239,12 +231,11 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
         modelContext,
       }),
     });
-    assertHookExecutionSucceeded(beforeFinalHookResult, AGENT_HOOK_POINTS.BEFORE_FINAL_OUTPUT);
     const endedAtMs = Date.now();
     await runAgentRuntimeHook({
       runtime,
-      point: AGENT_HOOK_POINTS.AFTER_TURN,
-      context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TURN, runtime, {
+      point: HOOK_POINT.AGENT.AFTER_TURN,
+      context: buildHookContext(HOOK_POINT.AGENT.AFTER_TURN, runtime, {
         phase: "agent_turn",
         status: "success",
         startedAt,
@@ -262,8 +253,8 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
     if (isAbortError(error) || isAbortError(error?.cause)) {
       await runAgentRuntimeHook({
         runtime,
-        point: AGENT_HOOK_POINTS.ON_ABORT,
-        context: buildHookContext(AGENT_HOOK_POINTS.ON_ABORT, runtime, {
+        point: HOOK_POINT.AGENT.ON_ABORT,
+        context: buildHookContext(HOOK_POINT.AGENT.ON_ABORT, runtime, {
           phase: "agent_turn",
           status: "abort",
           startedAt,
@@ -278,8 +269,8 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
     }
     await runAgentRuntimeHook({
       runtime,
-      point: AGENT_HOOK_POINTS.ON_ERROR,
-      context: buildHookContext(AGENT_HOOK_POINTS.ON_ERROR, runtime, {
+      point: HOOK_POINT.AGENT.ON_ERROR,
+      context: buildHookContext(HOOK_POINT.AGENT.ON_ERROR, runtime, {
         phase: "agent_turn",
         status: "error",
         startedAt,

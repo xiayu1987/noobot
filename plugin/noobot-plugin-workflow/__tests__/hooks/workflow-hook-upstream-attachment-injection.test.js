@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import {
   createMockBotHookManager,
@@ -22,7 +23,6 @@ import {
   callsByNodeName,
   workflowTurn,
   createRegisterWorkflowHooks,
-  WORKFLOW_BOT_HOOK_POINTS,
   WORKFLOW_PLUGIN_DEFAULTS,
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,
@@ -312,5 +312,4 @@ test("workflow hook injects one upstream action attachments into multiple direct
   assert.match(nodeCSystem, /节点A/);
   assert.match(nodeCSystem, /fanout-att-1|workflow-node-1-节点A-result\.md/);
 });
-
 

@@ -39,7 +39,7 @@ function createResolverContext({
   return {
     ...context,
     dialogProcessId,
-    contextProtocolVersion: 1,
+    contextProtocolVersion: 2,
     modelContext: createModelContext({
       messageBlocks: blocks,
       activeTurnIdentity: { dialogProcessId, turnScopeId: `turn:${dialogProcessId}` },
@@ -74,8 +74,7 @@ test("SessionExecutionEngine injects mini-runner capabilityModelInvoker for plug
   assert.equal(prepared.plugins.agentPlugin.basePath, basePath);
   assert.equal(prepared.plugins.agentPlugin.planningGuidanceMode, "separate_model");
   assert.equal(typeof prepared.plugins.agentPlugin.capabilityModelInvoker, "function");
-  assert.equal(typeof prepared.hookManager.runtime?.agentPlugin, "object");
-  assert.equal(prepared.hookManager.runtime.agentPlugin.mode, "on");
+  assert.equal(Object.hasOwn(prepared.hookManager, "runtime"), false);
 });
 
 test("SessionExecutionEngine preserves explicit plugin capabilityModelInvoker", async () => {

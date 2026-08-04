@@ -10,7 +10,8 @@ import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
 import { assertNotAborted } from "../utils/error-utils.js";
 import { normalizeToolResultAttachments } from "./turn-executor.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../tools/collaboration/final-answer-tool.js";
-import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
@@ -42,8 +43,8 @@ export async function processToolResults({
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.BEFORE_TOOL_CALLS,
-    context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_TOOL_CALLS, runtime, {
+    point: HOOK_POINT.AGENT.BEFORE_TOOL_CALLS,
+    context: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALLS, runtime, {
       phase: "tool_calls",
       status: "start",
       turn,
@@ -110,8 +111,8 @@ export async function processToolResults({
   }
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.AFTER_TOOL_CALLS,
-    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_TOOL_CALLS, runtime, {
+    point: HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
+    context: buildHookContext(HOOK_POINT.AGENT.AFTER_TOOL_CALLS, runtime, {
       phase: "tool_calls",
       status: "success",
       turn,

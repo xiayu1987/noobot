@@ -40,7 +40,7 @@ function stopCommand({ sessionId = 'session-1', turnScopeId = 'turn-1' } = {}) {
   return createTurnStopCommand({
     commandId: `stop:${turnScopeId}`,
     identity: { sessionId, dialogProcessId: 'dialog-1', turnScopeId },
-    concurrency: {},
+    concurrency: { expectedTurnRevision: 1 },
     stop: {},
   });
 }

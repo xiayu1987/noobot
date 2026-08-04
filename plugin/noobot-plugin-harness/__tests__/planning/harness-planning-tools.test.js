@@ -40,7 +40,7 @@ test("harness planning disables blocked tools (except help) and injects request_
     },
   };
 
-  await hookManager.emit("before_turn", ctx);
+  await hookManager.emit("agent.before_turn", ctx);
   const names = ctx.agentContext.payload.tools.registry.map((tool) => tool.name);
   assert.equal(names.includes("task_summary"), false);
   assert.equal(names.includes("request_help"), true);
@@ -65,7 +65,7 @@ test("harness planning skips auxiliary scope llm hooks", async () => {
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
   assert.equal(messages.some((item = {}) => /harness-planning-bootstrap/.test(String(item?.content || ""))), false);
   const names = ctx.agentContext.payload.tools.registry.map((tool) => tool.name);
   assert.equal(names.includes("request_task_acceptance"), false);
@@ -111,14 +111,14 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
     },
   };
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     userId: "u11-r",
     sessionId: "s11-r",
     dialogProcessId: "dp11-r",
     messages: [{ role: "user", content: "开始任务" }],
     agentContext,
   });
-  await hookManager.emit("after_llm_call", {
+  await hookManager.emit("agent.after_llm_call", {
     userId: "u11-r",
     sessionId: "s11-r",
     dialogProcessId: "dp11-r",
@@ -130,7 +130,7 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
 
   const messages = [{ role: "user", content: "继续处理" }];
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     userId: "u11-r",
     sessionId: "s11-r",
     dialogProcessId: "dp11-r",
@@ -193,14 +193,14 @@ test("harness planning does not inject refinement tool by default in programming
     },
   };
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     userId: "u11-rp",
     sessionId: "s11-rp",
     dialogProcessId: "dp11-rp",
     messages: [{ role: "user", content: "开始任务" }],
     agentContext,
   });
-  await hookManager.emit("after_llm_call", {
+  await hookManager.emit("agent.after_llm_call", {
     userId: "u11-rp",
     sessionId: "s11-rp",
     dialogProcessId: "dp11-rp",
@@ -210,7 +210,7 @@ test("harness planning does not inject refinement tool by default in programming
   assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
   assert.notEqual(agentContext.payload.harness.state.pending.planRefinement, true);
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     userId: "u11-rp",
     sessionId: "s11-rp",
     dialogProcessId: "dp11-rp",
@@ -250,21 +250,21 @@ test("harness request_plan_refinement falls back to closure meta when configurab
     },
   };
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     userId: "u11-r2",
     sessionId: "s11-r2",
     dialogProcessId: "dp11-r2",
     messages: [{ role: "user", content: "开始任务" }],
     agentContext,
   });
-  await hookManager.emit("after_llm_call", {
+  await hookManager.emit("agent.after_llm_call", {
     userId: "u11-r2",
     sessionId: "s11-r2",
     dialogProcessId: "dp11-r2",
     ai: { content: "1. 解析附件\n2. 执行核心任务" },
     agentContext,
   });
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     userId: "u11-r2",
     sessionId: "s11-r2",
     dialogProcessId: "dp11-r2",
@@ -313,11 +313,11 @@ test("harness planning allows tool-call turn without assistant text when plannin
     },
   };
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     messages: [{ role: "user", content: "开始任务" }],
     agentContext,
   });
-  await hookManager.emit("after_llm_call", {
+  await hookManager.emit("agent.after_llm_call", {
     ai: { content: "", tool_calls: [{ id: "c1", function: { name: "read_file", arguments: "{}" } }] },
     modelResponse: { finish_reason: "tool_calls" },
     agentContext,
@@ -373,7 +373,7 @@ test("harness planning separate model uses resolved planning tool allowlist", as
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   assert.equal(invocations.length >= 1, true);
   assert.deepEqual(invocations[0].toolAllowlist, []);

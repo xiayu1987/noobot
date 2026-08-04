@@ -93,7 +93,7 @@ test("harness acceptance semantic validation uses separate model when enabled", 
       incremental: [],
     },
   });
-  await hookManager.emit("before_final_output", finalContext);
+  await hookManager.emit("agent.before_final_output", finalContext);
 
   assert.equal(invocations.length, 2);
   assert.equal(invocations[0].purpose, "phase_acceptance_before_final");
@@ -161,7 +161,7 @@ test("acceptance semantic validation relays via unified ctx.modelContext.message
     },
   };
 
-  const res = await handler({ capability: "acceptance", point: "before_final_output", ctx, meta });
+  const res = await handler({ capability: "acceptance", point: "agent.before_final_output", ctx, meta });
   assert.equal(res.status, "active");
   assert.equal(Array.isArray(ctx.modelContext.messages), true);
   assert.equal(
@@ -207,14 +207,13 @@ test("harness acceptance semantic validation failure does not block active accep
     },
   };
 
-  await hookManager.emit("before_turn", createTestHookContext({ agentContext }));
+  await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
   const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
   const raw = await tool.invoke(
     { mode: "active" },
     {
       configurable: {
         noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
-        noobotHookMeta: hookManager.runtime,
       },
     },
   );
@@ -263,7 +262,7 @@ test("acceptance handler inject mode schedules and captures semantic validation 
   };
 
   const finalCtx = { agentContext, result: { output: "done" } };
-  await handler({ capability: "acceptance", point: "before_final_output", ctx: finalCtx, meta });
+  await handler({ capability: "acceptance", point: "agent.before_final_output", ctx: finalCtx, meta });
   assert.equal(
     agentContext.payload.harness.logs.acceptance.some(
       (item) => item.event === "acceptance_semantic_validation_scheduled_by_inject",
@@ -272,7 +271,7 @@ test("acceptance handler inject mode schedules and captures semantic validation 
   );
 
   const injectCtx = { agentContext, messages: [{ role: "user", content: "continue" }] };
-  await handler({ capability: "acceptance", point: "before_llm_call", ctx: injectCtx, meta });
+  await handler({ capability: "acceptance", point: "agent.before_llm_call", ctx: injectCtx, meta });
   assert.equal(
     injectCtx.modelContext.messages.some((item) =>
       String(item?.content || "").includes("harness-acceptance-semantic-validation"),
@@ -293,7 +292,7 @@ test("acceptance handler inject mode schedules and captures semantic validation 
       }),
     },
   };
-  await handler({ capability: "acceptance", point: "after_llm_call", ctx: captureCtx, meta });
+  await handler({ capability: "acceptance", point: "agent.after_llm_call", ctx: captureCtx, meta });
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
   assert.equal(

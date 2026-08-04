@@ -15,7 +15,6 @@ import {
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -80,7 +79,7 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
 });
 
 
-test("normalizeHookContextProtocol preserves explicit modelContext over agent payload messages", () => {
+test("hook context uses explicit modelContext instead of agent payload messages", () => {
   const ctx = createTestHookContext({
     agentContext: {
       payload: {
@@ -99,9 +98,6 @@ test("normalizeHookContextProtocol preserves explicit modelContext over agent pa
     },
   });
 
-  normalizeHookContextProtocol("before_final_output", ctx);
-
-  assert.equal(ctx.point, "before_final_output");
   assert.deepEqual(ctx.modelContext.messageBlocks.system.map(({ role, content }) => ({ role, content })), [
     { role: "system", content: "system ctx" },
   ]);
@@ -119,7 +115,7 @@ test("normalizeHookContextProtocol preserves explicit modelContext over agent pa
   ]);
 });
 
-test("normalizeHookContextProtocol canonicalizes messages and messageBlocks through one store", () => {
+test("hook context canonicalizes messages and messageBlocks through one store", () => {
   const ctxMessage = {
     role: "assistant",
     content: "",
@@ -144,8 +140,6 @@ test("normalizeHookContextProtocol canonicalizes messages and messageBlocks thro
       ],
     },
   });
-
-  normalizeHookContextProtocol("before_llm_call", ctx);
 
   assert.equal(ctx.modelContext.messages[1], ctx.modelContext.messageBlocks.incremental[1]);
   assert.ok(ctx.modelContext.messages[1].additional_kwargs?.noobotMessageId);

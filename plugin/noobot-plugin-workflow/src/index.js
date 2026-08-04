@@ -7,7 +7,6 @@
 export {
   PLUGIN_NAME,
   PLUGIN_VERSION,
-  WORKFLOW_BOT_HOOK_POINTS,
 } from "./core/constants.js";
 export { registerNoobotPlugin, createRegisterNoobotPlugin } from "./core/plugin.js";
 export { registerWorkflowHooks, createRegisterWorkflowHooks } from "./core/orchestrator.js";

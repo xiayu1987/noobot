@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { replaceMessageProjection } from "./message-store.js";
 import {
   resolveAuthoritativeModelContext,
@@ -28,7 +29,7 @@ function emitHarnessModelContextTrace(ctx = {}, stage = "", payload = {}) {
 }
 
 export function applyAgentResolvedModelMessages(point = "", ctx = {}, options = {}) {
-  if (String(point || "").trim().toLowerCase() !== "before_llm_call") return false;
+  if (String(point || "").trim().toLowerCase() !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return false;
   const modelContext = resolveAuthoritativeModelContext(ctx);
   if (!modelContext || !Array.isArray(modelContext.messages)) return false;
   const resolver = options?.resolveModelMessages || options?.harness?.resolveModelMessages;

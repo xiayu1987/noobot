@@ -7,7 +7,6 @@
 export const AGENT_CONTEXT_KIND = "noobot.agent-context";
 export const AGENT_CONTEXT_PROTOCOL_VERSION = 1;
 export const MODEL_CONTEXT_PROTOCOL_VERSION = 2;
-export const HOOK_CONTEXT_PROTOCOL_VERSION = 2;
 
 export const REQUIRED_AGENT_CONTEXT_IDENTITY_FIELDS = Object.freeze([
   "sessionId",

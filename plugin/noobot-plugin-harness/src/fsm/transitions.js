@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HARNESS_HOOK_POINTS, HARNESS_RUN_STATUS } from "../core/constants.js";
+import { HARNESS_RUN_STATUS } from "../core/constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 
 export const HARNESS_FSM_STATES = Object.freeze({
   IDLE: "idle",
@@ -90,39 +91,39 @@ function hasToolCalls(ctx = {}) {
 const FSM_TARGET_RULES = Object.freeze([
   {
     points: new Set([
-      HARNESS_HOOK_POINTS.ON_ERROR,
-      HARNESS_HOOK_POINTS.ON_ABORT,
-      HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
-      HARNESS_HOOK_POINTS.LLM_CALL_ERROR,
-      HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
+      HOOK_POINT.AGENT.ON_ERROR,
+      HOOK_POINT.AGENT.ON_ABORT,
+      HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
+      HOOK_POINT.AGENT.LLM_CALL_ERROR,
+      HOOK_POINT.AGENT.TOOL_CALL_ERROR,
     ]),
     resolve: () => HARNESS_FSM_STATES.FAILED,
   },
   {
-    points: new Set([HARNESS_HOOK_POINTS.AFTER_TURN]),
+    points: new Set([HOOK_POINT.AGENT.AFTER_TURN]),
     resolve: () => HARNESS_FSM_STATES.DONE,
   },
   {
-    points: new Set([HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT]),
+    points: new Set([HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT]),
     resolve: () => HARNESS_FSM_STATES.VERIFYING,
   },
   {
     points: new Set([
-      HARNESS_HOOK_POINTS.BEFORE_TOOL_CALLS,
-      HARNESS_HOOK_POINTS.AFTER_TOOL_CALLS,
-      HARNESS_HOOK_POINTS.BEFORE_TOOL_CALL,
+      HOOK_POINT.AGENT.BEFORE_TOOL_CALLS,
+      HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
+      HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
     ]),
     resolve: () => HARNESS_FSM_STATES.EXECUTING,
   },
   {
-    points: new Set([HARNESS_HOOK_POINTS.BEFORE_STATE_COMMIT, HARNESS_HOOK_POINTS.AFTER_STATE_COMMIT]),
+    points: new Set([HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, HOOK_POINT.AGENT.AFTER_STATE_COMMIT]),
     resolve: ({ ctx = {} }) => {
       const commitHint = String(ctx?.commitType || "").toLowerCase();
       return commitHint.includes("approval") ? HARNESS_FSM_STATES.HUMAN_APPROVAL : null;
     },
   },
   {
-    points: new Set([HARNESS_HOOK_POINTS.AFTER_LLM_CALL]),
+    points: new Set([HOOK_POINT.AGENT.AFTER_LLM_CALL]),
     resolve: ({ ctx = {}, currentState = HARNESS_FSM_STATES.IDLE }) => {
       if (currentState !== HARNESS_FSM_STATES.IDLE && currentState !== HARNESS_FSM_STATES.PLANNING) {
         return null;
@@ -134,10 +135,10 @@ const FSM_TARGET_RULES = Object.freeze([
   },
   {
     points: new Set([
-      HARNESS_HOOK_POINTS.BEFORE_CONTEXT_BUILD,
-      HARNESS_HOOK_POINTS.AFTER_CONTEXT_BUILD,
-      HARNESS_HOOK_POINTS.BEFORE_TURN,
-      HARNESS_HOOK_POINTS.BEFORE_LLM_CALL,
+      HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
+      HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD,
+      HOOK_POINT.AGENT.BEFORE_TURN,
+      HOOK_POINT.AGENT.BEFORE_LLM_CALL,
     ]),
     resolve: ({ currentState = HARNESS_FSM_STATES.IDLE }) =>
       currentState === HARNESS_FSM_STATES.IDLE ? HARNESS_FSM_STATES.PLANNING : null,

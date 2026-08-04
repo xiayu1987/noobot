@@ -284,9 +284,9 @@ test("incremental capability message cache is cleared when agent turn ends", asy
     },
   });
 
-  markHarnessTurnLifecycle("after_turn", ctx);
+  markHarnessTurnLifecycle("agent.after_turn", ctx);
   const nextCtx = { ...ctx, dialogProcessId: "turn-end-dialog-2" };
-  markHarnessTurnLifecycle("before_turn", nextCtx);
+  markHarnessTurnLifecycle("agent.before_turn", nextCtx);
 
   await invokeWithReasoningRetry({
     invoker,

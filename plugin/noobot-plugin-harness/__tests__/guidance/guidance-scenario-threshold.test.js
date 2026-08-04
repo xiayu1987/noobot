@@ -53,10 +53,10 @@ test("guidance summary and planning plan-update thresholds use full-mode default
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
 
-  await guidanceHandler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+  await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_turn_threshold"), true);
   agentContext.payload.harness.state.pending.summary = false;
-  await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
+  await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
 
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
@@ -72,7 +72,7 @@ test("guidance summary and planning plan-update thresholds use programming-mode 
   });
   await guidanceHandler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: beforeProgrammingThresholds },
     meta: {},
   });
@@ -88,7 +88,7 @@ test("guidance summary and planning plan-update thresholds use programming-mode 
   });
   await guidanceHandler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atProgrammingThresholds },
     meta: {},
   });
@@ -96,7 +96,7 @@ test("guidance summary and planning plan-update thresholds use programming-mode 
   atProgrammingThresholds.payload.harness.state.pending.summary = false;
   await planningHandler({
     capability: "planning",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atProgrammingThresholds },
     meta: {},
   });
@@ -120,7 +120,7 @@ test("phase acceptance threshold uses programming-mode override", async () => {
   };
   await planningHandler({
     capability: "planning",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       messages: [{ role: "user", content: "继续任务" }],
       agentContext: beforeProgrammingPhaseAcceptance,
@@ -142,7 +142,7 @@ test("phase acceptance threshold uses programming-mode override", async () => {
   };
   await planningHandler({
     capability: "planning",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       messages: [{ role: "user", content: "继续任务" }],
       agentContext: atProgrammingPhaseAcceptance,
@@ -171,7 +171,7 @@ test("guidance summary and planning plan-update thresholds use text-mode overrid
   });
   await guidanceHandler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: beforeTextThresholds },
     meta: {},
   });
@@ -187,7 +187,7 @@ test("guidance summary and planning plan-update thresholds use text-mode overrid
   });
   await guidanceHandler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atTextThresholds },
     meta: {},
   });
@@ -195,7 +195,7 @@ test("guidance summary and planning plan-update thresholds use text-mode overrid
   atTextThresholds.payload.harness.state.pending.summary = false;
   await planningHandler({
     capability: "planning",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext: atTextThresholds },
     meta: {},
   });
@@ -219,7 +219,7 @@ test("phase acceptance threshold uses text-mode override", async () => {
   };
   await planningHandler({
     capability: "planning",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       messages: [{ role: "user", content: "继续任务" }],
       agentContext: atTextPhaseAcceptance,
@@ -246,7 +246,7 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
   };
 
   const blockedCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
-  await planningHandler({ capability: "planning", point: "before_llm_call", ctx: blockedCtx, meta: {} });
+  await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx: blockedCtx, meta: {} });
   assert.equal(
     agentContext.payload.harness.state.counters.planUpdateTurns,
     FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
@@ -255,7 +255,7 @@ test("planning plan-update threshold keeps pressure while pending plan-update bl
   agentContext.payload.harness.state.pending.planRevision = false;
   agentContext.payload.harness.state.pending.planRevisionContext = null;
   const unblockedCtx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
-  await planningHandler({ capability: "planning", point: "before_llm_call", ctx: unblockedCtx, meta: {} });
+  await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx: unblockedCtx, meta: {} });
   assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });

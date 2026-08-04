@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../events/index.js";
-import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -30,7 +31,7 @@ export async function emitSemanticTransferValidation({
   emitEvent(listener, "semantic_transfer_validation", payload);
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.SEMANTIC_TRANSFER_VALIDATION,
+    point: HOOK_POINT.AGENT.SEMANTIC_TRANSFER_VALIDATION,
     context: {
       phase: "semantic_transfer",
       status: payload.invalidCount > 0 ? "warning" : "success",
@@ -40,4 +41,3 @@ export async function emitSemanticTransferValidation({
   });
   return payload;
 }
-

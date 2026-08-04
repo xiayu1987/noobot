@@ -31,6 +31,7 @@
     "test": "node --test __tests__/**/*.test.js"
   },
   "dependencies": {
+    "@noobot/hook-protocol": "file:../hook-protocol",
     "@noobot/shared": "file:../shared"
   }
 }

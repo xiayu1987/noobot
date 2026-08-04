@@ -3,39 +3,41 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
+
 export const CAPABILITY_HOOK_MAP = Object.freeze({
   planning: [
-    "before_context_build",
-    "before_turn",
-    "before_llm_call",
-    "after_llm_call",
-    "after_tool_calls",
-    "before_final_output",
+    HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
+    HOOK_POINT.AGENT.BEFORE_TURN,
+    HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+    HOOK_POINT.AGENT.AFTER_LLM_CALL,
+    HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
+    HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
   ],
   guidance: [
-    "before_llm_call",
-    "after_llm_call",
-    "after_tool_calls",
-    "after_tool_call",
-    "tool_call_error",
-    "before_final_output",
+    HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+    HOOK_POINT.AGENT.AFTER_LLM_CALL,
+    HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
+    HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+    HOOK_POINT.AGENT.TOOL_CALL_ERROR,
+    HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
   ],
   acceptance: [
-    "before_turn",
-    "before_tool_calls",
-    "before_tool_call",
-    "before_final_output",
-    "before_llm_call",
-    "after_llm_call",
+    HOOK_POINT.AGENT.BEFORE_TURN,
+    HOOK_POINT.AGENT.BEFORE_TOOL_CALLS,
+    HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
+    HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+    HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+    HOOK_POINT.AGENT.AFTER_LLM_CALL,
   ],
   review: [
-    "before_final_output",
-    "after_turn",
-    "on_error",
-    "on_abort",
-    "context_build_error",
-    "llm_call_error",
-    "tool_call_error",
+    HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+    HOOK_POINT.AGENT.AFTER_TURN,
+    HOOK_POINT.AGENT.ON_ERROR,
+    HOOK_POINT.AGENT.ON_ABORT,
+    HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
+    HOOK_POINT.AGENT.LLM_CALL_ERROR,
+    HOOK_POINT.AGENT.TOOL_CALL_ERROR,
   ],
 });
 

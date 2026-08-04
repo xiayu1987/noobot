@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { processPlanningResult } from "./result-pipeline.js";
 import {
@@ -450,12 +451,12 @@ export async function maybeCapturePlanningResult(ctx = {}, meta = {}) {
     return handleAfterLlmPlanningProcessResult(ctx, processed, state);
   }
   recordPlanningRawOutput(ctx, {
-    source: "after_llm_call",
+    source: HOOK_POINT.AGENT.AFTER_LLM_CALL,
     content: sourceContent,
   });
   const locale = state?.locale || LOCALE.ZH_CN;
   const processed = await processPlanningResult(ctx, meta, {
-    source: "after_llm_call",
+    source: HOOK_POINT.AGENT.AFTER_LLM_CALL,
     rawText: sourceContent,
     locale,
     repairInvoker: resolveCapabilityModelInvoker(meta),

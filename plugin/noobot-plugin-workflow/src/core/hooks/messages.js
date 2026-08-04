@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_SEMANTIC } from "../constants.js";
+import { WORKFLOW_SEMANTIC } from "../constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { resolveWorkflowAgentContext } from "./runtime.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -27,7 +28,7 @@ export function resolveWorkflowSourceText(ctx = {}, agentResult = {}, hookPoint 
   const normalizedHookPoint = String(hookPoint || "").trim();
   const outputFromAgent = resolveAssistantOutput(agentResult);
   if (outputFromAgent) return outputFromAgent;
-  if (normalizedHookPoint === WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH) {
+  if (normalizedHookPoint === HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH) {
     return String(ctx?.userMessage || "").trim();
   }
   return String(ctx?.userMessage || "").trim();
