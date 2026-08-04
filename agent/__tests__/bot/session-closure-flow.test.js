@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
 import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 test("service -> bot -> agent -> toolchain -> return -> persist: should form full closed loop", async () => {
   const persistedTurns = [];
@@ -110,20 +111,20 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       assert.equal(currentUserMessage.content, "请切换模型并输出附件");
       assert.equal(currentUserMessage.messageUid, "sm_turn-closure");
       assert.equal(
-        agentContext?.execution?.controllers?.runtime?.runtimeModel,
+        agentContext?.bindings?.runtime?.runtimeModel,
         "",
         "场景默认模型不应写入 runtimeModel",
       );
       assert.equal(
-        Array.isArray(agentContext?.payload?.messages?.system),
+        Array.isArray(agentContext?.context?.modelContext?.messageBlocks?.system),
         true,
       );
       assert.equal(
-        agentContext.payload.messages.system[0],
+        agentContext.context.modelContext.messageBlocks.system[0],
         "[PROMPT_PATCHED] 你现在处于审计模式",
         "中途 context 提示应生效",
       );
-      const toolNames = (agentContext?.payload?.tools?.registry || []).map(
+      const toolNames = (agentContext?.bindings?.tools || []).map(
         (toolItem) => String(toolItem?.name || ""),
       );
       assert.deepEqual(
@@ -204,10 +205,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
           ? userMessageAttachments
           : attachments;
         const firstIncoming = Array.isArray(effectiveAttachments) ? effectiveAttachments[0] || {} : {};
-        return {
-          execution: {
-            controllers: {
-              runtime: {
+        return createTestAgentExecutionScope({
                 currentTurnMessages: createCurrentTurnMessagesStore(),
                 runtimeModel: String(runConfig?.runtimeModel || ""),
                 userMessageAttachments: [
@@ -226,23 +224,18 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
                 systemRuntime: {
                   dialogProcessId,
                 },
-              },
-            },
+        }, {
+          identity: { sessionId, parentSessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
+          messageBlocks: {
+            system: ["[PROMPT_PATCHED] 你现在处于审计模式"],
+            history: [{ role: "user", content: "历史记录" }],
           },
-          payload: {
-            messages: {
-              system: ["[PROMPT_PATCHED] 你现在处于审计模式"],
-              history: [{ role: "user", content: "历史记录" }],
-            },
-            tools: {
-              registry: [
+          tools: [
                 { name: "switch_model" },
                 { name: "task_summary" },
                 { name: "user_interaction" },
-              ],
-            },
-          },
-        };
+          ],
+        });
       },
       async buildContinueContext({ dialogProcessId = "" } = {}) {
         return this.buildInitialContext({ dialogProcessId });
@@ -429,42 +422,32 @@ test("continue mode closed-loop: should build continue context and persist paren
     runConfig = {},
   } = {}) => ({
     async buildInitialContext({ dialogProcessId = "" } = {}) {
-      return {
-        execution: {
-          controllers: {
-            runtime: {
+      return createTestAgentExecutionScope({
               currentTurnMessages: createCurrentTurnMessagesStore(),
               runtimeModel: String(runConfig?.runtimeModel || ""),
               attachmentMetas: [],
               systemRuntime: { dialogProcessId },
-            },
-          },
-        },
-        payload: { messages: { system: ["initial"], history: [] }, tools: { registry: [] } },
-      };
+      }, {
+        identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
+        messageBlocks: { system: ["initial"], history: [] },
+      });
     },
     async buildContinueContext({ dialogProcessId = "" } = {}) {
       continueContextBuilt = true;
       capturedRunConfig = { ...runConfig };
-      return {
-        execution: {
-          controllers: {
-            runtime: {
+      return createTestAgentExecutionScope({
               currentTurnMessages: createCurrentTurnMessagesStore(),
               runtimeModel: "",
               attachmentMetas: [],
               systemRuntime: { dialogProcessId, sessionId },
-            },
-          },
-        },
-        payload: {
-          messages: {
+      }, {
+        identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
+        messageBlocks: {
             system: ["continue prompt"],
             history: [{ role: "user", content: "history" }],
-          },
-          tools: { registry: [{ name: "task_summary" }] },
         },
-      };
+        tools: [{ name: "task_summary" }],
+      });
     },
   });
 

@@ -5,7 +5,8 @@
  */
 import { withHookRuntimeMeta } from "../../extensions/hooks/index.js";
 import { emitEvent } from "../../events/index.js";
-import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../../context/runtime-state/context-diagnostics.js";
+import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
+import { summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
 import {
   attachModelContext,
   validateHookContextProtocol,

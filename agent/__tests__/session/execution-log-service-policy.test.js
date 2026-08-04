@@ -125,3 +125,29 @@ test("ExecutionLogService applies the context identity debug switch without a fl
   });
   assert.equal(appended.appended, true);
 });
+
+test("ExecutionLogService applies the default-on agent context debug switch", async () => {
+  const enabled = createService({ env: {} });
+  const appended = await enabled.service.appendExecutionLog({
+    userId: "u1",
+    sessionId: "s1",
+    event: "agent.context.executionScopeCreated",
+    category: "agent_context",
+    data: { debugType: "agent-context" },
+  });
+  assert.equal(appended.appended, true);
+
+  const disabled = createService({
+    env: {},
+    sessionLogControls: { debug: { agentContext: false } },
+  });
+  const skipped = await disabled.service.appendExecutionLog({
+    userId: "u1",
+    sessionId: "s1",
+    event: "agent.context.executionScopeCreated",
+    category: "agent_context",
+    data: { debugType: "agent-context" },
+  });
+  assert.equal(skipped.skipped, true);
+  assert.equal(disabled.resolvedScopeCount, 0);
+});

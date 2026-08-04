@@ -379,20 +379,19 @@ test("text-mode post-plan followup follows text deliverable-batch policy from re
 test("dynamic policy scenario overrides initial text mode for post-plan followup flags", () => {
   const ctx = {
     agentContext: {
-      payload: {
-        harness: {
-          dynamicPolicyPrompt: {
-            scenario: "programming",
-                  prompt: "Dynamic programming policy",
+      bindings: {
+        tools: [],
+        extensions: {
+          harness: {
+            dynamicPolicyPrompt: {
+              scenario: "programming",
+              prompt: "Dynamic programming policy",
+            },
           },
         },
-      },
-      execution: {
-        controllers: {
-          runtime: {
-            runConfig: { scenario: "text" },
-            systemRuntime: { runConfig: { scenario: "text" } },
-          },
+        runtime: {
+          runConfig: { scenario: "text" },
+          systemRuntime: { runConfig: { scenario: "text" } },
         },
       },
     },

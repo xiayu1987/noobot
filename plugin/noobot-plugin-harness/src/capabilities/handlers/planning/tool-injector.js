@@ -106,7 +106,7 @@ export function ensurePlanRefinementTool(ctx = {}, meta = {}) {
     return false;
   }
   if (state?.flags?.planningCaptured !== true) return false;
-  const registry = ctx?.agentContext?.payload?.tools?.registry;
+  const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return false;
   if (registry.some((tool) => String(tool?.name || "").trim() === PLAN_REFINEMENT_TOOL_NAME)) {
     return false;

@@ -3,12 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { emitEvent } from "../../events/index.js";
-export {
-  resolveDiagnosticRole,
-  summarizeDiagnosticBlocks,
-  summarizeDiagnosticMessages,
-} from "@noobot/context-protocol/context-diagnostics";
+
+import { emitEvent } from "../events/index.js";
 
 export function emitModelContextTrace(runtimeOrListener = null, stage = "", payload = {}) {
   const runtime = runtimeOrListener && typeof runtimeOrListener === "object" && !runtimeOrListener.onEvent

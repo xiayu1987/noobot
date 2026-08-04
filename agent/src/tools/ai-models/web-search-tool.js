@@ -220,7 +220,7 @@ export async function searchWithSearchEngine({
 }
 
 export function createWebSearchTool({ agentContext }) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = agentContext?.bindings?.runtime || {};
   const toolCfg = resolveWebSearchToolConfig(runtime);
   const toolEnabled = toolCfg?.enabled !== false;
   if (!toolEnabled) return [];

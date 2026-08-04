@@ -5,7 +5,6 @@
  */
 import { mergeConfig, normalizeConnectorType } from "../../../config/index.js";
 import { getRuntimeFromAgentContext } from "../../../context/agent-context-accessor.js";
-import { resolveDialogProcessIdFromContext } from "../../../context/session/dialog-process-id-resolver.js";
 import { resolveToolLocale } from "../../core/tool-i18n.js";
 import { collectNonSensitiveDefaults } from "./connector-fields.js";
 
@@ -21,7 +20,7 @@ function createConnectorToolContext(agentContext = {}) {
   const systemRuntime = runtime?.systemRuntime || {};
   const sessionId = String(systemRuntime?.sessionId || "").trim();
   const rootSessionId = String(systemRuntime?.rootSessionId || "").trim();
-  const dialogProcessId = resolveDialogProcessIdFromContext({ runtime });
+  const dialogProcessId = String(runtime?.systemRuntime?.dialogProcessId || "").trim();
   const allowUserInteraction = systemRuntime?.config?.allowUserInteraction !== false;
   const bridge = runtime?.userInteractionBridge || null;
   const store = runtime?.sharedTools?.connectorChannelStore || null;

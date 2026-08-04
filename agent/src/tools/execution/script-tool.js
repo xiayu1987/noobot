@@ -49,7 +49,7 @@ export { buildExecutionWorkspaceMeta, buildScriptExecutionMeta };
 export function createScriptTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const basePath =
-    agentContext?.environment?.workspace?.basePath || runtime.basePath || "";
+    agentContext?.context?.environment?.workspace?.basePath || runtime.basePath || "";
   const globalConfig = runtime.globalConfig || {};
   const effectiveConfig = mergeConfig(globalConfig, runtime.userConfig || {});
   if (!basePath) return [];

@@ -35,7 +35,7 @@ async function recordPlanJsonParseFallback({ runtime, event, error, hasMarkdownB
       event,
       userId,
       sessionId,
-      dialogProcessId: systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || undefined,
+      dialogProcessId: systemRuntime?.dialogProcessId || undefined,
       turnScopeId: systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || undefined,
       data: {
         toolName: TOOL_NAME.PLAN_MULTI_TASK_COLLABORATION,

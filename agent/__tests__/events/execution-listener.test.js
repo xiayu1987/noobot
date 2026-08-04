@@ -127,6 +127,35 @@ test("execution listener classifies context identity diagnostics under one proto
   assert.equal(persisted[0].data.sourceMessageUid, "sm_1");
 });
 
+test("execution listener classifies agent context diagnostics under the dedicated debug category", async () => {
+  const persisted = [];
+  const listener = createExecutionEventListener({
+    sessionManager: {
+      appendExecutionLog: async (record) => persisted.push(record),
+    },
+    userId: "user-a",
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    upstream: { dialogProcessId: "dialog-a", onEvent: async () => true },
+  });
+
+  await listener.onEvent({
+    event: "agent.context.executionScopeCreated",
+    data: {
+      debugType: "agent-context",
+      dialogProcessId: "dialog-a",
+      turnScopeId: "turn-a",
+      envelope: { protocolVersion: 1 },
+    },
+  });
+  await listener.flushPersistence();
+
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].category, "agent_context");
+  assert.equal(persisted[0].type, "agent_context_debug");
+  assert.equal(persisted[0].data.debugType, "agent-context");
+});
+
 test("execution listener exposes rejected asynchronous upstream delivery at the final barrier", async () => {
   const listener = createExecutionEventListener({
     sessionId: "session-a",

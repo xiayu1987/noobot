@@ -8,125 +8,54 @@ import assert from "node:assert/strict";
 
 import {
   getBasePathFromAgentContext,
+  getChildRunParentSessionIdFromAgentContext,
   getDialogProcessIdFromAgentContext,
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
   getSystemRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
+  getToolsFromAgentContext,
 } from "../../src/context/agent-context-accessor.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
-test("getRuntimeFromAgentContext prefers execution.controllers.runtime", () => {
-  const runtimeFromController = { id: "controller" };
-  const runtimeFromTopLevel = { id: "top" };
-  const runtime = getRuntimeFromAgentContext({
-    execution: { controllers: { runtime: runtimeFromController } },
-    runtime: runtimeFromTopLevel,
+test("agent context accessors read only canonical scope paths", () => {
+  const systemRuntime = { sessionId: "runtime-session" };
+  const runtime = { id: "runtime", systemRuntime };
+  const tools = [{ name: "read_file" }];
+  const scope = createTestAgentExecutionScope(runtime, {
+    identity: {
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "p1",
+      rootSessionId: "r1",
+      dialogProcessId: "d1",
+      turnScopeId: "t1",
+    },
+    environment: { workspace: { basePath: "/workspace/u1" } },
+    tools,
   });
-  assert.equal(runtime, runtimeFromController);
+  assert.equal(getRuntimeFromAgentContext(scope), runtime);
+  assert.equal(getSystemRuntimeFromAgentContext(scope), systemRuntime);
+  assert.equal(getToolsFromAgentContext(scope), tools);
+  assert.equal(getBasePathFromAgentContext(scope), "/workspace/u1");
+  assert.equal(getDialogProcessIdFromAgentContext(scope), "d1");
+  assert.equal(getChildRunParentSessionIdFromAgentContext(scope), "r1");
+  assert.deepEqual(getSessionIdsFromAgentContext(scope), scope.context.identity);
 });
 
-test("getRuntimeFromAgentContext falls back to top-level runtime and injected fallback", () => {
-  const runtimeFromTopLevel = { id: "top" };
-  assert.equal(
-    getRuntimeFromAgentContext({ runtime: runtimeFromTopLevel }),
-    runtimeFromTopLevel,
+test("agent context accessors reject removed runtime paths", () => {
+  assert.throws(
+    () => getRuntimeFromAgentContext({ runtime: { id: "legacy" } }),
+    /bindings\.runtime is required/,
   );
-  const fallbackRuntime = { id: "fallback" };
-  assert.equal(getRuntimeFromAgentContext({}, fallbackRuntime), fallbackRuntime);
-});
-
-test("getSystemRuntimeFromAgentContext reads systemRuntime safely", () => {
-  const systemRuntime = { sessionId: "s1" };
-  assert.equal(
-    getSystemRuntimeFromAgentContext({
-      execution: { controllers: { runtime: { systemRuntime } } },
-    }),
-    systemRuntime,
+  assert.throws(
+    () => getRuntimeFromAgentContext({ execution: { controllers: { runtime: {} } } }),
+    /bindings\.runtime is required/,
   );
-  assert.deepEqual(getSystemRuntimeFromAgentContext({}), {});
 });
 
-test("getSystemRuntimeFromRuntime reads and normalizes safely", () => {
+test("getSystemRuntimeFromRuntime reads the canonical runtime field", () => {
   const systemRuntime = { sessionId: "s1" };
   assert.equal(getSystemRuntimeFromRuntime({ systemRuntime }), systemRuntime);
   assert.deepEqual(getSystemRuntimeFromRuntime({ systemRuntime: null }), {});
-});
-
-test("getSessionIdsFromAgentContext resolves ids from session view and runtime fallback", () => {
-  const idsFromSessionView = getSessionIdsFromAgentContext({
-    environment: { identity: { userId: "u1" } },
-    session: {
-      current: { id: "s1" },
-      parent: { id: "p1" },
-      root: { id: "r1" },
-    },
-    execution: {
-      controllers: {
-        runtime: {
-          systemRuntime: {
-            userId: "ux",
-            sessionId: "sx",
-            parentSessionId: "px",
-            rootSessionId: "rx",
-          },
-        },
-      },
-    },
-  });
-  assert.deepEqual(idsFromSessionView, {
-    userId: "u1",
-    sessionId: "s1",
-    parentSessionId: "p1",
-    rootSessionId: "r1",
-  });
-
-  const idsFromRuntime = getSessionIdsFromAgentContext({
-    execution: {
-      controllers: {
-        runtime: {
-          userId: "u2",
-          systemRuntime: {
-            sessionId: "s2",
-            parentSessionId: "p2",
-            rootSessionId: "r2",
-          },
-        },
-      },
-    },
-  });
-  assert.deepEqual(idsFromRuntime, {
-    userId: "u2",
-    sessionId: "s2",
-    parentSessionId: "p2",
-    rootSessionId: "r2",
-  });
-});
-
-test("getBasePathFromAgentContext resolves workspace first then runtime fallback", () => {
-  const fromWorkspace = getBasePathFromAgentContext({
-    environment: { workspace: { basePath: "/workspace/u1" } },
-    execution: { controllers: { runtime: { basePath: "/runtime/u1" } } },
-  });
-  assert.equal(fromWorkspace, "/workspace/u1");
-
-  const fromRuntime = getBasePathFromAgentContext({
-    execution: { controllers: { runtime: { basePath: "/runtime/u2" } } },
-  });
-  assert.equal(fromRuntime, "/runtime/u2");
-});
-
-test("getDialogProcessIdFromAgentContext resolves id from execution and runtime fallback", () => {
-  const fromExecution = getDialogProcessIdFromAgentContext({
-    execution: {
-      dialogProcessId: "dp_execution",
-      controllers: { runtime: { systemRuntime: { dialogProcessId: "dp_runtime" } } },
-    },
-  });
-  assert.equal(fromExecution, "dp_execution");
-
-  const fromRuntimeFallback = getDialogProcessIdFromAgentContext(
-    {},
-    { systemRuntime: { dialogProcessId: "dp_fallback" } },
-  );
-  assert.equal(fromRuntimeFallback, "dp_fallback");
 });

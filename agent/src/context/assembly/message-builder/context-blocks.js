@@ -10,6 +10,10 @@ import { MAIN_MODEL_HISTORY_ROUND_LIMIT } from "../../../session/utils/context-w
 import { resolveDialogProcessId } from "../../session/dialog-process-id-resolver.js";
 import { resolveParentSessionId } from "../../parent-session-id-resolver.js";
 import { resolveRuntimeUserMessageAttachments } from "../../../artifacts/index.js";
+import {
+  getAgentContextEnvelope,
+  getRuntimeFromAgentContext,
+} from "../../agent-context-accessor.js";
 import { buildHistoryMessages } from "./history.js";
 import {
   canonicalMessageId,
@@ -20,7 +24,8 @@ export function buildContextMessageBlocks(
   agentContext,
   { currentUserMessage = null } = {},
 ) {
-  const runtime = agentContext?.execution?.controllers?.runtime || {};
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const context = getAgentContextEnvelope(agentContext);
   const systemRuntime = runtime?.systemRuntime || {};
   const runtimeParentSessionId = resolveParentSessionId({ runtime });
   const currentUserMessageAttachments = resolveRuntimeUserMessageAttachments(runtime);
@@ -35,31 +40,22 @@ export function buildContextMessageBlocks(
     attachments: currentUserMessageAttachments,
     userMessageAttachments: currentUserMessageAttachments,
   };
-  const systemMessages = Array.isArray(agentContext?.payload?.messages?.system)
-    ? agentContext.payload.messages.system
+  const messageBlocks = context.modelContext.messageBlocks;
+  const systemMessages = Array.isArray(messageBlocks?.system)
+    ? messageBlocks.system
     : [];
-  const rawHistoryMessages = Array.isArray(agentContext?.payload?.messages?.history)
-    ? agentContext.payload.messages.history
+  const rawHistoryMessages = Array.isArray(messageBlocks?.history)
+    ? messageBlocks.history
     : [];
-  const restoredIncrementalMessages = Array.isArray(agentContext?.payload?.messages?.incremental)
-    ? agentContext.payload.messages.incremental
+  const restoredIncrementalMessages = Array.isArray(messageBlocks?.incremental)
+    ? messageBlocks.incremental
     : [];
   const currentTurnScopeId = String(
     systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "",
   ).trim();
   fallbackUserMeta.turnScopeId = currentTurnScopeId;
   const historyMessages = rawHistoryMessages;
-  const resolvedDialogProcessId = resolveDialogProcessId({
-    ctx: {
-      agentContext: {
-        execution: {
-          dialogProcessId: systemRuntime?.dialogProcessId,
-          controllers: { runtime: { systemRuntime } },
-        },
-      },
-    },
-    messages: historyMessages,
-  });
+  const resolvedDialogProcessId = context.identity.dialogProcessId;
   fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
   const identity = {
     userId: runtime?.userId || systemRuntime?.userId,

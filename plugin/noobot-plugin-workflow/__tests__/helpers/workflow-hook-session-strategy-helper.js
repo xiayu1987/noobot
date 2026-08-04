@@ -164,7 +164,7 @@ export function createBaseContext(overrides = {}) {
 export function createContextWithSharedTools(sharedTools = {}, overrides = {}) {
   return createBaseContext({
     agentContext: {
-      execution: { controllers: { runtime: { sharedTools } } },
+      bindings: { runtime: { sharedTools }, tools: [], extensions: {} },
     },
     ...overrides,
   });
@@ -193,20 +193,24 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
     ? target.agentContext
     : null;
   const agentContext = existingAgentContext || {};
-  const execution = agentContext.execution && typeof agentContext.execution === "object"
-    ? agentContext.execution
-    : {};
-  const controllers = execution.controllers && typeof execution.controllers === "object"
-    ? execution.controllers
-    : {};
-  const runtime = controllers.runtime && typeof controllers.runtime === "object"
-    ? controllers.runtime
-    : {};
+  const bindings = agentContext.bindings && typeof agentContext.bindings === "object"
+    ? agentContext.bindings
+    : (agentContext.bindings = {});
+  const legacyRuntime = agentContext?.execution?.controllers?.runtime;
+  const runtime = bindings.runtime && typeof bindings.runtime === "object"
+    ? bindings.runtime
+    : (bindings.runtime = legacyRuntime && typeof legacyRuntime === "object" ? legacyRuntime : {});
+  if (!runtime.runConfig || typeof runtime.runConfig !== "object") runtime.runConfig = runConfig;
+  if (!Array.isArray(bindings.tools)) {
+    bindings.tools = Array.isArray(agentContext?.payload?.tools?.registry)
+      ? agentContext.payload.tools.registry
+      : [];
+  }
+  if (!bindings.extensions || typeof bindings.extensions !== "object") {
+    bindings.extensions = {};
+  }
 
   if (!existingAgentContext) target.agentContext = agentContext;
-  agentContext.execution = execution;
-  execution.controllers = controllers;
-  controllers.runtime = runtime;
   if (typeof runtime.materializePendingCurrentTurnMessageEvents !== "function") {
     runtime.materializePendingCurrentTurnMessageEvents = () => ({
       activityTimeline: [],

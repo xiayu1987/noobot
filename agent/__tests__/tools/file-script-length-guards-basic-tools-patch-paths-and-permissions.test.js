@@ -132,7 +132,7 @@ test("patch_file: super user can patch a mapped Windows absolute path outside wo
       },
     },
   });
-  agentContext.environment.os = { platform: "win32" };
+  agentContext.context.environment.os = { platform: "win32" };
   const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "patch_file");
   assert.ok(tool);
@@ -175,7 +175,7 @@ test("patch_file: apply_patch supports mapped Windows absolute paths", async () 
       },
     },
   });
-  agentContext.environment.os = { platform: "win32" };
+  agentContext.context.environment.os = { platform: "win32" };
   const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "patch_file");
   assert.ok(tool);

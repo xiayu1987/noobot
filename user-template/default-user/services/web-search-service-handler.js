@@ -5,8 +5,8 @@
  */
 function resolveLocale(agentContext = null) {
   const localeText = String(
-    agentContext?.runtime?.systemRuntime?.config?.locale ||
-      agentContext?.runtime?.locale ||
+    agentContext?.bindings?.runtime?.systemRuntime?.config?.locale ||
+      agentContext?.bindings?.runtime?.locale ||
       "",
   )
     .trim()
@@ -16,8 +16,8 @@ function resolveLocale(agentContext = null) {
 
 const WEB_SEARCH_I18N = {
   "fetchMissing": {
-    "zh-CN": "agentContext.runtime.sharedTools 中缺少 fetch",
-    "en-US": "fetch missing in agentContext.runtime.sharedTools",
+    "zh-CN": "agentContext.bindings.runtime.sharedTools 中缺少 fetch",
+    "en-US": "fetch missing in agentContext.bindings.runtime.sharedTools",
   },
   "bodyFormatInvalid": {
     "zh-CN": "body 格式错误：此服务不接受 body，请使用 queryString。",
@@ -282,14 +282,14 @@ export default async function webSearchServiceHandler({
   body,
 }) {
   const locale = resolveLocale(agentContext);
-  const fetcher = agentContext?.runtime?.sharedTools?.fetch;
+  const fetcher = agentContext?.bindings?.runtime?.sharedTools?.fetch;
   if (typeof fetcher !== "function") {
     return {
       ok: false,
       error: tWebSearch(locale, "fetchMissing"),
     };
   }
-  const textCleaner = agentContext?.runtime?.sharedTools?.textCleaner || null;
+  const textCleaner = agentContext?.bindings?.runtime?.sharedTools?.textCleaner || null;
   const hint = formatHint(endpointCfg, locale);
   if (body !== undefined && body !== null && String(body).trim() !== "") {
     return {

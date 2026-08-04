@@ -24,7 +24,7 @@ async function runInternalGlobalBootstrap(point = "", ctx = {}, meta = {}) {
 }
 
 function resolveHarnessBucket(ctx = {}) {
-  const bucket = ctx?.agentContext?.payload?.harness;
+  const bucket = ctx?.agentContext?.bindings?.extensions?.harness;
   return bucket && typeof bucket === "object" ? bucket : null;
 }
 

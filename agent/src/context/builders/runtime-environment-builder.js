@@ -22,7 +22,6 @@ import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
 } from "../session/current-turn-store.js";
-import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 import {
   resolveAttachmentDisplayPath,
   resolveHostPath,
@@ -316,7 +315,7 @@ function initializeConnectorRuntime(
     historyStore: connectorHistoryStore,
     rootSessionId,
     sessionId,
-    dialogProcessId: resolveDialogProcessIdFromContext({ runtime: runtimeContext }),
+    dialogProcessId: String(runtimeContext?.systemRuntime?.dialogProcessId || "").trim(),
     allowUserInteraction: runtimeContext?.systemRuntime?.config?.allowUserInteraction !== false,
     bridge: runtimeContext?.userInteractionBridge || null,
   });

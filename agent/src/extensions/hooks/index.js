@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../events/index.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { resolveHookClientEmitter } from "./client-channel.js";
@@ -319,7 +318,7 @@ export function resolveHookRuntimeMeta(runtime = {}) {
     userId: String(systemRuntime?.userId || runtime?.userId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
     parentSessionId: resolveParentSessionId({ runtime }),
-    dialogProcessId: resolveDialogProcessIdFromContext({ runtime }),
+    dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     caller: String(systemRuntime?.caller || "").trim(),
   };
 }

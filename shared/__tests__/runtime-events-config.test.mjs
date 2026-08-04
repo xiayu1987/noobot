@@ -122,6 +122,7 @@ test('session log controls honor explicit environment values independently of de
 test('context identity diagnostics default on while other diagnostics retain their defaults', () => {
   const defaults = resolveRuntimeEventsSessionLogControls({});
   assert.equal(defaults.debug.contextIdentity, true);
+  assert.equal(defaults.debug.agentContext, true);
   assert.equal(defaults.debug.resend, false);
   assert.equal(defaults.debug.stop, false);
 
@@ -129,6 +130,11 @@ test('context identity diagnostics default on while other diagnostics retain the
     [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.contextIdentity]: 'false',
   });
   assert.equal(disabled.debug.contextIdentity, false);
+
+  const agentContextDisabled = resolveRuntimeEventsSessionLogControls({
+    [RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.agentContext]: 'false',
+  });
+  assert.equal(agentContextDisabled.debug.agentContext, false);
 });
 
 test('session log controls do not accept the removed flat override protocol', () => {

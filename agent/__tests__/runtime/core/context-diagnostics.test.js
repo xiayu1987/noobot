@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { emitModelContextTrace } from "../../../src/context/runtime-state/context-diagnostics.js";
+import { emitModelContextTrace } from "../../../src/observability/model-context-trace-emitter.js";
 
 describe("context diagnostics", () => {
   it("always emits model context trace without a runtime switch", () => {

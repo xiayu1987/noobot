@@ -10,7 +10,8 @@ import {
   resolveBoundToolModelRequestOverrides,
   resolveNonThinkingCallOverrides,
 } from "./tool-choice-strategy.js";
-import { emitModelContextTrace, summarizeDiagnosticMessages } from "../../context/runtime-state/context-diagnostics.js";
+import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
+import { summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
 
 export function createBoundLlmToolChoiceInvoker({
   adaptedBinding,

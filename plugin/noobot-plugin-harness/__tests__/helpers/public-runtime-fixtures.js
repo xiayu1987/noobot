@@ -9,8 +9,66 @@ import {
   resolveModelFinalMessages,
 } from "@noobot/context-protocol";
 
+let testScopeSequence = 0;
+
+export function ensureTestAgentExecutionScope(ctx = {}) {
+  if (!ctx || typeof ctx !== "object") return null;
+  const agentContext = ctx.agentContext && typeof ctx.agentContext === "object"
+    ? ctx.agentContext
+    : null;
+  if (!agentContext) return null;
+  const bindings = agentContext.bindings && typeof agentContext.bindings === "object"
+    ? agentContext.bindings
+    : (agentContext.bindings = {});
+  const legacyRuntime = agentContext?.execution?.controllers?.runtime;
+  if (!bindings.runtime || typeof bindings.runtime !== "object") {
+    bindings.runtime = legacyRuntime && typeof legacyRuntime === "object"
+      ? legacyRuntime
+      : {};
+  }
+  if (!Array.isArray(bindings.tools)) {
+    bindings.tools = Array.isArray(agentContext?.payload?.tools?.registry)
+      ? agentContext.payload.tools.registry
+      : [];
+  }
+  const extensions = bindings.extensions && typeof bindings.extensions === "object"
+    ? bindings.extensions
+    : (bindings.extensions = {});
+  if (!extensions.harness || typeof extensions.harness !== "object") {
+    extensions.harness = agentContext?.payload?.harness &&
+      typeof agentContext.payload.harness === "object"
+      ? agentContext.payload.harness
+      : {};
+  }
+  if (!agentContext.context || typeof agentContext.context !== "object") {
+    testScopeSequence += 1;
+    const scopeSuffix = String(testScopeSequence);
+    const dialogProcessId = String(ctx.dialogProcessId || `test-dialog-${scopeSuffix}`).trim();
+    const turnScopeId = String(ctx.turnScopeId || `test-turn:${dialogProcessId}`).trim();
+    const sessionId = String(ctx.sessionId || `test-session-${scopeSuffix}`).trim();
+    agentContext.context = {
+      kind: "noobot.agent-context",
+      protocolVersion: 1,
+      identity: {
+        userId: String(ctx.userId || `test-user-${scopeSuffix}`).trim(),
+        sessionId,
+        rootSessionId: String(ctx.rootSessionId || sessionId).trim(),
+        parentSessionId: String(ctx.parentSessionId || "").trim(),
+        dialogProcessId,
+        turnScopeId,
+        runId: String(ctx.runId || `test-run-${scopeSuffix}`).trim(),
+      },
+      environment: {},
+      execution: {},
+      modelContext: null,
+    };
+  }
+  return agentContext;
+}
+
 export function ensureTestHookContext(ctx = {}) {
   if (!ctx || typeof ctx !== "object") return ctx;
+  const agentContext = ensureTestAgentExecutionScope(ctx);
   const explicitIdentity = ctx.activeTurnIdentity && typeof ctx.activeTurnIdentity === "object"
     ? ctx.activeTurnIdentity
     : null;
@@ -39,7 +97,7 @@ export function ensureTestHookContext(ctx = {}) {
     );
     ctx.modelContext = createModelContext({
       messageStore: ctx.messageStore || null,
-      messages: Array.isArray(ctx.messages) ? ctx.messages : null,
+      messages: explicitMessageBlocks ? null : (Array.isArray(ctx.messages) ? ctx.messages : null),
       messageBlocks: explicitMessageBlocks,
       activeTurnIdentity,
     });
@@ -48,6 +106,7 @@ export function ensureTestHookContext(ctx = {}) {
   if (!ctx.modelContext.activeTurnIdentity) {
     ctx.modelContext.activeTurnIdentity = activeTurnIdentity;
   }
+  if (agentContext?.context) agentContext.context.modelContext = ctx.modelContext;
   delete ctx.messageStore;
   delete ctx.messages;
   delete ctx.messageBlocks;
@@ -89,8 +148,7 @@ export function getTestContextMessageBlocks(ctx = {}) {
 function resolveDialogProcessId(ctx = {}) {
   return String(
     ctx?.dialogProcessId ||
-      ctx?.agentContext?.execution?.dialogProcessId ||
-      ctx?.runtimeAgentContext?.execution?.dialogProcessId ||
+      ctx?.agentContext?.context?.identity?.dialogProcessId ||
       "",
   ).trim();
 }
@@ -100,7 +158,7 @@ function resolveTurnScopeId(ctx = {}) {
     ctx?.turnScopeId ||
       ctx?.runtime?.turnScopeId ||
       ctx?.runtime?.systemRuntime?.turnScopeId ||
-      ctx?.agentContext?.execution?.controllers?.runtime?.systemRuntime?.turnScopeId ||
+      ctx?.agentContext?.context?.identity?.turnScopeId ||
       "",
   ).trim();
 }

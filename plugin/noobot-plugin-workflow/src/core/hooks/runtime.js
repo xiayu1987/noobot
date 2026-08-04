@@ -12,13 +12,8 @@ export function resolveWorkflowAgentContext(ctx = {}) {
 
 export function resolveWorkflowRuntimeFromContext(ctx = {}) {
   const agentContext = resolveWorkflowAgentContext(ctx);
-  const candidates = [
-    agentContext?.execution?.controllers?.runtime,
-    agentContext?.runtime,
-    ctx?.execution?.controllers?.runtime,
-    ctx?.runtime,
-  ];
-  return candidates.find((item) => item && typeof item === "object") || null;
+  const runtime = agentContext?.bindings?.runtime;
+  return runtime && typeof runtime === "object" ? runtime : null;
 }
 
 export function resolveWorkflowAbortSignal(ctx = {}) {
@@ -63,14 +58,10 @@ export function throwIfWorkflowAborted(ctx = {}) {
 export function resolveWorkflowParentRunConfig(ctx = {}) {
   const agentContext = resolveWorkflowAgentContext(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const candidates = [
-    ctx?.runConfig,
-    runtime?.runConfig,
-    agentContext?.runConfig,
-    agentContext?.payload?.runtime?.runConfig,
-    agentContext?.execution?.controllers?.runtime?.runConfig,
-  ];
-  return candidates.find((item) => item && typeof item === "object" && !Array.isArray(item)) || {};
+  const runConfig = runtime?.runConfig;
+  return runConfig && typeof runConfig === "object" && !Array.isArray(runConfig)
+    ? runConfig
+    : {};
 }
 
 export function hasOwnObjectKey(source = {}, key = "") {

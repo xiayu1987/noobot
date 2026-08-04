@@ -6,9 +6,9 @@
 import {
   resolveMainModelFinalMessages,
 } from "../../session/utils/context-window-normalizer.js";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { normalizeMessageForModelRuntime } from "./session-execution-engine-utils.js";
-import { emitModelContextTrace, summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "../../context/runtime-state/context-diagnostics.js";
+import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
+import { summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
@@ -84,7 +84,7 @@ export class ModelMessageRuntimeHelpers {
         historyMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(blocks, "history")),
         incrementalMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(blocks, "incremental")),
       });
-      emitModelContextTrace(getRuntimeFromAgentContext(ctx?.agentContext || ctx?.runtimeAgentContext || {}), "resolve_model_messages", {
+      emitModelContextTrace(ctx?.agentContext?.bindings?.runtime || null, "resolve_model_messages", {
         purpose: String(purpose || "").trim(),
         blockSource: "ctx.modelContext.messageBlocks",
         blocks: summarizeDiagnosticBlocks(blocks),

@@ -46,7 +46,7 @@ export async function transferSummaryInjectionMessage(
     meta = {},
   } = {},
 ) {
-  const runtime = ctx?.agentContext?.execution?.controllers?.runtime || null;
+  const runtime = ctx?.agentContext?.bindings?.runtime || null;
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
   const fallback = String(
     String(injectMode || "").trim().toLowerCase() === "summary"

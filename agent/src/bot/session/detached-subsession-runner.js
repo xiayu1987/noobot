@@ -29,6 +29,7 @@ export function createDetachedSubSessionRunner({
   now = () => new Date().toISOString(),
 } = {}) {
   return async ({
+    parentExecutionScope = null,
     parentContext = {},
     message = "",
     attachments = [],
@@ -46,10 +47,19 @@ export function createDetachedSubSessionRunner({
       throw new Error("detached sub-session runner requires scoped persistence context support");
     }
     const sourceContext = parentContext && typeof parentContext === "object" ? parentContext : {};
-    const inheritedRuntime = getRuntimeFromAgentContext(
-      sourceContext?.agentContext || sourceContext?.runtimeAgentContext || sourceContext,
-      null,
-    );
+    let inheritedRuntime;
+    try {
+      inheritedRuntime = getRuntimeFromAgentContext(parentExecutionScope);
+    } catch (error) {
+      emitEvent(eventListener, "detached_sub_session_scope_rejected", {
+        userId: String(strategy?.userId || parentContext?.userId || "").trim(),
+        parentSessionId: String(strategy?.parentSessionId || parentContext?.sessionId || "").trim(),
+        scopeId: String(metadata?.scope || "detached_sub_session").trim(),
+        reason: "bindings.runtime_missing",
+        error: error?.message || String(error),
+      });
+      throw error;
+    }
     const inheritedAbortSignal = abortSignal || sourceContext?.abortSignal || inheritedRuntime?.abortSignal || null;
     const inheritedUserInteractionBridge = sourceContext?.userInteractionBridge || inheritedRuntime?.userInteractionBridge || null;
     const throwIfSubSessionAborted = createAbortGuard(inheritedAbortSignal);
@@ -91,7 +101,9 @@ export function createDetachedSubSessionRunner({
     const inheritedRunConfig = clearParentTurnTransactionIdentity({
       ...(sourceContext?.runConfig && typeof sourceContext.runConfig === "object"
         ? sourceContext.runConfig
-        : {}),
+        : inheritedRuntime?.runConfig && typeof inheritedRuntime.runConfig === "object"
+          ? inheritedRuntime.runConfig
+          : {}),
     });
     const mergedRunConfig = mergeRunConfigWithPluginStrategy({
       baseRunConfig: inheritedRunConfig,
@@ -128,7 +140,6 @@ export function createDetachedSubSessionRunner({
     effectiveRunConfig.presentationMessageId = childPresentationMessageId;
     effectiveRunConfig.messageId = childMessageId;
     delete effectiveRunConfig.assistantMessageId;
-    attachPluginRuntimePatch(effectiveRunConfig, parentSessionId);
     emitEvent(eventListener, "detached_sub_session_message_identity_bound", {
       userId,
       sessionId: subSessionId,
@@ -465,17 +476,6 @@ async function loadSubSessionUserConfig({ workspaceService = null, configService
   } catch {
     return {};
   }
-}
-
-function attachPluginRuntimePatch(effectiveRunConfig = {}, parentSessionId = "") {
-  effectiveRunConfig.systemRuntimePatch = {
-    ...(effectiveRunConfig?.systemRuntimePatch && typeof effectiveRunConfig.systemRuntimePatch === "object"
-      ? effectiveRunConfig.systemRuntimePatch
-      : {}),
-    childRunParentSessionId: parentSessionId,
-    durableParentSessionId: parentSessionId,
-    detachedSessionScope: "bot_plugin_node",
-  };
 }
 
 function buildRuntimePluginState({ effectiveRunConfig = {}, disabledPlugins = [], pluginRuntime = {} } = {}) {

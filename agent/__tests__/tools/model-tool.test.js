@@ -14,7 +14,7 @@ function parseToolJson(raw = "") {
 
 function getSwitchModelTool({ runtime = {}, sessionId = "session-1" } = {}) {
   const tools = createModelTool({
-    agentContext: { runtime },
+    agentContext: { bindings: { runtime } },
     sessionId,
   });
   const switchModelTool = tools.find((toolItem) => toolItem?.name === "switch_model");

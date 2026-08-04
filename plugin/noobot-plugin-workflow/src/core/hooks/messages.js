@@ -69,8 +69,8 @@ export function compactWorkflowText(
 export function resolveWorkflowAvailableToolCatalog(ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const agentContext = resolveWorkflowAgentContext(ctx);
-  const registry = Array.isArray(agentContext?.payload?.tools?.registry)
-    ? agentContext.payload.tools.registry
+  const registry = Array.isArray(agentContext?.bindings?.tools)
+    ? agentContext.bindings.tools
     : [];
   const catalog = [];
   const seenNames = new Set();

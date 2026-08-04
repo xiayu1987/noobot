@@ -12,6 +12,7 @@ import fs from "node:fs/promises";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { projectRecoveredMessagesToIdentity } from "../../src/bot/session/turn-execution-preparer.js";
 import { saveStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 test("projectRecoveredMessagesToIdentity atomically replaces every recovered round identity", () => {
   const messages = [
@@ -181,7 +182,7 @@ test("stopped snapshot resume preserves history and incremental block boundaries
   const contextBuilder = {
     async _buildAgentContext(system, history, options) {
       captured.push({ system, history, options });
-      return { execution: { controllers: { runtime: {} } }, payload: { messages: {} } };
+      return createTestAgentExecutionScope({});
     },
   };
   const history = [{ type: "human", content: "history", dialogProcessId: "old" }];
@@ -229,7 +230,7 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     },
     async _buildAgentContext(system, history, options) {
       captured.push({ system, history, options });
-      return { execution: { controllers: { runtime: {} } }, payload: { messages: {} } };
+      return createTestAgentExecutionScope({});
     },
   };
 

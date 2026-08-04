@@ -13,3 +13,8 @@ export * from "./block-strategy.js";
 export * from "./summary-policy.js";
 export * from "./snapshot-policy.js";
 export * from "./terminal-history-policy.js";
+export * from "./agent-context-schema.js";
+export * from "./agent-context-identity.js";
+export * from "./agent-context-accessors.js";
+export * from "./agent-context-validation.js";
+export * from "./agent-context-envelope.js";

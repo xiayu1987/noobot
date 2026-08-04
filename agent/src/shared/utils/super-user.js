@@ -12,9 +12,7 @@ function asObject(value) {
 
 function resolveRuntimeFromAgentContext(agentContext = {}) {
   const context = asObject(agentContext) || {};
-  return asObject(context?.execution?.controllers?.runtime) ||
-    asObject(context?.runtime) ||
-    {};
+  return asObject(context?.bindings?.runtime) || {};
 }
 
 export function resolveConfiguredSuperUserId(globalConfig = {}) {

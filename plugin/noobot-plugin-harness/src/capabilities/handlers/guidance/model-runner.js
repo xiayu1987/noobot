@@ -444,6 +444,18 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       });
 
   let response = null;
+  const summaryStartedAt = purpose === "summary" ? Date.now() : 0;
+  if (purpose === "summary") {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.GUIDANCE,
+      event: "summary_model_started",
+      detail: {
+        requestedMessageCount: Array.isArray(state?.pending?.summaryCheckpointMessageIds)
+          ? state.pending.summaryCheckpointMessageIds.length
+          : 0,
+      },
+    });
+  }
   try {
     response = await invokeWithReasoningRetry({
       invoker,
@@ -483,6 +495,16 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       meta,
     });
   } catch (error) {
+    if (purpose === "summary") {
+      appendCapabilityLog(ctx, {
+        domain: CAPABILITY_DOMAIN.GUIDANCE,
+        event: "summary_model_failed",
+        detail: {
+          durationMs: Date.now() - summaryStartedAt,
+          error: String(error?.message || error || ""),
+        },
+      });
+    }
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: GUIDANCE_EVENTS.separateModelCallFailed,
@@ -561,7 +583,21 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     recordLatestSummaryFullText(ctx, responseText);
     const mergedSummaryText = applySummaryText(ctx, summaryMergeText);
     clearIncrementalCapabilityMessageCacheForContext(ctx);
+    const checkpointRequestedMessageCount = Array.isArray(state?.pending?.summaryCheckpointMessageIds)
+      ? state.pending.summaryCheckpointMessageIds.length
+      : 0;
+    const checkpointStartedAt = Date.now();
     const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.GUIDANCE,
+      event: "summary_checkpoint_ready",
+      detail: {
+        modelDurationMs: Date.now() - summaryStartedAt,
+        checkpointPreparationMs: Date.now() - checkpointStartedAt,
+        requestedMessageCount: checkpointRequestedMessageCount,
+        markedCount,
+      },
+    });
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: GUIDANCE_EVENTS.summaryMessagesMarked,

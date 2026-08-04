@@ -11,11 +11,7 @@ import { RunConfigResolver } from "../../src/bot/config/run-config-resolver.js";
 test("applyRunConfigToolPolicy should only keep tools allowed by runtime policy", () => {
   const resolver = new RunConfigResolver();
   const agentContext = {
-    payload: {
-      tools: {
-        registry: [{ name: "final_answer" }, { name: "read_file" }],
-      },
-    },
+    bindings: { tools: [{ name: "final_answer" }, { name: "read_file" }] },
   };
   const runConfig = {
     safeConfirm: true,
@@ -25,7 +21,7 @@ test("applyRunConfigToolPolicy should only keep tools allowed by runtime policy"
   };
 
   const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.payload?.tools?.registry || []).map((tool) => tool.name);
+  const toolNames = (nextContext?.bindings?.tools || []).map((tool) => tool.name);
 
   assert.deepEqual(toolNames, ["read_file"]);
 });
@@ -33,11 +29,7 @@ test("applyRunConfigToolPolicy should only keep tools allowed by runtime policy"
 test("applyRunConfigToolPolicy should not force keep final_answer when safety confirmation is disabled", () => {
   const resolver = new RunConfigResolver();
   const agentContext = {
-    payload: {
-      tools: {
-        registry: [{ name: "final_answer" }, { name: "read_file" }],
-      },
-    },
+    bindings: { tools: [{ name: "final_answer" }, { name: "read_file" }] },
   };
   const runConfig = {
     safeConfirm: false,
@@ -47,7 +39,7 @@ test("applyRunConfigToolPolicy should not force keep final_answer when safety co
   };
 
   const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.payload?.tools?.registry || []).map((tool) => tool.name);
+  const toolNames = (nextContext?.bindings?.tools || []).map((tool) => tool.name);
 
   assert.deepEqual(toolNames, ["read_file"]);
 });
@@ -55,15 +47,11 @@ test("applyRunConfigToolPolicy should not force keep final_answer when safety co
 test("applyRunConfigToolPolicy should support denyToolNames as unified runtime field", () => {
   const resolver = new RunConfigResolver();
   const agentContext = {
-    payload: {
-      tools: {
-        registry: [
-          { name: "read_file" },
-          { name: "read_file" },
-          { name: "delegate_task_async" },
-        ],
-      },
-    },
+    bindings: { tools: [
+      { name: "read_file" },
+      { name: "read_file" },
+      { name: "delegate_task_async" },
+    ] },
   };
   const runConfig = {
     toolPolicy: {
@@ -72,7 +60,7 @@ test("applyRunConfigToolPolicy should support denyToolNames as unified runtime f
   };
 
   const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.payload?.tools?.registry || []).map((tool) => tool.name);
+  const toolNames = (nextContext?.bindings?.tools || []).map((tool) => tool.name);
 
   assert.deepEqual(toolNames, []);
 });
@@ -80,11 +68,7 @@ test("applyRunConfigToolPolicy should support denyToolNames as unified runtime f
 test("applyRunConfigToolPolicy denyToolNames should override allowToolNames", () => {
   const resolver = new RunConfigResolver();
   const agentContext = {
-    payload: {
-      tools: {
-        registry: [{ name: "execute_script" }, { name: "read_file" }],
-      },
-    },
+    bindings: { tools: [{ name: "execute_script" }, { name: "read_file" }] },
   };
   const runConfig = {
     toolPolicy: {
@@ -94,7 +78,7 @@ test("applyRunConfigToolPolicy denyToolNames should override allowToolNames", ()
   };
 
   const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.payload?.tools?.registry || []).map((tool) => tool.name);
+  const toolNames = (nextContext?.bindings?.tools || []).map((tool) => tool.name);
 
   assert.deepEqual(toolNames, ["read_file"]);
 });
@@ -102,18 +86,14 @@ test("applyRunConfigToolPolicy denyToolNames should override allowToolNames", ()
 test("applyRunConfigToolPolicy should keep coding-required tools in coding scenario", () => {
   const resolver = new RunConfigResolver();
   const agentContext = {
-    payload: {
-      tools: {
-        registry: [
-          { name: "read_file" },
-          { name: "write_file" },
-          { name: "search" },
-          { name: "patch_file" },
-          { name: "execute_script" },
-          { name: "request_help" },
-        ],
-      },
-    },
+    bindings: { tools: [
+      { name: "read_file" },
+      { name: "write_file" },
+      { name: "search" },
+      { name: "patch_file" },
+      { name: "execute_script" },
+      { name: "request_help" },
+    ] },
   };
   const runConfig = {
     scenario: "coding",
@@ -132,7 +112,7 @@ test("applyRunConfigToolPolicy should keep coding-required tools in coding scena
   };
 
   const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.payload?.tools?.registry || [])
+  const toolNames = (nextContext?.bindings?.tools || [])
     .map((tool) => tool.name)
     .sort();
 

@@ -105,9 +105,9 @@ test("doc_to_data: direct text result stores content in file and returns text wh
     },
   };
   const agentContext = buildAgentContext(basePath);
-  agentContext.execution.controllers.runtime.userId = "primary-user";
-  agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
-  agentContext.execution.controllers.runtime.attachmentService = attachmentService;
+  agentContext.bindings.runtime.userId = "primary-user";
+  agentContext.bindings.runtime.systemRuntime = { sessionId: "s1" };
+  agentContext.bindings.runtime.attachmentService = attachmentService;
 
   const tools = createDoc2DataTool({ agentContext });
   const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
@@ -155,10 +155,10 @@ test("doc_to_data: direct text result returns preview when over semantic-transfe
     },
   };
   const agentContext = buildAgentContext(basePath);
-  agentContext.execution.controllers.runtime.userId = "primary-user";
-  agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
-  agentContext.execution.controllers.runtime.attachmentService = attachmentService;
-  agentContext.execution.controllers.runtime.globalConfig = { tools: { maxToolResultChars: 1000 } };
+  agentContext.bindings.runtime.userId = "primary-user";
+  agentContext.bindings.runtime.systemRuntime = { sessionId: "s1" };
+  agentContext.bindings.runtime.attachmentService = attachmentService;
+  agentContext.bindings.runtime.globalConfig = { tools: { maxToolResultChars: 1000 } };
 
   const tools = createDoc2DataTool({ agentContext });
   const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
@@ -242,15 +242,17 @@ test("doc_to_data: resolves a historical session attachment only after the model
       };
     },
   };
-  const agentContext = buildAgentContext(basePath);
-  const runtime = agentContext.execution.controllers.runtime;
+  const agentContext = buildAgentContext(basePath, {
+    userId: "primary-user",
+    systemRuntime: {
+      sessionId: "s1",
+      rootSessionId: "s1",
+      dialogProcessId: "dialog-parent",
+      turnScopeId: "continue-turn",
+    },
+  });
+  const runtime = agentContext.bindings.runtime;
   const emittedEvents = [];
-  runtime.userId = "primary-user";
-  runtime.systemRuntime = {
-    sessionId: "s1",
-    dialogProcessId: "dialog-parent",
-    turnScopeId: "continue-turn",
-  };
   runtime.eventListener = {
     onEvent(event) {
       emittedEvents.push(event);
@@ -303,16 +305,17 @@ test("doc_to_data: child run resolves source identity from the root session and 
 
   const resolveCalls = [];
   const linkCalls = [];
-  const agentContext = buildAgentContext(basePath);
-  const runtime = agentContext.execution.controllers.runtime;
-  runtime.userId = "primary-user";
-  runtime.systemRuntime = {
-    sessionId: "child-session",
-    parentSessionId: "root-session",
-    rootSessionId: "root-session",
-    dialogProcessId: "parent-dialog",
-    turnScopeId: "parent-turn",
-  };
+  const agentContext = buildAgentContext(basePath, {
+    userId: "primary-user",
+    systemRuntime: {
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+      rootSessionId: "root-session",
+      dialogProcessId: "parent-dialog",
+      turnScopeId: "parent-turn",
+    },
+  });
+  const runtime = agentContext.bindings.runtime;
   runtime.attachmentService = {
     async resolveSourceAttachment(payload = {}) {
       resolveCalls.push(payload);
@@ -362,9 +365,9 @@ test("doc_to_data: reuses generated data artifact instead of creating recursive 
 
   let persistCalls = 0;
   const agentContext = buildAgentContext(basePath);
-  agentContext.execution.controllers.runtime.userId = "primary-user";
-  agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
-  agentContext.execution.controllers.runtime.attachments = [
+  agentContext.bindings.runtime.userId = "primary-user";
+  agentContext.bindings.runtime.systemRuntime = { sessionId: "s1" };
+  agentContext.bindings.runtime.attachments = [
     {
       attachmentId: "existing-att",
       sessionId: "s1",
@@ -378,7 +381,7 @@ test("doc_to_data: reuses generated data artifact instead of creating recursive 
       generationSource: "media_to_data_tool",
     },
   ];
-  agentContext.execution.controllers.runtime.attachmentService = {
+  agentContext.bindings.runtime.attachmentService = {
     async ingestGeneratedArtifacts() {
       persistCalls += 1;
       return [];
@@ -413,9 +416,9 @@ test("doc_to_data: reuses generated data artifact by path even without attachmen
 
   let persistCalls = 0;
   const agentContext = buildAgentContext(basePath);
-  agentContext.execution.controllers.runtime.userId = "primary-user";
-  agentContext.execution.controllers.runtime.systemRuntime = { sessionId: "s1" };
-  agentContext.execution.controllers.runtime.attachmentService = {
+  agentContext.bindings.runtime.userId = "primary-user";
+  agentContext.bindings.runtime.systemRuntime = { sessionId: "s1" };
+  agentContext.bindings.runtime.attachmentService = {
     async ingestGeneratedArtifacts() {
       persistCalls += 1;
       return [];
@@ -482,7 +485,7 @@ test("doc_to_data: libreoffice abort propagates instead of falling back to visio
   const abortController = new AbortController();
   abortController.abort({ type: "user_stop" });
   const agentContext = buildAgentContext(basePath);
-  agentContext.execution.controllers.runtime.abortSignal = abortController.signal;
+  agentContext.bindings.runtime.abortSignal = abortController.signal;
 
   const tools = createDoc2DataTool({ agentContext });
   const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
@@ -511,7 +514,7 @@ test("doc_to_data: libreoffice fallback writes runtime-events session system eve
   await fs.writeFile(docPath, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff]));
 
   const agentContext = buildAgentContext(basePath);
-  const runtime = agentContext.execution.controllers.runtime;
+  const runtime = agentContext.bindings.runtime;
   runtime.userId = "u1";
   runtime.globalConfig = { workspaceRoot: basePath };
   runtime.systemRuntime = {

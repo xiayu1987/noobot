@@ -71,7 +71,7 @@ function buildPayloadPreview(point, ctx = {}, options = {}) {
 }
 
 function extractRuntime(ctx = {}) {
-  return ctx?.agentContext?.execution?.controllers?.runtime || null;
+  return ctx?.agentContext?.bindings?.runtime || null;
 }
 
 function resolveToolTurnLimitReached(capabilityLogs = []) {
@@ -120,24 +120,24 @@ export function buildContextSnapshot({ ctx = {}, pluginName = "", pluginVersion 
     plugin: pluginName,
     version: pluginVersion,
     createdAt: nowIso(),
-    userId: ctx.userId || runtime.userId || agentContext?.environment?.identity?.userId || "",
-    sessionId: ctx.sessionId || systemRuntime.sessionId || agentContext?.session?.current?.id || "",
-    parentSessionId: ctx.parentSessionId || systemRuntime.parentSessionId || agentContext?.session?.parent?.id || "",
+    userId: ctx.userId || agentContext?.context?.identity?.userId || "",
+    sessionId: ctx.sessionId || agentContext?.context?.identity?.sessionId || "",
+    parentSessionId: ctx.parentSessionId || agentContext?.context?.identity?.parentSessionId || "",
     dialogProcessId: resolveDialogProcessIdFromContext(ctx),
-    caller: ctx.caller || systemRuntime.caller || agentContext?.session?.parent?.caller || "",
+    caller: ctx.caller || agentContext?.context?.execution?.caller || "",
     environment: {
-      os: agentContext?.environment?.os || {},
-      workspace: agentContext?.environment?.workspace || {},
+      os: agentContext?.context?.environment?.os || {},
+      workspace: agentContext?.context?.environment?.workspace || {},
     },
     execution: {
-      flags: agentContext?.execution?.flags || {},
-      runtimeModel: agentContext?.execution?.models?.runtimeModel || runtime.runtimeModel || "",
+      flags: agentContext?.context?.execution?.flags || {},
+      runtimeModel: agentContext?.context?.execution?.model?.runtimeModel || runtime.runtimeModel || "",
     },
     session: {
-      attachmentCount: Array.isArray(agentContext?.session?.current?.attachments)
-        ? agentContext.session.current.attachments.length
+      attachmentCount: Array.isArray(runtime?.userMessageAttachments)
+        ? runtime.userMessageAttachments.length
         : 0,
-      connectors: agentContext?.session?.current?.connectors || {},
+      connectors: agentContext?.context?.execution?.selectedConnectors || {},
     },
     payload: {
       systemMessageCount: Array.isArray(ctx?.modelContext?.messageBlocks?.system)

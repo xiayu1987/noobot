@@ -18,6 +18,7 @@ import {
   buildScriptExecutionMeta,
   createScriptTool,
 } from "../../../src/tools/execution/script-tool.js";
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
 function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   const runtimeOverrides =
@@ -28,14 +29,7 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
     runtimeOverrides?.sharedTools && typeof runtimeOverrides.sharedTools === "object"
       ? runtimeOverrides.sharedTools
       : {};
-  return {
-    environment: {
-      workspace: { basePath },
-      identity: { userId },
-    },
-    execution: {
-      controllers: {
-        runtime: {
+  return createTestAgentExecutionScope({
           basePath,
           userId,
           globalConfig: {
@@ -57,11 +51,8 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
             config: {},
           },
           sharedTools,
-          ...runtimeOverrides,
-        },
-      },
-    },
-  };
+      ...runtimeOverrides,
+    }, { identity: { userId } });
 }
 
 function parseToolResult(raw = "") {

@@ -6,7 +6,7 @@
 import { BLOCKED_AGENT_TOOL_NAMES } from "./constants.js";
 
 export function resolveSceneToolNames(ctx = {}) {
-  const registry = ctx?.agentContext?.payload?.tools?.registry;
+  const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return [];
   return registry
     .map((tool) => String(tool?.name || "").trim())
@@ -20,7 +20,7 @@ export function shouldProcessPrimaryToolHooks(ctx = {}) {
 }
 
 export function disableBlockedToolsInRegistry(ctx = {}) {
-  const registry = ctx?.agentContext?.payload?.tools?.registry;
+  const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return false;
   const next = registry.filter((tool) => {
     const name = String(tool?.name || "").trim();

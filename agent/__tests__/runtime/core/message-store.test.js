@@ -14,7 +14,7 @@ import {
   replaceMessages,
   resolveMessagesByIds,
   writeMessageBlocks,
-} from "../../../src/context/runtime-state/message-store.js";
+} from "@noobot/context-protocol/message-store";
 
 test("agent message store canonicalizes messages and block views", () => {
   const system = { role: "system", content: "sys" };

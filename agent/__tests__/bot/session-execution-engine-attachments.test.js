@@ -18,9 +18,9 @@ test("_prepareAgentTurnExecution falls back to payload userMessageAttachments wh
     async prepareTurnExecution() {
       return {
         agentContext: {
-          runtime: {
+          bindings: { runtime: {
             userMessageAttachments: [],
-          },
+          } },
         },
       };
     },
@@ -55,9 +55,9 @@ test("_prepareAgentTurnExecution preserves explicit empty payload userMessageAtt
     async prepareTurnExecution() {
       return {
         agentContext: {
-          runtime: {
+          bindings: { runtime: {
             userMessageAttachments: [],
-          },
+          } },
         },
       };
     },
@@ -112,7 +112,7 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
   engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
-      return { agentContext: { runtime: { userMessageAttachments: [] } } };
+      return { agentContext: { bindings: { runtime: { userMessageAttachments: [] } } } };
     },
   };
 
@@ -173,7 +173,7 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
   };
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
-      return { agentContext: { runtime: { userMessageAttachments: [] } } };
+      return { agentContext: { bindings: { runtime: { userMessageAttachments: [] } } } };
     },
   };
 
@@ -205,7 +205,7 @@ test("_prepareAgentTurnExecution does not restore old rich attachments when payl
   };
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
-      return { agentContext: { runtime: { userMessageAttachments: [] } } };
+      return { agentContext: { bindings: { runtime: { userMessageAttachments: [] } } } };
     },
   };
 

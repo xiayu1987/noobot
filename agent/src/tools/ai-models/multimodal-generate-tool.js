@@ -388,7 +388,7 @@ async function generateWithOpenaiResponsesApi({
 
 
 export function createMultimodalGenerateTool({ agentContext }) {
-  const runtime = agentContext?.runtime || {};
+  const runtime = agentContext?.bindings?.runtime || {};
   const effectiveConfig = mergeConfig(
     runtime?.globalConfig || {},
     runtime?.userConfig || {},

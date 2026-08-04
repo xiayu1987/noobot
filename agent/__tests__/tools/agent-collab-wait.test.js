@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -13,9 +14,7 @@ function parseToolJson(text = "") {
 }
 
 test("wait_async_task_result treats invalid_request container as failed summary", async () => {
-  const agentContext = {
-    userId: "primary-user",
-    runtime: {
+  const agentContext = createTestAgentExecutionScope({
       userId: "primary-user",
       botManager: {
         waitAsyncSession: async () => ({ ok: true, status: "completed", result: {} }),
@@ -34,8 +33,7 @@ test("wait_async_task_result treats invalid_request container as failed summary"
       globalConfig: {},
       userConfig: {},
       sharedTools: {},
-    },
-  };
+    });
 
   const tools = createAgentCollabTool({ agentContext });
   const waitTool = tools.find((item) => item?.name === "wait_async_task_result");

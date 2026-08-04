@@ -18,7 +18,6 @@ import {
   normalizePluginSelectorSet,
   normalizeTrimmedStringList,
   persistSnapshotJsonFiles,
-  resolveScopedMessagesDialogProcessId,
   resolvePluginOptionsFromConfig,
   resolvePreferredAttachments,
   resolveTransferEnvelopeListFromMessage,
@@ -168,37 +167,6 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
     { attachmentId: "fallback" },
   ]);
   assert.deepEqual(resolvePreferredAttachments({ attachmentMetas: [{ attachmentId: "legacy" }] }), []);
-});
-
-test("session-execution-engine-utils resolves current dialog for incremental blocks", () => {
-  const resolvedFromFrontend = resolveScopedMessagesDialogProcessId({
-    scope: "incremental",
-    ctx: {
-      agentContext: {
-        execution: {
-          dialogProcessId: "ctx-dialog",
-        },
-      },
-    },
-    messages: [
-      { role: "user", content: "old", frontendUserMessage: true, dialogProcessId: "old-dialog" },
-      { role: "user", content: "new", frontendUserMessage: true, dialogProcessId: "new-dialog" },
-    ],
-  });
-  const resolvedFromCtx = resolveScopedMessagesDialogProcessId({
-    scope: "history",
-    ctx: {
-      agentContext: {
-        execution: {
-          dialogProcessId: "ctx-dialog",
-        },
-      },
-    },
-    messages: [],
-  });
-
-  assert.equal(resolvedFromFrontend, "new-dialog");
-  assert.equal(resolvedFromCtx, "ctx-dialog");
 });
 
 test("session-execution-engine-utils selects hook manager with priority and factory fallback", () => {

@@ -18,17 +18,14 @@ import {
   CALLER_ROLE,
   SESSION_ASYNC_STATUS,
 } from "../config/constants.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import {
+  getAgentContextEnvelope,
   getDialogProcessIdFromAgentContext,
   getRuntimeFromAgentContext,
   getSystemRuntimeFromAgentContext,
+  getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
-import {
-  getAgentContextCompatFieldHitStats,
-  resetAgentContextCompatFieldHitStats,
-} from "../../context/compatibility-deprecation.js";
 import { applyRuntimeUserMessageAttachments } from "../../artifacts/index.js";
 import {
   bindLifecycleToRuntime,
@@ -144,13 +141,10 @@ export class SessionExecutionRunner {
 
   _buildAgentContextSummary(agentContext = {}) {
     const runtime = getRuntimeFromAgentContext(agentContext);
-    const systemRuntime = getSystemRuntimeFromAgentContext(agentContext, runtime);
-    const messagesHistory = Array.isArray(agentContext?.payload?.messages?.history)
-      ? agentContext.payload.messages.history
-      : [];
-    const toolRegistry = Array.isArray(agentContext?.payload?.tools?.registry)
-      ? agentContext.payload.tools.registry
-      : [];
+    const context = getAgentContextEnvelope(agentContext);
+    const systemRuntime = getSystemRuntimeFromAgentContext(agentContext);
+    const messagesHistory = context.modelContext.messageBlocks.history;
+    const toolRegistry = getToolsFromAgentContext(agentContext);
     const userMessageAttachments = Array.isArray(runtime?.userMessageAttachments)
       ? runtime.userMessageAttachments
       : [];
@@ -162,8 +156,7 @@ export class SessionExecutionRunner {
       sessionId: String(systemRuntime?.sessionId || "").trim(),
       parentSessionId: resolveParentSessionId({ runtime }),
       dialogProcessId:
-        getDialogProcessIdFromAgentContext(agentContext, runtime) ||
-        resolveDialogProcessIdFromContext({ runtime }),
+        getDialogProcessIdFromAgentContext(agentContext),
       caller: String(systemRuntime?.caller || "").trim(),
       runtimeModel: String(runtime?.runtimeModel || "").trim(),
       messageCount: messagesHistory.length,
@@ -211,19 +204,6 @@ export class SessionExecutionRunner {
         eventListener: resolvedRuntimeEventListener,
         source,
       });
-    };
-    resetAgentContextCompatFieldHitStats();
-    const flushCompatFieldHitStats = () => {
-      const stats = getAgentContextCompatFieldHitStats();
-      const entries = Object.entries(stats);
-      if (entries.length > 0) {
-        emitEvent(resolvedRuntimeEventListener || eventListener, "agent_context_compat_field_hits", {
-          sessionId: resolvedUsedSessionId,
-          dialogProcessId: resolvedDialogProcessId,
-          fields: stats,
-        });
-      }
-      resetAgentContextCompatFieldHitStats();
     };
     try {
       const normalizedMessage = this.normalizeRunMessage(message);
@@ -487,7 +467,7 @@ export class SessionExecutionRunner {
       });
       const { agentContext, runtimeAgentContext, userMessageAttachments } =
         this._normalizePreparedAgentTurnExecution(preparedAgentTurnExecution);
-      const dispatchRuntime = runtimeAgentContext?.execution?.controllers?.runtime;
+      const dispatchRuntime = runtimeAgentContext?.bindings?.runtime;
       if (dispatchRuntime && typeof dispatchRuntime === "object") {
         lifecycleRuntime = dispatchRuntime;
         dispatchRuntime.eventListener = runtimeEventListener;
@@ -755,7 +735,6 @@ export class SessionExecutionRunner {
         },
         eventListener: runtimeEventListener,
       });
-      flushCompatFieldHitStats();
       return finalizedResult;
     } catch (error) {
       if (isAbortError(error)) {
@@ -852,7 +831,6 @@ export class SessionExecutionRunner {
         event: BOT_MANAGE_LOG_EVENT.RUN_SESSION_FAILED,
         error,
       });
-      flushCompatFieldHitStats();
       throw error;
     }
   }

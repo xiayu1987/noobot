@@ -85,8 +85,8 @@ export function buildDynamicPolicyPromptSignature(record = null) {
 export function applyDynamicPolicyPromptFromText(ctx = {}, text = "", meta = {}) {
   const parsed = parseDynamicPolicyPromptProtocol(text);
   if (!parsed) return null;
-  const bucket = ctx?.agentContext?.payload?.harness && typeof ctx.agentContext.payload.harness === "object"
-    ? ctx.agentContext.payload.harness
+  const bucket = ctx?.agentContext?.bindings?.extensions?.harness && typeof ctx.agentContext.bindings.extensions.harness === "object"
+    ? ctx.agentContext.bindings.extensions.harness
     : null;
   if (!bucket) return null;
   const previousSignature = buildDynamicPolicyPromptSignature(bucket.dynamicPolicyPrompt);
@@ -111,7 +111,7 @@ export function applyDynamicPolicyPromptFromText(ctx = {}, text = "", meta = {})
 }
 
 export function resolveActiveDynamicPolicyPromptFromContext(ctx = {}) {
-  const record = ctx?.agentContext?.payload?.harness?.dynamicPolicyPrompt;
+  const record = ctx?.agentContext?.bindings?.extensions?.harness?.dynamicPolicyPrompt;
   if (!record || typeof record !== "object") return null;
   const prompt = clipPrompt(record.prompt);
   if (!prompt) return null;

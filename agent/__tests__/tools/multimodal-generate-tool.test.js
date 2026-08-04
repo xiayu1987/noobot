@@ -10,7 +10,7 @@ import { createMultimodalGenerateTool } from "../../src/tools/ai-models/multimod
 
 function getMultimodalGenerateTool(runtime = {}) {
   const tools = createMultimodalGenerateTool({
-    agentContext: { runtime },
+    agentContext: { bindings: { runtime } },
   });
   const tool = tools.find((item) => item?.name === "multimodal_generate");
   assert.ok(tool, "multimodal_generate tool should exist");

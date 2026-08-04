@@ -69,7 +69,7 @@ export function isAllowedFsmTransition(from, to) {
 }
 
 function resolveChecklistLength(ctx = {}) {
-  const planText = String(ctx?.agentContext?.payload?.harness?.planText || "").trim();
+  const planText = String(ctx?.agentContext?.bindings?.extensions?.harness?.planText || "").trim();
   if (planText) {
     const mainLineCount = planText
       .split(/\r?\n/)
@@ -77,8 +77,8 @@ function resolveChecklistLength(ctx = {}) {
       .filter((line) => /^\d+\.\s+/.test(line)).length;
     return mainLineCount || 1;
   }
-  return Array.isArray(ctx?.agentContext?.payload?.harness?.taskChecklist)
-    ? ctx.agentContext.payload.harness.taskChecklist.length
+  return Array.isArray(ctx?.agentContext?.bindings?.extensions?.harness?.taskChecklist)
+    ? ctx.agentContext.bindings.extensions.harness.taskChecklist.length
     : 0;
 }
 

@@ -21,7 +21,7 @@ import { TOOL_NAME } from "../constants/index.js";
 function getBasePath(agentContext) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   return (
-    agentContext?.environment?.workspace?.basePath ||
+    agentContext?.context?.environment?.workspace?.basePath ||
     runtime?.basePath ||
     ""
   );

@@ -7,8 +7,7 @@ import {
   safeNum,
   normalizeSelectedConnectors,
 } from "../../shared/utils/shared-utils.js";
-import { resolveDialogProcessId } from "../session/dialog-process-id-resolver.js";
-import { resolveParentSessionId } from "../parent-session-id-resolver.js";
+import { createAgentContextEnvelope } from "@noobot/context-protocol/agent-context-envelope";
 
 export function mapToAgentContextSchema({
   staticAgentContext = {},
@@ -19,6 +18,8 @@ export function mapToAgentContextSchema({
   sessionId = "",
   parentSessionId = "",
   caller = "user",
+  turnScopeId = "",
+  runId = "",
   now = new Date().toISOString(),
   systemMessages = [],
   conversationMessages = [],
@@ -33,25 +34,17 @@ export function mapToAgentContextSchema({
   const selectedConnectors = normalizeSelectedConnectors(
     systemRuntime?.config?.selectedConnectors || {},
   );
-  const resolvedParentSessionId = resolveParentSessionId({
-    runtime: runtimeRef,
-    parentSessionId,
-  });
-  const controllers = { runtime: runtimeRef };
-  const tools = { registry: [] };
-  const resolvedDialogProcessId = resolveDialogProcessId({
-    ctx: {
-      dialogProcessId,
-      agentContext: {
-        execution: {
-          dialogProcessId: systemRuntime?.dialogProcessId,
-          controllers: { runtime: { systemRuntime } },
-        },
-      },
-    },
-    messages: conversationMessages,
-  });
-  return {
+  const identity = {
+    userId: staticAgentContext?.identity?.userId || staticAgentContext.userId || "",
+    sessionId: systemRuntime?.sessionId || sessionId,
+    rootSessionId: systemRuntime?.rootSessionId || resolvedRootSessionId,
+    parentSessionId: systemRuntime?.parentSessionId || parentSessionId,
+    dialogProcessId,
+    turnScopeId,
+    runId,
+  };
+  return createAgentContextEnvelope({
+    identity,
     environment: {
       os: {
         platform: staticAgentContext.platform || "",
@@ -71,22 +64,21 @@ export function mapToAgentContextSchema({
             ? staticAgentContext.globalDefaults
             : { workspaceRoot: globalConfig?.workspaceRoot || "" },
       },
-      identity: {
-        userId: staticAgentContext?.identity?.userId || staticAgentContext.userId || "",
+      permissions: {
         isSuperUser:
           staticAgentContext?.identity?.isSuperUser === true ||
           systemRuntime?.isSuperUser === true,
       },
     },
     execution: {
-      dialogProcessId: resolvedDialogProcessId,
       timestamp: String(systemRuntime?.now || now).trim(),
+      caller: String(systemRuntime?.caller || caller || "user").trim(),
       flags: {
         allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
         safeConfirm: systemRuntime?.config?.safeConfirm !== false,
         maxToolLoopTurns: safeNum(systemRuntime?.config?.maxToolLoopTurns),
       },
-      models: {
+      model: {
         runtimeModel: String(runtimeRef?.runtimeModel || "").trim(),
         allEnabledProviders:
           runtimeRef?.allEnabledProviders &&
@@ -94,30 +86,19 @@ export function mapToAgentContextSchema({
             ? runtimeRef.allEnabledProviders
             : {},
       },
-      controllers,
+      selectedConnectors,
     },
-    session: {
-      root: {
-        id: String(systemRuntime?.rootSessionId || resolvedRootSessionId || "").trim(),
-        tree: systemRuntime?.sessionTree || resolvedSessionTree || {},
-        sharedState: {},
+    modelContext: {
+      protocolVersion: 1,
+      activeTurnIdentity: {
+        dialogProcessId: String(dialogProcessId || "").trim(),
+        turnScopeId: String(turnScopeId || "").trim(),
       },
-      parent: {
-        id: resolvedParentSessionId,
-        caller: String(systemRuntime?.caller || caller || "user").trim(),
-      },
-      current: {
-        id: String(systemRuntime?.sessionId || sessionId || "").trim(),
-        connectors: selectedConnectors,
-      },
-    },
-    payload: {
-      messages: {
+      messageBlocks: {
         system: Array.isArray(systemMessages) ? systemMessages : [],
         history: Array.isArray(conversationMessages) ? conversationMessages : [],
         incremental: Array.isArray(incrementalMessages) ? incrementalMessages : [],
       },
-      tools,
     },
-  };
+  });
 }

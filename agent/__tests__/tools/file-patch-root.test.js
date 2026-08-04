@@ -12,19 +12,13 @@ import path from "node:path";
 import { resolvePatchTargetsWithOptions } from "../../src/tools/execution/file-patch.js";
 import { classifyToolInputPath, TOOL_PATH_VIEWS } from "../../src/shared/utils/path-resolver.js";
 import { ERROR_CODE } from "../../src/shared/errors/constants.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 
 function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   const runtimeOverrides =
     overrides?.runtime && typeof overrides.runtime === "object" ? overrides.runtime : {};
-  return {
-    environment: {
-      workspace: { basePath },
-      identity: { userId },
-    },
-    execution: {
-      controllers: {
-        runtime: {
+  return createTestAgentExecutionScope({
           basePath,
           userId,
           globalConfig: {},
@@ -35,11 +29,8 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
             rootSessionId: "s-1",
             config: {},
           },
-          ...runtimeOverrides,
-        },
-      },
-    },
-  };
+      ...runtimeOverrides,
+    }, { identity: { userId } });
 }
 
 async function mkWorkspace(prefix) {

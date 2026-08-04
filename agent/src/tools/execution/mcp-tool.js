@@ -8,8 +8,9 @@ import { z } from "zod";
 import { createMcpAgentTools } from "../../integrations/mcp/index.js";
 import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
 import {
+  getSessionIdsFromAgentContext,
   getRuntimeFromAgentContext,
-  resolveChildRunParentSessionIdFromRuntime,
+  getChildRunParentSessionIdFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -18,7 +19,6 @@ import { appendMcpErrorLog } from "../../observability/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 import { normalizeSelectedConnectors } from "../../shared/utils/shared-utils.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
@@ -59,18 +59,13 @@ export function createMcpTool({ agentContext }) {
       const botManager = runtime?.botManager || null;
       const eventListener = runtime?.eventListener || null;
       const signal = runtime?.abortSignal || null;
-      const basePath = String(
-        agentContext?.environment?.workspace?.basePath ||
-          runtime?.basePath ||
-          "",
-      ).trim();
+      const basePath = String(runtime.basePath || "").trim();
       const workspaceRoot = String(globalConfig?.workspaceRoot || "").trim();
-      const userId = String(runtime?.userId || agentContext?.userId || "").trim();
-      const sessionId = String(systemRuntime?.sessionId || "").trim();
-      const parentSessionId = resolveChildRunParentSessionIdFromRuntime(runtime);
-      const parentDialogProcessId = resolveDialogProcessIdFromContext({
-        runtime,
-      });
+      const contextIdentity = getSessionIdsFromAgentContext(agentContext);
+      const userId = contextIdentity.userId;
+      const sessionId = contextIdentity.sessionId;
+      const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
+      const parentDialogProcessId = contextIdentity.dialogProcessId;
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
       const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
@@ -103,7 +98,7 @@ export function createMcpTool({ agentContext }) {
           `${tTool(runtime, "bot.taskPrefix")}: ${normalizedTask}`,
         ].join("\n");
         const detachedRun = await botManager.runDetachedSubSession({
-          parentContext: agentContext,
+          parentExecutionScope: agentContext,
           message: subTaskMessage,
           eventListener,
           abortSignal: signal,

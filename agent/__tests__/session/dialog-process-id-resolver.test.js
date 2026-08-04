@@ -17,21 +17,14 @@ test("resolveMessageDialogProcessId supports dialogProcessId and dialogId", () =
   assert.equal(resolveMessageDialogProcessId({ dialogId: "d2" }), "d2");
 });
 
-test("resolveDialogProcessIdFromContext supports execution dialogProcessId", () => {
-  const id = resolveDialogProcessIdFromContext({
-    agentContext: {
-      execution: {
-        dialogProcessId: "d_exec",
-      },
-    },
-  });
-  assert.equal(id, "d_exec");
+test("resolveDialogProcessIdFromContext reads only the explicit field", () => {
+  assert.equal(resolveDialogProcessIdFromContext({ dialogProcessId: "d1" }), "d1");
+  assert.equal(resolveDialogProcessIdFromContext({ runtime: { dialogProcessId: "legacy" } }), "");
 });
 
-test("resolveDialogProcessId falls back to latest message dialogProcessId", () => {
+test("resolveDialogProcessId reads only the explicit current context", () => {
   const id = resolveDialogProcessId({
-    ctx: {},
-    messages: [{ dialogProcessId: "d_old" }, { dialogProcessId: "d_new" }],
+    ctx: { dialogProcessId: "d_current" },
   });
-  assert.equal(id, "d_new");
+  assert.equal(id, "d_current");
 });

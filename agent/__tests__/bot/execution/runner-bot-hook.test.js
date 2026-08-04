@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -11,7 +12,6 @@ import {
   BOT_HOOK_POINTS,
   createBotHookManager,
 } from "../../../src/bot/hook/index.js";
-import { warnAgentContextCompatFieldOnce } from "../../../src/context/compatibility-deprecation.js";
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
 import { createBotDispatchHandled } from "@noobot/shared/bot-dispatch-protocol";
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
@@ -48,12 +48,8 @@ function createRunner({
     turnTasks: [],
   }),
   prepareAgentTurnExecution = async () => ({
-    agentContext: {
-      execution: { controllers: { runtime: { attachmentMetas: [] } } },
-    },
-    runtimeAgentContext: {
-      execution: { controllers: { runtime: { attachmentMetas: [] } } },
-    },
+    agentContext: createTestAgentExecutionScope({ attachmentMetas: [] }),
+    runtimeAgentContext: createTestAgentExecutionScope({ attachmentMetas: [] }),
   }),
   initializeRunSessionRuntime = async ({ eventListener = null } = {}) => ({
     usedSessionId: "s1",
@@ -87,7 +83,7 @@ function createRunner({
   };
   const prepareCanonicalAgentTurnExecution = async (payload = {}) => {
     const prepared = await prepareAgentTurnExecution(payload);
-    const runtime = prepared?.runtimeAgentContext?.execution?.controllers?.runtime;
+    const runtime = prepared?.runtimeAgentContext?.bindings?.runtime;
     if (runtime && typeof runtime === "object") {
       const currentStore = runtime.currentTurnMessages;
       const isCanonicalStore =
@@ -107,7 +103,7 @@ function createRunner({
   const runCanonicalAgent = async (payload = {}) => {
     const result = await agentRunner(payload);
     if (!result || typeof result !== "object" || !String(result.output || "")) return result;
-    const runtime = payload?.agentContext?.execution?.controllers?.runtime;
+    const runtime = payload?.agentContext?.bindings?.runtime;
     const messageId = String(runtime?.systemRuntime?.messageEventStream?.activeMessageId || "").trim();
     if (!messageId) throw new Error("test Agent result requires the bound canonical messageId");
     const store = runtime.currentTurnMessages;
@@ -243,7 +239,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
       runtimeAgentContext,
     }),
     agentRunner: async ({ agentContext }) => {
-      await agentContext.execution.controllers.runtime.persistCurrentTurnMessages();
+      await agentContext.bindings.runtime.persistCurrentTurnMessages();
       return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
     },
   });
@@ -322,7 +318,7 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
       runtimeAgentContext,
     }),
     agentRunner: async ({ agentContext }) => {
-      const currentRuntime = agentContext.execution.controllers.runtime;
+      const currentRuntime = agentContext.bindings.runtime;
       await currentRuntime.persistCurrentTurnMessages();
       await currentRuntime.persistCurrentTurnMessages();
       currentRuntime.currentTurnMessages.push({
@@ -383,7 +379,7 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
       runtimeAgentContext,
     }),
     agentRunner: async ({ agentContext }) => {
-      const currentRuntime = agentContext.execution.controllers.runtime;
+      const currentRuntime = agentContext.bindings.runtime;
       await currentRuntime.withCurrentTurnPersistenceBatch(async () => {
         currentRuntime.currentTurnMessages.push({
           messageUid: "sm_tool_1",
@@ -437,7 +433,7 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
       runtimeAgentContext,
     }),
     agentRunner: async ({ agentContext }) => {
-      const currentRuntime = agentContext.execution.controllers.runtime;
+      const currentRuntime = agentContext.bindings.runtime;
       await assert.rejects(currentRuntime.persistCurrentTurnMessages(), /checkpoint unavailable/);
       await currentRuntime.persistCurrentTurnMessages();
       return { output: "ok", traces: [], turnMessages: [], turnTasks: [] };
@@ -533,12 +529,12 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
   assert.deepEqual(capturedBuildContextPayload?.userMessageAttachments, [{ attachmentId: "att1" }]);
   assert.equal(capturedBuildContextPayload?.attachmentMetas, undefined);
   assert.equal(
-    beforeDispatchContext?.agentContext?.execution?.controllers?.runtime
+    beforeDispatchContext?.agentContext?.bindings?.runtime
       ?.systemRuntime?.messageEventStream?.activeMessageId,
     beforeDispatchContext?.runConfig?.messageId,
   );
   assert.equal(
-    beforeDispatchContext?.agentContext?.execution?.controllers?.runtime
+    beforeDispatchContext?.agentContext?.bindings?.runtime
       ?.systemRuntime?.messageEventStream?.activePresentationMessageId,
     beforeDispatchContext?.runConfig?.presentationMessageId,
   );
@@ -1178,60 +1174,6 @@ test("SessionExecutionRunner emits bot error hooks", async () => {
     /mock agent failure/,
   );
   assert.deepEqual(events, ["agent_dispatch_error", "session_run_error"]);
-});
-
-test("SessionExecutionRunner emits compat field hit stats event", async () => {
-  const events = [];
-  const eventListener = {
-    onEvent(payload = {}) {
-      events.push(payload);
-    },
-  };
-  const runtimeAgentContext = {
-    execution: {
-      dialogProcessId: "dp1",
-      controllers: {
-        runtime: {
-          systemRuntime: {
-            sessionId: "s1",
-            dialogProcessId: "dp1",
-          },
-        },
-      },
-    },
-  };
-  const runner = createRunner({
-    prepareAgentTurnExecution: async () => ({
-      agentContext: runtimeAgentContext,
-      runtimeAgentContext,
-    }),
-    agentRunner: async () => {
-      warnAgentContextCompatFieldOnce({
-        field: "test.compat.field",
-        replacement: "execution.controllers.runtime.test",
-      });
-      return {
-        output: "ok",
-        traces: [],
-        turnMessages: [],
-        turnTasks: [],
-      };
-    },
-  });
-
-  await runner.runSession({
-    userId: "u1",
-    sessionId: "s1",
-    message: "hello",
-    runConfig: {},
-    eventListener,
-  });
-
-  const compatEvent = events.find((item) => item?.event === "agent_context_compat_field_hits");
-  assert.equal(Boolean(compatEvent), true);
-  assert.equal(compatEvent?.data?.sessionId, "s1");
-  assert.equal(compatEvent?.data?.dialogProcessId, "dp1");
-  assert.equal(compatEvent?.data?.fields?.["test.compat.field"], 1);
 });
 
 test("SessionExecutionRunner does not let currentSessionModelAlias override selectedModel", async () => {

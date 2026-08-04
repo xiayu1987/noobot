@@ -44,7 +44,7 @@ function buildSandboxPathContext({
   if (pathContext?.view === "sandbox") return pathContext;
   const runtimeBasePath = normalizePathForTool(
     runtime?.basePath ||
-      agentContext?.environment?.workspace?.basePath ||
+      agentContext?.context?.environment?.workspace?.basePath ||
       workspace.replace(/\/runtime\/ops_workdir\/?$/, ""),
   );
   return resolveRuntimePathContext({
@@ -162,7 +162,7 @@ function resolveRuntimeUserId(runtime = {}, agentContext = null) {
   return String(
     runtime?.systemRuntime?.userId ||
       runtime?.userId ||
-      agentContext?.environment?.identity?.userId ||
+      agentContext?.context?.identity?.userId ||
       "",
   ).trim();
 }
@@ -171,8 +171,7 @@ function resolveRuntimeSessionId(runtime = {}, agentContext = null) {
   return String(
     runtime?.systemRuntime?.sessionId ||
       runtime?.sessionId ||
-      agentContext?.session?.current?.id ||
-      agentContext?.session?.id ||
+      agentContext?.context?.identity?.sessionId ||
       "",
   ).trim();
 }

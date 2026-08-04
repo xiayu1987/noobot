@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -49,11 +50,7 @@ test("web_to_data: direct fetch receives runtime abort signal", async () => {
   const abortController = new AbortController();
   const fetchCalls = [];
   const tools = createWeb2DataTool({
-    agentContext: {
-      ...buildAgentContext(basePath),
-      execution: {
-        controllers: {
-          runtime: {
+    agentContext: createTestAgentExecutionScope({
             basePath,
             globalConfig: {},
             userConfig: {},
@@ -68,10 +65,7 @@ test("web_to_data: direct fetch receives runtime abort signal", async () => {
                 };
               },
             },
-          },
-        },
-      },
-    },
+          }),
   });
   const tool = tools.find((item) => item?.name === TOOL_NAME.WEB_TO_DATA);
   assert.ok(tool);

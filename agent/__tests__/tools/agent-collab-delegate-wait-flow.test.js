@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
@@ -19,9 +20,7 @@ function createAgentContext() {
   const runCalls = [];
   const waitCalls = [];
 
-  const agentContext = {
-    userId: "primary-user",
-    runtime: {
+  const agentContext = createTestAgentExecutionScope({
       userId: "primary-user",
       botManager: {
         runAsyncSession: (payload = {}) => {
@@ -84,8 +83,7 @@ function createAgentContext() {
       sharedTools: {},
       globalConfig: {},
       userConfig: {},
-    },
-  };
+    });
 
   return { agentContext, runCalls, waitCalls, ingestCalls };
 }
@@ -122,7 +120,7 @@ test("delegate_task_async + wait_async_task_result: completed flow persists atta
     "子任务完成",
   );
 
-  const container = agentContext.runtime.childAsyncResultContainers[0];
+  const container = agentContext.bindings.runtime.childAsyncResultContainers[0];
   assert.equal(container?.tasks?.[0]?.attachmentId, "att_1");
 });
 

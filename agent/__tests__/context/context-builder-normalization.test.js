@@ -31,7 +31,7 @@ function createBuilderForNormalizationTest() {
       caller: "user",
       parentSessionId: "",
       attachments: [],
-      runConfig: {},
+      runConfig: { turnScopeId: "turn-1" },
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
@@ -42,6 +42,7 @@ function createBuilderForAttachmentRuntimeTest({
   attachments = [],
   userMessageAttachments = null,
   includeContextKeys = [],
+  eventListener = null,
 } = {}) {
   return new ContextBuilder({
     config: {
@@ -55,7 +56,7 @@ function createBuilderForAttachmentRuntimeTest({
       memoryService: null,
       attachmentService: { async ingest() { return []; } },
       skillService: null,
-      eventListener: null,
+      eventListener,
       botManager: null,
       userInteractionBridge: null,
     },
@@ -67,6 +68,7 @@ function createBuilderForAttachmentRuntimeTest({
       ...(Array.isArray(userMessageAttachments) ? { userMessageAttachments } : {}),
       attachments,
       runConfig: {
+        turnScopeId: "turn-1",
         contextPolicy: {
           includeContextKeys,
         },
@@ -76,6 +78,37 @@ function createBuilderForAttachmentRuntimeTest({
     },
   });
 }
+
+test("buildInitialContext emits the default agent context debug structure", async () => {
+  const events = [];
+  const builder = createBuilderForAttachmentRuntimeTest({
+    includeContextKeys: ["base_prompt", "system_runtime", "scenario"],
+    eventListener: {
+      onEvent(event = {}) {
+        events.push(event);
+      },
+    },
+  });
+
+  await builder.buildInitialContext({ dialogProcessId: "dp-debug" });
+
+  const event = events.find((item = {}) => item.event === "agent.context.executionScopeCreated");
+  assert.ok(event);
+  assert.equal(event.data.debugType, "agent-context");
+  assert.equal(event.data.sessionId, "s1");
+  assert.equal(event.data.dialogProcessId, "dp-debug");
+  assert.equal(event.data.turnScopeId, "turn-1");
+  assert.equal(event.data.envelope.kind, "noobot.agent-context");
+  assert.equal(event.data.envelope.protocolVersion, 1);
+  assert.equal(event.data.bindings.runtimeBound, true);
+  assert.equal(Array.isArray(event.data.bindings.toolNames), true);
+  assert.deepEqual(event.data.separation, {
+    envelopeJsonSerializable: true,
+    runtimeOutsideEnvelope: true,
+    toolsOutsideEnvelope: true,
+  });
+  assert.equal(JSON.stringify(event.data).includes("abortSignal"), false);
+});
 
 test("buildInitialContext prefers userMessageAttachments over legacy attachments", async () => {
   const builder = createBuilderForAttachmentRuntimeTest({
@@ -104,10 +137,10 @@ test("buildInitialContext prefers userMessageAttachments over legacy attachments
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
   assert.equal(
-    context?.execution?.controllers?.runtime?.userMessageAttachments?.[0]?.attachmentId,
+    context?.bindings?.runtime?.userMessageAttachments?.[0]?.attachmentId,
     "att_input",
   );
-  assert.deepEqual(context?.execution?.controllers?.runtime?.attachments, []);
+  assert.deepEqual(context?.bindings?.runtime?.attachments, []);
 });
 
 test("buildInitialContext marks normalized superAdmin user as super user", async () => {
@@ -136,6 +169,7 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
       parentSessionId: "",
       attachments: [],
       runConfig: {
+        turnScopeId: "turn-1",
         contextPolicy: {
           includeContextKeys: ["base_prompt", "system_runtime", "scenario"],
         },
@@ -147,16 +181,16 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
   assert.equal(
-    context?.execution?.controllers?.runtime?.systemRuntime?.isSuperUser,
+    context?.bindings?.runtime?.systemRuntime?.isSuperUser,
     true,
   );
-  assert.equal(context?.environment?.identity?.isSuperUser, true);
+  assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
   assert.equal(
-    context.payload.messages.system.join("\n").includes("\"isSuperUser\": true"),
+    context.context.modelContext.messageBlocks.system.join("\n").includes("\"isSuperUser\": true"),
     true,
   );
   assert.equal(
-    context.payload.messages.system.join("\n").includes("\"allowedRoots\": [\n      \"<host-filesystem>\""),
+    context.context.modelContext.messageBlocks.system.join("\n").includes("\"allowedRoots\": [\n      \"<host-filesystem>\""),
     true,
   );
 });
@@ -186,8 +220,8 @@ test("buildInitialContext keeps turn identity in runtime but excludes it from sy
   });
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dialog-runtime-only" });
-  const runtime = context.execution.controllers.runtime.systemRuntime;
-  const systemText = context.payload.messages.system.join("\n");
+  const runtime = context.bindings.runtime.systemRuntime;
+  const systemText = context.context.modelContext.messageBlocks.system.join("\n");
 
   assert.equal(runtime.dialogProcessId, "dialog-runtime-only");
   assert.equal(runtime.turnScopeId, "turn-runtime-only");
@@ -223,6 +257,7 @@ test("buildInitialContext keeps super user identity in system message when syste
       parentSessionId: "",
       attachments: [],
       runConfig: {
+        turnScopeId: "turn-1",
         contextPolicy: {
           includeContextKeys: ["base_prompt"],
         },
@@ -233,8 +268,8 @@ test("buildInitialContext keeps super user identity in system message when syste
   });
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
-  const systemText = context.payload.messages.system.join("\n");
-  assert.equal(context?.environment?.identity?.isSuperUser, true);
+  const systemText = context.context.modelContext.messageBlocks.system.join("\n");
+  assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
   assert.equal(systemText.includes("\"identity\""), true);
   assert.equal(systemText.includes("\"isSuperUser\": true"), true);
 });
@@ -242,17 +277,21 @@ test("buildInitialContext keeps super user identity in system message when syste
 test("buildContextMessageBlocks prefers runtime userMessageAttachments for user meta", () => {
   const blocks = buildContextMessageBlocks(
     {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "u1",
-            userMessageAttachments: [{ attachmentId: "att_input", name: "input.png" }],
-            attachments: [{ attachmentId: "att_legacy", name: "legacy.png" }],
-            systemRuntime: { sessionId: "s1", dialogProcessId: "dp1", turnScopeId: "turn-1" },
-          },
+      context: {
+        identity: { dialogProcessId: "dp1", turnScopeId: "turn-1" },
+        modelContext: {
+          messageBlocks: { system: [], history: [], incremental: [] },
         },
       },
-      payload: { messages: { system: [], history: [] } },
+      bindings: {
+        tools: [],
+        runtime: {
+          userId: "u1",
+          userMessageAttachments: [{ attachmentId: "att_input", name: "input.png" }],
+          attachments: [{ attachmentId: "att_legacy", name: "legacy.png" }],
+          systemRuntime: { sessionId: "s1", dialogProcessId: "dp1", turnScopeId: "turn-1" },
+        },
+      },
     },
     { currentUserMessage: createPersistedCurrentUserMessage("hello", {
       dialogProcessId: "dp1",
@@ -284,7 +323,7 @@ test("buildInitialContext keeps user message attachments separate from runtime g
   });
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
-  const runtime = context?.execution?.controllers?.runtime || {};
+  const runtime = context?.bindings?.runtime || {};
   assert.equal(Array.isArray(runtime.userMessageAttachments), true);
   assert.equal(runtime.userMessageAttachments.length, 1);
   assert.equal(runtime.userMessageAttachments[0]?.attachmentId, "att_1");
@@ -347,10 +386,10 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
   assert.equal(calls[0]?.currentDialogProcessId, "dp-current");
   assert.equal(calls[0]?.currentTurnScopeId, "client-turn:edited");
   assert.deepEqual(
-    context.payload.messages.history.map((item) => item.content),
+    context.context.modelContext.messageBlocks.history.map((item) => item.content),
     ["history user", "history assistant"],
   );
-  assert.equal(context.payload.messages.system.length > 0, true);
+  assert.equal(context.context.modelContext.messageBlocks.system.length > 0, true);
 });
 
 function createBuilderForSuperUserRuntimeTest({ globalConfig = {}, userId = "u1", systemRuntimePatch = null } = {}) {
@@ -374,7 +413,7 @@ function createBuilderForSuperUserRuntimeTest({ globalConfig = {}, userId = "u1"
       caller: "user",
       parentSessionId: "",
       attachments: [],
-      runConfig: systemRuntimePatch ? { systemRuntimePatch } : {},
+      runConfig: { turnScopeId: "turn-1", ...(systemRuntimePatch ? { systemRuntimePatch } : {}) },
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
@@ -422,7 +461,7 @@ function createBuilderForStartupDependencyRuntimeTest() {
       caller: "user",
       parentSessionId: "",
       attachments: [],
-      runConfig: {},
+      runConfig: { turnScopeId: "turn-1" },
       abortSignal: null,
       parentAsyncResultContainer: null,
     },

@@ -9,7 +9,6 @@ import {
 } from "../../context/session/message-context-policy.js";
 import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
 import {
-  resolveDialogProcessId,
   resolveMessageDialogProcessId,
 } from "../../context/session/dialog-process-id-resolver.js";
 import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
@@ -89,19 +88,6 @@ export function normalizeMessageForModelRuntime(messageItem = {}) {
   const turnScopeId = readMessageField(messageItem, "turnScopeId");
   if (turnScopeId) normalized.turnScopeId = turnScopeId;
   return applyNormalizedMessageFlags(normalized, messageItem);
-}
-
-export function resolveScopedMessagesDialogProcessId({ scope = "", ctx = {}, messages = [] } = {}) {
-  const normalizedScope = String(scope || "").trim().toLowerCase();
-  if (
-    normalizedScope === "incremental" ||
-    normalizedScope === "conversation" ||
-    normalizedScope === "non_system"
-  ) {
-    const fromCurrentTurnMessages = resolveCurrentTurnDialogProcessIdFromMessages(messages);
-    if (fromCurrentTurnMessages) return fromCurrentTurnMessages;
-  }
-  return resolveDialogProcessId({ ctx, messages });
 }
 
 export function isPlainObject(value) {
@@ -198,21 +184,4 @@ function isFrontendUserMessageFlagged(messageItem = {}) {
     messageItem?.additional_kwargs?.frontendUserMessage === true ||
     messageItem?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
   );
-}
-
-function resolveCurrentTurnDialogProcessIdFromMessages(messages = []) {
-  const source = Array.isArray(messages) ? messages : [];
-  for (let index = source.length - 1; index >= 0; index -= 1) {
-    const item = source[index] || {};
-    if (!isFrontendUserMessageFlagged(item)) continue;
-    const dialogProcessId = resolveMessageDialogProcessId(item);
-    if (dialogProcessId) return dialogProcessId;
-  }
-  for (let index = source.length - 1; index >= 0; index -= 1) {
-    const item = source[index] || {};
-    if (!isInjectedMessage(item)) continue;
-    const dialogProcessId = resolveMessageDialogProcessId(item);
-    if (dialogProcessId) return dialogProcessId;
-  }
-  return "";
 }

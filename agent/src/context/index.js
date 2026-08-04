@@ -34,9 +34,12 @@ import {
 import { resolveScenarioProfile } from "./builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "./formatters/system-prompt-formatter.js";
 import { mapToAgentContextSchema } from "./formatters/agent-context-mapper.js";
+import { createAgentExecutionScope } from "./agent-execution-scope.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeParentSessionId } from "./parent-session-id-resolver.js";
-import { emitModelContextTrace, summarizeDiagnosticMessages } from "./runtime-state/context-diagnostics.js";
+import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
+import { emitAgentContextDebug } from "../observability/agent-context-debug.js";
+import { summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
 import { resolveConfiguredSuperUserId } from "../shared/utils/super-user.js";
 
 function resolveRuntimeSuperUserFlag({ globalConfig = {}, userId = "" } = {}) {
@@ -348,24 +351,26 @@ export class ContextBuilder {
       sessionId: this.sessionId,
       parentSessionId: this.parentSessionId,
       caller: this.caller,
+      turnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
+      runId: String(this.runConfig?.executionId || "").trim(),
       now: this._now(),
       systemMessages: effectiveSystemMessages,
       conversationMessages,
       incrementalMessages,
       globalConfig: this.globalConfig,
     });
+    const executionScope = createAgentExecutionScope({
+      context: agentContext,
+      bindings: { runtime, tools: [] },
+    });
     const builtTools = await buildTools({
       sessionId: this.sessionId || "",
       parentSessionId: normalizeParentSessionId(this.parentSessionId),
-      agentContext: {
-        ...agentContext,
-        runtime,
-      },
+      agentContext: executionScope,
     });
-    agentContext.payload.tools.registry = Array.isArray(builtTools)
-      ? builtTools
-      : [];
-    return agentContext;
+    executionScope.bindings.tools = Array.isArray(builtTools) ? builtTools : [];
+    emitAgentContextDebug(runtime.eventListener, executionScope);
+    return executionScope;
   }
 
   async _resolveSessionRecords({ sessionId, dialogProcessId = "" } = {}) {

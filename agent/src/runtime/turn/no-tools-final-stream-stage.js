@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { maybeInvokeFinalStreamingNoTools } from "./turn-stage.js";
-import { appendMessage } from "../../context/runtime-state/message-store.js";
+import { appendMessage } from "@noobot/context-protocol/message-store";
 
 export async function finalizeNoToolsStreamingTurn({
   modelState,

@@ -55,7 +55,7 @@ import {
 export { resolvePolicyPromptSelection } from "./policy-prompt-matrix.js";
 
 function resolveHarnessBucket(ctx = {}) {
-  const bucket = ctx?.agentContext?.payload?.harness;
+  const bucket = ctx?.agentContext?.bindings?.extensions?.harness;
   return bucket && typeof bucket === "object" ? bucket : null;
 }
 
@@ -83,7 +83,7 @@ function markPolicyPromptRefreshed(ctx = {}, activeDynamicPolicyPrompt = null) {
 }
 
 function resolveAgentRuntimeFromContext(ctx = {}) {
-  return ctx?.agentContext?.execution?.controllers?.runtime || ctx?.agentContext?.runtime || ctx?.runtime || null;
+  return ctx?.agentContext?.bindings?.runtime || null;
 }
 
 function isStoppedSnapshotResumeInitializingFirstLlmCall(ctx = {}) {

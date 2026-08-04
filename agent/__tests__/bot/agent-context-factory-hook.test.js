@@ -11,6 +11,7 @@ import {
   createAgentHookManager,
   AGENT_HOOK_POINTS,
 } from "../../src/extensions/hooks/index.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 test("buildAgentContextFromBuilder triggers before/after context build hooks", async () => {
   const hookManager = createAgentHookManager();
@@ -26,20 +27,10 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
 
   const contextBuilder = {
     async buildInitialContext() {
-      return {
-        execution: {
-          controllers: {
-            runtime: {
-              hookManager,
-            },
-          },
-        },
-        payload: {
-          messages: {
-            history: [{ role: "user", content: "a" }, { role: "assistant", content: "b" }],
-          },
-        },
-      };
+      return createTestAgentExecutionScope(
+        { hookManager },
+        { messageBlocks: { history: [{ role: "user", content: "a" }, { role: "assistant", content: "b" }] } },
+      );
     },
     async buildContinueContext() {
       throw new Error("should not be called");

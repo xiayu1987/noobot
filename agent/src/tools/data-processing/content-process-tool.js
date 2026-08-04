@@ -9,7 +9,7 @@ import { recoverableToolError } from "../../shared/errors/index.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import {
   getRuntimeFromAgentContext,
-  resolveChildRunParentSessionIdFromRuntime,
+  getChildRunParentSessionIdFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
@@ -20,7 +20,6 @@ import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { normalizeSelectedConnectors } from "../../shared/utils/shared-utils.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
   SANDBOX_CONFIG,
@@ -102,10 +101,8 @@ export function createContentProcessTool({ agentContext }) {
       const signal = runtime?.abortSignal || null;
       const userId = String(runtime?.userId || agentContext?.userId || "").trim();
       const sessionId = String(systemRuntime?.sessionId || "").trim();
-      const parentSessionId = resolveChildRunParentSessionIdFromRuntime(runtime);
-      const parentDialogProcessId = resolveDialogProcessIdFromContext({
-        runtime,
-      });
+      const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
+      const parentDialogProcessId = String(runtime?.systemRuntime?.dialogProcessId || "").trim();
       const resolvedModelName = String(modelName || "").trim();
       const allowUserInteraction =
         systemRuntime?.config?.allowUserInteraction !== false;
@@ -129,7 +126,7 @@ export function createContentProcessTool({ agentContext }) {
 
       try {
         const detachedRun = await botManager.runDetachedSubSession({
-          parentContext: agentContext,
+          parentExecutionScope: agentContext,
           message: composedTask,
           eventListener,
           abortSignal: signal,

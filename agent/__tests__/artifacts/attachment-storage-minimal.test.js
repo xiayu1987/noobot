@@ -25,6 +25,7 @@ import {
 import { getMimeTypeFromExtension, isValidMimeType } from "../../src/artifacts/policy/mime-utils.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 async function withTempDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-test-"));
@@ -170,16 +171,10 @@ test("resolveCanonicalUserSourceAttachment keeps source path matching before dis
         config: {},
       },
     };
-    const agentContext = {
-      runtime,
-      environment: {
-        workspace: { basePath: workspaceRoot },
-      },
-      session: {
-        userId: "u1",
-        sessionId: "s1",
-      },
-    };
+    const agentContext = createTestAgentExecutionScope(runtime, {
+      identity: { userId: "u1", sessionId: "s1" },
+      environment: { workspace: { basePath: workspaceRoot } },
+    });
 
     const resolved = await resolveCanonicalUserSourceAttachment({
       filePath: source.path,
