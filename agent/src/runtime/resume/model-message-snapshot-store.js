@@ -5,7 +5,6 @@
  */
 import fs from "node:fs/promises";
 import { filePath as path } from "../../shared/utils/path-resolver.js";
-import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { isWorkspaceSessionDeleted } from "@noobot/runtime-events";
 import {
   createModelContextSnapshot,
@@ -28,54 +27,6 @@ function snapshotPath(identity = {}, globalConfig = {}) {
     ? `${cleanId(identity.sessionId)}__`
     : "";
   return path.join(snapshotDir({ globalConfig, ...identity }), `${childPrefix}${cleanId(identity.dialogProcessId)}__${cleanId(identity.turnScopeId)}.json`);
-}
-
-function cloneJson(value) {
-  if (value == null) return value;
-  try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
-}
-
-const LANGCHAIN_SERIALIZATION_KEYS = new Set([
-  "lc",
-  "id",
-  "kwargs",
-  "type",
-  "lc_namespace",
-  "lc_serializable",
-  "lc_aliases",
-  "lc_attributes",
-  "lc_secrets",
-]);
-
-function deserializeMessage(item = {}) {
-  const payload = { content: item?.content ?? "", additional_kwargs: cloneJson(item?.additional_kwargs) || {} };
-  let message;
-  if (item?.type === "system") message = new SystemMessage(payload);
-  else if (item?.type === "ai") message = new AIMessage({
-    ...payload,
-    tool_calls: cloneJson(item?.tool_calls) || [],
-    invalid_tool_calls: cloneJson(item?.invalid_tool_calls) || [],
-  });
-  else if (item?.type === "tool") message = new ToolMessage({
-    ...payload,
-    tool_call_id: item?.tool_call_id || "",
-    name: item?.name,
-    status: item?.status,
-    artifact: cloneJson(item?.artifact),
-  });
-  else message = new HumanMessage(payload);
-  for (const [key, value] of Object.entries(item || {})) {
-    if (
-      !["content", "additional_kwargs", "tool_calls", "invalid_tool_calls", "tool_call_id"].includes(key)
-      && !LANGCHAIN_SERIALIZATION_KEYS.has(key)
-      && !String(key || "").startsWith("lc_")
-    ) {
-      try { message[key] = cloneJson(value); } catch {}
-    }
-  }
-  if (item?.lc_kwargs && typeof item.lc_kwargs === "object") message.lc_kwargs = cloneJson(item.lc_kwargs);
-  if (item?.summarized === true || item?.lc_kwargs?.summarized === true) message.summarized = true;
-  return message;
 }
 
 function countSnapshotMessages(candidate = {}) {
@@ -276,9 +227,7 @@ export async function loadStoppedModelMessageSnapshot({
     if (allowMissing === true && error?.code === "ENOENT") return null;
     throw error;
   }
-  return hydrateModelContextSnapshot(JSON.parse(raw), normalizedIdentity, {
-    deserializeMessage,
-  });
+  return hydrateModelContextSnapshot(JSON.parse(raw), normalizedIdentity);
 }
 
 export async function clearStoppedModelMessageSnapshot({ globalConfig = {}, identity = {} } = {}) {

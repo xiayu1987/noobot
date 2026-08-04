@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { WORKFLOW_BOT_HOOK_POINTS } from "../constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { executeWorkflowText } from "../../workflow/adapter.js";
 import {
   isWorkflowAbortError,
@@ -39,7 +39,7 @@ export async function handleBeforeAgentDispatch({
   hookPoint = "",
 } = {}) {
   const beforeDispatchMode =
-    String(hookPoint || "").trim() === WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH;
+    String(hookPoint || "").trim() === HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH;
   const sourceAgentResult =
     ctx?.agentResult && typeof ctx.agentResult === "object" ? ctx.agentResult : {};
   const agentResult = beforeDispatchMode

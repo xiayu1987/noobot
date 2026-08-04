@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import crypto from "node:crypto";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -45,7 +46,7 @@ export function preview(value, maxChars = LENGTH_THRESHOLDS.display.harnessPrevi
 
 function buildPayloadPreview(point, ctx = {}, options = {}) {
   const maxPreviewChars = options.maxPreviewChars || LENGTH_THRESHOLDS.display.harnessPreviewChars;
-  if (point === "before_llm_call" || point === "after_llm_call") {
+  if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL || point === HOOK_POINT.AGENT.AFTER_LLM_CALL) {
     return {
       messageCount: Array.isArray(ctx?.modelContext?.messages) ? ctx.modelContext.messages.length : undefined,
       toolChoice: ctx.toolChoice,

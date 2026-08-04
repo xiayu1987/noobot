@@ -37,7 +37,7 @@ test("createRegisterHarnessHooks skips non-primary execution scope", async () =>
   };
 
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {
@@ -75,7 +75,7 @@ test("createRegisterHarnessHooks skips non-primary execution scope", async () =>
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  await handlers.get("before_llm_call")({ executionScope: "auxiliary" });
+  await handlers.get("agent.before_llm_call")({ executionScope: "auxiliary" });
   assert.deepEqual(calls, []);
 });
 
@@ -92,7 +92,7 @@ test("createRegisterHarnessHooks cleans harness runs on after_session_delete", a
   const registerHarnessHooks = createRegisterHarnessHooks({
     tracePoints: [],
     flushPoints: [],
-    sessionCleanupPoints: ["after_session_delete"],
+    sessionCleanupPoints: ["service.after_session_delete"],
     flushAllManifests: async () => {
       calls.push("flushAllManifests");
     },
@@ -116,7 +116,7 @@ test("createRegisterHarnessHooks cleans harness runs on after_session_delete", a
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  await handlers.get("after_session_delete")({
+  await handlers.get("service.after_session_delete")({
     sessionId: "s-parent",
     deletedSessionIds: ["s-parent", "s-child"],
   });

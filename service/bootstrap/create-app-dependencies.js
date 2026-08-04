@@ -197,6 +197,7 @@ export async function createAppDependencies({
       openVSCodeService,
       globalConfigProvider: () => globalConfig,
       issueApiKey,
+      readWorkspaceUsers,
       readWorkspaceUsersConfig,
       writeWorkspaceUsersConfig,
       normalizeWorkspaceUsersConfig,

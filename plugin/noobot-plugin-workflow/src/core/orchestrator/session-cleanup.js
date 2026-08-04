@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_HOOKS, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
+import { WORKFLOW_HOOKS, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
 import { cleanupWorkflowBySessionIds } from "../../utils/cleanup.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 
 export function registerWorkflowSessionCleanupHook({ hookManager, options = {} } = {}) {
   return hookManager.on(
-    WORKFLOW_BOT_HOOK_POINTS.AFTER_SESSION_DELETE,
+    HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
     async (ctx = {}) => {
       const deletedSessionIds = Array.isArray(ctx?.deletedSessionIds)
         ? ctx.deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)

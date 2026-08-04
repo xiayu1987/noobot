@@ -6,11 +6,8 @@
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  assertHookExecutionSucceeded,
-  runAgentTurn,
-} from "../../../src/runtime/engine.js";
-import { createAgentHookManager } from "../../../src/extensions/hooks/index.js";
+import { runAgentTurn } from "../../../src/runtime/engine.js";
+import { createHookManager } from "@noobot/hook-protocol";
 
 function createAbortedSignal() {
   const controller = new AbortController();
@@ -22,9 +19,9 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
   const events = [];
   const abortHookContexts = [];
   const errorHookContexts = [];
-  const hookManager = createAgentHookManager();
-  hookManager.on("on_abort", (context) => abortHookContexts.push(context));
-  hookManager.on("on_error", (context) => errorHookContexts.push(context));
+  const hookManager = createHookManager();
+  hookManager.on("agent.on_abort", (context) => abortHookContexts.push(context));
+  hookManager.on("agent.on_error", (context) => errorHookContexts.push(context));
   const runtime = {
     userId: "admin",
     sessionId: "session-engine-stop",
@@ -86,19 +83,4 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
   assert.equal(errorHookContexts[0].contextProtocolVersion, 1);
   assert.equal(abortHookContexts[0].modelContext, runtime.activeMessageContext);
   assert.equal(errorHookContexts[0].modelContext, runtime.activeMessageContext);
-});
-
-test("before_final_output hook failures are a final-result gate", () => {
-  const failure = new Error("before_final_output rejected");
-  assert.throws(
-    () => assertHookExecutionSucceeded({
-      point: "before_final_output",
-      errors: [{ ok: false, error: failure }],
-    }),
-    (error) => error === failure,
-  );
-  assert.doesNotThrow(() => assertHookExecutionSucceeded({
-    point: "before_final_output",
-    errors: [],
-  }));
 });

@@ -5,13 +5,13 @@
  */
 
 import {
-  WORKFLOW_BOT_HOOK_POINTS,
   WORKFLOW_PHASE_STATUS,
   WORKFLOW_PLUGIN_DEFAULTS,
   WORKFLOW_PROTOCOL,
   WORKFLOW_RETRY,
   WORKFLOW_SEMANTIC,
 } from "./constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 function normalizeMetaValue(value = "") {
@@ -36,7 +36,7 @@ function resolveRunMeta(ctx = {}, options = {}) {
     sessionId: normalizeMetaValue(ctx?.sessionId),
     parentSessionId: normalizeMetaValue(ctx?.parentSessionId),
     dialogProcessId: normalizeMetaValue(ctx?.dialogProcessId),
-    hookPoint: WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH,
+    hookPoint: HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH,
     locale: normalizeMetaValue(ctx?.runConfig?.locale || WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_LOCALE),
   };
 }

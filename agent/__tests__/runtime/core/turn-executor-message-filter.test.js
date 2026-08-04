@@ -153,7 +153,7 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     systemRuntime: {},
     hookManager: {
       async emit(point, ctx = {}) {
-        if (point !== "before_llm_call") return [];
+        if (point !== "agent.before_llm_call") return [];
         // A detached flat projection is not a writable context source. The
         // authoritative blocks remain unchanged.
         return [];
@@ -225,7 +225,7 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     systemRuntime: {},
     hookManager: {
       async emit(point, ctx = {}) {
-        if (point !== "before_llm_call") return [];
+        if (point !== "agent.before_llm_call") return [];
         writeMessageBlocks(ctx.modelContext, {
           incremental: [...ctx.modelContext.messageBlocks.incremental, summary],
         });
@@ -293,7 +293,7 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     systemRuntime: {},
     hookManager: {
       async emit(point, ctx = {}) {
-        if (point !== "before_llm_call") return [];
+        if (point !== "agent.before_llm_call") return [];
         writeMessageBlocks(ctx.modelContext, {
           system: [...ctx.modelContext.messageBlocks.system, harnessSystem],
           history: [...ctx.modelContext.messageBlocks.history],
@@ -371,7 +371,7 @@ test("invokeWithToolsTurn adopts canonical hook messages on first stopped-snapsh
     systemRuntime: {},
     hookManager: {
       async emit(point, ctx = {}) {
-        if (point !== "before_llm_call") return [];
+        if (point !== "agent.before_llm_call") return [];
         writeMessageBlocks(ctx.modelContext, {
           system: [...ctx.modelContext.messageBlocks.system, harnessSystem],
           history: [...ctx.modelContext.messageBlocks.history],

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createAgentHookManager, AGENT_HOOK_POINTS } from "noobot-agent/hook";
+import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createJsonRouteWrapper } from "../routes/route-wrapper.js";
 import {
   buildNoobotPluginDiagnostics,
@@ -32,32 +32,21 @@ const EMPTY_DYNAMIC_PLUGIN_RUNTIME = Object.freeze({
   loadedAt: "",
 });
 
-const SERVICE_EVENT = Object.freeze({
-  AFTER_SESSION_DELETE: "after_session_delete",
-});
-
 const SERVICE_ROUTE_CAPABILITY = PLUGIN_CAPABILITY.SERVICE_HTTP_ROUTES;
 
-function resolveServiceEventCapability(eventName = "") {
-  const normalized = String(eventName || "").trim().toLowerCase();
-  return normalized ? `service.${normalized}` : "";
-}
-
-function resolveManifestRuntimeOptionsByServiceEvent(manifest = {}, eventName = "") {
-  const serviceCapability = resolveServiceEventCapability(eventName);
+function resolveManifestRuntimeOptionsByServiceEvent(manifest = {}, hookPoint = "") {
   const runtimeOptions =
     manifest?.runtimeOptions &&
     typeof manifest.runtimeOptions === "object" &&
       !Array.isArray(manifest.runtimeOptions)
       ? manifest.runtimeOptions
       : {};
-  const item = runtimeOptions[serviceCapability];
+  const item = runtimeOptions[hookPoint];
   return item && typeof item === "object" && !Array.isArray(item) ? { ...item } : {};
 }
 
-function supportsServiceEvent(manifest = {}, eventName = "") {
-  const serviceCapability = resolveServiceEventCapability(eventName);
-  return manifestSupportsCapability(manifest, serviceCapability);
+function supportsServiceEvent(manifest = {}, hookPoint = "") {
+  return manifestSupportsCapability(manifest, hookPoint);
 }
 
 export function createServicePluginHost({
@@ -90,7 +79,7 @@ export function createServicePluginHost({
   } = {}) {
     if (!hookManager || typeof hookManager?.on !== "function") return;
     const candidates = listLoadedNoobotPluginEntries(loadedPlugins).filter((item = {}) =>
-      supportsServiceEvent(item?.manifest, SERVICE_EVENT.AFTER_SESSION_DELETE),
+      supportsServiceEvent(item?.manifest, HOOK_POINT.SERVICE.AFTER_SESSION_DELETE),
     );
     for (const candidate of candidates) {
       const registerPlugin =
@@ -100,7 +89,7 @@ export function createServicePluginHost({
       if (typeof registerPlugin !== "function") continue;
       const options = resolveManifestRuntimeOptionsByServiceEvent(
         candidate?.manifest,
-        SERVICE_EVENT.AFTER_SESSION_DELETE,
+        HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
       );
       if (basePath && !options.basePath) {
         options.basePath = basePath;
@@ -168,13 +157,13 @@ export function createServicePluginHost({
           : "";
       if (!basePath) return;
       const loadedPlugins = await resolveLoadedPlugins();
-      const hookManager = createAgentHookManager();
+      const hookManager = createHookManager();
       await registerAfterSessionDeleteHooks({
         hookManager,
         loadedPlugins,
         basePath,
       });
-      await hookManager.emit(AGENT_HOOK_POINTS.AFTER_SESSION_DELETE, {
+      await hookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
         userId: String(userId || "").trim(),
         sessionId: String(sessionId || "").trim(),
         deletedSessionIds: Array.isArray(deletedSessionIds)

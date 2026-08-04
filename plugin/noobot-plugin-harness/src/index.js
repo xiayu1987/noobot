@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export { PLUGIN_NAME, PLUGIN_VERSION, HARNESS_HOOK_POINTS } from "./core/constants.js";
+export { PLUGIN_NAME, PLUGIN_VERSION } from "./core/constants.js";
 export { createPluginRuntimeContext, createPluginRuntimeContextFactory } from "./core/context.js";
 export { registerNoobotPlugin, createRegisterNoobotPlugin } from "./core/plugin.js";
 export { createHarnessPlugin, createHarnessPluginFactory } from "./core/plugin.js";

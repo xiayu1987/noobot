@@ -52,7 +52,7 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
 
   const before = await handler({
     capability: "acceptance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx,
     meta: { harness: { planningGuidanceMode: "inject" } },
   });
@@ -91,7 +91,7 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
 
   const after = await handler({
     capability: "acceptance",
-    point: "after_llm_call",
+    point: "agent.after_llm_call",
     ctx: { ...ctx, ai: { content: "阶段验收：pass" } },
     meta: { harness: { planningGuidanceMode: "inject" } },
   });
@@ -137,7 +137,7 @@ test("phase acceptance separate model receives context, summaries, revised plan,
 
   await handler({
     capability: "acceptance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx,
     meta: {
       harness: {
@@ -260,7 +260,7 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
 
   await handler({
     capability: "acceptance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx,
     meta: {
       harness: {
@@ -388,7 +388,7 @@ test("phase acceptance separate model drops historical summary relays and passes
 
   await handler({
     capability: "acceptance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx,
     meta: {
       harness: {
@@ -461,7 +461,7 @@ test("phase acceptance separate model uses messageBlocks incremental when ctx.mo
 
   await handler({
     capability: "acceptance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx,
     meta: {
       harness: {

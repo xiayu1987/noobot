@@ -41,12 +41,12 @@ test("capability runtime runs global bootstrap before capability handlers", asyn
     handlers: {
       planning: async () => {
         calls.push("planning");
-        return { capability: "planning", point: "before_llm_call", status: "ok" };
+        return { capability: "planning", point: "agent.before_llm_call", status: "ok" };
       },
     },
   });
 
-  await runtime.runHook("before_llm_call", withModelContext({ messages: [] }), {
+  await runtime.runHook("agent.before_llm_call", withModelContext({ messages: [] }), {
     harness: {
       globalBootstrap: async () => {
         calls.push("globalBootstrap");
@@ -69,12 +69,12 @@ test("capability runtime exposes resolved capability profile to handlers", async
     handlers: {
       guidance: async ({ meta = {} } = {}) => {
         capturedProfile = meta?.harness?.capabilityProfile || null;
-        return { capability: "guidance", point: "before_llm_call", status: "ok" };
+        return { capability: "guidance", point: "agent.before_llm_call", status: "ok" };
       },
     },
   });
 
-  await runtime.runHook("before_llm_call", withModelContext({ messages: [] }), {});
+  await runtime.runHook("agent.before_llm_call", withModelContext({ messages: [] }), {});
 
   assert.equal(capturedProfile?.planning?.enabled, false);
   assert.equal(capturedProfile?.guidance?.enabled, true);
@@ -87,15 +87,15 @@ test("capability runtime keeps planning first without blocking later before_llm_
     handlers: {
       planning: async () => {
         calls.push("planning");
-        return { capability: "planning", point: "before_llm_call", status: "active" };
+        return { capability: "planning", point: "agent.before_llm_call", status: "active" };
       },
       guidance: async () => {
         calls.push("guidance");
-        return { capability: "guidance", point: "before_llm_call", status: "active" };
+        return { capability: "guidance", point: "agent.before_llm_call", status: "active" };
       },
       acceptance: async () => {
         calls.push("acceptance");
-        return { capability: "acceptance", point: "before_llm_call", status: "active" };
+        return { capability: "acceptance", point: "agent.before_llm_call", status: "active" };
       },
     },
     profile: {
@@ -115,7 +115,7 @@ test("capability runtime keeps planning first without blocking later before_llm_
     messages: [],
   });
 
-  const results = await runtime.runHook("before_llm_call", ctx, {});
+  const results = await runtime.runHook("agent.before_llm_call", ctx, {});
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
   assert.deepEqual(results.map((item = {}) => item.capability), ["planning", "guidance", "acceptance"]);
@@ -127,15 +127,15 @@ test("capability runtime does not block guidance when plan text exists but captu
     handlers: {
       planning: async () => {
         calls.push("planning");
-        return { capability: "planning", point: "before_llm_call", status: "active" };
+        return { capability: "planning", point: "agent.before_llm_call", status: "active" };
       },
       guidance: async () => {
         calls.push("guidance");
-        return { capability: "guidance", point: "before_llm_call", status: "active" };
+        return { capability: "guidance", point: "agent.before_llm_call", status: "active" };
       },
       acceptance: async () => {
         calls.push("acceptance");
-        return { capability: "acceptance", point: "before_llm_call", status: "active" };
+        return { capability: "acceptance", point: "agent.before_llm_call", status: "active" };
       },
     },
     profile: {
@@ -156,7 +156,7 @@ test("capability runtime does not block guidance when plan text exists but captu
     messages: [],
   });
 
-  await runtime.runHook("before_llm_call", ctx, {});
+  await runtime.runHook("agent.before_llm_call", ctx, {});
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planningCaptured, true);
@@ -180,7 +180,7 @@ test("capability runtime delegates before_llm_call messages to agent resolver", 
     },
   });
   const calls = [];
-  await runtime.runHook("before_llm_call", ctx, {
+  await runtime.runHook("agent.before_llm_call", ctx, {
     harness: {
       resolveModelMessages: ({ ctx: resolverCtx = {} } = {}) => {
         calls.push("resolveModelMessages");
@@ -226,7 +226,7 @@ test("capability runtime filters summarized messages from incremental blocks by 
     },
   });
 
-  await runtime.runHook("before_llm_call", ctx, { harness: { resolveModelMessages: resolveFromBlocks } });
+  await runtime.runHook("agent.before_llm_call", ctx, { harness: { resolveModelMessages: resolveFromBlocks } });
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -260,7 +260,7 @@ test("capability runtime does not let resolver reintroduce summarized messages",
     },
   });
 
-  await runtime.runHook("before_llm_call", ctx, {
+  await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
 
@@ -300,12 +300,12 @@ test("capability runtime applies message blocks only once per runtime turn conte
   });
   const originalMessageBlocks = ctx.modelContext.messageBlocks;
 
-  await runtime.runHook("before_llm_call", ctx, {
+  await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
   assert.equal(ctx.modelContext.messageBlocks, originalMessageBlocks);
   appendMessage(ctx, { role: "assistant", content: "after-first-call" }, { block: "incremental" });
-  await runtime.runHook("before_llm_call", ctx, {
+  await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
 
@@ -339,7 +339,7 @@ test("capability runtime keeps repeated unsummarized guidance across tool rounds
     },
   });
 
-  await runtime.runHook("before_llm_call", ctx, {
+  await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
   appendMessage(ctx, {
@@ -360,7 +360,7 @@ test("capability runtime keeps repeated unsummarized guidance across tool rounds
     injectedMessageType: "separate_model_relay:guidance",
   }, { block: "incremental" });
 
-  await runtime.runHook("before_llm_call", ctx, {
+  await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
 
@@ -434,7 +434,7 @@ test("capability runtime preserves history and incremental user messages in bloc
     },
   });
 
-  await runtime.runHook("before_llm_call", ctx, {
+  await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
 
@@ -493,7 +493,7 @@ test("capability runtime does not remove same-text user from a different turn", 
     },
   });
 
-  await runtime.runHook("before_llm_call", ctx, {
+  await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
 
@@ -536,7 +536,7 @@ test("capability runtime keeps later flows running when one flow fails", async (
       },
     },
   };
-  const results = await runtime.runHook("before_llm_call", withModelContext({ agentContext, messages: [] }), {});
+  const results = await runtime.runHook("agent.before_llm_call", withModelContext({ agentContext, messages: [] }), {});
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
   assert.equal(results[0]?.status, "error");

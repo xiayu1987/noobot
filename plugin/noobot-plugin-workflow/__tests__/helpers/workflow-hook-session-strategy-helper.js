@@ -5,9 +5,10 @@
  */
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
-import { WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
+import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { resolveWorkflowNodeDialogProcessId } from "../../src/core/dialog-process-compat.js";
 import {
   collectWorkflowDialogProcessIds,
@@ -26,22 +27,22 @@ export function createMockBotHookManager() {
     },
     async emit(point, payload) {
       emits.push({ point: String(point || "").trim(), payload });
-      if (String(point || "").trim() === WORKFLOW_BOT_HOOK_POINTS.NODE_AGENT_EXECUTE) {
+      if (String(point || "").trim() === HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE) {
         return {
-          results: [
+          outcomes: [
             {
-              ok: true,
-              result: { action: { type: "submit", stepIndex: 0 } },
+              status: "ok",
+              value: { action: { type: "submit", stepIndex: 0 } },
             },
           ],
         };
       }
       const record = listeners.get(String(point || "").trim());
       if (!record || typeof record.handler !== "function") {
-        return { results: [], errors: [] };
+        return { outcomes: [], failures: [] };
       }
       const result = await record.handler(payload || {});
-      return { results: [{ ok: true, result }], errors: [] };
+      return { outcomes: [{ status: "ok", value: result }], failures: [] };
     },
   };
 }
@@ -221,7 +222,7 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
 }
 
 export function getBeforeDispatch(hookManager) {
-  const beforeDispatch = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const beforeDispatch = hookManager.listeners.get(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH);
   assert.ok(beforeDispatch?.handler);
   return {
     ...beforeDispatch,
@@ -249,7 +250,6 @@ export function workflowTurn(agentResult) {
 
 export {
   createRegisterWorkflowHooks,
-  WORKFLOW_BOT_HOOK_POINTS,
   WORKFLOW_PLUGIN_DEFAULTS,
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,

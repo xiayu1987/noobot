@@ -5,10 +5,8 @@
  */
 import { canonicalizeMessageStore } from "./message-store.js";
 import { attachModelContextRuntime } from "./model-context-runtime.js";
-import {
-  HOOK_CONTEXT_PROTOCOL_VERSION,
-  MODEL_CONTEXT_PROTOCOL_VERSION,
-} from "./agent-context-schema.js";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "./agent-context-schema.js";
+import { HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -106,7 +104,7 @@ export function createModelContext({
 
 export function attachModelContext(context = {}, modelContext = null) {
   if (!context || typeof context !== "object") return context;
-  context.contextProtocolVersion = HOOK_CONTEXT_PROTOCOL_VERSION;
+  context.contextProtocolVersion = HOOK_PROTOCOL_VERSION;
   context.modelContext = modelContext;
   return context;
 }
@@ -120,7 +118,7 @@ export function resolveAuthoritativeModelContext(context = {}) {
 export function validateHookContextProtocol(context = {}, { point = "" } = {}) {
   const warnings = [];
   const version = Number(context?.contextProtocolVersion);
-  if (version !== HOOK_CONTEXT_PROTOCOL_VERSION) warnings.push(`contextProtocolVersion must equal ${HOOK_CONTEXT_PROTOCOL_VERSION}`);
+  if (version !== HOOK_PROTOCOL_VERSION) warnings.push(`contextProtocolVersion must equal ${HOOK_PROTOCOL_VERSION}`);
   const modelContext = context?.modelContext;
   if (modelContext != null) {
     if (!asObject(modelContext)) warnings.push("modelContext should be object");

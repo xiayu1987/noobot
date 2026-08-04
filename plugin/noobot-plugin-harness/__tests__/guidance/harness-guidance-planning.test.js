@@ -130,7 +130,7 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
     },
   };
 
-  await hookManager.emit("before_llm_call", { messages, agentContext });
+  await hookManager.emit("agent.before_llm_call", { messages, agentContext });
 
   assert.deepEqual(invocations.map((item) => item.purpose), ["summary"]);
   const summaryRelayMessage = messages.find((item = {}) =>
@@ -150,7 +150,7 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
   assert.equal(String(agentContext.payload.harness.planText || "").trim().length > 0, false);
 
   const result = { output: "done" };
-  await hookManager.emit("before_final_output", { agentContext, result });
+  await hookManager.emit("agent.before_final_output", { agentContext, result });
 
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.finalPlanChecklist.length >= 1, true);
   assert.equal(Number(agentContext.payload.harness.lastAcceptanceReport.plan.revisionCount || 0), 0);
@@ -242,7 +242,7 @@ test("planning_revision reuses summary model messages in separate_model flow", a
     },
   };
 
-  await hookManager.emit("before_llm_call", { messages, agentContext });
+  await hookManager.emit("agent.before_llm_call", { messages, agentContext });
 
   assert.deepEqual(invocations.map((item) => item.purpose), ["summary"]);
   assert.equal(invocations.every((item) => item.promptVersion === "v1"), true);
@@ -296,7 +296,7 @@ test("planning_refinement is scheduled independently after revision main-plan ch
     },
   };
 
-  await hookManager.emit("before_llm_call", { messages, agentContext });
+  await hookManager.emit("agent.before_llm_call", { messages, agentContext });
 
   assert.deepEqual(invocations.map((item = {}) => item.purpose), ["summary"]);
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
@@ -340,7 +340,7 @@ test("harness summary without completion marker still triggers planning revision
     },
   };
 
-  await hookManager.emit("before_llm_call", { messages, agentContext });
+  await hookManager.emit("agent.before_llm_call", { messages, agentContext });
 
   assert.deepEqual(invocations.map((item) => item.purpose), ["summary"]);
   assert.equal(
@@ -388,7 +388,7 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     messages: [{ role: "user", content: "继续" }],
     agentContext,
   };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx: firstCtx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: firstCtx, meta });
   assert.equal(
     firstCtx.modelContext.messages.some((msg) => String(msg.content || "").includes("harness-guidance-summary")),
     true,
@@ -399,7 +399,7 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     ai: { content: "已完成：完成初始检查\n小结完成" },
     agentContext,
   };
-  await handler({ capability: "guidance", point: "after_llm_call", ctx: summaryCtx, meta });
+  await handler({ capability: "guidance", point: "agent.after_llm_call", ctx: summaryCtx, meta });
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
   assert.equal(
@@ -411,7 +411,7 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     messages: [{ role: "user", content: "继续执行" }],
     agentContext,
   };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx: secondCtx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: secondCtx, meta });
   assert.equal(
     secondCtx.modelContext.messages.some((msg) => String(msg.content || "").includes("harness-planning-revision")),
     false,
@@ -446,7 +446,7 @@ test("guidance handler inject mode can schedule and capture planning revision wi
     },
     agentContext,
   };
-  await handler({ capability: "guidance", point: "after_llm_call", ctx: revisionCtx, meta });
+  await handler({ capability: "guidance", point: "agent.after_llm_call", ctx: revisionCtx, meta });
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
   assert.equal(

@@ -55,7 +55,7 @@ test("dynamic harness system injections compose before history", async () => {
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -108,7 +108,7 @@ test("dynamic harness system injections compose before history", async () => {
     },
   });
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => `${item.role}:${item.content}`),

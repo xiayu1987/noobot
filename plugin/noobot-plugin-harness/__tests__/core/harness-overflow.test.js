@@ -14,7 +14,7 @@ const LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD = WORKFLOW_PARAMS.guidance.summary.mes
 async function finishGuidanceSummaryRound(guidanceHandler, { messages, agentContext, content = "SUMMARY_DONE" } = {}) {
   await guidanceHandler({
     capability: "guidance",
-    point: "after_llm_call",
+    point: "agent.after_llm_call",
     ctx: {
       messages,
       ai: { content },
@@ -27,7 +27,7 @@ async function finishGuidanceSummaryRound(guidanceHandler, { messages, agentCont
 async function runGuidanceSummaryRound(guidanceHandler, { messages, agentContext, content = "SUMMARY_DONE" } = {}) {
   await guidanceHandler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages, agentContext },
     meta: {},
   });
@@ -57,7 +57,7 @@ test("guidance summary capture leaves tool-call pair unchanged until checkpoint 
 
   await guidanceHandler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages, agentContext },
     meta: {},
   });
@@ -106,7 +106,7 @@ test("overflow after harness summary schedules the harness summary flow again wi
   await runGuidanceSummaryRound(guidanceHandler, { messages, agentContext });
   await guidanceHandler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages, agentContext },
     meta: {},
   });

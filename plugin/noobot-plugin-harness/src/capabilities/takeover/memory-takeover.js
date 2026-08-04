@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { isMessageInjected } from "./shared.js";
 import {
   appendMessage,
@@ -111,7 +112,7 @@ export function applyMemoryTakeover(point = "", ctx = {}, takeover = {}) {
   if (!takeover || typeof takeover !== "object") return false;
   if (takeover.enabled === false) return false;
   let changed = false;
-  if (point === "before_state_commit") {
+  if (point === HOOK_POINT.AGENT.BEFORE_STATE_COMMIT) {
     changed = applyMemoryTakeoverForStateCommit(ctx, takeover) || changed;
   }
   changed = applyMemoryTakeoverForModelContext(ctx, takeover) || changed;

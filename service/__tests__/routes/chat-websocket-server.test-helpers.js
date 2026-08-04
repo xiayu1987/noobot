@@ -45,7 +45,7 @@ export function createProtocolTestCommand(payload = {}) {
     return createTurnStopCommand({
       commandId: resolvedCommandId || `stop:${turnScopeId}`,
       identity,
-      concurrency: { expectedTurnRevision: payload?.expectedRevision },
+      concurrency: { expectedTurnRevision: payload?.expectedRevision ?? 1 },
       stop: { executionId: payload?.executionId, partialAssistant: payload?.partialAssistant },
     });
   }

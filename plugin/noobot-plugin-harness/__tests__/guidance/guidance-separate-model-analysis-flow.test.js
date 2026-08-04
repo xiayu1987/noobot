@@ -61,7 +61,7 @@ test("separate_model analysis uses aligned agent context then user request and u
     },
     agentContext,
   };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(capturedPayload?.purpose, "guidance");
   assert.equal(capturedPayload?.pluginFlow, "analysis");
@@ -132,19 +132,19 @@ test("separate_model skips analysis when trailing assistant tool call has conten
     },
   };
 
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(invocations.length, 0);
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
 
   appendMessage(ctx, { role: "tool", content: "读取完成", tool_call_id: "call-1" }, { block: "incremental" });
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(invocations.length, 0);
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
 
   ctx.modelContext.messages[0].content = "";
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(invocations.length, 1);
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);
@@ -176,7 +176,7 @@ test("separate_model skips analysis for LangChain AIMessage tool call with conte
     },
   };
 
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(invocations.length, 0);
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
@@ -201,7 +201,7 @@ test("separate_model guidance pending triggers guidance invoker without analysis
   };
 
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.deepEqual(invocations.map((item = {}) => item.purpose), ["guidance"]);
   assert.equal(invocations[0]?.pluginFlow, undefined);

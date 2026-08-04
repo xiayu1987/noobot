@@ -67,7 +67,7 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
     ],
     agentContext,
   };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
   assert.equal(markedCalled, 0);
   assert.equal(ctx.modelContext.messageBlocks.incremental[0].summarized, undefined);
   assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, undefined);
@@ -107,7 +107,7 @@ test("separate_model summary request includes previous summary after complete pl
   };
 
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   const checklistIndex = capturedMessages.findIndex((item = {}) =>
     String(item?.content || "").startsWith("<!-- harness-plan-checklist-context -->"),
@@ -180,7 +180,7 @@ test("separate_model summary request extracts previous summary relay into standa
     ],
     agentContext,
   };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   const checklistIndex = capturedMessages.findIndex((item = {}) =>
     String(item?.content || "").startsWith("<!-- harness-plan-checklist-context -->"),
@@ -217,7 +217,7 @@ test("separate_model summary no longer auto-triggers revision", async () => {
 
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
     meta,
   });

@@ -3,396 +3,97 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 
+import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import {
-  createAgentHookManager,
-  runAgentRuntimeHook,
   resolveRuntimeHookManager,
+  runAgentRuntimeHook,
   withHookRuntimeMeta,
 } from "../../../src/extensions/hooks/index.js";
 
-function sleep(ms = 0) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-test("hook manager runs hooks by priority (high -> low)", async () => {
-  const manager = createAgentHookManager();
-  const order = [];
-
-  manager.on("p", async () => order.push("low"), { priority: 1 });
-  manager.on("p", async () => order.push("high"), { priority: 10 });
-
-  const result = await manager.emit("p", {});
-  assert.deepEqual(order, ["high", "low"]);
-  assert.equal(result.errors.length, 0);
-  assert.equal(result.results.length, 2);
+test("agent adapter resolves only the canonical hookManager field", () => {
+  const hookManager = createHookManager();
+  assert.equal(resolveRuntimeHookManager({ hookManager }), hookManager);
+  assert.equal(resolveRuntimeHookManager({ hooks: hookManager }), null);
 });
 
-test("hook manager once hook only runs once", async () => {
-  const manager = createAgentHookManager();
-  let count = 0;
-
-  manager.once("once_point", async () => {
-    count += 1;
-  });
-
-  await manager.emit("once_point", {});
-  await manager.emit("once_point", {});
-
-  assert.equal(count, 1);
-  assert.equal(manager.list("once_point").length, 0);
-});
-
-test("hook manager off/remove works (including disposer)", async () => {
-  const manager = createAgentHookManager();
-  let count = 0;
-
-  const dispose = manager.on(
-    "off_point",
-    async () => {
-      count += 1;
-    },
-    { id: "hook_1" },
-  );
-  const removedById = manager.off("off_point", "hook_1");
-  assert.equal(removedById, true);
-
-  await manager.emit("off_point", {});
-  assert.equal(count, 0);
-
-  const dispose2 = manager.on("off_point", async () => {
-    count += 1;
-  });
-  dispose2();
-  await manager.emit("off_point", {});
-  assert.equal(count, 0);
-
-  dispose();
-});
-
-test("hook manager timeout returns hook error and calls onError", async () => {
-  const errors = [];
-  const manager = createAgentHookManager({
-    defaultTimeoutMs: 20,
-    onError: (payload = {}) => errors.push(payload),
-  });
-
-  manager.on("timeout_point", async () => {
-    await sleep(60);
-  });
-
-  const result = await manager.emit("timeout_point", {});
-  assert.equal(result.errors.length, 1);
-  assert.equal(result.results[0]?.ok, false);
-  assert.equal(result.results[0]?.error?.code, "HOOK_TIMEOUT");
-  assert.equal(errors.length, 1);
-  assert.equal(errors[0]?.error?.code, "HOOK_TIMEOUT");
-});
-
-test("hook manager supports parallel emit", async () => {
-  const manager = createAgentHookManager();
-  const order = [];
-
-  manager.on("parallel_point", async () => {
-    await sleep(50);
-    order.push("slow");
-  });
-  manager.on("parallel_point", async () => {
-    await sleep(10);
-    order.push("fast");
-  });
-
-  const startedAt = Date.now();
-  const result = await manager.emit("parallel_point", {}, { parallel: true });
-  const elapsed = Date.now() - startedAt;
-
-  assert.equal(result.errors.length, 0);
-  assert.equal(result.results.length, 2);
-  assert.ok(elapsed < 90);
-  assert.deepEqual(order, ["fast", "slow"]);
-});
-
-test("runAgentRuntimeHook resolves manager, executes, and emits hook_summary by default", async () => {
-  const manager = createAgentHookManager();
+test("agent adapter executes protocol hooks and emits a summary", async () => {
+  const hookManager = createHookManager();
   const events = [];
-  const eventListener = {
-    onEvent(evt = {}) {
-      events.push(evt);
-    },
-  };
-  const runtime = {
-    hooks: {
-      manager,
-    },
-  };
-  let called = false;
-  manager.on("runtime_point", async (ctx = {}) => {
-    called = true;
-    ctx.mutated = true;
+  const context = {};
+  hookManager.on(HOOK_POINT.AGENT.AFTER_TURN, (hookContext) => {
+    hookContext.observed = true;
+  }, { id: "test.agent-adapter.summary" });
+
+  const result = await runAgentRuntimeHook({
+    runtime: { hookManager },
+    point: HOOK_POINT.AGENT.AFTER_TURN,
+    context,
+    eventListener: { onEvent: (event) => events.push(event) },
   });
 
-  const resolved = resolveRuntimeHookManager(runtime);
-  assert.equal(resolved, manager);
+  assert.equal(result.executed, true);
+  assert.equal(result.failures.length, 0);
+  assert.equal(context.observed, true);
+  assert.equal(events[0]?.event, "hook_summary");
+  assert.equal(events[0]?.data?.point, HOOK_POINT.AGENT.AFTER_TURN);
+});
 
+test("agent adapter returns a canonical empty result when no manager exists", async () => {
   const context = { value: 1 };
   const result = await runAgentRuntimeHook({
-    runtime,
-    point: "runtime_point",
+    runtime: {},
+    point: HOOK_POINT.AGENT.AFTER_TURN,
     context,
-    eventListener,
-  });
-
-  assert.equal(result.executed, true);
-  assert.equal(called, true);
-  assert.equal(context.mutated, true);
-  assert.equal(result.errors.length, 0);
-  assert.equal(events.some((evt) => evt?.event === "hook_start"), false);
-  assert.equal(events.some((evt) => evt?.event === "hook_end"), false);
-  assert.equal(events[0]?.event, "hook_summary");
-  assert.equal(events[0]?.data?.point, "runtime_point");
-  assert.equal(events[0]?.data?.status, "ok");
-  assert.equal(events[0]?.data?.errorCount, 0);
-  assert.equal(typeof events[0]?.data?.durationMs, "number");
-});
-
-test("runAgentRuntimeHook keeps hook_start/hook_end when verbose runtime events are enabled", async () => {
-  const manager = createAgentHookManager();
-  const events = [];
-  const eventListener = {
-    onEvent(evt = {}) {
-      events.push(evt);
-    },
-  };
-  const runtime = { hookManager: manager, hookRuntimeEventsMode: "verbose" };
-  manager.on("runtime_point", async () => {});
-
-  await runAgentRuntimeHook({
-    runtime,
-    point: "runtime_point",
-    context: {},
-    eventListener,
-  });
-
-  assert.equal(events[0]?.event, "hook_start");
-  assert.equal(events[0]?.data?.point, "runtime_point");
-  assert.equal(events[1]?.event, "hook_end");
-  assert.equal(events[1]?.data?.point, "runtime_point");
-  assert.equal(events[1]?.data?.status, "ok");
-  assert.equal(events[1]?.data?.errorCount, 0);
-  assert.equal(typeof events[1]?.data?.durationMs, "number");
-});
-
-test("runAgentRuntimeHook exposes hook client emitter and skips routine plugin progress by default", async () => {
-  const manager = createAgentHookManager();
-  const events = [];
-  const eventListener = {
-    onEvent(evt = {}) {
-      events.push(evt);
-    },
-  };
-  const runtime = { hookManager: manager };
-  manager.on("runtime_point", async (ctx = {}) => {
-    assert.equal(typeof ctx?.emitHookClientEvent, "function");
-    assert.equal(Object.hasOwn(ctx, "hookClientChannel"), false);
-    ctx.emitHookClientEvent("plugin_step", {
-      plugin: "agentPlugin",
-      point: "before_turn",
-      stage: "trace_done",
-      status: "ok",
-      message: "routine progress",
-    });
-  });
-
-  await runAgentRuntimeHook({
-    runtime,
-    point: "runtime_point",
-    context: {},
-    eventListener,
-  });
-
-  assert.equal(events.some((evt) => evt?.event === "hook_plugin_progress"), false);
-});
-
-test("runAgentRuntimeHook forwards harness capability response through injected client emitter", async () => {
-  const manager = createAgentHookManager();
-  const events = [];
-  const eventListener = {
-    onEvent(evt = {}) {
-      events.push(evt);
-    },
-  };
-  const runtime = { hookManager: manager };
-  manager.on("runtime_point", async (ctx = {}) => {
-    ctx.emitHookClientEvent("plugin_capability_response", {
-      purpose: "guidance",
-      pluginFlow: "analysis",
-      chain: "auxiliary",
-      output: "guidance result",
-      text: "Plugin 模型返回 / guidance\nguidance result",
-      runtime: { secret: "hidden" },
-      agentContext: { secret: "hidden" },
-      extraUnsafe: "hidden",
-    });
-  });
-
-  await runAgentRuntimeHook({
-    runtime,
-    point: "runtime_point",
-    context: {},
-    eventListener,
-  });
-
-  const harnessEvent = events.find((evt) => evt?.event === "plugin_capability_response");
-  assert.ok(harnessEvent);
-  assert.equal(harnessEvent?.data?.purpose, "guidance");
-  assert.equal(harnessEvent?.data?.pluginFlow, "analysis");
-  assert.equal(harnessEvent?.data?.chain, "auxiliary");
-  assert.equal(harnessEvent?.data?.output, "guidance result");
-  assert.equal(Object.hasOwn(harnessEvent?.data || {}, "runtime"), false);
-  assert.equal(Object.hasOwn(harnessEvent?.data || {}, "agentContext"), false);
-  assert.equal(Object.hasOwn(harnessEvent?.data || {}, "extraUnsafe"), false);
-  assert.equal(events.some((evt) => evt?.event === "hook_plugin_progress"), false);
-});
-
-test("runAgentRuntimeHook records important plugin progress and sanitizes forwarded payload", async () => {
-  const manager = createAgentHookManager();
-  const events = [];
-  const eventListener = {
-    onEvent(evt = {}) {
-      events.push(evt);
-    },
-  };
-  const runtime = { hookManager: manager };
-  manager.on("runtime_point", async (ctx = {}) => {
-    assert.equal(typeof ctx?.emitHookClientEvent, "function");
-    assert.equal(Object.hasOwn(ctx, "hookClientChannel"), false);
-    ctx.emitHookClientEvent("plugin_failed", {
-      plugin: "agentPlugin",
-      point: "before_turn",
-      stage: "trace_done",
-      fsmState: "failed",
-      fsmRejected: true,
-      message: "x".repeat(320),
-      agent: { shouldBeHidden: true },
-      agentContext: { shouldBeHidden: true },
-      nested: { runtime: { shouldBeHidden: true }, pass: 1 },
-      customFieldShouldDrop: "x",
-    });
-  });
-
-  await runAgentRuntimeHook({
-    runtime,
-    point: "runtime_point",
-    context: {},
-    eventListener,
-  });
-
-  const pluginEvent = events.find((evt) => evt?.event === "hook_plugin_progress");
-  assert.ok(pluginEvent);
-  assert.equal(pluginEvent?.data?.event, "plugin_failed");
-  assert.equal(pluginEvent?.data?.data?.plugin, "agentPlugin");
-  assert.equal(pluginEvent?.data?.data?.fsmState, "failed");
-  assert.equal(pluginEvent?.data?.data?.fsmRejected, true);
-  assert.ok(pluginEvent?.data?.data?.message.length < 260);
-  assert.equal("agent" in (pluginEvent?.data?.data || {}), false);
-  assert.equal("agentContext" in (pluginEvent?.data?.data || {}), false);
-  assert.equal("nested" in (pluginEvent?.data?.data || {}), false);
-  assert.equal("customFieldShouldDrop" in (pluginEvent?.data?.data || {}), false);
-});
-
-test("runAgentRuntimeHook can record routine plugin progress when verbose trace is enabled", async () => {
-  const manager = createAgentHookManager();
-  const events = [];
-  const eventListener = {
-    onEvent(evt = {}) {
-      events.push(evt);
-    },
-  };
-  const runtime = { hookManager: manager, hookPluginProgressTrace: true };
-  manager.on("runtime_point", async (ctx = {}) => {
-    ctx.emitHookClientEvent("plugin_step", {
-      plugin: "agentPlugin",
-      point: "before_turn",
-      stage: "trace_done",
-      status: "ok",
-    });
-  });
-
-  await runAgentRuntimeHook({
-    runtime,
-    point: "runtime_point",
-    context: {},
-    eventListener,
-  });
-
-  const pluginEvent = events.find((evt) => evt?.event === "hook_plugin_progress");
-  assert.ok(pluginEvent);
-  assert.equal(pluginEvent?.data?.event, "plugin_step");
-  assert.equal(pluginEvent?.data?.data?.status, "ok");
-});
-
-test("runAgentRuntimeHook returns executed=false when no manager exists", async () => {
-  const runtime = {};
-  const result = await runAgentRuntimeHook({
-    runtime,
-    point: "missing_manager_point",
-    context: { a: 1 },
   });
   assert.equal(result.executed, false);
-  assert.equal(result.errors.length, 0);
+  assert.equal(result.context, context);
+  assert.deepEqual(result.outcomes, []);
+  assert.deepEqual(result.failures, []);
 });
 
-test("runAgentRuntimeHook handles runner throw and emits hook_error", async () => {
+test("agent adapter exposes the sanitized plugin event capability", async () => {
+  const hookManager = createHookManager();
   const events = [];
-  const eventListener = {
-    onEvent(evt = {}) {
-      events.push(evt);
-    },
-  };
-  const runtime = {
-    hookManager: {
-      async emit() {
-        throw new Error("runner exploded");
-      },
-    },
-  };
+  hookManager.on(HOOK_POINT.AGENT.AFTER_TURN, (context) => {
+    context.emitHookClientEvent("plugin_failed", {
+      plugin: "harness",
+      status: "failed",
+      message: "failed",
+      agentContext: { secret: true },
+    });
+  }, { id: "test.agent-adapter.client-event" });
 
-  const result = await runAgentRuntimeHook({
-    runtime,
-    point: "explode_point",
-    context: { x: 1 },
-    eventListener,
+  await runAgentRuntimeHook({
+    runtime: { hookManager },
+    point: HOOK_POINT.AGENT.AFTER_TURN,
+    context: {},
+    eventListener: { onEvent: (event) => events.push(event) },
   });
 
-  assert.equal(result.executed, true);
-  assert.equal(result.errors.length, 1);
-  assert.equal(result.errors[0]?.message, "runner exploded");
-  assert.equal(events.some((evt) => evt?.event === "hook_start"), false);
-  assert.equal(events[0]?.event, "hook_error");
+  const pluginEvent = events.find((event) => event?.event === "hook_plugin_progress");
+  assert.equal(pluginEvent?.data?.data?.plugin, "harness");
+  assert.equal(Object.hasOwn(pluginEvent?.data?.data || {}, "agentContext"), false);
 });
 
-test("withHookRuntimeMeta merges runtime identifiers into context", () => {
-  const context = withHookRuntimeMeta(
-    {
-      userId: "u_fallback",
-      systemRuntime: {
-        userId: "u1",
-        sessionId: "s1",
-        parentSessionId: "p1",
-        dialogProcessId: "d1",
-        caller: "user",
-      },
+test("withHookRuntimeMeta projects the canonical runtime identity", () => {
+  const context = withHookRuntimeMeta({
+    systemRuntime: {
+      userId: "u1",
+      sessionId: "s1",
+      parentSessionId: "p1",
+      dialogProcessId: "d1",
+      caller: "user",
     },
-    { phase: "x" },
-  );
+  }, { phase: "turn" });
   assert.deepEqual(context, {
     userId: "u1",
     sessionId: "s1",
     parentSessionId: "p1",
     dialogProcessId: "d1",
     caller: "user",
-    phase: "x",
+    phase: "turn",
   });
 });

@@ -38,10 +38,10 @@ test("guidance summary threshold by turns is independent from plan update attemp
     counters: { summaryTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1, planUpdateAttempts: 0 },
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
-  await guidanceHandler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+  await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_turn_threshold"), true);
   agentContext.payload.harness.state.pending.summary = false;
-  await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
+  await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
   const planningLogs = agentContext.payload.harness.logs.planning;
@@ -63,10 +63,10 @@ test("guidance summary threshold by chars is independent from plan update attemp
     messages: [{ role: "user", content: "x".repeat(LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD + 1) }],
     agentContext,
   };
-  await guidanceHandler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+  await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.logs.guidance.some((item = {}) => item?.event === "summary_scheduled_by_char_threshold"), true);
   agentContext.payload.harness.state.pending.summary = false;
-  await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
+  await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 0);
 });
@@ -85,7 +85,7 @@ test("guidance schedules summary after a single model tool burst reaches summary
 
   await planningHandler({
     capability: "planning",
-    point: "after_tool_calls",
+    point: "agent.after_tool_calls",
     ctx: {
       messages: [{ role: "user", content: "继续任务" }],
       calls,
@@ -97,7 +97,7 @@ test("guidance schedules summary after a single model tool burst reaches summary
 
   await guidanceHandler({
     capability: "guidance",
-    point: "after_tool_calls",
+    point: "agent.after_tool_calls",
     ctx: {
       messages: [{ role: "user", content: "继续任务" }],
       calls,
@@ -129,7 +129,7 @@ test("guidance schedules summary after a single model tool burst reaches summary
   };
   await guidanceHandler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: nextCtx,
     meta: { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } },
   });
@@ -157,7 +157,7 @@ test("planning does not schedule tool-burst summary by default", async () => {
 
   await planningHandler({
     capability: "planning",
-    point: "after_tool_calls",
+    point: "agent.after_tool_calls",
     ctx: {
       messages: [{ role: "user", content: "继续任务" }],
       calls,
@@ -189,7 +189,7 @@ test("planning does not schedule tool-burst summary when summary is already pend
 
   await planningHandler({
     capability: "planning",
-    point: "after_tool_calls",
+    point: "agent.after_tool_calls",
     ctx: {
       messages: [{ role: "user", content: "继续任务" }],
       calls: burstCalls,
@@ -209,7 +209,7 @@ test("planning does not schedule tool-burst summary when summary is already pend
   });
   await planningHandler({
     capability: "planning",
-    point: "after_tool_calls",
+    point: "agent.after_tool_calls",
     ctx: {
       messages: [{ role: "user", content: "继续任务" }],
       calls: [

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { appendReviewReport, buildReviewReport } from "./report-builder.js";
 import { attachReviewReportToFinalOutput } from "./output-finalizer.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
@@ -17,7 +18,7 @@ import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
 const REVIEW_DECISION = WORKFLOW_PARAMS.review.decisions;
 const REVIEW_HOOKS = new Set(
-  Array.isArray(WORKFLOW_PARAMS.review?.hooks) ? WORKFLOW_PARAMS.review.hooks : ["before_final_output", "on_error", "on_abort"],
+  Array.isArray(WORKFLOW_PARAMS.review?.hooks) ? WORKFLOW_PARAMS.review.hooks : [HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, HOOK_POINT.AGENT.ON_ERROR, HOOK_POINT.AGENT.ON_ABORT],
 );
 const REVIEW_REASON_LABEL_KEY = Object.freeze({
   [REVIEW_DECISION.reason.hookReview]: "reviewReasonHookReview",
@@ -41,7 +42,7 @@ export function createReviewHandler() {
     const reviewOptions = meta?.harness?.review && typeof meta.harness.review === "object"
       ? meta.harness.review
       : {};
-    const attachToFinalOutput = hook === "before_final_output" && reviewOptions.attachToFinalOutput === true;
+    const attachToFinalOutput = hook === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && reviewOptions.attachToFinalOutput === true;
     const lifecycle = await runWorkflowLifecycle(ctx, {
       domain: CAPABILITY_DOMAIN.REVIEW,
       point: hook,

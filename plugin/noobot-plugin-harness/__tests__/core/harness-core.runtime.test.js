@@ -14,7 +14,6 @@ import {
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -46,7 +45,7 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
     payload: {},
   };
 
-  await hookManager.emit("after_context_build", createTestHookContext({
+  await hookManager.emit("agent.after_context_build", createTestHookContext({
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp1",
@@ -56,7 +55,7 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
   }, {
     messageBlocks: { system: [], history: [{ role: "user", content: "hi" }], incremental: [] },
   }));
-  await hookManager.emit("after_turn", createTestHookContext({
+  await hookManager.emit("agent.after_turn", createTestHookContext({
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp1",
@@ -89,7 +88,7 @@ test("harness plugin emits hook summary via client emitter by default", async ()
     { trace: false, promptPolicy: false },
   );
 
-  await hookManager.emit("before_turn", {
+  await hookManager.emit("agent.before_turn", {
     userId: "u-channel",
     sessionId: "s-channel",
     dialogProcessId: "dp-channel",
@@ -103,7 +102,7 @@ test("harness plugin emits hook summary via client emitter by default", async ()
   assert.equal(channelEvents.some((item) => item.event === "harness.hook_end"), false);
   const summary = channelEvents.find((item) => item.event === "harness.hook_summary");
   assert.ok(summary);
-  assert.equal(summary.data?.point, "before_turn");
+  assert.equal(summary.data?.point, "agent.before_turn");
   assert.equal(summary.data?.status, "ok");
   assert.equal(typeof summary.data?.durationMs, "number");
   assert.equal(summary.data?.fsmRejected, false);
@@ -117,7 +116,7 @@ test("harness plugin keeps hook start/end via client emitter in verbose mode", a
     { trace: false, promptPolicy: false, hookRuntimeEventsMode: "verbose" },
   );
 
-  await hookManager.emit("before_turn", {
+  await hookManager.emit("agent.before_turn", {
     userId: "u-channel",
     sessionId: "s-channel",
     dialogProcessId: "dp-channel",
@@ -130,7 +129,7 @@ test("harness plugin keeps hook start/end via client emitter in verbose mode", a
   assert.equal(channelEvents.some((item) => item.event === "harness.capability_runtime_done"), true);
   const end = channelEvents.find((item) => item.event === "harness.hook_end");
   assert.ok(end);
-  assert.equal(end.data?.point, "before_turn");
+  assert.equal(end.data?.point, "agent.before_turn");
   assert.equal(end.data?.status, "ok");
   assert.equal(typeof end.data?.durationMs, "number");
 });
@@ -155,7 +154,7 @@ test("harness plugin deletes related run records on after_session_delete", async
 
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { basePath, trace: false, promptPolicy: false });
-  await hookManager.emit("after_session_delete", {
+  await hookManager.emit("service.after_session_delete", {
     userId: "u-cleanup",
     sessionId: "s-delete",
     deletedSessionIds: ["s-delete"],
@@ -202,7 +201,7 @@ test("harness plugin deletes workflow child run records by manifest.parentSessio
 
   const hookManager = createAgentHookManager();
   registerNoobotPlugin({ hookManager }, { basePath, trace: false, promptPolicy: false });
-  await hookManager.emit("after_session_delete", {
+  await hookManager.emit("service.after_session_delete", {
     userId: "u-cleanup-parent",
     sessionId: "root-session-delete",
     deletedSessionIds: ["root-session-delete"],

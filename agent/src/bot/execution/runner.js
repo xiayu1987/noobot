@@ -8,10 +8,10 @@ import { emitEvent } from "../../events/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { isAbortError, isUserStopAbort, resolveAbortStopType } from "../../shared/utils/error-utils.js";
 import {
-  BOT_HOOK_POINTS,
   runBotRuntimeHook,
   withBotHookRuntimeMeta,
 } from "../hook/index.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import {
   BOT_MANAGE_LOG_EVENT,
   BOT_MANAGE_LOG_SOURCE,
@@ -291,14 +291,11 @@ export class SessionExecutionRunner {
       }
       const botHookRuntime = {
         eventListener: runtimeEventListener,
+        abortSignal,
         botHookManager:
           resolvedRunConfig?.botHookManager &&
           typeof resolvedRunConfig.botHookManager === "object"
             ? resolvedRunConfig.botHookManager
-            : null,
-        botHooks:
-          resolvedRunConfig?.botHooks && typeof resolvedRunConfig.botHooks === "object"
-            ? resolvedRunConfig.botHooks
             : null,
       };
       const botHookBase = withBotHookRuntimeMeta(
@@ -323,7 +320,7 @@ export class SessionExecutionRunner {
       );
       await runBotRuntimeHook({
         runtime: botHookRuntime,
-        point: BOT_HOOK_POINTS.BEFORE_SESSION_RUN,
+        point: HOOK_POINT.BOT.BEFORE_SESSION_RUN,
         context: {
           ...botHookBase,
           message: normalizedMessage,
@@ -743,7 +740,7 @@ export class SessionExecutionRunner {
       });
       await runBotRuntimeHook({
         runtime: botHookRuntime,
-        point: BOT_HOOK_POINTS.AFTER_SESSION_RUN,
+        point: HOOK_POINT.BOT.AFTER_SESSION_RUN,
         context: {
           ...botHookBase,
           message: normalizedMessage,
@@ -802,12 +799,9 @@ export class SessionExecutionRunner {
             typeof resolvedRunConfig.botHookManager === "object"
               ? resolvedRunConfig.botHookManager
               : null,
-          botHooks:
-            resolvedRunConfig?.botHooks && typeof resolvedRunConfig.botHooks === "object"
-              ? resolvedRunConfig.botHooks
-              : null,
+          abortSignal: resolvedRunConfig?.abortSignal || null,
         },
-        point: BOT_HOOK_POINTS.SESSION_RUN_ERROR,
+        point: HOOK_POINT.BOT.SESSION_RUN_ERROR,
         context: withBotHookRuntimeMeta(
           {
             userId,

@@ -3,6 +3,7 @@
   "version": "4.1.5",
   "private": true,
   "workspaces": [
+    "hook-protocol",
     "agent-transport-protocol",
     "event-protocol",
     "authoritative-state",

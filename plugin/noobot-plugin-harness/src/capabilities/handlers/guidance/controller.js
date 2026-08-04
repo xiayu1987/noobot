@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
@@ -351,7 +352,7 @@ async function executeGuidanceWorkflowAction({
 export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
     let changed = false;
-    if (point === "before_llm_call") {
+    if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
       const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) === true;
       const summaryScheduleChanged = maybeScheduleGuidanceSummary(ctx) === true;
       const scheduleChanged = maybeScheduleGuidanceAnalysis(ctx, meta) === true;
@@ -361,7 +362,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
       const mode = resolveWorkflowMode(meta);
       const lifecycle = await runWorkflowLifecycle(ctx, {
         domain: CAPABILITY_DOMAIN.GUIDANCE,
-        point: "before_llm_call",
+        point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
         mode,
         resolveDecision: () => ({
           chosenAction: decision.chosenAction,
@@ -391,18 +392,18 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
       });
       changed = lifecycle.execution.changed || changed;
     }
-    if (point === "after_tool_call" && shouldProcessPrimaryToolHooks(ctx)) {
+    if (point === HOOK_POINT.AGENT.AFTER_TOOL_CALL && shouldProcessPrimaryToolHooks(ctx)) {
       changed = markToolSignals(ctx) || changed;
       const failed = ctx?.success === false;
       changed = updateFailureCounters(ctx, failed) || changed;
     }
-    if (point === "tool_call_error" && shouldProcessPrimaryToolHooks(ctx)) {
+    if (point === HOOK_POINT.AGENT.TOOL_CALL_ERROR && shouldProcessPrimaryToolHooks(ctx)) {
       changed = updateFailureCounters(ctx, true) || changed;
     }
-    if (point === "after_tool_calls" && shouldProcessPrimaryToolHooks(ctx)) {
+    if (point === HOOK_POINT.AGENT.AFTER_TOOL_CALLS && shouldProcessPrimaryToolHooks(ctx)) {
       changed = maybeScheduleSummaryByToolBurst(ctx, meta) || changed;
     }
-    if (point === "after_llm_call") {
+    if (point === HOOK_POINT.AGENT.AFTER_LLM_CALL) {
       const holder = ensureHarnessBucket(ctx);
       if (holder?.state?.flags?.guidanceSummaryMarkPending === true) {
         holder.state.flags.guidanceSummaryMarkPending = false;

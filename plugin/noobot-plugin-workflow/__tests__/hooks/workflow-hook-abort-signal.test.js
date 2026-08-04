@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import {
   createMockBotHookManager,
@@ -22,7 +23,6 @@ import {
   callsByNodeName,
   workflowTurn,
   createRegisterWorkflowHooks,
-  WORKFLOW_BOT_HOOK_POINTS,
   WORKFLOW_PLUGIN_DEFAULTS,
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,
@@ -163,4 +163,3 @@ test("workflow waits for every parallel node sub-session to stop before planner 
   assert.equal(startedNodes, 2);
   assert.deepEqual(new Set(settledNodes), new Set(["节点A", "节点B"]));
 });
-

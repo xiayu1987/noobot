@@ -9,6 +9,7 @@ import {
   AGENT_COMMAND,
   createInteractionResponseCommand,
   createTurnRunCommand,
+  createTurnStopCommand,
   parseAgentCommand,
 } from "../src/index.mjs";
 
@@ -76,6 +77,26 @@ test("run concurrency separates turn revision from session version", () => {
   delete command.concurrency.expectedRevision;
   command.concurrency.expectedTurnRevision = 7;
   assert.throws(() => parseAgentCommand(command), /run_turn_revision_must_be_zero/);
+});
+
+test("turn stop requires the current positive authoritative turn revision", () => {
+  const command = createTurnStopCommand({
+    commandId: "stop:turn-1",
+    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    concurrency: { expectedTurnRevision: 2 },
+    stop: {},
+  });
+  assert.equal(parseAgentCommand(command), command);
+  assert.equal(command.concurrency.expectedTurnRevision, 2);
+
+  assert.throws(() => createTurnStopCommand({
+    commandId: "stop:turn-1",
+    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    concurrency: {},
+    stop: {},
+  }), /invalid_expected_turn_revision/);
+  command.concurrency.expectedTurnRevision = 0;
+  assert.throws(() => parseAgentCommand(command), /invalid_expected_turn_revision/);
 });
 
 test("protocol rejects legacy and unknown top-level fields", () => {

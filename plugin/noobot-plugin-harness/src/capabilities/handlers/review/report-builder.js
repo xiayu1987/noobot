@@ -5,17 +5,18 @@
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { CAPABILITY_DOMAIN, appendCapabilityLog, ensureHarnessBucket } from "./deps.js";
-import { HARNESS_HOOK_POINTS, HARNESS_RUN_STATUS } from "../../../core/constants.js";
+import { HARNESS_RUN_STATUS } from "../../../core/constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { collectRuleCodes } from "../shared/rule-table-utils.js";
 import { nowIsoTimestamp } from "../shared/report-utils.js";
 
 const REVIEW_EVENTS = WORKFLOW_PARAMS.logging.events.review;
 
 const REVIEW_ERROR_POINTS = new Set([
-  HARNESS_HOOK_POINTS.ON_ERROR,
-  HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
-  HARNESS_HOOK_POINTS.LLM_CALL_ERROR,
-  HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
+  HOOK_POINT.AGENT.ON_ERROR,
+  HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
+  HOOK_POINT.AGENT.LLM_CALL_ERROR,
+  HOOK_POINT.AGENT.TOOL_CALL_ERROR,
 ]);
 
 const REVIEW_ISSUE_RULES = Object.freeze([
@@ -52,7 +53,7 @@ function resolveReviewStatus(point = "", ctx = {}) {
   const explicitStatus = String(ctx?.status || "").trim();
   if (explicitStatus) return explicitStatus;
   if (REVIEW_ERROR_POINTS.has(point)) return HARNESS_RUN_STATUS.ERROR;
-  if (point === HARNESS_HOOK_POINTS.ON_ABORT) return HARNESS_RUN_STATUS.ABORT;
+  if (point === HOOK_POINT.AGENT.ON_ABORT) return HARNESS_RUN_STATUS.ABORT;
   return HARNESS_RUN_STATUS.REVIEWED;
 }
 

@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import {
   createMockBotHookManager,
@@ -23,7 +24,6 @@ import {
   callsByNodeName,
   workflowTurn,
   createRegisterWorkflowHooks,
-  WORKFLOW_BOT_HOOK_POINTS,
   WORKFLOW_PLUGIN_DEFAULTS,
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,

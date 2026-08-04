@@ -13,7 +13,7 @@ import {
   executeToolCall as executeToolCallWithoutTurn,
   executeToolCallInTurn,
 } from "../../../src/runtime/tool-execution/tool-runner.js";
-import { createAgentHookManager, AGENT_HOOK_POINTS } from "../../../src/extensions/hooks/index.js";
+import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 
 function executeToolCall(options = {}) {
   if (!options.eventListener) return executeToolCallWithoutTurn(options);
@@ -295,15 +295,15 @@ test("executeToolCall redacts sensitive fields from recoverable error details", 
 });
 
 test("executeToolCall hook payload includes normalized runtime meta", async () => {
-  const hookManager = createAgentHookManager();
+  const hookManager = createHookManager();
   const starts = [];
   const ends = [];
-  hookManager.on(AGENT_HOOK_POINTS.BEFORE_TOOL_CALL, async (ctx = {}) => {
+  hookManager.on(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, async (ctx = {}) => {
     starts.push(ctx);
-  });
-  hookManager.on(AGENT_HOOK_POINTS.AFTER_TOOL_CALL, async (ctx = {}) => {
+  }, { id: "test.tool-call.before" });
+  hookManager.on(HOOK_POINT.AGENT.AFTER_TOOL_CALL, async (ctx = {}) => {
     ends.push(ctx);
-  });
+  }, { id: "test.tool-call.after" });
 
   const tool = {
     invoke: async () => ({ ok: true }),

@@ -7,7 +7,8 @@ import { ToolMessage } from "@langchain/core/messages";
 import { appendAttachmentMetasToRuntimeAndTurn } from "../../artifacts/index.js";
 import { emitEvent } from "../../events/index.js";
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
-import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
@@ -198,8 +199,8 @@ export function createStateCommitter({
       assistantMessage.additional_kwargs.noobotMessageId = canonicalMessageUid;
       await runAgentRuntimeHook({
         runtime,
-        point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
-        context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, runtime, {
+        point: HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
+        context: buildHookContext(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "assistant_message",
           status: "start",
@@ -216,8 +217,8 @@ export function createStateCommitter({
       await runtime?.persistCurrentTurnMessages?.();
       await runAgentRuntimeHook({
         runtime,
-        point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,
-        context: buildHookContext(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, runtime, {
+        point: HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
+        context: buildHookContext(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "assistant_message",
           status: "success",
@@ -254,8 +255,8 @@ export function createStateCommitter({
       }
       await runAgentRuntimeHook({
         runtime,
-        point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
-        context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, runtime, {
+        point: HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
+        context: buildHookContext(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "tool_result",
           status: "start",
@@ -288,8 +289,8 @@ export function createStateCommitter({
       await runtime?.persistCurrentTurnMessages?.();
       await runAgentRuntimeHook({
         runtime,
-        point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,
-        context: buildHookContext(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, runtime, {
+        point: HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
+        context: buildHookContext(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "tool_result",
           status: "success",
@@ -304,8 +305,8 @@ export function createStateCommitter({
       const ownedAttachments = annotateAttachments(attachments, ownership);
       await runAgentRuntimeHook({
         runtime,
-        point: AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT,
-        context: buildHookContext(AGENT_HOOK_POINTS.BEFORE_STATE_COMMIT, runtime, {
+        point: HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
+        context: buildHookContext(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "attachments",
           status: "start",
@@ -328,8 +329,8 @@ export function createStateCommitter({
       }
       await runAgentRuntimeHook({
         runtime,
-        point: AGENT_HOOK_POINTS.AFTER_STATE_COMMIT,
-        context: buildHookContext(AGENT_HOOK_POINTS.AFTER_STATE_COMMIT, runtime, {
+        point: HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
+        context: buildHookContext(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, runtime, {
           phase: "state_commit",
           commitType: "attachments",
           status: "success",

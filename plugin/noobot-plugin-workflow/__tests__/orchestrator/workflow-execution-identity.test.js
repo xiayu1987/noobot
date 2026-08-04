@@ -80,7 +80,7 @@ test("runWorkflowExecution carries planning identity through events, strategy an
       },
     });
   const result = await runWorkflowExecution({
-    hookManager: { emit: async () => ({ results: [] }) },
+    hookManager: { emit: async () => ({ outcomes: [] }) },
     options,
     ctx,
     semantic,
@@ -155,7 +155,7 @@ test("runWorkflowExecution rejects duplicate planning identities for the same no
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
-      hookManager: { emit: async () => ({ results: [] }) },
+      hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
       ctx,
       semantic,
@@ -174,7 +174,7 @@ test("runWorkflowExecution rejects missing planning identity in new protocol pat
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
-      hookManager: { emit: async () => ({ results: [] }) },
+      hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
       ctx,
       semantic,
@@ -193,7 +193,7 @@ test("runWorkflowExecution rejects incomplete planning identity", async () => {
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
-      hookManager: { emit: async () => ({ results: [] }) },
+      hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
       ctx,
       semantic,
@@ -209,7 +209,7 @@ test("runWorkflowExecution rejects missing workflow and planning identities", as
   const { ctx } = buildCtx();
   await assert.rejects(
     runWorkflowExecution({
-      hookManager: { emit: async () => ({ results: [] }) },
+      hookManager: { emit: async () => ({ outcomes: [] }) },
       options: buildOptions(),
       ctx,
       semantic,

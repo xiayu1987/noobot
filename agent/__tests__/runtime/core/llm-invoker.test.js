@@ -120,7 +120,7 @@ test("invokeLlmWithTransientRetry: persistent transient errors should attempt th
     events.filter((item) => item?.event === "llm_call_retry").length,
     2,
   );
-  const finalErrorEvent = events.find((item) => item?.event === "llm_call_error");
+  const finalErrorEvent = events.find((item) => item?.event === "agent.llm_call_error");
   assert.equal(finalErrorEvent?.data?.attempt, 3);
   assert.equal(finalErrorEvent?.data?.maxAttempts, 3);
 });
@@ -155,7 +155,7 @@ test("invokeLlmWithTransientRetry: if token already streamed, should not retry",
   );
 
   assert.equal(attempts, 1);
-  const errorEvent = events.find((item) => item?.event === "llm_call_error");
+  const errorEvent = events.find((item) => item?.event === "agent.llm_call_error");
   assert.ok(errorEvent, "应记录 llm_call_error");
   assert.equal(errorEvent?.data?.streamedTokens, 1);
 });

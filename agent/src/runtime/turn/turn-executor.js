@@ -18,7 +18,8 @@ import {
   normalizeAiTextContent,
 } from "../llm-invoker.js";
 import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
-import { AGENT_HOOK_POINTS, runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/hook-context";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
@@ -141,7 +142,7 @@ export async function invokeNoToolsTurn({
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
   traceLoopStateContext(runtime, "before_llm_hook_context_input", loopState, { turn, mode: "no_tools" });
-  const beforeLlmHookContext = buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
+  const beforeLlmHookContext = buildHookContext(HOOK_POINT.AGENT.BEFORE_LLM_CALL, runtime, {
     phase: "llm_call",
     turn,
     mode: "no_tools",
@@ -154,7 +155,7 @@ export async function invokeNoToolsTurn({
   });
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
+    point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
     context: beforeLlmHookContext,
   });
   emitModelContextTrace(runtime, "before_llm_hook_context_output", {
@@ -200,8 +201,8 @@ export async function invokeNoToolsTurn({
   } catch (error) {
     await runAgentRuntimeHook({
       runtime,
-      point: AGENT_HOOK_POINTS.LLM_CALL_ERROR,
-      context: buildHookContext(AGENT_HOOK_POINTS.LLM_CALL_ERROR, runtime, {
+      point: HOOK_POINT.AGENT.LLM_CALL_ERROR,
+      context: buildHookContext(HOOK_POINT.AGENT.LLM_CALL_ERROR, runtime, {
         phase: "llm_call",
         turn,
         mode: "no_tools",
@@ -220,8 +221,8 @@ export async function invokeNoToolsTurn({
   const llmEndedAtMs = Date.now();
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
-    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_LLM_CALL, runtime, {
+    point: HOOK_POINT.AGENT.AFTER_LLM_CALL,
+    context: buildHookContext(HOOK_POINT.AGENT.AFTER_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "no_tools",
@@ -339,7 +340,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
   traceLoopStateContext(runtime, "before_llm_hook_context_input", loopState, { turn, mode: "with_tools" });
-  const beforeLlmHookContext = buildHookContext(AGENT_HOOK_POINTS.BEFORE_LLM_CALL, runtime, {
+  const beforeLlmHookContext = buildHookContext(HOOK_POINT.AGENT.BEFORE_LLM_CALL, runtime, {
     phase: "llm_call",
     turn,
     mode: "with_tools",
@@ -353,7 +354,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   });
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.BEFORE_LLM_CALL,
+    point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
     context: beforeLlmHookContext,
   });
   emitModelContextTrace(runtime, "before_llm_hook_context_output", {
@@ -392,8 +393,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   } catch (error) {
     await runAgentRuntimeHook({
       runtime,
-      point: AGENT_HOOK_POINTS.LLM_CALL_ERROR,
-      context: buildHookContext(AGENT_HOOK_POINTS.LLM_CALL_ERROR, runtime, {
+      point: HOOK_POINT.AGENT.LLM_CALL_ERROR,
+      context: buildHookContext(HOOK_POINT.AGENT.LLM_CALL_ERROR, runtime, {
         phase: "llm_call",
         turn,
         mode: "with_tools",
@@ -448,8 +449,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   applyAuthoritativeMessageId(ai, assistantMessageId);
   await runAgentRuntimeHook({
     runtime,
-    point: AGENT_HOOK_POINTS.AFTER_LLM_CALL,
-    context: buildHookContext(AGENT_HOOK_POINTS.AFTER_LLM_CALL, runtime, {
+    point: HOOK_POINT.AGENT.AFTER_LLM_CALL,
+    context: buildHookContext(HOOK_POINT.AGENT.AFTER_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
       mode: "with_tools",

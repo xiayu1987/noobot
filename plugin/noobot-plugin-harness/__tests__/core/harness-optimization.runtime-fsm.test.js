@@ -11,10 +11,9 @@ import os from "node:os";
 import path from "node:path";
 
 import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
-import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { appendJsonlBuffered, flushAllJsonlBuffers } from "../../src/store/store.js";
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
-import { HARNESS_HOOK_POINTS } from "../../src/core/constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
@@ -85,27 +84,27 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
   const meta = { harness: { pendingTtlHookTurns: 1 } };
   ensureTestAgentExecutionScope(ctx);
 
-  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
 
-  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_TURN, ctx, meta);
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_TURN, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 1);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
 
-  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, true);
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 2);
 
-  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 3);
 
-  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, meta);
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.guidance, null);
   assert.equal(ctx.agentContext.payload.harness.state.pending.summary, false);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
@@ -127,13 +126,13 @@ test("takeover priority pipeline keeps higher priority takeover effective", asyn
     },
     handlers: {
       planning: async ({ point }) =>
-        point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
+        point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT
           ? {
               messageTakeover: { content: "planning", id: "planning", mode: "prepend", priority: 5 },
             }
           : null,
       guidance: async ({ point }) =>
-        point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT
+        point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT
           ? {
               messageTakeover: { content: "guidance", id: "guidance", mode: "prepend", priority: 20 },
             }
@@ -142,7 +141,7 @@ test("takeover priority pipeline keeps higher priority takeover effective", asyn
   });
 
   const ctx = createTestHookContext({}, { messages: [{ role: "user", content: "hello" }] });
-  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT, ctx, {});
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, ctx, {});
 
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /guidance/);
   assert.match(String(ctx.modelContext.messages[1]?.content || ""), /planning/);
@@ -181,15 +180,15 @@ test("capability runtime skips disabled planning guidance and acceptance handler
     messages: [{ role: "user", content: "hello" }],
   });
   const hooksWithDisabledCapabilities = [
-    HARNESS_HOOK_POINTS.BEFORE_TURN,
-    HARNESS_HOOK_POINTS.BEFORE_LLM_CALL,
-    HARNESS_HOOK_POINTS.AFTER_LLM_CALL,
-    HARNESS_HOOK_POINTS.BEFORE_TOOL_CALLS,
-    HARNESS_HOOK_POINTS.BEFORE_TOOL_CALL,
-    HARNESS_HOOK_POINTS.AFTER_TOOL_CALL,
-    HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
-    HARNESS_HOOK_POINTS.AFTER_TOOL_CALLS,
-    HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
+    HOOK_POINT.AGENT.BEFORE_TURN,
+    HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+    HOOK_POINT.AGENT.AFTER_LLM_CALL,
+    HOOK_POINT.AGENT.BEFORE_TOOL_CALLS,
+    HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
+    HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+    HOOK_POINT.AGENT.TOOL_CALL_ERROR,
+    HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
+    HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
   ];
 
   for (const hook of hooksWithDisabledCapabilities) {
@@ -198,10 +197,10 @@ test("capability runtime skips disabled planning guidance and acceptance handler
     assert.equal(capabilities.includes("guidance"), false, `${hook} should not include disabled guidance`);
     assert.equal(capabilities.includes("acceptance"), false, `${hook} should not include disabled acceptance`);
   }
-  assert.deepEqual(runtime.resolveByHook(HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT), ["review"]);
+  assert.deepEqual(runtime.resolveByHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT), ["review"]);
 
-  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_LLM_CALL, ctx, {});
-  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT, ctx, {});
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, {});
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, ctx, {});
 
   assert.deepEqual(calls, ["review"]);
   assert.equal(calls.includes("planning"), false);
@@ -213,9 +212,9 @@ test("capability runtime skips disabled planning guidance and acceptance handler
 });
 
 test("inferFsmTarget uses rule table consistently", () => {
-  const toPlanning = inferFsmTarget(HARNESS_HOOK_POINTS.BEFORE_TURN, {}, HARNESS_FSM_STATES.IDLE);
+  const toPlanning = inferFsmTarget(HOOK_POINT.AGENT.BEFORE_TURN, {}, HARNESS_FSM_STATES.IDLE);
   const toPlanned = inferFsmTarget(
-    HARNESS_HOOK_POINTS.AFTER_LLM_CALL,
+    HOOK_POINT.AGENT.AFTER_LLM_CALL,
     {
       agentContext: {
         bindings: {
@@ -228,11 +227,11 @@ test("inferFsmTarget uses rule table consistently", () => {
     HARNESS_FSM_STATES.PLANNING,
   );
   const toolCallsToPlanned = inferFsmTarget(
-    HARNESS_HOOK_POINTS.AFTER_LLM_CALL,
+    HOOK_POINT.AGENT.AFTER_LLM_CALL,
     { hasToolCalls: true, calls: [{ name: "read_file" }] },
     HARNESS_FSM_STATES.PLANNING,
   );
-  const toFailed = inferFsmTarget(HARNESS_HOOK_POINTS.ON_ERROR, {}, HARNESS_FSM_STATES.EXECUTING);
+  const toFailed = inferFsmTarget(HOOK_POINT.AGENT.ON_ERROR, {}, HARNESS_FSM_STATES.EXECUTING);
 
   assert.equal(toPlanning, HARNESS_FSM_STATES.PLANNING);
   assert.equal(toPlanned, HARNESS_FSM_STATES.PLANNED);
@@ -242,7 +241,7 @@ test("inferFsmTarget uses rule table consistently", () => {
 
 test("buildEvent promotes mini-runner tool turn limit flag to top level", () => {
   const event = buildEvent({
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       harnessCapabilityLogs: [
         {

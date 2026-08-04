@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 function normalizeToolNameSet(input) {
   if (!Array.isArray(input)) return new Set();
   return new Set(
@@ -90,10 +91,10 @@ function applyTakeoverForBeforeToolCall(ctx = {}, takeover = {}) {
 export function applyToolTakeover(point = "", ctx = {}, takeover = {}) {
   if (!takeover || typeof takeover !== "object") return false;
   if (takeover.enabled === false) return false;
-  if (point === "before_tool_calls") {
+  if (point === HOOK_POINT.AGENT.BEFORE_TOOL_CALLS) {
     return applyTakeoverForBeforeToolCalls(ctx, takeover);
   }
-  if (point === "before_tool_call") {
+  if (point === HOOK_POINT.AGENT.BEFORE_TOOL_CALL) {
     return applyTakeoverForBeforeToolCall(ctx, takeover);
   }
   return false;

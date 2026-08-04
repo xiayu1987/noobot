@@ -9,7 +9,6 @@
     "./system-core": "./src/system-core/index.js",
     "./agent": "./src/runtime/index.js",
     "./bot-manage": "./src/bot/index.js",
-    "./bot-manage/hook": "./src/bot/hook/index.js",
     "./tools": "./src/tools/index.js",
     "./tools/connectors/connector-toolkit": "./src/tools/connectors/connector-toolkit.js",
     "./model": "./src/models/index.js",
@@ -29,7 +28,6 @@
     "./config": "./src/config/index.js",
     "./plugin": "./src/extensions/plugins/session-plugin-runtime-provider.js",
     "./application": "./src/application/index.js",
-    "./hook": "./src/extensions/hooks/index.js",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -54,6 +52,7 @@
     "@langchain/openai": "^1.5.5",
     "@noobot/authoritative-state": "file:../authoritative-state",
     "@noobot/context-protocol": "file:../context-protocol",
+    "@noobot/hook-protocol": "file:../hook-protocol",
     "@noobot/runtime-events": "file:../runtime-events",
     "@noobot/sanitize": "file:../sanitize",
     "@noobot/shared": "file:../shared",

@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { createStateCommitter } from "../../src/runtime/tool-execution/state-committer.js";
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
-import { createAgentHookManager } from "../../src/extensions/hooks/index.js";
+import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext, getMessageId } from "@noobot/context-protocol";
 
 function createWorkspaceService(baseDir) {
@@ -48,7 +48,7 @@ test("_prepareRunConfig attaches independent botHookManager", () => {
   const prepared = engine._prepareRunConfig({
     userId: "u1",
     runConfig: {
-      hookManager: createAgentHookManager(),
+      hookManager: createHookManager(),
     },
   });
   assert.ok(prepared.botHookManager);
@@ -130,20 +130,20 @@ test("RunConfigPluginPreparer.prepareAgentPluginRunConfig registers harness plug
   assert.ok(prepared.hookManager);
   assert.equal(prepared.plugins.harness.enabled, true);
   assert.equal(prepared.plugins.harness.basePath, path.join(tempRoot, "u1"));
-  assert.equal(prepared.hookManager.list("before_llm_call").length, 1);
-  assert.equal(prepared.hookManager.list("after_tool_call").length, 1);
+  assert.equal(prepared.hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 1);
+  assert.equal(prepared.hookManager.list(HOOK_POINT.AGENT.AFTER_TOOL_CALL).length, 1);
 
   const messages = [{ role: "user", content: "hello" }];
   const hookCtx = {
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
-    contextProtocolVersion: 1,
+    contextProtocolVersion: 2,
     modelContext: createModelContext({
       messageBlocks: { system: [], history: [], incremental: messages },
     }),
   };
-  await prepared.hookManager.emit("before_llm_call", hookCtx);
+  await prepared.hookManager.emit(HOOK_POINT.AGENT.BEFORE_LLM_CALL, hookCtx);
 
   const resolvedMessages = hookCtx.modelContext.messages;
   const resolvedBlocks = hookCtx.modelContext.messageBlocks;
@@ -203,11 +203,11 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
     sessionId: "s-identity",
     dialogProcessId: "d-current",
     turnScopeId: "t-current",
-    contextProtocolVersion: 1,
+    contextProtocolVersion: 2,
     modelContext,
   };
 
-  await prepared.hookManager.emit("before_llm_call", hookCtx);
+  await prepared.hookManager.emit(HOOK_POINT.AGENT.BEFORE_LLM_CALL, hookCtx);
 
   assert.deepEqual(modelContext.messageBlocks.history.map(getMessageId), historyIds);
   assert.deepEqual(modelContext.messageBlocks.incremental.map(getMessageId), incrementalIds);
@@ -220,8 +220,8 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
 });
 
 test("RunConfigPluginPreparer.prepareAgentPluginRunConfig reuses existing hookManager instead of replacing it", () => {
-  const hookManager = createAgentHookManager();
-  hookManager.on("before_llm_call", () => {}, { id: "existing.before_llm_call" });
+  const hookManager = createHookManager();
+  hookManager.on(HOOK_POINT.AGENT.BEFORE_LLM_CALL, () => {}, { id: "existing.before_llm_call" });
   const engine = new SessionExecutionEngine({
     workspaceService: createWorkspaceService("/tmp/noobot-test"),
   });
@@ -235,11 +235,11 @@ test("RunConfigPluginPreparer.prepareAgentPluginRunConfig reuses existing hookMa
   });
 
   assert.equal(prepared.hookManager, hookManager);
-  assert.equal(hookManager.list("before_llm_call").length, 2);
+  assert.equal(hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 2);
 
   const preparedAgain = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({ userId: "u1", runConfig: prepared });
   assert.equal(preparedAgain.hookManager, hookManager);
-  assert.equal(hookManager.list("before_llm_call").length, 2);
+  assert.equal(hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 2);
 });
 
 test("globalConfig.plugins.harness.mode=on enables harness by default", () => {
@@ -403,12 +403,12 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       capturedAgentUserMessage = currentUserMessage.content;
       assert.equal(currentUserMessage.messageUid, "sm_turn-scope-smoke");
       const messages = [currentUserMessage];
-      await capturedRuntime.hookManager.emit("before_llm_call", {
+      await capturedRuntime.hookManager.emit(HOOK_POINT.AGENT.BEFORE_LLM_CALL, {
         userId: "u1",
         sessionId,
         dialogProcessId: capturedRuntime.systemRuntime.dialogProcessId,
         agentContext,
-        contextProtocolVersion: 1,
+        contextProtocolVersion: 2,
         modelContext: createModelContext({
           messageBlocks: { system: [], history: [], incremental: messages },
         }),
@@ -484,7 +484,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
 
 test("harness records tool call and state commit hook artifacts", async () => {
   const tempRoot = await createTempRoot();
-  const hookManager = createAgentHookManager();
+  const hookManager = createHookManager();
   const engine = new SessionExecutionEngine({
     workspaceService: createWorkspaceService(tempRoot),
   });
@@ -566,7 +566,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
   const hookToolOf = (event) => hookPayloadOf(event).tool || hookPayloadOf(event).toolName;
   assert.ok(eventRecords.some((event) => event.kind === "hook" && hookToolOf(event) === "demo_tool"));
   assert.ok(eventRecords.some((event) => event.kind === "hook" && hookToolOf(event) === "failing_tool"));
-  assert.ok(eventRecords.some((event) => event.kind === "hook" && event.point === "tool_call_error"));
+  assert.ok(eventRecords.some((event) => event.kind === "hook" && event.point === HOOK_POINT.AGENT.TOOL_CALL_ERROR));
   assert.ok(eventRecords.some((event) => event.kind === "hook" && hookPayloadOf(event).commitType === "assistant_message"));
   assert.ok(eventRecords.some((event) => event.kind === "hook" && hookPayloadOf(event).commitType === "tool_result"));
   assert.equal(turnMessageStore.items.length, 2);

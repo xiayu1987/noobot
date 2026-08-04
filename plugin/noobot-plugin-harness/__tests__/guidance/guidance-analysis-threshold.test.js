@@ -45,7 +45,7 @@ test("guidance schedules analysis by full-mode turn threshold", async () => {
     agentContext,
   };
 
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
 
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
   assert.equal(agentContext.payload.harness.state.counters.analysisTurns, 0);
@@ -70,7 +70,7 @@ test("planning does not schedule guidance analysis", async () => {
     agentContext,
   };
 
-  await handler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
+  await handler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
 
   assert.notEqual(agentContext.payload.harness.state.pending.analysis, true);
   assert.equal(agentContext.payload.harness.state.counters.analysisTurns, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1);
@@ -90,7 +90,7 @@ test("planning counters consume skipped agent turns without owning analysis turn
 
   await handler({
     capability: "planning",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       turn: 4,
       messages: [{ role: "user", content: "继续" }],
@@ -117,8 +117,8 @@ test("guidance analysis counter consumes skipped turns and ignores same-turn ree
   });
 
   const ctx = { turn: 2, messages: [{ role: "user", content: "继续" }], agentContext };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta: {} });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
 
   const counters = agentContext.payload.harness.state.counters;
   assert.equal(counters.analysisTurns, FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD - 1);
@@ -138,7 +138,7 @@ test("guidance analysis waits for captured main plan before scheduling", async (
 
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       turn: 2,
       messages: [{ role: "user", content: "继续" }],
@@ -166,7 +166,7 @@ test("guidance analysis does not require captured main plan when planning is dis
 
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       turn: 2,
       messages: [{ role: "user", content: "继续" }],
@@ -199,7 +199,7 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
   });
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
       messages: [{ role: "user", content: "继续" }],
@@ -222,7 +222,7 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
   });
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
       messages: [{ role: "user", content: "继续" }],
@@ -246,7 +246,7 @@ test("guidance analysis runtime threshold overrides scenario workflow params", a
 
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
       messages: [{ role: "user", content: "继续" }],
@@ -272,7 +272,7 @@ test("guidance analysis runtime threshold overrides scenario workflow params", a
 
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
       messages: [{ role: "user", content: "继续" }],
@@ -301,7 +301,7 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 10 to
 
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
       messages: [{ role: "user", content: "继续" }],
@@ -336,7 +336,7 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
 
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
       messages: [{ role: "user", content: "继续" }],
@@ -363,7 +363,7 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
 
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: {
       runConfig: { scenario: "programming" },
       messages: [{ role: "user", content: "继续" }],

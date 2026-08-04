@@ -62,7 +62,7 @@ test("final acceptance separate model receives revised plan, all phase checklist
 
   await handler({
     capability: "acceptance",
-    point: "before_final_output",
+    point: "agent.before_final_output",
     ctx,
     meta: {
       harness: {
@@ -142,14 +142,13 @@ test("harness active request_task_acceptance semantic validation receives agent 
       },
     },
   };
-  await hookManager.emit("before_turn", createTestHookContext({ agentContext }));
+  await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
   const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
   const raw = await tool.invoke(
     { mode: "active" },
     {
       configurable: {
         noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
-        noobotHookMeta: hookManager.runtime,
       },
     },
   );
@@ -206,7 +205,7 @@ test("harness active request_task_acceptance falls back to closure meta when con
       },
     },
   };
-  await hookManager.emit("before_turn", createTestHookContext({ agentContext }));
+  await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
   const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
   const raw = await tool.invoke(
     { mode: "active" },

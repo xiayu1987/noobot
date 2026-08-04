@@ -7,23 +7,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { AgentContextFactory } from "../../src/context/assembly/agent-context-factory.js";
-import {
-  createAgentHookManager,
-  AGENT_HOOK_POINTS,
-} from "../../src/extensions/hooks/index.js";
+import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 test("buildAgentContextFromBuilder triggers before/after context build hooks", async () => {
-  const hookManager = createAgentHookManager();
+  const hookManager = createHookManager();
   const beforePayloads = [];
   const afterPayloads = [];
 
-  hookManager.on(AGENT_HOOK_POINTS.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
+  hookManager.on(HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
     beforePayloads.push(ctx);
-  });
-  hookManager.on(AGENT_HOOK_POINTS.AFTER_CONTEXT_BUILD, async (ctx = {}) => {
+  }, { id: "test.context.before" });
+  hookManager.on(HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD, async (ctx = {}) => {
     afterPayloads.push(ctx);
-  });
+  }, { id: "test.context.after" });
 
   const contextBuilder = {
     async buildInitialContext() {
@@ -68,18 +65,18 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
 });
 
 test("buildAgentContextFromBuilder triggers context_build_error hook on failure", async () => {
-  const hookManager = createAgentHookManager();
+  const hookManager = createHookManager();
   const calls = [];
   const errorPayloads = [];
 
-  hookManager.on(AGENT_HOOK_POINTS.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
+  hookManager.on(HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
     assert.equal(ctx.sessionId, "s_ctx_2");
     calls.push("before");
-  });
-  hookManager.on(AGENT_HOOK_POINTS.CONTEXT_BUILD_ERROR, async (ctx = {}) => {
+  }, { id: "test.context-error.before" });
+  hookManager.on(HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR, async (ctx = {}) => {
     calls.push(`error:${ctx?.error?.message || ""}`);
     errorPayloads.push(ctx);
-  });
+  }, { id: "test.context-error.observe" });
 
   const contextBuilder = {
     async buildInitialContext() {

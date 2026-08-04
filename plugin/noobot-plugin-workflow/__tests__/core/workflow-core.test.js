@@ -8,11 +8,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import { DEFAULT_WORKFLOW_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
 import { createRegisterNoobotPlugin } from "../../src/core/plugin.js";
 import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
-import { PLUGIN_NAME, WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
+import { PLUGIN_NAME, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { getWorkflowDefaultSemanticPrompt } from "../../src/core/i18n.js";
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 import { installTurnMessageEventRuntimeFixture } from "../helpers/workflow-hook-session-strategy-helper.js";
@@ -49,10 +50,10 @@ function createMockBotHookManager() {
     async emit(point, payload) {
       const record = listeners.get(String(point || "").trim());
       if (!record || typeof record.handler !== "function") {
-        return { results: [], errors: [] };
+        return { outcomes: [], failures: [] };
       }
       const result = await record.handler(payload || {});
-      return { results: [{ ok: true, result }], errors: [] };
+      return { outcomes: [{ status: "ok", value: result }], failures: [] };
     },
   };
 }
@@ -343,7 +344,7 @@ test("workflow hook skips when source text is empty", async () => {
       mode: "on",
     },
   });
-  const listener = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const listener = hookManager.listeners.get(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH);
   assert.ok(listener?.handler);
   const agentResult = { output: "", traces: [] };
   await listener.handler({
@@ -371,7 +372,7 @@ test("workflow hook owns the turn and never falls back to main agent when semant
       },
     },
   });
-  const listener = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const listener = hookManager.listeners.get(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH);
   assert.ok(listener?.handler);
   const dispatchClaims = [];
   const beforeContext = {
@@ -430,7 +431,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
       },
     },
   });
-  const listener = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH);
+  const listener = hookManager.listeners.get(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH);
   assert.ok(listener?.handler);
   const dispatchClaims = [];
   const beforeContext = {
@@ -478,7 +479,7 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
       mode: "on",
     },
   });
-  const cleanupHook = hookManager.listeners.get(WORKFLOW_BOT_HOOK_POINTS.AFTER_SESSION_DELETE);
+  const cleanupHook = hookManager.listeners.get(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE);
   assert.ok(cleanupHook?.handler);
 
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-plugin-cleanup-"));

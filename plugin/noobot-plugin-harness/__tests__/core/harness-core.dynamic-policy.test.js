@@ -14,7 +14,6 @@ import {
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -107,7 +106,7 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
   assert.doesNotMatch(prompt, /updated_at/);
   assert.doesNotMatch(prompt, /Noobot Harness text-scenario\/text-delivery policy/);
 
-  await injectPrompt("before_llm_call", ctx, {
+  await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
     promptPolicy: true,
     promptText: "",
@@ -140,7 +139,7 @@ test("dynamic policy prompt change refreshes the unique main-flow policy selecti
     "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
   ].join("\n"), { source: "planning", stage: "planning" });
 
-  await injectPrompt("before_llm_call", ctx, {
+  await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
     promptPolicy: true,
     promptText: "",
@@ -164,7 +163,7 @@ test("dynamic policy prompt change refreshes the unique main-flow policy selecti
   ].join("\n"), { source: "planning_revision", stage: "revision" });
   assert.equal(ctx.agentContext.payload.harness.policyPromptRefresh.pending, true);
 
-  await injectPrompt("before_llm_call", ctx, {
+  await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
     promptPolicy: true,
     promptText: "",
@@ -203,7 +202,7 @@ test("harness policy prompt survives agent-side system message compaction", asyn
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   assert.equal(
     ctx.modelContext.messages.filter((item = {}) =>
@@ -242,7 +241,7 @@ test("harness policy preservation ignores ordinary system text that only mention
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   assert.equal(
     ctx.modelContext.messages.some((item = {}) =>

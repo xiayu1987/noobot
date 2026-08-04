@@ -5,17 +5,17 @@
  */
 
 import {
-  WORKFLOW_BOT_HOOK_POINTS,
   WORKFLOW_HOOKS,
   WORKFLOW_PLUGIN_DEFAULTS,
 } from "./constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { handleBeforeAgentDispatch } from "./orchestrator/hook-handler.js";
 import { registerWorkflowSessionCleanupHook } from "./orchestrator/session-cleanup.js";
 
 export function createRegisterWorkflowHooks() {
   return function registerWorkflowHooks({ hookManager, options }) {
     const disposers = [];
-    const hookPoint = WORKFLOW_BOT_HOOK_POINTS.BEFORE_AGENT_DISPATCH;
+    const hookPoint = HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH;
 
     disposers.push(
       hookManager.on(

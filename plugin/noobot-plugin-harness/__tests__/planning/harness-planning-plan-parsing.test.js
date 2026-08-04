@@ -28,11 +28,11 @@ test("harness planning accepts numbered plain-text plan output", async () => {
     },
   };
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     messages: [{ role: "user", content: "开始任务" }],
     agentContext,
   });
-  await hookManager.emit("after_llm_call", {
+  await hookManager.emit("agent.after_llm_call", {
     ai: {
       content: "1. 解析附件\n2. 执行核心任务\n3. 启动子任务",
     },
@@ -54,11 +54,11 @@ test("harness planning ignores wrapped non-plan payload even when non-empty", as
     },
   };
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     messages: [{ role: "user", content: "开始任务" }],
     agentContext,
   });
-  await hookManager.emit("after_llm_call", {
+  await hookManager.emit("agent.after_llm_call", {
     ai: {
       content: JSON.stringify({
         toolName: "execute_script",
@@ -105,11 +105,11 @@ test("harness planning rejects malformed non-plan json text", async () => {
     execution: { controllers: { runtime: { systemRuntime: { config: {} } } } },
   };
 
-  await hookManager.emit("before_llm_call", {
+  await hookManager.emit("agent.before_llm_call", {
     messages: [{ role: "user", content: "开始任务" }],
     agentContext,
   });
-  await hookManager.emit("after_llm_call", {
+  await hookManager.emit("agent.after_llm_call", {
     ai: { content: "{\"taskChecklist\":[{index:1,task:\"解析附件\"}]}" },
     agentContext,
   });
@@ -147,7 +147,7 @@ test("harness planning uses plan text flow without json repair", async () => {
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   assert.equal(purposes.includes("planning"), true);
   assert.equal(purposes.includes("planning_json_repair"), false);
@@ -184,7 +184,7 @@ test("harness planning requires parseable main plan payload", async () => {
     },
   };
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
   assert.equal(invocations.length >= 1, true);
   assertFlatCapabilityMessages(invocations[0].messages);
 

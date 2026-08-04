@@ -10,10 +10,9 @@ import os from "node:os";
 import path from "node:path";
 
 import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
-import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { appendJsonlBuffered, flushAllJsonlBuffers } from "../../src/store/store.js";
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
-import { HARNESS_HOOK_POINTS } from "../../src/core/constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
@@ -73,9 +72,9 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
     },
   };
 
-  const first = handler({ capability: "planning", point: "before_llm_call", ctx, meta });
+  const first = handler({ capability: "planning", point: "agent.before_llm_call", ctx, meta });
   await new Promise((resolve) => setTimeout(resolve, 10));
-  const second = handler({ capability: "planning", point: "before_llm_call", ctx, meta });
+  const second = handler({ capability: "planning", point: "agent.before_llm_call", ctx, meta });
   await Promise.all([first, second]);
 
   assert.equal(invokerCalls, 1);
@@ -146,8 +145,8 @@ test("relaySeparateModelOutputAsUserMessage is blocked after agent turn ended", 
     agentContext: { payload: {} },
   });
 
-  await runtime.runHook(HARNESS_HOOK_POINTS.BEFORE_TURN, ctx, {});
-  await runtime.runHook(HARNESS_HOOK_POINTS.AFTER_TURN, ctx, {});
+  await runtime.runHook(HOOK_POINT.AGENT.BEFORE_TURN, ctx, {});
+  await runtime.runHook(HOOK_POINT.AGENT.AFTER_TURN, ctx, {});
 
   const relayed = relaySeparateModelOutputAsUserMessage(ctx, {
     purpose: "planning",
@@ -200,7 +199,7 @@ test("planning separate_model uses injected resolveModelMessages from harness me
     },
   };
 
-  await handler({ capability: "planning", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "planning", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(Array.isArray(capturedMessages), true);
   assert.equal(capturedMessages.some((item = {}) => String(item?.content || "") === "drop-me"), false);

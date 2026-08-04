@@ -17,7 +17,7 @@ test("before_final_output retains the supplied authoritative modelContext entity
       incremental: [{ role: "assistant", content: "final" }],
     },
   });
-  const context = buildHookContext("before_final_output", {}, {
+  const context = buildHookContext("agent.before_final_output", {}, {
     modelContext,
     messages: [{ role: "user", content: "must not become a second source" }],
     result: { output: "final" },

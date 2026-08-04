@@ -51,7 +51,7 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
   };
 
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
   assert.equal(invocations.length >= 1, true);
   assert.equal(invocations[0]?.purpose, "planning_revision");
   assert.equal(invocations.some((item = {}) => item.purpose === "planning_revision"), true);
@@ -86,7 +86,7 @@ test("separate_model mode: pending revision runs by separate model without promp
   };
 
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
   assert.equal(invocations.some((item = {}) => item.purpose === "planning_revision"), true);
   assert.equal(
     ctx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
@@ -125,7 +125,7 @@ test("separate_model simultaneous plan update follows up with summary before ana
   };
 
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.deepEqual(
     invocations.map((item = {}) => item.pluginFlow || item.purpose),
@@ -168,7 +168,7 @@ test("workflow_execution_result captures errorCode when separate_model guidance 
   };
 
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   const executionLog = agentContext.payload.harness.logs.guidance.find(
     (item = {}) => item?.event === "workflow_execution_result",

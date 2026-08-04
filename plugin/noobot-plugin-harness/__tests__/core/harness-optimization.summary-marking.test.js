@@ -12,7 +12,7 @@ import path from "node:path";
 import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
 import { appendJsonlBuffered, flushAllJsonlBuffers } from "../../src/store/store.js";
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
-import { HARNESS_HOOK_POINTS } from "../../src/core/constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
 import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";

@@ -14,7 +14,6 @@ import {
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerNoobotPlugin } from "../../src/index.js";
-import { normalizeHookContextProtocol } from "../../src/core/context.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -41,7 +40,7 @@ test("harness policy prompt is promoted to system when stale policy exists in me
     },
   });
 
-  await injectPrompt("before_llm_call", ctx, {
+  await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
     promptPolicy: true,
     promptText: "policy",
@@ -76,7 +75,7 @@ test("harness policy prompt matrix exposes scenario without workflow mode", asyn
     const ctx = createTestHookContext(ctxPatch, {
       messages: [{ role: "user", content: "hello" }],
     });
-    await injectPrompt("before_llm_call", ctx, {
+    await injectPrompt("agent.before_llm_call", ctx, {
       enabled: true,
       promptPolicy: true,
       promptText: "",
@@ -160,7 +159,7 @@ test("harness policy prompt is not reinjected during stopped snapshot resume ini
     ],
   });
 
-  await injectPrompt("before_llm_call", ctx, {
+  await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
     promptPolicy: true,
     promptText: "",
@@ -205,7 +204,7 @@ test("harness policy prompt is not reinjected after stopped snapshot blocks are 
     ],
   });
 
-  await injectPrompt("before_llm_call", ctx, {
+  await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
     promptPolicy: true,
     promptText: "",
@@ -235,7 +234,7 @@ test("harness policy prompt is injected for normal first llm call", async () => 
     },
   }, { messages: [{ role: "user", content: "hello" }] });
 
-  await injectPrompt("before_llm_call", ctx, {
+  await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
     promptPolicy: true,
     promptText: "",

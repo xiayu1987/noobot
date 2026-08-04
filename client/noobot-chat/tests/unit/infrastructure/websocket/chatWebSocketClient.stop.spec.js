@@ -14,12 +14,13 @@ function stopCommand({
   sessionId = "s-1",
   dialogProcessId = "main-dp",
   turnScopeId = "main-turn",
+  expectedTurnRevision = 2,
   partialAssistant,
 } = {}) {
   return createTurnStopCommand({
     commandId,
     identity: { sessionId, dialogProcessId, turnScopeId },
-    concurrency: {},
+    concurrency: { expectedTurnRevision },
     stop: { partialAssistant },
   });
 }

@@ -99,7 +99,7 @@ test("harness review reports failed or inconsistent semantic acceptance", async 
   };
   const result = { output: "done" };
 
-  await hookManager.emit("before_final_output", { agentContext, result });
+  await hookManager.emit("agent.before_final_output", { agentContext, result });
 
   const report = agentContext.payload.harness.lastReviewReport;
   assert.equal(report.summary.semanticValidationStatus, null);

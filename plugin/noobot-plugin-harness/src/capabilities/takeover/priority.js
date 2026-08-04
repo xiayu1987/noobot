@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { HOOK_POINT } from "@noobot/hook-protocol";
 function resolveDirectivePriority(value, fallback = 0) {
   const priority = Number(value);
   return Number.isFinite(priority) ? priority : fallback;
@@ -50,7 +51,7 @@ export function resolveTakeoverPriority({
   if (kind !== "memory") return { priority: directPriority, sequence };
 
   const commitType = String(ctx?.commitType || "").trim();
-  if (point !== "before_state_commit" || !commitType) {
+  if (point !== HOOK_POINT.AGENT.BEFORE_STATE_COMMIT || !commitType) {
     return { priority: directPriority, sequence };
   }
 

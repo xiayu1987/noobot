@@ -60,7 +60,7 @@ test("unified attempts no longer block revision scheduling in planning handler",
     },
   });
   const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
-  await planningHandler({ capability: "planning", point: "before_llm_call", ctx, meta: {} });
+  await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
   assert.equal(agentContext.payload.harness.state.pending.planRevision, true);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateTurns, 0);
 });
@@ -78,14 +78,14 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
   const meta = { harness: { planningGuidanceMode: "inject", capabilityModelInvoker: null } };
 
   const beforeCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
-  await handler({ capability: "guidance", point: "before_llm_call", ctx: beforeCtx, meta });
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: beforeCtx, meta });
   const afterCtx = {
     modelContext: beforeCtx.modelContext,
     contextProtocolVersion: 2,
     ai: { content: "ADD 1.1 细化步骤A" },
     agentContext,
   };
-  await handler({ capability: "guidance", point: "after_llm_call", ctx: afterCtx, meta });
+  await handler({ capability: "guidance", point: "agent.after_llm_call", ctx: afterCtx, meta });
   assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, 1);
   assert.equal(agentContext.payload.harness.state.counters.planUpdateAttempts, 1);
 });
@@ -114,7 +114,7 @@ test("separate_model refinement-only flow runs planning_refinement then guidance
 
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
     meta,
   });
@@ -245,7 +245,7 @@ test("separate_model skips planning_revision when revision attempts already reac
   };
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
     meta,
   });
@@ -276,7 +276,7 @@ test("separate_model summary does not consume refinement attempts", async () => 
   };
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
     meta,
   });
@@ -305,7 +305,7 @@ test("separate_model does not auto-run refinement when revision has no main-plan
   };
   await handler({
     capability: "guidance",
-    point: "before_llm_call",
+    point: "agent.before_llm_call",
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
     meta,
   });

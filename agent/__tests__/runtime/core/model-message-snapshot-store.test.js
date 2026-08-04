@@ -81,14 +81,15 @@ test("stopped model message snapshot keeps message tool calls and tool results",
   assert.deepEqual(loaded.messageBlocks.history.map((item) => item.content), ["old user", "", "tool output"]);
   assert.deepEqual(loaded.messageBlocks.incremental.map((item) => item.content), ["current user"]);
   assert.deepEqual(loaded.messages.map((item) => item.content), ["system prompt", "old user", "", "tool output", "current user"]);
-  assert.deepEqual(loaded.messageBlocks.history.map((item) => item._getType()), ["human", "ai", "tool"]);
-  assert.deepEqual(loaded.messages.map((item) => item._getType()), ["system", "human", "ai", "tool", "human"]);
-  const loadedToolCallingAi = loaded.messages.find((item) => item instanceof AIMessage);
+  assert.deepEqual(loaded.messageBlocks.history.map((item) => item.type), ["human", "ai", "tool"]);
+  assert.deepEqual(loaded.messages.map((item) => item.type), ["system", "human", "ai", "tool", "human"]);
+  assert.ok(loaded.messages.every((item) => Object.getPrototypeOf(item) === Object.prototype));
+  const loadedToolCallingAi = loaded.messages.find((item) => item.type === "ai");
   assert.deepEqual(loadedToolCallingAi.tool_calls, [{ id: "call-1", name: "x", args: {} }]);
   assert.deepEqual(loadedToolCallingAi.additional_kwargs.tool_calls, [
     { id: "call-1", type: "function", function: { name: "x", arguments: "{}" } },
   ]);
-  const loadedToolResult = loaded.messages.find((item) => item instanceof ToolMessage);
+  const loadedToolResult = loaded.messages.find((item) => item.type === "tool");
   assert.equal(loadedToolResult.content, "tool output");
   assert.equal(loadedToolResult.tool_call_id, "call-1");
 

@@ -38,7 +38,7 @@ test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores"
   assert.equal(runtime.basePath, "/workspace/u1");
   assert.equal(runtime.sharedTools.customFetch, true);
   assert.equal(runtime.hookManager, hookManager);
-  assert.equal(runtime.hooks?.manager, hookManager);
+  assert.equal(runtime.hooks, undefined);
   assert.equal(runtime.runConfig.streaming, false);
   assert.equal(typeof runtime.currentTurnMessages.push, "function");
   assert.equal(typeof runtime.currentTurnTasks.push, "function");

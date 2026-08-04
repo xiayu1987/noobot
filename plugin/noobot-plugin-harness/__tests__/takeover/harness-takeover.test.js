@@ -31,7 +31,7 @@ test("harness capability hook can take over tool calls", async () => {
       promptPolicy: false,
       capabilityHandlers: {
         acceptance: async ({ point }) => {
-          if (point !== "before_tool_calls") return null;
+          if (point !== "agent.before_tool_calls") return null;
           return {
             capability: "acceptance",
             status: "active",
@@ -58,7 +58,7 @@ test("harness capability hook can take over tool calls", async () => {
     ],
   });
 
-  await hookManager.emit("before_tool_calls", ctx);
+  await hookManager.emit("agent.before_tool_calls", ctx);
   assert.equal(ctx.calls.length, 1);
   assert.equal(ctx.calls[0]?.name, "wait");
   assert.equal(ctx.calls[0]?.args?.seconds, 1);
@@ -73,7 +73,7 @@ test("harness capability hook can force inject system message in mid hooks", asy
       promptPolicy: false,
       capabilityHandlers: {
         acceptance: async ({ point }) => {
-          if (point !== "before_tool_calls") return null;
+          if (point !== "agent.before_tool_calls") return null;
           return {
             systemMessageTakeover: {
               id: "harness-mid-hook-guard",
@@ -94,7 +94,7 @@ test("harness capability hook can force inject system message in mid hooks", asy
     calls: [{ name: "wait", args: { seconds: 1 } }],
   }, { messageBlocks: { system: [{ role: "system", content: "existing system message" }], history: [], incremental: [] } });
 
-  await hookManager.emit("before_tool_calls", ctx);
+  await hookManager.emit("agent.before_tool_calls", ctx);
   assert.equal(ctx.modelContext.messageBlocks.system.length, 2);
   assert.match(
     String(ctx.modelContext.messageBlocks.system[0]?.content || ""),
@@ -111,7 +111,7 @@ test("harness capability hook can take over and remove agent internal forced mes
       promptPolicy: false,
       capabilityHandlers: {
         guidance: async ({ point }) => {
-          if (point !== "before_llm_call") return null;
+          if (point !== "agent.before_llm_call") return null;
           return {
             messageTakeover: {
               removeInternalMessageTypes: ["tool_choice_required_retry_prompt"],
@@ -152,7 +152,7 @@ test("harness capability hook can take over and remove agent internal forced mes
       { role: "user", content: "real user message" },
     ] });
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
   assert.equal(ctx.modelContext.messages.length, 2);
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /harness-replace-retry-prompt/);
   assert.equal(
@@ -172,7 +172,7 @@ test("harness message takeover keeps system context before injected ctx messages
       promptPolicy: false,
       capabilityHandlers: {
         guidance: async ({ point }) => {
-          if (point !== "before_llm_call") return null;
+          if (point !== "agent.before_llm_call") return null;
           return {
             messageTakeover: {
               id: "harness-current-turn-note",
@@ -206,7 +206,7 @@ test("harness message takeover keeps system context before injected ctx messages
       { role: "user", content: "real user message" },
     ] });
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
   assert.equal(ctx.modelContext.messages[0]?.content, "system context");
   assert.match(String(ctx.modelContext.messages[1]?.content || ""), /harness-current-turn-note/);
   assert.equal(ctx.modelContext.messages[2]?.content, "real user message");
@@ -221,7 +221,7 @@ test("harness ctx message takeover writes through message store views", async ()
       promptPolicy: false,
       capabilityHandlers: {
         guidance: async ({ point }) => {
-          if (point !== "before_llm_call") return null;
+          if (point !== "agent.before_llm_call") return null;
           return {
             messageTakeover: {
               id: "harness-store-note",
@@ -256,7 +256,7 @@ test("harness ctx message takeover writes through message store views", async ()
       incremental: [{ role: "user", content: "real user message" }],
     } });
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   assert.equal(ctx.modelContext.messages.length, 2);
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /harness-store-note/);
@@ -277,7 +277,7 @@ test("harness agent system takeover does not write ctx message store", async () 
       promptPolicy: false,
       capabilityHandlers: {
         acceptance: async ({ point }) => {
-          if (point !== "before_tool_calls") return null;
+          if (point !== "agent.before_tool_calls") return null;
           return {
             systemMessageTakeover: {
               id: "harness-agent-system-only",
@@ -305,7 +305,7 @@ test("harness agent system takeover does not write ctx message store", async () 
       incremental: [{ role: "user", content: "real user message" }],
     } });
 
-  await hookManager.emit("before_tool_calls", ctx);
+  await hookManager.emit("agent.before_tool_calls", ctx);
 
   assert.equal(ctx.modelContext.messages.length, 3);
   assert.equal(ctx.modelContext.messageBlocks.incremental.length, 1);
@@ -325,7 +325,7 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
       promptPolicy: false,
       capabilityHandlers: {
         guidance: async ({ point }) => {
-          if (point !== "before_llm_call") return null;
+          if (point !== "agent.before_llm_call") return null;
           return {
             messageTakeover: {
               removeInternalMessageTypes: ["tool_choice_required_retry_prompt"],
@@ -372,7 +372,7 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
       ],
     } });
 
-  await hookManager.emit("before_llm_call", ctx);
+  await hookManager.emit("agent.before_llm_call", ctx);
 
   assert.equal(ctx.modelContext.messages.length, 1);
   assert.equal(ctx.modelContext.messages[0], existingInjected);

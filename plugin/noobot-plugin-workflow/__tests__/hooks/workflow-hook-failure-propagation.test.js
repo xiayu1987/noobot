@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import {
   createMockBotHookManager,
@@ -22,7 +23,6 @@ import {
   callsByNodeName,
   workflowTurn,
   createRegisterWorkflowHooks,
-  WORKFLOW_BOT_HOOK_POINTS,
   WORKFLOW_PLUGIN_DEFAULTS,
   resolveWorkflowNodeDialogProcessId,
   collectWorkflowDialogProcessIds,
@@ -313,5 +313,4 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
     forbiddenNodes: ["节点C", "节点D"],
   });
 });
-
 

@@ -306,8 +306,9 @@ test("RunConfigPluginPreparer registers agent plugin once", () => {
 
   assert.equal(registerCount, 1);
   assert.ok(first.hookManager);
-  assert.equal(first.hookManager.__noobotAgentPluginRegistered, true);
-  assert.equal(first.hookManager.runtime.agentPlugin, first.plugins.agentPlugin);
+  assert.equal(Object.hasOwn(first.hookManager, "__noobotAgentPluginRegistered"), false);
+  assert.equal(Object.hasOwn(first.hookManager, "runtime"), false);
+  assert.equal(first.plugins.agentPlugin.enabled, true);
   assert.deepEqual(first.toolPolicy.denyToolNames, ["registered_tool"]);
 
   const second = preparer.prepareAgentPluginRunConfig({
@@ -511,8 +512,8 @@ test("RunConfigPluginPreparer prepares bot plugin botHookManager", () => {
 
   assert.ok(prepared.botHookManager);
   assert.equal(registerCount, 1);
-  assert.equal(prepared.botHookManager.__noobotBotPluginRegistered, true);
-  assert.equal(prepared.botHookManager.runtime.botPlugin, prepared.plugins.botPlugin);
+  assert.equal(Object.hasOwn(prepared.botHookManager, "__noobotBotPluginRegistered"), false);
+  assert.equal(Object.hasOwn(prepared.botHookManager, "runtime"), false);
   assert.equal(prepared.plugins.botPlugin.enabled, true);
   assert.equal(prepared.plugins.botPlugin.mode, "on");
 });

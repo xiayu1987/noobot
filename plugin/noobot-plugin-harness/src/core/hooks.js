@@ -12,47 +12,46 @@ import {
   emitHarnessHookProgress,
   extractBasePath,
   isPrimaryExecutionScope,
-  normalizeHookContextProtocol,
 } from "./context.js";
-import { HARNESS_HOOK_POINTS } from "./constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { applyAgentResolvedModelMessages } from "./model-message-context.js";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 
 export const HARNESS_TRACE_POINTS = Object.freeze([
-  HARNESS_HOOK_POINTS.BEFORE_CONTEXT_BUILD,
-  HARNESS_HOOK_POINTS.AFTER_CONTEXT_BUILD,
-  HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
-  HARNESS_HOOK_POINTS.BEFORE_TURN,
-  HARNESS_HOOK_POINTS.AFTER_TURN,
-  HARNESS_HOOK_POINTS.ON_ABORT,
-  HARNESS_HOOK_POINTS.ON_ERROR,
-  HARNESS_HOOK_POINTS.AFTER_LLM_CALL,
-  HARNESS_HOOK_POINTS.LLM_CALL_ERROR,
-  HARNESS_HOOK_POINTS.BEFORE_TOOL_CALLS,
-  HARNESS_HOOK_POINTS.AFTER_TOOL_CALLS,
-  HARNESS_HOOK_POINTS.BEFORE_TOOL_CALL,
-  HARNESS_HOOK_POINTS.AFTER_TOOL_CALL,
-  HARNESS_HOOK_POINTS.TOOL_CALL_ERROR,
-  HARNESS_HOOK_POINTS.BEFORE_STATE_COMMIT,
-  HARNESS_HOOK_POINTS.AFTER_STATE_COMMIT,
-  HARNESS_HOOK_POINTS.BEFORE_LLM_CALL,
-  HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT,
+  HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
+  HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD,
+  HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
+  HOOK_POINT.AGENT.BEFORE_TURN,
+  HOOK_POINT.AGENT.AFTER_TURN,
+  HOOK_POINT.AGENT.ON_ABORT,
+  HOOK_POINT.AGENT.ON_ERROR,
+  HOOK_POINT.AGENT.AFTER_LLM_CALL,
+  HOOK_POINT.AGENT.LLM_CALL_ERROR,
+  HOOK_POINT.AGENT.BEFORE_TOOL_CALLS,
+  HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
+  HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
+  HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+  HOOK_POINT.AGENT.TOOL_CALL_ERROR,
+  HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
+  HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
+  HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+  HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
 ]);
 
 export const HARNESS_FLUSH_POINTS = Object.freeze([
-  HARNESS_HOOK_POINTS.AFTER_TURN,
-  HARNESS_HOOK_POINTS.ON_ABORT,
-  HARNESS_HOOK_POINTS.ON_ERROR,
-  HARNESS_HOOK_POINTS.CONTEXT_BUILD_ERROR,
+  HOOK_POINT.AGENT.AFTER_TURN,
+  HOOK_POINT.AGENT.ON_ABORT,
+  HOOK_POINT.AGENT.ON_ERROR,
+  HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
 ]);
 
 export const HARNESS_SESSION_CLEANUP_POINTS = Object.freeze([
-  HARNESS_HOOK_POINTS.AFTER_SESSION_DELETE,
+  HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
 ]);
 
 export function shouldInjectPromptAtPoint(point = "", options = {}) {
   return (
-    point === HARNESS_HOOK_POINTS.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false
+    point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false
   );
 }
 
@@ -82,14 +81,13 @@ export function createRegisterHarnessHooks(deps = {}) {
           point,
           async (ctx = {}) => {
             if (!isPrimaryExecutionScopeFn(ctx)) return;
-            normalizeHookContextProtocol(point, ctx);
             const startedAt = Date.now();
             if (verboseHookRuntimeEvents) {
               emitHarnessHookProgressFn(ctx, "hook_start", { point });
             }
             try {
               const globalBootstrap = async () => {
-                if (point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL) return;
+                if (point !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return;
                 await injectPromptFn(point, ctx, options, plugin);
                 emitHarnessHookProgressFn(ctx, "global_bootstrap_done", { point });
               };
@@ -119,7 +117,7 @@ export function createRegisterHarnessHooks(deps = {}) {
               emitHarnessHookProgressFn(ctx, "capability_runtime_done", { point });
 
               if (
-                point !== HARNESS_HOOK_POINTS.BEFORE_LLM_CALL &&
+                point !== HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
                 shouldInjectPromptAtPointFn(point, options)
               ) {
                 await injectPromptFn(point, ctx, options, plugin);

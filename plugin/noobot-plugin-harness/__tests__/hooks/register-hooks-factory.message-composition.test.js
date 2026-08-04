@@ -38,7 +38,7 @@ test("createRegisterHarnessHooks leaves plain messages un-compacted without mess
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -73,7 +73,7 @@ test("createRegisterHarnessHooks leaves plain messages un-compacted without mess
       { role: "user", content: "h3" },
     ],
   });
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
     ["system context", "h1", "h2", "h3", "harness prompt"],
@@ -89,7 +89,7 @@ test("createRegisterHarnessHooks composes by system history incremental message 
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -133,7 +133,7 @@ test("createRegisterHarnessHooks composes by system history incremental message 
     },
   });
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -150,7 +150,7 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -189,7 +189,7 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
     },
   });
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
 
   const toolCallMessage = ctx.modelContext.messages.find((message) => Array.isArray(message?.tool_calls));
   assert.ok(toolCallMessage);
@@ -209,7 +209,7 @@ test("createRegisterHarnessHooks ignores messages outside agent-provided message
     },
   };
   const registerHarnessHooks = createRegisterHarnessHooks({
-    tracePoints: ["before_llm_call"],
+    tracePoints: ["agent.before_llm_call"],
     flushPoints: [],
     sessionCleanupPoints: [],
     emitHarnessHookProgress: () => {},
@@ -245,7 +245,7 @@ test("createRegisterHarnessHooks ignores messages outside agent-provided message
     },
   });
 
-  await handlers.get("before_llm_call")(ctx);
+  await handlers.get("agent.before_llm_call")(ctx);
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),

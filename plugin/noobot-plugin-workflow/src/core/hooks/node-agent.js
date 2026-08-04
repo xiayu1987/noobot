@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { WORKFLOW_ACTION, WORKFLOW_BOT_HOOK_POINTS, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
+import { WORKFLOW_ACTION, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
+import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import {
   getWorkflowTransferPayloadFromResult,
@@ -642,12 +643,10 @@ export async function runNodeAgent({
       };
     }
   }
-  const emitResult = await hookManager.emit(WORKFLOW_BOT_HOOK_POINTS.NODE_AGENT_EXECUTE, hookPayload);
+  const emitResult = await hookManager.emit(HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE, hookPayload);
   throwIfWorkflowAborted(ctx);
-  const results = Array.isArray(emitResult?.results) ? emitResult.results : [];
-  for (const item of results) {
-    if (!item?.ok) continue;
-    const action = item?.result?.action;
+  for (const outcome of emitResult.outcomes) {
+    const action = outcome?.value?.action;
     if (action && typeof action === "object") {
       return {
         action,

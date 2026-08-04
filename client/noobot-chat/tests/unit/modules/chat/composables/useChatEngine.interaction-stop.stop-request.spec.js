@@ -75,6 +75,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
         parentSessionId: "parent-session",
         parentDialogProcessId: "parent-dp",
       },
+      concurrency: { expectedTurnRevision: 2 },
       stop: {
         partialAssistant: {
           content: "partial answer",

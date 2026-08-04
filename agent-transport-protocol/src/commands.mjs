@@ -98,9 +98,13 @@ export function createTurnRunCommand(input = {}) {
 }
 
 export function createTurnStopCommand(input = {}) {
+  const expectedTurnRevision = input.concurrency?.expectedTurnRevision;
+  if (!Number.isInteger(expectedTurnRevision) || expectedTurnRevision < 1) {
+    throw new TypeError("invalid_expected_turn_revision");
+  }
   return {
     ...createEnvelope(AGENT_COMMAND.STOP, input),
-    concurrency: compactObject({ expectedTurnRevision: input.concurrency?.expectedTurnRevision ?? 0 }),
+    concurrency: { expectedTurnRevision },
     stop: compactObject({
       executionId: clean(input.stop?.executionId),
       partialAssistant: isObject(input.stop?.partialAssistant) ? { ...input.stop.partialAssistant } : undefined,
@@ -231,7 +235,7 @@ export function validateAgentCommand(command) {
     if (!isObject(command.concurrency)) errors.push("concurrency_not_object");
     else {
       rejectUnknownFields(command.concurrency, STOP_CONCURRENCY_KEYS, "concurrency", errors);
-      if (!Number.isInteger(command.concurrency.expectedTurnRevision) || command.concurrency.expectedTurnRevision < 0) {
+      if (!Number.isInteger(command.concurrency.expectedTurnRevision) || command.concurrency.expectedTurnRevision < 1) {
         errors.push("invalid_expected_turn_revision");
       }
     }
