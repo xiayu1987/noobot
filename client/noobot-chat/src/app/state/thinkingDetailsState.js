@@ -8,9 +8,9 @@ import { hasToolTimeline, selectToolTimelineCount } from "../../modules/chat/run
 
 export function getThinkingDetailsCount(messageItem = {}) {
   if (isAssistantWithoutTurnScope(messageItem)) return 0;
-  if (hasToolTimeline(messageItem)) return selectToolTimelineCount(messageItem);
   const summaryThinkingDetailsCount = getSummaryThinkingDetailsCount(messageItem);
   if (summaryThinkingDetailsCount > 0) return summaryThinkingDetailsCount;
+  if (hasToolTimeline(messageItem)) return selectToolTimelineCount(messageItem);
   const toolCalls = Array.isArray(messageItem?.toolCalls)
     ? messageItem.toolCalls
     : Array.isArray(messageItem?.tool_calls)

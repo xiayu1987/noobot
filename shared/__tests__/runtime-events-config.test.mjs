@@ -149,6 +149,17 @@ test('agent transport diagnostics are independently configurable and default on'
   assert.equal(resolveRuntimeEventsSessionLogControls({ [envName]: 'off' }).debug.agentTransport, false);
 });
 
+test('frontend thinking replay diagnostics are independently configurable and default on', () => {
+  const envName = RUNTIME_EVENTS_CONFIG_ENVS.sessionLogControls.debug.frontendThinkingReplay;
+  assert.equal(envName, 'NOOBOT_RUNTIME_EVENT_FRONTEND_THINKING_REPLAY_DEBUG');
+  assert.deepEqual(RUNTIME_EVENTS_SESSION_LOG_DEBUG_TYPES['thinking-replay'], {
+    controlKey: 'frontendThinkingReplay',
+    exposeToClient: true,
+  });
+  assert.equal(resolveRuntimeEventsSessionLogControls({}).debug.frontendThinkingReplay, true);
+  assert.equal(resolveRuntimeEventsSessionLogControls({ [envName]: 'off' }).debug.frontendThinkingReplay, false);
+});
+
 test('session log controls do not accept the removed flat override protocol', () => {
   const controls = resolveRuntimeEventsSessionLogControls({}, {
     messageLog: false,

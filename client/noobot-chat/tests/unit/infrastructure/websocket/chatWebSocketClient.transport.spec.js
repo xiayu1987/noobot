@@ -208,7 +208,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       requestId: expect.stringMatching(/^reconnect:/),
     }));
 
-    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0, cacheExpired: false });
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0 });
     await reconnectPromise;
   });
 

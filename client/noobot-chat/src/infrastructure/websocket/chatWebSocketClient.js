@@ -18,7 +18,6 @@ import {
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
 
-import { createReconnectCursorStore } from "./chatWebSocketReconnectCursor.js";
 import { createWebSocketCommandRequests } from "./chatWebSocketCommandRequests.js";
 import { createSocketHandlerRegistry } from "./chatWebSocketSocketHandlers.js";
 import {
@@ -48,15 +47,6 @@ export function createChatWebSocketClient({
   let activeReconnectContext = null;
   let protocolRequestSerial = 0;
 
-  const reconnectCursor = createReconnectCursorStore();
-  const {
-    clear: clearLastReceivedSeqMap,
-    getSeqMap: getLastReceivedSeqMap,
-    hasState: hasReconnectState,
-    remove: removeLastReceivedSeq,
-    trackEvent: trackIncomingEvent,
-    trackReconnectData,
-  } = reconnectCursor;
   let reconnecting = false;
   let reconnectResolve = null;
   let reconnectReject = null;
@@ -250,10 +240,6 @@ export function createChatWebSocketClient({
             transport.markReady(ws, { nextServerInstanceId: data?.serverInstanceId });
             return;
           }
-          trackIncomingEvent(data);
-          if (event === StreamEventEnum.DONE || event === StreamEventEnum.USER_STOPPED) {
-            removeLastReceivedSeq(data?.dialogProcessId);
-          }
           commandRequests.settle(event, data);
           const owner = reconnecting && activeReconnectContext
             ? "reconnect_handler"
@@ -409,9 +395,6 @@ export function createChatWebSocketClient({
         terminalChannelStateTimer = setTimeout(() => {
           terminalChannelStateTimer = null;
           if (settled || doneReceived) return;
-          if (data?.dialogProcessId) {
-            removeLastReceivedSeq(data.dialogProcessId);
-          }
           doneReceived = true;
           finalize(() => resolve());
         }, Math.max(0, Number(terminalChannelStateGraceMs || 0)));
@@ -665,8 +648,6 @@ export function createChatWebSocketClient({
           ws.send(JSON.stringify({
             action: "reconnect",
             requestId,
-            lastReceivedSeqMap: reconnectCursor.getSeqMap(),
-            lastReceivedTurnScopeIdMap: reconnectCursor.getTurnScopeIdMap(),
             currentSessionId: String(currentSessionId || "").trim(),
             userId: String(userId || "").trim(),
             knownLifecycleSequenceMap:
@@ -691,7 +672,6 @@ export function createChatWebSocketClient({
               }));
               return;
             }
-            trackReconnectData(data);
             onReconnectData(data);
             return;
           }
@@ -776,9 +756,6 @@ export function createChatWebSocketClient({
     requestJson,
     getActiveSocket,
     getTransportStatus: transport.status,
-    getLastReceivedSeqMap,
-    clearLastReceivedSeqMap,
-    hasReconnectState,
     dispose,
   };
 }

@@ -49,11 +49,12 @@ describe("useChatEngine.send-stream", () => {
     }));
     expect(userMessage.id).toBe(userMessage.messageId);
     expect(capturedPayload.presentation.userMessageId).toBe(userMessage.messageId);
-    expect(capturedPayload.concurrency.expectedRevision).toBe(0);
+    expect(capturedPayload.concurrency.expectedTurnRevision).toBe(0);
+    expect(capturedPayload.concurrency.expectedSessionVersion).toBe(0);
     expect(capturedPayload).not.toHaveProperty("userMessageId");
   });
 
-  it("sends the current session version as the expected revision", async () => {
+  it("sends the current session version independently from the new Turn revision", async () => {
     let capturedPayload = null;
     const stream = vi.fn(async (payload) => {
       capturedPayload = payload;
@@ -67,7 +68,8 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
-    expect(capturedPayload.concurrency.expectedRevision).toBe(7);
+    expect(capturedPayload.concurrency.expectedTurnRevision).toBe(0);
+    expect(capturedPayload.concurrency.expectedSessionVersion).toBe(7);
   });
 
   it("refreshes a stale session version without replaying the failed Turn", async () => {

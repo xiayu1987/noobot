@@ -98,7 +98,7 @@ const {
     :is-running="isMessageRuntimeRunning(messageItem)"
     :grouped-tool-logs="groupCompletedToolLogs(messageItem)"
     :injected-messages="injectedMessages"
-    :detail-count="getThinkingDetailCount(messageItem)"
+    :detail-count="getExecutionLogCount(messageItem)"
     :get-tree-prefix="getThinkingTreePrefix"
     :get-detail-key="getThinkingDetailItemKey"
     :is-expanded="isThinkingDetailExpanded"

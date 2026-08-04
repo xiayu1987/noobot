@@ -5,12 +5,6 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  BackendChannelState,
-  SESSION_RUN_EVENT,
-} from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { disposeReconnectReplayTimers } from "../../../../../../src/modules/chat/runtime/reconnect/cleanup.js";
-import { scheduleCacheExpiredSessionRefresh } from "../../../../../../src/modules/chat/runtime/reconnect/cacheExpiredRefresh.js";
 import { renderActiveSessionBeforeReplay } from "../../../../../../src/modules/chat/runtime/reconnect/hydrationReplay.js";
 import { createReconnectReplayPublicApi } from "../../../../../../src/modules/chat/runtime/reconnect/publicApi.js";
 
@@ -38,61 +32,6 @@ describe("reconnectReplay support modules", () => {
 
     expect(api.__test).toEqual(internals);
     expect(productionApi.__test).toBeUndefined();
-  });
-
-  it("clears pending interaction timers and cache expired refresh timer on cleanup", () => {
-    vi.useFakeTimers();
-    const interactionTimer = setTimeout(() => {}, 10000);
-    const refreshTimer = setTimeout(() => {}, 10000);
-    const missingInteractionPayloadTimers = new Map([["dp-1", interactionTimer]]);
-    const setCacheExpiredRefreshTimer = vi.fn();
-
-    disposeReconnectReplayTimers({
-      missingInteractionPayloadTimers,
-      getCacheExpiredRefreshTimer: () => refreshTimer,
-      setCacheExpiredRefreshTimer,
-      missingInteractionPayloadTimers,
-    });
-
-    expect(missingInteractionPayloadTimers.size).toBe(0);
-    expect(setCacheExpiredRefreshTimer).toHaveBeenCalledWith(null);
-    expect(vi.getTimerCount()).toBe(0);
-    vi.useRealTimers();
-  });
-
-  it("refreshes sessions after cache expiration and clears replay cache", async () => {
-    vi.useFakeTimers();
-    const replayCache = { "s-1": { "dp-1": [] }, "s-2": { "dp-2": [] } };
-    const timerState = { value: null };
-    const fetchSessions = vi.fn(async () => true);
-
-    scheduleCacheExpiredSessionRefresh({
-      getCacheExpiredRefreshTimer: () => timerState.value,
-      setCacheExpiredRefreshTimer: (timer) => {
-        timerState.value = timer;
-      },
-      replayCache,
-      sending: { value: true },
-      interactionSubmitting: { value: true },
-      clearPendingInteraction: vi.fn(),
-      translate: vi.fn((key) => key),
-      activeSession: { value: { id: "s-1", messages: [] } },
-      activeSessionId: { value: " s-1 " },
-      chatList: { fetchSessions },
-      applyAssistantFailureState: vi.fn(),
-      emitSyntheticErrorConversationState: vi.fn(),
-      notify: vi.fn(),
-    });
-
-    await vi.advanceTimersByTimeAsync(1200);
-
-    expect(timerState.value).toBe(null);
-    expect(replayCache).toEqual({});
-    expect(fetchSessions).toHaveBeenCalledWith("s-1", {
-      silent: true,
-      forceCurrentSessionRerender: true,
-    });
-    vi.useRealTimers();
   });
 
   it("fetches fresh session detail when hydrating active session before replay", async () => {
@@ -161,53 +100,6 @@ describe("reconnectReplay support modules", () => {
 
     expect(result).toBe(false);
     expect(applySessionDetail).not.toHaveBeenCalled();
-  });
-
-  it("reports expired refresh failure when session refresh fails", async () => {
-    vi.useFakeTimers();
-    const sending = { value: true };
-    const canStop = { value: true };
-    const applyRunStateEvent = vi.fn();
-    const clearPendingInteraction = vi.fn();
-    const applyAssistantFailureState = vi.fn();
-    const emitSyntheticErrorConversationState = vi.fn();
-    const notify = vi.fn();
-    const targetAssistantMessage = { role: "assistant", pending: true };
-
-    scheduleCacheExpiredSessionRefresh({
-      getCacheExpiredRefreshTimer: vi.fn(() => null),
-      setCacheExpiredRefreshTimer: vi.fn(),
-      replayCache: {},
-      sending,
-      canStop,
-      interactionSubmitting: { value: true },
-      clearPendingInteraction,
-      translate: vi.fn((key) => `translated:${key}`),
-      activeSession: { value: { id: "active-s", messages: [] } },
-      activeSessionId: { value: "active-s" },
-      chatList: { fetchSessions: vi.fn(async () => false) },
-      applyRunStateEvent,
-      applyAssistantFailureState,
-      emitSyntheticErrorConversationState,
-      notify,
-      sessionId: " failed-s ",
-      dialogProcessId: "dp-failed",
-      targetAssistantMessage,
-    });
-
-    await vi.advanceTimersByTimeAsync(1200);
-
-    expect(applyRunStateEvent).not.toHaveBeenCalled();
-    expect(sending.value).toBe(true);
-    expect(canStop.value).toBe(true);
-    expect(clearPendingInteraction).toHaveBeenCalledTimes(1);
-    expect(applyAssistantFailureState).not.toHaveBeenCalled();
-    expect(emitSyntheticErrorConversationState).not.toHaveBeenCalled();
-    expect(notify).toHaveBeenCalledWith({
-      type: "error",
-      message: "translated:chat.expiredRefreshFailed",
-    });
-    vi.useRealTimers();
   });
 
 });

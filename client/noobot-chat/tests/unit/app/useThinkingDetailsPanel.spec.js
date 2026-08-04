@@ -102,6 +102,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     };
     const canonicalMessage = {
       ...staleSummary,
+      pending: true,
       toolTimeline: [{
         key: "call:one",
         toolCallId: "one",
@@ -147,6 +148,66 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline[0].status).toBe("completed");
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(panel.thinkingDetailsAllMessages.value).toContainEqual(injectedMessage);
+  });
+
+  it("keeps the complete detail response authoritative for a completed turn", async () => {
+    const summaryMessage = {
+      role: "assistant",
+      presentationMessageId: "presentation-complete",
+      sessionId: "session-1",
+      dialogProcessId: "process-complete",
+      turnScopeId: "turn-complete",
+      pending: false,
+      hasThinkingDetails: true,
+      thinkingDetailCount: 20,
+      toolTimeline: [{ key: "summary:one", toolCallId: "summary-one", status: "completed" }],
+    };
+    const completeMessage = {
+      ...summaryMessage,
+      toolTimeline: Array.from({ length: 13 }, (_, index) => ({
+        key: `call:${index + 1}`,
+        toolCallId: `tool-${index + 1}`,
+        status: "completed",
+      })),
+      activityTimeline: Array.from({ length: 7 }, (_, index) => ({
+        eventId: `activity:${index + 1}`,
+        sequence: index + 1,
+      })),
+    };
+    const allMessages = Array.from({ length: 15 }, (_, index) => ({
+      role: index % 2 === 0 ? "assistant" : "user",
+      content: `message-${index + 1}`,
+      turnScopeId: "turn-complete",
+    }));
+    const fetcher = vi.fn(async () => ({
+      messageItem: completeMessage,
+      allMessages,
+      sessionDocs: [],
+    }));
+    const activeSession = ref({ messages: [summaryMessage] });
+    const panel = createPanel(fetcher, activeSession);
+
+    await panel.openThinkingDetailsPanel({ messageItem: summaryMessage });
+
+    expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(13);
+    expect(panel.thinkingDetailsMessageItem.value.activityTimeline).toHaveLength(7);
+    expect(panel.thinkingDetailsMessageItem.value.thinkingDetailCount).toBe(20);
+    expect(panel.thinkingDetailsAllMessages.value).toHaveLength(15);
+
+    activeSession.value = {
+      messages: [{ ...summaryMessage, toolTimeline: [{
+        key: "summary:updated",
+        toolCallId: "summary-updated",
+        status: "completed",
+      }] }],
+    };
+    await nextTick();
+    await nextTick();
+
+    expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(13);
+    expect(panel.thinkingDetailsMessageItem.value.activityTimeline).toHaveLength(7);
+    expect(panel.thinkingDetailsAllMessages.value).toHaveLength(15);
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it("does not bind the drawer to a different presentation in the same turn", async () => {

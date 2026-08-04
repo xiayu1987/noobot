@@ -8,6 +8,17 @@ import { describe, expect, it } from "vitest";
 import { buildChatPayload } from "../../../../../../src/modules/chat/runtime/engine/payload.js";
 
 describe("buildChatPayload model preferences", () => {
+  it("derives session provision intent only from backend session identity", () => {
+    expect(buildChatPayload({
+      activeSession: { value: { id: "local-1", backendSessionId: "" } },
+      message: "new",
+    }).session.createIfAbsent).toBe(true);
+    expect(buildChatPayload({
+      activeSession: { value: { id: "local-1", backendSessionId: "session-1" } },
+      message: "existing",
+    }).session.createIfAbsent).toBe(false);
+  });
+
   it("disables text streaming by default", () => {
     expect(buildChatPayload({ message: "x" }).preferences.streaming).toBe(false);
   });
@@ -48,7 +59,7 @@ describe("buildChatPayload model preferences", () => {
     });
 
     expect(payload).toMatchObject({
-      protocolVersion: 1,
+      protocolVersion: 2,
       commandType: "turn.send",
       input: { message: "hello", attachments: [] },
       preferences: {
@@ -109,14 +120,15 @@ describe("buildChatPayload model preferences", () => {
     expect(payload).not.toHaveProperty("userMessageId");
   });
 
-  it("carries the caller-owned session revision in concurrency", () => {
+  it("keeps new Turn revision separate from the caller-owned session version", () => {
     const payload = buildChatPayload({
       message: "hello",
       turnScopeId: "turn-1",
-      expectedVersion: 0,
+      expectedSessionVersion: 7,
     });
 
-    expect(payload.concurrency.expectedRevision).toBe(0);
+    expect(payload.concurrency.expectedTurnRevision).toBe(0);
+    expect(payload.concurrency.expectedSessionVersion).toBe(7);
   });
 
   it("builds independent continue payload with new turn and stopped snapshot identity", () => {
@@ -137,7 +149,7 @@ describe("buildChatPayload model preferences", () => {
     });
 
     expect(payload).toMatchObject({
-      protocolVersion: 1,
+      protocolVersion: 2,
       commandType: "turn.continue",
       identity: {
         sessionId: "s1",

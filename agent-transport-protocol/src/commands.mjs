@@ -17,7 +17,7 @@ const RUN_COMMAND_SET = new Set(RUN_COMMAND_TYPES);
 const EXECUTION_QUERY_SET = new Set(EXECUTION_QUERY_COMMAND_TYPES);
 const TOP_LEVEL_KEYS = new Set([
   "protocolVersion", "commandType", "commandId", "identity", "input", "preferences",
-  "presentation", "concurrency", "continuation", "stop", "interaction", "query", "options",
+  "presentation", "concurrency", "session", "continuation", "stop", "interaction", "query", "options",
 ]);
 const BASE_COMMAND_KEYS = ["protocolVersion", "commandType", "commandId", "identity"];
 const IDENTITY_KEYS = new Set([
@@ -25,7 +25,11 @@ const IDENTITY_KEYS = new Set([
 ]);
 const INPUT_KEYS = new Set(["message", "attachments"]);
 const PRESENTATION_KEYS = new Set(["userMessageId", "assistantMessageId"]);
-const CONCURRENCY_KEYS = new Set(["idempotencyKey", "expectedRevision"]);
+const RUN_CONCURRENCY_KEYS = new Set([
+  "idempotencyKey", "expectedTurnRevision", "expectedSessionVersion",
+]);
+const STOP_CONCURRENCY_KEYS = new Set(["expectedTurnRevision"]);
+const SESSION_KEYS = new Set(["createIfAbsent"]);
 const CONTINUATION_KEYS = new Set(["dialogProcessId", "turnScopeId"]);
 const STOP_KEYS = new Set(["executionId", "partialAssistant"]);
 const PARTIAL_ASSISTANT_KEYS = new Set([
@@ -78,8 +82,12 @@ export function createTurnRunCommand(input = {}) {
     }),
     concurrency: compactObject({
       idempotencyKey: clean(input.concurrency?.idempotencyKey),
-      expectedRevision: input.concurrency?.expectedRevision,
+      expectedTurnRevision: input.concurrency?.expectedTurnRevision ?? 0,
+      expectedSessionVersion: input.concurrency?.expectedSessionVersion ?? 0,
     }),
+    session: {
+      createIfAbsent: input.session?.createIfAbsent === true,
+    },
     ...(commandType === AGENT_COMMAND.CONTINUE ? {
       continuation: {
         dialogProcessId: clean(input.continuation?.dialogProcessId),
@@ -92,7 +100,7 @@ export function createTurnRunCommand(input = {}) {
 export function createTurnStopCommand(input = {}) {
   return {
     ...createEnvelope(AGENT_COMMAND.STOP, input),
-    concurrency: compactObject({ expectedRevision: input.concurrency?.expectedRevision }),
+    concurrency: compactObject({ expectedTurnRevision: input.concurrency?.expectedTurnRevision ?? 0 }),
     stop: compactObject({
       executionId: clean(input.stop?.executionId),
       partialAssistant: isObject(input.stop?.partialAssistant) ? { ...input.stop.partialAssistant } : undefined,
@@ -157,7 +165,7 @@ function rejectUnknownFields(value, allowedKeys, path, errors) {
 
 function validateTopLevelFields(command, commandType, errors) {
   const commandKeys = RUN_COMMAND_SET.has(commandType)
-    ? [...BASE_COMMAND_KEYS, "input", "preferences", "presentation", "concurrency",
+    ? [...BASE_COMMAND_KEYS, "input", "preferences", "presentation", "concurrency", "session",
       ...(commandType === AGENT_COMMAND.CONTINUE ? ["continuation"] : [])]
     : commandType === AGENT_COMMAND.STOP
       ? [...BASE_COMMAND_KEYS, "concurrency", "stop"]
@@ -197,7 +205,21 @@ export function validateAgentCommand(command) {
     if (!isObject(command.presentation)) errors.push("presentation_not_object");
     else rejectUnknownFields(command.presentation, PRESENTATION_KEYS, "presentation", errors);
     if (!isObject(command.concurrency)) errors.push("concurrency_not_object");
-    else rejectUnknownFields(command.concurrency, CONCURRENCY_KEYS, "concurrency", errors);
+    else {
+      rejectUnknownFields(command.concurrency, RUN_CONCURRENCY_KEYS, "concurrency", errors);
+      if (command.concurrency.expectedTurnRevision !== 0) errors.push("run_turn_revision_must_be_zero");
+      if (!Number.isInteger(command.concurrency.expectedSessionVersion) || command.concurrency.expectedSessionVersion < 0) {
+        errors.push("invalid_expected_session_version");
+      }
+    }
+    if (!isObject(command.session)) errors.push("session_not_object");
+    else {
+      rejectUnknownFields(command.session, SESSION_KEYS, "session", errors);
+      if (typeof command.session.createIfAbsent !== "boolean") errors.push("invalid_create_if_absent");
+      if (commandType !== AGENT_COMMAND.SEND && command.session.createIfAbsent) {
+        errors.push("create_if_absent_requires_send");
+      }
+    }
     if (commandType === AGENT_COMMAND.CONTINUE) {
       if (!isObject(command.continuation)) errors.push("continuation_not_object");
       else rejectUnknownFields(command.continuation, CONTINUATION_KEYS, "continuation", errors);
@@ -207,7 +229,12 @@ export function validateAgentCommand(command) {
   } else if (commandType === AGENT_COMMAND.STOP) {
     if (!clean(command.identity?.turnScopeId)) errors.push("missing_turn_scope_id");
     if (!isObject(command.concurrency)) errors.push("concurrency_not_object");
-    else rejectUnknownFields(command.concurrency, CONCURRENCY_KEYS, "concurrency", errors);
+    else {
+      rejectUnknownFields(command.concurrency, STOP_CONCURRENCY_KEYS, "concurrency", errors);
+      if (!Number.isInteger(command.concurrency.expectedTurnRevision) || command.concurrency.expectedTurnRevision < 0) {
+        errors.push("invalid_expected_turn_revision");
+      }
+    }
     if (!isObject(command.stop)) errors.push("stop_not_object");
     else {
       rejectUnknownFields(command.stop, STOP_KEYS, "stop", errors);

@@ -10,7 +10,7 @@ import { buildAgentTransportConsumption } from "../../../src/bot/execution/runne
 
 test("Agent transport consumption proves normalized fields reached their runtime consumers", () => {
   const result = buildAgentTransportConsumption({
-    transportCommand: { protocolVersion: 1, commandType: "turn.send", commandId: "turn-1" },
+    transportCommand: { protocolVersion: 2, commandType: "turn.send", commandId: "turn-1" },
     identity: {
       sessionId: "session-1",
       parentSessionId: "",
@@ -52,7 +52,7 @@ test("Agent transport consumption proves normalized fields reached their runtime
     },
   });
 
-  assert.equal(result.protocolVersion, 1);
+  assert.equal(result.protocolVersion, 2);
   assert.equal(result.commandType, "turn.send");
   assert.equal(result.commandId, "turn-1");
   assert.equal(result.identity.sessionId, "session-1");
@@ -77,7 +77,8 @@ test("Agent transport consumption proves normalized fields reached their runtime
   assert.equal(result.presentation.userMessageIdConsumed, true);
   assert.equal(result.presentation.assistantMessageIdConsumed, true);
   assert.equal(result.concurrency.idempotencyKeyConsumed, true);
-  assert.equal(result.concurrency.expectedRevisionConsumed, true);
+  assert.equal(result.concurrency.expectedSessionVersion, 3);
+  assert.equal(result.concurrency.expectedSessionVersionConsumed, true);
   assert.equal(result.concurrency.committedSessionVersion, 4);
   assert.equal(JSON.stringify(result).includes("hello"), false);
 });

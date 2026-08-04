@@ -192,6 +192,7 @@ const payload = {
   message: "hello",
   turnScopeId: "turn-authoritative",
   commandId: "command-authoritative",
+  createIfAbsent: true,
   config: {
     turnScopeId: "turn-authoritative",
     thinkingStartedAt: "2026-07-24T05:42:07.698Z",

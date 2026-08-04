@@ -83,7 +83,7 @@ function buildStopPayload({ activeSession, session: targetSession, pendingAssist
       turnScopeId,
     },
     concurrency: {
-      expectedRevision: Number.isFinite(Number(execution?.revision))
+      expectedTurnRevision: Number.isFinite(Number(execution?.revision))
         ? Number(execution.revision)
         : undefined,
     },

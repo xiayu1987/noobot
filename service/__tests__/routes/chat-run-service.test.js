@@ -36,7 +36,12 @@ function createCommand(overrides = {}) {
       selectedConnectors: { terminal: "local" },
     },
     presentation: { userMessageId: "user-1", assistantMessageId: "assistant-1" },
-    concurrency: { idempotencyKey: "turn-1", expectedRevision: 3 },
+    concurrency: {
+      idempotencyKey: "turn-1",
+      expectedTurnRevision: 0,
+      expectedSessionVersion: 3,
+    },
+    session: { createIfAbsent: overrides.createIfAbsent === true },
     continuation: overrides.continuation,
   });
 }
@@ -52,8 +57,10 @@ test("chat-run-service maps a validated transport command without a compat confi
   assert.equal(request.runConfig.userMessageId, "user-1");
   assert.equal(request.runConfig.idempotencyKey, "turn-1");
   assert.equal(request.runConfig.expectedVersion, 3);
+  assert.equal(request.expectedRevision, 0);
+  assert.equal(request.createSessionIfAbsent, false);
   assert.deepEqual(request.runConfig.transportCommand, {
-    protocolVersion: 1,
+    protocolVersion: 2,
     commandType: "turn.send",
     commandId: "turn-1",
   });
@@ -67,6 +74,14 @@ test("chat-run-service maps a validated transport command without a compat confi
   assert.equal("config" in request.runConfig, false);
   assert.equal("runTimeoutMs" in request.runConfig, false);
   assert.equal("thinkingStartedAt" in request.runConfig, false);
+});
+
+test("chat-run-service consumes explicit session provision intent", () => {
+  const request = createService().mapAgentRunCommand(
+    createCommand({ createIfAbsent: true }),
+    { userId: "user-1" },
+  );
+  assert.equal(request.createSessionIfAbsent, true);
 });
 
 test("chat-run-service derives resend and continuation flags from commandType", () => {

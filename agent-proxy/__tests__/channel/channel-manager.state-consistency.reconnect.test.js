@@ -171,7 +171,7 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
   assert.equal("currentRun" in session, false);
   assert.equal(session.replayBatch.snapshot.activeTurnScopeId, turnScopeId);
   assert.deepEqual(session.replayBatch.events, []);
-  assert.equal(session.dialogProcesses[0].messages.some((item) => item.event === "delta"), true);
+  assert.equal("dialogProcesses" in session, false);
 });
 
 test("reconnect opens a query transport without replaying the stale run command", async () => {
@@ -482,7 +482,7 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
   assert.equal(entry.replayBatch.snapshot.commandId, commandId);
   assert.equal(entry.replayBatch.snapshotSequence, 3);
   assert.deepEqual(entry.replayBatch.snapshot.replacedTurns.map((item) => item.turnScopeId), ["turn-old"]);
-  assert.equal(entry.replayBatch.cacheExpired, false);
+  assert.equal("cacheExpired" in entry.replayBatch, false);
   assert.equal(getEvent(client, "reconnect_complete")?.data?.totalSessions, 1);
   assert.equal("hasRunningTask" in entry, false);
   assert.equal("currentRun" in entry, false);
@@ -725,7 +725,6 @@ test("reconnect does not derive authoritative sending state from a running trans
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(client, {
     currentSessionId: "session-snapshot-running",
-    lastReceivedSeqMap: {},
   });
 
   const firstState = client.sentEvents.find((eventItem) => eventItem?.event === "channel_state");
@@ -753,7 +752,6 @@ test("reconnect leaves business state empty for a running transport without auth
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(client, {
     currentSessionId: "session-running-empty",
-    lastReceivedSeqMap: {},
   });
 
   const reconnectData = getEvent(client, "reconnect_data");
@@ -783,7 +781,7 @@ test("reconnect does not manufacture an error when a transport socket disappears
   channel.upstreamClosed = true;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, { currentSessionId: sessionId, lastReceivedSeqMap: {} });
+  manager.handleReconnect(client, { currentSessionId: sessionId });
 
   const reconnectData = getEvent(client, "reconnect_data");
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
@@ -812,7 +810,7 @@ test("reconnect keeps transport status separate from authoritative running state
   channel.upstreamClosed = false;
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(client, { currentSessionId: sessionId, lastReceivedSeqMap: {} });
+  manager.handleReconnect(client, { currentSessionId: sessionId });
 
   const reconnectData = getEvent(client, "reconnect_data");
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
@@ -840,7 +838,6 @@ test("reconnect does not infer a running Turn from same-user transport identity"
   manager.handleReconnect(reconnectClient, {
     userId: "user-1",
     currentSessionId: "session-user-fallback",
-    lastReceivedSeqMap: {},
   });
 
   const reconnectData = getEvent(reconnectClient, "reconnect_data");
@@ -882,8 +879,8 @@ test("reconnect state should be consistent for all same-user clients across chan
   const clientA = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   const clientB = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
 
-  manager.handleReconnect(clientA, { currentSessionId: "", lastReceivedSeqMap: {} });
-  manager.handleReconnect(clientB, { currentSessionId: "", lastReceivedSeqMap: {} });
+  manager.handleReconnect(clientA, { currentSessionId: "" });
+  manager.handleReconnect(clientB, { currentSessionId: "" });
 
   const reconnectDataA = getEvent(clientA, "reconnect_data");
   const reconnectDataB = getEvent(clientB, "reconnect_data");
@@ -896,12 +893,10 @@ test("reconnect state should be consistent for all same-user clients across chan
     normalizedSessionsA.map((entry) => ({
       sessionId: entry.sessionId,
       replayBatch: entry.replayBatch,
-      dialogProcesses: entry.dialogProcesses,
     })),
     normalizedSessionsB.map((entry) => ({
       sessionId: entry.sessionId,
       replayBatch: entry.replayBatch,
-      dialogProcesses: entry.dialogProcesses,
     })),
     "all same-user clients should see identical replay protocol state",
   );
@@ -913,16 +908,7 @@ test("reconnect state should be consistent for all same-user clients across chan
     assert.ok(sessionEntry, `missing session for status=${item.status}`);
     assert.equal("hasRunningTask" in sessionEntry, false);
     assert.equal("currentRun" in sessionEntry, false);
-    if (["done", "user_stopped", "error"].includes(item.status)) {
-      assert.equal(
-        sessionEntry.dialogProcesses.length,
-        0,
-        `terminal status ${item.status} should not replay with lastSeq=0`,
-      );
-    } else {
-      assert.equal(sessionEntry.dialogProcesses.length, 1);
-      assert.equal(sessionEntry.dialogProcesses[0].messages[0]?.event, "thinking");
-    }
+    assert.equal("dialogProcesses" in sessionEntry, false);
     const rawSessionEntry = (reconnectDataA.data?.sessions || []).find(
       (entry) => String(entry?.sessionId || "") === `session-${item.status}`,
     );
@@ -947,7 +933,6 @@ test("reconnect state should be isolated between different users", () => {
   const otherUserClient = createMockSocket({ apiKey: "api-key-2", userId: "user-2" });
   manager.handleReconnect(otherUserClient, {
     currentSessionId: "session-1",
-    lastReceivedSeqMap: {},
   });
 
   const reconnectData = getEvent(otherUserClient, "reconnect_data");
@@ -979,7 +964,6 @@ test("reconnect should include conversationStates snapshot", () => {
   const client = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
   manager.handleReconnect(client, {
     currentSessionId: "session-1",
-    lastReceivedSeqMap: { "dp-1": 1 },
   });
   const reconnectData = getEvent(client, "reconnect_data");
   assert.ok(reconnectData);
@@ -1023,7 +1007,6 @@ test("reconnect preserves cached authoritative states without synthesizing curre
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(client, {
     currentSessionId: "session-current-run",
-    lastReceivedSeqMap: {},
   });
 
   const reconnectData = getEvent(client, "reconnect_data");
@@ -1035,7 +1018,7 @@ test("reconnect preserves cached authoritative states without synthesizing curre
   assert.equal("conversationStates" in sessionEntry, false);
 });
 
-test("reconnect reports cache expiry without deriving reconnecting business state", () => {
+test("reconnect does not expose the removed data-plane cache-expiry branch", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
@@ -1051,7 +1034,6 @@ test("reconnect reports cache expiry without deriving reconnecting business stat
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(client, {
     currentSessionId: "session-1",
-    lastReceivedSeqMap: { "dp-1": 99 },
   });
   const reconnectData = getEvent(client, "reconnect_data");
   assert.ok(reconnectData);
@@ -1059,5 +1041,6 @@ test("reconnect reports cache expiry without deriving reconnecting business stat
     (item) => String(item?.sessionId || "") === "session-1",
   );
   assert.equal("conversationStates" in sessionEntry, false);
-  assert.equal(sessionEntry?.replayBatch?.cacheExpired, true);
+  assert.equal("cacheExpired" in sessionEntry.replayBatch, false);
+  assert.equal("cacheExpired" in reconnectData.data, false);
 });

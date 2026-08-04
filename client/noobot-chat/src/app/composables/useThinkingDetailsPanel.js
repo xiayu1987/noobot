@@ -218,9 +218,7 @@ export function useThinkingDetailsPanel({
     }
     const detailPayload = loadedThinkingDetail
       ? {
-        messageItem: hasLocalThinkingDetails
-          ? initialMessageItem
-          : loadedThinkingDetail.messageItem,
+        messageItem: loadedThinkingDetail.messageItem,
         allMessages: loadedThinkingDetail.allMessages,
         sessionDocs: getSessionDocsFromDetail(loadedThinkingDetail),
       }
@@ -257,7 +255,7 @@ export function useThinkingDetailsPanel({
       const turnScopeId = String(currentMessage?.turnScopeId || currentMessage?.turn_scope_id || "").trim();
       if (!dialogProcessId && !turnScopeId) return;
       const sourceMessage = findActiveCanonicalMessage(currentMessage);
-      if (hasCanonicalTimeline(sourceMessage)) {
+      if (sourceMessage?.pending === true && hasCanonicalTimeline(sourceMessage)) {
         detailRequestVersion += 1;
         thinkingDetailsMessageItem.value = sourceMessage;
         logThinkingPanelState("frontend.thinkingReplay.detailPanelCanonicalSynchronized", () => ({

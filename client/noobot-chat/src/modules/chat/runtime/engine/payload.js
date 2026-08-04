@@ -43,7 +43,7 @@ export function buildChatPayload({
   continueFromStopped = false,
   resumeDialogProcessId = "",
   resumeTurnScopeId = "",
-  expectedVersion = undefined,
+  expectedSessionVersion = 0,
   idempotencyKey = "",
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
@@ -95,7 +95,11 @@ export function buildChatPayload({
     },
     concurrency: {
       idempotencyKey: normalizeTrimmedString(idempotencyKey) || normalizedTurnScopeId,
-      expectedRevision: expectedVersion,
+      expectedTurnRevision: 0,
+      expectedSessionVersion,
+    },
+    session: {
+      createIfAbsent: !normalizeTrimmedString(activeSession?.value?.backendSessionId),
     },
     continuation: {
       dialogProcessId: normalizedResumeDialogProcessId,

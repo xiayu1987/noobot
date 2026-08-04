@@ -66,6 +66,7 @@ test("chat-websocket-server: stop from a new websocket aborts an active run by t
         action: "stop",
         sessionId: "s-cross-stop",
         turnScopeId: "turn-cross-stop",
+        expectedRevision: 2,
         partialAssistant: { content: "partial", turnScopeId: "turn-cross-stop" },
       }))));
       ws.on("message", (raw) => {
@@ -171,6 +172,7 @@ test("chat-websocket-server: an authenticated owner cannot stop another owner's 
         action: "stop",
         sessionId: "s-owner-isolation",
         turnScopeId: "turn-owner-isolation",
+        expectedRevision: 2,
         partialAssistant: {
           dialogProcessId: "dp-owner-isolation",
           turnScopeId: "turn-owner-isolation",
@@ -243,6 +245,7 @@ test("chat-websocket-server: the same authenticated owner stops its run without 
         action: "stop",
         sessionId: "s-owner-stop",
         turnScopeId: "turn-owner-stop",
+        expectedRevision: 2,
         partialAssistant: {
           dialogProcessId: "dp-owner-stop",
           turnScopeId: "turn-owner-stop",

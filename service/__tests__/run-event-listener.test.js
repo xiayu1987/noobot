@@ -126,14 +126,14 @@ test("run-event-listener preserves the safe Agent transport consumption proof", 
     onEventReceived: (event) => received.push(event),
   });
   const consumption = {
-    protocolVersion: 1,
+    protocolVersion: 2,
     commandType: "turn.send",
     commandId: "turn-1",
     consumer: "agent",
     identity: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
     input: { requestedMessageLength: 5, persistedMessageLength: 5, messageConsumed: true },
     presentation: { userMessageIdConsumed: true, assistantMessageIdConsumed: true },
-    concurrency: { expectedRevision: 0, expectedRevisionConsumed: true },
+    concurrency: { expectedSessionVersion: 0, expectedSessionVersionConsumed: true },
   };
 
   listener.onEvent({ event: "agent_transport_parameters_consumed", data: consumption });

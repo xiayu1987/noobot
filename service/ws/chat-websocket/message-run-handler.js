@@ -107,6 +107,7 @@ export function createMessageRunHandler({
       turnScopeId = "",
       runConfig: normalizedRunConfig,
       expectedRevision,
+      createSessionIfAbsent,
     } = mapAgentRunCommand(command, { userId: authInfo?.userId });
     state.currentTurnScopeId = String(turnScopeId || "").trim() || state.currentTurnScopeId;
     state.currentLocale = normalizeLocale(normalizedRunConfig.locale || state.currentLocale);
@@ -196,7 +197,7 @@ export function createMessageRunHandler({
       messageId: normalizedRunConfig.messageId,
       presentationMessageId: normalizedRunConfig.presentationMessageId,
       startedAt: authoritativeStartedAt,
-      createSessionIfAbsent: action === "send",
+      createSessionIfAbsent,
       expectedRevision: expectedRevision ?? 0,
       ...executionIntent,
       ...(isContinueCommand ? {

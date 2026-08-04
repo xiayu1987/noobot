@@ -49,11 +49,9 @@ test("interaction_request resolved by one client should be consistent across all
 
   manager.handleReconnect(clientA, {
     currentSessionId: "session-1",
-    lastReceivedSeqMap: { "dp-1": 2 },
   });
   manager.handleReconnect(clientB, {
     currentSessionId: "session-1",
-    lastReceivedSeqMap: { "dp-1": 2 },
   });
 
   const beforeResolveA = JSON.stringify(getEvent(clientA, "reconnect_data")?.data || {});
@@ -74,7 +72,6 @@ test("interaction_request resolved by one client should be consistent across all
   const clientBAfterResolve = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
   manager.handleReconnect(clientBAfterResolve, {
     currentSessionId: "session-1",
-    lastReceivedSeqMap: { "dp-1": 2 },
   });
   const afterResolve = JSON.stringify(
     getEvent(clientBAfterResolve, "reconnect_data")?.data || {},
@@ -262,8 +259,6 @@ test("workflow child terminal events cannot discard a pending interaction owned 
   await manager.handleReconnect(client, {
     currentSessionId: "root-session",
     currentTurnScopeId: "root-turn",
-    lastReceivedSeqMap: { "child-dialog": 49 },
-    lastReceivedTurnScopeIdMap: { "child-dialog": "root-turn" },
   });
 
   const reconnectData = getEvent(client, "reconnect_data");

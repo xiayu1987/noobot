@@ -60,22 +60,6 @@ export function sortReconnectSessions(payload = {}) {
     .map((sessionEntry) => ({
       sessionId: String(sessionEntry?.sessionId || ""),
       replayBatch: sessionEntry?.replayBatch || null,
-      dialogProcesses: (Array.isArray(sessionEntry?.dialogProcesses)
-        ? sessionEntry.dialogProcesses
-        : []
-      )
-        .map((dialogProcess) => ({
-          dialogProcessId: String(dialogProcess?.dialogProcessId || ""),
-          messages: (Array.isArray(dialogProcess?.messages) ? dialogProcess.messages : []).map(
-            (envelope) => ({
-              event: String(envelope?.event || ""),
-              seq: Number(envelope?.data?.seq || 0),
-              requestId: String(envelope?.data?.requestId || ""),
-              pending: envelope?.data?.__agentProxyPendingInteraction === true,
-            }),
-          ),
-        }))
-        .sort((left, right) => left.dialogProcessId.localeCompare(right.dialogProcessId)),
     }))
     .sort((left, right) => left.sessionId.localeCompare(right.sessionId));
 }

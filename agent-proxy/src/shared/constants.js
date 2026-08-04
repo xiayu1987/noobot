@@ -58,7 +58,6 @@ export const CONVERSATION_SOURCE_EVENT = {
   INIT: "init",
   RESTART: "restart",
   CHANNEL_STATUS: "channel_status",
-  RECONNECT_CACHE_EXPIRED: "reconnect_cache_expired",
   STOP: WS_ACTION.STOP,
   CONTINUE: WS_ACTION.CONTINUE,
   RESUME: WS_ACTION.RESUME,
@@ -66,11 +65,6 @@ export const CONVERSATION_SOURCE_EVENT = {
 };
 
 export const CONVERSATION_SCOPE_KEY = "__session__";
-
-export const RECONNECT_SUGGESTION = {
-  NONE: "",
-  RELOAD_SESSION_HISTORY: "reload_session_history",
-};
 
 export const UPSTREAM_CLOSE_REASON = {
   CLOSED: "closed",

@@ -102,6 +102,7 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
       headers: { authorization: "Bearer test-key" },
     });
     const stoppingEvent = await new Promise((resolve, reject) => {
+      let stopSent = false;
       ws.on("open", () => {
         ws.send(JSON.stringify(createProtocolTestCommand({
           userId: "u1",
@@ -110,17 +111,22 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
           turnScopeId: "turn-slow",
           config: { locale: "zh-CN" },
         })));
-        setTimeout(() => ws.send(JSON.stringify(createProtocolTestCommand({
-          action: "stop",
-          turnScopeId: "turn-slow",
-          partialAssistant: {
-            dialogProcessId: "dp-slow",
-            turnScopeId: "turn-slow",
-          },
-        }))), 10);
       });
       ws.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
+        if (!stopSent && parsed?.event === "turn_lifecycle" && parsed?.data?.capabilities?.canStop === true) {
+          stopSent = true;
+          ws.send(JSON.stringify(createProtocolTestCommand({
+            action: "stop",
+            sessionId: "s1",
+            turnScopeId: "turn-slow",
+            expectedRevision: parsed.data.revision,
+            partialAssistant: {
+              dialogProcessId: "dp-slow",
+              turnScopeId: "turn-slow",
+            },
+          })));
+        }
         if (parsed?.event === "turn_lifecycle" && parsed?.data?.eventType === TURN_EVENT.STOP_ACCEPTED) {
           resolve(parsed);
         }
@@ -376,6 +382,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
           action: "stop",
           sessionId: "session-idle-stop",
           turnScopeId: "turn-idle-stop",
+          expectedRevision: 2,
           partialAssistant: {
             dialogProcessId: "dp-idle-stop",
             turnScopeId: "turn-idle-stop",

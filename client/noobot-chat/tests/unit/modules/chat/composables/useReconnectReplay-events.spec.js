@@ -342,7 +342,7 @@ describe("useReconnectReplay", () => {
     expect(refs.sending.value).toBe(false);
   });
 
-  it("EV-01b: reconnect transaction hydrates detail before canonical replay updates the explicit assistant identity", async () => {
+  it("EV-01b: reconnect transaction hydrates the active presentation from session authority", async () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "old-q", ts: 1 },
@@ -376,14 +376,6 @@ describe("useReconnectReplay", () => {
       refs.activeSession.value.rawMessages = [...refs.activeSession.value.messages];
     });
 
-    const envelope = createAuthoritativeMessageEnvelope("llm_delta", {
-      sessionId: "s-1",
-      dialogProcessId: "dp-new",
-      turnScopeId: "turn-dp-new",
-      messageId: "message-dp-new",
-      seq: 1,
-      text: "A",
-    });
     const snapshot = createTurnLifecycleSnapshot({
       commandId: "command-dp-new",
       userId: "admin",
@@ -413,10 +405,6 @@ describe("useReconnectReplay", () => {
           snapshot,
           snapshotSequence: 1,
         }),
-        dialogProcesses: [{
-          dialogProcessId: "dp-new",
-          messages: [envelope],
-        }],
       }],
     });
 
@@ -426,8 +414,7 @@ describe("useReconnectReplay", () => {
     const assistantIdx = refs.activeSession.value.messages.findIndex(
       (message) =>
         message.role === RoleEnum.ASSISTANT &&
-        message.dialogProcessId === "dp-new" &&
-        message.content === "A",
+        message.dialogProcessId === "dp-new",
     );
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", {
       source: "reconnectProtocolReconcile",
@@ -438,7 +425,7 @@ describe("useReconnectReplay", () => {
     expect(refs.activeSession.value.messages[assistantIdx]).toMatchObject({
       id: "message-dp-new",
       messageId: "message-dp-new",
-      content: "A",
+      content: "",
     });
   });
 

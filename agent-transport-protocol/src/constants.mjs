@@ -6,7 +6,7 @@
 import { TURN_COMMAND } from "@noobot/event-protocol";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 
-export const AGENT_TRANSPORT_PROTOCOL_VERSION = 1;
+export const AGENT_TRANSPORT_PROTOCOL_VERSION = 2;
 
 export const AGENT_COMMAND = Object.freeze({
   SEND: TURN_COMMAND.SEND,

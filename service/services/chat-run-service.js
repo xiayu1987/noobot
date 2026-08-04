@@ -111,7 +111,7 @@ export function createChatRunService({
       userMessageId: String(command.presentation?.userMessageId || "").trim(),
       presentationMessageId: String(command.presentation?.assistantMessageId || "").trim(),
       idempotencyKey: String(command.concurrency?.idempotencyKey || command.commandId).trim(),
-      expectedVersion: command.concurrency?.expectedRevision,
+      expectedVersion: command.concurrency.expectedSessionVersion,
       transportCommand: {
         protocolVersion: command.protocolVersion,
         commandType: command.commandType,
@@ -134,7 +134,8 @@ export function createChatRunService({
       commandId: command.commandId,
       message: command.input.message,
       attachments: command.input.attachments,
-      expectedRevision: command.concurrency?.expectedRevision,
+      expectedRevision: command.concurrency.expectedTurnRevision,
+      createSessionIfAbsent: command.session?.createIfAbsent === true,
       runConfig,
     };
   }

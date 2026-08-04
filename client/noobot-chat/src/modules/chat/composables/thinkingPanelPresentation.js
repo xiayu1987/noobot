@@ -89,12 +89,12 @@ export function createThinkingPanelPresentation({
   }
 
   function getThinkingDetailCount(messageItem = {}) {
-    const completedToolLogCount =
-      getCompletedToolLogsForMessage(messageItem).length;
-    if (completedToolLogCount > 0) return completedToolLogCount;
     const summaryThinkingDetailCount =
       getSummaryThinkingDetailCount(messageItem);
     if (summaryThinkingDetailCount > 0) return summaryThinkingDetailCount;
+    const completedToolLogCount =
+      getCompletedToolLogsForMessage(messageItem).length;
+    if (completedToolLogCount > 0) return completedToolLogCount;
     const toolCalls = Array.isArray(messageItem?.toolCalls)
       ? messageItem.toolCalls
       : Array.isArray(messageItem?.tool_calls)
