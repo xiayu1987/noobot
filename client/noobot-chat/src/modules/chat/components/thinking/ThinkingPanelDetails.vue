@@ -12,35 +12,54 @@ import {
   BaseTabPanelBody,
   BaseThinkingLogLine,
 } from "../../../../shared/public-api/ui.js";
+import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },
   isRunning: Boolean,
   groupedToolLogs: { type: Array, default: () => [] },
-  injectedMessages: { type: Array, default: () => [] },
+  thinkingContentItems: { type: Array, default: () => [] },
   detailCount: { type: Number, default: 0 },
   getTreePrefix: { type: Function, required: true },
   getDetailKey: { type: Function, required: true },
   isExpanded: { type: Function, required: true },
   toggleExpanded: { type: Function, required: true },
-  formatInjectedTitle: { type: Function, required: true },
 });
 const rendererProjection = computed(() => (Array.isArray(props.groupedToolLogs)
   ? props.groupedToolLogs
   : []).flatMap((group = {}) => (Array.isArray(group.items) ? group.items : [])));
-const rendererProjectionSignature = computed(() => rendererProjection.value.map((item = {}) => [
-  item.eventId || "",
-  item.toolCallId || "",
-  item.detailText?.length || 0,
-].join(":")).join("|"));
+const rendererProjectionSignature = computed(() => [
+  rendererProjection.value.map((item = {}) => [
+    item.eventId || "",
+    item.toolCallId || "",
+    item.detailText?.length || 0,
+  ].join(":")).join("|"),
+  props.thinkingContentItems.map((item = {}) => [
+    item.eventId || "",
+    item.sequence || 0,
+    String(item.content || "").length,
+  ].join(":")).join("|"),
+].join("::"));
+function formatThinkingContentTitle(item = {}, index = 0) {
+  const source = String(item?.source || item?.event || item?.activityKind || "thinking").trim();
+  const timestamp = String(item?.timestamp || item?.timelineTimestamp || "").trim();
+  return `${index + 1}. ${source}${timestamp ? ` · ${timestamp}` : ""}`;
+}
 watch(rendererProjectionSignature, () => {
-  logStateMachineDebug("frontend.thinkingReplay.detailRendererProjected", () => ({
+  const buildLogPayload = () => ({
     sessionId: String(props.messageItem?.sessionId || ""),
     presentationMessageId: String(props.messageItem?.presentationMessageId || ""),
     dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
     turnScopeId: String(props.messageItem?.turnScopeId || ""),
     itemCount: rendererProjection.value.length,
+    thinkingContentCount: props.thinkingContentItems.length,
+    thinkingContent: props.thinkingContentItems.slice(-32).map((item = {}) => ({
+      eventId: String(item.eventId || ""),
+      event: String(item.event || ""),
+      sequence: Number(item.sequence || 0),
+      contentLength: String(item.content || "").length,
+    })),
     items: rendererProjection.value.slice(-32).map((item = {}, index) => {
       const detailKey = props.getDetailKey({ key: "tool-timeline" }, item, index);
       return {
@@ -54,7 +73,9 @@ watch(rendererProjectionSignature, () => {
         expanded: detailKey ? props.isExpanded(props.messageItem, detailKey) : false,
       };
     }),
-  }));
+  });
+  logThinkingReplayDebug("frontend.thinkingReplay.detailRendererProjected", buildLogPayload);
+  logStateMachineDebug("frontend.thinkingReplay.detailRendererProjected", buildLogPayload);
 }, { immediate: true, flush: "post" });
 </script>
 <template>
@@ -104,19 +125,19 @@ watch(rendererProjectionSignature, () => {
         ><el-tab-pane
           :label="
             translate('message.thinkingContent', {
-              count: injectedMessages.length,
+              count: thinkingContentItems.length,
             })
           "
           ><BaseTabPanelBody
-            class="thinking-details-scroll-body thinking-details-injected-body"
+            class="thinking-details-scroll-body thinking-details-content-body"
             ><BaseNoteBlock
-              v-for="(item, index) in injectedMessages"
-              :key="`detail-injected-${index}-${String(item.ts || '')}`"
-              :title="formatInjectedTitle(item, index)"
+              v-for="(item, index) in thinkingContentItems"
+              :key="`thinking-content-${String(item.eventId || index)}`"
+              :title="formatThinkingContentTitle(item, index)"
               :content="String(item.content || '')" /><BaseEmptyHint
-              v-if="!injectedMessages.length"
+              v-if="!thinkingContentItems.length"
               :text="
-                translate('message.noInjectedMessages')
+                translate('message.noThinkingContent')
               " /></BaseTabPanelBody></el-tab-pane></el-tabs
   ></BaseTabPanelBody>
 </template>
@@ -164,7 +185,7 @@ watch(rendererProjectionSignature, () => {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
-.thinking-details-injected-body :deep(.base-note-block__content) {
+.thinking-details-content-body :deep(.base-note-block__content) {
   font-size: var(--noobot-msg-caption-font-size);
 }
 </style>

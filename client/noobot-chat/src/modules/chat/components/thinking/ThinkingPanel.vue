@@ -47,7 +47,7 @@ function updateThinkingOpenNames(value) {
   setTurnThinkingOpenNames(props.messageItem, value);
 }
 const {
-  injectedMessages,
+  thinkingContentItems,
   hasThinking,
   getThinkingDurationLabel,
   isThinkingRuntimeRunning,
@@ -67,7 +67,6 @@ const {
   getThinkingDetailItemKey,
   isThinkingDetailExpanded,
   toggleThinkingDetailExpanded,
-  formatInjectedMessageTitle,
 } = panel;
 </script>
 
@@ -97,13 +96,12 @@ const {
     :translate="translate"
     :is-running="isMessageRuntimeRunning(messageItem)"
     :grouped-tool-logs="groupCompletedToolLogs(messageItem)"
-    :injected-messages="injectedMessages"
+    :thinking-content-items="thinkingContentItems"
     :detail-count="getExecutionLogCount(messageItem)"
     :get-tree-prefix="getThinkingTreePrefix"
     :get-detail-key="getThinkingDetailItemKey"
     :is-expanded="isThinkingDetailExpanded"
     :toggle-expanded="toggleThinkingDetailExpanded"
-    :format-injected-title="formatInjectedMessageTitle"
   />
   <template v-else></template>
 </template>

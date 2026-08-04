@@ -25,6 +25,20 @@ function toolTimeline() {
   }];
 }
 
+function thinkingActivity(eventId, sequence, output) {
+  return {
+    eventId,
+    event: "guidance_analysis_response",
+    sequence,
+    sequenceScopeId: "message-1",
+    authority: "authoritative",
+    sequenceDomain: "message-event",
+    source: "harness-plugin",
+    output,
+    timestamp: `2026-07-29T01:00:0${sequence}.000Z`,
+  };
+}
+
 describe("ThinkingPanel canonical details", () => {
   beforeEach(() => localStorage.clear());
   afterEach(() => clearExtensionRegistry());
@@ -140,26 +154,51 @@ describe("ThinkingPanel canonical details", () => {
     )).toBe("");
   });
 
-  it("renders scoped injected entities alongside canonical tool details", () => {
+  it("renders canonical thinking activities alongside canonical tool details", () => {
     const messageItem = {
       role: "assistant",
-      sessionId: "session-injected",
-      turnScopeId: "turn-injected",
+      sessionId: "session-activity",
+      turnScopeId: "turn-activity",
       toolTimeline: toolTimeline(),
+      activityTimeline: [thinkingActivity("guidance-1", 1, "scoped guidance analysis")],
     };
     const wrapper = mountThinkingPanel(messageItem, {
       variant: "details",
-      allMessages: [messageItem, {
-        role: "assistant",
-        sessionId: "session-injected",
-        turnScopeId: "turn-injected",
-        injectedMessage: true,
-        injectedBy: "harness-plugin",
-        content: "scoped injected guidance",
-      }],
     });
 
-    expect(wrapper.text()).toContain("scoped injected guidance");
+    expect(wrapper.text()).toContain("scoped guidance analysis");
+  });
+
+  it("renders new thinking activities while a detail turn is running", async () => {
+    const firstActivity = thinkingActivity("guidance-live-1", 1, "first realtime guidance");
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-live-activity",
+      turnScopeId: "turn-live-activity",
+      pending: true,
+      hasFirstStreamEvent: true,
+      toolTimeline: toolTimeline(),
+      activityTimeline: [firstActivity],
+    };
+    const wrapper = mountThinkingPanel(messageItem, {
+      variant: "details",
+      runtime: { running: true, terminal: false },
+    });
+
+    expect(wrapper.findAll("article")).toHaveLength(1);
+
+    await wrapper.setProps({
+      messageItem: {
+        ...messageItem,
+        activityTimeline: [
+          firstActivity,
+          thinkingActivity("guidance-live-2", 2, "second realtime guidance"),
+        ],
+      },
+    });
+
+    expect(wrapper.findAll("article")).toHaveLength(2);
+    expect(wrapper.text()).toContain("second realtime guidance");
   });
 
   it("does not derive details from historical tool messages", () => {
