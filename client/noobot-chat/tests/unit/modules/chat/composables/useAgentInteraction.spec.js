@@ -88,7 +88,7 @@ describe("useAgentInteraction", () => {
     });
 
     expect(sendJson).toHaveBeenCalledWith({
-      protocolVersion: 1,
+      protocolVersion: 2,
       commandType: "interaction.response",
       commandId: "interaction:req-first",
       identity: { sessionId: "s-1", dialogProcessId: "dp-1" },
@@ -131,7 +131,7 @@ describe("useAgentInteraction", () => {
     interaction.submitInteractionResponse({ approved: true });
 
     expect(sendJson).toHaveBeenCalledWith({
-      protocolVersion: 1,
+      protocolVersion: 2,
       commandType: "interaction.response",
       commandId: "interaction:req-a",
       identity: { sessionId: "s-1", dialogProcessId: "dp-1" },
@@ -160,7 +160,7 @@ describe("useAgentInteraction", () => {
 
     expect(encryptPayloadBySessionId).toHaveBeenCalledWith({ approved: true }, "session-2");
     expect(sendJson).toHaveBeenCalledWith({
-      protocolVersion: 1,
+      protocolVersion: 2,
       commandType: "interaction.response",
       commandId: "interaction:req-2",
       identity: { sessionId: "session-2" },

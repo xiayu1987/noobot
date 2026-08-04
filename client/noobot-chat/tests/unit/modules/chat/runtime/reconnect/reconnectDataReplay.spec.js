@@ -47,15 +47,11 @@ function fixture(overrides = {}) {
   return {
     ensureReconnectSessionActive: vi.fn(async () => {}),
     isCurrentActiveSession: vi.fn((id) => id === "s-1"),
-    replayCache: {},
-    applyReconnectMessagesToActiveSession: vi.fn(async () => {}),
-    applySubSessionReplayMessages: vi.fn(async () => ({ applied: true })),
     reconcileSessionState: vi.fn(async () => true),
     hydrateActiveSessionBeforeReplay: vi.fn(async () => true),
     applyTurnLifecycleEnvelope: vi.fn(async () => ({ applied: true })),
     applyTurnLifecycleSnapshot: vi.fn(() => ({ applied: true })),
     applyPendingInteraction: vi.fn(async () => {}),
-    scheduleCacheExpiredSessionRefresh: vi.fn(),
     ...overrides,
   };
 }
@@ -85,7 +81,7 @@ describe("applyReconnectDataReplay", () => {
     };
     const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }), dialogProcesses: [] }] },
+      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }] },
       ...f,
     });
     expect(f.applyTurnLifecycleSnapshot).toHaveBeenCalledWith(expect.objectContaining({
@@ -100,28 +96,23 @@ describe("applyReconnectDataReplay", () => {
       .toBeLessThan(f.applyTurnLifecycleEnvelope.mock.invocationCallOrder[0]);
   });
 
-  it("routes stable-identity message replay after the Authority baseline", async () => {
-    const message = {
-      event: "delta",
-      data: {
-        sessionId: "s-1", dialogProcessId: "dp-turn-1", turnScopeId: "turn-1",
-        messageId: "message-turn-1", presentationMessageId: "message-turn-1", seq: 5, text: "partial",
-      },
-    };
+  it("rejects the removed dialog message replay branch", async () => {
     const f = fixture();
     await applyReconnectDataReplay({
       reconnectData: {
         sessions: [{
           sessionId: "s-1",
           replayBatch: batch({ sequence: 4 }),
-          dialogProcesses: [{ dialogProcessId: "dp-turn-1", messages: [message] }],
+          dialogProcesses: [],
         }],
       },
       ...f,
     });
-    expect(f.applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
-      [message], "dp-turn-1", { turnScopeId: "turn-1" },
-    );
+    expect(f.reconcileSessionState).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      reason: "invalid_replay_batch",
+    });
+    expect(f.applyTurnLifecycleSnapshot).not.toHaveBeenCalled();
   });
 
   it("reconciles a sequence gap and never applies the invalid tail", async () => {
@@ -133,7 +124,7 @@ describe("applyReconnectDataReplay", () => {
     };
     const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }), dialogProcesses: [] }] },
+      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }] },
       ...f,
     });
     expect(f.reconcileSessionState).toHaveBeenCalledWith({ sessionId: "s-1", reason: "invalid_replay_batch" });
@@ -150,7 +141,7 @@ describe("applyReconnectDataReplay", () => {
     };
     const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }), dialogProcesses: [] }] },
+      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) }] },
       ...f,
     });
     expect(f.applyPendingInteraction).toHaveBeenCalledWith(interaction);

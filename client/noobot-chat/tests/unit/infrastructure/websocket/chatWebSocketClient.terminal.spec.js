@@ -55,7 +55,6 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
     });
     await streamPromise;
     expect(resolved).toBe(true);
-    expect(client.getLastReceivedSeqMap()).toEqual({});
   });
 
   it("does not resolve stream for non-terminal channel_state", async () => {
@@ -212,7 +211,6 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
 
     await expect(streamPromise).rejects.toThrow("boom");
     expect(onEvent).toHaveBeenCalledWith({ event: StreamEventEnum.ERROR, data: errorData });
-    expect(client.getLastReceivedSeqMap()).toEqual({ "dp-1": 4 });
     socket.close(1011, "server_error");
   });
 

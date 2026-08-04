@@ -271,7 +271,7 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   assert.equal(upstreamMessages.length, 1);
   assert.equal(channel.status, "running");
   const reconnectClient = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(reconnectClient, { currentSessionId: "session-stop", lastReceivedSeqMap: {} });
+  manager.handleReconnect(reconnectClient, { currentSessionId: "session-stop" });
 
   const reconnectData = getEvent(reconnectClient, "reconnect_data");
   const sessionEntry = (reconnectData?.data?.sessions || []).find(
@@ -290,7 +290,7 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   manager.broadcastChannelEvent(channel, stoppedEnvelope);
 
   const completedReconnectClient = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
-  manager.handleReconnect(completedReconnectClient, { currentSessionId: "session-stop", lastReceivedSeqMap: {} });
+  manager.handleReconnect(completedReconnectClient, { currentSessionId: "session-stop" });
   const completedReconnectData = getEvent(completedReconnectClient, "reconnect_data");
   const completedSessionEntry = (completedReconnectData?.data?.sessions || []).find(
     (entry) => String(entry?.sessionId || "") === "session-stop",

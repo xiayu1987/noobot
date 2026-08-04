@@ -37,6 +37,30 @@ describe("ThinkingPanel canonical details", () => {
     expect(wrapper.emitted("open-thinking-details")).toHaveLength(1);
   });
 
+  it("uses the protocol detail count instead of the partial rendered timeline count", () => {
+    const messageItem = {
+      role: "assistant",
+      turnScopeId: "turn-count",
+      thinkingDetailCount: 20,
+      toolTimeline: toolTimeline(),
+    };
+    const wrapper = mountThinkingPanel(messageItem);
+
+    expect(wrapper.vm.getThinkingDetailCount(messageItem)).toBe(20);
+  });
+
+  it("keeps the execution record count separate from the protocol detail count", () => {
+    const messageItem = {
+      role: "assistant",
+      turnScopeId: "turn-execution-count",
+      thinkingDetailCount: 20,
+      toolTimeline: toolTimeline(),
+    };
+    const wrapper = mountThinkingPanel(messageItem, { variant: "details" });
+
+    expect(wrapper.find(".tab-pane").attributes("data-label")).toContain("2");
+  });
+
   it("renders canonical call and result in details mode", () => {
     const wrapper = mountThinkingPanel({ role: "assistant", toolTimeline: toolTimeline() }, { variant: "details" });
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(2);

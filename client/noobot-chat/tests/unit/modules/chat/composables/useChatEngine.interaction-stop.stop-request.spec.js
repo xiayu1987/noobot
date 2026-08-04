@@ -65,7 +65,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
     expect(engine.stopSending()).toBe(false);
     expect(deps.chatWebSocketClient.requestStop).toHaveBeenCalledTimes(1);
     expect(deps.chatWebSocketClient.requestStop.mock.calls[0][0]).toMatchObject({
-      protocolVersion: 1,
+      protocolVersion: 2,
       commandType: "turn.stop",
       commandId: "stop:turn-stop-payload",
       identity: {
@@ -220,7 +220,7 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
       expect.objectContaining({
         commandId: "stop:child-turn",
         identity: expect.objectContaining({ sessionId: "child-session", parentSessionId: "main-session", dialogProcessId: "child-dialog", turnScopeId: "child-turn" }),
-        concurrency: { expectedRevision: 7 },
+        concurrency: { expectedTurnRevision: 7 },
         stop: expect.objectContaining({ executionId: "child-execution" }),
       }),
     );

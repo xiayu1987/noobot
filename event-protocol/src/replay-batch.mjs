@@ -16,7 +16,7 @@ const eventId = (event = {}) => clean(
 );
 
 export const EVENT_PROTOCOL_NAME = "@noobot/event-protocol";
-export const EVENT_PROTOCOL_VERSION = 1;
+export const EVENT_PROTOCOL_VERSION = 2;
 export const REPLAY_BATCH_SCHEMA = "replay.batch";
 
 export const EVENT_CATEGORY = Object.freeze({
@@ -34,8 +34,6 @@ export function createReplayBatch({
   snapshotSequence = 0,
   events = [],
   pendingInteractions = [],
-  cacheExpired = false,
-  expiredDialogProcessIds = [],
 } = {}) {
   const normalizedEvents = (Array.isArray(events) ? events : [])
     .filter((event) => event && typeof event === "object")
@@ -55,10 +53,6 @@ export function createReplayBatch({
     events: normalizedEvents,
     pendingInteractions: (Array.isArray(pendingInteractions) ? pendingInteractions : [])
       .filter((item) => item && typeof item === "object"),
-    cacheExpired: cacheExpired === true,
-    expiredDialogProcessIds: (Array.isArray(expiredDialogProcessIds)
-      ? expiredDialogProcessIds
-      : []).map(clean).filter(Boolean),
     cursor: {
       fromSequence: sequence,
       toSequence: normalizedEvents.reduce(
@@ -74,6 +68,8 @@ export function validateReplayBatch(batch = {}) {
   if (batch?.protocol?.name !== EVENT_PROTOCOL_NAME) errors.push("invalid_protocol_name");
   if (Number(batch?.protocol?.version) !== EVENT_PROTOCOL_VERSION) errors.push("unsupported_protocol_version");
   if (batch?.protocol?.schema !== REPLAY_BATCH_SCHEMA) errors.push("invalid_schema");
+  if ("cacheExpired" in batch) errors.push("unsupported_cache_expired_branch");
+  if ("expiredDialogProcessIds" in batch) errors.push("unsupported_dialog_replay_cursor");
   if (!clean(batch.sessionId)) errors.push("missing_session_id");
   if (!Number.isInteger(Number(batch.snapshotSequence)) || Number(batch.snapshotSequence) < 0) {
     errors.push("invalid_snapshot_sequence");

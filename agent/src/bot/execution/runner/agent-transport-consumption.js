@@ -100,8 +100,8 @@ export function buildAgentTransportConsumption({
     concurrency: {
       idempotencyKey: clean(turnCommand?.idempotencyKey || resolvedRunConfig?.idempotencyKey),
       idempotencyKeyConsumed: Boolean(clean(turnCommand?.idempotencyKey)),
-      expectedRevision: expectedVersion ?? null,
-      expectedRevisionConsumed: expectedVersion === commandExpectedVersion,
+      expectedSessionVersion: expectedVersion ?? null,
+      expectedSessionVersionConsumed: expectedVersion === commandExpectedVersion,
       committedSessionVersion: Number(
         committedTurnResult?.version ?? committedTurnResult?.sessionVersion ?? 0,
       ) || null,

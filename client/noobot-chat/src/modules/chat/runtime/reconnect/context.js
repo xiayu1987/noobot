@@ -9,7 +9,6 @@ export function createReconnectReplayContext() {
     replayCache: {},
     appliedReconnectSeqByDialogProcessId: {},
     appliedReconnectEventKindsByTurnKey: {},
-    cacheExpiredRefreshTimer: null,
     replayHydrationPromise: null,
   };
 }

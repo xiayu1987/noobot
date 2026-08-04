@@ -27,7 +27,7 @@ export function createMessageStopHandler({
       commandId: stopCommandId,
       eventType: TURN_EVENT.STOP_ACCEPTED,
       phase: TURN_PHASE.STOP,
-      expectedRevision: command.concurrency?.expectedRevision,
+      expectedRevision: command.concurrency.expectedTurnRevision,
     });
     if (!accepted?.applied && !accepted?.deduplicated) {
       sendEvent("error", {

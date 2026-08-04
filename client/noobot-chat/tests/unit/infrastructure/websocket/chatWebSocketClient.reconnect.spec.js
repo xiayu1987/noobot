@@ -72,7 +72,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       event: StreamEventEnum.DELTA,
       data: expect.objectContaining({ content: "continued answer", seq: 3 }),
     });
-    expect(client.getLastReceivedSeqMap()).toEqual({ "dp-live-replay": 3 });
   });
 
   it("delivers child canonical live events with a business requestId while reconnect replay is running", async () => {
@@ -105,7 +104,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       event: "subagent_message_event",
       data: childEventData,
     });
-    expect(client.getLastReceivedSeqMap()).toEqual({ "child-dialog": 42 });
 
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, {
       requestId: reconnectRequestId,
@@ -129,7 +127,6 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       event: { type: "tool_call_start", sequence: 99 },
     });
 
-    expect(client.getLastReceivedSeqMap()).toEqual({});
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
     await reconnectPromise;
   });
@@ -317,9 +314,9 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       error: "failed attempt",
     };
     socket.emit(StreamEventEnum.ERROR, errorData);
-    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1, cacheExpired: false });
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
 
-    await expect(reconnectPromise).resolves.toEqual({ totalSessions: 1, cacheExpired: false });
+    await expect(reconnectPromise).resolves.toEqual({ totalSessions: 1 });
     expect(onReconnectData).toHaveBeenCalledWith({
       event: StreamEventEnum.ERROR,
       data: errorData,

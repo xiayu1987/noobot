@@ -14,11 +14,20 @@ import {
 } from "../../../src/app/state/thinkingDetailsState.js";
 
 describe("thinking details state", () => {
-  it("counts the canonical tool timeline before other thinking sources", () => {
+  it("uses the protocol detail count instead of recalculating it from a partial timeline", () => {
     expect(getThinkingDetailsCount({
+      role: "assistant",
+      turnScopeId: "turn-1",
+      thinkingDetailCount: 20,
       toolTimeline: [{ key: "call:1" }, { key: "call:2" }],
       toolCalls: [{ id: 3 }],
       realtimeLogs: [{ event: "tool_call" }],
+    })).toBe(20);
+  });
+
+  it("counts the canonical tool timeline when the protocol count is unavailable", () => {
+    expect(getThinkingDetailsCount({
+      toolTimeline: [{ key: "call:1" }, { key: "call:2" }],
     })).toBe(2);
   });
 

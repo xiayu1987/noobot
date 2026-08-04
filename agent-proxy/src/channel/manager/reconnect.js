@@ -6,11 +6,9 @@
 import { config } from "../../shared/config.js";
 import {
   EVENT_TYPE,
-  CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
-  RECONNECT_SUGGESTION,
 } from "../../shared/constants.js";
-import { ensureConnectionId, nowMs } from "../../shared/utils.js";
+import { nowMs } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 import {
   createReplayBatch,
@@ -21,9 +19,10 @@ import { createTurnSnapshotCommand } from "@noobot/agent-transport-protocol";
 class ReconnectMethods {
 
 async handleReconnect(socket, payload = {}) {
+  if ("lastReceivedSeqMap" in payload || "lastReceivedTurnScopeIdMap" in payload) {
+    throw new Error("unsupported_reconnect_message_cursor");
+  }
   this.clearPendingLifecycleDeliveries(socket);
-  const lastReceivedSeqMap = payload?.lastReceivedSeqMap || {};
-  const lastReceivedTurnScopeIdMap = payload?.lastReceivedTurnScopeIdMap || {};
   const currentSessionId = String(payload?.currentSessionId || "").trim();
   const requestId = String(payload?.requestId || "").trim();
   const knownLifecycleSequenceMap = payload?.knownLifecycleSequenceMap || {};
@@ -42,9 +41,6 @@ async handleReconnect(socket, payload = {}) {
       data: {
         currentSessionId,
         sessions: [],
-        cacheExpired: false,
-        expiredDialogProcessIds: [],
-        suggestion: RECONNECT_SUGGESTION.NONE,
         requestId,
       },
     });
@@ -52,20 +48,18 @@ async handleReconnect(socket, payload = {}) {
       event: EVENT_TYPE.RECONNECT_COMPLETE,
       data: {
         totalSessions: 0,
-        cacheExpired: false,
         requestId,
       },
     });
     void writeAgentProxyRouteLifecycleEvent({
       event: "agentProxy.route.reconnect.completed",
       socket,
-      data: { totalSessions: 0, cacheExpired: false },
+      data: { totalSessions: 0 },
     });
     return;
   }
 
   const sessionsMap = new Map();
-  const expiredDialogProcessIds = [];
   const channelsBySessionId = new Map();
   const snapshotRequests = [];
   const reconnectTransaction = { eventBuffer: [], channelStateBaseline: [] };
@@ -94,14 +88,11 @@ async handleReconnect(socket, payload = {}) {
     const requiresAuthoritySnapshot = lifecycleReplay.hasReplayGap || Boolean(cachedActiveTurn);
     const pendingInteractions = sessionChannels.flatMap((channel) =>
       Array.from(channel?.pendingInteractionRequests?.values?.() || [])
-        .filter((envelope) =>
-          isPendingInteractionReplay(envelope) &&
-          String(envelope?.data?.sessionId || "").trim() === channelSessionId)
+        .filter((envelope) => isPendingInteractionReplay(envelope))
         .map((envelope) => this._withChannelSessionScope(channel, envelope)),
     );
     sessionsMap.set(channelSessionId, {
       sessionId: channelSessionId,
-      dialogProcesses: [],
       replayBatch: createReplayBatch({
         sessionId: channelSessionId,
         snapshotSequence: knownLifecycleSequence,
@@ -160,213 +151,13 @@ async handleReconnect(socket, payload = {}) {
     const channel = this.channelStore.get(channelKey);
     if (!channel) continue;
 
-    const channelSessionId = this._extractSessionIdFromChannelKey(channelKey);
-    if (!channelSessionId) continue;
-
     this.attachSubscriber(channel, socket, { sendStateSnapshot: false });
     reconnectTransaction.channelStateBaseline.push(
       ...this.buildChannelStateSnapshot(channel),
     );
-
-    const sessionEntry = sessionsMap.get(channelSessionId);
-    const dialogProcessIdsInLog = new Set();
-    for (const envelope of channel.eventLog) {
-      const dpId = String(envelope?.data?.dialogProcessId || "").trim();
-      if (dpId) dialogProcessIdsInLog.add(dpId);
-    }
-
-    const parts = channelKey.split("::");
-    if (parts.length >= 4 && parts[3]) {
-      dialogProcessIdsInLog.add(parts[3]);
-    }
-
-    for (const dpId of dialogProcessIdsInLog) {
-      const lastSeq = Number(lastReceivedSeqMap[dpId] || 0);
-      const reconnectTurnScopeId = String(
-        lastReceivedTurnScopeIdMap?.[dpId] || "",
-      ).trim();
-      const dialogHasPendingInteraction = this._findPendingInteractionsByDialogProcessId(
-        channel,
-        dpId,
-      ).length > 0;
-      if (
-        lastSeq <= 0 &&
-        !dialogHasPendingInteraction &&
-        channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED
-      ) {
-        this.logSessionEvent(channel, {
-          category: "transport",
-          event: "agentProxy.reconnect.replay.skipped",
-          data: {
-            channelKey,
-            connectionId: ensureConnectionId(socket),
-            sessionId: channelSessionId,
-            dialogProcessId: dpId,
-            turnScopeId: reconnectTurnScopeId,
-            lastSequence: lastSeq,
-            result: "skipped",
-            dropReason: "terminal_without_cursor",
-          },
-        });
-        continue;
-      }
-
-      const filteredCounts = {
-        dialogProcessMismatch: 0,
-        turnScopeMismatch: 0,
-        terminalError: 0,
-        resolvedInteraction: 0,
-        atOrBeforeCursor: 0,
-      };
-      const missingEvents = channel.eventLog.filter((envelope) => {
-        const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
-        if (envDpId !== dpId) {
-          filteredCounts.dialogProcessMismatch += 1;
-          return false;
-        }
-
-        const envelopeTurnScopeId = String(envelope?.data?.turnScopeId || "").trim();
-        if (
-          reconnectTurnScopeId &&
-          envelopeTurnScopeId !== reconnectTurnScopeId
-        ) {
-          filteredCounts.turnScopeMismatch += 1;
-          return false;
-        }
-
-        if (
-          channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED &&
-          String(envelope?.event || "").trim() === EVENT_TYPE.ERROR
-        ) {
-          filteredCounts.terminalError += 1;
-          return false;
-        }
-
-        if (
-          String(envelope?.event || "").trim() ===
-          EVENT_TYPE.INTERACTION_REQUEST
-        ) {
-          const requestId = String(envelope?.data?.requestId || "").trim();
-          if (!requestId || !channel.pendingInteractionRequests.has(requestId)) {
-            filteredCounts.resolvedInteraction += 1;
-            return false;
-          }
-        }
-
-        const upstreamSeq = Number(envelope?.data?.seq || 0);
-        const proxySeq = Number(envelope?.sequence || 0);
-        const comparableSequence = upstreamSeq > 0 ? upstreamSeq : proxySeq;
-        const afterCursor = comparableSequence > lastSeq;
-        if (!afterCursor) filteredCounts.atOrBeforeCursor += 1;
-        return afterCursor;
-      });
-      const missingRequestIds = new Set(
-        missingEvents
-          .map((envelope) => String(envelope?.data?.requestId || "").trim())
-          .filter(Boolean),
-      );
-      const pendingInteractionEvents = Array.from(channel.pendingInteractionRequests.values())
-        .filter((envelope) => {
-          if (!isPendingInteractionReplay(envelope)) return false;
-          const envDpId = String(envelope?.data?.dialogProcessId || "").trim();
-          const envelopeTurnScopeId = String(envelope?.data?.turnScopeId || "").trim();
-          const requestId = String(envelope?.data?.requestId || "").trim();
-          const matchesRun =
-            !reconnectTurnScopeId ||
-            envelopeTurnScopeId === reconnectTurnScopeId;
-          return envDpId === dpId && matchesRun && requestId && !missingRequestIds.has(requestId);
-        })
-        .map((envelope) => this._withChannelSessionScope(channel, envelope));
-      const replayEvents = [...missingEvents].sort((left, right) => {
-        const leftSeq = Number(left?.data?.seq || left?.sequence || 0);
-        const rightSeq = Number(right?.data?.seq || right?.sequence || 0);
-        return leftSeq - rightSeq;
-      });
-      const pendingByRequestId = new Map(
-        (sessionEntry.replayBatch?.pendingInteractions || [])
-          .map((interaction) => [String(interaction?.data?.requestId || interaction?.requestId || "").trim(), interaction])
-          .filter(([requestId]) => requestId),
-      );
-      for (const interaction of pendingInteractionEvents.map((event) => this._withChannelSessionScope(channel, event))) {
-        const requestId = String(interaction?.data?.requestId || interaction?.requestId || "").trim();
-        if (requestId) pendingByRequestId.set(requestId, interaction);
-      }
-      sessionEntry.replayBatch = createReplayBatch({
-        ...sessionEntry.replayBatch,
-        pendingInteractions: [...pendingByRequestId.values()],
-      });
-      const replayLimit = Math.max(0, Number(config.maxReplayEvents || 0));
-      const replayedCount = replayLimit > 0
-        ? Math.min(replayEvents.length, replayLimit)
-        : replayEvents.length;
-      this.logSessionEvent(channel, {
-        category: "transport",
-        event: "agentProxy.reconnect.replay.evaluated",
-        data: {
-          channelKey,
-          connectionId: ensureConnectionId(socket),
-          sessionId: channelSessionId,
-          dialogProcessId: dpId,
-          turnScopeId: reconnectTurnScopeId,
-          lastSequence: lastSeq,
-          cachedEventCount: channel.eventLog.length,
-          missingEventCount: missingEvents.length,
-          pendingInteractionCount: pendingInteractionEvents.length,
-          replayedCount,
-          truncatedCount: Math.max(0, replayEvents.length - replayedCount),
-          filteredCounts,
-          result: replayEvents.length ? "replayed" : "empty",
-          dropReason: replayEvents.length ? "" : (lastSeq > 0 ? "cursor_gap_or_cache_expired" : "no_events_after_cursor"),
-        },
-      });
-
-      if (replayEvents.length > 0) {
-        const replayMessages = replayEvents
-          .slice(0, config.maxReplayEvents)
-          .map((eventEnvelope) => this._withChannelSessionScope(channel, eventEnvelope));
-        const replayTurnScopeIds = new Set(
-          replayMessages
-            .map((eventEnvelope) => String(eventEnvelope?.data?.turnScopeId || "").trim())
-            .filter(Boolean),
-        );
-        sessionEntry.dialogProcesses.push({
-          dialogProcessId: dpId,
-          ...(replayTurnScopeIds.size === 1 ? { turnScopeId: [...replayTurnScopeIds][0] } : {}),
-          parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
-          messages: replayMessages,
-        });
-      } else if (lastSeq > 0) {
-        expiredDialogProcessIds.push(dpId);
-        sessionEntry.replayBatch = createReplayBatch({
-          ...sessionEntry.replayBatch,
-          cacheExpired: true,
-          expiredDialogProcessIds: [
-            ...(sessionEntry.replayBatch?.expiredDialogProcessIds || []),
-            dpId,
-          ],
-        });
-        this.logSessionEvent(channel, {
-          category: "transport",
-          level: "warn",
-          event: "agentProxy.reconnect.cache.expired",
-          data: {
-            channelKey,
-            connectionId: ensureConnectionId(socket),
-            sessionId: channelSessionId,
-            dialogProcessId: dpId,
-            turnScopeId: reconnectTurnScopeId,
-            lastSequence: lastSeq,
-            result: "expired",
-            dropReason: "cursor_gap_or_cache_expired",
-          },
-        });
-      }
-    }
   }
 
   const sessions = Array.from(sessionsMap.values());
-  const cacheExpired = expiredDialogProcessIds.length > 0;
-
   const snapshotResults = snapshotRequests.length
     ? await Promise.all(snapshotRequests.map(async (request) => ({
         ...request,
@@ -415,6 +206,26 @@ async handleReconnect(socket, payload = {}) {
     throw new Error(`authoritative_snapshot_failed:${sessionId}:${snapshotFailureReason}`);
   }
 
+  for (const sessionEntry of sessions) {
+    const sessionChannels = channelsBySessionId.get(sessionEntry.sessionId) || [];
+    const logChannel = sessionChannels[0];
+    if (!logChannel) continue;
+    this.logSessionEvent(logChannel, {
+      category: "transport",
+      event: "agentProxy.reconnect.authorityBatch.prepared",
+      data: {
+        sessionId: sessionEntry.sessionId,
+        snapshotSequence: Number(sessionEntry.replayBatch?.snapshotSequence || 0),
+        lifecycleTailCount: sessionEntry.replayBatch?.events?.length || 0,
+        pendingInteractionCount: sessionEntry.replayBatch?.pendingInteractions?.length || 0,
+        excludedDataPlaneEventCount: sessionChannels.reduce(
+          (count, channel) => count + Number(channel?.eventLog?.length || 0),
+          0,
+        ),
+      },
+    });
+  }
+
   this.sendSocketEvent(socket, {
     event: EVENT_TYPE.RECONNECT_DATA,
     data: {
@@ -423,11 +234,6 @@ async handleReconnect(socket, payload = {}) {
         ...session,
         replayBatch,
       })),
-      cacheExpired,
-      expiredDialogProcessIds,
-      suggestion: cacheExpired
-        ? RECONNECT_SUGGESTION.RELOAD_SESSION_HISTORY
-        : RECONNECT_SUGGESTION.NONE,
       requestId,
     },
   });
@@ -454,7 +260,6 @@ async handleReconnect(socket, payload = {}) {
     event: EVENT_TYPE.RECONNECT_COMPLETE,
     data: {
       totalSessions: sessions.length,
-      cacheExpired,
       requestId,
     },
   });
@@ -463,7 +268,6 @@ async handleReconnect(socket, payload = {}) {
     socket,
     data: {
       totalSessions: sessions.length,
-      cacheExpired: expiredDialogProcessIds.length > 0,
     },
   });
 }

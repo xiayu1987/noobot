@@ -24,7 +24,6 @@ import {
 } from "../runtime/reconnect/interactionHandlers.js";
 import { applyReconnectDataReplay } from "../runtime/reconnect/reconnectDataReplay.js";
 import { applyReconnectEventReplay } from "../runtime/reconnect/reconnectEventReplay.js";
-import { scheduleCacheExpiredSessionRefresh as scheduleCacheExpiredSessionRefreshWithContext } from "../runtime/reconnect/cacheExpiredRefresh.js";
 import {
   _ensureArray,
   _isAssistantRole,
@@ -51,7 +50,6 @@ import {
   mergeAssistantAttachments as mergeAssistantAttachmentsWithContext,
 } from "../runtime/reconnect/messageReplay.js";
 import { createReconnectReplayPublicApi } from "../runtime/reconnect/publicApi.js";
-import { registerReconnectReplayLifecycleCleanup } from "../runtime/reconnect/lifecycle.js";
 import {
   BackendChannelState,
 } from "../runtime/sessionRunStateMachine.js";
@@ -106,7 +104,7 @@ export function useReconnectReplay({
     appliedReconnectEventKindsByTurnKey,
   } =
     reconnectReplayContext;
-  let { cacheExpiredRefreshTimer, replayHydrationPromise } = reconnectReplayContext;
+  let { replayHydrationPromise } = reconnectReplayContext;
   const protocolReconcileAttempts = new Map();
   const isDeletedTurn = ({ sessionId = "", turnScopeId = "" } = {}) =>
     isTurnRuntimeDeleted(turnRuntimeRegistry?.value || turnRuntimeRegistry, { sessionId, turnScopeId });
@@ -244,12 +242,7 @@ export function useReconnectReplay({
       reconnectData,
       ensureReconnectSessionActive,
       isCurrentActiveSession,
-      replayCache,
-      applyReconnectMessagesToActiveSession,
-      scheduleCacheExpiredSessionRefresh,
       reconcileSessionState,
-      applySubSessionReplayMessages,
-      isDeletedTurn,
       hydrateActiveSessionBeforeReplay,
       applyTurnLifecycleEnvelope,
       applyTurnLifecycleSnapshot,
@@ -344,33 +337,6 @@ export function useReconnectReplay({
       reason: "transport_channel_state_ignored",
       sessionId: String(stateData?.sessionId || "").trim(),
       turnScopeId: String(stateData?.turnScopeId || "").trim(),
-    });
-  }
-
-  function scheduleCacheExpiredSessionRefresh({
-    sessionId = "",
-    dialogProcessId = "",
-    targetAssistantMessage = null,
-  } = {}) {
-    return scheduleCacheExpiredSessionRefreshWithContext({
-      getCacheExpiredRefreshTimer: () => cacheExpiredRefreshTimer,
-      setCacheExpiredRefreshTimer: (timer) => {
-        cacheExpiredRefreshTimer = timer;
-        reconnectReplayContext.cacheExpiredRefreshTimer = timer;
-      },
-      replayCache,
-      interactionSubmitting,
-      clearPendingInteraction,
-      translate,
-      activeSession,
-      activeSessionId,
-      chatList,
-      applyRunStateEvent,
-      applyAssistantFailureState,
-      notify,
-      sessionId,
-      dialogProcessId,
-      targetAssistantMessage,
     });
   }
 
@@ -492,14 +458,6 @@ export function useReconnectReplay({
       isDeletedTurn,
     });
   }
-
-  registerReconnectReplayLifecycleCleanup({
-    getCacheExpiredRefreshTimer: () => cacheExpiredRefreshTimer,
-    setCacheExpiredRefreshTimer: (timer) => {
-      cacheExpiredRefreshTimer = timer;
-      reconnectReplayContext.cacheExpiredRefreshTimer = timer;
-    },
-  });
 
   return createReconnectReplayPublicApi({
     applyReconnectData,

@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { effectScope } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFixture, createFakeProcessStore } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -13,27 +12,12 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("FN-02: cacheExpired timer refreshes sessions and clears replayCache", async () => {
-    vi.useFakeTimers();
+  it("rejects the removed cache-expiration reconnect branch", async () => {
     const { api, mocks } = createFixture();
 
-    await api.applyReconnectEvent(StreamEventEnum.DELTA, {
-      sessionId: "s-2",
-      dialogProcessId: "dp-cache",
-      seq: 1,
-      text: "X",
-    });
-    expect(api.__test.replayCache["s-2"]).toBeTruthy();
-
-    await api.applyReconnectData({ sessions: [], cacheExpired: true });
-    vi.advanceTimersByTime(1200);
-    await Promise.resolve();
-
-    expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", {
-      silent: true,
-      forceCurrentSessionRerender: true,
-    });
-    expect(api.__test.replayCache["s-2"]).toBeUndefined();
+    await expect(api.applyReconnectData({ sessions: [], cacheExpired: true }))
+      .rejects.toThrow("unsupported_reconnect_cache_branch");
+    expect(mocks.chatList.fetchSessions).not.toHaveBeenCalled();
   });
 
   it("FN-02b: channel_state expired is ignored without refresh", async () => {
@@ -61,25 +45,6 @@ describe("useReconnectReplay", () => {
 
     expect(refs.interactionSubmitting.value).toBe(true);
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
-  });
-
-  it("FN-03: timer is cleaned on scope dispose", async () => {
-    vi.useFakeTimers();
-    let api;
-    let chatList;
-    const scope = effectScope();
-    scope.run(() => {
-      const fixture = createFixture();
-      api = fixture.api;
-      chatList = fixture.mocks.chatList;
-    });
-
-    await api.applyReconnectData({ sessions: [], cacheExpired: true });
-    scope.stop();
-    vi.advanceTimersByTime(1200);
-    await Promise.resolve();
-
-    expect(chatList.fetchSessions).not.toHaveBeenCalled();
   });
 
   it.each([

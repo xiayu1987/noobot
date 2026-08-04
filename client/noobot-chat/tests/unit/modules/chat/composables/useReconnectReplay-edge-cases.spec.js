@@ -97,25 +97,4 @@ describe("useReconnectReplay", () => {
     vi.useRealTimers();
   });
 
-  it("Replay Batch cache expiration refreshes without manufacturing a Turn terminal state", async () => {
-    vi.useFakeTimers();
-    const { api, refs, mocks } = createFixture();
-    refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "", turnScopeId: "turn-expired" },
-    ];
-    mocks.chatList.fetchSessions.mockResolvedValue(false);
-
-    await api.applyReconnectData({ sessions: [], cacheExpired: true });
-
-    await vi.advanceTimersByTimeAsync(1300);
-
-    expect(refs.sending.value).toBe(false);
-    expect(mocks.chatList.fetchSessions).toHaveBeenCalledWith("s-1", {
-      silent: true,
-      forceCurrentSessionRerender: true,
-    });
-    expect(mocks.resolveTurnTerminalState).not.toHaveBeenCalled();
-    vi.useRealTimers();
-  });
 });

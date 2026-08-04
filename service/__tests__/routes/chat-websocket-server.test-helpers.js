@@ -45,7 +45,7 @@ export function createProtocolTestCommand(payload = {}) {
     return createTurnStopCommand({
       commandId: resolvedCommandId || `stop:${turnScopeId}`,
       identity,
-      concurrency: { expectedRevision: payload?.expectedRevision },
+      concurrency: { expectedTurnRevision: payload?.expectedRevision },
       stop: { executionId: payload?.executionId, partialAssistant: payload?.partialAssistant },
     });
   }
@@ -87,6 +87,7 @@ export function createProtocolTestCommand(payload = {}) {
     commandType: resolvedRunCommandType,
     commandId: resolvedCommandId,
     identity,
+    session: { createIfAbsent: payload?.createIfAbsent === true },
     input: { message: payload?.message || "test message", attachments: payload?.attachments || [] },
     preferences: {
       allowUserInteraction: config.allowUserInteraction,
@@ -109,7 +110,8 @@ export function createProtocolTestCommand(payload = {}) {
     },
     concurrency: {
       idempotencyKey: payload?.idempotencyKey || config.idempotencyKey,
-      expectedRevision: payload?.expectedRevision ?? payload?.expectedVersion,
+      expectedTurnRevision: payload?.expectedTurnRevision ?? 0,
+      expectedSessionVersion: payload?.expectedSessionVersion ?? payload?.expectedVersion ?? 0,
     },
     continuation: {
       dialogProcessId: config.resumeDialogProcessId,
@@ -359,6 +361,7 @@ export async function stopChatWs({ port, payload = {}, stopPayload = {}, timeout
             action: "stop",
             sessionId: stopPayload.sessionId || payload.sessionId,
             turnScopeId: stopPayload.turnScopeId || payload.turnScopeId,
+            expectedRevision: stopPayload.expectedRevision ?? parsed.data.revision,
             ...stopPayload,
           })));
         }

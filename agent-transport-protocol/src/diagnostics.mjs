@@ -26,6 +26,7 @@ function resolveCommand(command) {
 export function summarizeAgentTransportCommand(rawCommand, extra = {}) {
   const command = resolveCommand(rawCommand);
   const identity = isObject(command.identity) ? command.identity : {};
+  const concurrency = isObject(command.concurrency) ? command.concurrency : {};
   return {
     protocolVersion: Number(command.protocolVersion) || null,
     commandType: clean(command.commandType).toLowerCase(),
@@ -41,6 +42,13 @@ export function summarizeAgentTransportCommand(rawCommand, extra = {}) {
     selectedPluginCount: Array.isArray(command.preferences?.selectedPlugins)
       ? command.preferences.selectedPlugins.length
       : 0,
+    expectedTurnRevision: Number.isInteger(concurrency.expectedTurnRevision)
+      ? concurrency.expectedTurnRevision
+      : null,
+    expectedSessionVersion: Number.isInteger(concurrency.expectedSessionVersion)
+      ? concurrency.expectedSessionVersion
+      : null,
+    createSessionIfAbsent: command.session?.createIfAbsent === true,
     hasUserIdField: Object.hasOwn(command, "userId") || Object.hasOwn(identity, "userId"),
     ...(isObject(extra) ? extra : {}),
   };

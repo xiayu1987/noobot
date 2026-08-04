@@ -208,7 +208,7 @@ export function createChatEngineSender({
         activeSession,
         message: text,
         idempotencyKey: turnScopeId,
-        expectedVersion: getCurrentSessionVersion(activeSession) ?? 0,
+        expectedSessionVersion: getCurrentSessionVersion(activeSession) ?? 0,
         attachments,
         allowUserInteraction,
         safeConfirmLevel,

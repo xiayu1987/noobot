@@ -8,8 +8,7 @@ import { createHarness, assistantMessage, emitChannelState } from "../helpers/us
 import { StreamEventEnum, RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.interaction-stop: interaction", () => {
-  it("expired channel_state schedules session refresh", async () => {
-    vi.useFakeTimers();
+  it("expired channel_state does not start a session-refresh recovery branch", async () => {
     const refreshSessionsAsync = vi.fn(async () => {});
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-expired", "dp-expired", "expired");
@@ -34,14 +33,9 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     });
 
     await engine.send();
-    await vi.advanceTimersByTimeAsync(1300);
 
     expect(deps.clearPendingInteraction).toHaveBeenCalled();
-    expect(refreshSessionsAsync).toHaveBeenCalledTimes(1);
-    expect(refreshSessionsAsync).toHaveBeenCalledWith("local-expired", {
-      silent: true,
-    });
-    vi.useRealTimers();
+    expect(refreshSessionsAsync).not.toHaveBeenCalled();
   });
 
   it("channel_state interaction_pending restores pending interaction payload", async () => {
@@ -147,8 +141,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     vi.useRealTimers();
   });
 
-  it("expired refresh failure falls back to error state", async () => {
-    vi.useFakeTimers();
+  it("expired transport state does not manufacture a refresh failure", async () => {
     const notify = vi.fn();
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-expired-fail", "dp-expired-fail", "expired", {
@@ -165,7 +158,6 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     });
 
     await engine.send();
-    await vi.advanceTimersByTimeAsync(1300);
 
     const assistant = assistantMessage(activeSession);
     // Refresh failure cannot manufacture an Authority terminal state. The
@@ -175,11 +167,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     expect(canStop.value).toBe(false);
     expect(assistant?.statusLabel).not.toBe("chat.generated");
     expect(assistant?.error).not.toBe("chat.expiredRefreshFailed");
-    expect(notify).toHaveBeenCalledWith({
-      type: "error",
-      message: "chat.expiredRefreshFailed",
-    });
-    vi.useRealTimers();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("interaction_request with lifecycle=resolved & ackMode=auto should auto ack and not enter pending", async () => {

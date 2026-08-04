@@ -19,7 +19,6 @@ import {
 import {
   BackendChannelState,
   FrontendRunState,
-  SESSION_RUN_EVENT,
   clearRememberedStopRequests,
   getMessageRuntimeChannelState,
 } from "../sessionRunStateMachine.js";
@@ -52,16 +51,13 @@ export function createChatEngineConversationState({
   clearPendingInteractionIfObsolete,
   setPendingInteractionRequest,
   submitInteractionResponse,
-  refreshSessionsAsync,
   onConversationState,
   connectorTypeSet,
   upsertConnectedConnectorInPanelState,
   refreshSessionConnectorsAsync,
   notify,
   translate,
-  applyAssistantFailureState,
 } = {}) {
-  let cacheExpiredRefreshTimer = null;
   const missingInteractionPayloadTimers = new Map();
   const connectorConnectedAckedRequestIds = new Set();
 
@@ -164,59 +160,6 @@ export function createChatEngineConversationState({
     missingInteractionPayloadTimers.set(key, timer);
   }
 
-  function scheduleCacheExpiredSessionRefresh({
-    sessionId = "",
-    dialogProcessId = "",
-    targetAssistantMessage = null,
-  } = {}) {
-    if (cacheExpiredRefreshTimer) clearTimeout(cacheExpiredRefreshTimer);
-    cacheExpiredRefreshTimer = setTimeout(() => {
-      cacheExpiredRefreshTimer = null;
-      if (typeof refreshSessionsAsync !== "function") return;
-      Promise.resolve(
-        refreshSessionsAsync(String(activeSessionId.value || ""), {
-          silent: true,
-        }),
-      )
-        .then((ok) => {
-          if (ok !== false) return;
-          applyRunStateEvent?.({
-              type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-              state: BackendChannelState.ERROR,
-              sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
-              dialogProcessId,
-              source: "expired_refresh_failed",
-          });
-          interactionSubmitting.value = false;
-          clearPendingInteraction();
-          const expiredErrorMessage = translate("chat.expiredRefreshFailed");
-          emitSyntheticErrorConversationState({
-            sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
-            dialogProcessId,
-            sourceEvent: "expired_refresh_failed",
-          });
-          notify({ type: "error", message: expiredErrorMessage });
-        })
-        .catch(() => {
-          applyRunStateEvent?.({
-              type: SESSION_RUN_EVENT.LOCAL_FAILURE,
-              state: BackendChannelState.ERROR,
-              sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
-              dialogProcessId,
-              source: "expired_refresh_failed",
-          });
-          interactionSubmitting.value = false;
-          clearPendingInteraction();
-          const expiredErrorMessage = translate("chat.expiredRefreshFailed");
-          emitSyntheticErrorConversationState({
-            sessionId: normalizeTrimmedString(sessionId || activeSession.value?.id),
-            dialogProcessId,
-            sourceEvent: "expired_refresh_failed",
-          });
-          notify({ type: "error", message: expiredErrorMessage });
-        });
-    }, 1200);
-  }
   function isStateForActiveSession(sessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return true;
@@ -458,9 +401,6 @@ export function createChatEngineConversationState({
     if (!pendingInteractionRequest.value) {
       interactionSubmitting.value = false;
     }
-    if (state === BackendChannelState.EXPIRED) {
-      scheduleCacheExpiredSessionRefresh({ sessionId, dialogProcessId, targetAssistantMessage });
-    }
     if (state === BackendChannelState.NO_CONVERSATION || state === BackendChannelState.EXPIRED) {
       clearPendingInteraction();
       return;
@@ -490,10 +430,6 @@ export function createChatEngineConversationState({
   }
 
   function disposeConversationState() {
-    if (cacheExpiredRefreshTimer) {
-      clearTimeout(cacheExpiredRefreshTimer);
-      cacheExpiredRefreshTimer = null;
-    }
     for (const timer of missingInteractionPayloadTimers.values()) {
       clearTimeout(timer);
     }
