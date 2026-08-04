@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildChatPayload } from "./payload.js";
+import { getCurrentSessionVersion } from "./sessionVersionManager.js";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import {
   applySendErrorState,
   finalizeSendCleanup,
@@ -60,7 +62,6 @@ export function createChatEngineSender({
   ensureConnected,
   fetchSessionDetail,
   foldMessagesForView,
-  safeConfirm,
   safeConfirmLevel,
   sanitizeOutput,
   input,
@@ -204,14 +205,12 @@ export function createChatEngineSender({
       const requestedTextStreaming = streamOutput?.value === true;
 
       const buildPayloadForCurrentVersion = () => buildChatPayload({
-        userId,
         activeSession,
         message: text,
         idempotencyKey: turnScopeId,
-        expectedVersion: activeSession?.value?.version ?? activeSession?.value?.revision,
+        expectedVersion: getCurrentSessionVersion(activeSession) ?? 0,
         attachments,
         allowUserInteraction,
-        safeConfirm,
         safeConfirmLevel,
         sanitizeOutput,
         requestedTextStreaming,
@@ -223,10 +222,9 @@ export function createChatEngineSender({
         turnScopeId,
         userMessageId: normalizeTrimmedString(userMessage?.messageId || userMessage?.id || userMessageId),
         assistantMessageId,
-        action: continueFromUserStopped ? "continue" : "",
+        continueFromStopped: continueFromUserStopped,
         resumeDialogProcessId: continueFromUserStopped ? resumeDialogProcessId : "",
         resumeTurnScopeId: continueFromUserStopped ? resumeTurnScopeId : "",
-        thinkingStartedAt,
         uploadHint: translate("chat.uploadHint"),
         reuseExistingUserTurn,
       });
@@ -239,22 +237,21 @@ export function createChatEngineSender({
         data: {
           requestedTextStreaming,
           attachmentCount: attachments.length,
-          reuseExistingUserTurn: payload?.config?.reuseExistingUserTurn === true,
+          reuseExistingUserTurn: payload?.commandType === AGENT_COMMAND.RESEND,
         },
       });
       logResendDebug("send.stream.before", () => ({
         sessionId,
         turnScopeId,
-        payloadTurnScopeId: payload?.turnScopeId,
-        reuseExistingUserTurn: payload?.config?.reuseExistingUserTurn === true,
+        payloadTurnScopeId: payload?.identity?.turnScopeId,
+        reuseExistingUserTurn: payload?.commandType === AGENT_COMMAND.RESEND,
         explicitUserAttachments: summarizeDebugAttachments(explicitUserAttachments),
         explicitTransportAttachments: summarizeDebugAttachments(explicitTransportAttachments),
         filesToSend: summarizeDebugAttachments(filesToSend),
         attachments: summarizeDebugAttachments(attachments),
-        payloadAttachments: summarizeDebugAttachments(payload?.attachments),
+        payloadAttachments: summarizeDebugAttachments(payload?.input?.attachments),
         botMessage: summarizeDebugMessage(botMsg),
         botThinkingStartedAt: botMsg?.thinkingStartedAt || "",
-        payloadThinkingStartedAt: payload?.config?.thinkingStartedAt || "",
       }));
       let locatedSendingStartedMessage = false;
       // Authority terminal notifications are deliberately asynchronous: the

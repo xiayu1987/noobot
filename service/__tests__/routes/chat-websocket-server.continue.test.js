@@ -193,7 +193,7 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
       },
     });
     const errorEvent = events.find((item) => item?.event === "error");
-    assert.match(String(errorEvent?.data?.error || ""), /continue requires resumeDialogProcessId and resumeTurnScopeId/);
+    assert.match(String(errorEvent?.data?.error || ""), /missing_continuation_dialog_process_id/);
     assert.equal(turnStatusWrites, 0);
   } finally {
     await closeServer(server);
@@ -230,7 +230,7 @@ test("chat-websocket-server: continue action does not fallback to current dialog
       },
     });
     const errorEvent = events.find((item) => item?.event === "error");
-    assert.match(String(errorEvent?.data?.error || ""), /continue requires resumeDialogProcessId and resumeTurnScopeId/);
+    assert.match(String(errorEvent?.data?.error || ""), /missing_continuation_dialog_process_id/);
     assert.equal(runSessionCalled, false);
     assert.equal(turnStatusWrites, 0);
   } finally {

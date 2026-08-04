@@ -206,6 +206,7 @@ test("reconnect opens a query transport without replaying the stale run command"
   assert.equal(upstream.sent.length, 1);
   const snapshotCommand = JSON.parse(upstream.sent[0]);
   assert.equal(snapshotCommand.commandType, "turn.snapshot.get");
+  assert.equal(snapshotCommand.identity.sessionId, sessionId);
   assert.equal(snapshotCommand.message, undefined);
   upstream.emit("message", JSON.stringify({
     event: "turn_snapshot",
@@ -435,7 +436,8 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
 
   assert.equal(forwarded.length, 1);
   assert.equal(forwarded[0].commandType, "turn.snapshot.get");
-  assert.equal(forwarded[0].knownSequence, 1);
+  assert.equal(forwarded[0].identity.sessionId, sessionId);
+  assert.equal(forwarded[0].options.knownSequence, 1);
   assert.equal(channel.pendingSnapshotRequests.size, 1);
   assert.equal(getEvent(client, "reconnect_data"), null);
   assert.equal(getEvent(client, "reconnect_complete"), null);

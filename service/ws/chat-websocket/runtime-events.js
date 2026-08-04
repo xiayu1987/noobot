@@ -8,6 +8,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
+export { recordServiceAgentTransportDebug } from "../../runtime-events/agent-transport-debug.js";
 
 export function summarizeDebugAttachments(attachments) {
   if (!Array.isArray(attachments)) {

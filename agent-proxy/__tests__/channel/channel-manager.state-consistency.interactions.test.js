@@ -10,6 +10,15 @@ import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents } from "./channel-manager.state-consistency.test-helpers.js";
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/event-protocol";
+import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
+
+function interactionResponse({ sessionId, requestId, response = { confirmed: true } }) {
+  return createInteractionResponseCommand({
+    commandId: `interaction:${requestId}`,
+    identity: { sessionId },
+    interaction: { requestId, response },
+  });
+}
 
 test("interaction_request resolved by one client should be consistent across all clients", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -56,11 +65,10 @@ test("interaction_request resolved by one client should be consistent across all
       String(item?.data?.requestId || item?.requestId || "") === "req-1"), true);
   }
 
-  const forwarded = manager.forwardToUpstream(channel, {
-    action: "interaction_response",
+  const forwarded = manager.forwardToUpstream(channel, interactionResponse({
+    sessionId: "session-1",
     requestId: "req-1",
-    response: { confirmed: true },
-  });
+  }));
   assert.equal(forwarded, true, "interaction_response should be forwarded");
 
   const clientBAfterResolve = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
@@ -163,18 +171,17 @@ test("resolving one concurrent interaction atomically publishes the remaining pe
     content: "second concurrent confirmation",
   });
   const stateEventsBeforeResponse = listEvents(client, "channel_state").length;
-  const forwarded = manager.forwardToUpstream(channel, {
-    action: "interaction_response",
+  const forwarded = manager.forwardToUpstream(channel, interactionResponse({
+    sessionId: "session-concurrent",
     requestId: "req-a",
-    response: { confirmed: true },
-  });
+  }));
 
   assert.equal(forwarded, true);
   const stateEventsAfterResponse = listEvents(client, "channel_state");
   assert.equal(stateEventsAfterResponse.length, stateEventsBeforeResponse + 1);
   const latestState = stateEventsAfterResponse.at(-1);
   assert.equal(latestState?.data?.state, "interaction_pending");
-  assert.equal(latestState?.data?.sourceEvent, "interaction_response");
+  assert.equal(latestState?.data?.sourceEvent, "interaction.response");
   assert.deepEqual(latestState?.data?.pendingRequestIds, ["req-b"]);
   assert.equal(latestState?.data?.pendingInteraction?.requestId, "req-b");
   assert.equal(channel.pendingInteractionRequests.has("req-a"), false);
@@ -360,10 +367,7 @@ test("interaction_response should resolve channel by pending requestId", () => {
 
   const resolvedChannel = manager.resolveChannelFromSocketMessage(
     createMockSocket({ apiKey: "api-key-2", userId: "user-1" }),
-    {
-      action: "interaction_response",
-      requestId: "req-resolve",
-    },
+    interactionResponse({ sessionId: "session-resolve", requestId: "req-resolve" }),
   );
 
   assert.equal(resolvedChannel, channel);

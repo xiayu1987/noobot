@@ -5,16 +5,21 @@
  */
 import { RUNTIME_EVENT_CATEGORIES, RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEvent } from "@noobot/runtime-events";
 import { attachRunTransport, findActiveRun, publishRunEvent, registerActiveRun } from "./run-registry.js";
-import { recordServiceWebSocketLifecycle, summarizeDebugAttachments } from "./runtime-events.js";
+import {
+  recordServiceAgentTransportDebug,
+  recordServiceWebSocketLifecycle,
+  summarizeDebugAttachments,
+} from "./runtime-events.js";
 import { isPluginDebugEnabled, resolveEffectiveRunTimeoutMs, resolveEffectiveStreamingEnabled, summarizePluginConfig } from "./run-config.js";
 import { isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/event-protocol";
 import { recoverOrphanedTurn } from "@noobot/authoritative-state/application";
 import { createAgentApplication } from "#agent/application";
+import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 
 export function createMessageRunHandler({
-  state, authInfo, sendEvent, translateText, normalizeLocale, normalizeRunConfig, isForbiddenUserScope,
+  state, authInfo, sendEvent, translateText, normalizeLocale, mapAgentRunCommand,
   resolveBot, sessionLogConfig, userInteractionBridge, buildRunStateSnapshot,
   finalizeTimeout, finalizeUserStopped, finalizeCompleted, commitTurnLifecycle, dispatchAuthorityEvents,
 }) {
@@ -90,7 +95,7 @@ export function createMessageRunHandler({
       data,
     });
   };
-  const handleRun = async (payload, { isContinueAction, onRunBound = null }) => {
+  const handleRun = async (command, { onRunBound = null }) => {
     const {
       userId,
       sessionId,
@@ -99,16 +104,12 @@ export function createMessageRunHandler({
       parentDialogProcessId = "",
       message,
       attachments = [],
-      config = {},
       turnScopeId = "",
-      userMessageId = "",
-      presentationMessageId = "",
-      idempotencyKey = "",
-      expectedVersion = undefined,
-    } = payload || {};
-    state.currentTurnScopeId =
-      String(turnScopeId || config?.turnScopeId || "").trim() || state.currentTurnScopeId;
-    state.currentLocale = normalizeLocale(config?.locale || state.currentLocale);
+      runConfig: normalizedRunConfig,
+      expectedRevision,
+    } = mapAgentRunCommand(command, { userId: authInfo?.userId });
+    state.currentTurnScopeId = String(turnScopeId || "").trim() || state.currentTurnScopeId;
+    state.currentLocale = normalizeLocale(normalizedRunConfig.locale || state.currentLocale);
 
     void writeRoutedRuntimeEvent(
       {
@@ -120,13 +121,11 @@ export function createMessageRunHandler({
         userId: String(userId || "").trim(),
         sessionId: String(sessionId || "").trim(),
         parentSessionId: String(parentSessionId || "").trim(),
-        turnScopeId: String(state.currentTurnScopeId || turnScopeId || config?.turnScopeId || "").trim(),
+        turnScopeId: String(state.currentTurnScopeId || turnScopeId || "").trim(),
         data: {
-          reuseExistingUserTurn: config?.reuseExistingUserTurn === true,
-          hasPayloadThinkingStartedAt: Boolean(String(config?.thinkingStartedAt || "").trim()),
-          payloadThinkingStartedAt: String(config?.thinkingStartedAt || "").trim(),
+          commandType: command.commandType,
+          reuseExistingUserTurn: normalizedRunConfig.reuseExistingUserTurn === true,
           attachments: summarizeDebugAttachments(attachments),
-          payloadAttachments: summarizeDebugAttachments(payload?.attachments),
         },
       },
       sessionLogConfig,
@@ -135,22 +134,6 @@ export function createMessageRunHandler({
     if (!userId || !sessionId || !message) {
       throw new Error(translateText("common.userSessionMessageRequired", state.currentLocale));
     }
-    if (isForbiddenUserScope(authInfo, userId)) {
-      throw new Error(translateText("auth.forbiddenUserScope", state.currentLocale));
-    }
-    const normalizedRunConfig = {
-      ...normalizeRunConfig(config),
-      turnScopeId: String(turnScopeId || config?.turnScopeId || "").trim(),
-      userMessageId: String(userMessageId || config?.userMessageId || "").trim(),
-      presentationMessageId: String(
-        presentationMessageId || config?.presentationMessageId || "",
-      ).trim(),
-      idempotencyKey: String(
-        idempotencyKey || config?.idempotencyKey || turnScopeId || config?.turnScopeId || "",
-      ).trim(),
-      expectedVersion,
-    };
-
     const runningTurn = findActiveRun({
       userId: canonicalRunOwnerId,
       sessionId,
@@ -176,22 +159,13 @@ export function createMessageRunHandler({
     }
     const authoritativeStartedAt = new Date().toISOString();
     normalizedRunConfig.thinkingStartedAt = authoritativeStartedAt;
-    if (isContinueAction) {
-      const resumeDialogProcessId = String(config?.resumeDialogProcessId || "").trim();
-      const resumeTurnScopeId = String(config?.resumeTurnScopeId || "").trim();
-      normalizedRunConfig.resumeFromStoppedSnapshot = true;
-      normalizedRunConfig.resumeDialogProcessId = resumeDialogProcessId;
-      normalizedRunConfig.resumeTurnScopeId = resumeTurnScopeId;
-      if (!normalizedRunConfig.resumeDialogProcessId || !normalizedRunConfig.resumeTurnScopeId) {
-        throw new Error("continue requires resumeDialogProcessId and resumeTurnScopeId");
-      }
-    }
-    const action = isContinueAction
-      ? "continue"
-      : normalizedRunConfig.reuseExistingUserTurn === true
-        ? "resend"
+    const isContinueCommand = command.commandType === AGENT_COMMAND.CONTINUE;
+    const action = command.commandType === AGENT_COMMAND.RESEND
+      ? "resend"
+      : isContinueCommand
+        ? "continue"
         : "send";
-    const commandId = String(payload?.commandId || normalizedRunConfig.idempotencyKey || state.currentTurnScopeId).trim();
+    const commandId = String(command.commandId).trim();
     normalizedRunConfig.presentationMessageId = String(
       normalizedRunConfig.presentationMessageId || `msg_${state.currentTurnScopeId}`,
     ).trim();
@@ -223,9 +197,9 @@ export function createMessageRunHandler({
       presentationMessageId: normalizedRunConfig.presentationMessageId,
       startedAt: authoritativeStartedAt,
       createSessionIfAbsent: action === "send",
-      expectedRevision: payload?.expectedRevision ?? 0,
+      expectedRevision: expectedRevision ?? 0,
       ...executionIntent,
-      ...(isContinueAction ? {
+      ...(isContinueCommand ? {
         continuationSource: {
           dialogProcessId: normalizedRunConfig.resumeDialogProcessId,
           turnScopeId: normalizedRunConfig.resumeTurnScopeId,
@@ -248,6 +222,19 @@ export function createMessageRunHandler({
     }
     pendingLifecycleCommit = null;
     latestAuthorityTurn = accepted.turn || null;
+    void recordServiceAgentTransportDebug({
+      sessionLogConfig,
+      event: "service.agentTransport.commandConsumed",
+      command,
+      userId,
+      data: {
+        accepted: true,
+        consumed: true,
+        transport: "websocket",
+        lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
+        lifecycleRevision: Number(accepted?.turn?.revision || accepted?.currentRevision || 0),
+      },
+    });
     state.currentLifecycleCommandId = commandId;
     state.currentLifecyclePhase = TURN_PHASE.ACTION;
     state.isRunning = true;
@@ -266,11 +253,9 @@ export function createMessageRunHandler({
         dialogProcessId: "",
         turnScopeId: String(normalizedRunConfig?.turnScopeId || state.currentTurnScopeId || "").trim(),
         data: {
-          payloadSelectedPlugins: config?.selectedPlugins,
+          requestedSelectedPlugins: command.preferences.selectedPlugins,
           normalizedSelectedPlugins: normalizedRunConfig?.selectedPlugins,
           normalizedPlugins: summarizePluginConfig(normalizedRunConfig?.plugins),
-          hasPayloadThinkingStartedAt: Boolean(String(config?.thinkingStartedAt || "").trim()),
-          payloadThinkingStartedAt: String(config?.thinkingStartedAt || "").trim(),
           normalizedThinkingStartedAt: String(normalizedRunConfig?.thinkingStartedAt || "").trim(),
         },
       });
@@ -350,6 +335,21 @@ export function createMessageRunHandler({
       getCurrentTurnScopeId: () => runMeta.turnScopeId,
       onEventReceived: (eventData = {}) => {
         const eventType = String(eventData.eventType || eventData.eventName || "").trim();
+        if (eventType === "agent_transport_parameters_consumed") {
+          void recordServiceAgentTransportDebug({
+            sessionLogConfig,
+            event: "agent.agentTransport.parametersConsumed",
+            command,
+            userId,
+            data: {
+              consumed: true,
+              transport: "websocket",
+              consumer: "agent",
+              consumption: eventData.agentTransportConsumption || {},
+            },
+          });
+          return;
+        }
         if (
           eventType === "workflow_planning_message_prepared" ||
           eventType === "workflow_node_state_committed"

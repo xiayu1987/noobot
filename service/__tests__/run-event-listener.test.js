@@ -113,6 +113,36 @@ test("run-event-listener forwards workflow planning frames verbatim", () => {
   });
 });
 
+test("run-event-listener preserves the safe Agent transport consumption proof", () => {
+  const received = [];
+  const listener = createRunEventListener({
+    sendEvent: () => true,
+    sessionId: "session-1",
+    textStreamingEnabled: false,
+    registerActiveRun: () => {},
+    getCurrentRunMeta: () => ({ turnScopeId: "turn-1" }),
+    getCurrentRunHandle: () => null,
+    getCurrentTurnScopeId: () => "turn-1",
+    onEventReceived: (event) => received.push(event),
+  });
+  const consumption = {
+    protocolVersion: 1,
+    commandType: "turn.send",
+    commandId: "turn-1",
+    consumer: "agent",
+    identity: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+    input: { requestedMessageLength: 5, persistedMessageLength: 5, messageConsumed: true },
+    presentation: { userMessageIdConsumed: true, assistantMessageIdConsumed: true },
+    concurrency: { expectedRevision: 0, expectedRevisionConsumed: true },
+  };
+
+  listener.onEvent({ event: "agent_transport_parameters_consumed", data: consumption });
+
+  assert.equal(received.length, 1);
+  assert.equal(received[0].eventName, "agent_transport_parameters_consumed");
+  assert.deepEqual(received[0].agentTransportConsumption, consumption);
+});
+
 test("run-event-listener forwards workflow node state frames verbatim", () => {
   const frames = [];
   const listener = createRunEventListener({

@@ -132,6 +132,11 @@ export function createRunEventListener({
         sequenceScopeId: String(eventData?.sequenceScopeId || eventData?.messageId || "").trim(),
         hasTool: Boolean(eventData?.tool),
         hasResult: eventData?.result !== undefined,
+        agentTransportConsumption:
+          eventName === "agent_transport_parameters_consumed" &&
+          eventData && typeof eventData === "object" && !Array.isArray(eventData)
+            ? eventData
+            : null,
         dataKeys: Object.keys(eventData).sort(),
       });
       const eventDialogProcessId = String(eventData?.dialogProcessId || "").trim();

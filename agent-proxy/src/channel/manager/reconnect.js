@@ -16,6 +16,7 @@ import {
   createReplayBatch,
   isPendingInteractionReplay,
 } from "@noobot/event-protocol";
+import { createTurnSnapshotCommand } from "@noobot/agent-transport-protocol";
 
 class ReconnectMethods {
 
@@ -128,14 +129,11 @@ async handleReconnect(socket, payload = {}) {
           },
         });
       });
-      const snapshotCommand = {
-        action: "turn.snapshot.get",
-        commandType: "turn.snapshot.get",
+      const snapshotCommand = createTurnSnapshotCommand({
         commandId,
-        userId: String(socket?.__agentProxyUserId || "").trim(),
-        sessionId: channelSessionId,
-        knownSequence: knownLifecycleSequence,
-      };
+        identity: { sessionId: channelSessionId },
+        options: { knownSequence: knownLifecycleSequence },
+      });
       const forwarded = this.forwardToUpstream(snapshotChannel, snapshotCommand);
       const queryConnection = forwarded ? null : this.connectUpstreamChannel(
         snapshotChannel,

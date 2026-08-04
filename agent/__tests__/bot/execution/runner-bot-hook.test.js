@@ -141,23 +141,42 @@ function createRunner({
   };
   const commitCanonicalUserMessage = async (payload = {}) => {
     const result = await commitSessionTurn(payload) || {};
+    const turnIdentity = String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const sourceAttachments = Array.isArray(result.attachments)
+      ? result.attachments
+      : payload.attachments || [];
+    const attachments = sourceAttachments.map((attachment = {}, index) => ({
+      ...attachment,
+      attachmentId: String(attachment?.attachmentId || `att_test_${turnIdentity}_${index}`).trim(),
+      sessionId: payload.sessionId,
+    }));
+    const sourceUserMessage = result.userMessage || {};
+    const messageUid = String(sourceUserMessage.messageUid || `sm_test_${turnIdentity}`).trim();
+    const messageId = String(
+      sourceUserMessage.messageId || sourceUserMessage.id ||
+      payload?.runConfig?.userMessageId || `msg_user_test_${turnIdentity}`,
+    ).trim();
     return {
       ...result,
-      attachments: Array.isArray(result.attachments) ? result.attachments : payload.attachments || [],
-      userMessage: result.userMessage || {
-        messageUid: `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`,
+      sessionId: payload.sessionId,
+      version: result.version ?? result.sessionVersion ?? 1,
+      attachments,
+      userMessage: {
+        ...sourceUserMessage,
+        messageUid,
+        messageId,
         role: "user",
         type: "message",
-        content: payload.content,
-        userName: payload.userId,
+        content: sourceUserMessage.content ?? payload.content,
+        userName: sourceUserMessage.userName ?? payload.userId,
         sessionId: payload.sessionId,
         parentSessionId: payload.parentSessionId,
         dialogProcessId: payload.dialogProcessId,
         parentDialogProcessId: payload.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
-        frontendUserMessage: payload.frontendUserMessage === true,
-        messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
-        attachments: payload.attachments || [],
+        frontendUserMessage: sourceUserMessage.frontendUserMessage ?? payload.frontendUserMessage === true,
+        messageOrigin: sourceUserMessage.messageOrigin || (payload.frontendUserMessage === true ? "user" : "internal"),
+        attachments,
       },
     };
   };
@@ -225,9 +244,7 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
       toArray() { return this.items.slice(); },
     },
   };
-  const runtimeAgentContext = {
-    execution: { controllers: { runtime } },
-  };
+  const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => {
       checkpointPayloads.push(payload);
@@ -310,7 +327,7 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
       },
     ]),
   };
-  const runtimeAgentContext = { execution: { controllers: { runtime } } };
+  const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => checkpointPayloads.push(payload),
     prepareAgentTurnExecution: async () => ({
@@ -371,7 +388,7 @@ test("SessionExecutionRunner coalesces persistence requests inside one tool-resu
     attachmentMetas: [],
     currentTurnMessages: createCurrentTurnMessagesStore([]),
   };
-  const runtimeAgentContext = { execution: { controllers: { runtime } } };
+  const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async (payload = {}) => checkpointPayloads.push(payload),
     prepareAgentTurnExecution: async () => ({
@@ -422,7 +439,7 @@ test("SessionExecutionRunner retries an incremental checkpoint after persistence
       { messageUid: "sm_retry", role: "tool", type: "tool_result", content: "retry" },
     ]),
   };
-  const runtimeAgentContext = { execution: { controllers: { runtime } } };
+  const runtimeAgentContext = createTestAgentExecutionScope(runtime);
   const runner = createRunner({
     appendAgentMessages: async ({ messages = [] } = {}) => {
       attempts.push(messages.map((message) => message.messageUid));
@@ -496,17 +513,17 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     botHookManager,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedBuildContextPayload = buildContextPayload;
-      const runtimeAgentContext = {
-        payload: {
-          messages: {
+      const runtimeAgentContext = createTestAgentExecutionScope(
+        { attachmentMetas: [] },
+        {
+          messageBlocks: {
             history: [
               { role: "user", content: "history user" },
               { role: "assistant", content: "history assistant" },
             ],
           },
         },
-        execution: { controllers: { runtime: { attachmentMetas: [] } } },
-      };
+      );
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
   });
@@ -515,7 +532,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     userId: "u1",
     sessionId: "s1",
     message: "hello",
-    attachments: [{ attachmentId: "att1" }],
+    attachments: [{ attachmentId: "att1", sessionId: "s1" }],
     runConfig: {},
   });
 
@@ -526,7 +543,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     "after_agent_dispatch",
     "after_session_run",
   ]);
-  assert.deepEqual(capturedBuildContextPayload?.userMessageAttachments, [{ attachmentId: "att1" }]);
+  assert.deepEqual(capturedBuildContextPayload?.userMessageAttachments, [{ attachmentId: "att1", sessionId: "s1" }]);
   assert.equal(capturedBuildContextPayload?.attachmentMetas, undefined);
   assert.equal(
     beforeDispatchContext?.agentContext?.bindings?.runtime
@@ -586,17 +603,10 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   const runner = createRunner({
     botHookManager,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
-      const runtimeAgentContext = {
-        payload: { tools: { registry: [] } },
-        execution: {
-          controllers: {
-            runtime: {
-              attachmentMetas: [],
-              eventListener: buildContextPayload.eventListener,
-            },
-          },
-        },
-      };
+      const runtimeAgentContext = createTestAgentExecutionScope({
+        attachmentMetas: [],
+        eventListener: buildContextPayload.eventListener,
+      });
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
   });
@@ -882,10 +892,7 @@ test("SessionExecutionRunner passes prepared turnScopeId into context building",
     }),
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedRunConfig = buildContextPayload.runConfig;
-      const runtimeAgentContext = {
-        payload: { messages: { history: [] } },
-        execution: { controllers: { runtime: { attachmentMetas: [] } } },
-      };
+      const runtimeAgentContext = createTestAgentExecutionScope({ attachmentMetas: [] });
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
     commitSessionTurn: async (payload = {}) => {
@@ -920,10 +927,7 @@ test("SessionExecutionRunner merges top-level turnScopeId before context buildin
   const runner = createRunner({
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedRunConfig = buildContextPayload.runConfig;
-      const runtimeAgentContext = {
-        payload: { messages: { history: [] } },
-        execution: { controllers: { runtime: { attachmentMetas: [] } } },
-      };
+      const runtimeAgentContext = createTestAgentExecutionScope({ attachmentMetas: [] });
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
     commitSessionTurn: async (payload = {}) => {
@@ -1064,10 +1068,7 @@ test("SessionExecutionRunner stamps reused user with prepared attachments after 
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       calls.push({ type: "prepare" });
       capturedBuildContextPayload = buildContextPayload;
-      const runtimeAgentContext = {
-        payload: { messages: { history: [] } },
-        execution: { controllers: { runtime: { attachmentMetas: [] } } },
-      };
+      const runtimeAgentContext = createTestAgentExecutionScope({ attachmentMetas: [] });
       return {
         agentContext: runtimeAgentContext,
         runtimeAgentContext,
@@ -1191,10 +1192,7 @@ test("SessionExecutionRunner does not let currentSessionModelAlias override sele
     resolveScenarioRunConfig: (runConfig = {}) => runConfig,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedRunConfig = buildContextPayload.runConfig;
-      const runtimeAgentContext = {
-        payload: { messages: { history: [] } },
-        execution: { controllers: { runtime: { attachmentMetas: [] } } },
-      };
+      const runtimeAgentContext = createTestAgentExecutionScope({ attachmentMetas: [] });
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
   });
@@ -1229,10 +1227,7 @@ test("SessionExecutionRunner restores currentSessionModelAlias when selectedMode
     resolveScenarioRunConfig: (runConfig = {}) => runConfig,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
       capturedRunConfig = buildContextPayload.runConfig;
-      const runtimeAgentContext = {
-        payload: { messages: { history: [] } },
-        execution: { controllers: { runtime: { attachmentMetas: [] } } },
-      };
+      const runtimeAgentContext = createTestAgentExecutionScope({ attachmentMetas: [] });
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
   });

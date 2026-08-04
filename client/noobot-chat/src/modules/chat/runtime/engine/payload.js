@@ -5,6 +5,10 @@
  */
 import { normalizeSelectedConnectors } from "../../../session/model/sessionModel.js";
 import { normalizeTrimmedString } from "./utils.js";
+import {
+  AGENT_COMMAND,
+  createTurnRunCommand,
+} from "@noobot/agent-transport-protocol";
 
 function normalizeSelectedPluginKeys(selectedPlugins) {
   const source = Array.isArray(selectedPlugins?.value)
@@ -18,12 +22,10 @@ function normalizeSelectedPluginKeys(selectedPlugins) {
 }
 
 export function buildChatPayload({
-  userId,
   activeSession,
   message,
   attachments = [],
   allowUserInteraction,
-  safeConfirm,
   safeConfirmLevel,
   sanitizeOutput,
   requestedTextStreaming = false,
@@ -38,10 +40,9 @@ export function buildChatPayload({
   turnScopeId = "",
   userMessageId = "",
   assistantMessageId = "",
-  action = "",
+  continueFromStopped = false,
   resumeDialogProcessId = "",
   resumeTurnScopeId = "",
-  thinkingStartedAt = "",
   expectedVersion = undefined,
   idempotencyKey = "",
 } = {}) {
@@ -52,26 +53,27 @@ export function buildChatPayload({
   const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
   const normalizedUserMessageId = normalizeTrimmedString(userMessageId);
   const normalizedAssistantMessageId = normalizeTrimmedString(assistantMessageId);
-  const normalizedAction = normalizeTrimmedString(action);
   const normalizedResumeDialogProcessId = normalizeTrimmedString(resumeDialogProcessId);
   const normalizedResumeTurnScopeId = normalizeTrimmedString(resumeTurnScopeId);
-  const normalizedThinkingStartedAt = normalizeTrimmedString(thinkingStartedAt);
-  return {
-    ...(normalizedAction ? { action: normalizedAction } : {}),
-    userId: userId?.value ?? userId,
-    sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
-    turnScopeId: normalizedTurnScopeId,
-    ...(normalizedUserMessageId ? { userMessageId: normalizedUserMessageId } : {}),
-    ...(normalizedAssistantMessageId ? { presentationMessageId: normalizedAssistantMessageId } : {}),
-    idempotencyKey: normalizeTrimmedString(idempotencyKey) || normalizedTurnScopeId,
-    ...(expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== "" ? { expectedVersion } : {}),
-    message: message || uploadHint,
-    attachments,
-    config: {
+  const commandType = continueFromStopped
+    ? AGENT_COMMAND.CONTINUE
+    : reuseExistingUserTurn
+      ? AGENT_COMMAND.RESEND
+      : AGENT_COMMAND.SEND;
+  return createTurnRunCommand({
+    commandType,
+    commandId: normalizeTrimmedString(idempotencyKey) || normalizedTurnScopeId,
+    identity: {
+      sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
+      parentSessionId: activeSession?.value?.parentSessionId,
+      parentDialogProcessId: activeSession?.value?.parentDialogProcessId,
+      turnScopeId: normalizedTurnScopeId,
+    },
+    input: { message: message || uploadHint, attachments },
+    preferences: {
       allowUserInteraction: (allowUserInteraction?.value ?? allowUserInteraction) === false ? false : true,
-      safeConfirm: (safeConfirm?.value ?? safeConfirm) === false ? false : true,
       sanitizeOutput: (sanitizeOutput?.value ?? sanitizeOutput) === false ? false : true,
-      safeConfirmLevel: ["low", "medium", "high", "critical"].includes(String((safeConfirmLevel?.value ?? safeConfirmLevel) || "").trim().toLowerCase())
+      confirmationLevel: ["low", "medium", "high", "critical"].includes(String((safeConfirmLevel?.value ?? safeConfirmLevel) || "").trim().toLowerCase())
         ? String(safeConfirmLevel?.value ?? safeConfirmLevel).trim().toLowerCase()
         : "low",
       streaming: requestedTextStreaming,
@@ -86,16 +88,18 @@ export function buildChatPayload({
         activeSession?.value?.connectorPanelState?.selectedConnectors || {},
       ),
       selectedPlugins: normalizeSelectedPluginKeys(selectedPlugins),
-      ...(normalizedUserMessageId ? { userMessageId: normalizedUserMessageId } : {}),
-      ...(normalizedAssistantMessageId ? { presentationMessageId: normalizedAssistantMessageId } : {}),
-      ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
-      ...(normalizedResumeDialogProcessId ? { resumeDialogProcessId: normalizedResumeDialogProcessId } : {}),
-      ...(normalizedResumeTurnScopeId ? {
-        resumeTurnScopeId: normalizedResumeTurnScopeId,
-      } : {}),
-      ...(reuseExistingUserTurn ? {
-        reuseExistingUserTurn: true,
-      } : {}),
     },
-  };
+    presentation: {
+      userMessageId: normalizedUserMessageId,
+      assistantMessageId: normalizedAssistantMessageId,
+    },
+    concurrency: {
+      idempotencyKey: normalizeTrimmedString(idempotencyKey) || normalizedTurnScopeId,
+      expectedRevision: expectedVersion,
+    },
+    continuation: {
+      dialogProcessId: normalizedResumeDialogProcessId,
+      turnScopeId: normalizedResumeTurnScopeId,
+    },
+  });
 }

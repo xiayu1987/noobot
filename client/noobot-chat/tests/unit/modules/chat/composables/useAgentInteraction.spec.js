@@ -88,9 +88,11 @@ describe("useAgentInteraction", () => {
     });
 
     expect(sendJson).toHaveBeenCalledWith({
-      action: "interaction_response",
-      requestId: "req-first",
-      response: { value: "first" },
+      protocolVersion: 1,
+      commandType: "interaction.response",
+      commandId: "interaction:req-first",
+      identity: { sessionId: "s-1", dialogProcessId: "dp-1" },
+      interaction: { requestId: "req-first", response: { value: "first" } },
     });
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-second");
     expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
@@ -129,9 +131,11 @@ describe("useAgentInteraction", () => {
     interaction.submitInteractionResponse({ approved: true });
 
     expect(sendJson).toHaveBeenCalledWith({
-      action: "interaction_response",
-      requestId: "req-a",
-      response: { approved: true },
+      protocolVersion: 1,
+      commandType: "interaction.response",
+      commandId: "interaction:req-a",
+      identity: { sessionId: "s-1", dialogProcessId: "dp-1" },
+      interaction: { requestId: "req-a", response: { approved: true } },
     });
     expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-b");
     expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
@@ -156,11 +160,16 @@ describe("useAgentInteraction", () => {
 
     expect(encryptPayloadBySessionId).toHaveBeenCalledWith({ approved: true }, "session-2");
     expect(sendJson).toHaveBeenCalledWith({
-      action: "interaction_response",
-      requestId: "req-2",
-      response: {
-        encrypted: true,
-        payload: "encrypted-payload",
+      protocolVersion: 1,
+      commandType: "interaction.response",
+      commandId: "interaction:req-2",
+      identity: { sessionId: "session-2" },
+      interaction: {
+        requestId: "req-2",
+        response: {
+          encrypted: true,
+          payload: "encrypted-payload",
+        },
       },
     });
     expect(interaction.interactionSubmitting.value).toBe(false);

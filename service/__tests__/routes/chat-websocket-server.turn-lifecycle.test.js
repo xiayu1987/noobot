@@ -34,7 +34,7 @@ import {
   unregisterActiveRun,
 } from "../../ws/chat-websocket/run-registry.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
-import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
+import { startServerWithWs, closeServer, callChatWs, stopChatWs, createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
 
 const TEST_EVENT_FACTS = Object.freeze({
   [TURN_EVENT.ACTION_ACCEPTED]: Object.freeze({ phase: TURN_PHASE.ACTION, state: TURN_STATE.ACTION_REQUESTING }),
@@ -229,12 +229,12 @@ async function requestTurnSnapshot({ port, sessionId, commandId }) {
       ws.close();
       callback(value);
     };
-    ws.on("open", () => ws.send(JSON.stringify({
+    ws.on("open", () => ws.send(JSON.stringify(createProtocolTestCommand({
       commandType: TURN_COMMAND.SNAPSHOT_GET,
       userId: "u1",
       sessionId,
       commandId,
-    })));
+    }))));
     ws.on("message", (raw) => {
       const message = JSON.parse(String(raw || "{}"));
       if (message?.event === "error") settle(reject, new Error(message?.data?.errorCode || "snapshot_error"));
@@ -260,7 +260,10 @@ test("run event publishing awaits the actual transport send result", async () =>
 
 test("authoritative lifecycle follows accepted -> running -> processed -> summary completed", async () => {
   const authoritative = createAuthoritativeBot();
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startServerWithWs({
+    bot: authoritative.bot,
+    resolveAuthByApiKey: () => ({ userId: "u1" }),
+  });
   try {
     const events = await callChatWs({ port: server.address().port, payload });
     assert.deepEqual(authoritative.committed(), [
@@ -309,7 +312,10 @@ test("declared workflow execution identity is stable from acceptance through com
     origin: { type: "workflow", workflowRunId: `workflow:${turnScopeId}` },
     stage: "planning",
   });
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startServerWithWs({
+    bot: authoritative.bot,
+    resolveAuthByApiKey: () => ({ userId: "u1" }),
+  });
   try {
     await callChatWs({
       port: server.address().port,
@@ -988,7 +994,7 @@ test("socket close terminates an accepted turn and releases the session mutex", 
         ws.terminate();
         reject(new Error("socket close lifecycle timeout"));
       }, 2000);
-      ws.on("open", () => ws.send(JSON.stringify(scopedPayload)));
+      ws.on("open", () => ws.send(JSON.stringify(createProtocolTestCommand(scopedPayload))));
       ws.on("message", (raw) => {
         const message = JSON.parse(String(raw || "{}"));
         if (message?.event === "turn_lifecycle" && message?.data?.eventType === TURN_EVENT.ACTION_ACCEPTED) {
@@ -1089,7 +1095,10 @@ test("snapshot reconnect recovers a stale persisted turn lost after service rest
     Date.now() - TIME_THRESHOLDS.service.orphanedTurnRecoveryGraceMs - 1,
   ).toISOString();
 
-  const server = await startServerWithWs({ bot: authoritative.bot });
+  const server = await startServerWithWs({
+    bot: authoritative.bot,
+    resolveAuthByApiKey: () => ({ userId: "u1" }),
+  });
   try {
     const first = await requestTurnSnapshot({
       port: server.address().port,
@@ -1237,7 +1246,6 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
         commandId: "stop-command-authoritative",
         expectedRevision: 2,
         partialAssistant: {
-          sessionId: "s-stop-authoritative",
           turnScopeId: "turn-stop-authoritative",
           dialogProcessId: "dp-stop-authoritative",
           content: "partial",
@@ -1278,12 +1286,10 @@ test("rejected stop has no abort or interaction side effects", async () => {
   const handler = createMessageHandler({
     state: { currentTurnScopeId: "turn-locked", currentRunMeta: { sessionId: "session-locked" } },
     authInfo: { userId: "u1" },
-    webSocket: {},
+    webSocket: { close() {} },
     sendEvent: (event, data) => sent.push({ event, data }),
     translateText: (key) => key,
     normalizeLocale: (value) => value,
-    normalizeRunConfig: (value) => value,
-    isForbiddenUserScope: () => false,
     resolveBot: () => ({}),
     pendingInteractionRequests: new Map(),
     rejectAllPendingInteractions: () => { rejectCount += 1; },
@@ -1292,7 +1298,7 @@ test("rejected stop has no abort or interaction side effects", async () => {
   const originalAbort = AbortController.prototype.abort;
   AbortController.prototype.abort = function (...args) { abortCount += 1; return originalAbort.apply(this, args); };
   try {
-    await handler(JSON.stringify({ action: "stop", sessionId: "session-locked", turnScopeId: "turn-locked" }));
+    await handler(JSON.stringify(createProtocolTestCommand({ action: "stop", sessionId: "session-locked", turnScopeId: "turn-locked" })));
   } finally {
     AbortController.prototype.abort = originalAbort;
   }
@@ -1368,25 +1374,24 @@ test("execution queries expose authoritative snapshot, children and tree envelop
     sendEvent: (event, data) => sent.push({ event, data }), resolveBot: () => bot,
     isForbiddenUserScope: () => false, pendingInteractionRequests: new Map(),
   });
-  await handler(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, executionId: root.executionId, commandId: "q1" }));
-  await handler(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.CHILDREN_GET, executionId: root.executionId, commandId: "q2" }));
-  await handler(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.TREE_GET, rootExecutionId: root.executionId, commandId: "q3" }));
+  await handler(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, sessionId: "root-session", executionId: root.executionId, commandId: "q1" })));
+  await handler(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.CHILDREN_GET, sessionId: "root-session", executionId: root.executionId, commandId: "q2" })));
+  await handler(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.TREE_GET, sessionId: "root-session", rootExecutionId: root.executionId, commandId: "q3" })));
   assert.deepEqual(sent.map(({ event }) => event), ["execution_snapshot", "execution_children", "execution_tree"]);
   assert.deepEqual(sent.map(({ data }) => data.commandId), ["q1", "q2", "q3"]);
 });
 
-test("execution query rejects invalid, forbidden and unavailable requests", async () => {
+test("execution query rejects malformed and unavailable requests", async () => {
   const sent = [];
   const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
-  const create = ({ forbidden = false, bot = {} } = {}) => createMessageHandler({
+  const create = ({ bot = {} } = {}) => createMessageHandler({
     state: {}, authInfo: { userId: "u1" }, webSocket: { close() {} },
     sendEvent: (event, data) => sent.push({ event, data }), resolveBot: () => bot,
-    isForbiddenUserScope: () => forbidden, pendingInteractionRequests: new Map(),
+    pendingInteractionRequests: new Map(),
   });
-  await create()(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, commandId: "bad" }));
-  await create({ forbidden: true })(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, executionId: "agent:x", commandId: "denied" }));
-  await create()(JSON.stringify({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, executionId: "agent:x", commandId: "missing-reader" }));
+  await create()(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, sessionId: "s1", commandId: "bad" })));
+  await create()(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, sessionId: "s1", executionId: "agent:x", commandId: "missing-reader" })));
   assert.deepEqual(sent.map(({ data }) => data.errorCode), [
-    "invalid_execution_query", "invalid_execution_query", "execution_query_unavailable",
+    "INVALID_AGENT_COMMAND", "execution_query_unavailable",
   ]);
 });

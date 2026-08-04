@@ -283,9 +283,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     expect(recoveredSocket.url).toContain("fresh-key");
     recoveredSocket.readyState = MockWebSocket.OPEN;
     recoveredSocket.onopen?.();
-    expect(recoveredSocket.sent.map((item) => JSON.parse(item))).toEqual([
-      expect.objectContaining({ ...payload, requestId: expect.stringMatching(/^stream:/) }),
-    ]);
+    expect(recoveredSocket.sent.map((item) => JSON.parse(item))).toEqual([payload]);
 
     recoveredSocket.emit(StreamEventEnum.DONE, {
       sessionId: payload.sessionId,
@@ -350,17 +348,16 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       { onPayloadSent },
     );
 
-    expect(socket.sent.map((item) => JSON.parse(item))).toContainEqual(expect.objectContaining({
+    expect(socket.sent.map((item) => JSON.parse(item))).toContainEqual({
       action: "continue",
       turnScopeId: "turn-continue",
-      requestId: expect.stringMatching(/^stream:/),
-    }));
+    });
+    expect(socket.sent.some((item) => Object.hasOwn(JSON.parse(item), "requestId"))).toBe(false);
     expect(onPayloadSent).toHaveBeenCalledTimes(1);
-    expect(onPayloadSent).toHaveBeenCalledWith(expect.objectContaining({
+    expect(onPayloadSent).toHaveBeenCalledWith({
       action: "continue",
       turnScopeId: "turn-continue",
-      requestId: expect.stringMatching(/^stream:/),
-    }));
+    });
 
     socket.emit(StreamEventEnum.DONE, { turnScopeId: "turn-continue" });
     await streamPromise;

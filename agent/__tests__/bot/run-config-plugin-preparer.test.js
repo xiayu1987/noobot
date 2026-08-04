@@ -177,14 +177,12 @@ test("RunConfigPluginPreparer merges agent plugin model config by generic plugin
     userId: "u1",
     runConfig: {
       selectedPlugins: ["assistant-driver"],
-      config: {
-        pluginModelConfig: {
-          "assistant-driver": {
-            stepModels: {
-              planning: "planner_run",
-              guidance: "guidance_run",
-              empty: "",
-            },
+      pluginModelConfig: {
+        "assistant-driver": {
+          stepModels: {
+            planning: "planner_run",
+            guidance: "guidance_run",
+            empty: "",
           },
         },
       },
@@ -218,14 +216,12 @@ test("RunConfigPluginPreparer merges agent plugin capability profile without los
     userId: "u1",
     runConfig: {
       selectedPlugins: ["assistant-driver"],
-      config: {
-        pluginModelConfig: {
-          "assistant-driver": {
-            capabilityProfile: {
-              planning: { enabled: false },
-              guidance: { enabled: false },
-              acceptance: { enabled: false },
-            },
+      pluginModelConfig: {
+        "assistant-driver": {
+          capabilityProfile: {
+            planning: { enabled: false },
+            guidance: { enabled: false },
+            acceptance: { enabled: false },
           },
         },
       },
@@ -260,12 +256,10 @@ test("RunConfigPluginPreparer merges agent plugin guidance runtime options", () 
     userId: "u1",
     runConfig: {
       selectedPlugins: ["assistant-driver"],
-      config: {
-        pluginModelConfig: {
-          "assistant-driver": {
-            guidance: {
-              analysis: { turnsThreshold: 4 },
-            },
+      pluginModelConfig: {
+        "assistant-driver": {
+          guidance: {
+            analysis: { turnsThreshold: 4 },
           },
         },
       },

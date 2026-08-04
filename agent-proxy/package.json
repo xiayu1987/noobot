@@ -19,6 +19,7 @@
     "pretest": "npm run -s check:i18n-imports"
   },
   "dependencies": {
+    "@noobot/agent-transport-protocol": "file:../agent-transport-protocol",
     "@noobot/authoritative-state": "file:../authoritative-state",
     "ws": "^8.21.1",
     "noobot-i18n": "file:../i18n",

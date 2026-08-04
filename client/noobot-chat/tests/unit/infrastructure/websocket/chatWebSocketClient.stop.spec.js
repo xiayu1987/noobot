@@ -7,6 +7,22 @@ import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import { MockWebSocket, setupWebSocketTestHooks } from "./chatWebSocketClientTestFixtures.js";
+import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
+
+function stopCommand({
+  commandId = "stop:main-turn",
+  sessionId = "s-1",
+  dialogProcessId = "main-dp",
+  turnScopeId = "main-turn",
+  partialAssistant,
+} = {}) {
+  return createTurnStopCommand({
+    commandId,
+    identity: { sessionId, dialogProcessId, turnScopeId },
+    concurrency: {},
+    stop: { partialAssistant },
+  });
+}
 
 setupWebSocketTestHooks();
 
@@ -25,19 +41,9 @@ describe("chatWebSocketClient stop transport", () => {
       resolved = true;
     });
 
-    const stopPromise = client.requestStop({
-      commandId: "stop:main-turn",
-      sessionId: "s-1",
-      dialogProcessId: "main-dp",
-      turnScopeId: "main-turn",
-    });
-    expect(JSON.parse(socket.sent.at(-1))).toEqual({
-      action: "stop",
-      commandId: "stop:main-turn",
-      sessionId: "s-1",
-      dialogProcessId: "main-dp",
-      turnScopeId: "main-turn",
-    });
+    const command = stopCommand();
+    const stopPromise = client.requestStop(command);
+    expect(JSON.parse(socket.sent.at(-1))).toEqual(command);
 
     await vi.advanceTimersByTimeAsync(10000);
     expect(resolved).toBe(false);
@@ -63,7 +69,7 @@ describe("chatWebSocketClient stop transport", () => {
   it("rejects when no open transport can send the command", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
 
-    await expect(client.requestStop({ commandId: "stop:turn-1", turnScopeId: "turn-1" })).rejects.toThrow();
+    await expect(client.requestStop(stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" }))).rejects.toThrow();
     expect(client.isStopRequested).toBeUndefined();
     expect(client.getStopRequestedTurnScopeId).toBeUndefined();
     expect(client.clearStopRequested).toBeUndefined();
@@ -75,7 +81,7 @@ describe("chatWebSocketClient stop transport", () => {
     client.connect();
     const socket = MockWebSocket.instances[0];
 
-    await expect(client.requestStop({ commandId: "stop:turn-1", turnScopeId: "turn-1" })).rejects.toThrow();
+    await expect(client.requestStop(stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" }))).rejects.toThrow();
     expect(socket.readyState).toBe(MockWebSocket.CONNECTING);
   });
 
@@ -84,20 +90,17 @@ describe("chatWebSocketClient stop transport", () => {
     client.connect();
     const socket = MockWebSocket.instances[0];
 
-    const first = client.requestStop({ commandId: "stop:turn-1", turnScopeId: "turn-1" });
-    await expect(client.requestStop({
+    const firstCommand = stopCommand({ commandId: "stop:turn-1", turnScopeId: "turn-1" });
+    const first = client.requestStop(firstCommand);
+    await expect(client.requestStop(stopCommand({
       commandId: "stop:turn-1",
       turnScopeId: "turn-1",
       partialAssistant: { content: "partial" },
-    })).rejects.toThrow("commandId request already pending");
+    }))).rejects.toThrow("commandId request already pending");
 
     const stopMessages = socket.sent.map((item) => JSON.parse(item));
     expect(stopMessages).toHaveLength(1);
-    expect(stopMessages[0]).toEqual({
-      action: "stop",
-      commandId: "stop:turn-1",
-      turnScopeId: "turn-1",
-    });
+    expect(stopMessages[0]).toEqual(firstCommand);
     socket.emit(StreamEventEnum.TURN_LIFECYCLE, {
       commandId: "stop:turn-1",
       turnScopeId: "turn-1",

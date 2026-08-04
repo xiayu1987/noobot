@@ -11,25 +11,23 @@ export function createMessageStopHandler({
   state, canonicalRunOwnerId, sendEvent, translateText, resolveBot, sessionLogConfig,
   rejectAllPendingInteractions, commitTurnLifecycle,
 }) {
-  const handleStop = async (payload) => {
+  const handleStop = async (command) => {
+    const identity = command.identity;
+    const partialAssistant = command.stop?.partialAssistant || {};
     const targetUserId = canonicalRunOwnerId;
-    const targetTurnScopeId =
-      String(payload?.turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim() ||
-      state.currentTurnScopeId;
-    const targetSessionId =
-      String(payload?.sessionId || payload?.partialAssistant?.sessionId || "").trim() ||
-      state.currentRunMeta?.sessionId || "";
-    const stopCommandId = String(payload?.commandId || payload?.idempotencyKey || `stop:${targetTurnScopeId}`).trim();
+    const targetTurnScopeId = String(identity.turnScopeId).trim();
+    const targetSessionId = String(identity.sessionId).trim();
+    const stopCommandId = String(command.commandId).trim();
     const accepted = await commitTurnLifecycle({
       userId: targetUserId,
       sessionId: targetSessionId,
-      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      parentSessionId: String(identity.parentSessionId || "").trim(),
       turnScopeId: targetTurnScopeId,
-      dialogProcessId: String(payload?.dialogProcessId || payload?.partialAssistant?.dialogProcessId || "").trim(),
+      dialogProcessId: String(identity.dialogProcessId || "").trim(),
       commandId: stopCommandId,
       eventType: TURN_EVENT.STOP_ACCEPTED,
       phase: TURN_PHASE.STOP,
-      expectedRevision: payload?.expectedRevision,
+      expectedRevision: command.concurrency?.expectedRevision,
     });
     if (!accepted?.applied && !accepted?.deduplicated) {
       sendEvent("error", {
@@ -50,17 +48,9 @@ export function createMessageStopHandler({
       message: translateText("ws.dialogStoppedByUser", state.currentLocale),
       sessionId:
         targetSessionId,
-      dialogProcessId:
-        String(payload?.dialogProcessId || "").trim() ||
-        String(payload?.partialAssistant?.dialogProcessId || "").trim() ||
-        state.currentRunMeta?.dialogProcessId ||
-        "",
-      turnScopeId:
-        String(payload?.turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim() ||
-        state.currentTurnScopeId ||
-        state.currentRunMeta?.turnScopeId ||
-        "",
-      partialAssistant: payload?.partialAssistant || {},
+      dialogProcessId: String(identity.dialogProcessId || state.currentRunMeta?.dialogProcessId || "").trim(),
+      turnScopeId: targetTurnScopeId,
+      partialAssistant,
       commandId: stopCommandId,
     };
     void recordServiceWebSocketLifecycle({
@@ -96,7 +86,7 @@ export function createMessageStopHandler({
         const lifecycleContext = {
           userId,
           sessionId: stopPayload.sessionId,
-          parentSessionId: String(payload?.parentSessionId || "").trim(),
+          parentSessionId: String(identity.parentSessionId || "").trim(),
           turnScopeId: stopPayload.turnScopeId,
           dialogProcessId: stopPayload.dialogProcessId,
           phase: TURN_PHASE.STOP,

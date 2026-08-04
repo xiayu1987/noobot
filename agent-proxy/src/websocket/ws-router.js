@@ -20,9 +20,15 @@ import {
   writeAgentProxyRouteLifecycleEvent,
 } from "../runtime-events/ws-runtime-events.js";
 import { writeAgentProxyRouteDebugEvent } from "../runtime-events/route-debug-runtime-events.js";
+import { writeAgentTransportDebugEvent } from "../runtime-events/agent-transport-debug-runtime-events.js";
 import { ensureConnectionId } from "../shared/utils.js";
-import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
 import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/event-protocol";
+import {
+  AGENT_COMMAND,
+  EXECUTION_QUERY_COMMAND_TYPES,
+  RUN_COMMAND_TYPES,
+  parseAgentCommand,
+} from "@noobot/agent-transport-protocol";
 
 function resolveRawMessageInfo(rawData) {
   const text = String(rawData || "");
@@ -64,9 +70,22 @@ export class WsRouter {
         data: { ...resolveRawMessageInfo(rawData) },
       });
       let payload = {};
+      let parsedCommand = null;
       try {
         payload = JSON.parse(String(rawData || "{}"));
       } catch {
+        void writeAgentTransportDebugEvent({
+          event: "agentProxy.agentTransport.commandRejected",
+          command: rawData,
+          socket,
+          data: {
+            accepted: false,
+            transport: "websocket",
+            errorCode: "INVALID_JSON",
+            validationErrors: ["invalid_json"],
+            ...resolveRawMessageInfo(rawData),
+          },
+        });
         void writeAgentProxyInvalidJsonPayloadEvent({ rawData });
         this.channelManager.sendSocketError(
           socket,
@@ -77,52 +96,77 @@ export class WsRouter {
 
       try {
         const action = String(payload?.action || "").trim().toLowerCase();
-        const commandType = String(payload?.commandType || "").trim().toLowerCase();
         void writeAgentProxyRouteLifecycleEvent({
-          event: commandType
-            ? "agentProxy.route.commandReceived"
-            : action
-              ? "agentProxy.route.actionReceived"
-              : "agentProxy.route.channelStartReceived",
+          event: action ? "agentProxy.route.controlReceived" : "agentProxy.route.commandReceived",
           socket,
           data: {
             action,
-            commandType,
-            hasSessionId: Boolean(String(payload?.sessionId || "").trim()),
+            commandType: String(payload?.commandType || "").trim().toLowerCase(),
+            hasSessionId: Boolean(String(payload?.identity?.sessionId || payload?.sessionId || "").trim()),
             hasChannelKey: Boolean(String(payload?.channelKey || "").trim()),
           },
         });
-        if (Object.values(EXECUTION_QUERY_COMMAND).includes(commandType)) {
-          this._forwardExecutionQuery(socket, payload, commandType);
-          return;
-        }
-        if (!action) {
-          this.channelManager.startOrJoinChannel({
-            socket,
-            payload,
-            connectionApiKey,
-            connectionLocale,
-          });
-          return;
-        }
-
-        const handler = this._handlers[action];
-        if (handler) {
-          handler.call(this, socket, payload);
-        } else {
+        if (action) {
+          const handler = this._controlHandlers[action];
+          if (handler) {
+            handler.call(this, socket, payload);
+            return;
+          }
           void writeAgentProxyRouteLifecycleEvent({ event: "agentProxy.route.unsupportedAction", socket, data: { action } });
           this.channelManager.sendSocketError(
             socket,
             AGENT_PROXY_ERROR.UNSUPPORTED_ACTION(action),
           );
+          return;
         }
+        const command = parseAgentCommand(payload);
+        parsedCommand = command;
+        void writeAgentTransportDebugEvent({
+          event: "agentProxy.agentTransport.commandReceived",
+          command,
+          socket,
+          data: { accepted: true, transport: "websocket" },
+        });
+        this._routeAgentCommand(socket, command, { connectionApiKey, connectionLocale });
       } catch (error) {
+        if (!String(payload?.action || "").trim()) {
+          void writeAgentTransportDebugEvent({
+            event: parsedCommand
+              ? "agentProxy.agentTransport.commandDispatchFailed"
+              : "agentProxy.agentTransport.commandRejected",
+            command: parsedCommand || payload,
+            socket,
+            data: {
+              accepted: Boolean(parsedCommand),
+              dispatched: false,
+              transport: "websocket",
+              errorType: String(error?.name || "Error"),
+              errorCode: String(error?.errorCode || error?.code || ""),
+              validationErrors: Array.isArray(error?.errors) ? error.errors.slice(0, 20) : [],
+            },
+          });
+        }
+        if (!parsedCommand && String(error?.errorCode || error?.code || "") === "INVALID_AGENT_COMMAND") {
+          this.channelManager.sendSocketEvent(socket, {
+            event: EVENT_TYPE.ERROR,
+            data: {
+              error: String(error?.message || "invalid_agent_command"),
+              errorCode: "INVALID_AGENT_COMMAND",
+              commandId: String(payload?.commandId || "").trim(),
+              sessionId: String(payload?.identity?.sessionId || "").trim(),
+              turnScopeId: String(payload?.identity?.turnScopeId || "").trim(),
+            },
+          });
+          try { socket.close?.(1008, "invalid_agent_command"); } catch {}
+          return;
+        }
         void writeAgentProxyRouteLifecycleEvent({
           event: "agentProxy.route.unhandledFailure",
           socket,
           data: {
             errorType: String(error?.name || "Error"),
             errorCode: String(error?.code || ""),
+            errorMessage: String(error?.message || "route failed").slice(0, 300),
           },
         });
         try { this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.ROUTE_FAILED); } catch {}
@@ -132,7 +176,7 @@ export class WsRouter {
   }
 
 
-  _handlers = {
+  _controlHandlers = {
     [TURN_LIFECYCLE_RECEIPT_ACTION](socket, payload) {
       const result = this.channelManager.acknowledgeTurnLifecycleDelivery(socket, payload);
       if (result.acknowledged) {
@@ -159,106 +203,6 @@ export class WsRouter {
           reason: result.reason,
         },
       });
-    },
-
-    [WS_ACTION.SNAPSHOT_GET](socket, payload) {
-      const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
-      if (!targetChannel) {
-        this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
-        return;
-      }
-      if (!this.channelManager.hasChannelPermission(
-        targetChannel,
-        socket.__agentProxyApiKey,
-        String(socket?.__agentProxyUserId || "").trim(),
-      )) {
-        this.channelManager.sendSocketError(
-          socket,
-          AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(WS_ACTION.SNAPSHOT_GET),
-        );
-        return;
-      }
-      const commandId = String(payload?.commandId || "").trim();
-      if (!commandId) {
-        this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.INVALID_JSON_PAYLOAD);
-        return;
-      }
-      targetChannel.pendingSnapshotRequests ||= new Map();
-      targetChannel.pendingSnapshotRequests.set(commandId, socket);
-      if (this.channelManager.forwardToUpstream(targetChannel, payload)) return;
-      targetChannel.pendingSnapshotRequests.delete(commandId);
-      this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
-    },
-
-    [WS_ACTION.STOP](socket, payload) {
-      const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
-      if (!targetChannel) {
-        this.channelManager.sendSocketError(
-          socket,
-          AGENT_PROXY_ERROR.CHANNEL_NOT_FOUND_FOR_STOP,
-        );
-        return;
-      }
-      if (
-        !this.channelManager.hasChannelPermission(
-          targetChannel,
-          socket.__agentProxyApiKey,
-          String(socket?.__agentProxyUserId || "").trim(),
-        )
-      ) {
-        this.channelManager.sendSocketError(
-          socket,
-          AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(WS_ACTION.STOP),
-        );
-        return;
-      }
-      const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
-      if (forwarded) return;
-      this.channelManager.sendSocketError(
-        socket,
-        AGENT_PROXY_ERROR.UPSTREAM_NOT_RUNNING,
-      );
-    },
-
-    [WS_ACTION.CONTINUE](socket, payload) {
-      this._forwardRunAction(socket, payload, WS_ACTION.CONTINUE);
-    },
-
-    [WS_ACTION.RESUME](socket, payload) {
-      this._forwardRunAction(socket, payload, WS_ACTION.RESUME);
-    },
-
-    [WS_ACTION.INTERACTION_RESPONSE](socket, payload) {
-      const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
-      if (!targetChannel) {
-        this.channelManager.sendSocketError(
-          socket,
-          AGENT_PROXY_ERROR.CHANNEL_NOT_FOUND_FOR_INTERACTION,
-        );
-        return;
-      }
-      if (
-        !this.channelManager.hasChannelPermission(
-          targetChannel,
-          socket.__agentProxyApiKey,
-          String(socket?.__agentProxyUserId || "").trim(),
-        )
-      ) {
-        this.channelManager.sendSocketError(
-          socket,
-          AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(
-            WS_ACTION.INTERACTION_RESPONSE,
-          ),
-        );
-        return;
-      }
-      const forwarded = this.channelManager.forwardToUpstream(targetChannel, payload);
-      if (!forwarded) {
-        this.channelManager.sendSocketError(
-          socket,
-          AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE,
-        );
-      }
     },
 
     [WS_ACTION.JOIN](socket, payload) {
@@ -312,6 +256,73 @@ export class WsRouter {
     },
   };
 
+  _routeAgentCommand(socket, command, { connectionApiKey, connectionLocale } = {}) {
+    const { commandType } = command;
+    if (commandType === AGENT_COMMAND.SEND || commandType === AGENT_COMMAND.RESEND) {
+      this.channelManager.startOrJoinChannel({ socket, payload: command, connectionApiKey, connectionLocale });
+      return;
+    }
+    if (commandType === AGENT_COMMAND.CONTINUE) {
+      this._forwardRunAction(socket, command, commandType);
+      return;
+    }
+    if (EXECUTION_QUERY_COMMAND_TYPES.includes(commandType)) {
+      this._forwardExecutionQuery(socket, command, commandType);
+      return;
+    }
+    if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET || commandType === AGENT_COMMAND.FINALIZE) {
+      this._forwardSnapshotCommand(socket, command);
+      return;
+    }
+    if (commandType === AGENT_COMMAND.STOP || commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
+      this._forwardScopedCommand(socket, command);
+      return;
+    }
+    if (RUN_COMMAND_TYPES.includes(commandType)) {
+      this.channelManager.startOrJoinChannel({ socket, payload: command, connectionApiKey, connectionLocale });
+      return;
+    }
+    this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UNSUPPORTED_ACTION(commandType));
+  }
+
+  _forwardScopedCommand(socket, command) {
+    const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, command);
+    if (!targetChannel) {
+      this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
+      return;
+    }
+    if (!this.channelManager.hasChannelPermission(
+      targetChannel,
+      socket.__agentProxyApiKey,
+      String(socket?.__agentProxyUserId || "").trim(),
+    )) {
+      this.channelManager.sendSocketError(
+        socket,
+        AGENT_PROXY_ERROR.PERMISSION_DENIED_FOR_ACTION(command.commandType),
+      );
+      return;
+    }
+    if (this.channelManager.forwardToUpstream(targetChannel, command)) return;
+    this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
+  }
+
+  _forwardSnapshotCommand(socket, command) {
+    const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, command);
+    if (!targetChannel || !this.channelManager.hasChannelPermission(
+      targetChannel,
+      socket.__agentProxyApiKey,
+      String(socket?.__agentProxyUserId || "").trim(),
+    )) {
+      this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
+      return;
+    }
+    targetChannel.pendingSnapshotRequests ||= new Map();
+    targetChannel.pendingSnapshotRequests.set(command.commandId, socket);
+    if (this.channelManager.forwardToUpstream(targetChannel, command)) return;
+    targetChannel.pendingSnapshotRequests.delete(command.commandId);
+    this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
+  }
+
   _forwardExecutionQuery(socket, payload, commandType) {
     const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
     const commandId = String(payload?.commandId || "").trim();
@@ -349,8 +360,8 @@ export class WsRouter {
   _forwardRunAction(socket, payload, action) {
     const targetChannel = this.channelManager.resolveChannelFromSocketMessage(socket, payload);
     if (!targetChannel) {
-      const userId = String(payload?.userId || socket?.__agentProxyUserId || "").trim();
-      const sessionId = String(payload?.sessionId || "").trim();
+      const userId = String(socket?.__agentProxyUserId || "").trim();
+      const sessionId = String(payload?.identity?.sessionId || "").trim();
       if (
         userId &&
         sessionId &&
@@ -358,7 +369,7 @@ export class WsRouter {
       ) {
         this.channelManager.startOrJoinChannel({
           socket,
-          payload: { ...(payload || {}), userId, sessionId },
+          payload,
           connectionApiKey: String(socket?.__agentProxyApiKey || "").trim(),
           connectionLocale: String(socket?.__agentProxyLocale || "").trim(),
         });
@@ -394,10 +405,7 @@ export class WsRouter {
     void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forwardRun.forwardResult", payload, socket, channel: targetChannel, data: { action, forwarded } });
     if (forwarded) return;
 
-    if (
-      action === WS_ACTION.CONTINUE ||
-      action === WS_ACTION.RESUME
-    ) {
+    if (action === AGENT_COMMAND.CONTINUE) {
       const restarted = this._restartUpstreamRunAction(socket, targetChannel, payload);
       void writeAgentProxyRouteDebugEvent({ event: "agentProxy.route.forwardRun.restartResult", payload, socket, channel: targetChannel, data: { action, restarted } });
       if (restarted) return;

@@ -13,11 +13,11 @@ import {
 } from "@noobot/shared/execution-lifecycle-protocol";
 
 export function createMessageQueryHandlers({
-  state, authInfo, sendEvent, translateText, isForbiddenUserScope, resolveBot,
+  state, authInfo, sendEvent, translateText, resolveBot,
   pendingInteractionRequests, recoverTurnFinalize, recoverSnapshotOrphan,
 }) {
-  const handleInteractionResponse = (payload) => {
-    const requestId = String(payload?.requestId || "").trim();
+  const handleInteractionResponse = (command) => {
+    const requestId = String(command.interaction?.requestId || "").trim();
     const requestItem = pendingInteractionRequests.get(requestId);
     if (!requestItem) {
       sendEvent("error", { error: translateText("ws.interactionNotFound", state.currentLocale) });
@@ -25,23 +25,23 @@ export function createMessageQueryHandlers({
     }
     pendingInteractionRequests.delete(requestId);
     clearTimeout(requestItem.timer);
-    requestItem.resolve(payload?.response ?? {});
+    requestItem.resolve(command.interaction?.response ?? {});
   };
 
-  const handleSnapshotGet = async (payload) => {
-    const userId = String(payload?.userId || authInfo?.userId || "").trim();
-    const sessionId = String(payload?.sessionId || "").trim();
-    const commandId = String(payload?.commandId || "").trim();
-    if (!userId || !sessionId || !commandId || isForbiddenUserScope(authInfo, userId)) {
+  const handleSnapshotGet = async (command) => {
+    const userId = String(authInfo?.userId || "").trim();
+    const sessionId = String(command.identity?.sessionId || "").trim();
+    const commandId = String(command.commandId || "").trim();
+    if (!userId || !sessionId || !commandId) {
       sendEvent("error", { errorCode: "invalid_snapshot_request", sessionId, commandId });
       return;
     }
     const recovered = await recoverTurnFinalize?.({
       userId,
       sessionId,
-      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      parentSessionId: String(command.identity?.parentSessionId || "").trim(),
       commandId: `${commandId}:recovery`,
-      terminalLimit: payload?.terminalLimit,
+      terminalLimit: command.options?.terminalLimit,
     });
     if (!recovered?.recovered && recovered?.reason && recovered.reason !== "no_recoverable_finalize") {
       sendEvent("error", { errorCode: recovered.reason, sessionId, commandId });
@@ -50,9 +50,9 @@ export function createMessageQueryHandlers({
     await recoverSnapshotOrphan?.({
       userId,
       sessionId,
-      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      parentSessionId: String(command.identity?.parentSessionId || "").trim(),
       commandId: `${commandId}:orphan-recovery`,
-      terminalLimit: payload?.terminalLimit,
+      terminalLimit: command.options?.terminalLimit,
     });
     const bot = resolveBot();
     const reader = bot?.getTurnLifecycleSnapshot;
@@ -61,8 +61,8 @@ export function createMessageQueryHandlers({
       return;
     }
     const result = await reader.call(bot, {
-      userId, sessionId, parentSessionId: String(payload?.parentSessionId || "").trim(),
-      commandId, knownSequence: payload?.knownSequence, terminalLimit: payload?.terminalLimit,
+      userId, sessionId, parentSessionId: String(command.identity?.parentSessionId || "").trim(),
+      commandId, knownSequence: command.options?.knownSequence, terminalLimit: command.options?.terminalLimit,
     });
     if (!result?.found) {
       sendEvent("error", { errorCode: result?.reason || "snapshot_not_found", sessionId, commandId });
@@ -76,17 +76,17 @@ export function createMessageQueryHandlers({
     sendEvent("turn_snapshot", result.snapshot);
   };
 
-  const handleExecutionQuery = async (payload, commandType) => {
-    const userId = String(payload?.userId || authInfo?.userId || "").trim();
-    const executionId = String(payload?.executionId || "").trim();
-    const rootExecutionId = String(payload?.rootExecutionId || "").trim();
-    const commandId = String(payload?.commandId || "").trim();
+  const handleExecutionQuery = async (command, commandType) => {
+    const userId = String(authInfo?.userId || "").trim();
+    const executionId = String(command.query?.executionId || "").trim();
+    const rootExecutionId = String(command.query?.rootExecutionId || "").trim();
+    const commandId = String(command.commandId || "").trim();
     const query = commandType === EXECUTION_QUERY_COMMAND.SNAPSHOT_GET
       ? { method: "getExecution", event: EXECUTION_SNAPSHOT_WIRE_EVENT, requiresExecutionId: true }
       : commandType === EXECUTION_QUERY_COMMAND.CHILDREN_GET
         ? { method: "getExecutionChildren", event: EXECUTION_CHILDREN_WIRE_EVENT, requiresExecutionId: true }
         : { method: "getExecutionTree", event: EXECUTION_TREE_WIRE_EVENT, requiresExecutionId: false };
-    if (!userId || !commandId || (query.requiresExecutionId ? !executionId : (!executionId && !rootExecutionId)) || isForbiddenUserScope(authInfo, userId)) {
+    if (!userId || !commandId || (query.requiresExecutionId ? !executionId : (!executionId && !rootExecutionId))) {
       sendEvent("error", { errorCode: "invalid_execution_query", executionId, rootExecutionId, commandId });
       return;
     }
@@ -114,20 +114,20 @@ export function createMessageQueryHandlers({
     sendEvent(query.event, { ...result, commandId });
   };
 
-  const handleFinalize = async (payload) => {
-    const userId = String(payload?.userId || authInfo?.userId || "").trim();
-    const sessionId = String(payload?.sessionId || "").trim();
-    const commandId = String(payload?.commandId || "").trim();
-    if (!userId || !sessionId || !commandId || isForbiddenUserScope(authInfo, userId)) {
+  const handleFinalize = async (command) => {
+    const userId = String(authInfo?.userId || "").trim();
+    const sessionId = String(command.identity?.sessionId || "").trim();
+    const commandId = String(command.commandId || "").trim();
+    if (!userId || !sessionId || !commandId) {
       sendEvent("error", { errorCode: "invalid_finalize_request", sessionId, commandId });
       return;
     }
     const result = await recoverTurnFinalize?.({
       userId,
       sessionId,
-      parentSessionId: String(payload?.parentSessionId || "").trim(),
+      parentSessionId: String(command.identity?.parentSessionId || "").trim(),
       commandId,
-      terminalLimit: payload?.terminalLimit,
+      terminalLimit: command.options?.terminalLimit,
     });
     if (!result?.recovered && result?.reason !== "no_recoverable_finalize") {
       sendEvent("error", {

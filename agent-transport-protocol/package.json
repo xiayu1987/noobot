@@ -1,0 +1,21 @@
+{
+  "name": "@noobot/agent-transport-protocol",
+  "version": "4.1.5",
+  "private": true,
+  "type": "module",
+  "description": "Strict frontend-to-agent transport command protocol",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./commands": "./src/commands.mjs",
+    "./run-preferences": "./src/run-preferences.mjs",
+    "./diagnostics": "./src/diagnostics.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.mjs"
+  },
+  "dependencies": {
+    "@noobot/event-protocol": "file:../event-protocol",
+    "@noobot/shared": "file:../shared"
+  }
+}

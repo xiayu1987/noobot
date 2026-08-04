@@ -15,6 +15,108 @@ import {
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
+import {
+  AGENT_COMMAND,
+  EXECUTION_QUERY_COMMAND_TYPES,
+  createExecutionQueryCommand,
+  createInteractionResponseCommand,
+  createTurnFinalizeCommand,
+  createTurnRunCommand,
+  createTurnSnapshotCommand,
+  createTurnStopCommand,
+} from "@noobot/agent-transport-protocol";
+import { createChatRunService } from "../../services/chat-run-service.js";
+
+export function createProtocolTestCommand(payload = {}) {
+  if (Number(payload?.protocolVersion) === 1) return payload;
+  const action = String(payload?.action || "").trim().toLowerCase();
+  const commandType = String(payload?.commandType || "").trim().toLowerCase();
+  const config = payload?.config && typeof payload.config === "object" ? payload.config : {};
+  const turnScopeId = String(payload?.turnScopeId || config?.turnScopeId || "test-turn").trim();
+  const identity = {
+    sessionId: String(payload?.sessionId || "s1").trim(),
+    parentSessionId: String(payload?.parentSessionId || "").trim(),
+    dialogProcessId: String(payload?.dialogProcessId || payload?.partialAssistant?.dialogProcessId || "").trim(),
+    parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
+    turnScopeId: String(turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim(),
+  };
+  const resolvedCommandId = String(payload?.commandId || payload?.idempotencyKey || turnScopeId).trim();
+  if (action === "stop") {
+    return createTurnStopCommand({
+      commandId: resolvedCommandId || `stop:${turnScopeId}`,
+      identity,
+      concurrency: { expectedRevision: payload?.expectedRevision },
+      stop: { executionId: payload?.executionId, partialAssistant: payload?.partialAssistant },
+    });
+  }
+  if (action === "interaction_response") {
+    return createInteractionResponseCommand({
+      commandId: resolvedCommandId || `interaction:${payload?.requestId}`,
+      identity,
+      interaction: { requestId: payload?.requestId, response: payload?.response },
+    });
+  }
+  if (EXECUTION_QUERY_COMMAND_TYPES.includes(commandType)) {
+    return createExecutionQueryCommand({
+      commandType,
+      commandId: resolvedCommandId,
+      identity,
+      query: { executionId: payload?.executionId, rootExecutionId: payload?.rootExecutionId },
+    });
+  }
+  if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
+    return createTurnSnapshotCommand({
+      commandId: resolvedCommandId,
+      identity,
+      options: { knownSequence: payload?.knownSequence, terminalLimit: payload?.terminalLimit },
+    });
+  }
+  if (commandType === AGENT_COMMAND.FINALIZE) {
+    return createTurnFinalizeCommand({
+      commandId: resolvedCommandId,
+      identity,
+      options: { terminalLimit: payload?.terminalLimit },
+    });
+  }
+  const resolvedRunCommandType = action === "continue" || action === "resume"
+    ? AGENT_COMMAND.CONTINUE
+    : config.reuseExistingUserTurn === true
+      ? AGENT_COMMAND.RESEND
+      : AGENT_COMMAND.SEND;
+  return createTurnRunCommand({
+    commandType: resolvedRunCommandType,
+    commandId: resolvedCommandId,
+    identity,
+    input: { message: payload?.message || "test message", attachments: payload?.attachments || [] },
+    preferences: {
+      allowUserInteraction: config.allowUserInteraction,
+      sanitizeOutput: config.sanitizeOutput,
+      ...(Object.prototype.hasOwnProperty.call(config, "streaming")
+        ? { streaming: config.streaming }
+        : {}),
+      confirmationLevel: config.safeConfirmLevel,
+      locale: config.locale,
+      scenario: config.scenario,
+      selectedModel: config.selectedModel,
+      memoryModel: config.memoryModel,
+      pluginModelConfig: config.pluginModelConfig,
+      selectedConnectors: config.selectedConnectors,
+      selectedPlugins: config.selectedPlugins,
+    },
+    presentation: {
+      userMessageId: payload?.userMessageId || config.userMessageId,
+      assistantMessageId: payload?.presentationMessageId || config.presentationMessageId,
+    },
+    concurrency: {
+      idempotencyKey: payload?.idempotencyKey || config.idempotencyKey,
+      expectedRevision: payload?.expectedRevision ?? payload?.expectedVersion,
+    },
+    continuation: {
+      dialogProcessId: config.resumeDialogProcessId,
+      turnScopeId: config.resumeTurnScopeId,
+    },
+  });
+}
 
 export async function startServerWithWs({
   runSession = async () => ({}),
@@ -108,6 +210,12 @@ export async function startServerWithWs({
       return { acknowledged: result.found };
     }),
   };
+  const { mapAgentRunCommand } = createChatRunService({
+    getBot: () => testBot,
+    normalizeLocale: (locale = "") => String(locale || "zh-CN"),
+    defaultLocale: "zh-CN",
+    translateText: (key = "") => String(key || ""),
+  });
   if (typeof suppliedBot.applyTurnLifecycleEvent !== "function") {
     testBot.runSession = async (payload = {}) => {
       payload?.eventListener?.onEvent?.({
@@ -125,8 +233,7 @@ export async function startServerWithWs({
     getBot: () => testBot,
     resolveRequestLocale: () => "zh-CN",
     resolveAuthByApiKey,
-    isForbiddenUserScope,
-    normalizeRunConfig: (config = {}) => config || {},
+    mapAgentRunCommand,
     normalizeLocale: (locale = "") => String(locale || "zh-CN"),
     defaultLocale: "zh-CN",
     translateText: (key = "") => String(key || ""),
@@ -210,10 +317,7 @@ export async function callChatWs({ port, payload = {}, timeoutMs = 2000 } = {}) 
       clearTimeout(timer);
       callback(value);
     };
-    ws.on("open", () => ws.send(JSON.stringify({
-      ...payload,
-      turnScopeId: String(payload?.turnScopeId || "test-turn"),
-    })));
+    ws.on("open", () => ws.send(JSON.stringify(createProtocolTestCommand(payload))));
     ws.on("message", (raw) => {
       try {
         messages.push(JSON.parse(String(raw || "{}")));
@@ -243,7 +347,7 @@ export async function stopChatWs({ port, payload = {}, stopPayload = {}, timeout
       callback(value);
     };
     ws.on("open", () => {
-      ws.send(JSON.stringify(payload));
+      ws.send(JSON.stringify(createProtocolTestCommand(payload)));
     });
     ws.on("message", (raw) => {
       try {
@@ -251,7 +355,12 @@ export async function stopChatWs({ port, payload = {}, stopPayload = {}, timeout
         messages.push(parsed);
         if (!stopSent && parsed?.event === "turn_lifecycle" && parsed?.data?.capabilities?.canStop === true) {
           stopSent = true;
-          ws.send(JSON.stringify({ action: "stop", ...stopPayload }));
+          ws.send(JSON.stringify(createProtocolTestCommand({
+            action: "stop",
+            sessionId: stopPayload.sessionId || payload.sessionId,
+            turnScopeId: stopPayload.turnScopeId || payload.turnScopeId,
+            ...stopPayload,
+          })));
         }
       } catch (error) {
         ws.terminate();

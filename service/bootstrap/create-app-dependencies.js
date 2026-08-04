@@ -112,10 +112,11 @@ export async function createAppDependencies({
     normalizeLocale,
     defaultLocale: DEFAULT_LOCALE,
     translateText,
+    sessionLogConfig: { workspaceRoot: workspaceRootPath() },
   });
   const {
     normalizeSelectedConnectors,
-    normalizeRunConfig,
+    mapAgentRunCommand,
     handleChat,
   } = chatRunService;
 
@@ -183,7 +184,7 @@ export async function createAppDependencies({
     defaultLocale: DEFAULT_LOCALE,
     resolveRequestLocale,
     translateText,
-    normalizeRunConfig,
+    mapAgentRunCommand,
     resolveAuthByApiKey,
     isForbiddenUserScope,
     workspaceRootPath,

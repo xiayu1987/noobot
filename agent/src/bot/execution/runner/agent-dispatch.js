@@ -18,6 +18,7 @@ import {
   canonicalMessageIdentityDebugData,
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
+import { getAgentContextEnvelope } from "../../../context/agent-context-accessor.js";
 
 function messageIdentity(message = {}) {
   const messageId = String(
@@ -87,8 +88,9 @@ export async function dispatchAgentTurn({
   // window. At this boundary the prepared session history is the only model
   // context owned by the dispatcher; system and incremental messages are added
   // later by the selected execution owner.
-  const dispatchContextMessages = Array.isArray(runtimeAgentContext?.payload?.messages?.history)
-    ? runtimeAgentContext.payload.messages.history
+  const context = getAgentContextEnvelope(runtimeAgentContext);
+  const dispatchContextMessages = Array.isArray(context?.modelContext?.messageBlocks?.history)
+    ? context.modelContext.messageBlocks.history
     : [];
   const dispatchModelContext = createModelContext({
     messages: dispatchContextMessages,

@@ -65,6 +65,7 @@ test('session log protocol exports stable categories and helpers from runtime-ev
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-proxy-route' } }), 'agentProxyRoute');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'context-identity' } }), 'contextIdentity');
   assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-context' } }), 'agentContext');
+  assert.equal(getSessionLogDebugControlKey({ data: { debugType: 'agent-transport' } }), 'agentTransport');
 
   const record = buildSessionLogRecord({
     source: 'frontend',
@@ -101,6 +102,7 @@ test('session log client policy is derived from the shared debug registry', () =
   assert.equal(policy.debug['tool-log-window'], true);
   assert.equal(policy.debug.resend, false);
   assert.equal(policy.debug.stop, false);
+  assert.equal(policy.debug['agent-transport'], true);
   assert.equal(Object.hasOwn(policy.debug, 'timeline-pipeline'), false);
   assert.deepEqual(
     Object.keys(policy.debug).sort(),
@@ -112,6 +114,38 @@ test('session log client policy is derived from the shared debug registry', () =
   assert.equal(policy.limits.maxDebugQueue > 0, true);
   assert.equal(policy.limits.maxDebugBytes > 0, true);
   assert.equal(policy.limits.debugTtlMs > 0, true);
+});
+
+test('agent transport debug uses its own file and excludes business payloads', async () => {
+  const root = await tempRoot();
+  const result = await writeRuntimeEvent({
+    source: 'frontend',
+    scope: 'session',
+    category: 'debug',
+    level: 'debug',
+    debugType: 'agent-transport',
+    event: 'frontend.agentTransport.commandSent',
+    userId: 'admin',
+    sessionId: 'session-transport',
+    data: {
+      debugType: 'agent-transport',
+      commandId: 'command-1',
+      commandType: 'send',
+      messageLength: 12,
+      attachmentCount: 1,
+    },
+  }, {
+    root,
+    includeProcess: false,
+    sessionLogControls: { debug: { agentTransport: true } },
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(result.file, /session-transport\/debug-agent-transport\.jsonl$/);
+  const [record] = await readJsonl(result.file);
+  assert.equal(record.data.commandId, 'command-1');
+  assert.equal(Object.hasOwn(record.data, 'message'), false);
+  assert.equal(Object.hasOwn(record.data, 'attachments'), false);
 });
 
 test('tool log window debug uses its own file when enabled', async () => {

@@ -10,6 +10,7 @@ import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents, FakeUpstreamWebSocket } from "./channel-manager.state-consistency.test-helpers.js";
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/event-protocol";
+import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
 
 test("invalid authoritative lifecycle has no journal or state projection side effects", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -200,12 +201,12 @@ test("startOrJoinChannel restarts running channel when upstream socket is not op
   manager.startOrJoinChannel({
     socket: client,
     connectionApiKey: "api-key-1",
-    payload: { userId: "user-1", sessionId: "session-stale", action: "start" },
+    payload: { identity: { sessionId: "session-stale" }, commandType: "turn.send" },
   });
 
   assert.equal(closeCount, 1);
   assert.equal(connectCount, 1);
-  assert.equal(channel.startPayload?.sessionId, "session-stale");
+  assert.equal(channel.startPayload?.identity?.sessionId, "session-stale");
   assert.equal(channel.eventLog.length, 0);
 });
 
@@ -227,7 +228,7 @@ test("startOrJoinChannel keeps running channel when upstream socket is open", ()
   manager.startOrJoinChannel({
     socket: client,
     connectionApiKey: "api-key-1",
-    payload: { userId: "user-1", sessionId: "session-live", action: "start" },
+    payload: { identity: { sessionId: "session-live" }, commandType: "turn.send" },
   });
 
   assert.equal(connectCount, 0);
@@ -255,13 +256,16 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
 
-  const forwarded = manager.forwardToUpstream(channel, {
-    action: "stop",
-    userId: "user-1",
-    sessionId: "session-stop",
-    dialogProcessId: "dp-stop",
-    turnScopeId: "turn-stop",
-  });
+  const forwarded = manager.forwardToUpstream(channel, createTurnStopCommand({
+    commandId: "stop:turn-stop",
+    identity: {
+      sessionId: "session-stop",
+      dialogProcessId: "dp-stop",
+      turnScopeId: "turn-stop",
+    },
+    concurrency: {},
+    stop: {},
+  }));
   assert.equal(forwarded, true);
 
   assert.equal(upstreamMessages.length, 1);
@@ -293,6 +297,27 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   );
   assert.equal("hasRunningTask" in completedSessionEntry, false);
   assert.equal("conversationStates" in completedSessionEntry, false);
+});
+
+test("forwardToUpstream reports a closed upstream without throwing", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channel = manager.ensureChannel(
+    createChannelKey({ userId: "user-1", sessionId: "session-closed-upstream" }),
+    { identity: { sessionId: "session-closed-upstream" } },
+  );
+  channel.ownerUserId = "user-1";
+
+  assert.doesNotThrow(() => {
+    assert.equal(manager.forwardToUpstream(channel, createTurnStopCommand({
+      commandId: "stop:closed-upstream",
+      identity: {
+        sessionId: "session-closed-upstream",
+        turnScopeId: "turn-closed-upstream",
+      },
+      concurrency: {},
+      stop: {},
+    })), false);
+  });
 });
 
 test("upstream close without authoritative event does not synthesize a turn terminal", () => {
