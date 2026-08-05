@@ -19,7 +19,9 @@ export const TURN_THRESHOLDS = deepFreeze({
 
     toolLoopLimitBufferTurns: 5,
 
-    phaseSummaryLoopTurns: 15,
+    phaseSummaryLoopTurns: 20,
+
+    taskCheckLoopTurns: 10,
 
     helpPromptLoopTurns: 50,
 

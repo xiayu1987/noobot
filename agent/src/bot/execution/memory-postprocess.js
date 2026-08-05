@@ -120,8 +120,10 @@ export class MemoryPostProcessService {
     try {
       await this.memory.maybeSummarize({
         userId,
+        sessionId,
         userConfig,
         abortSignal: memorySummaryAbortController.signal,
+        eventListener: runtimeEventListener,
       });
     } catch (error) {
       if (!isAbortLikeError(error) || !memorySummaryTimedOut) {

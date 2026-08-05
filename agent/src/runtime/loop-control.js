@@ -8,14 +8,19 @@ import { emitEvent } from "../events/index.js";
 import { tEngine } from "./i18n-adapter.js";
 import {
   PHASE_SUMMARY_PROMPT_MARKER,
+  TASK_CHECK_PROMPT_MARKER,
   PHASE_SUMMARY_OVERFLOW_POLICY,
   HELP_TOOL_LOOP_PROMPT_MARKER,
   HELP_TOOL_FAILURE_PROMPT_MARKER,
   TASK_SUMMARY_TOOL_NAME,
+  TASK_CHECK_TOOL_NAME,
 } from "./constants/index.js";
 import { REQUEST_HELP_TOOL_NAME } from "../tools/collaboration/request-help-tool.js";
 import { extractMessageTextContent } from "../context/session/message-content-utils.js";
-import { appendContextMessage as appendMessage } from "@noobot/context-protocol/context-mutation";
+import {
+  appendContextMessage as appendMessage,
+  writeContextBlocks,
+} from "@noobot/context-protocol/context-mutation";
 import {
   MAIN_FLOW_CONTROL_REASON,
   requestMainFlowFinalNoToolsTurn,
@@ -64,28 +69,51 @@ function resolveUnsummarizedMessageChars(messages = []) {
   }, 0);
 }
 
-export function removePhaseSummaryPromptMessages(messages = [], runtime = {}) {
-  if (!Array.isArray(messages)) return 0;
-  let removedCount = 0;
-  const phaseSummaryPrompt = tEngine(runtime, "phaseSummaryPrompt");
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
+export function removePhaseSummaryPromptMessages(modelContext = {}) {
+  const blocks = modelContext.messageBlocks;
+  const isPhaseSummaryPrompt = (message = {}) => {
     const marker =
       message?.additional_kwargs?.noobotInternalMessageType ||
       message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
       message?.metadata?.noobotInternalMessageType ||
       message?.lc_kwargs?.metadata?.noobotInternalMessageType ||
       "";
-    if (marker === PHASE_SUMMARY_PROMPT_MARKER) {
-      messages.splice(index, 1);
-      removedCount += 1;
-      continue;
-    }
-    const content = String(message?.content || "").trim();
-    if (content !== phaseSummaryPrompt) continue;
-    messages.splice(index, 1);
-    removedCount += 1;
-  }
+    return marker === PHASE_SUMMARY_PROMPT_MARKER;
+  };
+  const filteredBlocks = Object.fromEntries(
+    ["system", "history", "incremental"].map((blockName) => [
+      blockName,
+      blocks[blockName].filter((message) => !isPhaseSummaryPrompt(message)),
+    ]),
+  );
+  const removedCount =
+    blocks.system.length + blocks.history.length + blocks.incremental.length -
+    filteredBlocks.system.length - filteredBlocks.history.length - filteredBlocks.incremental.length;
+  if (removedCount > 0) writeContextBlocks(modelContext, filteredBlocks);
+  return removedCount;
+}
+
+export function removeTaskCheckPromptMessages(modelContext = {}) {
+  const blocks = modelContext.messageBlocks;
+  const isTaskCheckPrompt = (message = {}) => {
+    const marker =
+      message?.additional_kwargs?.noobotInternalMessageType ||
+      message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      message?.metadata?.noobotInternalMessageType ||
+      message?.lc_kwargs?.metadata?.noobotInternalMessageType ||
+      "";
+    return marker === TASK_CHECK_PROMPT_MARKER;
+  };
+  const filteredBlocks = Object.fromEntries(
+    ["system", "history", "incremental"].map((blockName) => [
+      blockName,
+      blocks[blockName].filter((message) => !isTaskCheckPrompt(message)),
+    ]),
+  );
+  const removedCount =
+    blocks.system.length + blocks.history.length + blocks.incremental.length -
+    filteredBlocks.system.length - filteredBlocks.history.length - filteredBlocks.incremental.length;
+  if (removedCount > 0) writeContextBlocks(modelContext, filteredBlocks);
   return removedCount;
 }
 
@@ -207,6 +235,41 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
         : reachedCharsThreshold
           ? "message_chars"
           : "loop_turns",
+  });
+  return true;
+}
+
+export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults = [] }) {
+  const runtime = modelState?.runtime || {};
+  const systemRuntime = getSystemRuntime(runtime);
+  if (!systemRuntime) return false;
+  if (!hasTool(loopState?.tools || [], TASK_CHECK_TOOL_NAME)) return false;
+
+  const hasTaskCheckCall = (Array.isArray(toolCallResults) ? toolCallResults : [])
+    .some((result) => String(result?.call?.name || "").trim() === TASK_CHECK_TOOL_NAME);
+  if (hasTaskCheckCall) {
+    systemRuntime.taskCheckLoopCount = 0;
+    return false;
+  }
+
+  const currentCount = Number(systemRuntime.taskCheckLoopCount || 0);
+  const nextCount = Number.isFinite(currentCount) && currentCount >= 0
+    ? currentCount + 1
+    : 1;
+  systemRuntime.taskCheckLoopCount = nextCount;
+  const threshold = Number(loopState?.taskCheckLoopTurns || 0);
+  if (!Number.isFinite(threshold) || threshold <= 0 || nextCount < threshold) return false;
+
+  systemRuntime.taskCheckLoopCount = 0;
+  appendMessage(loopState.modelContext, new HumanMessage({
+    content: tEngine(runtime, "taskCheckPrompt"),
+    additional_kwargs: {
+      noobotInternalMessageType: TASK_CHECK_PROMPT_MARKER,
+    },
+  }), { block: "incremental" });
+  emitEvent(modelState?.eventListener || null, "task_check_required", {
+    loopCount: nextCount,
+    threshold,
   });
   return true;
 }

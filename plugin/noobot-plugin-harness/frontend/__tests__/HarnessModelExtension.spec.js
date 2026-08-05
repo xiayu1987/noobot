@@ -73,4 +73,26 @@ describe("HarnessModelExtension", () => {
     expect(wrapper.find(".plugin-guidance-analysis-title").text()).toContain("1");
     expect(wrapper.find("el-slider").attributes("modelvalue")).toBe("1");
   });
+
+  it("writes each Harness threshold to its single owned config field", () => {
+    const patch = vi.fn();
+    const wrapper = mountHarnessModelExtension({ patch });
+
+    wrapper.vm.onHarnessTurnsThresholdChange("summary", 1);
+    wrapper.vm.onHarnessTurnsThresholdChange("planUpdate", 2);
+    wrapper.vm.onHarnessTurnsThresholdChange("phaseAcceptance", 3);
+
+    expect(patch).toHaveBeenNthCalledWith(1, {
+      guidance: { summary: { turnsThreshold: 1 } },
+    });
+    expect(patch).toHaveBeenNthCalledWith(2, {
+      planning: { planUpdate: { triggerTurnsThreshold: 2 } },
+    });
+    expect(patch).toHaveBeenNthCalledWith(3, {
+      acceptance: { phase: { triggerTurnsThreshold: 3 } },
+    });
+    expect(wrapper.find('[data-threshold-key="summary"]').exists()).toBe(true);
+    expect(wrapper.find('[data-threshold-key="planUpdate"]').exists()).toBe(true);
+    expect(wrapper.find('[data-threshold-key="phaseAcceptance"]').exists()).toBe(true);
+  });
 });

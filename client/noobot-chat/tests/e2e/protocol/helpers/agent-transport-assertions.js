@@ -4,18 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
-import { AGENT_COMMAND, validateAgentCommand } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_COMMAND,
+  AGENT_TRANSPORT_PROTOCOL_VERSION,
+  validateAgentCommand,
+} from "@noobot/agent-transport-protocol";
 
 const RUN_COMMANDS = new Set([AGENT_COMMAND.SEND, AGENT_COMMAND.RESEND, AGENT_COMMAND.CONTINUE]);
 
 export function assertAgentTransportCommand(command, expected = {}) {
   expect(validateAgentCommand(command)).toEqual({ valid: true, errors: [] });
-  expect(command.protocolVersion).toBe(2);
+  expect(command.protocolVersion).toBe(AGENT_TRANSPORT_PROTOCOL_VERSION);
   expect(command.commandId).toBeTruthy();
   expect(command.identity?.sessionId).toBe(expected.sessionId);
   if (RUN_COMMANDS.has(command.commandType)) {
     expect(command.identity?.turnScopeId).toMatch(/^client-turn:/);
     expect(command.concurrency?.expectedTurnRevision).toBe(0);
+    expect(command.concurrency?.expectedAggregateVersion).toBeGreaterThanOrEqual(0);
     expect(Array.isArray(command.input?.attachments)).toBe(true);
   }
   if (command.commandType === AGENT_COMMAND.STOP) {

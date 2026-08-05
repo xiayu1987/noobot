@@ -11,14 +11,14 @@ export function validateTurnCommittedEventData(data = {}) {
   const sessionId = trim(data?.sessionId);
   const dialogProcessId = trim(data?.dialogProcessId);
   const turnScopeId = trim(data?.turnScopeId);
-  const sessionVersion = Number(data?.sessionVersion);
+  const aggregateVersion = Number(data?.aggregateVersion);
   const userMessage = data?.userMessage;
 
   if (!sessionId) errors.push("session_id_missing");
   if (!dialogProcessId) errors.push("dialog_process_id_missing");
   if (!turnScopeId) errors.push("turn_scope_id_missing");
-  if (!Number.isInteger(sessionVersion) || sessionVersion < 1) {
-    errors.push("session_version_invalid");
+  if (!Number.isInteger(aggregateVersion) || aggregateVersion < 1) {
+    errors.push("aggregate_version_invalid");
   }
   if (!userMessage || typeof userMessage !== "object" || Array.isArray(userMessage)) {
     errors.push("user_message_missing");

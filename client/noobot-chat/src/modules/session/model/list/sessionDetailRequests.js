@@ -35,13 +35,13 @@ export function createSessionDetailRequests({
     if (!sessionItem?.loaded) return null;
     const sessionDocs = Array.isArray(sessionItem.sessionDocs) ? sessionItem.sessionDocs : [];
     if (!sessionDocs.length) return null;
-    const backendSessionId = normalizeSessionId(
-      sessionItem.backendSessionId || sessionItem.id || normalizedSessionId,
+    const resolvedSessionId = normalizeSessionId(
+      sessionItem.sessionId || normalizedSessionId,
     );
     return {
       ok: true,
       exists: true,
-      sessionId: backendSessionId,
+      sessionId: resolvedSessionId,
       sessions: sessionDocs,
     };
   }
@@ -112,7 +112,11 @@ export function createSessionDetailRequests({
       );
       if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
       const data = await res.json();
-      if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
+      if (!data.ok) throw new Error(data.error || translate("chat.getSessionFailed", { status: res.status }));
+      if (!data.exists) {
+        if (options.requireExists === false) return null;
+        throw new Error(data.error || translate("chat.sessionNotFound"));
+      }
       const sessionDocs = Array.isArray(data?.sessions) ? data.sessions : [];
       const responseMessages = sessionDocs.flatMap((doc = {}) =>
         Array.isArray(doc?.messages) ? doc.messages : []);

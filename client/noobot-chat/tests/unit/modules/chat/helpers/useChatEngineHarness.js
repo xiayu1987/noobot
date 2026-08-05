@@ -5,8 +5,8 @@
  */
 import { computed, ref } from "vue";
 import { vi } from "vitest";
-import { createTurnLifecycleEnvelope } from "@noobot/event-protocol";
-import { createTurnReplacementCommit } from "@noobot/shared/turn-replacement-protocol";
+import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
+import { createTurnReplacementCommit } from "@noobot/session-protocol";
 import { useChatEngine } from "../../../../../src/modules/chat/composables/useChatEngine.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
 import {
@@ -60,7 +60,7 @@ const terminalResolutionFromUrl = (
       failure,
     },
     materialization: {
-      sessionVersion: 1,
+      aggregateVersion: 1,
       terminalStatus: { status: state },
       messages,
       completionCommitId,
@@ -79,8 +79,8 @@ vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
 }));
 
 export const makeSession = (id, overrides = {}) => ({
-  id,
-  backendSessionId: id,
+  sessionId: id,
+  aggregateVersion: 0,
   title: "chat.newSession",
   loaded: false,
   messages: [],
@@ -96,17 +96,24 @@ export const makeSession = (id, overrides = {}) => ({
 export function makeTurnReplacementResponse({
   commandId,
   sessionId,
-  version,
+  aggregateVersion,
   replacedTurnScopeIds,
   replacementUser,
   messages = [replacementUser],
   session = {},
 }) {
+  const replacementDialogProcessId = replacementUser.dialogProcessId
+    || `dialog:${replacementUser.turnScopeId}`;
+  const committedMessages = messages.map((message) => (
+    message === replacementUser
+      ? { ...message, dialogProcessId: replacementDialogProcessId }
+      : message
+  ));
   const committedSession = {
     ...session,
     sessionId,
-    version,
-    messages,
+    aggregateVersion,
+    messages: committedMessages,
   };
   return {
     ok: true,
@@ -114,8 +121,9 @@ export function makeTurnReplacementResponse({
     turnReplacement: createTurnReplacementCommit({
       commandId,
       sessionId,
-      committedVersion: version,
+      committedAggregateVersion: aggregateVersion,
       replacedTurnScopeIds,
+      replacementDialogProcessId,
       replacementTurnScopeId: replacementUser.turnScopeId,
       replacementUserMessageId: replacementUser.messageId,
       committedAt: "2026-07-31T00:00:00.000Z",
@@ -151,10 +159,10 @@ export const createHarness = ({
   const sessions = ref([makeSession(sessionId)]);
   const activeSession = computed({
     get: () => sessions.value.find((item) =>
-      [item?.id, item?.sessionId, item?.backendSessionId].includes(activeSessionId.value)) || null,
+      [item?.id, item?.sessionId, item?.sessionId].includes(activeSessionId.value)) || null,
     set: (value) => {
       const index = sessions.value.findIndex((item) =>
-        [item?.id, item?.sessionId, item?.backendSessionId].includes(activeSessionId.value));
+        [item?.id, item?.sessionId, item?.sessionId].includes(activeSessionId.value));
       if (index < 0) sessions.value.push(value);
       else sessions.value[index] = value;
     },
@@ -242,7 +250,7 @@ export const createHarness = ({
     const targetSession = sessions.value.find((sessionItem) => [
       sessionItem?.id,
       sessionItem?.sessionId,
-      sessionItem?.backendSessionId,
+      sessionItem?.sessionId,
     ].some((candidate) => String(candidate || "").trim() === normalizedSessionId));
     return targetSession?.messages?.find((message) => (
       String(message?.messageId || message?.id || "").trim() === normalizedMessageId

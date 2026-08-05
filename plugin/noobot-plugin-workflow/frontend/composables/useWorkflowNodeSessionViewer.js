@@ -474,7 +474,7 @@ export function useWorkflowNodeSessionViewer({
                       nodeExecutionId: text(canonicalNodeItem?.nodeExecutionId || executionId),
                       messages: rawMessages,
                       rawMessages,
-                      snapshotVersion: Number(hydratedDetail?.snapshotVersion || 0),
+                      aggregateVersion: Number(hydratedDetail?.aggregateVersion || 0),
                     },
                   }, { source: "rest_snapshot" })
                 : null;

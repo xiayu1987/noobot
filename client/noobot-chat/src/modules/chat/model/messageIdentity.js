@@ -78,7 +78,7 @@ function hasTurnOwner(owner = {}) {
 }
 
 export function getMessageSessionId(messageItem = {}) {
-  return trim(messageItem?.sessionId || messageItem?.session_id || messageItem?.backendSessionId);
+  return trim(messageItem?.sessionId || messageItem?.session_id || messageItem?.sessionId);
 }
 
 export function normalizeTurnOwner(raw = {}) {

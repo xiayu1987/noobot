@@ -23,7 +23,7 @@ import { activate as activateWorkflowFrontend } from "../../../../../../../plugi
 function createSession(id) {
   return {
     id,
-    backendSessionId: id,
+    sessionId: id,
     title: `session-${id}`,
     loaded: true,
     messages: [],
@@ -219,7 +219,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       if (!nextSession?.id && !nextSession?.sessionId) return;
       const nextId = nextSession.id || nextSession.sessionId;
       const index = sessions.value.findIndex(
-        (sessionItem) => sessionItem.id === nextId || sessionItem.backendSessionId === nextId,
+        (sessionItem) => sessionItem.id === nextId || sessionItem.sessionId === nextId,
       );
       if (index >= 0) {
         sessions.value[index] = { ...sessions.value[index], ...nextSession };
@@ -255,7 +255,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     const targetSession = sessions.value.find((sessionItem) => [
       sessionItem?.id,
       sessionItem?.sessionId,
-      sessionItem?.backendSessionId,
+      sessionItem?.sessionId,
     ].some((candidate) => String(candidate || "").trim() === normalizedSessionId));
     if (!targetSession) return null;
     return targetSession.messages.find((message) =>

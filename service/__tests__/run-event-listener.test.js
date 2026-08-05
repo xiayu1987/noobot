@@ -29,7 +29,7 @@ test("run-event-listener forwards committed session version as a first-class eve
       sessionId: "root-session",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
-      sessionVersion: 7,
+      aggregateVersion: 7,
       userMessage: {
         messageUid: "sm_1",
         messageId: "frontend-user-1",
@@ -48,7 +48,7 @@ test("run-event-listener forwards committed session version as a first-class eve
       sessionId: "root-session",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
-      sessionVersion: 7,
+      aggregateVersion: 7,
       userMessage: {
         messageUid: "sm_1",
         messageId: "frontend-user-1",
@@ -133,7 +133,13 @@ test("run-event-listener preserves the safe Agent transport consumption proof", 
     identity: { sessionId: "session-1", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
     input: { requestedMessageLength: 5, persistedMessageLength: 5, messageConsumed: true },
     presentation: { userMessageIdConsumed: true, assistantMessageIdConsumed: true },
-    concurrency: { expectedSessionVersion: 0, expectedSessionVersionConsumed: true },
+    concurrency: {
+      commandId: "turn-1",
+      commandIdConsumed: true,
+      expectedAggregateVersion: 0,
+      expectedAggregateVersionConsumed: true,
+      committedAggregateVersion: 1,
+    },
   };
 
   listener.onEvent({ event: "agent_transport_parameters_consumed", data: consumption });

@@ -10,6 +10,7 @@ import { resolveHookClientEmitter } from "./client-channel.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 import {
+  HOOK_CANCELLATION_MODE,
   createEmptyHookResult,
   requireHookPointDescriptor,
 } from "@noobot/hook-protocol";
@@ -224,7 +225,8 @@ export async function runAgentRuntimeHook({
   context = {},
   eventListener = null,
 } = {}) {
-  const normalizedPoint = requireHookPointDescriptor(point).point;
+  const descriptor = requireHookPointDescriptor(point);
+  const normalizedPoint = descriptor.point;
   const listener = eventListener || runtime?.eventListener || null;
   const manager = resolveRuntimeHookManager(runtime);
   if (!manager) {
@@ -237,6 +239,9 @@ export async function runAgentRuntimeHook({
   });
   const hookedContext = withHookClientEmitter(context, emitHookClientEvent);
   const verboseHookRuntimeEvents = isHookRuntimeEventVerboseEnabled({ runtime });
+  const invocationSignal = descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED
+    ? null
+    : runtime?.abortSignal || null;
   const startedAt = Date.now();
 
   if (verboseHookRuntimeEvents) {
@@ -244,7 +249,7 @@ export async function runAgentRuntimeHook({
   }
   try {
     const result = await manager.emit(normalizedPoint, hookedContext, {
-      signal: runtime?.abortSignal || null,
+      signal: invocationSignal,
     });
     const summary = {
       point: normalizedPoint,
@@ -258,6 +263,7 @@ export async function runAgentRuntimeHook({
       context: hookedContext,
     };
   } catch (error) {
+    if (invocationSignal?.aborted) throw error;
     emitEvent(listener, "hook_error", {
       point: normalizedPoint,
       message: error?.message || String(error),

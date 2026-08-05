@@ -25,6 +25,28 @@ export async function readSessionFact(userId, sessionId) {
   return readJson(path.join(sessionRoot(userId, sessionId), "session.json"));
 }
 
+export async function readSessionTurnMessages(userId, sessionId) {
+  const directory = path.join(sessionRoot(userId, sessionId), "turns");
+  let names = [];
+  try {
+    names = (await fs.readdir(directory)).filter((name) => name.endsWith(".jsonl")).sort();
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const records = (await Promise.all(names.map((name) => readJsonLines(path.join(directory, name))))).flat();
+  const messages = new Map();
+  for (const record of records) {
+    const messageUid = String(record?.messageUid || record?.message?.messageUid || "").trim();
+    if (!messageUid) continue;
+    if (record.op === "delete") messages.delete(messageUid);
+    if (record.op === "upsert" && record.message && typeof record.message === "object") {
+      messages.set(messageUid, record.message);
+    }
+  }
+  return [...messages.values()];
+}
+
 export async function readSnapshots(userId, sessionId) {
   const directory = path.join(sessionRoot(userId, sessionId), "model-message-snapshots");
   const names = (await fs.readdir(directory)).filter((name) => name.endsWith(".json")).sort();
@@ -73,6 +95,73 @@ export async function readSessionExecutionEvents(userId, sessionId) {
   ))).flat();
 }
 
+async function findExecutionEventSegments(directory) {
+  let entries = [];
+  try {
+    entries = await fs.readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const segments = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const child = path.join(directory, entry.name);
+    if (entry.name === "execution-events") {
+      const names = (await fs.readdir(child))
+        .filter((name) => /^segment-\d+\.jsonl$/.test(name))
+        .sort();
+      segments.push(...names.map((name) => path.join(child, name)));
+      continue;
+    }
+    segments.push(...await findExecutionEventSegments(child));
+  }
+  return segments;
+}
+
+export async function readSessionExecutionEventTree(userId, sessionId) {
+  const segments = await findExecutionEventSegments(sessionRoot(userId, sessionId));
+  return (await Promise.all(segments.sort().map(readJsonLinesIfPresent))).flat();
+}
+
+export function modelInvocationTraces(records) {
+  return records.filter((record) =>
+    record.event === "model_context_trace" &&
+    record.data?.stage === "llm_invoke_messages" &&
+    record.data?.authority === "model_invoke_port",
+  );
+}
+
+export async function waitForSessionExecutionEventTree(
+  userId,
+  sessionId,
+  predicate,
+  { timeoutMs = 120_000 } = {},
+) {
+  const deadline = Date.now() + timeoutMs;
+  let records = [];
+  while (Date.now() < deadline) {
+    records = await readSessionExecutionEventTree(userId, sessionId);
+    if (predicate(records)) return records;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error(`execution event tree did not converge for session ${sessionId}: ${JSON.stringify(records)}`);
+}
+
+export async function waitForModelInvocationTraces(
+  userId,
+  sessionId,
+  predicate,
+  { timeoutMs = 120_000 } = {},
+) {
+  let traces = [];
+  await waitForSessionExecutionEventTree(userId, sessionId, (records) => {
+    traces = modelInvocationTraces(records);
+    return predicate(traces);
+  }, { timeoutMs });
+  return traces;
+}
+
 export async function readUserAttachmentIndex(userId, sessionId) {
   return readJson(path.join(
     workspaceRoot(),
@@ -115,5 +204,22 @@ export async function readHarnessRun(userId, dialogProcessId) {
     run: await readJson(path.join(root, "harness-run.json")),
     context: await readJson(path.join(root, "context-snapshot.json")),
     events: await readJsonLines(path.join(root, "events.jsonl")),
+    capabilityTraces: await readJsonLinesIfPresent(path.join(root, "capability-traces.jsonl")),
   };
+}
+
+
+export async function waitForHarnessRun(userId, dialogProcessId, predicate, { timeoutMs = 120_000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let run = null;
+  while (Date.now() < deadline) {
+    try {
+      run = await readHarnessRun(userId, dialogProcessId);
+      if (predicate(run)) return run;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error(`Harness run did not converge for dialog ${dialogProcessId}: ${JSON.stringify(run)}`);
 }

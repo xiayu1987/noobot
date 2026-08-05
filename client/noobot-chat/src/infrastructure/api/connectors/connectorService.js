@@ -161,7 +161,7 @@ export function createConnectorService({
     if (!normalizedSessionId) return;
     const sessionItem = (Array.isArray(sessions) ? sessions : []).find(
       (candidateSessionItem) =>
-        String(candidateSessionItem?.id || "").trim() === normalizedSessionId,
+        String(candidateSessionItem?.sessionId || "").trim() === normalizedSessionId,
     );
     if (!sessionItem) return;
     try {
@@ -169,7 +169,7 @@ export function createConnectorService({
         {
           userId: userId?.value,
           sessionId:
-            sessionItem.backendSessionId || sessionItem.id || normalizedSessionId,
+            sessionItem.sessionId || normalizedSessionId,
         },
         { fetcher: authFetch },
       );

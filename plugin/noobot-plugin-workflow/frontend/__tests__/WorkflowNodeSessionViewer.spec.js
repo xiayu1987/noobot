@@ -31,7 +31,7 @@ function detailResponse(sessionId, content) {
     json: async () => ({
       ok: true,
       workflowSession: {
-        snapshotVersion: 1,
+        aggregateVersion: 1,
         session: { sessionId, messages },
         sessionSummary: { sessionId, messages },
       },
@@ -300,7 +300,7 @@ describe("workflow node session view ownership", () => {
       json: async () => ({
         ok: true,
         workflowSession: {
-          snapshotVersion: 1,
+          aggregateVersion: 1,
           session: { sessionId: "child-running", messages: [childUser] },
           sessionSummary: { sessionId: "child-running", messages: [childUser] },
           executionLogs: [

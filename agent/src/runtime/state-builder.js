@@ -24,6 +24,7 @@ import {
   resolveMaxToolLoopTurns,
   resolvePhaseSummaryMessageCharsThreshold,
   resolvePhaseSummaryLoopTurns,
+  resolveTaskCheckLoopTurns,
   resolveToolFailureHelpCount,
 } from "./run-config/index.js";
 import { createModelContext } from "@noobot/context-protocol/hook-context";
@@ -49,6 +50,7 @@ export function createStateBuilder({
   resolveEffectiveModelSpecFn = resolveEffectiveModelSpec,
   resolveMaxToolLoopTurnsFn = resolveMaxToolLoopTurns,
   resolvePhaseSummaryLoopTurnsFn = resolvePhaseSummaryLoopTurns,
+  resolveTaskCheckLoopTurnsFn = resolveTaskCheckLoopTurns,
   resolvePhaseSummaryMessageCharsThresholdFn = resolvePhaseSummaryMessageCharsThreshold,
   resolveHelpPromptLoopTurnsFn = resolveHelpPromptLoopTurns,
   resolveToolFailureHelpCountFn = resolveToolFailureHelpCount,
@@ -78,7 +80,8 @@ export function createStateBuilder({
       systemRuntime: sys,
       effectiveConfig,
     });
-    const phaseSummaryLoopTurns = resolvePhaseSummaryLoopTurnsFn(effectiveConfig);
+    const phaseSummaryLoopTurns = resolvePhaseSummaryLoopTurnsFn({ runConfig });
+    const taskCheckLoopTurns = resolveTaskCheckLoopTurnsFn({ runConfig });
     const phaseSummaryMessageCharsThreshold =
       resolvePhaseSummaryMessageCharsThresholdFn(effectiveConfig);
     const helpPromptLoopTurns = resolveHelpPromptLoopTurnsFn(effectiveConfig);
@@ -199,6 +202,7 @@ export function createStateBuilder({
           ? maxToolLoopTurns
           : DEFAULT_MAX_TOOL_LOOP_TURNS,
       phaseSummaryLoopTurns,
+      taskCheckLoopTurns,
       phaseSummaryMessageCharsThreshold,
       helpPromptLoopTurns,
       toolFailureHelpCount,

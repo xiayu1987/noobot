@@ -5,8 +5,16 @@
  */
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "../../models/index.js";
-export function resolvePhaseSummaryLoopTurns(_effectiveConfig = {}) {
+export function resolvePhaseSummaryLoopTurns({ runConfig = {} } = {}) {
+  const runtimeThreshold = Number(runConfig?.summaryPolicy?.phaseSummaryLoopTurns);
+  if (Number.isInteger(runtimeThreshold) && runtimeThreshold > 0) return runtimeThreshold;
   return BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns;
+}
+
+export function resolveTaskCheckLoopTurns({ runConfig = {} } = {}) {
+  const runtimeThreshold = Number(runConfig?.summaryPolicy?.taskCheckLoopTurns);
+  if (Number.isInteger(runtimeThreshold) && runtimeThreshold > 0) return runtimeThreshold;
+  return BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns;
 }
 
 export function resolvePhaseSummaryMessageCharsThreshold(_effectiveConfig = {}) {

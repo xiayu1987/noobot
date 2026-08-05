@@ -22,6 +22,19 @@
 
 Supported commands are exported through `AGENT_COMMAND`. Each command has one canonical location for identity, input, preferences, presentation, concurrency, continuation, stop, interaction, query, or options data.
 
+Main-Agent phase summarization and periodic task checking use one per-run policy shape:
+
+```js
+preferences: {
+  summaryPolicy: {
+    phaseSummaryLoopTurns: 20, // positive integer; defaults to 20
+    taskCheckLoopTurns: 10 // positive integer; defaults to 10
+  }
+}
+```
+
+The Service maps these values unchanged to `runConfig.summaryPolicy`; the Agent runtime reads only these fields. Harness thresholds remain owned by `pluginModelConfig.harness` and cannot control the Main-Agent policy. The browser Composer does not expose threshold controls.
+
 ## Boundary rules
 
 - The service derives `userId` from authenticated HTTP or WebSocket identity. Client commands cannot provide it.

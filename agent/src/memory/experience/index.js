@@ -283,7 +283,10 @@ export class ExperienceManager {
         knownDomainText: dedupeTextList(knownDomainNames).join(", "),
         shortMemoryItems: promptPayload,
       });
-      const lessonRes = await llm.invoke(lessonPrompt, { signal: abortSignal });
+      const lessonRes = await llm.invoke(
+        [{ role: "user", content: lessonPrompt }],
+        { signal: abortSignal },
+      );
       const normalizedResults = this.parseDaily(lessonRes?.content, { basePath });
       const modelEntries = normalizedResults.map((item) => ({
         domain_name: item?.domain_name,

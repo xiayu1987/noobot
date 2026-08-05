@@ -12,7 +12,7 @@ import {
   createProtocolTestCommand,
   waitForCondition,
 } from "./chat-websocket-server.test-helpers.js";
-import { TURN_EVENT } from "@noobot/event-protocol";
+import { TURN_EVENT } from "@noobot/session-protocol";
 
 test("chat-websocket-server: stop from a new websocket aborts an active run by turnScopeId", async () => {
   let capturedStopPayload = null;

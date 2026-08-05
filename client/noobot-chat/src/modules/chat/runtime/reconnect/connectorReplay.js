@@ -25,7 +25,7 @@ export function applyReconnectConnectorStatus({
       status,
     });
     if (typeof refreshSessionConnectorsAsync === "function") {
-      refreshSessionConnectorsAsync(activeSession?.value?.id || "");
+      refreshSessionConnectorsAsync(activeSession?.value?.sessionId || "");
     }
   }
 }

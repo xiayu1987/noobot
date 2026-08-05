@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { randomUUID } from "node:crypto";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
 import { ensureHarnessBucket } from "./bucket-utils.js";
@@ -250,7 +251,10 @@ export function attachMetasToLatestInjectedMessage(ctx = {}, metas = [], transfe
   return false;
 }
 
-export function appendCapabilityLog(ctx = {}, { domain = "", event = "", detail = {} } = {}) {
+export function appendCapabilityLog(
+  ctx = {},
+  { domain = "", event = "", traceId = "", detail = {} } = {},
+) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket } = holder;
@@ -269,6 +273,7 @@ export function appendCapabilityLog(ctx = {}, { domain = "", event = "", detail 
     String(ctx?.harnessEnvelopeType || "").trim() ||
     PROMPT_ENVELOPE.TYPE;
   const entry = {
+    ...(String(traceId || "").trim() ? { traceId: String(traceId).trim() } : {}),
     domain,
     event: String(event || "").trim() || "unknown",
     timestamp: new Date().toISOString(),
@@ -380,7 +385,6 @@ export async function saveCapabilityOutputAsTransferArtifacts(
 
 export async function appendCapabilityModelTraceLog(
   ctx = {},
-  meta = {},
   { domain = "", purpose = "", pluginFlow = undefined, chain = undefined, response = null } = {},
 ) {
   const traces = Array.isArray(response?.traces) ? response.traces : [];
@@ -395,21 +399,11 @@ export async function appendCapabilityModelTraceLog(
     traces,
   };
   const log = {
+    traceId: randomUUID(),
     domain,
     event: SHARED_EVENTS.capabilityModelTrace,
     detail,
   };
   appendCapabilityLog(ctx, log);
-  const sink = typeof meta?.harness?.runTraceSink === "function" ? meta.harness.runTraceSink : null;
-  if (sink) {
-    await sink({
-      point: ctx?.point || HOOK_POINT.AGENT.BEFORE_LLM_CALL,
-      timestamp: new Date().toISOString(),
-      userId: ctx?.userId || undefined,
-      sessionId: ctx?.sessionId || undefined,
-      dialogProcessId: resolveDialogProcessIdFromContext(ctx) || undefined,
-      ...log,
-    });
-  }
   return true;
 }

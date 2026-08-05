@@ -36,8 +36,7 @@ test("SessionMessageService.deleteFromMessage deletes from anchor message to ses
     initialSession: {
       sessionId: "s1",
       parentSessionId: "",
-      version: 2,
-      revision: 2,
+      aggregateVersion: 2,
       messages: [
         { turnScopeId: "scope-keep", role: "user", content: "keep" },
         { turnScopeId: "scope-delete", role: "assistant", content: "delete" },
@@ -50,17 +49,16 @@ test("SessionMessageService.deleteFromMessage deletes from anchor message to ses
     userId: "u1",
     sessionId: "s1",
     anchor: { turnScopeId: "scope-delete" },
-    expectedVersion: 2,
+    expectedAggregateVersion: 2,
   });
 
   assert.equal(result.deletedCount, 2);
   assert.equal(result.anchorIndex, 1);
   assert.deepEqual(result.deletedTurnScopeIds, ["scope-delete", "scope-tail"]);
-  assert.equal(result.version, 3);
+  assert.equal(result.aggregateVersion, 3);
   assert.equal(saved.length, 1);
   assert.deepEqual(saved[0].messages.map((message) => message.content), ["keep"]);
-  assert.equal(saved[0].version, 3);
-  assert.equal(saved[0].revision, 3);
+  assert.equal(saved[0].aggregateVersion, 3);
   assert.equal(saved[0].updatedAt, "2026-06-17T00:00:00.000Z");
 });
 
@@ -109,8 +107,7 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
   const { service, getSession } = createService({
     initialSession: {
       sessionId: "s1",
-      version: 2,
-      revision: 2,
+      aggregateVersion: 2,
       messages: [
         { turnScopeId: "scope-keep", role: "user", content: "keep" },
         { turnScopeId: "scope-delete", role: "assistant", content: "delete" },
@@ -138,7 +135,7 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
     userId: "u1",
     sessionId: "s1",
     anchor: { turnScopeId: "scope-delete" },
-    expectedVersion: 2,
+    expectedAggregateVersion: 2,
   });
 
   const persisted = getSession();
@@ -186,8 +183,7 @@ test("SessionMessageService.deleteFromMessage rejects dialogProcessId legacy anc
     initialSession: {
       sessionId: "s1",
       parentSessionId: "",
-      version: 1,
-      revision: 1,
+      aggregateVersion: 1,
       messages: [
         { turnScopeId: "scope-keep", role: "user", content: "keep" },
         { dialogId: "dp-legacy", role: "assistant", content: "delete" },
@@ -207,13 +203,12 @@ test("SessionMessageService.deleteFromMessage rejects dialogProcessId legacy anc
   assert.equal(saved.length, 0);
 });
 
-test("SessionMessageService.deleteFromMessage returns 409 when expectedVersion conflicts", async () => {
+test("SessionMessageService.deleteFromMessage returns 409 when expectedAggregateVersion conflicts", async () => {
   const { service, saved } = createService({
     initialSession: {
       sessionId: "s1",
       parentSessionId: "",
-      version: 5,
-      revision: 5,
+      aggregateVersion: 5,
       messages: [{ turnScopeId: "scope-keep", role: "user", content: "keep" }],
     },
   });
@@ -223,7 +218,7 @@ test("SessionMessageService.deleteFromMessage returns 409 when expectedVersion c
       userId: "u1",
       sessionId: "s1",
       anchor: { turnScopeId: "scope-keep" },
-      expectedVersion: 4,
+      expectedAggregateVersion: 4,
     }),
     (error) => error?.statusCode === 409 && error?.currentVersion === 5,
   );

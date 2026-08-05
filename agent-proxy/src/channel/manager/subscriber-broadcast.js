@@ -14,7 +14,7 @@ import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 import {
   TURN_EVENT,
   validateTurnLifecycleReceipt,
-} from "@noobot/event-protocol";
+} from "@noobot/session-protocol";
 
 const TERMINAL_TURN_EVENTS = new Set([
   TURN_EVENT.COMPLETED,

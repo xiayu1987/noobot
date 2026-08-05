@@ -101,6 +101,9 @@ export const BUILTIN_THRESHOLDS = Object.freeze({
     phaseSummaryLoopTurns: TURN_THRESHOLDS.agent.phaseSummaryLoopTurns,
     phaseSummaryMessageCharsThreshold: LENGTH_THRESHOLDS.context.phaseSummaryMessageChars,
   }),
+  taskCheck: Object.freeze({
+    taskCheckLoopTurns: TURN_THRESHOLDS.agent.taskCheckLoopTurns,
+  }),
   requestHelp: Object.freeze({
     helpPromptLoopTurns: TURN_THRESHOLDS.agent.helpPromptLoopTurns,
     toolFailureHelpCount: TURN_THRESHOLDS.agent.toolFailureHelpCount,

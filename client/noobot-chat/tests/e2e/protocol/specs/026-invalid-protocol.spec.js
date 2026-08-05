@@ -4,19 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
-import { waitForCaptured } from "../helpers/websocket-capture.js";
-import { sendAndStop } from "../helpers/turn-scenarios.js";
+import { findProtocolObjects, waitForCaptured } from "../helpers/websocket-capture.js";
 
-test("@full PBE-026 非法和旧协议拒绝", async ({ noobot, protocolCapture }, testInfo) => {
-  await sendAndStop({
-    page: noobot.page,
-    capture: protocolCapture,
-    sessionId: noobot.sessionId,
-    prompt: `[PBE:${testInfo.testId}:${Date.now()}] establish authoritative product transport`,
-  });
-  const socketUrl = protocolCapture.websocketSent.find(({ payload }) => {
-    try { return JSON.parse(String(payload)).commandType === "turn.send"; } catch { return false; }
-  })?.url;
+test("@full PBE-026 非法和旧协议拒绝", async ({ noobot, protocolCapture }) => {
+  const transportReady = findProtocolObjects(protocolCapture.websocketReceived)
+    .find(({ event }) => event === "transport_ready");
+  const socketUrl = transportReady?.frame?.url;
   expect(socketUrl, "connected product WebSocket URL is required").toBeTruthy();
   const invalidFrames = [
     { action: "continue", sessionId: noobot.sessionId },

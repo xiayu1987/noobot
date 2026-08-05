@@ -7,7 +7,7 @@ import { RoleEnum } from "../../../chat/model/chatConstants.js";
 import { findVisibleLastMessage } from "../../../chat/model/messageModel.js";
 import {
   findSessionByAnyId as findSessionByAnyIdInList,
-  promoteSessionIdentityToBackendId,
+  confirmSessionIdentity,
 } from "../../../chat/model/sessionIdentity.js";
 import {
   clearTurnScopedAssets,
@@ -17,7 +17,6 @@ import {
 } from "../../../chat/model/messageIdentity.js";
 import { buildSessionDetailProjection } from "./sessionDetailProjection.js";
 import { mergeCanonicalSessionDetail } from "../../../chat/model/sessionDetailMerge.js";
-import { promoteSessionTurnUiStates } from "../../../chat/runtime/engine/turnUiStore.js";
 import { revokeMessagePreviewUrls } from "./sessionRecords.js";
 import {
   logResendDebug,
@@ -28,7 +27,7 @@ import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
-import { applyLatestSessionVersion } from "../../../chat/runtime/engine/sessionVersionManager.js";
+import { applyLatestSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
 import {
   confirmTurnRuntimeDeletion,
   isTurnRuntimeDeleted,
@@ -85,16 +84,12 @@ export function createSessionDetailApplicator({
       });
     }
     sessionItem.loaded = true;
-    const previousSessionId = String(sessionItem.id || "").trim();
-    const promotionResult = promoteSessionIdentityToBackendId({
+    const confirmationResult = confirmSessionIdentity({
       sessionItem,
-      backendSessionId: detailSessionId,
+      sessionId: detailSessionId,
       activeSessionId: activeSessionId.value,
     });
-    if (promotionResult.changed) {
-      promoteSessionTurnUiStates(previousSessionId, detailSessionId);
-    }
-    activeSessionId.value = promotionResult.nextActiveSessionId;
+    activeSessionId.value = confirmationResult.nextActiveSessionId;
     const sessionDocs = Array.isArray(detail.sessions) ? detail.sessions : [];
     sessionItem.sessionDocs = sessionDocs;
     const mainSessionDoc =
@@ -125,7 +120,7 @@ export function createSessionDetailApplicator({
     if (turnLifecycleSnapshot) {
       sessionItem.turnLifecycleSnapshot = turnLifecycleSnapshot;
     }
-    applyLatestSessionVersion(sessionItem, mainSessionDoc);
+    applyLatestSessionAggregateVersion(sessionItem, mainSessionDoc);
     sessionItem.createdAt = mainSessionDoc.createdAt || sessionItem.createdAt;
     sessionItem.updatedAt = mainSessionDoc.updatedAt || sessionItem.updatedAt;
 

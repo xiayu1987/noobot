@@ -101,8 +101,8 @@ export function buildModelMessageIdentityKwargs(msg = {}, fallbackMeta = {}) {
     ...(msg?.frontendUserMessage === true ? { frontendUserMessage: true } : {}),
     ...(msg?.injectedMessage === true ? { injectedMessage: true } : {}),
     ...(String(msg?.injectedBy || "").trim() ? { injectedBy: String(msg.injectedBy).trim() } : {}),
-    ...(String(msg?.injectedMessageType || msg?.injected_message_type || "").trim()
-      ? { injectedMessageType: String(msg?.injectedMessageType || msg?.injected_message_type).trim() }
+    ...(String(msg?.injectedMessageType || "").trim()
+      ? { injectedMessageType: String(msg.injectedMessageType).trim() }
       : {}),
     ...(msg?.pluginMessage === true ? { pluginMessage: true } : {}),
     ...(String(msg?.messageOrigin || "").trim()

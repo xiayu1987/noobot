@@ -15,7 +15,7 @@ import {
   reconcileSessionObject,
   revokeMessagePreviewUrls,
 } from "./sessionRecords.js";
-import { promoteSessionRuntimeIdentity, removeSessionRuntime, sessionRuntimeId } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { removeSessionRuntime, sessionRuntimeId } from "../../../chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { clearSessionTurnUiStates } from "../../../chat/runtime/engine/turnUiStore.js";
 
 export function createSessionListActions({
@@ -51,7 +51,7 @@ export function createSessionListActions({
     if (!sessionId) return;
     const target = findSessionByAnyIdInList(sessions.value, sessionId);
     if (!target) return;
-    const targetPrimaryId = String(target.id || sessionId || "").trim();
+    const targetPrimaryId = String(target.sessionId || sessionId || "").trim();
     if (!force && targetPrimaryId === activeSessionId.value) return;
     activeSessionId.value = targetPrimaryId;
     if (target.isLocal) {
@@ -62,7 +62,7 @@ export function createSessionListActions({
     if (target.loaded && !force) {
       onSessionDetailApplied?.({
         detail: {
-          sessionId: target.backendSessionId || target.sessionId || target.id || targetPrimaryId,
+          sessionId: target.sessionId || targetPrimaryId,
           sessions: target.sessionDocs || [],
           source: "selectSession.loadedSnapshot",
         },
@@ -77,7 +77,7 @@ export function createSessionListActions({
 
     if (!silent) loadingSessionDetail.value = true;
     try {
-      const detailSessionId = String(target.backendSessionId || target.id || sessionId || "").trim();
+      const detailSessionId = String(target.sessionId || sessionId || "").trim();
       const detail = await fetchSessionDetail(detailSessionId, {
         source: "selectSession",
         force,
@@ -116,14 +116,9 @@ export function createSessionListActions({
       if (!data.ok) throw new Error(data.error || translate("chat.getSessionsFailed"));
 
       const existingSessionsById = buildSessionIdentityMap(sessions.value);
-      const optimisticSessionByTurnScope = new Map();
-      for (const existing of sessions.value) {
-        if (existing?.isLocal !== true) continue;
-        for (const message of [...(existing?.messages || []), ...(existing?.rawMessages || [])]) {
-          const scope = String(message?.turnScopeId || "").trim();
-          if (scope) optimisticSessionByTurnScope.set(scope, existing);
-        }
-      }
+      const persistedSessionIds = new Set();
+      const requestedSessionId = String(preferredActiveId || "").trim();
+      let requestedSessionDetail = null;
       const nextSessions = (data.sessions || [])
         .filter((sessionItem) => String(sessionItem?.caller || "") === RoleEnum.USER)
         .sort(
@@ -133,39 +128,68 @@ export function createSessionListActions({
         )
         .map((sessionItem) => {
           const mappedSession = mapSummaryToSession(sessionItem, { sessionTitleFromMessages, createConnectorPanelState });
-          const discoveryScopes = [
-            sessionItem?.turnLifecycleSnapshot?.activeTurn?.turnScopeId,
-            ...(sessionItem?.turnLifecycleSnapshot?.recentTerminalTurns || []).map((turn) => turn?.turnScopeId),
-          ].map((value) => String(value || "").trim()).filter(Boolean);
-          const optimisticMatch = discoveryScopes.map((scope) => optimisticSessionByTurnScope.get(scope)).find(Boolean) || null;
-          const existing = existingSessionsById.get(String(mappedSession.id || "")) || optimisticMatch;
-          if (optimisticMatch && turnRuntimeRegistry?.value) {
-            const previousId = sessionRuntimeId(optimisticMatch);
-            const promotion = promoteSessionRuntimeIdentity(turnRuntimeRegistry.value, previousId, mappedSession.id);
-            if (promotion.applied) turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
-            if (String(activeSessionId.value || "") === previousId) activeSessionId.value = mappedSession.id;
-          }
+          persistedSessionIds.add(mappedSession.sessionId);
+          const existing = existingSessionsById.get(mappedSession.sessionId);
           return reconcileSessionObject(
             mappedSession,
             existing,
             { sessionTitleFromMessages },
           );
         });
+      nextSessions.push(...sessions.value.filter((session) =>
+        session?.isLocal === true && !persistedSessionIds.has(String(session.sessionId || "")),
+      ));
 
       sessions.value.splice(0, sessions.value.length, ...nextSessions);
 
       for (const session of sessions.value) {
-        const existingSession = existingSessionsById.get(String(session?.id || ""));
+        const existingSession = existingSessionsById.get(String(session?.sessionId || ""));
         if (existingSession && existingSession.messages === session.messages) continue;
         revokeMessagePreviewUrls(session.messages || []);
+      }
+
+      if (requestedSessionId && !findSessionByAnyIdInList(nextSessions, requestedSessionId)) {
+        requestedSessionDetail = await fetchSessionDetail(requestedSessionId, {
+          source: "explicitSessionRoute",
+          requireFresh: true,
+          requireExists: false,
+        });
+      }
+      if (requestedSessionDetail) {
+        const requestedSessionDoc = (Array.isArray(requestedSessionDetail?.sessions)
+          ? requestedSessionDetail.sessions
+          : []).find((doc) => String(doc?.sessionId || "").trim() === requestedSessionId)
+          || requestedSessionDetail?.sessions?.[0]
+          || {};
+        const resolvedRequestedSessionId = String(
+          requestedSessionDetail?.sessionId || requestedSessionId,
+        ).trim();
+        const requestedSession = mapSummaryToSession({
+          ...requestedSessionDoc,
+          sessionId: resolvedRequestedSessionId,
+          caller: requestedSessionDoc.caller || RoleEnum.USER,
+        }, { sessionTitleFromMessages, createConnectorPanelState });
+        sessions.value.unshift(requestedSession);
+        persistedSessionIds.add(resolvedRequestedSessionId);
       }
 
       if (!sessions.value.length) {
         createLocalSession();
         return true;
       }
+      if (requestedSessionDetail) {
+        const resolvedRequestedSessionId = String(
+          requestedSessionDetail.sessionId || requestedSessionId,
+        ).trim();
+        activeSessionId.value = resolvedRequestedSessionId;
+        applySessionDetail(requestedSessionDetail, {
+          navigateToLastMessage: shouldNavigateToLastMessage,
+        });
+        refreshSessionConnectorsAsync(resolvedRequestedSessionId);
+        return true;
+      }
       const keepActive = Boolean(prevActiveId && findSessionByAnyIdInList(sessions.value, prevActiveId));
-      const nextId = keepActive ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId) : sessions.value[0].id;
+      const nextId = keepActive ? resolveSessionPrimaryIdInList(sessions.value, prevActiveId) : sessions.value[0].sessionId;
       await selectSession(nextId, {
         force: forceCurrentSessionRerender,
         silent,
@@ -201,9 +225,9 @@ export function createSessionListActions({
       return true;
     }
     if (!ensureConnected()) return false;
-    const backendSessionId = String(targetSession.backendSessionId || targetSession.id || targetSessionId).trim();
+    const resolvedSessionId = String(targetSession.sessionId || targetSessionId).trim();
     const res = await renameSessionApi(
-      { userId: userId.value, sessionId: backendSessionId, title: normalizedTitle },
+      { userId: userId.value, sessionId: resolvedSessionId, title: normalizedTitle },
       { fetcher: authFetch },
     );
     const data = await res.json();
@@ -218,7 +242,7 @@ export function createSessionListActions({
     const targetSessionId = String(sessionId || "").trim();
     if (!targetSessionId) return false;
 
-    const index = sessions.value.findIndex((sessionItem) => sessionItem.id === targetSessionId);
+    const index = sessions.value.findIndex((sessionItem) => sessionItem.sessionId === targetSessionId);
     if (index < 0) return false;
     const targetSession = sessions.value[index];
     const runtimeSessionId = sessionRuntimeId(targetSession);
@@ -231,7 +255,7 @@ export function createSessionListActions({
       if (!sessions.value.length) {
         createLocalSession();
       } else if (activeSessionId.value === targetSessionId) {
-        activeSessionId.value = sessions.value[0].id;
+        activeSessionId.value = sessions.value[0].sessionId;
         await selectSession(activeSessionId.value, { force: true });
       }
       return true;
@@ -240,7 +264,7 @@ export function createSessionListActions({
     if (!ensureConnected()) return false;
     const isDeletingActive = activeSessionId.value === targetSessionId;
     const fallbackNextSessionId = isDeletingActive
-      ? String(sessions.value[index + 1]?.id || sessions.value[index - 1]?.id || "")
+      ? String(sessions.value[index + 1]?.sessionId || sessions.value[index - 1]?.sessionId || "")
       : String(activeSessionId.value || "");
     const res = await deleteSessionApi(
       { userId: userId.value, sessionId: targetSessionId },

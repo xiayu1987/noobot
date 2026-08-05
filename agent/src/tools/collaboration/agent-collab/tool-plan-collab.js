@@ -83,6 +83,11 @@ export function createPlanMultiTaskCollaborationTool({
             userConfig,
             streaming: false,
             context: { runtime },
+            invocation: {
+              flow: "tool.agent_collab",
+              purpose: "collaboration_plan",
+              domain: "collaboration",
+            },
           });
         }
       }
@@ -93,6 +98,11 @@ export function createPlanMultiTaskCollaborationTool({
           userConfig,
           streaming: false,
           context: { runtime },
+          invocation: {
+            flow: "tool.agent_collab",
+            purpose: "collaboration_plan",
+            domain: "collaboration",
+          },
         });
       }
 

@@ -339,7 +339,7 @@ describe("ChatMessageListPanel", () => {
     const startedAt = "2026-06-22T10:00:00.000Z";
     const activeSession = {
       id: "s-1",
-      backendSessionId: "s-1",
+      sessionId: "s-1",
       messages: [
         { role: RoleEnum.USER, content: "edited orphan", turnScopeId: "turn-live" },
         { role: RoleEnum.ASSISTANT, content: "partial after refresh", pending: false, turnScopeId: "turn-live" },
@@ -371,7 +371,7 @@ describe("ChatMessageListPanel", () => {
     const startedAt = "2026-06-22T10:00:00.000Z";
     const activeSession = reactive({
       id: "s-1",
-      backendSessionId: "s-1",
+      sessionId: "s-1",
       messages: [
         { role: RoleEnum.USER, content: "q", turnScopeId: "turn-live" },
         { role: RoleEnum.ASSISTANT, content: "partial", pending: false, turnScopeId: "turn-live" },
@@ -418,7 +418,7 @@ describe("ChatMessageListPanel", () => {
   it("does not rewrite message runtime from stale message fields", () => {
     const activeSession = {
       id: "s-1",
-      backendSessionId: "s-1",
+      sessionId: "s-1",
       messages: [
         { role: RoleEnum.USER, content: "old q", turnScopeId: "turn-old" },
         {

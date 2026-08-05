@@ -386,7 +386,7 @@ function upsertSubSessionEvent(eventName = "", eventData = {}) {
 }
 
 function reduceSubSessionSnapshot(sessionDoc = {}, snapshotContext = {}) {
-  const sessionId = text(sessionDoc?.sessionId || sessionDoc?.id || sessionDoc?.backendSessionId);
+  const sessionId = text(sessionDoc?.sessionId);
   if (!sessionId) return { applied: false, reason: "missing_session" };
   const timingResult = typeof applyTurnTimingSnapshot === "function"
     ? applyTurnTimingSnapshot({
@@ -396,22 +396,22 @@ function reduceSubSessionSnapshot(sessionDoc = {}, snapshotContext = {}) {
     : { applied: false, reason: "turn_runtime_unavailable" };
   const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
   const current = registry.sessions?.[sessionId] || { sessionId, messages: [], eventsById: {}, sequence: 0 };
-  const snapshotVersion = Number(sessionDoc?.snapshotVersion || sessionDoc?.sessionVersion || sessionDoc?.revision || 0);
-  if (!Number.isInteger(snapshotVersion) || snapshotVersion <= 0) {
+  const aggregateVersion = Number(sessionDoc?.aggregateVersion || 0);
+  if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
     return { applied: false, reason: "invalid_snapshot_version", current };
   }
-  const appliedSnapshotVersion = Number(
+  const appliedAggregateVersion = Number(
     current.sequenceByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT] || 0,
   );
-  if (appliedSnapshotVersion && snapshotVersion <= appliedSnapshotVersion) {
-    const reason = snapshotVersion === appliedSnapshotVersion ? "duplicate_snapshot_version" : "stale_snapshot";
+  if (appliedAggregateVersion && aggregateVersion <= appliedAggregateVersion) {
+    const reason = aggregateVersion === appliedAggregateVersion ? "duplicate_snapshot_version" : "stale_snapshot";
     logWorkflowDiagnostics("frontend.workflowSubSession.snapshotRejected", () => ({
       sessionId,
       parentSessionId: text(sessionDoc?.parentSessionId || current?.parentSessionId),
       workflowRunId: text(sessionDoc?.workflowRunId || current?.workflowRunId),
       nodeExecutionId: text(sessionDoc?.nodeExecutionId || current?.nodeExecutionId),
-      snapshotVersion,
-      appliedSnapshotVersion,
+      aggregateVersion,
+      appliedAggregateVersion,
       source: text(snapshotContext?.source) || "unknown",
       eventId: text(snapshotContext?.eventId),
       sequenceDomain: text(snapshotContext?.sequenceDomain),
@@ -430,8 +430,8 @@ function reduceSubSessionSnapshot(sessionDoc = {}, snapshotContext = {}) {
   const realtimeMessages = Array.isArray(current.messages) ? current.messages : [];
   logWorkflowDiagnostics("frontend.workflowSubSession.snapshotMergeStarted", () => ({
     sessionId,
-    snapshotVersion,
-    appliedSnapshotVersion,
+    aggregateVersion,
+    appliedAggregateVersion,
     source: text(snapshotContext?.source) || "unknown",
     eventId: text(snapshotContext?.eventId),
     sequenceDomain: text(snapshotContext?.sequenceDomain),
@@ -500,8 +500,8 @@ function reduceSubSessionSnapshot(sessionDoc = {}, snapshotContext = {}) {
   }
   logWorkflowDiagnostics("frontend.workflowSubSession.snapshotMergeCommitted", () => ({
     sessionId,
-    snapshotVersion,
-    previousSnapshotVersion: appliedSnapshotVersion,
+    aggregateVersion,
+    previousAggregateVersion: appliedAggregateVersion,
     source: text(snapshotContext?.source) || "unknown",
     eventId: text(snapshotContext?.eventId),
     sequenceDomain: text(snapshotContext?.sequenceDomain),
@@ -535,7 +535,7 @@ function reduceSubSessionSnapshot(sessionDoc = {}, snapshotContext = {}) {
     sequenceDomain: text(current.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
     sequenceByDomain: {
       ...(current.sequenceByDomain || {}),
-      [WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT]: snapshotVersion,
+      [WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT]: aggregateVersion,
     },
     sequenceByScopeKey: { ...(current.sequenceByScopeKey || {}) },
     revision: Number(current.revision || 0),

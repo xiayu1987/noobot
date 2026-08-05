@@ -14,6 +14,7 @@ import {
   SEQUENCE_DOMAIN,
   TIMELINE_AUTHORITY,
 } from "./timelineFact.js";
+import { parseTaskCheckReceipt } from "@noobot/context-protocol/task-check-receipt";
 
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
@@ -181,6 +182,34 @@ export function hasToolTimeline(message = {}) {
 
 export function selectToolTimeline(message = {}) {
   return Array.isArray(message?.toolTimeline) ? message.toolTimeline : [];
+}
+
+export function selectLatestTaskCheckReceipt(message = {}) {
+  const entries = selectToolTimeline(message);
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (text(entry?.tool) !== "task_check" || !entry?.resultEvent) continue;
+    if (typeof entry.result !== "string") return null;
+    let payload;
+    try {
+      payload = JSON.parse(entry.result);
+    } catch {
+      return null;
+    }
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload) ||
+      payload.toolName !== "task_check" ||
+      payload.protocolVersion !== 1
+    ) return null;
+    try {
+      return parseTaskCheckReceipt(payload.summary);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function mergeToolTimelines(...timelines) {

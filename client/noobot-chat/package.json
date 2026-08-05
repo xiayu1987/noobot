@@ -34,8 +34,10 @@
   "dependencies": {
     "@noobot/agent-transport-protocol": "file:../../agent-transport-protocol",
     "@noobot/client-shared": "file:../shared",
+    "@noobot/context-protocol": "file:../../context-protocol",
     "@noobot/plugin-runtime": "file:../../plugin-runtime",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
+    "@noobot/session-protocol": "file:../../session-protocol",
     "@noobot/shared": "file:../../shared",
     "@element-plus/icons-vue": "^2.3.2",
     "element-plus": "^2.14.3",

@@ -209,8 +209,11 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
       parentSessionId: "p1",
       messages: [
         {
+          messageUid: "sm_snapshot_assistant",
           role: "assistant",
           content: "canonical attachment",
+          dialogProcessId: "dialog-snapshot",
+          turnScopeId: "turn-snapshot",
           attachments: [{ attachmentId: "att-1", name: "a.txt" }],
           attachmentMetas: [{ attachmentId: "legacy" }],
         },
@@ -230,17 +233,17 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
   assert.equal(sessionPayload.messageIdentityVersion, 1);
   assert.equal("messages" in sessionPayload, false);
   assert.equal(sessionPayload.turnOrder.length, 1);
-  assert.deepEqual(sessionPayload.messageOrder, [{ messageUid: "sm_legacy_3ede32c9be8a50723c6fa7bbca81cc98" }]);
+  assert.deepEqual(sessionPayload.messageOrder, [{ messageUid: "sm_snapshot_assistant" }]);
   assert.equal(sessionPayload.turnOrder[0].turnId, "turn-000001");
   assert.equal(sessionPayload.turnOrder[0].artifactOrdinal, 1);
-  assert.equal(sessionPayload.turnOrder[0].turnScopeId, "");
+  assert.equal(sessionPayload.turnOrder[0].turnScopeId, "turn-snapshot");
   assert.equal(sessionPayload.turnOrder[0].file, "turns/turn-000001.jsonl");
   assert.equal(sessionPayload.turnOrder[0].messageCount, 1);
   assert.equal(typeof sessionPayload.turnOrder[0].committedBytes, "number");
   assert.equal(typeof sessionPayload.turnOrder[0].recordCount, "number");
-  assert.deepEqual(sessionPayload.turnOrder[0].messageOrder, ["sm_legacy_3ede32c9be8a50723c6fa7bbca81cc98"]);
-  assert.equal(typeof sessionPayload.turnOrder[0].messageHashes.sm_legacy_3ede32c9be8a50723c6fa7bbca81cc98, "string");
-  assert.match(sessionPayload.turnOrder[0].messageHashes.sm_legacy_3ede32c9be8a50723c6fa7bbca81cc98, /^sha256:/);
+  assert.deepEqual(sessionPayload.turnOrder[0].messageOrder, ["sm_snapshot_assistant"]);
+  assert.equal(typeof sessionPayload.turnOrder[0].messageHashes.sm_snapshot_assistant, "string");
+  assert.match(sessionPayload.turnOrder[0].messageHashes.sm_snapshot_assistant, /^sha256:/);
   assert.equal(sessionPayload.turnOrder[0].compacted, false);
   assert.equal(sessionPayload.createdAt, "2026-05-14T00:00:00.000Z");
   assert.equal(sessionPayload.updatedAt, "2026-05-14T00:00:00.000Z");

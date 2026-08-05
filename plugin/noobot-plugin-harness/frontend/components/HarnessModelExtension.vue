@@ -137,6 +137,47 @@ function onGuidanceAnalysisIntensityChange(value = 10) {
   });
 }
 
+function getHarnessTurnsThreshold(kind = "") {
+  if (kind === "summary") return pluginConfig.value?.guidance?.summary?.turnsThreshold;
+  if (kind === "planUpdate") return pluginConfig.value?.planning?.planUpdate?.triggerTurnsThreshold;
+  if (kind === "phaseAcceptance") return pluginConfig.value?.acceptance?.phase?.triggerTurnsThreshold;
+  return undefined;
+}
+
+function onHarnessTurnsThresholdChange(kind = "", value = 1) {
+  const turns = Math.max(1, Math.round(Number(value) || 1));
+  const currentHarness = pluginConfig.value;
+  if (kind === "summary") {
+    patchPluginConfig({
+      ...currentHarness,
+      guidance: {
+        ...(currentHarness.guidance || {}),
+        summary: { ...(currentHarness.guidance?.summary || {}), turnsThreshold: turns },
+      },
+    });
+    return;
+  }
+  if (kind === "planUpdate") {
+    patchPluginConfig({
+      ...currentHarness,
+      planning: {
+        ...(currentHarness.planning || {}),
+        planUpdate: { ...(currentHarness.planning?.planUpdate || {}), triggerTurnsThreshold: turns },
+      },
+    });
+    return;
+  }
+  if (kind === "phaseAcceptance") {
+    patchPluginConfig({
+      ...currentHarness,
+      acceptance: {
+        ...(currentHarness.acceptance || {}),
+        phase: { ...(currentHarness.acceptance?.phase || {}), triggerTurnsThreshold: turns },
+      },
+    });
+  }
+}
+
 function canToggleHarnessCapability(stepKey = "") {
   const key = String(stepKey || "").trim();
   return key && key !== "default" && key !== "guidance";
@@ -197,6 +238,51 @@ function isHarnessStepModelDisabled(stepKey = "") {
             @touchstart.stop
           />
         </div>
+        <label
+          v-if="stepItem.key === 'guidance'"
+          class="plugin-turn-threshold-control"
+          data-threshold-key="summary"
+        >
+          <span>{{ translate("modelExtension.summaryTurns") }}</span>
+          <el-input-number
+            :model-value="getHarnessTurnsThreshold('summary')"
+            :min="1"
+            :max="100"
+            size="small"
+            controls-position="right"
+            @update:model-value="onHarnessTurnsThresholdChange('summary', $event)"
+          />
+        </label>
+        <label
+          v-if="stepItem.key === 'planning'"
+          class="plugin-turn-threshold-control"
+          data-threshold-key="planUpdate"
+        >
+          <span>{{ translate("modelExtension.planUpdateTurns") }}</span>
+          <el-input-number
+            :model-value="getHarnessTurnsThreshold('planUpdate')"
+            :min="1"
+            :max="100"
+            size="small"
+            controls-position="right"
+            @update:model-value="onHarnessTurnsThresholdChange('planUpdate', $event)"
+          />
+        </label>
+        <label
+          v-if="stepItem.key === 'acceptance'"
+          class="plugin-turn-threshold-control"
+          data-threshold-key="phaseAcceptance"
+        >
+          <span>{{ translate("modelExtension.phaseAcceptanceTurns") }}</span>
+          <el-input-number
+            :model-value="getHarnessTurnsThreshold('phaseAcceptance')"
+            :min="1"
+            :max="100"
+            size="small"
+            controls-position="right"
+            @update:model-value="onHarnessTurnsThresholdChange('phaseAcceptance', $event)"
+          />
+        </label>
         <el-select
           :model-value="getHarnessStepModel(stepItem.key)"
           size="small"
@@ -356,6 +442,20 @@ function isHarnessStepModelDisabled(stepKey = "") {
   color: var(--el-color-primary);
   font-size: 13px;
   font-weight: 700;
+}
+
+.plugin-turn-threshold-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: 12px;
+  color: var(--noobot-text-secondary, var(--el-text-color-regular));
+}
+
+.plugin-turn-threshold-control :deep(.el-input-number) {
+  width: 92px;
 }
 
 .plugin-guidance-analysis-control :deep(.el-slider) {

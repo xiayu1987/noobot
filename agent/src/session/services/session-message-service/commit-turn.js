@@ -6,14 +6,14 @@
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
 import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { dedupeAttachments, assertCanonicalAttachments } from "./attachment-helpers.js";
-import { resolveSessionVersion } from "./anchor-utils.js";
-import { createRequestHash, assertIdempotencyRequestMatches, normalizeExpectedVersion } from "./idempotency-guards.js";
+import { resolveAggregateVersion } from "./anchor-utils.js";
+import { createRequestHash, assertCommandRequestMatches, normalizeExpectedAggregateVersion } from "./idempotency-guards.js";
 import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";
 
 export async function commitTurn({
     userId, sessionId, parentSessionId = "", content = "", action = "send",
     turnScopeId = "", dialogProcessId = "", parentDialogProcessId = "",
-    attachments = [], expectedVersion = null, idempotencyKey = "",
+    attachments = [], expectedAggregateVersion = null, commandId = "",
     messageId = "",
     resumeDialogProcessId = "", resumeTurnScopeId = "",
     frontendUserMessage = true,
@@ -25,8 +25,8 @@ export async function commitTurn({
     const normalizedContent = String(content || "").trim();
     const normalizedTurnScopeId = String(turnScopeId || "").trim();
     const normalizedAction = String(action || "send").trim().toLowerCase() === "continue" ? "continue" : "send";
-    const normalizedIdempotencyKey = String(idempotencyKey || normalizedTurnScopeId).trim();
-    const normalizedExpectedVersion = normalizeExpectedVersion(expectedVersion);
+    const normalizedCommandId = String(commandId || normalizedTurnScopeId).trim();
+    const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
     const requestHash = createRequestHash({
       operation: normalizedAction,
       content: normalizedContent,
@@ -35,8 +35,8 @@ export async function commitTurn({
       resumeTurnScopeId: String(resumeTurnScopeId || "").trim(),
       attachmentIds: (Array.isArray(attachments) ? attachments : []).map((item) => String(item?.attachmentId || "").trim()),
     });
-    if (!normalizedContent || !normalizedTurnScopeId || !normalizedIdempotencyKey) {
-      const error = new Error("content, turnScopeId and idempotencyKey are required"); error.statusCode = 400; throw error;
+    if (!normalizedContent || !normalizedTurnScopeId || !normalizedCommandId) {
+      const error = new Error("content, turnScopeId and commandId are required"); error.statusCode = 400; throw error;
     }
     return this._withSessionMutation(userId, sessionId, async () => {
       const resolvedParentSessionId = await this._resolveParentSessionId(userId, sessionId, parentSessionId, persistenceContext);
@@ -45,14 +45,14 @@ export async function commitTurn({
       const messages = Array.isArray(session.messages) ? session.messages : [];
       const existing = messages.find((item) =>
         item?.role === "user" && (String(item?.turnScopeId || "") === normalizedTurnScopeId ||
-          String(item?.turnCommit?.idempotencyKey || "") === normalizedIdempotencyKey));
+          String(item?.turnCommit?.commandId || "") === normalizedCommandId));
       if (existing) {
-        assertIdempotencyRequestMatches(existing?.turnCommit?.requestHash, requestHash);
-        return { session, userMessage: existing, attachments: existing.attachments || [], version: resolveSessionVersion(session), deduplicated: true, turnScopeId: normalizedTurnScopeId, dialogProcessId: resolveMessageDialogProcessId(existing), runState: existing?.turnCommit?.runState || "pending_start" };
+        assertCommandRequestMatches(existing?.turnCommit?.requestHash, requestHash);
+        return { session, userMessage: existing, attachments: existing.attachments || [], aggregateVersion: resolveAggregateVersion(session), deduplicated: true, turnScopeId: normalizedTurnScopeId, dialogProcessId: resolveMessageDialogProcessId(existing), runState: existing?.turnCommit?.runState || "pending_start" };
       }
-      const currentVersion = resolveSessionVersion(session);
+      const currentVersion = resolveAggregateVersion(session);
       if (normalizedExpectedVersion !== null && normalizedExpectedVersion !== currentVersion) {
-        const error = new Error("session version conflict"); error.statusCode = 409; error.errorCode = "SESSION_VERSION_CONFLICT"; error.currentVersion = currentVersion; throw error;
+        const error = new Error("session aggregate version conflict"); error.statusCode = 409; error.errorCode = "SESSION_AGGREGATE_VERSION_CONFLICT"; error.currentVersion = currentVersion; throw error;
       }
       const resumeDialog = String(resumeDialogProcessId || "").trim();
       const resumeScope = String(resumeTurnScopeId || "").trim();
@@ -94,15 +94,15 @@ export async function commitTurn({
         frontendUserMessage: frontendUserMessage === true,
         messageOrigin: frontendUserMessage === true ? "user" : "internal",
         attachments: canonicalAttachments,
-        turnCommit: { action: normalizedAction, idempotencyKey: normalizedIdempotencyKey, requestHash, runState: "pending_start", ...(normalizedAction === "continue" ? { resumeDialogProcessId: String(resumeDialogProcessId).trim(), resumeTurnScopeId: String(resumeTurnScopeId).trim() } : {}) }, ts: nowValue,
+        turnCommit: { action: normalizedAction, commandId: normalizedCommandId, requestHash, runState: "pending_start", ...(normalizedAction === "continue" ? { resumeDialogProcessId: String(resumeDialogProcessId).trim(), resumeTurnScopeId: String(resumeTurnScopeId).trim() } : {}) }, ts: nowValue,
       }, () => nowValue);
       session.messages = [...messages, userMessage];
       session.dialogOrder = appendDialogOrderEntry(session.dialogOrder, userMessage);
-      session.version = currentVersion + 1; session.revision = session.version; session.updatedAt = nowValue;
+      session.aggregateVersion = currentVersion + 1;  session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion, persistenceContext });
+      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedAggregateVersion: currentVersion, persistenceContext });
       const savedSession = await this.sessionRepo.findById(userId, sessionId, resolvedParentSessionId, persistenceContext) || session;
       const savedMessage = (savedSession.messages || []).find((item) => item?.role === "user" && String(item?.turnScopeId || "") === normalizedTurnScopeId) || userMessage;
-      return { session: savedSession, userMessage: savedMessage, attachments: savedMessage.attachments || [], version: resolveSessionVersion(savedSession), deduplicated: false, turnScopeId: normalizedTurnScopeId, dialogProcessId: resolveMessageDialogProcessId(savedMessage), runState: savedMessage?.turnCommit?.runState || "pending_start" };
+      return { session: savedSession, userMessage: savedMessage, attachments: savedMessage.attachments || [], aggregateVersion: resolveAggregateVersion(savedSession), deduplicated: false, turnScopeId: normalizedTurnScopeId, dialogProcessId: resolveMessageDialogProcessId(savedMessage), runState: savedMessage?.turnCommit?.runState || "pending_start" };
     }, parentSessionId, persistenceContext);
   }

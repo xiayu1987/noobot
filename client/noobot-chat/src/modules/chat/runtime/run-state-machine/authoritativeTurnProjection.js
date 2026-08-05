@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_STATE } from "@noobot/event-protocol";
+import { TURN_STATE } from "@noobot/session-protocol";
 import { FrontendRunState } from "./constants.js";
 
 const AUTHORITY_TO_FRONTEND_STATE = Object.freeze({

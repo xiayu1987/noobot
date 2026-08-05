@@ -10,7 +10,7 @@ import {
 } from "./runtime-events.js";
 import { isAbortLikeError, isSocketCloseRunAbort, isUserStopRunAbort } from "./stop-lifecycle.js";
 import { resetRunState } from "./connection-state.js";
-import { TURN_PHASE } from "@noobot/event-protocol";
+import { TURN_PHASE } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND,
   EXECUTION_QUERY_COMMAND_TYPES,

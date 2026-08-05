@@ -19,6 +19,6 @@ test("@core PBE-003 带附件普通发送", async ({ noobot, protocolCapture }, 
     mimeType: file.mimeType,
     contentBase64: file.buffer.toString("base64"),
   });
-  await waitForNaturalCompletion(noobot.page);
+  await waitForNaturalCompletion({ page: noobot.page, capture: protocolCapture, sessionId: noobot.sessionId, turnScopeId: command.identity.turnScopeId });
   assertTurnLifecycle(protocolCapture, noobot.sessionId, command.identity.turnScopeId);
 });

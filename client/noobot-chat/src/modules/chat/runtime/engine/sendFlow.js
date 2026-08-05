@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildChatPayload } from "./payload.js";
-import { getCurrentSessionVersion } from "./sessionVersionManager.js";
+import { getCurrentSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import {
   applySendErrorState,
@@ -75,6 +75,7 @@ export function createChatEngineSender({
   notify,
   pendingInteractionRequest,
   pluginModelConfig,
+  summaryPolicy,
   refreshSessionConnectorsAsync,
   navigateToLastMessage,
   selectedModel,
@@ -103,6 +104,7 @@ export function createChatEngineSender({
     const composerRequestStarted = options?.composerRequestStarted === true;
     const resumeDialogProcessId = normalizeTrimmedString(options?.resumeDialogProcessId);
     const resumeTurnScopeId = normalizeTrimmedString(options?.resumeTurnScopeId);
+    const dialogProcessId = normalizeTrimmedString(options?.dialogProcessId);
     if (!ensureConnected()) return false;
     const allowCurrentContinuationRequest = continueFromUserStopped === true;
     const currentSessionInFlight = hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry });
@@ -120,7 +122,7 @@ export function createChatEngineSender({
     }
     const userMessageId = requestedUserMessageId || createUserMessageId();
     const assistantMessageId = normalizeTrimmedString(options?.assistantMessageId) || createAssistantMessageId();
-    const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId?.value || "");
+    const sessionId = String(activeSession.value?.sessionId || activeSessionId?.value || "");
     const runtimeView = () => selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
     logSessionEvent({
       category: "message",
@@ -207,8 +209,8 @@ export function createChatEngineSender({
       const buildPayloadForCurrentVersion = () => buildChatPayload({
         activeSession,
         message: text,
-        idempotencyKey: turnScopeId,
-        expectedSessionVersion: getCurrentSessionVersion(activeSession) ?? 0,
+        commandId: turnScopeId,
+        expectedAggregateVersion: getCurrentSessionAggregateVersion(activeSession) ?? 0,
         attachments,
         allowUserInteraction,
         safeConfirmLevel,
@@ -217,8 +219,10 @@ export function createChatEngineSender({
         botScenario,
         selectedModel,
         pluginModelConfig,
+        summaryPolicy,
         locale,
         selectedPlugins,
+        dialogProcessId,
         turnScopeId,
         userMessageId: normalizeTrimmedString(userMessage?.messageId || userMessage?.id || userMessageId),
         assistantMessageId,

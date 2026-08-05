@@ -72,7 +72,7 @@ describe("selectTurnPresentations", () => {
   it("materializes one normal assistant shell when only the user and live workflow exist", () => {
     const user = { id: "user-a", sessionId: "session-a", role: "user", turnScopeId: "turn-a", content: "run" };
     const result = selectTurnPresentations({
-      activeSession: { id: "session-a", messages: [user] },
+      activeSession: { sessionId: "session-a", messages: [user] },
       workflowRegistry: liveRegistry(),
     });
 
@@ -109,7 +109,7 @@ describe("selectTurnPresentations", () => {
       content: "",
     };
     const result = selectTurnPresentations({
-      activeSession: { id: "session-a", messages: [shell] },
+      activeSession: { sessionId: "session-a", messages: [shell] },
       workflowRegistry: liveRegistry(),
     });
 
@@ -136,7 +136,7 @@ describe("selectTurnPresentations", () => {
       attachments: [{ name: "workflow-result.txt" }],
     };
     const result = selectTurnPresentations({
-      activeSession: { id: "session-a", messages: [canonical] },
+      activeSession: { sessionId: "session-a", messages: [canonical] },
       workflowRegistry: liveRegistry(),
     });
 
@@ -153,7 +153,7 @@ describe("selectTurnPresentations", () => {
   it("keeps the persisted workflow shell as the sole completed-content source", () => {
     const persisted = persistedWorkflow({ content: "final workflow content" });
     const result = selectTurnPresentations({
-      activeSession: { id: "session-a", messages: [persisted] },
+      activeSession: { sessionId: "session-a", messages: [persisted] },
       workflowRegistry: liveRegistry(),
     });
 
@@ -177,7 +177,7 @@ describe("selectTurnPresentations", () => {
       content: "",
     };
     const result = selectTurnPresentations({
-      activeSession: { id: "session-a", messages: [placeholder, persistedWorkflow()] },
+      activeSession: { sessionId: "session-a", messages: [placeholder, persistedWorkflow()] },
       workflowRegistry: liveRegistry(),
     });
 
@@ -215,7 +215,7 @@ describe("selectTurnPresentations", () => {
     };
     const result = selectTurnPresentations({
       activeSession: {
-        id: "session-a",
+        sessionId: "session-a",
         messages: [terminalPresentation, canonicalAssistant],
       },
     });
@@ -251,7 +251,7 @@ describe("selectTurnPresentations", () => {
     ];
     const result = selectTurnPresentations({
       activeSession: {
-        id: "session-a",
+        sessionId: "session-a",
         messages: sourceMessages,
         turnStatuses: [{
           turnScopeId: "turn-a",
@@ -292,7 +292,7 @@ describe("selectTurnPresentations", () => {
       content: "",
     };
     const result = selectTurnPresentations({
-      activeSession: { id: "session-runtime-stop", messages: [user, assistant] },
+      activeSession: { sessionId: "session-runtime-stop", messages: [user, assistant] },
       turnRuntimeRegistry: {
         sessions: {
           "session-runtime-stop": {
@@ -318,7 +318,7 @@ describe("selectTurnPresentations", () => {
   it("anchors an orphaned terminal Turn before the next authoritative Turn", () => {
     const result = selectTurnPresentations({
       activeSession: {
-        id: "session-a",
+        sessionId: "session-a",
         messages: [
           { id: "user-next", sessionId: "session-a", role: "user", turnScopeId: "turn-next", content: "next" },
           { id: "assistant-next", sessionId: "session-a", role: "assistant", turnScopeId: "turn-next", content: "answer" },
@@ -369,7 +369,7 @@ describe("selectTurnPresentations", () => {
     };
     const result = selectTurnPresentations({
       activeSession: {
-        id: "session-a",
+        sessionId: "session-a",
         messages: [canonicalAssistant, terminalPresentation],
       },
     });
@@ -386,7 +386,7 @@ describe("selectTurnPresentations", () => {
   it("does not coalesce terminal status across Turn boundaries", () => {
     const result = selectTurnPresentations({
       activeSession: {
-        id: "session-a",
+        sessionId: "session-a",
         messages: [
           { id: "assistant-a", role: "assistant", turnScopeId: "turn-a", content: "" },
           {
@@ -408,7 +408,7 @@ describe("selectTurnPresentations", () => {
     confirmTurnRuntimeDeletion(turnRuntimeRegistry, ["turn-old", "turn-tail"], { sessionId: "session-a" });
     const result = selectTurnPresentations({
       activeSession: {
-        id: "session-a",
+        sessionId: "session-a",
         messages: [
           { id: "user-old", sessionId: "session-a", role: "user", turnScopeId: "turn-old", content: "old" },
           { id: "assistant-old", sessionId: "session-a", role: "assistant", turnScopeId: "turn-old", content: "old answer" },
@@ -431,7 +431,7 @@ describe("selectTurnPresentations", () => {
   it("rejects multiple canonical assistant presentations for one Turn", () => {
     expect(() => selectTurnPresentations({
       activeSession: {
-        id: "session-a",
+        sessionId: "session-a",
         messages: [
           {
             id: "assistant-source-a",
@@ -461,7 +461,7 @@ describe("selectTurnPresentations", () => {
   it("never projects across Session or Turn ownership boundaries", () => {
     const result = selectTurnPresentations({
       activeSession: {
-        id: "session-a",
+        sessionId: "session-a",
         messages: [{ sessionId: "session-a", role: "assistant", turnScopeId: "turn-a", content: "" }],
       },
       workflowRegistry: {
@@ -482,13 +482,12 @@ describe("selectTurnPresentations", () => {
     });
   });
 
-  it("canonicalizes the optimistic and backend Session ids without weakening Turn ownership", () => {
+  it("keeps workflow projection within the declared Session and Turn ownership", () => {
     const result = selectTurnPresentations({
       activeSession: {
-        id: "local-session-a",
-        backendSessionId: "session-a",
+        sessionId: "session-a",
         messages: [{
-          sessionId: "local-session-a",
+          sessionId: "session-a",
           role: "assistant",
           turnScopeId: "turn-a",
           content: "",
@@ -499,7 +498,7 @@ describe("selectTurnPresentations", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      sessionId: "local-session-a",
+      sessionId: "session-a",
       turnScopeId: "turn-a",
       __workflowLiveProjection: true,
     });
@@ -510,7 +509,7 @@ describe("selectTurnPresentations", () => {
     confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-a", { sessionId: "session-a" });
 
     expect(selectTurnPresentations({
-      activeSession: { id: "session-a", messages: [] },
+      activeSession: { sessionId: "session-a", messages: [] },
       workflowRegistry: liveRegistry(),
       turnRuntimeRegistry,
     })).toEqual([]);
@@ -522,7 +521,7 @@ describe("selectTurnPresentations", () => {
     confirmTurnRuntimeDeletion(turnRuntimeRegistry, "turn-a", { sessionId: "session-b" });
 
     expect(selectTurnPresentations({
-      activeSession: { id: "session-a", messages: [] },
+      activeSession: { sessionId: "session-a", messages: [] },
       workflowRegistry: liveRegistry(),
       turnRuntimeRegistry,
     })).toHaveLength(1);

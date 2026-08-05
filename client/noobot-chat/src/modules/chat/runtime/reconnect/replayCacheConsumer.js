@@ -44,14 +44,12 @@ export async function consumeReconnectReplayCacheForSession({
 }
 
 export function markReconnectSequenceApplied(
-  appliedReconnectSeqByDialogProcessId,
-  dialogProcessId = "",
+  appliedReconnectSequenceByTurnKey,
   sequence = 0,
   identity = {},
 ) {
   markReconnectSequenceAppliedInCache(
-    appliedReconnectSeqByDialogProcessId,
-    dialogProcessId,
+    appliedReconnectSequenceByTurnKey,
     sequence,
     identity,
   );
@@ -65,7 +63,7 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   messages,
   dialogProcessId,
   turnScopeId = "",
-  appliedReconnectSeqByDialogProcessId,
+  appliedReconnectSequenceByTurnKey,
   appliedReconnectEventKindsByTurnKey,
   classifyRealtimeLog,
   envelopeCallbacks,
@@ -73,14 +71,11 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   navigateToLastMessage,
   processStore,
 } = {}) {
-  const replayKey = normalizeReplayCacheKey(dialogProcessId, activeSessionId?.value, turnScopeId);
+  const replayKey = normalizeReplayCacheKey(activeSessionId?.value, turnScopeId);
   const lastAppliedSeq = Number(
-    appliedReconnectSeqByDialogProcessId[replayKey] ||
-    appliedReconnectSeqByDialogProcessId[_trimStr(dialogProcessId)] ||
-    0,
+    appliedReconnectSequenceByTurnKey[replayKey] || 0,
   );
-  const boundary = appliedReconnectEventKindsByTurnKey?.[replayKey] ||
-    appliedReconnectEventKindsByTurnKey?.[_trimStr(dialogProcessId)] || null;
+  const boundary = appliedReconnectEventKindsByTurnKey?.[replayKey] || null;
   return applyReconnectReplayBatchToActiveSession({
     activeSession,
     activeSessionId,

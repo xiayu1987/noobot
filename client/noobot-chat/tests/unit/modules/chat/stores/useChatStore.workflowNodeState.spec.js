@@ -9,7 +9,7 @@ import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStor
 import {
   selectTurnMessageRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { createTurnLifecycleEnvelope } from "@noobot/event-protocol";
+import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 
 function applyNodeEvent(store, data) {
   return store.applyWorkflowRuntimeEvent({ event: "workflow_node_state_committed", data }, { source: "test" });

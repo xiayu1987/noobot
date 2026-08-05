@@ -82,7 +82,7 @@ function createRunner({
   appendAgentMessages = async () => {},
   getSessionTurns = null,
   commitSessionTurn = async () => ({}),
-  stampReusedUserTurnDialogProcessId = async () => ({}),
+  assertReusedUserTurnIdentity = async () => ({}),
   assertPersistenceContextIdentity = null,
 } = {}) {
   const initializeCanonicalRunSessionRuntime = async (payload = {}) => {
@@ -171,7 +171,7 @@ function createRunner({
     return {
       ...result,
       sessionId: payload.sessionId,
-      version: result.version ?? result.sessionVersion ?? 1,
+      aggregateVersion: result.aggregateVersion ?? 1,
       attachments,
       userMessage: {
         ...sourceUserMessage,
@@ -192,8 +192,8 @@ function createRunner({
       },
     };
   };
-  const stampCanonicalReusedUserMessage = async (payload = {}) => {
-    const result = await stampReusedUserTurnDialogProcessId(payload) || {};
+  const assertCanonicalReusedUserMessage = async (payload = {}) => {
+    const result = await assertReusedUserTurnIdentity(payload) || {};
     return {
       ...result,
       userMessage: result.userMessage || {
@@ -229,7 +229,7 @@ function createRunner({
     appendSessionTurn: async () => {},
     assertPersistenceContextIdentity,
     commitSessionTurn: commitCanonicalUserMessage,
-    stampReusedUserTurnDialogProcessId: stampCanonicalReusedUserMessage,
+    assertReusedUserTurnIdentity: assertCanonicalReusedUserMessage,
     finalizeRunSession: async () => ({ answer: "ok" }),
     upsertParentAsyncTask: () => {},
     now: () => new Date().toISOString(),
@@ -989,7 +989,7 @@ test("SessionExecutionRunner commits a normal send for a new turn in an existing
     }),
     commitSessionTurn: async (payload = {}) => {
       committedPayload = payload;
-      return { attachments: [], version: 2 };
+      return { attachments: [], aggregateVersion: 2 };
     },
   });
 
@@ -1027,7 +1027,7 @@ test("SessionExecutionRunner commits continue only for a stopped snapshot resume
     }),
     commitSessionTurn: async (payload = {}) => {
       committedPayload = payload;
-      return { attachments: [], version: 2 };
+      return { attachments: [], aggregateVersion: 2 };
     },
   });
 
@@ -1050,7 +1050,7 @@ test("SessionExecutionRunner commits continue only for a stopped snapshot resume
   assert.equal(beforeRunContext?.isContinue, true);
 });
 
-test("SessionExecutionRunner stamps reused user with prepared attachments after context building", async () => {
+test("SessionExecutionRunner asserts reused user with prepared attachments after context building", async () => {
   const calls = [];
   let capturedBuildContextPayload = null;
   const runner = createRunner({
@@ -1063,8 +1063,8 @@ test("SessionExecutionRunner stamps reused user with prepared attachments after 
       executionStartIndex: 0,
       runtimeEventListener: eventListener,
     }),
-    stampReusedUserTurnDialogProcessId: async (payload = {}) => {
-      calls.push({ type: "stamp", payload });
+    assertReusedUserTurnIdentity: async (payload = {}) => {
+      calls.push({ type: "assert", payload });
     },
     prepareTurnInput: async () => ({
       userMessageAttachments: [
@@ -1099,6 +1099,7 @@ test("SessionExecutionRunner stamps reused user with prepared attachments after 
   await runner.runSession({
     userId: "u1",
     sessionId: "s1",
+    dialogProcessId: "dp-new",
     message: "edited",
     attachments: [{ name: "doc.docx", size: 12 }],
     runConfig: {
@@ -1107,8 +1108,8 @@ test("SessionExecutionRunner stamps reused user with prepared attachments after 
     },
   });
 
-  assert.deepEqual(calls.map((item) => item.type), ["stamp", "prepare"]);
-  assert.deepEqual(calls[0].payload, {
+  assert.deepEqual(calls.map((item) => item.type), ["assert", "assert", "prepare"]);
+  assert.deepEqual(calls[1].payload, {
     userId: "u1",
     sessionId: "s1",
     parentSessionId: "",
@@ -1127,7 +1128,7 @@ test("SessionExecutionRunner stamps reused user with prepared attachments after 
   assert.equal(capturedBuildContextPayload?.dialogProcessId, "dp-new");
 });
 
-test("SessionExecutionRunner stamps reused user with generated dialogProcessId after context building", async () => {
+test("SessionExecutionRunner preserves the precommitted reused Turn dialogProcessId", async () => {
   const calls = [];
   const runner = createRunner({
     initializeRunSessionRuntime: async ({ eventListener = null } = {}) => ({
@@ -1139,7 +1140,7 @@ test("SessionExecutionRunner stamps reused user with generated dialogProcessId a
       executionStartIndex: 0,
       runtimeEventListener: eventListener,
     }),
-    stampReusedUserTurnDialogProcessId: async (payload = {}) => {
+    assertReusedUserTurnIdentity: async (payload = {}) => {
       calls.push(payload);
     },
   });
@@ -1147,6 +1148,7 @@ test("SessionExecutionRunner stamps reused user with generated dialogProcessId a
   await runner.runSession({
     userId: "u1",
     sessionId: "s1",
+    dialogProcessId: "dp-new",
     message: "edited",
     runConfig: {
       reuseExistingUserTurn: true,
@@ -1154,7 +1156,7 @@ test("SessionExecutionRunner stamps reused user with generated dialogProcessId a
     },
   });
 
-  assert.deepEqual(calls[0], {
+  assert.deepEqual(calls[1], {
     userId: "u1",
     sessionId: "s1",
     parentSessionId: "",
@@ -1162,6 +1164,19 @@ test("SessionExecutionRunner stamps reused user with generated dialogProcessId a
     dialogProcessId: "dp-new",
     attachments: [],
   });
+});
+
+test("SessionExecutionRunner rejects reused Turn execution without a precommitted dialogProcessId", async () => {
+  const runner = createRunner();
+  await assert.rejects(runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "edited",
+    runConfig: {
+      reuseExistingUserTurn: true,
+      turnScopeId: "client-turn:edited",
+    },
+  }), (error) => error?.errorCode === "MISSING_REUSED_TURN_DIALOG_PROCESS_ID");
 });
 
 test("SessionExecutionRunner emits bot error hooks", async () => {

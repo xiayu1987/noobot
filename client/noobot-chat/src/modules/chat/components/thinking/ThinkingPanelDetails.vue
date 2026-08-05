@@ -21,6 +21,7 @@ const props = defineProps({
   groupedToolLogs: { type: Array, default: () => [] },
   thinkingContentItems: { type: Array, default: () => [] },
   detailCount: { type: Number, default: 0 },
+  taskCheckReceipt: { type: Object, default: null },
   getTreePrefix: { type: Function, required: true },
   getDetailKey: { type: Function, required: true },
   isExpanded: { type: Function, required: true },
@@ -80,7 +81,16 @@ watch(rendererProjectionSignature, () => {
 </script>
 <template>
   <BaseTabPanelBody class="thinking-details-panel"
-    ><el-tabs class="thinking-details-tabs"
+    ><div
+      v-if="taskCheckReceipt"
+      class="thinking-task-check-block"
+      data-thinking-block="task-check"
+    >
+      <BaseMetaLabel
+        class="thinking-task-check-title"
+        :text="translate('message.taskCheck')"
+      /><BaseNoteBlock :content="taskCheckReceipt.abstract" />
+    </div><el-tabs class="thinking-details-tabs"
         ><el-tab-pane
           :label="translate('message.executionRecords', { count: detailCount })"
           ><BaseTabPanelBody
@@ -148,6 +158,15 @@ watch(rendererProjectionSignature, () => {
 }
 .thinking-group-title {
   margin: 8px 0 6px;
+}
+.thinking-task-check-block {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--noobot-divider);
+}
+.thinking-task-check-title {
+  margin-bottom: 8px;
 }
 .thinking-details-panel {
   height: 100%;

@@ -11,6 +11,8 @@ export const MAIN_FLOW_CONTROL_ACTION = Object.freeze({
 
 export const MAIN_FLOW_CONTROL_REASON = Object.freeze({
   CONTEXT_OVERFLOW_AFTER_SUMMARY: "context_overflow_after_summary",
+  TASK_SUMMARY_COMPLETE: "task_summary_complete",
+  TASK_SUMMARY_BLOCKED: "task_summary_blocked",
 });
 
 function asObject(value) {
@@ -130,33 +132,17 @@ export function requestMainFlowFinalNoToolsTurn(
 export function peekMainFlowFinalNoToolsTurnInstruction(runtimeOrSystemRuntime = {}) {
   const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
   if (!systemRuntime) return null;
-  const instruction = normalizeFinalNoToolsInstruction(systemRuntime.mainFlowControlInstruction);
-  if (instruction) return instruction;
-  if (systemRuntime.phaseSummaryNoToolsNextTurn === true) {
-    return {
-      action: MAIN_FLOW_CONTROL_ACTION.FINAL_NO_TOOLS_TURN,
-      reason: MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
-      source: "phase_summary_legacy_flag",
-      requestedAt: "",
-      detail: {},
-    };
-  }
-  return null;
+  return normalizeFinalNoToolsInstruction(systemRuntime.mainFlowControlInstruction);
 }
 
 export function clearMainFlowFinalNoToolsTurnInstruction(runtimeOrSystemRuntime = {}) {
   const systemRuntime = resolveSystemRuntimeHolder(runtimeOrSystemRuntime);
   if (!systemRuntime) return false;
-  let changed = false;
   if (normalizeFinalNoToolsInstruction(systemRuntime.mainFlowControlInstruction)) {
     delete systemRuntime.mainFlowControlInstruction;
-    changed = true;
+    return true;
   }
-  if (systemRuntime.phaseSummaryNoToolsNextTurn === true) {
-    systemRuntime.phaseSummaryNoToolsNextTurn = false;
-    changed = true;
-  }
-  return changed;
+  return false;
 }
 
 export function consumeMainFlowFinalNoToolsTurnInstruction(runtimeOrSystemRuntime = {}) {

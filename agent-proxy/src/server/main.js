@@ -16,7 +16,7 @@ import {
   AGENT_PROXY_ERROR,
   EVENT_TYPE,
 } from "../shared/constants.js";
-import { TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION } from "@noobot/event-protocol";
+import { TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION } from "@noobot/session-protocol";
 import {
   proxyHttpRequest,
   writeProxyError,

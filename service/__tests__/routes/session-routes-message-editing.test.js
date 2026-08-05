@@ -5,7 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTurnReplacementCommit } from "@noobot/shared/turn-replacement-protocol";
+import {
+  createSessionCommand,
+  createTurnReplacementCommit,
+  SESSION_COMMAND,
+} from "@noobot/session-protocol";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 
 function createReplaceTurnResult(payload, {
@@ -13,27 +17,40 @@ function createReplaceTurnResult(payload, {
   replacedTurnScopeIds,
   replacementUserMessageId,
 } = {}) {
+  const replacementDialogProcessId = "dialog-replacement";
   const replacementUser = {
     role: "user",
     messageId: replacementUserMessageId,
+    dialogProcessId: replacementDialogProcessId,
     turnScopeId: payload.turnScopeId,
   };
   return {
     session: {
       sessionId: payload.sessionId,
-      version,
+      aggregateVersion: version,
       messages: [replacementUser],
     },
     turnReplacement: createTurnReplacementCommit({
-      commandId: payload.idempotencyKey,
+      commandId: payload.commandId,
       sessionId: payload.sessionId,
-      committedVersion: version,
+      committedAggregateVersion: version,
       replacedTurnScopeIds,
+      replacementDialogProcessId,
       replacementTurnScopeId: payload.turnScopeId,
       replacementUserMessageId,
       committedAt: "2026-07-31T00:00:00.000Z",
     }),
   };
+}
+
+function mutationCommand(type, {
+  userId = "u1", sessionId = "s1", parentSessionId = "",
+  commandId = "test-command", expectedAggregateVersion = 0, ...payload
+} = {}) {
+  return createSessionCommand({
+    commandId, type, scope: { userId, sessionId, parentSessionId },
+    expectedAggregateVersion, payload,
+  });
 }
 
 test("session-routes: delete-from 路由透传请求体并返回后端快照", async () => {
@@ -50,11 +67,11 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
         deleteFromMessage: async (payload) => {
           calls.push(payload);
           return {
-            session: { id: payload.sessionId, messages: [{ id: "m1" }], version: 3 },
+            session: { sessionId: payload.sessionId, messages: [{ id: "m1" }], aggregateVersion: 3 },
             deletedCount: 2,
             anchorIndex: 1,
             deletedTurnScopeIds: ["turn-delete", "turn-tail"],
-            version: 3,
+            aggregateVersion: 3,
           };
         },
       },
@@ -71,10 +88,10 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        parentSessionId: " parent-1 ",
-        anchor: { dialogProcessId: "dp-1" },
-        expectedVersion: 2,
-        idempotencyKey: " idem-1 ",
+        ...mutationCommand(SESSION_COMMAND.MESSAGE_DELETE_FROM, {
+          parentSessionId: "parent-1", commandId: "idem-1", expectedAggregateVersion: 2,
+          anchor: { dialogProcessId: "dp-1" },
+        }),
       }),
     });
     const payload = await response.json();
@@ -88,8 +105,8 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
       sessionId: "s1",
       parentSessionId: "parent-1",
       anchor: { dialogProcessId: "dp-1" },
-      expectedVersion: 2,
-      idempotencyKey: "idem-1",
+      expectedAggregateVersion: 2,
+      commandId: "idem-1",
     });
   });
 });
@@ -124,7 +141,9 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
       const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/delete-from`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anchor: { turnScopeId: "scope-missing" } }),
+        body: JSON.stringify(mutationCommand(SESSION_COMMAND.MESSAGE_DELETE_FROM, {
+          commandId: `delete-${statusCode}`, anchor: { turnScopeId: "scope-missing" },
+        })),
       });
       const payload = await response.json();
       assert.equal(response.status, statusCode);
@@ -158,7 +177,7 @@ test("session-routes: rename 路由 trim 标题并返回成功", async () => {
   });
 
   await withTestServer(app, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/api/internal/session/u1/s1/rename`, {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s1/rename`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "  new title  " }),
@@ -190,7 +209,7 @@ test("session-routes: rename 空标题返回 400，session 不存在返回 404",
   });
 
   await withTestServer(app, async (baseUrl) => {
-    const emptyResponse = await fetch(`${baseUrl}/api/internal/session/u1/s1/rename`, {
+    const emptyResponse = await fetch(`${baseUrl}/internal/session/u1/s1/rename`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "   " }),
@@ -198,7 +217,7 @@ test("session-routes: rename 空标题返回 400，session 不存在返回 404",
     assert.equal(emptyResponse.status, 400);
     assert.equal((await emptyResponse.json()).ok, false);
 
-    const missingResponse = await fetch(`${baseUrl}/api/internal/session/u1/missing/rename`, {
+    const missingResponse = await fetch(`${baseUrl}/internal/session/u1/missing/rename`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "new title" }),
@@ -239,19 +258,20 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
     const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/replace-turn`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        parentSessionId: " parent-1 ",
+      body: JSON.stringify(mutationCommand(SESSION_COMMAND.TURN_REPLACE, {
+        parentSessionId: "parent-1",
         anchor: { turnScopeId: "scope-old" },
         newContent: " edited content ",
         turnScopeId: " turn-scope-replace ",
-        expectedVersion: 3,
-        idempotencyKey: " idem-2 ",
-      }),
+        expectedAggregateVersion: 3,
+        commandId: "idem-2",
+      })),
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.turnReplacement.replacementTurnScopeId, "turn-scope-replace");
+    assert.equal(payload.turnReplacement.replacementDialogProcessId, "dialog-replacement");
     assert.equal(payload.turnReplacement.replacementUserMessageId, "replacement-user-1");
     assert.deepEqual(calls[0], {
       userId: "u1",
@@ -260,12 +280,12 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
       anchor: { turnScopeId: "scope-old" },
       newContent: "edited content",
       turnScopeId: "turn-scope-replace",
-      expectedVersion: 3,
-      idempotencyKey: "idem-2",
+      expectedAggregateVersion: 3,
+      commandId: "idem-2",
     });
   });
 });
-test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
+test("session-routes: replace-turn rejects duplicate /api/internal service route", async () => {
   const calls = [];
   const app = express();
   app.use(express.json());
@@ -297,21 +317,18 @@ test("session-routes: replace-turn 兼容 /api/internal 前缀", async () => {
     const response = await fetch(`${baseUrl}/api/internal/session/primary-user/93606d58-60eb-4ca4-bccf-c926e67e1fed/messages/replace-turn`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: JSON.stringify(mutationCommand(SESSION_COMMAND.TURN_REPLACE, {
+        userId: "primary-user",
+        sessionId: "93606d58-60eb-4ca4-bccf-c926e67e1fed",
         anchor: { turnScopeId: "client-turn:api" },
         newContent: "edited content",
         turnScopeId: "client-turn:api-new",
-        expectedVersion: 2,
-        idempotencyKey: "replace-api-command",
-      }),
+        expectedAggregateVersion: 2,
+        commandId: "replace-api-command",
+      })),
     });
-    const payload = await response.json();
-    assert.equal(response.status, 200);
-    assert.equal(payload.ok, true);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].userId, "primary-user");
-    assert.equal(calls[0].sessionId, "93606d58-60eb-4ca4-bccf-c926e67e1fed");
-    assert.deepEqual(calls[0].anchor, { turnScopeId: "client-turn:api" });
+    assert.equal(response.status, 404);
+    assert.equal(calls.length, 0);
   });
 });
 test("session-routes: replace-turn 保留服务层 404/409 状态码", async () => {
@@ -345,7 +362,10 @@ test("session-routes: replace-turn 保留服务层 404/409 状态码", async () 
       const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/replace-turn`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ anchor: { turnScopeId: "scope-missing" }, newContent: "edit" }),
+        body: JSON.stringify(mutationCommand(SESSION_COMMAND.TURN_REPLACE, {
+          commandId: `replace-${statusCode}`,
+          anchor: { turnScopeId: "scope-missing" }, newContent: "edit", turnScopeId: "scope-new",
+        })),
       });
       const payload = await response.json();
       assert.equal(response.status, statusCode);

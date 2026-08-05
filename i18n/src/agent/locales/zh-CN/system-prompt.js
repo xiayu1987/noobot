@@ -55,7 +55,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     sections: {
       staticInfo: "系统运行环境",
       pathGuidance: "路径规则",
-      dynamicInfo: "当前会话动态上下文",
+      dynamicInfo: "当前执行上下文",
       scenario: "当前场景配置（名称、描述、约束）",
       workspaceDirectories: "工作区目录",
       longMemory: "相关长期记忆",

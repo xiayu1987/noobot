@@ -4,16 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
-import { addAttachment, fixedAttachment, selectPlugins } from "../helpers/browser-actions.js";
+import { PLUGIN_PROTOCOL_VERSION } from "@noobot/plugin-protocol";
+import {
+  addAttachment, fixedAttachment, selectPlugins, sendMessage, waitForNaturalCompletion,
+} from "../helpers/browser-actions.js";
 import {
   readUserAttachmentIndex,
+  waitForModelInvocationTraces,
   waitForPluginExecutionEvents,
   waitForPluginRuntimeEvents,
 } from "../helpers/persistence-audit.js";
+import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
 
 function assertActivationIdentity(record, command, sessionId) {
-  expect(record.data.protocolVersion).toBe(2);
+  expect(record.data.protocolVersion).toBe(PLUGIN_PROTOCOL_VERSION);
   expect(record.data.surface).toBe("agent");
   expect(record.sessionId).toBe(sessionId);
   expect(record.turnScopeId).toBe(command.identity.turnScopeId);
@@ -60,13 +65,21 @@ test("@core PBE-027 Manifest V2 激活与 runtime-events 身份闭环", async ({
 });
 
 test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async ({ noobot, protocolCapture }, testInfo) => {
+  test.setTimeout(420_000);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
-  await addAttachment(noobot.page, fixedAttachment("pbe-028.txt"));
-  const { send } = await sendAndStop({
+  const file = fixedAttachment("pbe-028.txt");
+  await addAttachment(noobot.page, file);
+  await sendMessage(noobot.page, uniquePrompt(
+    testInfo,
+    "execute one workflow child that reads the attached file and reports its exact content",
+  ));
+  const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
+  await waitForNaturalCompletion({
     page: noobot.page,
     capture: protocolCapture,
     sessionId: noobot.sessionId,
-    prompt: uniquePrompt(testInfo, "workflow and harness protocol audit"),
+    turnScopeId: send.identity.turnScopeId,
+    timeoutMs: 300_000,
   });
   expect(send.input.attachments).toHaveLength(1);
   const events = await waitForPluginRuntimeEvents(noobot.userId, noobot.sessionId, (records) =>
@@ -86,9 +99,29 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   const attachments = Object.values(attachmentIndex.attachments || {});
   expect(attachments).toHaveLength(1);
   expect(attachments[0]).toMatchObject({
-    name: "pbe-028.txt",
+    name: file.name,
     sessionId: noobot.sessionId,
     attachmentSource: "user",
     generatedByModel: false,
   });
+
+  const traces = await waitForModelInvocationTraces(noobot.userId, noobot.sessionId, (records) =>
+    records.some((record) => record.parentSessionId === noobot.sessionId),
+  );
+  const childSessionId = traces.find((record) => record.parentSessionId === noobot.sessionId)?.sessionId;
+  expect(childSessionId).toBeTruthy();
+  const childAttachmentIndex = await readUserAttachmentIndex(noobot.userId, childSessionId);
+  expect(childAttachmentIndex).toMatchObject({
+    sessionId: childSessionId,
+    attachmentSource: "user",
+  });
+  const childAttachments = Object.values(childAttachmentIndex.attachments || {});
+  expect(childAttachments).toHaveLength(1);
+  expect(childAttachments[0]).toMatchObject({
+    name: file.name,
+    sessionId: childSessionId,
+    attachmentSource: "user",
+    generatedByModel: false,
+  });
+  expect(childAttachments[0].attachmentId).not.toBe(attachments[0].attachmentId);
 });

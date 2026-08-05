@@ -72,8 +72,9 @@ test("session save persists thinking timing fields to full session and display s
     await runtime.sessionCrudService.ensureSession(userId, "S", "");
     const session = await runtime.repositories.sessionRepository.findById(userId, "S", "");
     session.messages = [
-      { role: "user", content: "hello", turnScopeId: "turn-1" },
+      { messageUid: "sm_thinking_user", role: "user", content: "hello", turnScopeId: "turn-1", dialogProcessId: "dp-1" },
       {
+        messageUid: "sm_thinking_assistant_1",
         role: "assistant",
         content: "first assistant chunk",
         turnScopeId: "turn-1",
@@ -81,6 +82,7 @@ test("session save persists thinking timing fields to full session and display s
         thinkingStartedAt: "2026-07-08T10:00:00.000Z",
       },
       {
+        messageUid: "sm_thinking_assistant_2",
         role: "assistant",
         content: "final assistant chunk",
         turnScopeId: "turn-1",

@@ -106,21 +106,26 @@ function resolveGuidanceAnalysisTurnsThreshold(ctx = {}, meta = {}) {
   };
 }
 
-function resolveGuidanceSummaryThresholds(ctx = {}) {
+function resolveGuidanceSummaryThresholds(ctx = {}, meta = {}) {
   const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full || {};
   const scoped = scopedMode?.guidance?.summary || {};
+  const runtimeThreshold = normalizePositiveInteger(
+    meta?.harness?.guidance?.summary?.turnsThreshold,
+    0,
+  );
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
-    turnsThreshold: normalizePositiveInteger(
-      scoped?.turnsThreshold,
-      WORKFLOW_PARAMS.guidance.summary.turnsThreshold,
-    ),
+    turnsThreshold: runtimeThreshold || normalizePositiveInteger(
+        scoped?.turnsThreshold,
+        WORKFLOW_PARAMS.guidance.summary.turnsThreshold,
+      ),
+    source: runtimeThreshold ? "runtime" : "workflow_params",
   };
 }
 
-function maybeScheduleGuidanceSummary(ctx = {}) {
+function maybeScheduleGuidanceSummary(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder?.state) return false;
   const state = holder.state;
@@ -139,7 +144,7 @@ function maybeScheduleGuidanceSummary(ctx = {}) {
   }
   state.counters.summaryTurns = Number(state.counters.summaryTurns || 0) + turnIncrement;
   const currentChars = resolveUnsummarizedMessageChars(ctx?.modelContext?.messages);
-  const threshold = resolveGuidanceSummaryThresholds(ctx);
+  const threshold = resolveGuidanceSummaryThresholds(ctx, meta);
   const reachedTurnsSummary = state.counters.summaryTurns > threshold.turnsThreshold;
   const reachedCharsSummary = currentChars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD;
 
@@ -155,6 +160,7 @@ function maybeScheduleGuidanceSummary(ctx = {}) {
     event: reachedCharsSummary ? "summary_scheduled_by_char_threshold" : "summary_scheduled_by_turn_threshold",
     detail: {
       thresholdMode: threshold.mode,
+      thresholdSource: threshold.source,
       triggerTurns: threshold.turnsThreshold,
       charsThreshold: LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
       unsummarizedChars: currentChars,
@@ -169,7 +175,7 @@ function isSummaryOnToolBurstThresholdEnabled(meta = {}) {
 
 function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
   if (!isSummaryOnToolBurstThresholdEnabled(meta)) return false;
-  const threshold = Number(resolveGuidanceSummaryThresholds(ctx).turnsThreshold);
+  const threshold = Number(resolveGuidanceSummaryThresholds(ctx, meta).turnsThreshold);
   if (!Number.isFinite(threshold) || threshold <= 0) return false;
   const calls = Array.isArray(ctx?.calls) ? ctx.calls : [];
   if (!Array.isArray(calls) || calls.length < threshold) return false;
@@ -354,7 +360,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
     let changed = false;
     if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
       const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) === true;
-      const summaryScheduleChanged = maybeScheduleGuidanceSummary(ctx) === true;
+      const summaryScheduleChanged = maybeScheduleGuidanceSummary(ctx, meta) === true;
       const scheduleChanged = maybeScheduleGuidanceAnalysis(ctx, meta) === true;
       const holder = ensureHarnessBucket(ctx);
       const nextAction = resolveNextGuidanceAction(holder?.state || {});

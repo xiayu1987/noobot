@@ -10,6 +10,7 @@ import {
   createFakeProcessStore,
 } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { createTurnKey } from "../../../../../src/modules/chat/runtime/engine/turnIdentity.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -26,24 +27,28 @@ describe("useReconnectReplay", () => {
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
+      turnScopeId: "turn-dp-1",
       seq: 3,
       text: "C",
     });
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
+      turnScopeId: "turn-dp-1",
       seq: 1,
       text: "A",
     });
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
+      turnScopeId: "turn-dp-1",
       seq: 2,
       text: "B",
     });
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-1",
+      turnScopeId: "turn-dp-1",
       seq: 2,
       text: "B2",
     });
@@ -52,7 +57,7 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-1",
     );
     expect(assistant?.content).toBe("C");
-    expect(api.__test.appliedReconnectSeqByDialogProcessId["dp-1"]).toBe(3);
+    expect(api.__test.appliedReconnectSequenceByTurnKey[createTurnKey({ sessionId: "s-1", turnScopeId: "turn-dp-1" })]).toBe(3);
   });
 
   it("SQ-04: sequence gap is allowed and progresses watermark", async () => {
@@ -65,12 +70,14 @@ describe("useReconnectReplay", () => {
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-gap",
+      turnScopeId: "turn-dp-gap",
       seq: 5,
       text: "X",
     });
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-gap",
+      turnScopeId: "turn-dp-gap",
       seq: 6,
       text: "Y",
     });
@@ -79,7 +86,7 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-gap",
     );
     expect(assistant?.content).toBe("XY");
-    expect(api.__test.appliedReconnectSeqByDialogProcessId["dp-gap"]).toBe(6);
+    expect(api.__test.appliedReconnectSequenceByTurnKey[createTurnKey({ sessionId: "s-1", turnScopeId: "turn-dp-gap" })]).toBe(6);
   });
 
   it("SQ-01: increasing sequence applies in order and records max sequence", async () => {
@@ -92,18 +99,21 @@ describe("useReconnectReplay", () => {
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-inc",
+      turnScopeId: "turn-dp-inc",
       seq: 1,
       text: "A",
     });
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-inc",
+      turnScopeId: "turn-dp-inc",
       seq: 2,
       text: "B",
     });
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",
       dialogProcessId: "dp-inc",
+      turnScopeId: "turn-dp-inc",
       seq: 3,
       text: "C",
     });
@@ -112,7 +122,7 @@ describe("useReconnectReplay", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-inc",
     );
     expect(assistant?.content).toBe("ABC");
-    expect(api.__test.appliedReconnectSeqByDialogProcessId["dp-inc"]).toBe(3);
+    expect(api.__test.appliedReconnectSequenceByTurnKey[createTurnKey({ sessionId: "s-1", turnScopeId: "turn-dp-inc" })]).toBe(3);
   });
 
   it("SQ-05: distinct protocol events at the same transport sequence are each consumed once", async () => {
@@ -150,6 +160,6 @@ describe("useReconnectReplay", () => {
 
     const assistant = refs.activeSession.value.messages[1];
     expect(assistant.content).toBe("answer");
-    expect(api.__test.appliedReconnectSeqByDialogProcessId["dp-boundary"]).toBe(10);
+    expect(api.__test.appliedReconnectSequenceByTurnKey[createTurnKey({ sessionId: "s-1", turnScopeId: "turn-boundary" })]).toBe(10);
   });
 });

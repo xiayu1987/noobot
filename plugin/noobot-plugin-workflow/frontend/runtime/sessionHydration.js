@@ -59,13 +59,13 @@ export function hydrateWorkflowRegistryFromSessionDetail({
   const logWorkflowDiagnostics = (event, payload) => logRuntimeDiagnostic(event, payload);
   if (typeof applyWorkflowRuntimeEvent !== "function") {
     logWorkflowDiagnostics("frontend.workflowHydration.skipped", {
-      sessionId: text(detail?.sessionId || sessionItem?.backendSessionId || sessionItem?.id),
+      sessionId: text(detail?.sessionId || sessionItem?.sessionId),
       reason: "missing_upsert",
     });
     return 0;
   }
   const sessionId = text(
-    mainSessionDoc?.sessionId || detail?.sessionId || sessionItem?.backendSessionId || sessionItem?.id,
+    mainSessionDoc?.sessionId || detail?.sessionId || sessionItem?.sessionId,
   );
   const sources = [
     ...(Array.isArray(mainSessionDoc?.messages) ? mainSessionDoc.messages : []),

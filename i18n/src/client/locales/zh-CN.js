@@ -219,6 +219,7 @@ export const zhCNMessages = {
     "sessionStateOutOfSync": "会话状态不同步，请刷新后重试"
   },
   "message": {
+    "taskCheck": "任务检查",
     "subtaskProcessing": "子任务处理中...",
     "subtaskStopped": "子任务已停止",
     "subtaskFailed": "子任务处理失败",
@@ -290,6 +291,7 @@ export const zhCNMessages = {
     "safeConfirm": "安全确认",
     "notSafeConfirm": "非安全确认",
     "safeConfirmLevelLabel": "安全等级",
+    "phaseSummaryLoopTurns": "主流程小结轮次",
     "safeConfirmLevel": {
       "low": "低",
       "medium": "中",

@@ -25,5 +25,6 @@ test("context diagnostics records compact role and dialog dimensions", () => {
   assert.equal(summary.missingDialogIdCount, 1);
   assert.equal(summary.summarizedCount, 1);
   assert.equal(summary.preview.length, 1);
+  assert.equal(summary.preview[0].contentLength, 2);
   assert.equal(summary.truncated, 3);
 });

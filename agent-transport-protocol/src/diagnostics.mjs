@@ -45,8 +45,8 @@ export function summarizeAgentTransportCommand(rawCommand, extra = {}) {
     expectedTurnRevision: Number.isInteger(concurrency.expectedTurnRevision)
       ? concurrency.expectedTurnRevision
       : null,
-    expectedSessionVersion: Number.isInteger(concurrency.expectedSessionVersion)
-      ? concurrency.expectedSessionVersion
+    expectedAggregateVersion: Number.isInteger(concurrency.expectedAggregateVersion)
+      ? concurrency.expectedAggregateVersion
       : null,
     createSessionIfAbsent: command.session?.createIfAbsent === true,
     hasUserIdField: Object.hasOwn(command, "userId") || Object.hasOwn(identity, "userId"),

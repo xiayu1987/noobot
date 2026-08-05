@@ -116,7 +116,7 @@ function formatSessionStatus(status = "") {
 }
 
 function sessionRuntimeStatus(sessionItem = {}) {
-  const sessionId = String(sessionItem.backendSessionId || sessionItem.id || "").trim();
+  const sessionId = String(sessionItem.sessionId || "").trim();
   const sessionStatus = selectSessionTurnRuntime(props.turnRuntimeRegistry, sessionId);
   if (sessionStatus.terminal === "error") return "error";
   if (sessionStatus.terminal) return "done";
@@ -149,7 +149,7 @@ async function promptRenameSession(sessionItem = {}) {
         },
       },
     );
-    emit("rename-session", { sessionId: sessionItem.id, title: String(value || "").trim() });
+    emit("rename-session", { sessionId: sessionItem.sessionId, title: String(value || "").trim() });
   } catch {
   }
 }
@@ -174,7 +174,7 @@ watch(
           <div class="session-list-inner">
             <el-popover
               v-for="sessionItem in dateGroup.items"
-              :key="sessionItem.id"
+              :key="sessionItem.sessionId"
               trigger="hover"
               :disabled="isMobile"
               placement="right"
@@ -186,8 +186,10 @@ watch(
               <template #reference>
                 <div
                   class="session-item noobot-subtle-row"
-                  :class="{ active: sessionItem.id === activeSessionId }"
-                  @click="emit('select-session', sessionItem.id)"
+                  :data-session-id="sessionItem.sessionId"
+                  :data-session-local="sessionItem.isLocal === true ? 'true' : 'false'"
+                  :class="{ active: sessionItem.sessionId === activeSessionId }"
+                  @click="emit('select-session', sessionItem.sessionId)"
                 >
                   <div class="session-icon-wrapper">
                     <el-icon class="session-icon"><ChatDotRound /></el-icon>
@@ -196,7 +198,7 @@ watch(
                     <div class="title">{{ sessionItem.title }}</div>
                     <div class="sid">
                       <span class="status-dot" :class="sessionRuntimeStatus(sessionItem)"></span>
-                      #{{ sessionItem.backendSessionId ? sessionItem.backendSessionId.slice(0, 8) : translate("common.notStarted") }}
+                      #{{ sessionItem.sessionId ? sessionItem.sessionId.slice(0, 8) : translate("common.notStarted") }}
                     </div>
                   </div>
                   <div class="session-actions">
@@ -214,7 +216,7 @@ watch(
                       class="session-delete-btn noobot-action-btn noobot-flat-icon-btn"
                       :title="translate('common.deleteSession')"
                       :aria-label="translate('common.deleteSession')"
-                      @click.stop="emit('delete-session', sessionItem.id)"
+                      @click.stop="emit('delete-session', sessionItem.sessionId)"
                     >
                       <el-icon><Delete /></el-icon>
                     </button>
@@ -233,11 +235,7 @@ watch(
                   </li>
                   <li>
                     <span class="k">{{ translate("common.sessionBackendId") }}</span>
-                    <span class="v">{{ sessionItem.backendSessionId || translate("common.notStarted") }}</span>
-                  </li>
-                  <li v-if="sessionItem.id && sessionItem.id !== sessionItem.backendSessionId">
-                    <span class="k">{{ translate("common.sessionLocalId") }}</span>
-                    <span class="v">{{ sessionItem.id }}</span>
+                    <span class="v">{{ sessionItem.sessionId || translate("common.notStarted") }}</span>
                   </li>
                   <li>
                     <span class="k">{{ translate("common.sessionMessageCount") }}</span>

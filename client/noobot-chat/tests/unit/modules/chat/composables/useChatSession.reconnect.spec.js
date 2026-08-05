@@ -71,7 +71,7 @@ describe("useChatSession reconnect replay", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "s-deleted",
-      backendSessionId: "s-deleted",
+      sessionId: "s-deleted",
       messages: [],
     })];
     store.activeSessionId = "s-deleted";
@@ -110,7 +110,7 @@ describe("useChatSession reconnect replay", () => {
     };
     store.sessions = [{
       id: "s-live",
-      backendSessionId: "s-live",
+      sessionId: "s-live",
       title: "live",
       isLocal: false,
       loaded: true,
@@ -186,7 +186,7 @@ describe("useChatSession reconnect replay", () => {
     };
     store.sessions = [createSessionFixture({
       id: "s-after-reconnect",
-      backendSessionId: "s-after-reconnect",
+      sessionId: "s-after-reconnect",
       messages: [{ role: RoleEnum.USER, content: "continue" }, assistant],
     })];
     store.activeSessionId = "s-after-reconnect";
@@ -252,7 +252,7 @@ describe("useChatSession reconnect replay", () => {
     };
     store.sessions = [{
       id: "s-continue",
-      backendSessionId: "s-continue",
+      sessionId: "s-continue",
       title: "continue",
       isLocal: false,
       loaded: true,
@@ -317,7 +317,7 @@ describe("useChatSession reconnect replay", () => {
     store.sessions = [
       {
         id: "s-1",
-        backendSessionId: "s-1",
+        sessionId: "s-1",
         title: "session",
         isLocal: false,
         loaded: true,
@@ -505,7 +505,7 @@ describe("useChatSession reconnect replay", () => {
     store.sessions = [
       {
         id: "s-reconnect-user",
-        backendSessionId: "s-reconnect-user",
+        sessionId: "s-reconnect-user",
         title: "session",
         isLocal: false,
         loaded: true,
@@ -550,7 +550,7 @@ describe("useChatSession reconnect replay", () => {
 
   it("restores a workflow Execution tree before its selected snapshot without double-consuming responses", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({ id: "workflow-session", backendSessionId: "workflow-session" })];
+    store.sessions = [createSessionFixture({ id: "workflow-session", sessionId: "workflow-session" })];
     store.activeSessionId = "workflow-session";
     store.turnRuntimeRegistry.sessions["workflow-session"] = {
       activeTurnScopeId: "workflow-turn",
@@ -637,7 +637,7 @@ describe("useChatSession reconnect replay", () => {
     store.sessions = [
       {
         id: "s-cross-device",
-        backendSessionId: "s-cross-device",
+        sessionId: "s-cross-device",
         title: "session",
         isLocal: false,
         loaded: true,

@@ -21,5 +21,5 @@ export function formatTime(ts) {
 }
 
 export function hasActiveSessionForReconnect({ activeSession = {} } = {}) {
-  return Boolean(String(activeSession?.backendSessionId || "").trim());
+  return Boolean(String(activeSession?.sessionId || "").trim());
 }

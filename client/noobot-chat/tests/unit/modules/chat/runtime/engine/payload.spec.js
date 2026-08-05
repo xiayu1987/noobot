@@ -8,14 +8,25 @@ import { describe, expect, it } from "vitest";
 import { buildChatPayload } from "../../../../../../src/modules/chat/runtime/engine/payload.js";
 
 describe("buildChatPayload model preferences", () => {
-  it("derives session provision intent only from backend session identity", () => {
+  it("grants session provision intent only to an initial send", () => {
     expect(buildChatPayload({
-      activeSession: { value: { id: "local-1", backendSessionId: "" } },
+      activeSession: { value: { sessionId: "session-1", isLocal: true } },
       message: "new",
     }).session.createIfAbsent).toBe(true);
     expect(buildChatPayload({
-      activeSession: { value: { id: "local-1", backendSessionId: "session-1" } },
+      activeSession: { value: { sessionId: "session-1", isLocal: false } },
       message: "existing",
+    }).session.createIfAbsent).toBe(false);
+    expect(buildChatPayload({
+      activeSession: { value: { sessionId: "session-1", isLocal: true } },
+      message: "continue",
+      continueFromStopped: true,
+    }).session.createIfAbsent).toBe(false);
+    expect(buildChatPayload({
+      activeSession: { value: { sessionId: "session-1", isLocal: true } },
+      message: "resend",
+      reuseExistingUserTurn: true,
+      dialogProcessId: "dialog-resend",
     }).session.createIfAbsent).toBe(false);
   });
 
@@ -87,6 +98,17 @@ describe("buildChatPayload model preferences", () => {
     expect(payload).not.toHaveProperty("config");
   });
 
+  it("writes the canonical main-flow summary policy to preferences", () => {
+    const payload = buildChatPayload({
+      activeSession: { value: { sessionId: "session-1" } },
+      message: "hello",
+      turnScopeId: "turn-1",
+      summaryPolicy: { phaseSummaryLoopTurns: 1 },
+    });
+
+    expect(payload.preferences.summaryPolicy).toEqual({ phaseSummaryLoopTurns: 1 });
+  });
+
   it("accepts selectedPlugins as a plain array", () => {
     const payload = buildChatPayload({
       userId: "admin",
@@ -124,11 +146,26 @@ describe("buildChatPayload model preferences", () => {
     const payload = buildChatPayload({
       message: "hello",
       turnScopeId: "turn-1",
-      expectedSessionVersion: 7,
+      expectedAggregateVersion: 7,
     });
 
     expect(payload.concurrency.expectedTurnRevision).toBe(0);
-    expect(payload.concurrency.expectedSessionVersion).toBe(7);
+    expect(payload.concurrency.expectedAggregateVersion).toBe(7);
+  });
+
+  it("carries the Session-committed resend dialog identity once in transport identity", () => {
+    const payload = buildChatPayload({
+      activeSession: { value: { sessionId: "session-1" } },
+      message: "edited",
+      reuseExistingUserTurn: true,
+      dialogProcessId: "  dialog-resend  ",
+      turnScopeId: "turn-resend",
+    });
+    expect(payload.identity).toMatchObject({
+      sessionId: "session-1",
+      dialogProcessId: "dialog-resend",
+      turnScopeId: "turn-resend",
+    });
   });
 
   it("builds independent continue payload with new turn and stopped snapshot identity", () => {

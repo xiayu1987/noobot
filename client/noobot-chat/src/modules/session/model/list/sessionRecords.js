@@ -8,11 +8,11 @@ import { findVisibleLastMessage, isPluginInjectedMessage } from "../../../chat/m
 
 export function createLocalSessionItem({ id, title, createConnectorPanelState }) {
   return {
-    id,
+    sessionId: id,
     title,
     isLocal: true,
     loaded: true,
-    backendSessionId: "",
+    aggregateVersion: 0,
     currentTaskId: "",
     messageCount: 0,
     lastMessage: null,
@@ -39,11 +39,11 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
     ? summaryLastMessage
     : findVisibleLastMessage(messages);
   return {
-    id: item.sessionId,
     title,
     isLocal: false,
     loaded: false,
-    backendSessionId: item.sessionId,
+    sessionId: item.sessionId,
+    aggregateVersion: Number(item.aggregateVersion || 0),
     currentTaskId: item.currentTaskId || "",
     messageCount,
     lastMessage,
@@ -81,7 +81,7 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
       : (Array.isArray(existingSession.turnTimings) ? existingSession.turnTimings : []),
     loaded: existingSession.loaded === true || mappedSession.loaded === true,
     isLocal: mappedSession.isLocal === false ? false : existingSession.isLocal === true,
-    backendSessionId: mappedSession.backendSessionId || existingSession.backendSessionId,
+    sessionId: mappedSession.sessionId || existingSession.sessionId,
     currentTaskId: mappedSession.currentTaskId || existingSession.currentTaskId || "",
     messages: existingMessages.length ? existingMessages : mappedSession.messages,
     sessionDocs: existingSessionDocs.length ? existingSessionDocs : mappedSession.sessionDocs,

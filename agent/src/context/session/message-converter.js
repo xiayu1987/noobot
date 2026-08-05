@@ -37,7 +37,7 @@ export function toConversationMessages(sessionRecords = []) {
       summarized: item.summarized === true,
       injectedMessage: item.injectedMessage === true,
       injectedBy: item.injectedBy || "",
-      injectedMessageType: item.injectedMessageType || item.injected_message_type || "",
+      injectedMessageType: item.injectedMessageType || "",
       frontendUserMessage: item.frontendUserMessage === true,
       messageOrigin: item.messageOrigin || "",
       pluginMessage: item.pluginMessage === true,

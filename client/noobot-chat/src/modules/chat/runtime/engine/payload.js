@@ -33,23 +33,26 @@ export function buildChatPayload({
   selectedModel,
   memoryModel,
   pluginModelConfig,
+  summaryPolicy,
   locale,
   selectedPlugins,
   uploadHint = "",
   reuseExistingUserTurn = false,
+  dialogProcessId = "",
   turnScopeId = "",
   userMessageId = "",
   assistantMessageId = "",
   continueFromStopped = false,
   resumeDialogProcessId = "",
   resumeTurnScopeId = "",
-  expectedSessionVersion = 0,
-  idempotencyKey = "",
+  expectedAggregateVersion = 0,
+  commandId = "",
 } = {}) {
   const normalizedScenario = normalizeTrimmedString(botScenario?.value ?? botScenario);
   const normalizedSelectedModel = normalizeTrimmedString(selectedModel?.value ?? selectedModel);
   const normalizedMemoryModel = normalizeTrimmedString(memoryModel?.value ?? memoryModel);
   const normalizedPluginModelConfig = pluginModelConfig?.value ?? pluginModelConfig;
+  const normalizedSummaryPolicy = summaryPolicy?.value ?? summaryPolicy;
   const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
   const normalizedUserMessageId = normalizeTrimmedString(userMessageId);
   const normalizedAssistantMessageId = normalizeTrimmedString(assistantMessageId);
@@ -62,10 +65,11 @@ export function buildChatPayload({
       : AGENT_COMMAND.SEND;
   return createTurnRunCommand({
     commandType,
-    commandId: normalizeTrimmedString(idempotencyKey) || normalizedTurnScopeId,
+    commandId: normalizeTrimmedString(commandId) || normalizedTurnScopeId,
     identity: {
-      sessionId: activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSession?.value?.id,
+      sessionId: activeSession?.value?.sessionId,
       parentSessionId: activeSession?.value?.parentSessionId,
+      dialogProcessId: normalizeTrimmedString(dialogProcessId),
       parentDialogProcessId: activeSession?.value?.parentDialogProcessId,
       turnScopeId: normalizedTurnScopeId,
     },
@@ -83,6 +87,9 @@ export function buildChatPayload({
       ...(normalizedPluginModelConfig && typeof normalizedPluginModelConfig === "object" && !Array.isArray(normalizedPluginModelConfig)
         ? { pluginModelConfig: normalizedPluginModelConfig }
         : {}),
+      ...(normalizedSummaryPolicy && typeof normalizedSummaryPolicy === "object" && !Array.isArray(normalizedSummaryPolicy)
+        ? { summaryPolicy: normalizedSummaryPolicy }
+        : {}),
       locale: normalizeTrimmedString(locale?.value ?? locale),
       selectedConnectors: normalizeSelectedConnectors(
         activeSession?.value?.connectorPanelState?.selectedConnectors || {},
@@ -94,12 +101,12 @@ export function buildChatPayload({
       assistantMessageId: normalizedAssistantMessageId,
     },
     concurrency: {
-      idempotencyKey: normalizeTrimmedString(idempotencyKey) || normalizedTurnScopeId,
       expectedTurnRevision: 0,
-      expectedSessionVersion,
+      expectedAggregateVersion,
     },
     session: {
-      createIfAbsent: !normalizeTrimmedString(activeSession?.value?.backendSessionId),
+      createIfAbsent:
+        commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true,
     },
     continuation: {
       dialogProcessId: normalizedResumeDialogProcessId,

@@ -65,7 +65,11 @@ Bare or historical point names are invalid and are not normalized.
 Each point descriptor defines execution order and failure mode. Control points
 use `fail_flow`; observer points use `continue`. Consumers do not implement a
 second failure policy. Handler timeout and parent cancellation are exposed by
-the invocation `signal`, and a failed control point throws `HookExecutionError`.
+the invocation `signal`, and a failed control point throws `HookExecutionError`. Cancellation from the
+parent invocation is not a hook failure: the runtime propagates the parent's abort reason unchanged,
+does not call the hook error observer, and stops dispatching remaining serial handlers.
+Cancellation policy belongs to each hook point descriptor. Terminal error and abort observers are
+`detached`, so they can record the terminal fact after the parent execution signal has been cancelled.
 
 ## Ownership Boundaries
 

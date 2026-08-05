@@ -10,11 +10,11 @@ import {
 } from "../../../debug/loggers/resendDebugLogger.js";
 
 function sessionIdentity(value = {}) {
-  return _trimStr(value?.sessionId || value?.backendSessionId || value?.id);
+  return _trimStr(value?.sessionId);
 }
 
-export function resolveMatchingSessionDetail(detail, backendSessionId = "") {
-  const expectedSessionId = _trimStr(backendSessionId);
+export function resolveMatchingSessionDetail(detail, sessionId = "") {
+  const expectedSessionId = _trimStr(sessionId);
   if (!expectedSessionId || !detail || typeof detail !== "object") return null;
   const detailSessionId = sessionIdentity(detail);
   if (detailSessionId && detailSessionId !== expectedSessionId) return null;
@@ -32,9 +32,9 @@ export async function renderActiveSessionBeforeReplay({
   if (!activeSession?.value) return false;
   const existingPromise = getReplayHydrationPromise();
   if (existingPromise) return existingPromise;
-  const backendSessionId = String(activeSession.value?.backendSessionId || "").trim();
+  const sessionId = String(activeSession.value?.sessionId || "").trim();
   if (
-    !backendSessionId ||
+    !sessionId ||
     typeof chatList?.fetchSessionDetail !== "function" ||
     typeof chatList?.applySessionDetail !== "function"
   ) {
@@ -42,14 +42,14 @@ export async function renderActiveSessionBeforeReplay({
   }
   const hydrationPromise = (async () => {
     try {
-      const detail = await chatList.fetchSessionDetail(backendSessionId, {
+      const detail = await chatList.fetchSessionDetail(sessionId, {
         source: "reconnectProtocolReconcile",
       });
-      const matchingSessionDoc = resolveMatchingSessionDetail(detail, backendSessionId);
+      const matchingSessionDoc = resolveMatchingSessionDetail(detail, sessionId);
       const currentActiveSessionId = sessionIdentity(activeSession?.value);
-      if (!matchingSessionDoc || currentActiveSessionId !== backendSessionId) {
+      if (!matchingSessionDoc || currentActiveSessionId !== sessionId) {
         logResendDebug("hydration.detail.rejected", () => ({
-          sessionId: backendSessionId,
+          sessionId: sessionId,
           currentActiveSessionId,
           detailSessionId: sessionIdentity(detail),
           reason: !matchingSessionDoc ? "identity_mismatch_or_empty" : "active_session_changed",
@@ -57,12 +57,12 @@ export async function renderActiveSessionBeforeReplay({
         return false;
       }
       logResendDebug("hydration.detail.apply.before", () => ({
-        sessionId: backendSessionId,
+        sessionId: sessionId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       }));
       chatList.applySessionDetail(detail);
       logResendDebug("hydration.detail.apply.after", () => ({
-        sessionId: backendSessionId,
+        sessionId: sessionId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       }));
       return true;

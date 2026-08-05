@@ -35,14 +35,11 @@ function createActions({
     ts: "2026-07-02T00:00:01.000Z",
   };
   const activeSession = ref({
-    id: "s1",
     sessionId: "s1",
-    backendSessionId: "s1",
     parentSessionId: "",
     messages: [userMessage, assistantMessage],
     rawMessages: [userMessage, assistantMessage],
-    version: 1,
-    revision: 1,
+    aggregateVersion: 1,
   });
   const deleteSessionMessagesFromApi = vi.fn(async () => ({
     ok: true,
@@ -54,7 +51,7 @@ function createActions({
   });
   const fetchSessionDetail = vi.fn(async () => ({
     sessionId: "s1",
-    sessions: [{ ...activeSession.value, version: 2, revision: 2 }],
+    sessions: [{ ...activeSession.value, aggregateVersion: 2 }],
   }));
   const actions = createMonotonicMessageActions({
     activeSession,
@@ -139,15 +136,15 @@ describe("monotonicMessageActions stop-window gates", () => {
         json: async () => ({
           ok: false,
           error: "session version conflict",
-          errorCode: "SESSION_VERSION_CONFLICT",
-          currentVersion: 2,
+          errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
+          currentAggregateVersion: 2,
         }),
       })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           ok: true,
-          session: { ...activeSession.value, messages: [], rawMessages: [], version: 3, revision: 3 },
+          session: { ...activeSession.value, messages: [], rawMessages: [], aggregateVersion: 3 },
         }),
       });
 
@@ -156,8 +153,8 @@ describe("monotonicMessageActions stop-window gates", () => {
     expect(result).toBe(true);
     expect(fetchSessionDetail).toHaveBeenCalledTimes(1);
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(2);
-    expect(deleteSessionMessagesFromApi.mock.calls[0][0].expectedVersion).toBe(1);
-    expect(deleteSessionMessagesFromApi.mock.calls[1][0].expectedVersion).toBe(2);
+    expect(deleteSessionMessagesFromApi.mock.calls[0][0].expectedAggregateVersion).toBe(1);
+    expect(deleteSessionMessagesFromApi.mock.calls[1][0].expectedAggregateVersion).toBe(2);
   });
 
   it("applies the top-level mutation version after deleting a stopped turn", async () => {
@@ -167,14 +164,13 @@ describe("monotonicMessageActions stop-window gates", () => {
       json: async () => ({
         ok: true,
         sessionId: "s1",
-        sessionVersion: 2,
+        aggregateVersion: 2,
         session: { ...activeSession.value, messages: [], rawMessages: [] },
       }),
     });
 
     expect(await actions.deleteMonotonicMessage(userMessage)).toBe(true);
-    expect(activeSession.value.version).toBe(2);
-    expect(activeSession.value.revision).toBe(2);
+    expect(activeSession.value.aggregateVersion).toBe(2);
   });
 
   it("deletes a stopped turn after its authoritative summary clears the temporary lock", async () => {
@@ -187,7 +183,7 @@ describe("monotonicMessageActions stop-window gates", () => {
       json: async () => ({
         ok: true,
         sessionId: "s1",
-        sessionVersion: 2,
+        aggregateVersion: 2,
         session: { ...activeSession.value, messages: [], rawMessages: [] },
       }),
     });

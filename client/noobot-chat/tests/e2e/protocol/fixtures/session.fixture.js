@@ -8,12 +8,7 @@ import { expect } from "@playwright/test";
 export async function createSessionThroughUi(page) {
   await page.locator(".new-chat-btn").click();
   await expect(page.locator(".chat-input textarea")).toBeVisible();
-  await expect.poll(() => page.evaluate(() => new URL(location.href).searchParams.get("session") || ""))
-    .not.toBe("");
-  return page.evaluate(() => {
-    const queryId = new URL(location.href).searchParams.get("session");
-    if (queryId) return queryId;
-    const routeId = location.pathname.match(/\/sessions?\/([^/]+)/)?.[1];
-    return routeId ? decodeURIComponent(routeId) : "";
-  });
+  const activeSession = page.locator(".session-item.active");
+  await expect(activeSession).toHaveAttribute("data-session-id", /.+/);
+  return String(await activeSession.getAttribute("data-session-id") || "").trim();
 }

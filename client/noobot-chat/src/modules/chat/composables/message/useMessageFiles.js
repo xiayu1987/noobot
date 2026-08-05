@@ -371,7 +371,7 @@ function logDisplayedAttachmentsSummary({
     dialogProcessId: getMessageDialogProcessId(messageItem),
     turnScopeId: getMessageTurnScopeId(messageItem),
     pending: messageItem?.pending === true,
-    channelState: messageItem?.channelState?.state || messageItem?.channel_state?.state || "",
+    channelState: messageItem?.channelState?.state || "",
     hasRuntimeMark: Boolean(messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] || messageItem?.runtimeMark),
     baseAttachmentsCount,
     toolLogAttachmentsCount,

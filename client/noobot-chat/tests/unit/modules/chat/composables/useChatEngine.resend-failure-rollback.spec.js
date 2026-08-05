@@ -120,7 +120,7 @@ describe("useChatEngine.resend failure rollback", () => {
       return makeTurnReplacementResponse({
         commandId: "another-resend-command",
         sessionId: "local-resend-command-mismatch",
-        version: 1,
+        aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
       });
@@ -146,7 +146,7 @@ describe("useChatEngine.resend failure rollback", () => {
     const staleTarget = { turnScopeId: "scope-old", dialogId: "dp-reused", role: RoleEnum.ASSISTANT, content: "old answer" };
     const stream = vi.fn(async () => {});
     const deleteSessionMessagesFromApi = vi.fn();
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
         messageId: "replacement-user",
         turnScopeId,
@@ -154,9 +154,9 @@ describe("useChatEngine.resend failure rollback", () => {
         content: "repeat",
       };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-replace-reused-dialog",
-        version: 1,
+        aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
         messages: [staleFirst, staleTarget, replacementUser],
@@ -187,12 +187,12 @@ describe("useChatEngine.resend failure rollback", () => {
     const stream = vi.fn(async () => {
       throw new Error("network failed");
     });
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = { id: "m-new", messageId: "m-new", turnScopeId, role: RoleEnum.USER, content: "edited retry text" };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-send-fail",
-        version: 1,
+        aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
       });

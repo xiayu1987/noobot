@@ -12,6 +12,16 @@ import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import {
+  TASK_SUMMARY_PROTOCOL_VERSION,
+  TASK_SUMMARY_STATE,
+  createTaskSummaryReceipt,
+  parseTaskSummaryContent,
+} from "@noobot/context-protocol/task-summary-protocol";
+import {
+  MAIN_FLOW_CONTROL_REASON,
+  requestMainFlowFinalNoToolsTurn,
+} from "../../runtime/main-flow-control.js";
 
 export const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
 
@@ -68,6 +78,34 @@ export function createTaskSummaryTool(ctx = {}) {
         );
       }
 
+      let parsedSummary;
+      try {
+        parsedSummary = parseTaskSummaryContent(summaryText);
+      } catch (error) {
+        throw recoverableToolError(
+          tTool(runtime, "tools.task_summary.summaryProtocolInvalid"),
+          {
+            code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT,
+            details: { reason: String(error?.message || error) },
+          },
+        );
+      }
+
+      const summary = createTaskSummaryReceipt(parsedSummary);
+      if (summary.state === TASK_SUMMARY_STATE.COMPLETE) {
+        requestMainFlowFinalNoToolsTurn(runtime, {
+          reason: MAIN_FLOW_CONTROL_REASON.TASK_SUMMARY_COMPLETE,
+          source: TASK_SUMMARY_TOOL_NAME,
+          detail: summary,
+        });
+      } else if (summary.state === TASK_SUMMARY_STATE.BLOCKED) {
+        requestMainFlowFinalNoToolsTurn(runtime, {
+          reason: MAIN_FLOW_CONTROL_REASON.TASK_SUMMARY_BLOCKED,
+          source: TASK_SUMMARY_TOOL_NAME,
+          detail: summary,
+        });
+      }
+
       systemRuntime.needsPhaseSummary = false;
       systemRuntime.toolLoopExecutionCount = 0;
       systemRuntime.phaseSummaryLoopCount = 0;
@@ -76,7 +114,9 @@ export function createTaskSummaryTool(ctx = {}) {
         {
           ok: true,
           status: TASK_STATUS.COMPLETED,
-          message: tTool(runtime, "tools.task_summary.summaryCompletedContinue"),
+          protocolVersion: TASK_SUMMARY_PROTOCOL_VERSION,
+          summary,
+          message: tTool(runtime, "tools.task_summary.summaryCompletedFollowState"),
         },
         true,
       );

@@ -122,7 +122,7 @@ export async function persistSessionArtifactSnapshot({
       files: publishedFiles,
       session: sessionArtifact?.session || null,
       sessionSummary: sessionArtifact?.sessionSummary || null,
-      version: Number(sessionArtifact?.session?.version || sessionArtifact?.sessionSummary?.version || 0),
+      aggregateVersion: Number(sessionArtifact?.session?.aggregateVersion || sessionArtifact?.sessionSummary?.aggregateVersion || 0),
     };
   };
   const lockDir = String(mutationLockDir || "").trim();

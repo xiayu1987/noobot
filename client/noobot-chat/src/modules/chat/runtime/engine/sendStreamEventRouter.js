@@ -40,7 +40,7 @@ export function createSendStreamEventHandler(context) {
       ? normalizeTrimmedString(data?.sessionId)
       : "";
     const lifecycleRootSessionId = normalizeTrimmedString(
-      data?.parentSessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId,
+      data?.parentSessionId || activeSession?.value?.sessionId || sessionId,
     );
     const subProjectionChecks = {
       eventName: event === "subagent_message_event",

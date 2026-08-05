@@ -100,7 +100,7 @@ export function useReconnectReplay({
   const reconnectReplayContext = createReconnectReplayContext();
   const {
     replayCache,
-    appliedReconnectSeqByDialogProcessId,
+    appliedReconnectSequenceByTurnKey,
     appliedReconnectEventKindsByTurnKey,
   } =
     reconnectReplayContext;
@@ -349,10 +349,9 @@ export function useReconnectReplay({
     });
   }
 
-  function markReconnectSequenceApplied(dialogProcessId = "", sequence = 0, identity = {}) {
+  function markReconnectSequenceApplied(sequence = 0, identity = {}) {
     markReconnectSequenceAppliedInConsumer(
-      appliedReconnectSeqByDialogProcessId,
-      dialogProcessId,
+      appliedReconnectSequenceByTurnKey,
       sequence,
       {
         ...identity,
@@ -402,7 +401,7 @@ export function useReconnectReplay({
     sessionLogWebSocketClient?.log?.({
       category: "system",
       event,
-      sessionId: payload?.sessionId || String(activeSession.value?.backendSessionId || ""),
+      sessionId: payload?.sessionId || String(activeSession.value?.sessionId || ""),
       dialogProcessId: payload?.dialogProcessId || "",
       turnScopeId: payload?.turnScopeId || "",
       data: {
@@ -418,7 +417,7 @@ export function useReconnectReplay({
     dialogProcessId,
     { turnScopeId = "" } = {},
   ) {
-    const sessionId = String(activeSession.value?.backendSessionId || "").trim();
+    const sessionId = String(activeSession.value?.sessionId || "").trim();
     if (isDeletedTurn({ sessionId, turnScopeId })) {
       return { applied: false, reason: "deleted_turn_tombstoned" };
     }
@@ -430,7 +429,7 @@ export function useReconnectReplay({
       messages,
       dialogProcessId,
       turnScopeId,
-      appliedReconnectSeqByDialogProcessId,
+      appliedReconnectSequenceByTurnKey,
       appliedReconnectEventKindsByTurnKey,
       classifyRealtimeLog,
       envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
@@ -446,8 +445,6 @@ export function useReconnectReplay({
       data,
       replayCache,
       isCurrentActiveSession,
-      isCurrentActiveDialogProcess: (dialogProcessId) =>
-        Boolean(findAssistantMessageByDialogProcessId(dialogProcessId)),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
       applyTurnLifecycleEnvelope,
@@ -464,7 +461,7 @@ export function useReconnectReplay({
     applyReconnectEvent,
     applyChannelState,
     replayCache,
-    appliedReconnectSeqByDialogProcessId,
+    appliedReconnectSequenceByTurnKey,
     isTestMode: import.meta.env.MODE === "test",
   });
 }

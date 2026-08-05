@@ -6,7 +6,7 @@
 import {
   TURN_LIFECYCLE_WIRE_EVENT,
   validateTurnLifecycleEnvelope,
-} from "@noobot/event-protocol";
+} from "@noobot/session-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const clean = (value) => String(value || "").trim();

@@ -7,7 +7,11 @@
 import { emitEvent } from "../../events/index.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
-import { createEmptyHookResult, requireHookPointDescriptor } from "@noobot/hook-protocol";
+import {
+  createEmptyHookResult,
+  HOOK_CANCELLATION_MODE,
+  requireHookPointDescriptor,
+} from "@noobot/hook-protocol";
 
 function resolveBotRuntimeHookManager(runtime = {}) {
   return runtime?.botHookManager && typeof runtime.botHookManager.emit === "function"
@@ -47,16 +51,20 @@ export async function runBotRuntimeHook({
   context = {},
   eventListener = null,
 } = {}) {
-  const normalizedPoint = requireHookPointDescriptor(point).point;
+  const descriptor = requireHookPointDescriptor(point);
+  const normalizedPoint = descriptor.point;
   const manager = resolveBotRuntimeHookManager(runtime);
   if (!manager) {
     return createEmptyHookResult(normalizedPoint, context);
   }
   const listener = eventListener || runtime?.eventListener || null;
+  const invocationSignal = descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED
+    ? null
+    : runtime?.abortSignal || null;
   emitEvent(listener, "bot_hook_start", { point: normalizedPoint });
   try {
     const result = await manager.emit(normalizedPoint, context, {
-      signal: runtime?.abortSignal || null,
+      signal: invocationSignal,
     });
     emitEvent(listener, "bot_hook_end", {
       point: normalizedPoint,
@@ -67,6 +75,7 @@ export async function runBotRuntimeHook({
       context,
     };
   } catch (error) {
+    if (invocationSignal?.aborted) throw error;
     emitEvent(listener, "bot_hook_error", {
       point: normalizedPoint,
       message: error?.message || String(error),

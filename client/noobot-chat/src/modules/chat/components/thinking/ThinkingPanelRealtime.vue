@@ -28,6 +28,7 @@ const props = defineProps({
   latestMainModelContentLog: { type: Object, default: null },
   executionLogs: { type: Array, default: () => [] },
   executionLogCount: { type: Number, default: 0 },
+  taskCheckReceipt: { type: Object, default: null },
   thinkingDetailLabel: { type: String, default: "" },
   openNames: { type: Array, default: () => [] },
   getDetailKey: { type: Function, required: true },
@@ -137,6 +138,16 @@ watch(
           class="thinking-analysis-title"
           text="模型分析"
         /><BaseNoteBlock :content="latestMainModelContentLog.output" />
+      </div>
+      <div
+        v-if="taskCheckReceipt"
+        class="thinking-analysis-block thinking-task-check-block"
+        data-thinking-block="task-check"
+      >
+        <BaseMetaLabel
+          class="thinking-analysis-title"
+          :text="translate('message.taskCheck')"
+        /><BaseNoteBlock :content="taskCheckReceipt.abstract" />
       </div>
       <div class="thinking-realtime-log-stream">
         <div

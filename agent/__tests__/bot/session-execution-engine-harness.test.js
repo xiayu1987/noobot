@@ -290,7 +290,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
         attachments: payload.attachments || [],
       };
       persistedTurns.push(userMessage);
-      return { userMessage, attachments: userMessage.attachments, version: 1 };
+      return { userMessage, attachments: userMessage.attachments, aggregateVersion: 1 };
     },
     async saveCurrentTurnTasks(payload = {}) {
       savedCurrentTurnTasksPayload = payload;

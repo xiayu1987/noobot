@@ -14,7 +14,7 @@ import {
 function createCommit(overrides = {}) {
   return {
     sessionId: "session-1",
-    sessionVersion: 1,
+    aggregateVersion: 1,
     dialogProcessId: "dialog-1",
     turnScopeId: "turn-1",
     userMessage: {

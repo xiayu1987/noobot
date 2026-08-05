@@ -19,7 +19,7 @@ function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent({
     event: "workflow_session_snapshot_loaded",
     data: {
-      snapshotVersion: 1,
+      aggregateVersion: 1,
       parentSessionId: "main-session-1",
       workflowRunId: "workflow-1",
       nodeExecutionId: "node-1",
@@ -675,7 +675,7 @@ describe("useChatStore sub session projection", () => {
 
   it("resolves main and child Agent details through the same executionId selector", () => {
     const store = useChatStore();
-    store.sessions.push({ id: "main-session", messages: [{ id: "main-message", content: "main" }] });
+    store.sessions.push({ sessionId: "main-session", messages: [{ id: "main-message", content: "main" }] });
     applySessionSnapshot(store, {
       sessionId: "child-session",
       messages: [{ id: "child-message", content: "child" }],

@@ -39,21 +39,21 @@ test("@full PBE-023 Session version 冲突", async ({ noobot, protocolCapture, b
 });
 
 test("@full PBE-024 停止命令幂等性", async ({ noobot, protocolCapture }, testInfo) => {
-  const secondPage = await noobot.page.context().newPage();
-  await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
-  await connectThroughUi(secondPage, readE2eCredentials());
   const { sendMessage } = await import("../helpers/browser-actions.js");
   await sendMessage(noobot.page, uniquePrompt(testInfo, "long run for concurrent stop"));
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await expect(noobot.page.locator(".stop-float-btn")).toBeVisible();
+  const secondPage = await noobot.page.context().newPage();
+  await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
+  await connectThroughUi(secondPage, readE2eCredentials());
   await expect(secondPage.locator(".stop-float-btn")).toBeVisible();
-  await Promise.allSettled([
-    noobot.page.locator(".stop-float-btn").click(),
-    secondPage.locator(".stop-float-btn").click(),
+  await Promise.all([
+    noobot.page.locator(".stop-float-btn").evaluate((button) => button.click()),
+    secondPage.locator(".stop-float-btn").evaluate((button) => button.click()),
   ]);
   const { waitForLifecycle } = await import("../helpers/scenario-assertions.js");
   await waitForLifecycle(protocolCapture, noobot.sessionId, "turn.stop_completed", 0, send.identity.turnScopeId);
   const terminals = (await import("../helpers/scenario-assertions.js")).lifecycleForSession(protocolCapture, noobot.sessionId)
     .filter((event) => event.turnScopeId === send.identity.turnScopeId && event.eventType === "turn.stop_completed");
-  expect(terminals).toHaveLength(1);
+  expect(new Set(terminals.map((event) => event.eventId)).size).toBe(1);
 });

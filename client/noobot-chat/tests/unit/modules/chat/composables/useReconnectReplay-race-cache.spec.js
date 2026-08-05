@@ -11,7 +11,8 @@ import {
   createFakeProcessStore,
 } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import { createReplayBatch, createTurnLifecycleSnapshot } from "@noobot/event-protocol";
+import { createReplayBatch } from "@noobot/event-protocol";
+import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 
 function emptyAuthorityBatch(sessionId, commandId) {
   return createReplayBatch({
@@ -28,7 +29,7 @@ afterEach(() => {
 });
 
 describe("useReconnectReplay", () => {
-  it("RC-05: missing dialogProcessId does not throw and uses safe cache key", async () => {
+  it("RC-05: missing Turn identity does not create a Session-only cache entry", async () => {
     const { api } = createFixture();
 
     await expect(
@@ -39,8 +40,7 @@ describe("useReconnectReplay", () => {
       }),
     ).resolves.toBeUndefined();
 
-    const cacheKeys = Object.keys(api.__test.replayCache["s-2"] || {});
-    expect(cacheKeys.some((key) => key.startsWith("__session__"))).toBe(true);
+    expect(api.__test.replayCache["s-2"]).toBeUndefined();
   });
 
   it("RC-01: rapid session switching does not apply replay to wrong session", async () => {

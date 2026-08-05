@@ -17,7 +17,7 @@ import {
   validateTurnLifecycleSnapshot,
   validateTurnLifecycleReceipt,
   validateSessionProvisionIntent,
-} from "../src/turn-lifecycle-protocol.mjs";
+} from "@noobot/session-protocol";
 
 test("turn lifecycle snapshot carries authoritative replacement tombstones", () => {
   const snapshot = createTurnLifecycleSnapshot({
@@ -26,19 +26,21 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
     sequence: 8,
     replacedTurns: [{
       turnScopeId: "turn-old",
+      replacementDialogProcessId: "dialog-new",
       replacementTurnScopeId: "turn-new",
       replacementUserMessageId: "user-new",
       commandId: "replace-command-1",
-      committedVersion: 4,
+      committedAggregateVersion: 4,
       replacedTurnScopeIds: ["turn-old", "turn-tail"],
       sequence: 8,
       committedAt: "2026-08-02T10:00:00.000Z",
     }, {
       turnScopeId: "turn-tail",
+      replacementDialogProcessId: "dialog-new",
       replacementTurnScopeId: "turn-new",
       replacementUserMessageId: "user-new",
       commandId: "replace-command-1",
-      committedVersion: 4,
+      committedAggregateVersion: 4,
       replacedTurnScopeIds: ["turn-old", "turn-tail"],
       sequence: 8,
       committedAt: "2026-08-02T10:00:00.000Z",
@@ -66,14 +68,6 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
     ["replaced_turn_still_materialized"],
   );
 });
-
-import {
-  acknowledgeAuthorityEventDelivery,
-  compactAuthorityEventOutbox,
-  listPendingAuthorityEvents,
-  normalizeAuthorityEventOutbox,
-  recordAuthorityEventDeliveryAttempt,
-} from "../src/authority-event-outbox.mjs";
 
 test("turn lifecycle receipt identifies one authoritative delivery without carrying state", () => {
   const receipt = createTurnLifecycleReceipt({
@@ -118,7 +112,7 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
   assert.equal(envelope.messageId, "turn-message-1");
 });
 
-test("turn lifecycle envelope carries only a serializable scoped persistence locator", () => {
+test("turn lifecycle envelope rejects storage locator fields", () => {
   const persistenceScope = {
     scopeId: "agent:node-1",
     parentSessionId: "root-session",
@@ -139,82 +133,9 @@ test("turn lifecycle envelope carries only a serializable scoped persistence loc
     state: TURN_STATE.PROCESSING,
     persistenceScope,
   });
-  assert.deepEqual(envelope.persistenceScope, persistenceScope);
-  assert.equal(Object.isFrozen(envelope.persistenceScope), true);
+  assert.equal("persistenceScope" in envelope, false);
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
-  assert.equal(validateTurnLifecycleEnvelope({ ...envelope, persistenceScope: {} }).valid, false);
-});
-
-test("authority outbox tracks attempts and acknowledges delivery idempotently", () => {
-  const envelope = createTurnLifecycleEnvelope({
-    eventType: TURN_EVENT.PROCESSING_STARTED,
-    eventId: "outbox-event-1",
-    commandId: "outbox-command-1",
-    sessionId: "outbox-session-1",
-    turnScopeId: "outbox-turn-1",
-    messageId: "outbox-message-1",
-    presentationMessageId: "outbox-presentation-1",
-    revision: 1,
-    sequence: 1,
-    phase: TURN_PHASE.PROCESSING,
-    state: TURN_STATE.PROCESSING,
-  });
-  const initial = normalizeAuthorityEventOutbox([{ eventId: envelope.eventId, envelope, committedAt: envelope.updatedAt }]);
-  assert.equal(listPendingAuthorityEvents(initial).length, 1);
-  const attempted = recordAuthorityEventDeliveryAttempt(initial, {
-    eventId: envelope.eventId,
-    attemptedAt: "2026-07-18T00:00:01.000Z",
-  });
-  assert.equal(attempted.found, true);
-  assert.equal(attempted.outbox[0].delivery.attempts, 1);
-  const acknowledged = acknowledgeAuthorityEventDelivery(attempted.outbox, {
-    eventId: envelope.eventId,
-    deliveredAt: "2026-07-18T00:00:02.000Z",
-  });
-  assert.equal(acknowledged.changed, true);
-  assert.equal(listPendingAuthorityEvents(acknowledged.outbox).length, 0);
-  const replay = acknowledgeAuthorityEventDelivery(acknowledged.outbox, {
-    eventId: envelope.eventId,
-    deliveredAt: "2026-07-18T00:00:03.000Z",
-  });
-  assert.equal(replay.found, true);
-  assert.equal(replay.changed, false);
-  assert.equal(replay.outbox[0].delivery.deliveredAt, "2026-07-18T00:00:02.000Z");
-});
-
-test("outbox compaction never removes pending, unreceipted, recent or above-watermark events", () => {
-  const envelope = (eventId, sequence) => createTurnLifecycleEnvelope({
-    eventType: TURN_EVENT.PROCESSING_STARTED,
-    eventId,
-    commandId: `command-${eventId}`,
-    sessionId: "session-1",
-    turnScopeId: "turn-1",
-    messageId: "message-1",
-    presentationMessageId: "presentation-1",
-    revision: sequence,
-    sequence,
-    phase: TURN_PHASE.PROCESSING,
-    state: TURN_STATE.PROCESSING,
-  });
-  const source = [
-    { eventId: "pending", envelope: envelope("pending", 1), committedAt: "2026-07-01T00:00:00.000Z" },
-    { eventId: "unreceipted", envelope: envelope("unreceipted", 2), committedAt: "2026-07-01T00:00:00.000Z", deliveredAt: "2026-07-02T00:00:00.000Z" },
-    { eventId: "recent", envelope: envelope("recent", 3), committedAt: "2026-07-01T00:00:00.000Z", deliveredAt: "2026-07-20T00:00:00.000Z" },
-    { eventId: "above-watermark", envelope: envelope("above-watermark", 4), committedAt: "2026-07-01T00:00:00.000Z", deliveredAt: "2026-07-02T00:00:00.000Z" },
-  ];
-  const receipts = source.slice(2).map((item) => ({
-    commandId: item.envelope.commandId,
-    eventType: item.envelope.eventType,
-    eventId: item.eventId,
-    envelope: item.envelope,
-  }));
-  const result = compactAuthorityEventOutbox(source, {
-    deliveredThroughSequence: 3,
-    retainDeliveredAfter: "2026-07-10T00:00:00.000Z",
-    commandReceipts: receipts,
-  });
-  assert.equal(result.removed, 0);
-  assert.deepEqual(result.outbox.map((item) => item.eventId), ["pending", "unreceipted", "recent", "above-watermark"]);
+  assert.deepEqual(validateTurnLifecycleEnvelope({ ...envelope, persistenceScope }).errors, ["unsupported_persistence_scope"]);
 });
 
 test("turn lifecycle envelope preserves parent identity without leaking mutation intents", () => {

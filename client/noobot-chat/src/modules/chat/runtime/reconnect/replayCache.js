@@ -10,18 +10,12 @@ import {
   resolveTurnIdentity,
 } from "../engine/turnIdentity.js";
 
-export function normalizeReplayCacheKey(dialogProcessId = "", sessionId = "", turnScopeId = "") {
-  const turnKey = createTurnKey({ sessionId, turnScopeId });
-  if (turnKey) return turnKey;
-  const normalizedDpId = _trimStr(dialogProcessId);
-  if (normalizedDpId) return normalizedDpId;
-  const normalizedSessionId = _trimStr(sessionId);
-  return normalizedSessionId ? `__session__${normalizedSessionId}` : "__session__unknown";
+export function normalizeReplayCacheKey(sessionId = "", turnScopeId = "") {
+  return createTurnKey({ sessionId, turnScopeId });
 }
 
 export function markReconnectSequenceApplied(
   appliedReconnectSequenceByTurnKey,
-  dialogProcessId = "",
   sequence = 0,
   {
     sessionId = "",
@@ -30,8 +24,7 @@ export function markReconnectSequenceApplied(
     eventKindsAtSequence = [],
   } = {},
 ) {
-  const normalizedDpId = _trimStr(dialogProcessId);
-  const replayKey = createTurnKey({ sessionId, turnScopeId }) || normalizedDpId;
+  const replayKey = createTurnKey({ sessionId, turnScopeId });
   const normalizedSequence = Number(sequence || 0);
   if (!replayKey || normalizedSequence <= 0) return;
   const lastAppliedSeq = Number(appliedReconnectSequenceByTurnKey?.[replayKey] || 0);
@@ -55,15 +48,6 @@ export function markReconnectSequenceApplied(
       };
     }
   }
-  if (normalizedDpId) {
-    const legacySequence = Number(appliedReconnectSequenceByTurnKey?.[normalizedDpId] || 0);
-    if (normalizedSequence > legacySequence) {
-      appliedReconnectSequenceByTurnKey[normalizedDpId] = normalizedSequence;
-    }
-    if (appliedEventKindsByTurnKey) {
-      appliedEventKindsByTurnKey[normalizedDpId] = appliedEventKindsByTurnKey[replayKey];
-    }
-  }
 }
 
 export function takeReplayCacheGroupsForSession(replayCache, sessionId = "") {
@@ -76,6 +60,7 @@ export function takeReplayCacheGroupsForSession(replayCache, sessionId = "") {
   return replayGroups.map(([replayKey, replayMessages]) => {
     const normalizedReplayMessages = Array.isArray(replayMessages) ? replayMessages : [];
     const keyIdentity = parseTurnKey(replayKey);
+    if (!keyIdentity) return null;
     const identities = normalizedReplayMessages.map(({ data } = {}) =>
       resolveTurnIdentity(data, { sessionId: normalizedSessionId }),
     );
@@ -89,9 +74,9 @@ export function takeReplayCacheGroupsForSession(replayCache, sessionId = "") {
       replayKey,
       dialogProcessId: dialogProcessIds.size === 1
         ? [...dialogProcessIds][0]
-        : (keyIdentity || String(replayKey || "").startsWith("__session__") ? "" : String(replayKey || "")),
-      turnScopeId: keyIdentity?.turnScopeId || (turnScopeIds.size === 1 ? [...turnScopeIds][0] : ""),
+        : "",
+      turnScopeId: keyIdentity.turnScopeId,
       replayMessages: normalizedReplayMessages,
     };
-  });
+  }).filter(Boolean);
 }

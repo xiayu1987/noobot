@@ -19,7 +19,9 @@ import {
   maybePromptHelpToolByFailure,
   maybePromptHelpToolByLoop,
   maybeRequestPhaseSummary,
+  maybeRequestTaskCheck,
   removePhaseSummaryPromptMessages,
+  removeTaskCheckPromptMessages,
 } from "../loop-control.js";
 import { resolveLlmForTurn } from "../../models/runtime/model-manager.js";
 import { assertNotAborted } from "../utils/error-utils.js";
@@ -46,6 +48,8 @@ export function createTurnOrchestrator({
   buildLoopResultFn = buildLoopResult,
   removePhaseSummaryPromptMessagesFn = removePhaseSummaryPromptMessages,
   maybeRequestPhaseSummaryFn = maybeRequestPhaseSummary,
+  maybeRequestTaskCheckFn = maybeRequestTaskCheck,
+  removeTaskCheckPromptMessagesFn = removeTaskCheckPromptMessages,
   maybeFinalizeNoToolsAfterPhaseSummaryOverflowFn = maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
   maybePromptHelpToolByLoopFn = maybePromptHelpToolByLoop,
   maybePromptHelpToolByFailureFn = maybePromptHelpToolByFailure,
@@ -190,10 +194,7 @@ export function createTurnOrchestrator({
         return invokeFinalNoToolsTurn({
           finalTurn: turn,
           instruction: mainFlowFinalNoToolsInstruction,
-          eventName:
-            mainFlowFinalNoToolsInstruction.source === "phase_summary_legacy_flag"
-              ? "phase_summary_no_tools_turn_enforced"
-              : "main_flow_final_no_tools_turn_enforced",
+          eventName: "main_flow_final_no_tools_turn_enforced",
         });
       }
 
@@ -212,6 +213,7 @@ export function createTurnOrchestrator({
       }
 
       const withToolsResult = await invokeWithToolsTurnFn({ modelState, loopState, turn });
+      removeTaskCheckPromptMessagesFn(loopState.modelContext);
       await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
       if (withToolsResult?.mainFlowFinalNoToolsRequested === true) {
         const instruction =
@@ -326,10 +328,11 @@ export function createTurnOrchestrator({
       loopState.turnTasks = turnTaskStore.toArray();
 
       if (hasTaskSummaryCall) {
-        removePhaseSummaryPromptMessagesFn(loopState.modelContext.messages, runtime);
+        removePhaseSummaryPromptMessagesFn(loopState.modelContext);
       }
 
       maybeRequestPhaseSummaryFn({ modelState, loopState, toolCallResults });
+      maybeRequestTaskCheckFn({ modelState, loopState, toolCallResults });
       maybePromptHelpToolByLoopFn({ modelState, loopState });
       maybePromptHelpToolByFailureFn({
         modelState,

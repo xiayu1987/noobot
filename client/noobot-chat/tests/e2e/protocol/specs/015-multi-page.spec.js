@@ -5,19 +5,26 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
-import { sendMessage, stopActiveTurn } from "../helpers/browser-actions.js";
+import { sendMessage, stopActiveTurn, waitForNaturalCompletion } from "../helpers/browser-actions.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 test("@full PBE-015 双标签页生命周期一致性", async ({ noobot, protocolCapture, browser }, testInfo) => {
+  await sendMessage(noobot.page, uniquePrompt(testInfo, "multi-page session provision"));
+  const provision = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
+  await waitForLifecycle(protocolCapture, noobot.sessionId, "turn.processing_started", 0, provision.identity.turnScopeId);
+  await waitForNaturalCompletion({ page: noobot.page, capture: protocolCapture, sessionId: noobot.sessionId, turnScopeId: provision.identity.turnScopeId });
+
   const secondContext = await browser.newContext();
   const secondPage = await secondContext.newPage();
   protocolCapture.bindPage(secondPage);
   try {
     await secondPage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
     await connectThroughUi(secondPage, readE2eCredentials());
-    await sendMessage(noobot.page, uniquePrompt(testInfo, "multi-page long run"));
-    const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
+    await expect(secondPage.locator(".stop-float-btn")).toBeHidden();
+
+    await sendMessage(noobot.page, uniquePrompt(testInfo, "multi-page active turn"));
+    const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send", 1);
     await waitForLifecycle(protocolCapture, noobot.sessionId, "turn.processing_started", 0, send.identity.turnScopeId);
     await expect(secondPage.locator(".stop-float-btn")).toBeVisible();
     await stopActiveTurn(secondPage);

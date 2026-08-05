@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  MAIN_FLOW_CONTROL_REASON,
-  requestMainFlowFinalNoToolsTurn,
-} from "../main-flow-control.js";
-
 export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
   if (!systemRuntime || typeof systemRuntime !== "object") return;
 
@@ -28,7 +23,11 @@ export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
       ? phaseSummaryLoopCount
       : 0;
 
-  const otherCounters = ["helpPromptLoopCount", "toolConsecutiveFailureCount"];
+  const otherCounters = [
+    "taskCheckLoopCount",
+    "helpPromptLoopCount",
+    "toolConsecutiveFailureCount",
+  ];
   for (const key of otherCounters) {
     const value = Number(systemRuntime[key] || 0);
     systemRuntime[key] = Number.isFinite(value) && value > 0 ? value : 0;
@@ -37,16 +36,6 @@ export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
   systemRuntime.needsPhaseSummary = systemRuntime.needsPhaseSummary === true;
   systemRuntime.phaseSummaryByCharsPrompted =
     systemRuntime.phaseSummaryByCharsPrompted === true;
-  if (
-    systemRuntime.phaseSummaryNoToolsNextTurn === true &&
-    String(systemRuntime.mainFlowControlInstruction?.action || "").trim() !== "final_no_tools_turn"
-  ) {
-    requestMainFlowFinalNoToolsTurn({ systemRuntime }, {
-      reason: MAIN_FLOW_CONTROL_REASON.CONTEXT_OVERFLOW_AFTER_SUMMARY,
-      source: "phase_summary_legacy_flag",
-    });
-  }
-  systemRuntime.phaseSummaryNoToolsNextTurn = false;
   systemRuntime.mainFlowFinalNoToolsTurnActive = false;
   systemRuntime.currentTurnUserMessage = String(userMessage || "").trim();
 }

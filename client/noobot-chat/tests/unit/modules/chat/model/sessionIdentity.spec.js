@@ -6,9 +6,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSessionIdentityMap,
+  confirmSessionIdentity,
   findSessionByAnyId,
   normalizeSessionId,
-  promoteSessionIdentityToBackendId,
 } from "../../../../../src/modules/chat/model/sessionIdentity.js";
 
 describe("sessionIdentity", () => {
@@ -19,39 +19,45 @@ describe("sessionIdentity", () => {
     expect(normalizeSessionId(undefined)).toBe("");
   });
 
-  it("buildSessionIdentityMap indexes by id and backendSessionId", () => {
-    const sessionA = { id: "local-1", backendSessionId: "backend-1" };
-    const sessionB = { id: "backend-2", backendSessionId: "backend-2" };
+  it("buildSessionIdentityMap indexes only by sessionId", () => {
+    const sessionA = { sessionId: "session-1" };
+    const sessionB = { sessionId: "session-2" };
     const map = buildSessionIdentityMap([sessionA, sessionB]);
 
-    expect(map.get("local-1")).toBe(sessionA);
-    expect(map.get("backend-1")).toBe(sessionA);
-    expect(map.get("backend-2")).toBe(sessionB);
+    expect(map.get("session-1")).toBe(sessionA);
+    expect(map.get("session-2")).toBe(sessionB);
+    expect(map.size).toBe(2);
   });
 
-  it("findSessionByAnyId resolves either local id or backend id", () => {
+  it("findSessionByAnyId resolves the unique sessionId", () => {
     const sessions = [
-      { id: "local-1", backendSessionId: "backend-1" },
-      { id: "backend-2", backendSessionId: "backend-2" },
+      { sessionId: "session-1" },
+      { sessionId: "session-2" },
     ];
-    expect(findSessionByAnyId(sessions, "local-1")).toBe(sessions[0]);
-    expect(findSessionByAnyId(sessions, "backend-1")).toBe(sessions[0]);
-    expect(findSessionByAnyId(sessions, "backend-2")).toBe(sessions[1]);
+    expect(findSessionByAnyId(sessions, "session-1")).toBe(sessions[0]);
+    expect(findSessionByAnyId(sessions, "session-2")).toBe(sessions[1]);
     expect(findSessionByAnyId(sessions, "missing")).toBeNull();
   });
 
-  it("promoteSessionIdentityToBackendId upgrades ids and active session id", () => {
-    const session = { id: "local-1", backendSessionId: "local-1", isLocal: true };
-    const result = promoteSessionIdentityToBackendId({
+  it("confirmSessionIdentity persists an unchanged preallocated identity", () => {
+    const session = { sessionId: "session-1", isLocal: true };
+    const result = confirmSessionIdentity({
       sessionItem: session,
-      backendSessionId: "backend-1",
-      activeSessionId: "local-1",
+      sessionId: "session-1",
+      activeSessionId: "session-1",
     });
 
-    expect(session.id).toBe("backend-1");
-    expect(session.backendSessionId).toBe("backend-1");
+    expect(session.sessionId).toBe("session-1");
     expect(session.isLocal).toBe(false);
-    expect(result.changed).toBe(true);
-    expect(result.nextActiveSessionId).toBe("backend-1");
+    expect(result.changed).toBe(false);
+    expect(result.nextActiveSessionId).toBe("session-1");
+  });
+
+  it("confirmSessionIdentity rejects a different identity", () => {
+    expect(() => confirmSessionIdentity({
+      sessionItem: { sessionId: "session-1", isLocal: true },
+      sessionId: "session-2",
+      activeSessionId: "session-1",
+    })).toThrow("session identity mismatch");
   });
 });

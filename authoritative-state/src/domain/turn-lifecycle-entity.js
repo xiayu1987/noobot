@@ -11,7 +11,7 @@ import {
   deriveAuthoritativeTurnCapabilities,
   normalizeTurnContinuationSource,
   validateTurnLifecycleEnvelope,
-} from "@noobot/event-protocol/turn-lifecycle";
+} from "@noobot/session-protocol/turn-lifecycle";
 
 const TERMINAL_STATES = new Set([
   TURN_STATE.COMPLETED,
@@ -93,10 +93,11 @@ export function normalizeTurnLifecycleEntity(source = {}) {
     if (!turnScopeId || !replacementTurnScopeId || !commandId) continue;
     replacedTurns[turnScopeId] = {
       turnScopeId,
+      replacementDialogProcessId: clean(value.replacementDialogProcessId),
       replacementTurnScopeId,
       replacementUserMessageId: clean(value.replacementUserMessageId),
       commandId,
-      committedVersion: integer(value.committedVersion),
+      committedAggregateVersion: integer(value.committedAggregateVersion),
       replacedTurnScopeIds: [...new Set(
         (Array.isArray(value.replacedTurnScopeIds) ? value.replacedTurnScopeIds : [turnScopeId])
           .map(clean)

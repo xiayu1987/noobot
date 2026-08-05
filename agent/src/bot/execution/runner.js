@@ -91,7 +91,7 @@ export class SessionExecutionRunner {
     appendAgentMessages,
     assertPersistenceContextIdentity,
     commitSessionTurn,
-    stampReusedUserTurnDialogProcessId,
+    assertReusedUserTurnIdentity,
     getSessionTurns,
     getTurnSummaryCheckpointState,
     finalizeRunSession,
@@ -112,7 +112,7 @@ export class SessionExecutionRunner {
     this.appendAgentMessages = appendAgentMessages;
     this.assertPersistenceContextIdentity = assertPersistenceContextIdentity;
     this.commitSessionTurn = commitSessionTurn;
-    this.stampReusedUserTurnDialogProcessId = stampReusedUserTurnDialogProcessId;
+    this.assertReusedUserTurnIdentity = assertReusedUserTurnIdentity;
     this.getSessionTurns = getSessionTurns;
     this.getTurnSummaryCheckpointState = getTurnSummaryCheckpointState;
     this.finalizeRunSession = finalizeRunSession;
@@ -209,6 +209,25 @@ export class SessionExecutionRunner {
     try {
       const normalizedMessage = this.normalizeRunMessage(message);
       this.validateRunInput({ userId, sessionId, caller, parentSessionId });
+      if (runConfig?.reuseExistingUserTurn === true && !String(requestedDialogProcessId || "").trim()) {
+        const error = new Error("reused Turn requires its precommitted dialogProcessId");
+        error.statusCode = 400;
+        error.errorCode = "MISSING_REUSED_TURN_DIALOG_PROCESS_ID";
+        throw error;
+      }
+      if (runConfig?.reuseExistingUserTurn === true) {
+        if (typeof this.assertReusedUserTurnIdentity !== "function") {
+          throw new Error("assertReusedUserTurnIdentity is required before reused Turn initialization");
+        }
+        await this.assertReusedUserTurnIdentity({
+          userId,
+          sessionId,
+          parentSessionId,
+          turnScopeId: String(turnScopeId || runConfig?.turnScopeId || "").trim(),
+          dialogProcessId: String(requestedDialogProcessId || "").trim(),
+          ...(persistenceContext ? { persistenceContext } : {}),
+        });
+      }
       const normalizedRequestTurnScopeId = resolveRunTurnScopeId({
         caller,
         turnScopeId: turnScopeId || runConfig?.turnScopeId,
@@ -385,7 +404,7 @@ export class SessionExecutionRunner {
       let committedTurnResult = null;
       let effectiveTurnCommand = null;
       if (resolvedRunConfig?.reuseExistingUserTurn === true) {
-        reusedTurnResult = await this.stampReusedUserTurnDialogProcessId?.({
+        reusedTurnResult = await this.assertReusedUserTurnIdentity?.({
           userId,
           sessionId: usedSessionId,
           parentSessionId,
@@ -419,7 +438,7 @@ export class SessionExecutionRunner {
         canonicalAttachments.splice(0, canonicalAttachments.length, ...(committedTurnResult?.attachments || []));
         const turnCommittedEvent = assertTurnCommittedEventData({
           sessionId: committedTurnResult?.sessionId || usedSessionId,
-          sessionVersion: committedTurnResult?.version ?? committedTurnResult?.sessionVersion,
+          aggregateVersion: committedTurnResult?.aggregateVersion,
           dialogProcessId,
           turnScopeId: resolvedTurnScopeId,
           userMessage: currentUserMessage,
@@ -456,8 +475,7 @@ export class SessionExecutionRunner {
             : 0,
           ...(reusedTurnResult
             ? {
-                stamped: reusedTurnResult?.stamped === true,
-                reason: String(reusedTurnResult?.reason || "").trim(),
+                asserted: reusedTurnResult?.asserted === true,
               }
             : {}),
           ...(committedTurnResult

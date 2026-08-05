@@ -60,6 +60,8 @@ function mergeTaskSummaryTransferPayload(toolResultText = "", transferPayload = 
     ok: parsed.ok !== false,
     status: parsed.status,
     message: parsed.message,
+    protocolVersion: parsed.protocolVersion,
+    summary: parsed.summary,
     summarizedMessages: parsed.summarizedMessages,
     ...normalizedTransferPayload,
   });
@@ -431,7 +433,7 @@ export async function executeToolCallInTurn(options = {}) {
   emitMessageEvent(eventListener, runtime, "tool_call_end", {
     turn,
     tool: call?.name,
-    result: String(result?.toolResultText || "").slice(0, 200),
+    result: String(result?.toolResultText || ""),
     success: result?.success === true,
     toolCallId,
     ...(Array.isArray(result?.extractedAttachments) && result.extractedAttachments.length

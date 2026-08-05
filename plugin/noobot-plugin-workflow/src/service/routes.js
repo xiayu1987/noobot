@@ -51,9 +51,9 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
       throw error;
     }
     const { session, sessionSummary, task, execution, executionLogs = [], meta, childSessionId } = snapshot;
-    const snapshotVersion = Number(sessionSummary?.revision || 0);
-    if (!Number.isInteger(snapshotVersion) || snapshotVersion <= 0) {
-      throw new Error("workflow session snapshot is missing an authoritative revision");
+    const aggregateVersion = Number(sessionSummary?.aggregateVersion || 0);
+    if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
+      throw new Error("workflow session snapshot is missing an authoritative aggregateVersion");
     }
     const restoredExecutionLogs = executionLogs;
     const hasMoreExecutionLogs = Boolean(executionPage && restoredExecutionLogs.length > executionPage.limit);
@@ -75,7 +75,7 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
       sessionId: String(sessionId || "").trim(),
       dialogProcessId: String(dialogProcessId || "").trim(),
       workflowSession: {
-        snapshotVersion,
+        aggregateVersion,
         session,
         sessionSummary,
         task,

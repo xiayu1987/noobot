@@ -50,7 +50,7 @@ describe("useChatEngine.send-stream", () => {
     expect(userMessage.id).toBe(userMessage.messageId);
     expect(capturedPayload.presentation.userMessageId).toBe(userMessage.messageId);
     expect(capturedPayload.concurrency.expectedTurnRevision).toBe(0);
-    expect(capturedPayload.concurrency.expectedSessionVersion).toBe(0);
+    expect(capturedPayload.concurrency.expectedAggregateVersion).toBe(0);
     expect(capturedPayload).not.toHaveProperty("userMessageId");
   });
 
@@ -63,13 +63,13 @@ describe("useChatEngine.send-stream", () => {
       sessionId: "s-current-version",
       stream,
     });
-    activeSession.value.version = 7;
+    activeSession.value.aggregateVersion = 7;
     activeSession.value.revision = 6;
 
     await engine.send();
 
     expect(capturedPayload.concurrency.expectedTurnRevision).toBe(0);
-    expect(capturedPayload.concurrency.expectedSessionVersion).toBe(7);
+    expect(capturedPayload.concurrency.expectedAggregateVersion).toBe(7);
   });
 
   it("refreshes a stale session version without replaying the failed Turn", async () => {
@@ -301,7 +301,7 @@ describe("useChatEngine.send-stream", () => {
     }));
     expect(selectToolTimelineLogs(assistant)).toEqual([]);
     await vi.waitFor(() => expect(sending.value).toBe(false));
-    expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.id);
+    expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.sessionId);
   });
 
   it("accepts active stream events without turnScopeId and still finalizes frontend completion", async () => {
@@ -365,7 +365,7 @@ describe("useChatEngine.send-stream", () => {
     expect(assistant?.dialogProcessId).toBe("dp-missing-turn");
     expect(selectToolTimelineLogs(assistant)).toEqual([]);
     await vi.waitFor(() => expect(sending.value).toBe(false));
-    expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.id);
+    expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.sessionId);
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
   });
@@ -500,8 +500,7 @@ describe("useChatEngine.send-stream", () => {
       }),
     }));
 
-    expect(activeSession.value.id).toBe("local-1");
-    expect(activeSession.value.backendSessionId).toBe("local-1");
+    expect(activeSession.value.sessionId).toBe("local-1");
     expect(activeSessionId.value).toBe("local-1");
     expect(activeSession.value.messages).toHaveLength(2);
     expect(activeSession.value.messages[0].role).toBe(RoleEnum.USER);

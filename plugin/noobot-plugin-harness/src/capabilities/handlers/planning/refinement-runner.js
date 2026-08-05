@@ -152,7 +152,7 @@ export async function runPlanningRefinementBySeparateModel(
       domain: CAPABILITY_DOMAIN.PLANNING,
       appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
-        await appendCapabilityModelTraceLog(ctx, meta, {
+        await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.PLANNING,
           purpose: "planning_refinement",
           response: retryResponse,

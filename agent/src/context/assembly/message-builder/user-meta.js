@@ -176,8 +176,7 @@ export function shouldBuildUserMetaForHistoryMessage(
     msg?.pluginMessage === true || kwargs?.pluginMessage === true
   ) return false;
   if (String(
-    msg?.injectedMessageType || msg?.injected_message_type ||
-    kwargs?.injectedMessageType || kwargs?.injected_message_type || "",
+    msg?.injectedMessageType || kwargs?.injectedMessageType || "",
   ).trim()) return false;
   if (msg?.frontendUserMessage === true) return true;
   const identityKey = buildUserSourceIdentityKey(msg);

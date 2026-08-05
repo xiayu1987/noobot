@@ -291,7 +291,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
-        await appendCapabilityModelTraceLog(ctx, meta, {
+        await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.ACCEPTANCE,
           purpose: "acceptance_semantic_validation",
           response: retryResponse,

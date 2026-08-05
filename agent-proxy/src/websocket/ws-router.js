@@ -22,7 +22,7 @@ import {
 import { writeAgentProxyRouteDebugEvent } from "../runtime-events/route-debug-runtime-events.js";
 import { writeAgentTransportDebugEvent } from "../runtime-events/agent-transport-debug-runtime-events.js";
 import { ensureConnectionId } from "../shared/utils.js";
-import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/event-protocol";
+import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND,
   EXECUTION_QUERY_COMMAND_TYPES,
@@ -248,6 +248,7 @@ export class WsRouter {
           data: {
             errorType: String(error?.name || "Error"),
             errorCode: String(error?.code || ""),
+            errorMessage: String(error?.message || "route failed").slice(0, 300),
           },
         });
         try { this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.ROUTE_FAILED); } catch {}

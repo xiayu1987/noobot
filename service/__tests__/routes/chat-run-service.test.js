@@ -24,7 +24,11 @@ function createCommand(overrides = {}) {
   return createTurnRunCommand({
     commandType: overrides.commandType || AGENT_COMMAND.SEND,
     commandId: "turn-1",
-    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+    identity: {
+      sessionId: "session-1",
+      ...(overrides.commandType === AGENT_COMMAND.RESEND ? { dialogProcessId: "dialog-resend" } : {}),
+      turnScopeId: "turn-1",
+    },
     input: { message: "hello", attachments: [] },
     preferences: {
       locale: "en-US",
@@ -32,14 +36,14 @@ function createCommand(overrides = {}) {
       selectedModel: "gpt-5.5",
       memoryModel: "memory-gpt",
       pluginModelConfig: { web_search: { semanticModel: "gpt-4.1-mini" } },
+      summaryPolicy: { phaseSummaryLoopTurns: 1 },
       selectedPlugins: ["planning"],
       selectedConnectors: { terminal: "local" },
     },
     presentation: { userMessageId: "user-1", assistantMessageId: "assistant-1" },
     concurrency: {
-      idempotencyKey: "turn-1",
       expectedTurnRevision: 0,
-      expectedSessionVersion: 3,
+      expectedAggregateVersion: 3,
     },
     session: { createIfAbsent: overrides.createIfAbsent === true },
     continuation: overrides.continuation,
@@ -53,10 +57,11 @@ test("chat-run-service maps a validated transport command without a compat confi
   assert.equal(request.sessionId, "session-1");
   assert.equal(request.runConfig.selectedModel, "gpt-5.5");
   assert.equal(request.runConfig.memoryModel, "memory-gpt");
+  assert.deepEqual(request.runConfig.summaryPolicy, { phaseSummaryLoopTurns: 1 });
   assert.equal(request.runConfig.presentationMessageId, "assistant-1");
   assert.equal(request.runConfig.userMessageId, "user-1");
-  assert.equal(request.runConfig.idempotencyKey, "turn-1");
-  assert.equal(request.runConfig.expectedVersion, 3);
+  assert.equal(request.runConfig.commandId, "turn-1");
+  assert.equal(request.runConfig.expectedAggregateVersion, 3);
   assert.equal(request.expectedRevision, 0);
   assert.equal(request.createSessionIfAbsent, false);
   assert.deepEqual(request.runConfig.transportCommand, {
@@ -93,6 +98,7 @@ test("chat-run-service derives resend and continuation flags from commandType", 
   }), { userId: "user-1" });
 
   assert.equal(resend.runConfig.reuseExistingUserTurn, true);
+  assert.equal(resend.dialogProcessId, "dialog-resend");
   assert.equal(continued.runConfig.resumeFromStoppedSnapshot, true);
   assert.equal(continued.runConfig.resumeDialogProcessId, "dialog-1");
   assert.equal(continued.runConfig.resumeTurnScopeId, "turn-old");

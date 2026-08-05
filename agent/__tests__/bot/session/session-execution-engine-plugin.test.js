@@ -93,12 +93,18 @@ test("plugin model config is keyed only by Manifest id", () => {
     runConfig: {
       selectedPlugins: ["harness", "workflow"],
       pluginModelConfig: {
-        harness: { stepModels: { planning: "planner-model" } },
+        harness: {
+          stepModels: { planning: "planner-model" },
+          planning: { planUpdate: { triggerTurnsThreshold: 1 } },
+          acceptance: { phase: { triggerTurnsThreshold: 1 } },
+        },
         workflow: { semanticModel: "workflow-model" },
       },
     },
   });
 
   assert.equal(prepared.plugins.harness.stepModels.planning, "planner-model");
+  assert.equal(prepared.plugins.harness.planning.planUpdate.triggerTurnsThreshold, 1);
+  assert.equal(prepared.plugins.harness.acceptance.phase.triggerTurnsThreshold, 1);
   assert.equal(prepared.plugins.workflow.semanticModel, "workflow-model");
 });

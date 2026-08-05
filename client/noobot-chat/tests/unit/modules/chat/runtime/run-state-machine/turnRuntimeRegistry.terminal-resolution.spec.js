@@ -140,7 +140,6 @@ import {
     });
 
     expect(resolved.applied).toBe(true);
-    expect(registry.sessionAliases[localSessionId]).toBeUndefined();
     expect(registry.sessions[localSessionId]).toBeDefined();
     expect(registry.sessions[canonicalSessionId].turns["t-refresh"]).toMatchObject({
       sessionId: canonicalSessionId,
@@ -321,15 +320,15 @@ import {
     expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "s1" })).toMatchObject({ terminal: "completed" });
   });
 
-  it("promotes an optimistic Session without using deferred detail as terminal authority", () => {
+  it("uses the preallocated Session identity without deferred detail authority", () => {
     const registry = createTurnRuntimeRegistryState();
     applyTurnRuntimeEvent(registry, {
       type: SESSION_RUN_EVENT.LOCAL_FRONTEND_COMPLETION_APPLIED,
-      sessionId: "local-session",
+      sessionId: "backend-session",
       turnScopeId: "t1",
       dialogProcessId: "dp1",
     });
-    sendStart(registry, { sessionId: "local-session", turnScopeId: "t1" });
+    sendStart(registry, { sessionId: "backend-session", turnScopeId: "t1" });
     lifecycle(registry, {
       sessionId: "backend-session", eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
       executionState: "accepted", revision: 1, sequence: 1, canStop: false,
@@ -342,7 +341,6 @@ import {
     backendState(registry, { sessionId: "backend-session", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.SENDING, seq: 2 });
     backendState(registry, { sessionId: "backend-session", turnScopeId: "t1", dialogProcessId: "dp1", state: BackendChannelState.COMPLETED, seq: 3 });
 
-    expect(registry.sessionAliases["local-session"]).toBe("backend-session");
     expect(resolveTurnRuntimeByScope(registry, "t1", { sessionId: "backend-session" })).toMatchObject({
       state: "frontend_completion_requesting", terminal: null,
     });

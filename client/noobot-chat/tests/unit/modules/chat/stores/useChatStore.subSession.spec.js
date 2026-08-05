@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
-import { createTurnLifecycleEnvelope } from "@noobot/event-protocol";
+import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 
 function applyMessageEvent(store, eventName, data) {
   return store.applyWorkflowRuntimeEvent({
@@ -19,7 +19,7 @@ function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent({
     event: "workflow_session_snapshot_loaded",
     data: {
-      snapshotVersion: 1,
+      aggregateVersion: 1,
       parentSessionId: "root-session",
       workflowRunId: "workflow-run-1",
       nodeExecutionId: "node-execution-1",
@@ -259,7 +259,7 @@ describe("sub-session realtime message projection", () => {
       presentationMessageId: "root-assistant",
     };
     store.sessions.push({
-      id: identity.sessionId,
+      sessionId: identity.sessionId,
       messages: [{
         ...identity,
         id: identity.messageId,
@@ -366,7 +366,7 @@ describe("sub-session realtime message projection", () => {
         parentSessionId: "root-session",
         workflowRunId: "workflow-run-1",
         nodeExecutionId: "node-1",
-        snapshotVersion: 1,
+        aggregateVersion: 1,
         status: "succeeded",
         turnStatuses: [{ turnScopeId: "workflow-node_node-1", status: "succeeded" }],
         turnTimings: [{
@@ -382,7 +382,7 @@ describe("sub-session realtime message projection", () => {
         parentSessionId: "root-session",
         workflowRunId: "workflow-run-1",
         nodeExecutionId: "node-1",
-        snapshotVersion: 2,
+        aggregateVersion: 2,
         status: "completed",
         turnStatuses: [{ turnScopeId: "workflow-node:node-1", status: "completed" }],
         turnTimings: [{

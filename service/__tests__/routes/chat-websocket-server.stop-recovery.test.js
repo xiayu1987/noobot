@@ -14,7 +14,7 @@ import {
   createProtocolTestCommand,
   waitForCondition,
 } from "./chat-websocket-server.test-helpers.js";
-import { TURN_EVENT } from "@noobot/event-protocol";
+import { TURN_EVENT } from "@noobot/session-protocol";
 
 test("chat-websocket-server: stop closes run and next websocket run can start", async () => {
   let runCount = 0;

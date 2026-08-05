@@ -5,7 +5,7 @@
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
-import { applyLatestSessionVersion, getCurrentSessionVersion, isNewerSessionVersion } from "./sessionVersionManager.js";
+import { applyLatestSessionAggregateVersion, getCurrentSessionAggregateVersion, isNewerSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
 import { validateTurnCommittedEventData } from "@noobot/shared/turn-commit-protocol";
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
@@ -13,7 +13,7 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
   const transportEvent = normalizeTrimmedString(event).toLowerCase();
   if (transportEvent === StreamEventEnum.TURN_LIFECYCLE) {
     const eventSessionId = normalizeTrimmedString(data?.sessionId);
-    const mainSessionId = normalizeTrimmedString(activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId);
+    const mainSessionId = normalizeTrimmedString(activeSession?.value?.sessionId || sessionId);
     const parentSessionId = normalizeTrimmedString(data?.parentSessionId);
     const isChildLifecycle = Boolean(
       eventSessionId && mainSessionId && eventSessionId !== mainSessionId &&
@@ -149,7 +149,7 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
   }
   if (event !== "turn_committed") return false;
   const eventSessionId = normalizeTrimmedString(data?.sessionId);
-  const targetSessionId = normalizeTrimmedString(activeSession?.value?.backendSessionId || activeSession?.value?.id || sessionId);
+  const targetSessionId = normalizeTrimmedString(activeSession?.value?.sessionId || sessionId);
   const committedUserMessage = data?.userMessage;
   const committedMessageId = normalizeTrimmedString(committedUserMessage?.messageId);
   const validation = validateTurnCommittedEventData(data);
@@ -171,10 +171,9 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
       targetMessage.attachments = Array.isArray(projectedMessage?.attachments)
         ? projectedMessage.attachments.map((attachment) => ({ ...attachment }))
         : [];
-      if (isNewerSessionVersion(data?.sessionVersion, getCurrentSessionVersion(activeSession))) {
-        applyLatestSessionVersion(activeSession.value, {
-          version: data.sessionVersion,
-          revision: data.sessionVersion,
+      if (isNewerSessionAggregateVersion(data?.aggregateVersion, getCurrentSessionAggregateVersion(activeSession))) {
+        applyLatestSessionAggregateVersion(activeSession.value, {
+          aggregateVersion: data.aggregateVersion,
         });
       }
       applied = true;
@@ -198,7 +197,7 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
       attachmentCount: Array.isArray(committedUserMessage?.attachments)
         ? committedUserMessage.attachments.length
         : 0,
-      sessionVersion: Number(data?.sessionVersion || 0),
+      aggregateVersion: Number(data?.aggregateVersion || 0),
     },
   });
   return true;

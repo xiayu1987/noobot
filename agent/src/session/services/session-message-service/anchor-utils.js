@@ -12,8 +12,8 @@ export function resolveTurnScopeId(message = {}) {
   return normalizeAnchorValue(message?.turnScopeId || "");
 }
 
-export function resolveSessionVersion(session = {}) {
-  const version = Number(session?.version ?? session?.revision ?? 0);
+export function resolveAggregateVersion(session = {}) {
+  const version = Number(session?.aggregateVersion || 0);
   return Number.isFinite(version) ? version : 0;
 }
 

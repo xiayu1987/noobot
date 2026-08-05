@@ -109,9 +109,9 @@ export async function fetchExecutionSessionDetail({
     const session = workflowSession.session && typeof workflowSession.session === "object" && !Array.isArray(workflowSession.session)
       ? workflowSession.session
       : {};
-    const snapshotVersion = Number(workflowSession.snapshotVersion || 0);
-    if (!Number.isInteger(snapshotVersion) || snapshotVersion <= 0) {
-      throw new TypeError("workflowSession.snapshotVersion must be a positive integer");
+    const aggregateVersion = Number(workflowSession.aggregateVersion || 0);
+    if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
+      throw new TypeError("workflowSession.aggregateVersion must be a positive integer");
     }
     const sessionSummary = workflowSession.sessionSummary && typeof workflowSession.sessionSummary === "object" && !Array.isArray(workflowSession.sessionSummary)
       ? workflowSession.sessionSummary
@@ -138,7 +138,7 @@ export async function fetchExecutionSessionDetail({
     const detail = {
       state: messages.length ? "ready" : "empty",
       sessionId: String(sessionSummary.sessionId || session.sessionId || session.id || normalizedSessionId).trim(),
-      snapshotVersion,
+      aggregateVersion,
       sessionSummary: {
         ...sessionSummaryWithoutMutableRuntime(session),
         ...sessionSummaryWithoutMutableRuntime(sessionSummary),
@@ -191,7 +191,7 @@ export function normalizeWorkflowNodeSessionDetail(payload = {}) {
       ? payload.workflowSession.sessionSummary
       : null;
   return {
-    snapshotVersion: Number(payload?.workflowSession?.snapshotVersion || 0),
+    aggregateVersion: Number(payload?.workflowSession?.aggregateVersion || 0),
     session,
     sessionSummary,
     sessionId: String(

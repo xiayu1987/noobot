@@ -219,6 +219,7 @@ export const enUSMessages = {
     "sessionStateOutOfSync": "Session state is out of sync. Refresh and try again."
   },
   "message": {
+    "taskCheck": "Task Check",
     "subtaskProcessing": "Subtask processing...",
     "subtaskStopped": "Subtask stopped",
     "subtaskFailed": "Subtask failed",
@@ -290,6 +291,7 @@ export const enUSMessages = {
     "safeConfirm": "Safety Confirmation",
     "notSafeConfirm": "No Safety Confirmation",
     "safeConfirmLevelLabel": "Confirmation level",
+    "phaseSummaryLoopTurns": "Main summary turns",
     "safeConfirmLevel": {
       "low": "Low",
       "medium": "Medium",

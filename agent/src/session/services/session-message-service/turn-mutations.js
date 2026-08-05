@@ -5,14 +5,15 @@
  */
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
 import { normalizeIncomingAttachmentsForSessionMessage } from "./attachment-helpers.js";
-import { resolveSessionVersion, createMessageAnchorMatcher, resolveUserTurnStartIndex, clearReplacementUserRuntimeState, resolveTurnScopeId, uniqueValues } from "./anchor-utils.js";
-import { createRequestHash, assertIdempotencyRequestMatches, findMutationReceipt, rememberMutationReceipt, normalizeExpectedVersion } from "./idempotency-guards.js";
+import { resolveAggregateVersion, createMessageAnchorMatcher, resolveUserTurnStartIndex, clearReplacementUserRuntimeState, resolveTurnScopeId, uniqueValues } from "./anchor-utils.js";
+import { createRequestHash, assertCommandRequestMatches, findMutationReceipt, rememberMutationReceipt, normalizeExpectedAggregateVersion } from "./idempotency-guards.js";
 import { pruneSessionTurnTimings, pruneSessionTurnStatuses } from "./turn-timing.js";
 import {
   assertTurnReplacementMaterialization,
   createTurnReplacementCommit,
-} from "@noobot/shared/turn-replacement-protocol";
+} from "@noobot/session-protocol";
 import { commitTurnReplacement } from "@noobot/authoritative-state/application";
+import { randomUUID } from "node:crypto";
 
 export async function deleteFromMessage({
     userId,
@@ -20,8 +21,8 @@ export async function deleteFromMessage({
     parentSessionId = "",
     persistenceContext = null,
     anchor = {},
-    expectedVersion = null,
-    idempotencyKey = "",
+    expectedAggregateVersion = null,
+    commandId = "",
     attachments = undefined,
   } = {}) {
     if (!userId || !sessionId) {
@@ -30,13 +31,13 @@ export async function deleteFromMessage({
       throw error;
     }
     const matcher = createMessageAnchorMatcher(anchor);
-    const normalizedExpectedVersion = normalizeExpectedVersion(expectedVersion);
+    const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
     if (!matcher) {
       const error = new Error("message anchor is required");
       error.statusCode = 400;
       throw error;
     }
-    const normalizedIdempotencyKey = String(idempotencyKey || "").trim();
+    const normalizedCommandId = String(commandId || "").trim();
     const requestHash = createRequestHash({ operation: "delete_from", anchor });
     return this._withSessionMutation(userId, sessionId, async () => {
     const resolvedParentSessionId = await this._resolveParentSessionId(
@@ -56,17 +57,17 @@ export async function deleteFromMessage({
       error.statusCode = 404;
       throw error;
     }
-    const replay = findMutationReceipt(session, "delete_from", normalizedIdempotencyKey);
+    const replay = findMutationReceipt(session, "delete_from", normalizedCommandId);
     if (replay) {
-      assertIdempotencyRequestMatches(replay.requestHash, requestHash);
-      return { session, ...replay.result, version: resolveSessionVersion(session), committedVersion: replay.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: true };
+      assertCommandRequestMatches(replay.requestHash, requestHash);
+      return { session, ...replay.result, aggregateVersion: resolveAggregateVersion(session), committedAggregateVersion: replay.aggregateVersion, commandId: normalizedCommandId, deduplicated: true };
     }
-    const currentVersion = resolveSessionVersion(session);
+    const currentVersion = resolveAggregateVersion(session);
     if (normalizedExpectedVersion !== null) {
       if (normalizedExpectedVersion !== currentVersion) {
-        const error = new Error("session version conflict");
+        const error = new Error("session aggregate version conflict");
         error.statusCode = 409;
-        error.errorCode = "SESSION_VERSION_CONFLICT";
+        error.errorCode = "SESSION_AGGREGATE_VERSION_CONFLICT";
         error.currentVersion = currentVersion;
         throw error;
       }
@@ -85,22 +86,22 @@ export async function deleteFromMessage({
     pruneSessionTurnTimings(session);
     pruneSessionTurnStatuses(session);
     session.updatedAt = this.now();
-    session.version = currentVersion + 1;
-    session.revision = session.version;
+    session.aggregateVersion = currentVersion + 1;
+
     const result = { deletedCount, anchorIndex, deletedTurnScopeIds };
-    if (normalizedIdempotencyKey) {
+    if (normalizedCommandId) {
       rememberMutationReceipt(session, {
         operation: "delete_from",
-        idempotencyKey: normalizedIdempotencyKey,
-        version: session.version,
+        commandId: normalizedCommandId,
+        aggregateVersion: session.aggregateVersion,
         requestHash,
         result,
         committedAt: this.now(),
       });
     }
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion, persistenceContext });
-    return { session, ...result, version: session.version, idempotencyKey: normalizedIdempotencyKey, deduplicated: false };
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedAggregateVersion: currentVersion, persistenceContext });
+    return { session, ...result, aggregateVersion: session.aggregateVersion, commandId: normalizedCommandId, deduplicated: false };
     }, parentSessionId, persistenceContext);
   }
 
@@ -112,8 +113,8 @@ export async function replaceTurn({
     anchor = {},
     newContent = "",
     turnScopeId = "",
-    expectedVersion = null,
-    idempotencyKey = "",
+    expectedAggregateVersion = null,
+    commandId = "",
     attachments = undefined,
   } = {}) {
     if (!userId || !sessionId) {
@@ -128,7 +129,7 @@ export async function replaceTurn({
       throw error;
     }
     const matcher = createMessageAnchorMatcher(anchor);
-    const normalizedExpectedVersion = normalizeExpectedVersion(expectedVersion);
+    const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
     if (!matcher) {
       const error = new Error("message anchor is required");
       error.statusCode = 400;
@@ -140,9 +141,9 @@ export async function replaceTurn({
       error.statusCode = 400;
       throw error;
     }
-    const normalizedIdempotencyKey = String(idempotencyKey || "").trim();
-    if (!normalizedIdempotencyKey) {
-      const error = new Error("idempotencyKey is required");
+    const normalizedCommandId = String(commandId || "").trim();
+    if (!normalizedCommandId) {
+      const error = new Error("commandId is required");
       error.statusCode = 400;
       throw error;
     }
@@ -171,17 +172,17 @@ export async function replaceTurn({
       error.statusCode = 404;
       throw error;
     }
-    const replay = findMutationReceipt(session, "replace_turn", normalizedIdempotencyKey);
+    const replay = findMutationReceipt(session, "replace_turn", normalizedCommandId);
     if (replay) {
-      assertIdempotencyRequestMatches(replay.requestHash, requestHash);
+      assertCommandRequestMatches(replay.requestHash, requestHash);
       return { session, ...replay.result, deduplicated: true };
     }
-    const currentVersion = resolveSessionVersion(session);
+    const currentVersion = resolveAggregateVersion(session);
     if (normalizedExpectedVersion !== null) {
       if (normalizedExpectedVersion !== currentVersion) {
-        const error = new Error("session version conflict");
+        const error = new Error("session aggregate version conflict");
         error.statusCode = 409;
-        error.errorCode = "SESSION_VERSION_CONFLICT";
+        error.errorCode = "SESSION_AGGREGATE_VERSION_CONFLICT";
         error.currentVersion = currentVersion;
         throw error;
       }
@@ -198,6 +199,7 @@ export async function replaceTurn({
     const replacedUserMessage = messages[turnStartIndex] || messages[anchorIndex] || {};
     const nextVersion = currentVersion + 1;
     const nowValue = this.now();
+    const replacementDialogProcessId = randomUUID();
     const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage || {});
     delete replacementBaseMessage.turnId;
     delete replacementBaseMessage.turn_id;
@@ -216,7 +218,7 @@ export async function replaceTurn({
       type: "message",
       content: normalizedNewContent,
       turnScopeId: normalizedTurnScopeId,
-      dialogProcessId: "",
+      dialogProcessId: replacementDialogProcessId,
       pending: false,
       error: false,
       done: true,
@@ -227,14 +229,15 @@ export async function replaceTurn({
     pruneSessionTurnTimings(session);
     pruneSessionTurnStatuses(session);
     session.updatedAt = nowValue;
-    session.version = nextVersion;
-    session.revision = nextVersion;
+    session.aggregateVersion = nextVersion;
+
     const replacementUserMessageId = String(newMessage.messageId || "").trim();
     const turnReplacement = createTurnReplacementCommit({
-      commandId: normalizedIdempotencyKey,
+      commandId: normalizedCommandId,
       sessionId,
-      committedVersion: session.version,
+      committedAggregateVersion: session.aggregateVersion,
       replacedTurnScopeIds: uniqueValues(replacedMessages.map(resolveTurnScopeId)),
+      replacementDialogProcessId,
       replacementTurnScopeId: normalizedTurnScopeId,
       replacementUserMessageId,
       committedAt: nowValue,
@@ -252,15 +255,15 @@ export async function replaceTurn({
     const result = { turnReplacement };
     rememberMutationReceipt(session, {
       operation: "replace_turn",
-      idempotencyKey: normalizedIdempotencyKey,
-      version: session.version,
+      commandId: normalizedCommandId,
+      aggregateVersion: session.aggregateVersion,
       requestHash,
       result,
       committedAt: nowValue,
     });
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     assertTurnReplacementMaterialization({ commit: turnReplacement, session });
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedVersion: currentVersion, persistenceContext });
+    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedAggregateVersion: currentVersion, persistenceContext });
     return { session, ...result, deduplicated: false };
     }, parentSessionId, persistenceContext);
   }

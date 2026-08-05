@@ -17,6 +17,7 @@ export const ENGINE_I18N_KEY_MAP = {
   fetchRemoteMediaArtifactFailed: "agent.fetchRemoteMediaArtifactFailed",
   abortError: "agent.abortError",
   phaseSummaryPrompt: "agent.phaseSummaryPrompt",
+  taskCheckPrompt: "agent.taskCheckPrompt",
 };
 
 export const DEFAULT_TOOL_FAILURE_HELP_COUNT =
@@ -31,6 +32,9 @@ export const DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS =
 export const DEFAULT_PHASE_SUMMARY_LOOP_TURNS =
   TURN_THRESHOLDS.agent.phaseSummaryLoopTurns;
 
+export const DEFAULT_TASK_CHECK_LOOP_TURNS =
+  TURN_THRESHOLDS.agent.taskCheckLoopTurns;
+
 export const DEFAULT_PHASE_SUMMARY_MESSAGE_CHARS_THRESHOLD =
   LENGTH_THRESHOLDS.context.phaseSummaryMessageChars;
 export const PHASE_SUMMARY_OVERFLOW_POLICY = Object.freeze({
@@ -41,7 +45,9 @@ export const DEFAULT_HELP_PROMPT_LOOP_TURNS =
   TURN_THRESHOLDS.agent.helpPromptLoopTurns;
 
 export const PHASE_SUMMARY_PROMPT_MARKER = "noobot.phase_summary_prompt";
+export const TASK_CHECK_PROMPT_MARKER = "noobot.task_check_prompt";
 export const HELP_TOOL_LOOP_PROMPT_MARKER = "noobot.help_tool_loop_prompt";
 export const HELP_TOOL_FAILURE_PROMPT_MARKER = "noobot.help_tool_failure_prompt";
 
 export const TASK_SUMMARY_TOOL_NAME = "task_summary";
+export const TASK_CHECK_TOOL_NAME = "task_check";

@@ -14,19 +14,40 @@ import {
   buildSessionArtifactFileMap,
   cleanupSessionArtifacts,
   inspectSessionArtifacts,
-  migrateSessionArtifacts,
   persistSessionArtifactSnapshot,
   readJsonlArtifactFile,
   readSessionArtifact,
   readSessionArtifactSnapshot,
   repairSessionArtifacts,
-  writeSessionArtifact,
+  writeSessionArtifact as writeSessionArtifactCanonical,
 } from "../../src/session/session-artifact-store.js";
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
 
 async function withTemp(fn) {
   const root = await mkdtemp(path.join(tmpdir(), "noobot-artifact-v2-"));
   try { await fn(root); } finally { await rm(root, { recursive: true, force: true }); }
+}
+
+function canonicalMessages(messages = []) {
+  return messages.map((message, index) => {
+    const turnScopeId = String(message?.turnScopeId || `turn-fixture-${index + 1}`);
+    return {
+      messageUid: String(message?.messageUid || `sm_fixture_${index + 1}`),
+      dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
+      turnScopeId,
+      ...message,
+    };
+  });
+}
+
+async function writeSessionArtifact(options = {}) {
+  return writeSessionArtifactCanonical({
+    ...options,
+    sessionPayload: {
+      ...options.sessionPayload,
+      messages: canonicalMessages(options.sessionPayload?.messages),
+    },
+  });
 }
 
 test("execution events roll by UTF-8 byte size and preserve order", async () => withTemp(async (root) => {
@@ -93,7 +114,7 @@ test("an oversized execution event stays whole in its own segment", async () => 
   assert.equal((await readJsonlArtifactFile(files.executionEvents))[0].text.length, 100);
 }));
 
-test("session manifest stores ordered turn references and reads legacy and v2 sessions", async () => withTemp(async (root) => {
+test("session manifest stores ordered turn references and rejects noncanonical sessions", async () => withTemp(async (root) => {
   const messages = [
     { role: "user", content: "u1", turnScopeId: "a" },
     { role: "assistant", content: "a1", turnScopeId: "a" },
@@ -111,25 +132,9 @@ test("session manifest stores ordered turn references and reads legacy and v2 se
   const legacy = path.join(root, "legacy");
   await writeSessionArtifact({ sessionDir: legacy, sessionPayload: { sessionId: "unused", messages: [] } });
   await writeFile(path.join(legacy, "session.json"), JSON.stringify({ sessionId: "legacy", messages }), "utf8");
-  assert.deepEqual((await readSessionArtifact({ sessionDir: legacy })).messages, messages);
-}));
-
-test("legacy artifacts migrate to turns and execution segments without changing order", async () => withTemp(async (root) => {
-  const files = buildSessionArtifactFileMap(root);
-  const messages = [
-    { role: "user", content: "first", turnScopeId: "one" },
-    { role: "assistant", content: "answer", turnScopeId: "one" },
-    { role: "user", content: "second", turnScopeId: "two" },
-  ];
-  await writeFile(files.session, JSON.stringify({ sessionId: "legacy", messages }), "utf8");
-  await writeFile(files.executionEvents, '{"id":1}\n{"id":2}\n', "utf8");
-  const migrated = await migrateSessionArtifacts({ sessionDir: root });
-  assert.deepEqual(migrated.session.messages.map((item) => item.content), ["first", "answer", "second"]);
-  assert.deepEqual(migrated.executionLogs.map((item) => item.id), [1, 2]);
-  const manifest = JSON.parse(await readFile(files.session, "utf8"));
-  assert.equal("messages" in manifest, false);
-  assert.equal(manifest.turnOrder.length, 2);
-  await assert.rejects(readFile(files.executionEvents, "utf8"), { code: "ENOENT" });
+  await assert.rejects(readSessionArtifact({ sessionDir: legacy }), {
+    code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
+  });
 }));
 
 test("execution event readers report corrupted indexes, missing segments, and invalid JSONL", async () => withTemp(async (root) => {
@@ -160,10 +165,8 @@ test("execution event readers report corrupted indexes, missing segments, and in
   });
 }));
 
-test("session turns preserve empty, missing, and non-contiguous scopes without reordering", async () => withTemp(async (root) => {
+test("session turns preserve non-contiguous scopes without reordering and reject missing Turn identity", async () => withTemp(async (root) => {
   const messages = [
-    { role: "user", content: "legacy user" },
-    { role: "assistant", content: "legacy answer" },
     { role: "user", content: "a first", turnScopeId: "a" },
     { role: "assistant", content: "a answer", turnScopeId: "a" },
     { role: "user", content: "b", turnScopeId: "b" },
@@ -172,7 +175,7 @@ test("session turns preserve empty, missing, and non-contiguous scopes without r
   await writeSessionArtifact({ sessionDir: root, sessionPayload: { sessionId: "edges", messages } });
   const files = buildSessionArtifactFileMap(root);
   const manifest = JSON.parse(await readFile(files.session, "utf8"));
-  assert.deepEqual(manifest.turnOrder.map((turn) => turn.turnScopeId), ["", "a", "b", "a"]);
+  assert.deepEqual(manifest.turnOrder.map((turn) => turn.turnScopeId), ["a", "b"]);
   assert.deepEqual(
     (await readSessionArtifact({ sessionDir: root })).messages.map(({ role, content, turnScopeId }) => ({ role, content, turnScopeId })),
     messages.map(({ role, content, turnScopeId = "" }) => ({ role, content, turnScopeId })),
@@ -182,6 +185,14 @@ test("session turns preserve empty, missing, and non-contiguous scopes without r
   const emptyManifest = JSON.parse(await readFile(files.session, "utf8"));
   assert.deepEqual(emptyManifest.turnOrder, []);
   assert.deepEqual((await readSessionArtifact({ sessionDir: root })).messages, []);
+
+  await assert.rejects(writeSessionArtifactCanonical({
+    sessionDir: root,
+    sessionPayload: {
+      sessionId: "missing-turn-identity",
+      messages: [{ messageUid: "sm_missing_turn", role: "user", content: "invalid" }],
+    },
+  }), { code: "SESSION_TURN_IDENTITY_REQUIRED" });
 }));
 
 test("session artifacts group interleaved messages by logical dialog without changing replay order", async () => withTemp(async (root) => {
@@ -307,31 +318,6 @@ test("session reader reports missing and corrupted turn artifacts", async () => 
   await assert.rejects(readSessionArtifact({ sessionDir: root }), { code: "ARTIFACT_JSON_CORRUPTED" });
 }));
 
-test("artifact migration runs inside the supplied mutation lock", async () => withTemp(async (root) => {
-  const files = buildSessionArtifactFileMap(root);
-  await writeFile(files.session, JSON.stringify({
-    sessionId: "legacy",
-    messages: [{ role: "user", content: "one", turnScopeId: "one" }],
-  }), "utf8");
-  let lockCalls = 0;
-  let held = false;
-  const migrated = await migrateSessionArtifacts({
-    sessionDir: root,
-    withMutationLock: async (operation) => {
-      lockCalls += 1;
-      held = true;
-      try { return await operation(); } finally { held = false; }
-    },
-    now: () => {
-      assert.equal(held, true);
-      return "2026-01-01T00:00:00.000Z";
-    },
-  });
-  assert.equal(lockCalls, 1);
-  assert.equal(held, false);
-  assert.equal(migrated.session.messages[0].content, "one");
-}));
-
 test("mutation coordinator distinguishes nested re-entry from concurrent callers", async () => withTemp(async (root) => {
   const coordinator = new SessionMutationCoordinator({ timeoutMs: 2000, pollMs: 2 });
   const lockDir = path.join(root, ".lock");
@@ -398,15 +384,6 @@ test("artifact mutation utilities honor deleted-session lifecycle gates", async 
   const lockDir = path.join(root, ".lifecycle", "deleted-session.lock");
   const assertDeleted = () => false;
 
-  await assert.rejects(migrateSessionArtifacts({
-    sessionDir,
-    sessionId: "deleted-session",
-    mutationLockDir: lockDir,
-    assertSessionWritable: assertDeleted,
-  }), { code: "SESSION_DELETED" });
-  assert.equal(JSON.parse(await readFile(files.session, "utf8")).messages[0].content, "legacy");
-  await assert.rejects(access(files.executionEventsDir), { code: "ENOENT" });
-
   await appendRollingJsonlArtifactLog({ sessionDir, log: { id: 2 } });
   const indexPath = path.join(files.executionEventsDir, "index.json");
   const indexBefore = await readFile(indexPath, "utf8");
@@ -444,7 +421,7 @@ test("snapshot publishes committed artifacts and rejects incomplete new snapshot
   const outputDir = path.join(root, "snapshot");
   await persistSessionArtifactSnapshot({
     outputDir,
-    sessionPayload: { sessionId: "snapshot-session", messages: [{ role: "user", content: "hello" }] },
+    sessionPayload: { sessionId: "snapshot-session", messages: canonicalMessages([{ role: "user", content: "hello" }]) },
     executionPayload: { logs: [{ id: 1 }] },
   });
   const snapshot = await readSessionArtifactSnapshot({ outputDir, allowLegacy: false });
@@ -458,13 +435,13 @@ test("snapshot publish rejects deleted sessions and cleans staging without resto
   const outputDir = path.join(root, "snapshot-zombie");
   await persistSessionArtifactSnapshot({
     outputDir,
-    sessionPayload: { sessionId: "zombie-snapshot", messages: [{ role: "user", content: "old" }] },
+    sessionPayload: { sessionId: "zombie-snapshot", messages: canonicalMessages([{ role: "user", content: "old" }]) },
   });
   let deleted = false;
   const lockDir = path.join(root, ".lifecycle", "zombie.lock");
   await assert.rejects(persistSessionArtifactSnapshot({
     outputDir,
-    sessionPayload: { sessionId: "zombie-snapshot", messages: [{ role: "user", content: "new" }] },
+    sessionPayload: { sessionId: "zombie-snapshot", messages: canonicalMessages([{ role: "user", content: "new" }]) },
     mutationLockDir: lockDir,
     assertSessionWritable: () => {
       if (deleted) return false;

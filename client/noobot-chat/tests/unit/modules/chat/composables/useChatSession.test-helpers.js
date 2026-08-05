@@ -22,7 +22,7 @@ export const sessionLogClientMock = {
 
 export function createSessionFixture(overrides = {}) {
   return {
-    id: "s-action-state", backendSessionId: "s-action-state", title: "session",
+    id: "s-action-state", sessionId: "s-action-state", title: "session",
     isLocal: false, loaded: true, messages: [], rawMessages: [], sessionDocs: [],
     connectorPanelState: { selectedConnectors: {} }, currentTaskId: "",
     currentTaskStatus: "idle", messageCount: 0, lastMessage: null, createdAt: "", updatedAt: "",

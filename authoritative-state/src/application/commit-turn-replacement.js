@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { assertTurnReplacementCommit } from "@noobot/shared/turn-replacement-protocol";
+import { assertTurnReplacementCommit } from "@noobot/session-protocol";
 import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
 import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js";
 
@@ -13,9 +13,10 @@ function sameReplacement(left = {}, right = {}) {
   const leftScopes = [...new Set((left.replacedTurnScopeIds || []).map(clean).filter(Boolean))].sort();
   const rightScopes = [...new Set((right.replacedTurnScopeIds || []).map(clean).filter(Boolean))].sort();
   return clean(left.commandId) === clean(right.commandId) &&
+    clean(left.replacementDialogProcessId) === clean(right.replacementDialogProcessId) &&
     clean(left.replacementTurnScopeId) === clean(right.replacementTurnScopeId) &&
     clean(left.replacementUserMessageId) === clean(right.replacementUserMessageId) &&
-    Number(left.committedVersion || 0) === Number(right.committedVersion || 0) &&
+    Number(left.committedAggregateVersion || 0) === Number(right.committedAggregateVersion || 0) &&
     clean(left.committedAt) === clean(right.committedAt) &&
     JSON.stringify(leftScopes) === JSON.stringify(rightScopes);
 }
@@ -95,10 +96,11 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
     delete normalizedLifecycle.turns[turnScopeId];
     normalizedLifecycle.replacedTurns[turnScopeId] = {
       turnScopeId,
+      replacementDialogProcessId: clean(replacement.replacementDialogProcessId),
       replacementTurnScopeId: clean(replacement.replacementTurnScopeId),
       replacementUserMessageId: clean(replacement.replacementUserMessageId),
       commandId: clean(replacement.commandId),
-      committedVersion: Number(replacement.committedVersion),
+      committedAggregateVersion: Number(replacement.committedAggregateVersion),
       replacedTurnScopeIds: [...replacedTurnScopeIds],
       sequence,
       committedAt: clean(replacement.committedAt),

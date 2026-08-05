@@ -9,14 +9,15 @@ import {
   assertTurnReplacementMaterialization,
   createTurnReplacementCommit,
   validateTurnReplacementCommit,
-} from "../turn-replacement-protocol.mjs";
+} from "../src/turn-replacement.mjs";
 
 test("turn replacement commit binds one replacement user to one committed session version", () => {
   const commit = createTurnReplacementCommit({
     commandId: "resend-1",
     sessionId: "session-1",
-    committedVersion: 4,
+    committedAggregateVersion: 4,
     replacedTurnScopeIds: ["turn-old"],
+    replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
     replacementUserMessageId: "user-new",
     committedAt: "2026-07-31T00:00:00.000Z",
@@ -26,8 +27,8 @@ test("turn replacement commit binds one replacement user to one committed sessio
     commit,
     session: {
       sessionId: "session-1",
-      version: 4,
-      messages: [{ role: "user", messageId: "user-new", turnScopeId: "turn-new" }],
+      aggregateVersion: 4,
+      messages: [{ role: "user", messageId: "user-new", dialogProcessId: "dialog-new", turnScopeId: "turn-new" }],
     },
   });
   assert.equal(materialized.replacementUser.messageId, "user-new");
@@ -37,8 +38,9 @@ test("turn replacement materialization rejects a snapshot from another version",
   const commit = createTurnReplacementCommit({
     commandId: "resend-1",
     sessionId: "session-1",
-    committedVersion: 4,
+    committedAggregateVersion: 4,
     replacedTurnScopeIds: ["turn-old"],
+    replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
     replacementUserMessageId: "user-new",
   });
@@ -46,18 +48,19 @@ test("turn replacement materialization rejects a snapshot from another version",
     commit,
     session: {
       sessionId: "session-1",
-      version: 3,
-      messages: [{ role: "user", messageId: "user-new", turnScopeId: "turn-new" }],
+      aggregateVersion: 3,
+      messages: [{ role: "user", messageId: "user-new", dialogProcessId: "dialog-new", turnScopeId: "turn-new" }],
     },
-  }), /session_version_mismatch/);
+  }), /aggregate_version_mismatch/);
 });
 
 test("turn replacement materialization rejects a snapshot that still contains a replaced scope", () => {
   const commit = createTurnReplacementCommit({
     commandId: "resend-2",
     sessionId: "session-1",
-    committedVersion: 5,
+    committedAggregateVersion: 5,
     replacedTurnScopeIds: ["turn-old"],
+    replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
     replacementUserMessageId: "user-new",
   });
@@ -65,10 +68,10 @@ test("turn replacement materialization rejects a snapshot that still contains a 
     commit,
     session: {
       sessionId: "session-1",
-      version: 5,
+      aggregateVersion: 5,
       messages: [
         { role: "user", messageId: "user-old", turnScopeId: "turn-old" },
-        { role: "user", messageId: "user-new", turnScopeId: "turn-new" },
+        { role: "user", messageId: "user-new", dialogProcessId: "dialog-new", turnScopeId: "turn-new" },
       ],
     },
   }), /replaced_scope_still_materialized/);
@@ -78,8 +81,9 @@ test("turn replacement materialization requires a user-only replacement scope", 
   const commit = createTurnReplacementCommit({
     commandId: "resend-3",
     sessionId: "session-1",
-    committedVersion: 6,
+    committedAggregateVersion: 6,
     replacedTurnScopeIds: ["turn-old"],
+    replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
     replacementUserMessageId: "user-new",
   });
@@ -87,11 +91,36 @@ test("turn replacement materialization requires a user-only replacement scope", 
     commit,
     session: {
       sessionId: "session-1",
-      version: 6,
+      aggregateVersion: 6,
       messages: [
-        { role: "user", messageId: "user-new", turnScopeId: "turn-new" },
-        { role: "assistant", messageId: "assistant-new", turnScopeId: "turn-new" },
+        { role: "user", messageId: "user-new", dialogProcessId: "dialog-new", turnScopeId: "turn-new" },
+        { role: "assistant", messageId: "assistant-new", dialogProcessId: "dialog-new", turnScopeId: "turn-new" },
       ],
     },
   }), /replacement_scope_not_user_only/);
+});
+
+test("turn replacement materialization requires the committed dialog identity", () => {
+  const commit = createTurnReplacementCommit({
+    commandId: "resend-4",
+    sessionId: "session-1",
+    committedAggregateVersion: 7,
+    replacedTurnScopeIds: ["turn-old"],
+    replacementDialogProcessId: "dialog-new",
+    replacementTurnScopeId: "turn-new",
+    replacementUserMessageId: "user-new",
+  });
+  assert.throws(() => assertTurnReplacementMaterialization({
+    commit,
+    session: {
+      sessionId: "session-1",
+      aggregateVersion: 7,
+      messages: [{
+        role: "user",
+        messageId: "user-new",
+        dialogProcessId: "dialog-other",
+        turnScopeId: "turn-new",
+      }],
+    },
+  }), /replacement_dialog_process_mismatch/);
 });

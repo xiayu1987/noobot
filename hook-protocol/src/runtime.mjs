@@ -55,6 +55,14 @@ function createLinkedAbortController(parentSignal = null) {
   return { controller, removeParentListener };
 }
 
+function requireParentAbortReason(signal = null) {
+  if (signal?.reason !== undefined) return signal.reason;
+  const error = new Error("hook invocation aborted by parent signal");
+  error.name = "AbortError";
+  error.code = "HOOK_PARENT_ABORTED";
+  return error;
+}
+
 async function invokeHandler({ registration, point, context, parentSignal }) {
   const startedAt = Date.now();
   const { controller, removeParentListener } = createLinkedAbortController(parentSignal);
@@ -194,7 +202,8 @@ export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = 
         context,
         parentSignal: signal,
       });
-      if (outcome.status !== HOOK_OUTCOME_STATUS.OK && typeof onError === "function") {
+      const abortedByParent = outcome.status === HOOK_OUTCOME_STATUS.ABORTED && signal?.aborted === true;
+      if (!abortedByParent && outcome.status !== HOOK_OUTCOME_STATUS.OK && typeof onError === "function") {
         onError({ point: descriptor.point, handlerId: registration.id, context, outcome });
       }
       return outcome;
@@ -203,8 +212,12 @@ export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = 
     if (descriptor.execution === HOOK_EXECUTION.PARALLEL) {
       outcomes.push(...await Promise.all(registrations.map(runRegistration)));
     } else {
-      for (const registration of registrations) outcomes.push(await runRegistration(registration));
+      for (const registration of registrations) {
+        outcomes.push(await runRegistration(registration));
+        if (signal?.aborted) break;
+      }
     }
+    if (signal?.aborted) throw requireParentAbortReason(signal);
     const result = Object.freeze({
       protocolVersion: HOOK_PROTOCOL_VERSION,
       executed: true,

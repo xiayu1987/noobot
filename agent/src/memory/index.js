@@ -81,7 +81,13 @@ export class MemoryManager {
     });
   }
 
-  async maybeSummarize({ userId, userConfig, abortSignal = null }) {
+  async maybeSummarize({
+    userId,
+    sessionId = "",
+    userConfig,
+    abortSignal = null,
+    eventListener = null,
+  }) {
     throwIfAborted(abortSignal);
     const basePath = this.storage.resolveBasePath(userId);
     const effectiveConfig = mergeConfig(this.globalConfig, userConfig);
@@ -111,6 +117,20 @@ export class MemoryManager {
     const llm = createChatModelByName(modelSpec?.alias || modelSpec?.model, {
       globalConfig: this.globalConfig,
       userConfig,
+      context: {
+        runtime: {
+          userId,
+          sessionId,
+          eventListener,
+          systemRuntime: { userId, sessionId },
+        },
+        sessionId,
+      },
+      invocation: {
+        flow: "memory.summary",
+        purpose: "memory_consolidation",
+        domain: "memory",
+      },
     });
 
     let nextLongMemory = existingLongMemory;
@@ -129,7 +149,7 @@ export class MemoryManager {
       ).trim();
       if (!prompt) return;
       try {
-        const res = await llm.invoke(prompt, { signal: abortSignal });
+        const res = await llm.invoke([{ role: "user", content: prompt }], { signal: abortSignal });
         nextLongMemory = normalizeModelContent(res?.content);
       } catch (error) {
         if (isAbortLikeError(error) || abortSignal?.aborted) throw error;

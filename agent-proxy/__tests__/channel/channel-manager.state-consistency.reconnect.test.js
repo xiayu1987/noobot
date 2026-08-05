@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
+import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS } from "../../src/shared/constants.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
@@ -19,7 +20,7 @@ import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
   TURN_LIFECYCLE_PROTOCOL_VERSION,
-} from "@noobot/event-protocol";
+} from "@noobot/session-protocol";
 
 function authoritativeLifecycle(fields = {}) {
   const eventType = String(fields.eventType || "").trim();
@@ -188,6 +189,8 @@ test("reconnect opens a query transport without replaying the stale run command"
   });
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
+  channel.retention.phase = CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED;
+  channel.retention.terminalStatus = CHANNEL_STATUS.USER_STOPPED;
   manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "query-active-1",
@@ -525,6 +528,7 @@ test("lifecycle replay gap waits for the authoritative snapshot before reconnect
       recentTerminalTurns: [],
       replacedTurns: [{
         turnScopeId: "turn-old",
+        replacementDialogProcessId: "dialog-t1",
         replacementTurnScopeId: "t1",
         replacementUserMessageId: "user-t1",
         commandId: "replace-turn-old",

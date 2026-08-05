@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 import { createSessionFacade, createSessionServices } from "../../src/session/index.js";
 
 async function withTempWorkspace(operation) {

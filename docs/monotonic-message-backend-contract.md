@@ -54,7 +54,7 @@
   },
   "parentSessionId": "optional",
   "expectedVersion": 12,
-  "idempotencyKey": "uuid"
+  "commandId": "uuid"
 }
 ```
 
@@ -90,7 +90,7 @@
 ## 并发与幂等
 
 - `expectedVersion`：第一阶段允许为空；若传入，后端与当前 session `version/revision` 比对，不一致返回 `409`。
-- `idempotencyKey`：第一阶段接口接收并透传；持久幂等日志在版本字段稳定后补齐。
+- `commandId`：接口接收并透传，持久命令回执以该字段作为唯一幂等身份。
 - 所有失败分支不得执行本地继续删除或继续发送。
 
 ## 响应基线

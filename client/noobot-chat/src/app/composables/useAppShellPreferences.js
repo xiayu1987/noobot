@@ -85,6 +85,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   const pluginModelConfig = ref(
     applyFrontendPluginModelConfigDefaults(uiPreferences.pluginModelConfig),
   );
+  const summaryPolicy = ref({});
   const hasStoredSelectedPlugins = ref(hasStoredSelectedPluginKeys());
   const selectedPlugins = ref(loadSelectedPluginKeys());
 
@@ -198,6 +199,12 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     updatePluginModelConfigPreference({ preferenceRef: pluginModelConfig, value, scenarioKey: botScenario.value });
   }
 
+  function onSummaryPolicyUpdate(value = {}) {
+    summaryPolicy.value = value && typeof value === "object" && !Array.isArray(value)
+      ? { ...value }
+      : {};
+  }
+
   function onSelectedPluginsUpdate(value = []) {
     const selectablePluginKeySet = new Set(
       availablePlugins.value
@@ -249,6 +256,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     selectedModel,
     memoryModel,
     pluginModelConfig,
+    summaryPolicy,
     selectedPlugins,
     availableBotScenarios,
     availableModelOptions,
@@ -263,6 +271,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     onSelectedModelUpdate,
     onMemoryModelUpdate,
     onPluginModelConfigUpdate,
+    onSummaryPolicyUpdate,
     onSelectedPluginsUpdate,
     onUserIdUpdate,
   };

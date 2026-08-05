@@ -22,7 +22,7 @@ describe("foreign Turn lifecycle routing", () => {
     };
 
     expect(routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
-      activeSession: { value: { id: "local-session", backendSessionId: "" } },
+      activeSession: { value: { id: "local-session", sessionId: "" } },
       applyTurnLifecycleEnvelope,
       logSessionEvent,
       sessionId: "local-session",
@@ -44,7 +44,7 @@ describe("foreign Turn lifecycle routing", () => {
     };
 
     expect(routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
-      activeSession: { value: { backendSessionId: "root-session" } },
+      activeSession: { value: { sessionId: "root-session" } },
       applyTurnLifecycleEnvelope,
       sessionId: "root-session",
     })).toBe(true);
@@ -67,7 +67,7 @@ describe("foreign Turn lifecycle routing", () => {
     };
 
     routeForeignTurnLifecycleEvent("turn_lifecycle", data, {
-      activeSession: { value: { backendSessionId: "root-session" } },
+      activeSession: { value: { sessionId: "root-session" } },
       applyTurnLifecycleEnvelope,
       logSessionEvent,
       sessionId: "root-session",
@@ -103,7 +103,7 @@ describe("committed user Turn routing", () => {
     const activeSession = {
       value: {
         id: "session-1",
-        backendSessionId: "session-1",
+        sessionId: "session-1",
         version: 0,
         messages: [draftMessage],
       },
@@ -118,7 +118,7 @@ describe("committed user Turn routing", () => {
 
     expect(routeCurrentTurnLifecycleEvent("turn_committed", {
       sessionId: "session-1",
-      sessionVersion: 1,
+      aggregateVersion: 1,
       dialogProcessId: "dialog-1",
       turnScopeId: "client-turn:1",
       userMessage: {
@@ -142,7 +142,7 @@ describe("committed user Turn routing", () => {
       sessionId: "session-1",
     })).toBe(true);
 
-    expect(activeSession.value.version).toBe(1);
+    expect(activeSession.value.aggregateVersion).toBe(1);
     expect(draftMessage).toMatchObject({
       messageUid: "sm_1",
       messageId: "frontend-user-1",
@@ -158,12 +158,12 @@ describe("committed user Turn routing", () => {
   it("rejects a commit whose stable message id has no local target", () => {
     const logSessionEvent = vi.fn();
     const activeSession = {
-      value: { id: "session-1", backendSessionId: "session-1", version: 0, messages: [] },
+      value: { id: "session-1", sessionId: "session-1", version: 0, messages: [] },
     };
 
     expect(routeCurrentTurnLifecycleEvent("turn_committed", {
       sessionId: "session-1",
-      sessionVersion: 1,
+      aggregateVersion: 1,
       dialogProcessId: "dialog-1",
       turnScopeId: "client-turn:1",
       userMessage: {

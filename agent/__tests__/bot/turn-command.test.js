@@ -15,7 +15,7 @@ import {
 test("turn command keeps existing-session context separate from continue action", () => {
   const send = createTurnCommand({
     userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "turn",
-    message: "next", runConfig: { idempotencyKey: "send-1" },
+    message: "next", runConfig: { commandId: "send-1" },
   });
   assert.equal(send.type, "send");
   assert.equal(send.sourceIdentity, null);

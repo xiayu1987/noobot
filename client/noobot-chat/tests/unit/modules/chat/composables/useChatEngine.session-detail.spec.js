@@ -25,13 +25,13 @@ import {
   BackendChannelState,
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "@noobot/event-protocol";
+import { createTurnTerminalResolution } from "@noobot/session-protocol";
 
 function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages = [] } = {}) {
   const activeSession = {
     id: sessionId,
     sessionId,
-    backendSessionId: sessionId,
+    sessionId: sessionId,
     title: "current",
     messages,
     rawMessages: [],
@@ -122,7 +122,7 @@ describe("useChatEngine.session-detail", () => {
     const activeSession = {
       id: "s-renamed",
       sessionId: "s-renamed",
-      backendSessionId: "s-renamed",
+      sessionId: "s-renamed",
       title: "previous title",
       messages: [],
       rawMessages: [],
@@ -156,12 +156,9 @@ describe("useChatEngine.session-detail", () => {
 
   it("applySessionDetail does not roll back a newer local session version", () => {
     const activeSession = {
-      id: "s-apply-version",
       sessionId: "s-apply-version",
-      backendSessionId: "s-apply-version",
       title: "current",
-      version: 9,
-      revision: 9,
+      aggregateVersion: 9,
       messages: [{ role: RoleEnum.USER, content: "current", turnScopeId: "client-turn:version" }],
       rawMessages: [],
     };
@@ -182,27 +179,23 @@ describe("useChatEngine.session-detail", () => {
       sessionId: "s-apply-version",
       sessions: [{
         sessionId: "s-apply-version",
-        version: 7,
-        revision: 7,
+        aggregateVersion: 7,
         messages: [{ role: RoleEnum.USER, content: "stale", turnScopeId: "client-turn:version" }],
       }],
     });
 
-    expect(activeSession.version).toBe(9);
-    expect(activeSession.revision).toBe(9);
+    expect(activeSession.aggregateVersion).toBe(9);
 
     applySessionDetail({
       sessionId: "s-apply-version",
       sessions: [{
         sessionId: "s-apply-version",
-        version: 10,
-        revision: 10,
+        aggregateVersion: 10,
         messages: [{ role: RoleEnum.USER, content: "fresh", turnScopeId: "client-turn:version" }],
       }],
     });
 
-    expect(activeSession.version).toBe(10);
-    expect(activeSession.revision).toBe(10);
+    expect(activeSession.aggregateVersion).toBe(10);
   });
 
   it("applySessionDetail lets an authoritative stopped turn replace matching in-flight content", () => {
@@ -210,7 +203,7 @@ describe("useChatEngine.session-detail", () => {
     const activeSession = {
       id: "s-apply-same-scope-stopped",
       sessionId: "s-apply-same-scope-stopped",
-      backendSessionId: "s-apply-same-scope-stopped",
+      sessionId: "s-apply-same-scope-stopped",
       title: "current",
       messages: [
         { id: "msg-user-same-scope-stopped", messageId: "msg-user-same-scope-stopped", role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },
@@ -345,7 +338,7 @@ describe("useChatEngine.session-detail", () => {
     const activeSession = {
       id: "s-apply-same-scope-completed",
       sessionId: "s-apply-same-scope-completed",
-      backendSessionId: "s-apply-same-scope-completed",
+      sessionId: "s-apply-same-scope-completed",
       title: "current",
       messages: [
         { id: "msg-user-same-scope-completed", messageId: "msg-user-same-scope-completed", role: RoleEnum.USER, content: "edited question", turnScopeId: freshTurnScopeId },

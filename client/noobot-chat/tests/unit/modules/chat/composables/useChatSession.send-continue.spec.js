@@ -8,7 +8,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { applyTurnTerminalResolution } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { createTurnTerminalResolution } from "@noobot/event-protocol";
+import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import {
   createChatSession,
   createSessionFixture,
@@ -29,7 +29,7 @@ function sessionWithTurn(status, overrides = {}) {
   const turnScopeId = overrides.turnScopeId || "turn-1";
   return createSessionFixture({
     id: overrides.id || "s-1",
-    backendSessionId: overrides.backendSessionId || overrides.id || "s-1",
+    sessionId: overrides.sessionId || overrides.id || "s-1",
     messages: overrides.messages || turnMessages({ dialogProcessId, turnScopeId }),
     turnStatuses: status ? [{ status, dialogProcessId, turnScopeId }] : [],
     ...overrides,
@@ -37,7 +37,7 @@ function sessionWithTurn(status, overrides = {}) {
 }
 
 function settleStopped(store, session) {
-  const sessionId = session.backendSessionId || session.id;
+  const sessionId = session.sessionId || session.id;
   const status = session.turnStatuses.at(-1);
   const turnScopeId = status.turnScopeId;
   const revision = 100;
@@ -74,7 +74,7 @@ describe("useChatSession send/continue actions", () => {
 
   it("derives sending controls from the last in-flight message and rejects a duplicate action", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({ id: "s-send", backendSessionId: "s-send" })];
+    store.sessions = [createSessionFixture({ id: "s-send", sessionId: "s-send" })];
     store.activeSessionId = "s-send";
     store.input = "hello";
     wsClientMock.stream.mockReturnValue(new Promise(() => {}));
@@ -102,7 +102,7 @@ describe("useChatSession send/continue actions", () => {
 
   it("allows the first send through the composer lock without reporting a state mismatch", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({ id: "s-first-send", backendSessionId: "s-first-send" })];
+    store.sessions = [createSessionFixture({ id: "s-first-send", sessionId: "s-first-send" })];
     store.activeSessionId = "s-first-send";
     store.input = "hello";
     wsClientMock.stream.mockResolvedValue({});
@@ -144,12 +144,11 @@ describe("useChatSession send/continue actions", () => {
   it("continues with the stopped identity as resume source and a fresh turnScopeId", async () => {
     const store = useChatStore();
     store.sessions = [sessionWithTurn("user_stopped", {
-      id: "local-session",
-      backendSessionId: "backend-session",
+      sessionId: "backend-session",
       dialogProcessId: "dp-stopped",
       turnScopeId: "turn-stopped",
     })];
-    store.activeSessionId = "local-session";
+    store.activeSessionId = "backend-session";
     store.input = "continue";
     wsClientMock.stream.mockImplementation(async (payload, _onEvent, options) => {
       options?.onPayloadSent?.(payload);
@@ -179,7 +178,7 @@ describe("useChatSession send/continue actions", () => {
     const newMessages = turnMessages({ dialogProcessId: "dp-new", turnScopeId: "turn-new" });
     const current = createSessionFixture({
       id: "s-latest-terminal",
-      backendSessionId: "s-latest-terminal",
+      sessionId: "s-latest-terminal",
       messages: [...oldMessages, ...newMessages],
       turnStatuses: [
         { status: "user_stopped", dialogProcessId: "dp-old", turnScopeId: "turn-old" },
@@ -205,7 +204,7 @@ describe("useChatSession send/continue actions", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "s-incomplete",
-      backendSessionId: "s-incomplete",
+      sessionId: "s-incomplete",
       messages: [{ role: "assistant", content: "partial", turnScopeId: "turn-only" }],
       turnStatuses: [{ status: "user_stopped", turnScopeId: "turn-only" }],
     })];

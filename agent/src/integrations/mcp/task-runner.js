@@ -106,12 +106,22 @@ export async function executeMcpTask({
         userConfig,
         streaming: false,
         context: { runtime },
+        invocation: {
+          flow: "mcp.task",
+          purpose: "mcp_tool_execution",
+          domain: "mcp",
+        },
       })
     : createChatModel({
         globalConfig,
         userConfig,
         streaming: false,
         context: { runtime },
+        invocation: {
+          flow: "mcp.task",
+          purpose: "mcp_tool_execution",
+          domain: "mcp",
+        },
       });
   const modelSpec = modelName
     ? resolveModelSpecByName({

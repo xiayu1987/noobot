@@ -19,4 +19,5 @@ export async function connectThroughUi(page, credentials) {
   await page.locator(".connect-input input").fill(credentials.connectCode);
   await page.locator(".connect-btn").click();
   await expect(page.locator(".status-btn.connected")).toBeVisible();
+  await expect(page.locator(".connect-btn")).not.toHaveClass(/is-loading/);
 }

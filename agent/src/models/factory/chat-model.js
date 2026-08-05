@@ -18,6 +18,7 @@ import {
   PARENT_SESSION_HEADER_KEY,
   PLUGIN_MODEL_HEADER_KEY,
 } from "../headers/plugin-headers.js";
+import { createObservedChatModel } from "../invoke/observed-chat-model.js";
 
 const DEFAULT_MAIN_FLOW = "agent.main";
 const DEFAULT_MAIN_PURPOSE = "main_agent";
@@ -363,14 +364,17 @@ function resolveHeaderParentSessionId(options = {}) {
 function buildChatModelConfiguration(normalizedSpec = {}, options = {}) {
   const sessionId = resolveHeaderSessionId(options);
   const parentSessionId = resolveHeaderParentSessionId(options);
+  const invocation = options?.invocation && typeof options.invocation === "object"
+    ? options.invocation
+    : {};
   const providerFormat = normalizeProviderFormat(normalizedSpec?.format || "");
   const useResponsesApi = resolveUseResponsesApi(normalizedSpec);
   const defaultHeaders = {
     [MODEL_NAME_HEADER_KEY]: String(normalizedSpec?.model || "").trim(),
     ...buildPluginModelHeaders({
-      flow: DEFAULT_MAIN_FLOW,
-      purpose: DEFAULT_MAIN_PURPOSE,
-      domain: DEFAULT_MAIN_DOMAIN,
+      flow: String(invocation?.flow || DEFAULT_MAIN_FLOW).trim(),
+      purpose: String(invocation?.purpose || DEFAULT_MAIN_PURPOSE).trim(),
+      domain: String(invocation?.domain || DEFAULT_MAIN_DOMAIN).trim(),
       sessionId,
     }),
     ...(parentSessionId ? { [PARENT_SESSION_HEADER_KEY]: parentSessionId } : {}),
@@ -442,7 +446,16 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });
 
-  return chat;
+  return createObservedChatModel(chat, {
+    runtime: resolveContextObject(options)?.runtime || null,
+    modelSpec: normalizedSpec,
+    streaming: Boolean(options?.streaming),
+    invocation: {
+      flow: configuration.defaultHeaders[PLUGIN_MODEL_HEADER_KEY.FLOW],
+      purpose: configuration.defaultHeaders[PLUGIN_MODEL_HEADER_KEY.PURPOSE],
+      domain: configuration.defaultHeaders[PLUGIN_MODEL_HEADER_KEY.DOMAIN],
+    },
+  });
 }
 
 export function createChatModel(specOrOptions = {}, maybeOptions = {}) {

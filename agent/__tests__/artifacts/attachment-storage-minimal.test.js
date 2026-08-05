@@ -23,7 +23,7 @@ import {
   validateAttachmentPolicy,
 } from "../../src/artifacts/policy/policy-validator.js";
 import { getMimeTypeFromExtension, isValidMimeType } from "../../src/artifacts/policy/mime-utils.js";
-import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import { readSessionArtifact, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
@@ -331,8 +331,11 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
       sessionId: rootSessionId,
       messages: [
         {
+          messageUid: "sm_attachment_source",
           role: "user",
           content: "test",
+          dialogProcessId: "dialog-attachment-source",
+          turnScopeId: "turn-attachment-source",
           attachmentMetas: [
             {
               attachmentId: sourceAttachment.attachmentId,
@@ -354,11 +357,9 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
         },
       ],
     };
-    await mkdir(path.dirname(runtimeSessionFile), { recursive: true });
-    await writeFile(runtimeSessionFile, `${JSON.stringify(snapshotPayload, null, 2)}\n`, "utf8");
+    await writeSessionArtifact({ sessionDir: path.dirname(runtimeSessionFile), sessionPayload: snapshotPayload });
     await writeFile(runtimeSummaryFile, `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 2, messages: [] }, null, 2)}\n`, "utf8");
-    await mkdir(path.dirname(pluginSessionFile), { recursive: true });
-    await writeFile(pluginSessionFile, `${JSON.stringify(snapshotPayload, null, 2)}\n`, "utf8");
+    await writeSessionArtifact({ sessionDir: path.dirname(pluginSessionFile), sessionPayload: snapshotPayload });
     await writeFile(pluginSummaryFile, `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 3, messages: [] }, null, 2)}\n`, "utf8");
 
     const linked = await service.linkParsedResultToAttachment({

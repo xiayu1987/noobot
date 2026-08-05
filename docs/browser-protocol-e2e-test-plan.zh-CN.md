@@ -90,14 +90,22 @@ client/noobot-chat/tests/e2e/protocol/
 │   ├── 002-send-no-attachment.spec.js
 │   ├── 003-send-with-attachment.spec.js
 │   ├── 004-stop-and-snapshot.spec.js
-│   ├── 005-continue-from-snapshot.spec.js
-│   ├── 006-repeated-stop-continue.spec.js
-│   ├── 007-resend-no-attachment.spec.js
-│   ├── 008-resend-attachments.spec.js
-│   ├── 009-reconnect.spec.js
-│   ├── 010-harness.spec.js
-│   ├── 011-workflow-harness.spec.js
-│   └── 099-full-chain-audit.spec.js
+│   ├── 006-continue-from-snapshot.spec.js
+│   ├── 007-attachment-continue.spec.js
+│   ├── 008-repeated-stop-continue.spec.js
+│   ├── 009-resend-no-attachment.spec.js
+│   ├── 010-resend-attachments.spec.js
+│   ├── 013-reconnect.spec.js
+│   ├── 015-multi-page.spec.js
+│   ├── 016-harness.spec.js
+│   ├── 021-session-refresh.spec.js
+│   ├── 023-concurrency.spec.js
+│   ├── 025-offline-reconnect.spec.js
+│   ├── 026-invalid-protocol.spec.js
+│   ├── 027-plugin-protocol.spec.js
+│   ├── 029-session-protocol.spec.js
+│   ├── 030-local-session-refresh.spec.js
+│   └── 031-workflow-lifecycle.spec.js
 └── playwright.protocol.config.js
 ```
 
@@ -195,7 +203,7 @@ workspace/<userId>/runtime/session/<sessionId>/
 - 每个 run 的 `dialogProcessId + turnScopeId` 唯一。
 - 同一 Turn 不得存在两套 active 事实。
 - Resend 的旧 Turn 和 replacement 关系明确，且不会同时 active。
-- Session version 单调增长。
+- `aggregateVersion` 单调增长。
 - UI 可见消息与持久化可见消息语义一致。
 - hydration 不得自造后端不存在的 lifecycle 或 persistence 字段。
 
@@ -308,12 +316,6 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：Stop identity 和 revision 正确；Stop 只发一次；快照身份一致；所有 block 为 plain object；Session 为 `user_stopped`；Harness 为 `abort`；不存在 `socket_close` 或 Context envelope 错误。
 
-### PBE-005：带附件停止快照
-
-步骤：上传附件并发送，等待模型读取附件，点击 Stop，审计 Session、附件和停止快照。
-
-断言：快照包含文件名、canonical attachmentId、SHA256 和 scoped path；快照与 Session 指向同一附件事实；停止过程不创建第二份附件。
-
 ### PBE-006：无附件停止后继续
 
 步骤：执行 PBE-004，在 Continue 输入框输入唯一提示，点击 Continue，等待新 run 启动后再次 Stop。
@@ -322,9 +324,9 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 ### PBE-007：带附件停止后继续
 
-步骤：执行 PBE-005，点击 Continue，读取 Continue Model Context，然后 Stop。
+步骤：上传附件并发送后 Stop，审计初始快照；点击 Continue，读取 Continue Model Context，然后再次 Stop。
 
-断言：Continue 命令附件数为 0；Continue Context 附件数为 1；文件名、SHA256、canonical ID 和持久化路径正确；新停止快照仍含附件元数据。
+断言：初始 Send 附件数为 1，初始快照 identity 与 Send 一致；Continue 命令附件数为 0；Continue Context 附件数为 1；文件名、SHA256、canonical ID 和持久化路径正确；两份停止快照均含附件元数据。
 
 ### PBE-008：连续三次停止和继续
 
@@ -336,7 +338,7 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 步骤：创建一轮无附件消息，打开编辑重发，修改内容并发送，捕获 replace-turn HTTP 和 `turn.resend`，随后 Stop。
 
-断言：HTTP anchor 只使用旧 `turnScopeId`；`expectedVersion` 正确；replacement 使用新 turnScopeId；附件为 `[]`；旧 Turn 明确 replaced；Session version 权威增长；UI 不残留旧 pending 状态。
+断言：HTTP anchor 只使用旧 `turnScopeId`；`expectedAggregateVersion` 正确；Session replacement transaction 生成唯一 `replacementDialogProcessId`；replacement user message、commit、lifecycle tombstone、后续 `turn.resend.identity` 与 Turn journal 使用同一 `dialogProcessId + turnScopeId`；附件为 `[]`；旧 Turn 明确 replaced；`aggregateVersion` 权威增长；UI 不残留旧 pending 状态。
 
 ### PBE-010：保留原附件编辑重发
 
@@ -392,23 +394,11 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：辅助调用具有明确 purpose；主模型与辅助模型身份可区分；capability trace start/end 成对；Harness 输出通过规范 Context mutation 注入；不得伪装成原始用户消息。
 
-### PBE-019：Workflow + Harness 联合运行
-
-步骤：同时选择 Workflow 和 Harness，发送会产生子执行的请求，捕获 root command、workflow execution/message events 和 child execution，最后完成或 Stop。
-
-断言：root/child execution identity 完整；child terminal 不覆盖 root lifecycle 或 channel retention；Harness root/child run 分别绑定正确 dialogProcessId；UI、execution tree 和持久化终态一致。
-
-### PBE-020：Workflow 带附件
-
-步骤：选择 Workflow + Harness，上传固定附件并要求工作流读取，等待 child 工具使用附件，最后完成或 Stop。
-
-断言：root canonical attachment 只有一份；child 通过规范 reference 或 transfer envelope 获取；child 不生成第二个用户附件事实；路径和所有权正确；Harness trace 不复制二进制内容。
-
 ### PBE-021：自然完成后刷新 Session
 
 步骤：等待普通 Send 自然完成，记录 UI，刷新页面并等待 reconnect/hydration，再比较状态。
 
-断言：刷新前后消息语义一致；已完成轮次不会重回 sending；不产生新 run、dialogProcessId 或 Session version；hydration 不制造业务事实。
+断言：刷新前后消息语义一致；已完成轮次不会重回 sending；不产生新 run、dialogProcessId 或 `aggregateVersion`；hydration 不制造业务事实。
 
 ### PBE-022：停止后关闭浏览器，再打开并继续
 
@@ -416,11 +406,11 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：Continue 只依赖持久化事实；命令附件数为 0；Model Context 恢复附件；Stop 正常；不创建旁路 snapshot；不出现非法 Context envelope。
 
-### PBE-023：Session version 冲突
+### PBE-023：Session aggregateVersion 冲突
 
 步骤：两个页面打开同一 Session，A 先完成编辑重发，B 使用旧页面版本再次重发，观察 409 和权威刷新流程。
 
-断言：旧版本 mutation 不提交；不得忽略 `expectedVersion`；不得创建本地伪 replacement；最终 replacement chain 唯一；Session version 单调增长。
+断言：旧版本 mutation 不提交；不得忽略 `expectedAggregateVersion`；不得创建本地伪 replacement；最终 replacement chain 唯一；`aggregateVersion` 单调增长。
 
 ### PBE-024：停止命令幂等性
 
@@ -442,50 +432,69 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：全部明确失败；不创建 Turn、lifecycle 或 snapshot；不进入兼容 route；Proxy 不自动补字段；错误来自唯一协议 validator。
 
-## 6. 全链路总审计 PBE-099
+### PBE-027：Manifest V2 激活与 runtime-events 身份闭环
 
-顺序执行：
+步骤：只选择 Harness，通过 UI 发起并停止一轮请求，读取 runtime-events 与 execution-events 中的插件协议事件。
+
+断言：插件激活和贡献事件使用唯一插件协议版本；Session、dialog、Turn identity 在事件顶层与协议 data 中一致；runtime 与 execution 投影引用同一业务事实。
+
+### PBE-028：Workflow + Harness 带附件统一协议
+
+步骤：选择 Workflow + Harness，上传固定附件，要求一个 Workflow 子 Session 读取其精确内容并自然完成；读取插件事件、根 Session 附件索引、子 Session 模型调用和子 Session 附件索引。
+
+断言：根 Session 只有一个 canonical 用户附件；Workflow 子 Session 通过规范 Session transfer 获得独立 child attachmentId，名称和来源保持一致且所有权切换为子 Session；Workflow 与 Harness 的 runtime/execution 插件身份闭合；根生命周期自然完成。
+
+### PBE-029：统一 Session 协议闭环审计
+
+步骤：使用浏览器在同一预分配 `sessionId` 下依次执行无附件 Send、Stop、Continue、Stop、无附件 Resend、带附件 Resend、显式删除附件 Resend，并读取 WebSocket 命令、lifecycle、Session manifest、Turn journals、runtime-events、execution-events 和模型停止快照。
+
+断言：所有业务命令只使用 `commandId`；聚合并发只使用 `expectedAggregateVersion`；Turn 并发只使用 `revision/expectedTurnRevision`；事件顺序只使用 `sequence`；Session 身份只使用 `sessionId`。Session manifest 只含 `aggregateVersion`，每条消息有唯一 `messageUid`，每个 Turn 由 `(sessionId, turnScopeId)` 唯一定位。禁止出现 `backendSessionId`、`expectedVersion`、`expectedSessionVersion`、`sessionVersion`、`snapshotVersion`、`committedVersion`、`idempotencyKey` 或 Session-only/Dialog-only 缓存身份。每个停止轮次只有一个权威终态和一个 plain-object 模型快照，runtime-events 与 execution-events 的身份链闭合。
+
+### PBE-030：未 provision Session 刷新
+
+步骤：连接后新建一个尚未发送消息的本地 Session，记录当前历史 Session 集合和本地预分配身份，随后刷新浏览器并等待自动连接完成。
+
+断言：本地预分配身份不进入可恢复 URL；刷新不显示“会话不存在”；未 provision 的本地草稿可以丢弃；刷新前的全部持久化 Session 仍在列表中；刷新后的 URL 若包含 `sessionId`，该身份必须来自后端权威列表且不得等于已丢弃的本地身份。
+
+### PBE-031：Workflow 运行中停止并继续
+
+步骤：选择 Workflow + Harness，发送包含多个顺序子任务的 Workflow；等待子 Session 的真实模型调用开始后停止根执行，再从同一 Session 发送继续请求并等待自然完成。
+
+断言：停止和继续各自只有一个权威终态；Continue 显式引用被停止 Turn；Workflow 根执行、子 Session、子 Turn identity 不串线；模型调用观测来自根 Session execution event tree 中唯一的 `model_context_trace/llm_invoke_messages` 协议，且 `authority=model_invoke_port`。每个实际 provider 调用只有一个 `invocationId`，同一 `modelInstanceId` 的 `invocationSequence` 严格单调。
+
+### PBE-032：Workflow 与普通消息连续切换
+
+步骤：在同一 Session 中依次完成 Workflow 消息、无插件普通消息、第二条 Workflow 消息。
+
+断言：三轮均使用独立 Turn identity；插件选择严格为 `workflow+harness -> [] -> workflow+harness`；两个 Workflow 根生命周期均携带 executionId 并自然完成；普通消息由根 Session 模型处理，两个 Workflow 分别产生不同子 Session 模型调用；每条模型调用必须来自 `authority=model_invoke_port`，消息的角色计数、dialog 分组、messageId 缺失数、content hash、预览和截断数量闭合。
+
+### 模型调用唯一观测边界
+
+模型输入观测发生在模型 factory 返回的 observed model 端口，并紧邻底层 provider `invoke()`。
+这是主 Agent、retry、streaming、tool binding、capability、memory、MCP、协作和数据处理调用的
+共同边界。业务分支不得自行发送 `llm_invoke_messages`，不得用 capability trace、HTTP header、
+stream callback 或 retry 日志替代这一事实源。输入必须是消息数组；字符串 prompt 属于协议错误，
+不得在端口内转换或 fallback。
+
+每条权威记录至少包含：
 
 ```text
-连接
-→ 新建 Session
-→ Harness Send 无附件
-→ Stop
-→ Continue
-→ Stop
-→ 无附件 Resend
-→ Stop
-→ 添加附件 Resend
-→ Stop
-→ 带附件 Continue
-→ 浏览器刷新 Reconnect
-→ Stop
-→ Workflow + Harness 带附件
-→ 完成或 Stop
-→ Session/快照/附件/Harness/Workflow/事件统一审计
+protocolVersion
+authority = model_invoke_port
+modelInstanceId
+invocationId
+invocationSequence
+model(alias/name/format/streaming/boundToolCount)
+invocation(flow/purpose/domain)
+messages(count/roles/dialogGroups/missingDialogIdCount/missingMessageIdCount/preview/truncated)
 ```
 
-最终断言：
+审计时以 `invocationId` 判断调用唯一性，不以消息 hash 或文本近似去重；以
+`modelInstanceId + invocationSequence` 检查实例内顺序。主 Agent 输入还需与 Context 的 system、
+history、incremental 组装及小结策略结果闭合；辅助模型允许没有 Session messageId，但其
+`missingMessageIdCount` 必须与 preview 和 truncated 数量闭合。
 
-- 所有 run identity 唯一。
-- 所有 continuation 引用存在且唯一。
-- 所有 replacement chain 闭合。
-- 所有 lifecycle 有且只有一个权威终态。
-- 所有 lifecycle receipt 可以对应到唯一事件。
-- 每个停止轮次有且只有一个模型快照。
-- 所有快照 block 都是 plain object。
-- 所有逻辑附件只有一个 canonical 事实。
-- Continue 不重复传附件。
-- Harness run 与 dialogProcessId 一一对应。
-- Workflow root/child identity 不串线。
-- 没有 `socket_close` 业务失败。
-- 没有非法 Context envelope。
-- 没有未知协议字段或 legacy action route。
-- 没有 UI 本地终态推断。
-- 没有未释放 reconnect transaction。
-- 没有 active run 被 snapshot cleanup 关闭。
-
-## 7. Debug 日志和禁止错误
+## 6. Debug 日志和禁止错误
 
 协议测试环境应启用并收集以下 debug 类型：
 
@@ -513,7 +522,7 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 用户 Stop 导致的 `HOOK_EXECUTION_FAILED` 只有在错误类型明确为 `user_stop`、生命周期最终为 `turn.stop_completed` 且快照保存成功时才属于合法中止表示。
 
-## 8. 执行分层
+## 7. 执行分层
 
 建议提供三个入口：
 
@@ -524,7 +533,7 @@ npm run test:e2e:protocol:smoke
 # Session、快照、附件、reconnect、Harness
 npm run test:e2e:protocol:core
 
-# Workflow、多标签、断网、并发、负向协议和总审计
+# Workflow、多标签、断网、并发和负向协议
 npm run test:e2e:protocol:full
 ```
 
@@ -533,10 +542,10 @@ npm run test:e2e:protocol:full
 | 级别 | 用例 |
 | --- | --- |
 | Smoke | PBE-001、002、004、006 |
-| Core | PBE-003、005、007～018、021、022 |
-| Full | PBE-019、020、023～026、099 |
+| Core | PBE-003、007～014、016～018、021、022、027、029、030 |
+| Full-only | PBE-015、023～026、028、031～034 |
 
-## 9. CI 失败产物要求
+## 8. CI 失败产物要求
 
 每个失败用例必须保留：
 

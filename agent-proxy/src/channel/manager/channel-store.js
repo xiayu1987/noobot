@@ -22,6 +22,8 @@ import {
   TURN_STATE,
   isAuthoritativeTurnLifecycleEnvelope,
   validateTurnLifecycleEnvelope,
+} from "@noobot/session-protocol";
+import {
   validateInteractionRequestPayload,
 } from "@noobot/event-protocol";
 

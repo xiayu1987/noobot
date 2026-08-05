@@ -211,7 +211,6 @@ export class ContextBuilder {
 
   _buildSystemRuntime({
     dialogProcessId = "",
-    sessionTree = {},
     rootSessionId = "",
     staticInfo = null,
   } = {}) {
@@ -220,7 +219,6 @@ export class ContextBuilder {
       sessionId: this.sessionId,
       caller: this.caller,
       dialogProcessId,
-      sessionTree,
       runConfig: this.runConfig,
       now: this._now(),
       rootSessionId,
@@ -286,6 +284,7 @@ export class ContextBuilder {
             sessionManager: this.sessionManager,
             userId: this.userId,
             sessionId: this.sessionId,
+            parentSessionId: this.parentSessionId,
             now: this._now(),
           });
 
@@ -412,6 +411,7 @@ export class ContextBuilder {
       sessionManager: this.sessionManager,
       userId: this.userId,
       sessionId: this.sessionId,
+      parentSessionId: this.parentSessionId,
       now: this._now(),
     });
 
@@ -493,7 +493,6 @@ export class ContextBuilder {
     const dynamicInfo = includeSystemRuntime
       ? this._buildSystemRuntime({
           dialogProcessId,
-          sessionTree: treeInfo.sessionTree,
           rootSessionId: treeInfo.rootSessionId,
         })
       : {};

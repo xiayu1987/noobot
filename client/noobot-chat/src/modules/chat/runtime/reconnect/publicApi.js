@@ -9,7 +9,7 @@ export function createReconnectReplayPublicApi({
   applyReconnectEvent,
   applyChannelState,
   replayCache,
-  appliedReconnectSeqByDialogProcessId,
+  appliedReconnectSequenceByTurnKey,
   isTestMode = false,
 }) {
   return {
@@ -19,7 +19,7 @@ export function createReconnectReplayPublicApi({
     __test: isTestMode
       ? {
           replayCache,
-          appliedReconnectSeqByDialogProcessId,
+          appliedReconnectSequenceByTurnKey,
         }
       : undefined,
   };

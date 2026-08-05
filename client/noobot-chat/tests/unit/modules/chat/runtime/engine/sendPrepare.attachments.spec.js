@@ -11,7 +11,7 @@ function createPrepareHarness({ existingMessages = [] } = {}) {
   const activeSession = {
     value: {
       id: "session-a",
-      backendSessionId: "session-a",
+      sessionId: "session-a",
       title: "Existing title",
       messages: existingMessages,
     },

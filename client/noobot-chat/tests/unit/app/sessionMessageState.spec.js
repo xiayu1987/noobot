@@ -97,7 +97,7 @@ describe("sessionMessageState", () => {
 
   it("allows reconnect only after a backend session identity exists", () => {
     expect(hasActiveSessionForReconnect({ activeSession: {}, activeSessionId: "" })).toBe(false);
-    expect(hasActiveSessionForReconnect({ activeSession: { backendSessionId: " backend " }, activeSessionId: "" })).toBe(true);
+    expect(hasActiveSessionForReconnect({ activeSession: { sessionId: " backend " }, activeSessionId: "" })).toBe(true);
     expect(hasActiveSessionForReconnect({ activeSession: { id: " local ", isLocal: true }, activeSessionId: "local" })).toBe(false);
     expect(hasActiveSessionForReconnect({ activeSession: {}, activeSessionId: " active " })).toBe(false);
   });

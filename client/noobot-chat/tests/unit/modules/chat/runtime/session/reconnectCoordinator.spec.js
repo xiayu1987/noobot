@@ -12,7 +12,7 @@ describe("createReconnectCoordinator", () => {
   it("does not reconnect a local Session without a backend identity", async () => {
     const chatWebSocketClient = { reconnect: vi.fn() };
     const coordinator = createReconnectCoordinator({
-      activeSession: ref({ id: "local-1", backendSessionId: "", isLocal: true, messages: [] }),
+      activeSession: ref({ id: "local-1", sessionId: "", isLocal: true, messages: [] }),
       activeSessionId: ref("local-1"),
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
       userId: ref("user-1"),
@@ -52,7 +52,7 @@ describe("createReconnectCoordinator", () => {
     const notify = vi.fn();
     const logSessionSystemEvent = vi.fn();
     const coordinator = createReconnectCoordinator({
-      activeSession: ref({ backendSessionId: "s-1", messages: [] }),
+      activeSession: ref({ sessionId: "s-1", messages: [] }),
       activeSessionId: ref("s-1"),
       turnRuntimeRegistry: ref(createTurnRuntimeRegistryState()),
       userId: ref("user-1"),

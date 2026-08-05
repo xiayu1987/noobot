@@ -38,7 +38,7 @@ function normalizeIdentityValue(value = "") { return String(value || "").trim();
 function getMessagePrimaryId(messageItem = {}) { return normalizeIdentityValue(messageItem?.id || messageItem?.messageId || messageItem?.message_id || messageItem?.clientMessageId || messageItem?.client_message_id); }
 function getMessageDialogProcessId(messageItem = {}) { return normalizeIdentityValue(messageItem?.dialogProcessId || messageItem?.dialog_process_id || messageItem?.dialogId || messageItem?.dialog_id || messageItem?.channelState?.dialogProcessId || messageItem?.channelState?.dialog_process_id || messageItem?.channelState?.dialogId || messageItem?.channelState?.dialog_id); }
 function getMessageTurnScopeId(messageItem = {}) { return normalizeIdentityValue(messageItem?.turnScopeId || messageItem?.turn_scope_id || messageItem?.channelState?.turnScopeId || messageItem?.channelState?.turn_scope_id); }
-function getMessageSessionId(messageItem = {}) { return normalizeIdentityValue(messageItem?.sessionId || messageItem?.session_id || messageItem?.backendSessionId || messageItem?.backend_session_id || messageItem?.channelState?.sessionId || messageItem?.channelState?.session_id || messageItem?.channelState?.backendSessionId || messageItem?.channelState?.backend_session_id); }
+function getMessageSessionId(messageItem = {}) { return normalizeIdentityValue(messageItem?.sessionId || messageItem?.session_id || messageItem?.sessionId || messageItem?.backend_session_id || messageItem?.channelState?.sessionId || messageItem?.channelState?.session_id || messageItem?.channelState?.sessionId || messageItem?.channelState?.backend_session_id); }
 function sameTurnScope(left = "", right = "") {
   return Boolean(left && right) && areTurnScopeIdsEquivalent(left, right);
 }

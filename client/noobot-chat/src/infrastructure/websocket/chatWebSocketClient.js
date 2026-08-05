@@ -12,7 +12,7 @@ import {
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   validateTurnLifecycleEnvelope,
-} from "@noobot/event-protocol";
+} from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_DEBUG_TYPE,
   summarizeAgentTransportCommand,

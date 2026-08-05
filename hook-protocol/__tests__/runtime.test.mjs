@@ -10,8 +10,25 @@ import {
   createHookManager,
   HookExecutionError,
   HOOK_OUTCOME_STATUS,
+  HOOK_CANCELLATION_MODE,
   HOOK_POINT,
+  requireHookPointDescriptor,
 } from "../src/index.mjs";
+
+test("hook point descriptors own cancellation policy", () => {
+  assert.equal(
+    requireHookPointDescriptor(HOOK_POINT.AGENT.BEFORE_LLM_CALL).cancellationMode,
+    HOOK_CANCELLATION_MODE.PROPAGATE,
+  );
+  assert.equal(
+    requireHookPointDescriptor(HOOK_POINT.AGENT.ON_ABORT).cancellationMode,
+    HOOK_CANCELLATION_MODE.DETACHED,
+  );
+  assert.equal(
+    requireHookPointDescriptor(HOOK_POINT.BOT.SESSION_RUN_ERROR).cancellationMode,
+    HOOK_CANCELLATION_MODE.DETACHED,
+  );
+});
 
 test("protocol rejects unknown hook points and anonymous handlers", () => {
   const manager = createHookManager();
@@ -58,6 +75,35 @@ test("timeout aborts the handler signal and fail-flow points throw", async () =>
     (error) => error instanceof HookExecutionError && error.cause?.code === "HOOK_TIMEOUT",
   );
   assert.equal(observedAbort, true);
+});
+
+test("parent cancellation propagates the single abort fact without hook failure reporting", async () => {
+  const reportedErrors = [];
+  const manager = createHookManager({
+    onError: (event) => reportedErrors.push(event),
+  });
+  const controller = new AbortController();
+  const abortReason = Object.assign(new Error("stopped by user"), {
+    name: "AbortError",
+    code: "USER_STOP",
+    type: "user_stop",
+  });
+  let secondHandlerCalls = 0;
+  manager.on(HOOK_POINT.AGENT.BEFORE_TURN, async (_context, invocation) => {
+    await new Promise((resolve) => {
+      invocation.signal.addEventListener("abort", resolve, { once: true });
+    });
+  }, { id: "test.parent-abort.first" });
+  manager.on(HOOK_POINT.AGENT.BEFORE_TURN, () => {
+    secondHandlerCalls += 1;
+  }, { id: "test.parent-abort.second" });
+
+  const emitted = manager.emit(HOOK_POINT.AGENT.BEFORE_TURN, {}, { signal: controller.signal });
+  controller.abort(abortReason);
+
+  await assert.rejects(emitted, (error) => error === abortReason);
+  assert.equal(secondHandlerCalls, 0);
+  assert.deepEqual(reportedErrors, []);
 });
 
 test("observer point returns a canonical failure outcome without failing the flow", async () => {

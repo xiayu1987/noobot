@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+  TASK_SUMMARY_PROTOCOL_VERSION,
+  parseTaskSummaryReceipt,
+} from "./task-summary-protocol.js";
+
 const text = (value) => String(value ?? "").trim();
 
 export const CONTEXT_MESSAGE_ROLE = Object.freeze({
@@ -109,12 +114,11 @@ export function extractContextTaskSummary(message = {}) {
   if (!raw) return "";
   try {
     const parsed = JSON.parse(raw);
-    return text(
-      parsed?.phaseSummary || parsed?.phase_summary || parsed?.summaryContent ||
-        parsed?.summary_content || (typeof parsed?.summary === "string" ? parsed.summary : "") || raw,
-    );
-  } catch {
+    if (parsed?.protocolVersion !== TASK_SUMMARY_PROTOCOL_VERSION) return "";
+    parseTaskSummaryReceipt(parsed?.summary);
     return raw;
+  } catch {
+    return "";
   }
 }
 
@@ -124,13 +128,36 @@ export function recoverContextTaskSummaryToolResult(message = {}, { toolName = "
   const summary = extractContextTaskSummary(message);
   if (!summary) return null;
   const sourceMessageId = resolveContextMessageId(message);
+  const toolCallId = resolveContextToolCallId(message);
+  const {
+    tool_call_id: omittedToolCallId,
+    toolCallId: omittedToolCallIdCamel,
+    toolName: omittedToolName,
+    tool_name: omittedToolNameSnake,
+    tool_calls: omittedToolCalls,
+    ...rest
+  } = message;
+  void omittedToolCallId;
+  void omittedToolCallIdCamel;
+  void omittedToolName;
+  void omittedToolNameSnake;
+  void omittedToolCalls;
   return {
-    ...message,
+    ...rest,
     role: CONTEXT_MESSAGE_ROLE.USER,
     content: summary,
     summarized: false,
     phaseSummaryMemory: true,
     recoveredFromUnpairedTaskSummary: true,
+    ...(toolCallId ? { original_tool_call_id: toolCallId } : {}),
+    additional_kwargs: {
+      ...(message?.additional_kwargs && typeof message.additional_kwargs === "object"
+        ? message.additional_kwargs
+        : {}),
+      noobotInternalMessageType: "phase_summary_memory",
+      recoveredFromUnpairedTaskSummary: true,
+      ...(toolCallId ? { original_tool_call_id: toolCallId } : {}),
+    },
     projection: {
       type: "phase-summary",
       sourceMessageId,

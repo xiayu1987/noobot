@@ -220,8 +220,8 @@ export class SessionExecutionEngine {
       commitSessionTurn: typeof this.session?.commitTurn === "function"
         ? (payload = {}) => this.session.commitTurn(payload)
         : null,
-      stampReusedUserTurnDialogProcessId: (payload = {}) =>
-        this._stampReusedUserTurnDialogProcessId(payload),
+      assertReusedUserTurnIdentity: (payload = {}) =>
+        this._assertReusedUserTurnIdentity(payload),
       getSessionTurns: (payload = {}) => this.session?.getSessionTurns?.(payload),
       getTurnSummaryCheckpointState: (payload = {}) => this.session?.getTurnSummaryCheckpointState?.(payload),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
@@ -439,6 +439,7 @@ export class SessionExecutionEngine {
       configService: this.configService,
       sessionRunner: this.runner,
       session: this.session,
+      attachmentService: this.attach,
       pluginRuntime: this.pluginRuntimeBundle?.pluginRuntime || getDefaultSessionPluginRuntime(),
       mergeRunConfigWithPluginStrategy: (payload = {}) =>
         this._mergeRunConfigWithPluginStrategy(payload),
@@ -613,8 +614,8 @@ export class SessionExecutionEngine {
     });
   }
 
-  async _stampReusedUserTurnDialogProcessId(payload = {}) {
-    return this.session?.stampReusedUserTurnDialogProcessId?.(payload);
+  async _assertReusedUserTurnIdentity(payload = {}) {
+    return this.session?.assertReusedUserTurnIdentity?.(payload);
   }
 
   async applyTurnLifecycleEvent(payload = {}) {

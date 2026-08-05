@@ -9,19 +9,21 @@ import assert from "node:assert/strict";
 import { runAgentTurn } from "../../../src/runtime/engine.js";
 import { createHookManager } from "@noobot/hook-protocol";
 
-function createAbortedSignal() {
-  const controller = new AbortController();
-  controller.abort({ type: "user_stop", reason: "user stop action" });
-  return controller.signal;
-}
-
 test("runAgentTurn completes terminal hooks before the runner seals a stopped snapshot", async () => {
   const events = [];
   const abortHookContexts = [];
   const errorHookContexts = [];
   const hookManager = createHookManager();
-  hookManager.on("agent.on_abort", (context) => abortHookContexts.push(context));
-  hookManager.on("agent.on_error", (context) => errorHookContexts.push(context));
+  const stopController = new AbortController();
+  hookManager.on("agent.before_llm_call", () => {
+    stopController.abort({ type: "user_stop", reason: "user stop action" });
+  }, { id: "test.engine-stop.before-llm" });
+  hookManager.on("agent.on_abort", (context) => abortHookContexts.push(context), {
+    id: "test.engine-stop.on-abort",
+  });
+  hookManager.on("agent.on_error", (context) => errorHookContexts.push(context), {
+    id: "test.engine-stop.on-error",
+  });
   const runtime = {
     userId: "admin",
     sessionId: "session-engine-stop",
@@ -39,7 +41,7 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
     },
     userConfig: {},
     runConfig: { turnScopeId: "turn-engine-stop" },
-    abortSignal: createAbortedSignal(),
+    abortSignal: stopController.signal,
     hookManager,
     eventListener: {
       onEvent(event) {
@@ -70,7 +72,7 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
         turnScopeId: "turn-engine-stop",
       },
     }),
-    (error) => error?.name === "AbortError",
+    (error) => error?.type === "user_stop" && error?.reason === "user stop action",
   );
 
   assert.equal(events.some((event) => event?.event === "stopped_model_message_snapshot_saved"), false);
@@ -78,9 +80,7 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
     (message) => String(message.content || "").includes("stop after snapshot candidate"),
   ));
   assert.equal(abortHookContexts.length, 1);
-  assert.equal(errorHookContexts.length, 1);
-  assert.equal(abortHookContexts[0].contextProtocolVersion, 1);
-  assert.equal(errorHookContexts[0].contextProtocolVersion, 1);
+  assert.equal(errorHookContexts.length, 0);
+  assert.equal(abortHookContexts[0].contextProtocolVersion, 2);
   assert.equal(abortHookContexts[0].modelContext, runtime.activeMessageContext);
-  assert.equal(errorHookContexts[0].modelContext, runtime.activeMessageContext);
 });

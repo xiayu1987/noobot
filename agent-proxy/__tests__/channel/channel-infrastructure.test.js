@@ -15,7 +15,7 @@ import {
   TURN_EVENT,
   TURN_PHASE,
   TURN_STATE,
-} from "@noobot/event-protocol";
+} from "@noobot/session-protocol";
 
 test("channel event journal is the bounded ordered replay source", () => {
   const journal = new ChannelEventJournal({ maxEvents: 2 });

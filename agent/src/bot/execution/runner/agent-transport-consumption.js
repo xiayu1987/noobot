@@ -44,8 +44,8 @@ export function buildAgentTransportConsumption({
   );
   const requestedMessageLength = String(normalizedMessage ?? "").length;
   const persistedMessageLength = String(currentUserMessage?.content ?? "").length;
-  const expectedVersion = resolvedRunConfig?.expectedVersion;
-  const commandExpectedVersion = turnCommand?.expectedVersion;
+  const expectedAggregateVersion = resolvedRunConfig?.expectedAggregateVersion;
+  const commandExpectedAggregateVersion = turnCommand?.expectedAggregateVersion;
 
   return {
     protocolVersion: Number(transportCommand?.protocolVersion) || null,
@@ -98,13 +98,11 @@ export function buildAgentTransportConsumption({
         requestedAssistantMessageId === boundAssistantMessageId,
     },
     concurrency: {
-      idempotencyKey: clean(turnCommand?.idempotencyKey || resolvedRunConfig?.idempotencyKey),
-      idempotencyKeyConsumed: Boolean(clean(turnCommand?.idempotencyKey)),
-      expectedSessionVersion: expectedVersion ?? null,
-      expectedSessionVersionConsumed: expectedVersion === commandExpectedVersion,
-      committedSessionVersion: Number(
-        committedTurnResult?.version ?? committedTurnResult?.sessionVersion ?? 0,
-      ) || null,
+      commandId: clean(turnCommand?.commandId || resolvedRunConfig?.commandId),
+      commandIdConsumed: Boolean(clean(turnCommand?.commandId)),
+      expectedAggregateVersion: expectedAggregateVersion ?? null,
+      expectedAggregateVersionConsumed: expectedAggregateVersion === commandExpectedAggregateVersion,
+      committedAggregateVersion: Number(committedTurnResult?.aggregateVersion || 0) || null,
     },
   };
 }

@@ -9,18 +9,18 @@ export function createRequestHash(payload = {}) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
-export function assertIdempotencyRequestMatches(storedHash = "", requestHash = "") {
+export function assertCommandRequestMatches(storedHash = "", requestHash = "") {
   if (!storedHash || storedHash === requestHash) return;
-  const error = new Error("idempotency key was reused with a different request");
+  const error = new Error("commandId was reused with a different request");
   error.statusCode = 409;
-  error.errorCode = "IDEMPOTENCY_KEY_REUSED";
+  error.errorCode = "COMMAND_ID_REUSE_CONFLICT";
   throw error;
 }
 
-export function findMutationReceipt(session = {}, operation = "", idempotencyKey = "") {
-  if (!idempotencyKey) return null;
+export function findMutationReceipt(session = {}, operation = "", commandId = "") {
+  if (!commandId) return null;
   return (Array.isArray(session?.mutationReceipts) ? session.mutationReceipts : []).find((receipt) =>
-    receipt?.operation === operation && receipt?.idempotencyKey === idempotencyKey) || null;
+    receipt?.operation === operation && receipt?.commandId === commandId) || null;
 }
 
 export function rememberMutationReceipt(session = {}, receipt = {}) {
@@ -30,14 +30,13 @@ export function rememberMutationReceipt(session = {}, receipt = {}) {
   ].slice(-100);
 }
 
-export function normalizeExpectedVersion(expectedVersion) {
-  if (expectedVersion === null || expectedVersion === undefined || expectedVersion === "") return null;
-  const normalized = Number(expectedVersion);
-  if (!Number.isSafeInteger(normalized) || normalized < 0) {
-    const error = new Error("expectedVersion must be a non-negative safe integer");
+export function normalizeExpectedAggregateVersion(expectedAggregateVersion) {
+  if (expectedAggregateVersion === null || expectedAggregateVersion === undefined || expectedAggregateVersion === "") return null;
+  if (!Number.isSafeInteger(expectedAggregateVersion) || expectedAggregateVersion < 0) {
+    const error = new Error("expectedAggregateVersion must be a non-negative safe integer");
     error.statusCode = 400;
-    error.errorCode = "INVALID_SESSION_VERSION";
+    error.errorCode = "INVALID_SESSION_AGGREGATE_VERSION";
     throw error;
   }
-  return normalized;
+  return expectedAggregateVersion;
 }

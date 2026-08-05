@@ -5,11 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTurnReplacementCommit } from "@noobot/shared/turn-replacement-protocol";
+import { createTurnReplacementCommit } from "@noobot/session-protocol";
 import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
 import { commitTurnReplacement } from "../src/application/commit-turn-replacement.js";
 import { createAuthoritativeTurnSnapshot } from "../src/application/authority-query-service.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/event-protocol/turn-lifecycle";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol/turn-lifecycle";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
 
 function acceptedTurn() {
@@ -36,8 +36,9 @@ function replacement(commandId = "replace-old", replacementTurnScopeId = "turn-n
   return createTurnReplacementCommit({
     commandId,
     sessionId: "session-1",
-    committedVersion: 2,
+    committedAggregateVersion: 2,
     replacedTurnScopeIds: ["turn-old"],
+    replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId,
     replacementUserMessageId: "user-new",
     committedAt: "2026-07-31T00:00:01.000Z",
@@ -62,10 +63,11 @@ test("turn replacement atomically removes lifecycle projection and outbox state"
   assert.deepEqual(committed.eventOutbox, []);
   assert.deepEqual(committed.lifecycle.replacedTurns["turn-old"], {
     turnScopeId: "turn-old",
+    replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
     replacementUserMessageId: "user-new",
     commandId: "replace-old",
-    committedVersion: 2,
+    committedAggregateVersion: 2,
     replacedTurnScopeIds: ["turn-old"],
     sequence: 2,
     committedAt: "2026-07-31T00:00:01.000Z",
@@ -119,8 +121,9 @@ test("turn replacement rejects partial or mutated replay of one command", () => 
   const firstCommit = createTurnReplacementCommit({
     commandId: "replace-many",
     sessionId: "session-1",
-    committedVersion: 2,
+    committedAggregateVersion: 2,
     replacedTurnScopeIds: ["turn-old", "turn-tail"],
+    replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
     replacementUserMessageId: "user-new",
     committedAt: "2026-07-31T00:00:01.000Z",
@@ -211,8 +214,9 @@ test("turn replacement removes the authoritative Continue edge when replacing it
     replacement: createTurnReplacementCommit({
       commandId: "replace-target",
       sessionId: "session-1",
-      committedVersion: 3,
+      committedAggregateVersion: 3,
       replacedTurnScopeIds: ["turn-target"],
+      replacementDialogProcessId: "dialog-replacement",
       replacementTurnScopeId: "turn-replacement",
       replacementUserMessageId: "user-replacement",
       committedAt: "2026-07-31T00:00:02.000Z",

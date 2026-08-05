@@ -40,7 +40,7 @@ POST /internal/session/:userId/:sessionId/messages/delete-from
   },
   "parentSessionId": "optional",
   "expectedVersion": 12,
-  "idempotencyKey": "uuid"
+  "commandId": "uuid"
 }
 ```
 
@@ -72,7 +72,7 @@ POST /internal/session/:userId/:sessionId/messages/resend-from
   "content": "edited user content",
   "parentSessionId": "optional",
   "expectedVersion": 12,
-  "idempotencyKey": "uuid"
+  "commandId": "uuid"
 }
 ```
 
@@ -87,7 +87,7 @@ POST /internal/session/:userId/:sessionId/messages/resend-from
 ## 4. 并发、幂等与失败补偿
 
 - `expectedVersion`：前端提交操作时携带当前 session 版本；后端保存前比对，不一致返回 `409 Conflict`，要求前端刷新会话。
-- `idempotencyKey`：同一用户、同一 session、同一操作 key 重放时返回相同结果，避免双击或重试导致重复删除/重复发送。
+- `commandId`：同一用户、同一 Session、同一命令 ID 重放时返回相同结果，避免双击或重试导致重复删除/重复发送。
 - 原子性：删除与重发应尽量放入同一服务方法；如果存储层不支持事务，也要用版本检查 + 操作日志保证可恢复。
 - anchor 不存在：返回 `404` 或业务错误，不应按近似位置删除。
 - anchor 已被删除：若命中相同幂等 key，返回上次结果；若不是同 key，返回冲突并要求刷新。
@@ -108,7 +108,7 @@ POST /internal/session/:userId/:sessionId/messages/resend-from
 | 删除期间仍在运行 | 点击删除 | 先停止运行，停止失败则不删除；停止成功才进入后端删除 |
 | 重发期间仍在运行 | 点击重发 | 先停止运行，失败不删不发；成功后删除旧尾段并发送新内容 |
 | 并发版本冲突 | 两端同时操作同一 session | 后端返回 409，前端刷新，不覆盖新状态 |
-| 重复点击/请求重试 | 同一 idempotencyKey 重放 | 返回同一结果，不重复发送、不重复追加 |
+| 重复点击/请求重试 | 同一 commandId 重放 | 返回同一结果，不重复发送、不重复追加 |
 | anchor 不存在 | 删除或重发不存在消息 | 不执行近似删除，返回明确错误 |
 | 发送失败 | 旧尾段已删但新发送失败 | 返回可恢复状态；前端按后端快照恢复或提示重试 |
 

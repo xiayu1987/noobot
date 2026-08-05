@@ -265,12 +265,22 @@ async function invokeHelpModel({
         userConfig,
         streaming: false,
         context: { runtime },
+        invocation: {
+          flow: "tool.request_help",
+          purpose: "collaboration_help",
+          domain: "collaboration",
+        },
       })
     : createChatModel({
         globalConfig,
         userConfig,
         streaming: false,
         context: { runtime },
+        invocation: {
+          flow: "tool.request_help",
+          purpose: "collaboration_help",
+          domain: "collaboration",
+        },
       });
   const response = await llm.invoke([new HumanMessage(helpContent)], {
     signal: runtime?.abortSignal || undefined,

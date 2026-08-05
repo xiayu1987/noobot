@@ -14,18 +14,18 @@ function numericValue(value) {
   return null;
 }
 
-export function getCurrentSessionVersion(activeSession) {
+export function getCurrentSessionAggregateVersion(activeSession) {
   const session = activeSession?.value || activeSession;
-  return session?.version ?? session?.revision;
+  return session?.aggregateVersion;
 }
 
-export function isSessionVersionConflict(result, payload) {
-  if (String(payload?.errorCode || "").trim() === "SESSION_VERSION_CONFLICT") return true;
+export function isSessionAggregateVersionConflict(result, payload) {
+  if (String(payload?.errorCode || "").trim() === "SESSION_AGGREGATE_VERSION_CONFLICT") return true;
   const errorText = String(payload?.error || payload?.message || "").toLowerCase();
   return errorText.includes("version") && errorText.includes("conflict");
 }
 
-export function isNewerSessionVersion(nextVersion, currentVersion) {
+export function isNewerSessionAggregateVersion(nextVersion, currentVersion) {
   if (!hasValue(nextVersion)) return false;
   if (!hasValue(currentVersion)) return true;
   const nextNumber = numericValue(nextVersion);
@@ -34,28 +34,21 @@ export function isNewerSessionVersion(nextVersion, currentVersion) {
   return nextVersion !== currentVersion;
 }
 
-export function applyLatestSessionVersion(session, source = {}) {
+export function applyLatestSessionAggregateVersion(session, source = {}) {
   if (!session || !source) return false;
-  let changed = false;
-  if (isNewerSessionVersion(source.version, session.version)) {
-    session.version = source.version;
-    changed = true;
-  }
-  if (isNewerSessionVersion(source.revision, session.revision)) {
-    session.revision = source.revision;
-    changed = true;
-  }
-  return changed;
+  if (!isNewerSessionAggregateVersion(source.aggregateVersion, session.aggregateVersion)) return false;
+  session.aggregateVersion = source.aggregateVersion;
+  return true;
 }
 
-export function createSessionVersionManager({
+export function createSessionAggregateVersionManager({
   activeSession,
   fetchSessionDetail,
   applySessionDetail,
   log = null,
 } = {}) {
   function getVersion() {
-    return getCurrentSessionVersion(activeSession);
+    return getCurrentSessionAggregateVersion(activeSession);
   }
 
   async function refreshAfterConflict({ sessionId, previousVersion, detailOptions = {}, logContext = {} } = {}) {
@@ -70,48 +63,48 @@ export function createSessionVersionManager({
     log?.("versionConflict.detail.apply.before", {
       sessionId,
       ...logContext,
-      version: getVersion(),
+      aggregateVersion: getVersion(),
     });
     applySessionDetail(detail);
     const nextVersion = getVersion();
-    const changed = isNewerSessionVersion(nextVersion, previousVersion);
+    const changed = isNewerSessionAggregateVersion(nextVersion, previousVersion);
     log?.("versionConflict.detail.apply.after", {
       sessionId,
       ...logContext,
-      version: nextVersion,
+      aggregateVersion: nextVersion,
       previousVersion,
       versionChanged: changed,
     });
     return changed;
   }
 
-  async function runVersionedMutation({
+  async function runAggregateVersionedMutation({
     mutate,
     shouldRetry = true,
     refreshOptions = {},
   } = {}) {
     if (typeof mutate !== "function") return null;
     let attempt = 1;
-    let expectedVersion = getVersion();
-    let response = await mutate({ expectedVersion, attempt });
+    let expectedAggregateVersion = getVersion();
+    let response = await mutate({ expectedAggregateVersion, attempt });
     const failed = () => response?.result?.ok === false || response?.payload?.ok === false;
-    if (shouldRetry && failed() && isSessionVersionConflict(response?.result, response?.payload)) {
+    if (shouldRetry && failed() && isSessionAggregateVersionConflict(response?.result, response?.payload)) {
       const refreshed = await refreshAfterConflict({
-        previousVersion: expectedVersion,
+        previousVersion: expectedAggregateVersion,
         ...refreshOptions,
       });
       if (refreshed) {
         attempt = 2;
-        expectedVersion = getVersion();
-        response = await mutate({ expectedVersion, attempt });
+        expectedAggregateVersion = getVersion();
+        response = await mutate({ expectedAggregateVersion, attempt });
       }
     }
-    return { ...response, expectedVersion, attempt };
+    return { ...response, expectedAggregateVersion, attempt };
   }
 
   return {
     getVersion,
     refreshAfterConflict,
-    runVersionedMutation,
+    runAggregateVersionedMutation,
   };
 }

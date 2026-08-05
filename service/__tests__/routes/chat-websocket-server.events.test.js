@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTurnLifecycleEnvelope } from "@noobot/event-protocol";
+import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { startServerWithWs, closeServer, callChatWs } from "./chat-websocket-server.test-helpers.js";
 

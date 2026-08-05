@@ -26,6 +26,17 @@ export async function waitForLifecycle(capture, sessionId, eventType, after = 0,
     .slice(after).find((event) => event.eventType === eventType && (!turnScopeId || event.turnScopeId === turnScopeId)), { timeoutMs: 120_000 });
 }
 
+export async function waitForTurnTerminal(
+  capture,
+  sessionId,
+  turnScopeId = "",
+  { timeoutMs = 120_000 } = {},
+) {
+  const terminalTypes = new Set(["turn.completed", "turn.stop_completed", "turn.failed"]);
+  return waitForCaptured(() => lifecycleForSession(capture, sessionId)
+    .find((event) => terminalTypes.has(event.eventType) && (!turnScopeId || event.turnScopeId === turnScopeId)), { timeoutMs });
+}
+
 export function assertCommandChain(capture, sessionId) {
   const commands = commandsForSession(capture, sessionId);
   expect(commands.length).toBeGreaterThan(0);

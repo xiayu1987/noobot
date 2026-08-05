@@ -55,10 +55,6 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
       calls.push(["traceHook", point]);
       return { fsmState: "planning", fsmRejected: false };
     },
-    createRunTraceSink: (ctx, options) => {
-      calls.push(["createRunTraceSink", !!ctx, !!options]);
-      return async () => {};
-    },
     flushAllManifests: async () => {
       calls.push(["flushAllManifests"]);
     },
@@ -74,13 +70,16 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
     capabilityModelInvoker: null,
     capabilityToolAllowlist: [],
     capabilityToolAllowlistByPurpose: {},
-    acceptance: {},
+    planning: { planUpdate: { triggerTurnsThreshold: 1 } },
+    acceptance: { phase: { triggerTurnsThreshold: 1 } },
     review: {},
   };
   const capabilityRuntime = {
     async runHook(point, ctx, payload) {
       calls.push(["runHook", point, !!ctx, payload?.pluginName]);
-      assert.equal(typeof payload?.harness?.runTraceSink, "function");
+      assert.equal("runTraceSink" in payload.harness, false);
+      assert.deepEqual(payload.harness.planning, options.planning);
+      assert.deepEqual(payload.harness.acceptance, options.acceptance);
       await payload?.harness?.globalBootstrap?.();
     },
   };

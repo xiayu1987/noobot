@@ -41,6 +41,7 @@ export async function invokeModelWithTextAndAttachments({
   const modelInstance = createChatModelFromSpec(resolvedModelSpec, {
     streaming,
     context,
+    invocation: context?.invocation,
   });
   const userText = String(text || "").trim();
   const normalizedAttachments = Array.isArray(attachments) ? attachments : [];
