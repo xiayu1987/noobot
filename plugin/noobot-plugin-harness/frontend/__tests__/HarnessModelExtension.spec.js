@@ -74,25 +74,18 @@ describe("HarnessModelExtension", () => {
     expect(wrapper.find("el-slider").attributes("modelvalue")).toBe("1");
   });
 
-  it("writes each Harness threshold to its single owned config field", () => {
-    const patch = vi.fn();
-    const wrapper = mountHarnessModelExtension({ patch });
+  it("does not expose Harness runtime thresholds in the frontend", () => {
+    const wrapper = mountHarnessModelExtension({
+      pluginConfig: {
+        guidance: { summary: { turnsThreshold: 1 } },
+        planning: { planUpdate: { triggerTurnsThreshold: 2 } },
+        acceptance: { phase: { triggerTurnsThreshold: 3 } },
+      },
+    });
 
-    wrapper.vm.onHarnessTurnsThresholdChange("summary", 1);
-    wrapper.vm.onHarnessTurnsThresholdChange("planUpdate", 2);
-    wrapper.vm.onHarnessTurnsThresholdChange("phaseAcceptance", 3);
-
-    expect(patch).toHaveBeenNthCalledWith(1, {
-      guidance: { summary: { turnsThreshold: 1 } },
-    });
-    expect(patch).toHaveBeenNthCalledWith(2, {
-      planning: { planUpdate: { triggerTurnsThreshold: 2 } },
-    });
-    expect(patch).toHaveBeenNthCalledWith(3, {
-      acceptance: { phase: { triggerTurnsThreshold: 3 } },
-    });
-    expect(wrapper.find('[data-threshold-key="summary"]').exists()).toBe(true);
-    expect(wrapper.find('[data-threshold-key="planUpdate"]').exists()).toBe(true);
-    expect(wrapper.find('[data-threshold-key="phaseAcceptance"]').exists()).toBe(true);
+    expect(wrapper.findAll("el-input-number")).toHaveLength(0);
+    expect(wrapper.find("[data-threshold-key]").exists()).toBe(false);
+    expect(wrapper.text()).not.toMatch(/Harness 小结轮次|计划更新轮次|阶段验收轮次/);
+    expect(wrapper.find(".plugin-guidance-analysis-control").exists()).toBe(true);
   });
 });

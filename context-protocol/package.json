@@ -18,6 +18,7 @@
     "./window-reducer": "./src/window-reducer.js",
     "./block-strategy": "./src/block-strategy.js",
     "./summary-policy": "./src/summary-policy.js",
+    "./injected-message-policy": "./src/injected-message-policy.js",
     "./snapshot-policy": "./src/snapshot-policy.js",
     "./terminal-history-policy": "./src/terminal-history-policy.js",
     "./agent-context-schema": "./src/agent-context-schema.js",

@@ -282,6 +282,7 @@ test("mergeConfig: full/programming/text 为内置情景且用户只能覆盖内
     "process_content_task",
     "user_interaction",
     "task_summary",
+    "task_check",
     "request_help",
     "web_search",
   ]);

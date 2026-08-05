@@ -157,6 +157,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "process_content_task",
     "user_interaction",
     "task_summary",
+    "task_check",
     "request_help",
     "web_search",
   ]);

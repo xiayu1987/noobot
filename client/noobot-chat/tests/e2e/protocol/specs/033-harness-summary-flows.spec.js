@@ -9,7 +9,7 @@ import {
   sendMessage,
   setHarnessCapability,
   setHarnessGuidanceAnalysisIntensity,
-  setHarnessTurnsThreshold,
+  setHarnessRuntimeThresholds,
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import { assertCapabilityModelTraces, assertHarnessRun } from "../helpers/harness-assertions.js";
@@ -50,9 +50,11 @@ test("@full PBE-033 Harness 低轮次完整流程与小结数据闭环", async (
   await setHarnessCapability(noobot.page, "Planning", true);
   await setHarnessCapability(noobot.page, "Planning Acceptance", true);
   await setHarnessGuidanceAnalysisIntensity(noobot.page, 9);
-  await setHarnessTurnsThreshold(noobot.page, "summary", 2);
-  await setHarnessTurnsThreshold(noobot.page, "planUpdate", 3);
-  await setHarnessTurnsThreshold(noobot.page, "phaseAcceptance", 1);
+  await setHarnessRuntimeThresholds(noobot.page, {
+    summaryTurns: 2,
+    planUpdateTurns: 3,
+    phaseAcceptanceTurns: 1,
+  });
 
   await sendMessage(noobot.page, uniquePrompt(testInfo, [
     "完成一个五步只读计算链，每一步分别调用一次 execute_script。",

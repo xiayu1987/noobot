@@ -11,8 +11,15 @@ import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
 import {
   DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS,
-  TASK_SUMMARY_TOOL_NAME,
 } from "../constants/index.js";
+import {
+  DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
+} from "@noobot/context-protocol/summary-policy";
+import {
+  CONTEXT_INJECTED_MESSAGE_TRIGGER,
+  CONTEXT_INJECTED_MESSAGE_TYPE,
+  consumeInjectedContextMessages,
+} from "@noobot/context-protocol/injected-message-policy";
 import { handleEngineError } from "../errors/index.js";
 import {
   maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
@@ -20,8 +27,6 @@ import {
   maybePromptHelpToolByLoop,
   maybeRequestPhaseSummary,
   maybeRequestTaskCheck,
-  removePhaseSummaryPromptMessages,
-  removeTaskCheckPromptMessages,
 } from "../loop-control.js";
 import { resolveLlmForTurn } from "../../models/runtime/model-manager.js";
 import { assertNotAborted } from "../utils/error-utils.js";
@@ -30,7 +35,11 @@ import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
-import { appendContextMessage as appendMessage } from "@noobot/context-protocol/context-mutation";
+import {
+  appendContextMessage as appendMessage,
+  removeContextMessagesByIds,
+} from "@noobot/context-protocol/context-mutation";
+import { getMessageId } from "@noobot/context-protocol/message-store";
 import {
   clearMainFlowFinalNoToolsTurnInstruction,
   consumeMainFlowFinalNoToolsTurnInstruction,
@@ -46,37 +55,26 @@ export function createTurnOrchestrator({
   invokeWithToolsTurnFn = invokeWithToolsTurn,
   processToolResultsFn = processToolResults,
   buildLoopResultFn = buildLoopResult,
-  removePhaseSummaryPromptMessagesFn = removePhaseSummaryPromptMessages,
+  consumeInjectedContextMessagesFn = consumeInjectedContextMessages,
   maybeRequestPhaseSummaryFn = maybeRequestPhaseSummary,
   maybeRequestTaskCheckFn = maybeRequestTaskCheck,
-  removeTaskCheckPromptMessagesFn = removeTaskCheckPromptMessages,
   maybeFinalizeNoToolsAfterPhaseSummaryOverflowFn = maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
   maybePromptHelpToolByLoopFn = maybePromptHelpToolByLoop,
   maybePromptHelpToolByFailureFn = maybePromptHelpToolByFailure,
   handleEngineErrorFn = handleEngineError,
 } = {}) {
-  function removeToolChoiceRequiredRetryPrompts(messages = []) {
-    if (!Array.isArray(messages)) return 0;
-    let removedCount = 0;
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const message = messages[index];
-      const marker =
-        message?.additional_kwargs?.noobotInternalMessageType ||
-        message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-        message?.metadata?.noobotInternalMessageType ||
-        message?.lc_kwargs?.metadata?.noobotInternalMessageType ||
-        "";
-      if (marker !== "tool_choice_required_retry_prompt") continue;
-      messages.splice(index, 1);
-      removedCount += 1;
-    }
-    return removedCount;
-  }
-
   function resolveTaskSummaryCall(calls = []) {
     return (Array.isArray(calls) ? calls : []).find(
       (call = {}) => String(call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
     ) || null;
+  }
+
+  function consumeModelInvocationLifecycle(modelContext = {}) {
+    return consumeInjectedContextMessagesFn(modelContext, {
+      trigger: {
+        type: CONTEXT_INJECTED_MESSAGE_TRIGGER.MODEL_INVOCATION_COMPLETED,
+      },
+    });
   }
 
   function removeLastAssistantToolCallMessage({ loopState: targetLoopState, turnMessageStore = null } = {}) {
@@ -88,7 +86,11 @@ export function createTurnOrchestrator({
       ? lastMessage.tool_calls
       : [];
     if (lastToolCalls.length) {
-      modelMessages.pop();
+      const messageId = getMessageId(lastMessage);
+      if (!messageId) {
+        throw new Error("assistant tool-call message requires a canonical context message id");
+      }
+      removeContextMessagesByIds(targetLoopState.modelContext, [messageId]);
     }
     if (turnMessageStore && typeof turnMessageStore.removeLast === "function") {
       turnMessageStore.removeLast(
@@ -124,6 +126,7 @@ export function createTurnOrchestrator({
           turn: finalTurn,
           forceToolChoiceNone: true,
         });
+        consumeModelInvocationLifecycle(loopState.modelContext);
         return buildLoopResultFn({
           output: noToolsResult.output,
           assistantMessageId: noToolsResult.assistantMessageId,
@@ -156,6 +159,7 @@ export function createTurnOrchestrator({
           turn,
           forceToolChoiceNone: true,
         });
+        consumeModelInvocationLifecycle(loopState.modelContext);
         return buildLoopResultFn({
           output: finalResult.output,
           assistantMessageId: finalResult.assistantMessageId,
@@ -172,7 +176,8 @@ export function createTurnOrchestrator({
         appendMessage(loopState.modelContext, new HumanMessage({
           content: tEngine(runtime, "toolLoopLimitFinalizePrompt", { maxTurns }),
           additional_kwargs: {
-            noobotInternalMessageType: "tool_loop_limit_finalize_prompt",
+            noobotInternalMessageType:
+              CONTEXT_INJECTED_MESSAGE_TYPE.TOOL_LOOP_LIMIT_FINALIZE_PROMPT,
           },
         }), { block: "incremental" });
         loopState.loopLimitFinalizePrompted = true;
@@ -200,6 +205,7 @@ export function createTurnOrchestrator({
 
       if (!Array.isArray(tools) || tools.length === 0) {
         const noToolsResult = await invokeNoToolsTurnFn({ modelState, loopState, turn });
+        consumeModelInvocationLifecycle(loopState.modelContext);
         return buildLoopResultFn({
           output: noToolsResult.output,
           assistantMessageId: noToolsResult.assistantMessageId,
@@ -213,7 +219,7 @@ export function createTurnOrchestrator({
       }
 
       const withToolsResult = await invokeWithToolsTurnFn({ modelState, loopState, turn });
-      removeTaskCheckPromptMessagesFn(loopState.modelContext);
+      consumeModelInvocationLifecycle(loopState.modelContext);
       await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
       if (withToolsResult?.mainFlowFinalNoToolsRequested === true) {
         const instruction =
@@ -237,7 +243,6 @@ export function createTurnOrchestrator({
       if (!calls.length) {
         if (isOverMaxTurns) {
           loopState.toolChoiceRetryPrompted = false;
-          removeToolChoiceRequiredRetryPrompts(loopState.modelContext.messages);
           return buildLoopResultFn({
             output: aiContentText,
             assistantMessageId: withToolsResult.assistantMessageId,
@@ -250,7 +255,6 @@ export function createTurnOrchestrator({
           });
         }
         loopState.toolChoiceRetryPrompted = false;
-        removeToolChoiceRequiredRetryPrompts(loopState.modelContext.messages);
         return buildLoopResultFn({
           output: aiContentText,
           assistantMessageId: withToolsResult.assistantMessageId,
@@ -270,7 +274,8 @@ export function createTurnOrchestrator({
         appendMessage(loopState.modelContext, new HumanMessage({
           content: tEngine(runtime, "taskSummarySingleToolPrompt"),
           additional_kwargs: {
-            noobotInternalMessageType: "task_summary_single_tool_retry_prompt",
+            noobotInternalMessageType:
+              CONTEXT_INJECTED_MESSAGE_TYPE.TASK_SUMMARY_SINGLE_TOOL_RETRY_PROMPT,
           },
         }), { block: "incremental" });
         emitEvent(eventListener, "task_summary_multi_tool_call_rejected", {
@@ -297,6 +302,7 @@ export function createTurnOrchestrator({
           turn,
           forceToolChoiceNone: true,
         });
+        consumeModelInvocationLifecycle(loopState.modelContext);
         return buildLoopResultFn({
           output: finalResult.output,
           assistantMessageId: finalResult.assistantMessageId,
@@ -326,10 +332,12 @@ export function createTurnOrchestrator({
 
       loopState.turnMessages = turnMessageStore.toArray();
       loopState.turnTasks = turnTaskStore.toArray();
-
-      if (hasTaskSummaryCall) {
-        removePhaseSummaryPromptMessagesFn(loopState.modelContext);
-      }
+      consumeInjectedContextMessagesFn(loopState.modelContext, {
+        trigger: {
+          type: CONTEXT_INJECTED_MESSAGE_TRIGGER.TOOL_CALLS_COMPLETED,
+          toolNames: calls.map((call = {}) => String(call?.name || "").trim()).filter(Boolean),
+        },
+      });
 
       maybeRequestPhaseSummaryFn({ modelState, loopState, toolCallResults });
       maybeRequestTaskCheckFn({ modelState, loopState, toolCallResults });
@@ -367,6 +375,7 @@ export function createTurnOrchestrator({
           turn: nextTurn,
           forceToolChoiceNone: true,
         });
+        consumeModelInvocationLifecycle(loopState.modelContext);
         return buildLoopResultFn({
           output: finalResult.output,
           assistantMessageId: finalResult.assistantMessageId,

@@ -8,7 +8,6 @@ import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
 import {
   createModelContext,
-  getModelContextRevision,
 } from "@noobot/context-protocol";
 
 import {
@@ -17,11 +16,9 @@ import {
   maybePromptHelpToolByFailure,
   maybeRequestPhaseSummary,
   maybeRequestTaskCheck,
-  removePhaseSummaryPromptMessages,
-  removeTaskCheckPromptMessages,
 } from "../../../src/runtime/loop-control.js";
 
-test("task check prompt is periodic, one-shot, and independent from phase summary state", () => {
+test("task check prompt is periodic and independent from phase summary state", () => {
   const events = [];
   const modelContext = createModelContext({
     messageBlocks: { system: [], history: [], incremental: [] },
@@ -44,11 +41,10 @@ test("task check prompt is periodic, one-shot, and independent from phase summar
     "noobot.task_check_prompt",
   );
   assert.equal(modelState.runtime.systemRuntime.needsPhaseSummary, true);
-  assert.equal(removeTaskCheckPromptMessages(modelContext), 1);
-  assert.equal(removeTaskCheckPromptMessages(modelContext), 0);
+  assert.equal(modelState.runtime.systemRuntime.taskCheckLoopCount, 0);
   assert.equal(maybeRequestTaskCheck({ modelState, loopState }), false);
-  assert.equal(maybeRequestTaskCheck({ modelState, loopState }), true);
-  assert.equal(events.filter((event) => event?.event === "task_check_required").length, 2);
+  assert.equal(modelState.runtime.systemRuntime.taskCheckLoopCount, 1);
+  assert.equal(events.filter((event) => event?.event === "task_check_required").length, 1);
 });
 
 test("a task_check call starts the next periodic slice without adding a prompt", () => {
@@ -68,65 +64,6 @@ test("a task_check call starts the next periodic slice without adding a prompt",
   }), false);
   assert.equal(modelState.runtime.systemRuntime.taskCheckLoopCount, 0);
   assert.equal(modelContext.messages.length, 0);
-});
-
-test("removePhaseSummaryPromptMessages removes marked prompts from authoritative blocks", () => {
-  const systemMessage = { role: "system", content: "system" };
-  const historyMessage = { role: "user", content: "history" };
-  const regularMessage = { role: "user", content: "regular" };
-  const sameTextWithoutMarker = { role: "user", content: "请执行阶段小结。" };
-  const prompts = ["system", "history", "incremental"].map((blockName) => ({
-    role: "user",
-    content: `summary prompt in ${blockName}`,
-    additional_kwargs: { noobotInternalMessageType: "noobot.phase_summary_prompt" },
-  }));
-  const modelContext = createModelContext({
-    messageBlocks: {
-      system: [systemMessage, prompts[0]],
-      history: [historyMessage, prompts[1]],
-      incremental: [regularMessage, prompts[2], sameTextWithoutMarker],
-    },
-  });
-  const revision = getModelContextRevision(modelContext);
-
-  const removedCount = removePhaseSummaryPromptMessages(modelContext);
-
-  assert.equal(removedCount, 3);
-  assert.equal(getModelContextRevision(modelContext), revision + 1);
-  assert.deepEqual(modelContext.messageBlocks.system, [systemMessage]);
-  assert.deepEqual(modelContext.messageBlocks.history, [historyMessage]);
-  assert.deepEqual(modelContext.messageBlocks.incremental, [regularMessage, sameTextWithoutMarker]);
-  assert.deepEqual(modelContext.messages, [systemMessage, historyMessage, regularMessage, sameTextWithoutMarker]);
-});
-
-test("removePhaseSummaryPromptMessages does not accumulate prompts across summary cycles", () => {
-  const modelContext = createModelContext({
-    messageBlocks: { system: [], history: [], incremental: [] },
-  });
-  const modelState = {
-    eventListener: { onEvent() {} },
-    runtime: {
-      systemRuntime: {
-        toolLoopExecutionCount: 1,
-        phaseSummaryLoopCount: 1,
-      },
-    },
-  };
-  const loopState = {
-    tools: [{ name: "task_summary" }],
-    phaseSummaryLoopTurns: 1,
-    modelContext,
-  };
-
-  for (let cycle = 0; cycle < 2; cycle += 1) {
-    assert.equal(maybeRequestPhaseSummary({ modelState, loopState }), true);
-    assert.equal(modelContext.messageBlocks.incremental.length, 1);
-    assert.equal(removePhaseSummaryPromptMessages(modelContext), 1);
-    assert.equal(modelContext.messageBlocks.incremental.length, 0);
-    assert.equal(modelContext.messages.length, 0);
-    modelState.runtime.systemRuntime.needsPhaseSummary = false;
-    modelState.runtime.systemRuntime.phaseSummaryLoopCount = 1;
-  }
 });
 
 test("maybePromptHelpToolByFailure injects prompt and resets failure counter", () => {

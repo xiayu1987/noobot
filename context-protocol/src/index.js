@@ -15,6 +15,7 @@ export * from "./message-policy.js";
 export * from "./window-reducer.js";
 export * from "./block-strategy.js";
 export * from "./summary-policy.js";
+export * from "./injected-message-policy.js";
 export * from "./snapshot-policy.js";
 export * from "./terminal-history-policy.js";
 export * from "./agent-context-schema.js";

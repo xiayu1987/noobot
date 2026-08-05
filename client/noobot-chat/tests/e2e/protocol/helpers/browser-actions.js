@@ -83,16 +83,85 @@ export async function setHarnessGuidanceAnalysisIntensity(page, value) {
   await expect(page.locator(".more-panel-overlay")).toBeHidden();
 }
 
-export async function setHarnessTurnsThreshold(page, key, value) {
+export async function setHarnessRuntimeThresholds(page, thresholds = {}) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
   if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
-  const control = panel.locator(`[data-threshold-key="${key}"]`);
-  await expect(control).toBeVisible();
-  const input = control.locator("input");
-  await input.fill(String(value));
-  await input.press("Enter");
-  await expect(input).toHaveValue(String(value));
+  await expect(panel.locator("[data-threshold-key], .plugin-turn-threshold-control")).toHaveCount(0);
+  const normalized = Object.fromEntries(
+    Object.entries(thresholds)
+      .map(([key, value]) => [key, Number(value)])
+      .filter(([, value]) => Number.isInteger(value) && value > 0),
+  );
+  await panel.locator(".composer-options").evaluate((_element, runtimeThresholds) => {
+    const rootVNode = document.querySelector("#app")?._vnode;
+    const visited = new Set();
+    let layoutComponent = null;
+    const visit = (vnode, depth = 0) => {
+      if (!vnode || typeof vnode !== "object" || visited.has(vnode) || depth > 40) return;
+      visited.add(vnode);
+      if (Array.isArray(vnode)) {
+        vnode.forEach((child) => visit(child, depth));
+        return;
+      }
+      const component = vnode.component;
+      if (component) {
+        const name = String(component.type?.__name || component.type?.name || "");
+        if (name === "AppShellLayout") {
+          layoutComponent = component;
+          return;
+        }
+        visit(component.subTree, depth + 1);
+      }
+      if (Array.isArray(vnode.children)) {
+        vnode.children.forEach((child) => visit(child, depth + 1));
+      }
+    };
+    visit(rootVNode);
+    const updatePluginModelConfig = layoutComponent?.vnode?.props?.["onUpdate:pluginModelConfig"];
+    if (typeof updatePluginModelConfig !== "function") {
+      throw new Error("AppShellLayout plugin-model-config event boundary is unavailable");
+    }
+    const currentConfig = layoutComponent.props?.pluginModelConfig || {};
+    const currentHarness = currentConfig.harness || {};
+    const nextHarness = {
+      ...currentHarness,
+      ...(runtimeThresholds.summaryTurns
+        ? {
+            guidance: {
+              ...(currentHarness.guidance || {}),
+              summary: {
+                ...(currentHarness.guidance?.summary || {}),
+                turnsThreshold: runtimeThresholds.summaryTurns,
+              },
+            },
+          }
+        : {}),
+      ...(runtimeThresholds.planUpdateTurns
+        ? {
+            planning: {
+              ...(currentHarness.planning || {}),
+              planUpdate: {
+                ...(currentHarness.planning?.planUpdate || {}),
+                triggerTurnsThreshold: runtimeThresholds.planUpdateTurns,
+              },
+            },
+          }
+        : {}),
+      ...(runtimeThresholds.phaseAcceptanceTurns
+        ? {
+            acceptance: {
+              ...(currentHarness.acceptance || {}),
+              phase: {
+                ...(currentHarness.acceptance?.phase || {}),
+                triggerTurnsThreshold: runtimeThresholds.phaseAcceptanceTurns,
+              },
+            },
+          }
+        : {}),
+    };
+    updatePluginModelConfig({ ...currentConfig, harness: nextHarness });
+  }, normalized);
   await page.locator(".more-collapse-btn").click();
   await expect(page.locator(".more-panel-overlay")).toBeHidden();
 }
