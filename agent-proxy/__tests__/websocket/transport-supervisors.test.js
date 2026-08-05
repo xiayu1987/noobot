@@ -39,6 +39,36 @@ test("upstream supervisor ignores close callbacks from a replaced generation", (
   assert.equal(supervisor.status().phase, "connecting");
 });
 
+test("upstream supervisor closes only the connection generation and purpose owned by its caller", () => {
+  FakeWebSocket.instances = [];
+  const supervisor = new UpstreamTransportSupervisor(FakeWebSocket);
+  const queryConnection = supervisor.connect("ws://query", {}, { purpose: "snapshot_query" });
+  const runConnection = supervisor.connect("ws://run", {}, { purpose: "run" });
+
+  assert.equal(
+    supervisor.closeOwnedConnection(
+      queryConnection,
+      1000,
+      "snapshot_query_complete",
+      { purpose: "snapshot_query" },
+    ),
+    false,
+  );
+  assert.equal(supervisor.socket, runConnection.socket);
+  assert.equal(supervisor.status().purpose, "run");
+
+  assert.equal(
+    supervisor.closeOwnedConnection(
+      runConnection,
+      1000,
+      "snapshot_query_complete",
+      { purpose: "snapshot_query" },
+    ),
+    false,
+  );
+  assert.equal(supervisor.socket, runConnection.socket);
+});
+
 test("upstream supervisor terminates a replaced socket that never completes close", async () => {
   class HangingWebSocket extends EventEmitter {
     static OPEN = 1;

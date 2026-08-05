@@ -23,9 +23,10 @@ export class UpstreamTransportSupervisor {
     this.lastSeenAtMs = 0;
     this.awaitingPong = false;
     this.handlers = null;
+    this.purpose = "";
   }
 
-  connect(url, handlers = {}) {
+  connect(url, handlers = {}, { purpose = "run" } = {}) {
     if (this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return null;
     const previousSocket = this.socket;
     let socket = null;
@@ -39,6 +40,7 @@ export class UpstreamTransportSupervisor {
     const generation = ++this.generation;
     this.socket = socket;
     this.handlers = handlers;
+    this.purpose = String(purpose || "").trim() || "run";
     this.phase = UPSTREAM_TRANSPORT_PHASE.CONNECTING;
     this.everConnected = true;
     this.lastSeenAtMs = Date.now();
@@ -72,9 +74,23 @@ export class UpstreamTransportSupervisor {
       this.socket = null;
       this.phase = UPSTREAM_TRANSPORT_PHASE.IDLE;
       this.handlers = null;
+      this.purpose = "";
       this.invokeHandler(handlers, "close", { socket, generation, code, reason });
     });
     return { socket, generation, previousSocket };
+  }
+
+  claimPurpose(purpose = "run") {
+    if (!this.socket || this.phase === UPSTREAM_TRANSPORT_PHASE.DISPOSED) return false;
+    this.purpose = String(purpose || "").trim() || "run";
+    return true;
+  }
+
+  closeOwnedConnection(connection = null, code = 1000, reason = "closed", { purpose = "" } = {}) {
+    if (!connection || !this.isCurrent(connection.socket, connection.generation)) return false;
+    const requiredPurpose = String(purpose || "").trim();
+    if (requiredPurpose && this.purpose !== requiredPurpose) return false;
+    return this.close(code, reason);
   }
 
   adopt(socket) {
@@ -85,6 +101,7 @@ export class UpstreamTransportSupervisor {
     this.generation += 1;
     this.socket = socket || null;
     this.handlers = null;
+    this.purpose = socket ? "run" : "";
     this.phase = !socket
       ? UPSTREAM_TRANSPORT_PHASE.IDLE
       : socket.readyState === this.WebSocket.OPEN
@@ -144,6 +161,7 @@ export class UpstreamTransportSupervisor {
     this.generation += 1;
     this.socket = null;
     this.handlers = null;
+    this.purpose = "";
     this.phase = UPSTREAM_TRANSPORT_PHASE.IDLE;
     this._retireSocket(socket, code, reason);
     this.invokeHandler(handlers, "close", { socket, generation: this.generation, code, reason, locallyInitiated: true });
@@ -157,6 +175,7 @@ export class UpstreamTransportSupervisor {
     this.generation += 1;
     this.socket = null;
     this.handlers = null;
+    this.purpose = "";
     this.phase = UPSTREAM_TRANSPORT_PHASE.DISPOSED;
     this._retireSocket(socket, code, reason);
     if (socket) this.invokeHandler(handlers, "close", { socket, generation: this.generation, code, reason, locallyInitiated: true });
@@ -200,6 +219,7 @@ export class UpstreamTransportSupervisor {
       phase: this.phase,
       hasSocket: Boolean(this.socket),
       readyState: this.socket?.readyState ?? this.WebSocket.CLOSED,
+      purpose: this.purpose,
       everConnected: this.everConnected,
       lastSeenAtMs: this.lastSeenAtMs,
       retiredSocketCount: this.retiredSockets.size,

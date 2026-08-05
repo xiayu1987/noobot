@@ -173,6 +173,61 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     await streamPromise;
   });
 
+  it("routes run events to the active stream while reconnect control is still in flight", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onStreamEvent = vi.fn();
+    const onReconnectData = vi.fn();
+    const streamPromise = client.stream({
+      commandType: "turn.resend",
+      commandId: "turn-overlap",
+      identity: { sessionId: "s-overlap", turnScopeId: "turn-overlap" },
+    }, onStreamEvent);
+    const socket = MockWebSocket.instances[0];
+    const reconnectPromise = client.reconnect({
+      currentSessionId: "s-overlap",
+      userId: "u-1",
+      onReconnectData,
+    });
+    const reconnectRequestId = JSON.parse(socket.sent[1]).requestId;
+
+    socket.emit(StreamEventEnum.TURN_LIFECYCLE, {
+      eventId: "lifecycle-overlap-1",
+      eventType: "turn.action_accepted",
+      sessionId: "s-overlap",
+      turnScopeId: "turn-overlap",
+      revision: 1,
+      sequence: 1,
+    });
+    socket.emit(StreamEventEnum.DELTA, {
+      sessionId: "s-overlap",
+      turnScopeId: "turn-overlap",
+      content: "run is active",
+    });
+
+    expect(onStreamEvent).toHaveBeenCalledWith({
+      event: StreamEventEnum.TURN_LIFECYCLE,
+      data: expect.objectContaining({ eventType: "turn.action_accepted" }),
+    });
+    expect(onStreamEvent).toHaveBeenCalledWith({
+      event: StreamEventEnum.DELTA,
+      data: expect.objectContaining({ content: "run is active" }),
+    });
+    expect(onReconnectData).not.toHaveBeenCalled();
+
+    socket.emit(StreamEventEnum.RECONNECT_COMPLETE, {
+      requestId: reconnectRequestId,
+      totalSessions: 1,
+    });
+    await reconnectPromise;
+    expect(onStreamEvent).toHaveBeenCalledTimes(2);
+
+    socket.emit(StreamEventEnum.DONE, {
+      sessionId: "s-overlap",
+      turnScopeId: "turn-overlap",
+    });
+    await streamPromise;
+  });
+
   it("multiplexes reconnect on the active stream socket without opening another connection", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();

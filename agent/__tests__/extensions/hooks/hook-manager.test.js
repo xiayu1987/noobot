@@ -85,6 +85,7 @@ test("withHookRuntimeMeta projects the canonical runtime identity", () => {
       sessionId: "s1",
       parentSessionId: "p1",
       dialogProcessId: "d1",
+      turnScopeId: "t1",
       caller: "user",
     },
   }, { phase: "turn" });
@@ -93,6 +94,7 @@ test("withHookRuntimeMeta projects the canonical runtime identity", () => {
     sessionId: "s1",
     parentSessionId: "p1",
     dialogProcessId: "d1",
+    turnScopeId: "t1",
     caller: "user",
     phase: "turn",
   });

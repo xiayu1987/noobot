@@ -16,7 +16,7 @@ import {
 import { normalizeApiKey, createChannelKey, buildFingerprint } from "../../shared/utils.js";
 import { writeAgentProxyRouteDebugEvent } from "../../runtime-events/route-debug-runtime-events.js";
 import { writeAgentTransportDebugEvent } from "../../runtime-events/agent-transport-debug-runtime-events.js";
-import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
+import { AGENT_COMMAND, RUN_COMMAND_TYPES } from "@noobot/agent-transport-protocol";
 
 class ChannelFlowMethods {
 
@@ -91,6 +91,9 @@ forwardToUpstream(channel, payload = {}) {
   }
   try {
     channel.upstreamSocket.send(JSON.stringify(payload || {}));
+    if (RUN_COMMAND_TYPES.includes(String(payload?.commandType || "").trim().toLowerCase())) {
+      channel.transport.claimPurpose("run");
+    }
     void writeAgentTransportDebugEvent({
       event: "agentProxy.agentTransport.commandForwarded",
       command: payload,

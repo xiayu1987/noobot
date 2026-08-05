@@ -315,7 +315,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
       },
     });
   },
-  });
+  }, { purpose: String(options?.purpose || "run").trim() || "run" });
   if (!connection?.socket) {
     channel.transport.phase = CHANNEL_STATUS.IDLE;
   }

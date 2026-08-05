@@ -91,13 +91,16 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
   const context = withHookRuntimeMeta(runtime, merged);
   attachModelContext(context, suppliedModelContext?.protocolVersion ? suppliedModelContext : null);
   emitAgentContextProtocolDebug(runtime?.eventListener || null, "hookDocumentConsumed", {
-    userId: context?.agentContext?.context?.identity?.userId,
-    sessionId: context?.agentContext?.context?.identity?.sessionId,
-    dialogProcessId: context?.modelContext?.activeTurnIdentity?.dialogProcessId,
-    turnScopeId: context?.modelContext?.activeTurnIdentity?.turnScopeId,
+    userId: context.userId,
+    sessionId: context.sessionId,
+    dialogProcessId:
+      context.modelContext?.activeTurnIdentity?.dialogProcessId || context.dialogProcessId,
+    turnScopeId:
+      context.modelContext?.activeTurnIdentity?.turnScopeId || context.turnScopeId,
   }, {
     consumer: `hook:${context.point}`,
     contextProtocolVersion: context.contextProtocolVersion,
+    hasModelContext: context.modelContext != null,
     modelContextProtocolVersion: Number(context.modelContext?.protocolVersion || 0),
     messageCount: Array.isArray(context.modelContext?.messages) ? context.modelContext.messages.length : 0,
   });

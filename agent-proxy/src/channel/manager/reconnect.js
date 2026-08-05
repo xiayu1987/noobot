@@ -130,7 +130,11 @@ async handleReconnect(socket, payload = {}) {
         snapshotChannel,
         String(socket?.__agentProxyApiKey || "").trim(),
         String(socket?.__agentProxyLocale || "").trim(),
-        { initialPayload: null, initialCommands: [snapshotCommand] },
+        {
+          initialPayload: null,
+          initialCommands: [snapshotCommand],
+          purpose: "snapshot_query",
+        },
       );
       if (!forwarded && !queryConnection) {
         const pendingRequest = snapshotChannel.pendingSnapshotRequests.get(commandId);
@@ -141,7 +145,7 @@ async handleReconnect(socket, payload = {}) {
         sessionId: channelSessionId,
         channel: snapshotChannel,
         commandId,
-        closeQueryConnection: Boolean(queryConnection),
+        queryConnection,
         promise: snapshotPromise,
       });
     }
@@ -165,8 +169,13 @@ async handleReconnect(socket, payload = {}) {
       })))
     : [];
   if (socket.__agentProxyReconnectTransaction !== reconnectTransaction) return;
-  for (const { sessionId, channel, commandId, closeQueryConnection, result } of snapshotResults) {
-    if (closeQueryConnection) this.closeUpstreamChannel(channel, 1000, "snapshot_query_complete");
+  for (const { sessionId, channel, commandId, queryConnection, result } of snapshotResults) {
+    channel.transport.closeOwnedConnection(
+      queryConnection,
+      1000,
+      "snapshot_query_complete",
+      { purpose: "snapshot_query" },
+    );
     const sessionEntry = sessionsMap.get(sessionId);
     if (result?.ok === true && result.snapshot) {
       const snapshotSequence = Number(result.snapshot?.sequence || 0);
