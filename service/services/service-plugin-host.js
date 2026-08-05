@@ -4,165 +4,173 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
+import {
+  PLUGIN_SURFACE,
+  requireDeclaredPluginHook,
+  requireDeclaredPluginHookEmission,
+  requireDeclaredPluginRoute,
+} from "@noobot/plugin-protocol";
 import { createJsonRouteWrapper } from "../routes/route-wrapper.js";
 import {
+  activateLoadedNoobotPlugin,
   buildNoobotPluginDiagnostics,
   getNoobotPluginRuntime,
   listLoadedNoobotPluginEntries,
-  manifestSupportsCapability,
-  PLUGIN_CAPABILITY,
   refreshNoobotPluginRuntime,
-  resolveManifestRuntimeOptionsByCapability,
 } from "@noobot/plugin-runtime";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
 
-const dynamicPluginRuntimeOptions = {
-  requiredApiVersion: "1",
-  runtimeSurface: "service",
-};
-
-const EMPTY_DYNAMIC_PLUGIN_RUNTIME = Object.freeze({
-  pluginRootDir: "",
-  requiredApiVersion: "1",
-  discoveredCount: 0,
-  loadedCount: 0,
-  skippedCount: 0,
-  skipped: [],
-  registry: new Map(),
-  errors: [],
-  loadedAt: "",
-});
-
-const SERVICE_ROUTE_CAPABILITY = PLUGIN_CAPABILITY.SERVICE_HTTP_ROUTES;
-
-function resolveManifestRuntimeOptionsByServiceEvent(manifest = {}, hookPoint = "") {
-  const runtimeOptions =
-    manifest?.runtimeOptions &&
-    typeof manifest.runtimeOptions === "object" &&
-      !Array.isArray(manifest.runtimeOptions)
-      ? manifest.runtimeOptions
-      : {};
-  const item = runtimeOptions[hookPoint];
-  return item && typeof item === "object" && !Array.isArray(item) ? { ...item } : {};
+function reportPluginEvent(record = {}) {
+  void writeRoutedRuntimeEvent({
+    scope: "startup",
+    source: "service",
+    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+    category: RUNTIME_EVENT_CATEGORIES.STATE,
+    level: record.event === "plugin.failed" ? "error" : "info",
+    event: record.event,
+    data: record,
+  });
 }
 
-function supportsServiceEvent(manifest = {}, hookPoint = "") {
-  return manifestSupportsCapability(manifest, hookPoint);
+function scopeHandlerId(pluginId = "", handlerId = "") {
+  const normalized = String(handlerId || "").trim();
+  if (!normalized) throw new TypeError(`plugin ${pluginId} hook handler id is required`);
+  return `${pluginId}:${normalized}`;
 }
 
 export function createServicePluginHost({
   loadPluginRuntime = getNoobotPluginRuntime,
+  refreshPluginRuntime = refreshNoobotPluginRuntime,
   pluginRootDir = "",
 } = {}) {
   const runtimeOptions = {
-    ...dynamicPluginRuntimeOptions,
-    ...(String(pluginRootDir || "").trim()
-      ? { pluginRootDir: String(pluginRootDir).trim() }
-      : {}),
+    surface: PLUGIN_SURFACE.SERVICE,
+    ...(String(pluginRootDir || "").trim() ? { pluginRootDir: String(pluginRootDir).trim() } : {}),
   };
-  const loadedDynamicPluginsPromise = loadPluginRuntime(runtimeOptions).catch(
-    () => EMPTY_DYNAMIC_PLUGIN_RUNTIME,
-  );
+  let runtimePromise = null;
+  let activationPromise = null;
+  let hookManager = createHookManager();
+  const activations = new Map();
 
-  async function resolveLoadedPlugins({ refresh = false } = {}) {
+  function load({ refresh = false } = {}) {
     if (refresh) {
-      return refreshNoobotPluginRuntime(runtimeOptions).catch(
-        () => EMPTY_DYNAMIC_PLUGIN_RUNTIME,
-      );
+      runtimePromise = refreshPluginRuntime(runtimeOptions);
+      activationPromise = null;
+      hookManager = createHookManager();
+      activations.clear();
     }
-    return loadedDynamicPluginsPromise;
+    if (!runtimePromise) runtimePromise = loadPluginRuntime(runtimeOptions);
+    return runtimePromise;
   }
 
-  async function registerAfterSessionDeleteHooks({
-    hookManager = null,
-    loadedPlugins = EMPTY_DYNAMIC_PLUGIN_RUNTIME,
-    basePath = "",
-  } = {}) {
-    if (!hookManager || typeof hookManager?.on !== "function") return;
-    const candidates = listLoadedNoobotPluginEntries(loadedPlugins).filter((item = {}) =>
-      supportsServiceEvent(item?.manifest, HOOK_POINT.SERVICE.AFTER_SESSION_DELETE),
-    );
-    for (const candidate of candidates) {
-      const registerPlugin =
-        typeof candidate?.registerNoobotPlugin === "function"
-          ? candidate.registerNoobotPlugin
-          : null;
-      if (typeof registerPlugin !== "function") continue;
-      const options = resolveManifestRuntimeOptionsByServiceEvent(
-        candidate?.manifest,
-        HOOK_POINT.SERVICE.AFTER_SESSION_DELETE,
-      );
-      if (basePath && !options.basePath) {
-        options.basePath = basePath;
-      }
-      registerPlugin({ hookManager }, options);
-    }
-  }
-
-
-  async function registerServiceRoutes(app, context = {}) {
-    if (!app || typeof app?.get !== "function") return [];
-    const loadedPlugins = await resolveLoadedPlugins();
-    const candidates = listLoadedNoobotPluginEntries(loadedPlugins).filter((item = {}) =>
-      manifestSupportsCapability(item?.manifest, SERVICE_ROUTE_CAPABILITY),
-    );
-    const registered = [];
-    for (const candidate of candidates) {
-      const registerRoutes =
-        typeof candidate?.moduleNamespace?.registerServiceRoutes === "function"
-          ? candidate.moduleNamespace.registerServiceRoutes
-          : typeof candidate?.moduleNamespace?.registerNoobotServiceRoutes === "function"
-            ? candidate.moduleNamespace.registerNoobotServiceRoutes
-            : null;
-      if (typeof registerRoutes !== "function") continue;
-      const options = resolveManifestRuntimeOptionsByCapability(
-        candidate?.manifest,
-        SERVICE_ROUTE_CAPABILITY,
-      );
-      const result = await registerRoutes(app, {
-        ports: context?.ports,
-        translateText: context?.translateText,
-        plugin: {
-          id: String(candidate?.pluginId || candidate?.manifest?.id || "").trim(),
-          manifest: candidate?.manifest || {},
-          pluginDir: String(candidate?.pluginDir || "").trim(),
+  function createPluginHost({ entry, app, context, registeredRoutes, registeredEndpoints }) {
+    const { manifest, pluginId } = entry;
+    const jsonRoute = createJsonRouteWrapper({ translateText: context?.translateText });
+    return Object.freeze({
+      hooks: Object.freeze({
+        register(point, handler, options = {}) {
+          requireDeclaredPluginHook(manifest, PLUGIN_SURFACE.SERVICE, point);
+          return hookManager.on(point, handler, {
+            ...options,
+            id: scopeHandlerId(pluginId, options?.id),
+          });
         },
-        createJsonRouteWrapper,
-        jsonRoute: createJsonRouteWrapper({ translateText: context?.translateText }),
-      }, options);
-      registered.push({
-        pluginId: String(candidate?.pluginId || candidate?.manifest?.id || "").trim(),
-        result: result || null,
-      });
-    }
-    return registered;
+        emit(point, payload, options) {
+          requireDeclaredPluginHookEmission(manifest, PLUGIN_SURFACE.SERVICE, point);
+          return hookManager.emit(point, payload, options);
+        },
+      }),
+      routes: Object.freeze({
+        bind(routeId, handler) {
+          if (!app) throw new Error(`plugin ${pluginId} cannot bind routes before service startup`);
+          if (typeof handler !== "function") throw new TypeError(`plugin route handler is required: ${routeId}`);
+          const route = requireDeclaredPluginRoute(manifest, routeId);
+          const routeKey = `${pluginId}:${route.id}`;
+          if (registeredRoutes.has(routeKey)) throw new Error(`duplicate plugin route binding: ${routeKey}`);
+          const register = app[String(route.method || "").toLowerCase()];
+          if (typeof register !== "function") throw new Error(`service does not support route method ${route.method}`);
+          for (const routePath of route.paths) {
+            const endpoint = `${route.method} ${routePath}`;
+            if (registeredEndpoints.has(endpoint)) throw new Error(`duplicate plugin route endpoint: ${endpoint}`);
+            registeredEndpoints.add(endpoint);
+            register.call(app, routePath, jsonRoute(handler));
+          }
+          registeredRoutes.add(routeKey);
+          return Object.freeze({ id: route.id, method: route.method, paths: [...route.paths] });
+        },
+      }),
+      ports: context?.ports || Object.freeze({}),
+    });
   }
 
-  return {
-    registerServiceRoutes,
+  async function activatePlugins({ app = null, context = {} } = {}) {
+    if (activationPromise) return activationPromise;
+    activationPromise = (async () => {
+      const runtime = await load();
+      for (const record of runtime.lifecycleEvents || []) reportPluginEvent(record);
+      if (runtime.errors?.length) {
+        throw new Error(`service plugin runtime failed: ${runtime.errors.map((item) => `${item.pluginId}: ${item.message}`).join("; ")}`);
+      }
+      const registeredRoutes = new Set();
+      const registeredEndpoints = new Set();
+      for (const entry of listLoadedNoobotPluginEntries(runtime)) {
+        const activation = await activateLoadedNoobotPlugin(entry, {
+          host: createPluginHost({ entry, app, context, registeredRoutes, registeredEndpoints }),
+          config: entry.manifest.configuration?.defaults || {},
+        });
+        activations.set(entry.pluginId, activation);
+        reportPluginEvent({
+          event: "plugin.activated",
+          pluginId: entry.pluginId,
+          pluginVersion: entry.manifest.version,
+          protocolVersion: entry.manifest.protocolVersion,
+          surface: PLUGIN_SURFACE.SERVICE,
+        });
+      }
+      const declaredRoutes = listLoadedNoobotPluginEntries(runtime)
+        .flatMap((entry) => entry.manifest.contributes.service?.routes || []);
+      if (app && registeredRoutes.size !== declaredRoutes.length) {
+        throw new Error(`service plugins bound ${registeredRoutes.size} of ${declaredRoutes.length} declared routes`);
+      }
+      for (const entry of listLoadedNoobotPluginEntries(runtime)) {
+        reportPluginEvent({
+          event: "plugin.contribution_committed",
+          pluginId: entry.pluginId,
+          pluginVersion: entry.manifest.version,
+          protocolVersion: entry.manifest.protocolVersion,
+          surface: PLUGIN_SURFACE.SERVICE,
+        });
+      }
+      return runtime;
+    })();
+    return activationPromise;
+  }
 
-    async getPluginDiagnostics({ refresh = false } = {}) {
-      const loadedPlugins = await resolveLoadedPlugins({ refresh });
-      return buildNoobotPluginDiagnostics(loadedPlugins);
+  return Object.freeze({
+    async registerServiceRoutes(app, context = {}) {
+      const runtime = await activatePlugins({ app, context });
+      return listLoadedNoobotPluginEntries(runtime).map((entry) => ({
+        pluginId: entry.pluginId,
+        activation: activations.get(entry.pluginId),
+      }));
     },
 
-    async emitAfterSessionDelete({
-      bot = null,
-      userId = "",
-      sessionId = "",
-      deletedSessionIds = [],
-    } = {}) {
-      const basePath =
-        bot && typeof bot.getWorkspacePath === "function"
-          ? String(bot.getWorkspacePath(userId) || "").trim()
-          : "";
+    async getPluginDiagnostics({ refresh = false } = {}) {
+      const runtime = refresh ? await load({ refresh: true }) : await load();
+      return buildNoobotPluginDiagnostics(runtime);
+    },
+
+    async emitAfterSessionDelete({ bot = null, userId = "", sessionId = "", deletedSessionIds = [] } = {}) {
+      if (!activationPromise) throw new Error("service plugins must be activated during HTTP startup");
+      await activationPromise;
+      const basePath = bot && typeof bot.getWorkspacePath === "function"
+        ? String(bot.getWorkspacePath(userId) || "").trim()
+        : "";
       if (!basePath) return;
-      const loadedPlugins = await resolveLoadedPlugins();
-      const hookManager = createHookManager();
-      await registerAfterSessionDeleteHooks({
-        hookManager,
-        loadedPlugins,
-        basePath,
-      });
       await hookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
         userId: String(userId || "").trim(),
         sessionId: String(sessionId || "").trim(),
@@ -173,5 +181,13 @@ export function createServicePluginHost({
         executionScope: "primary",
       });
     },
-  };
+
+    async dispose() {
+      for (const [pluginId, activation] of activations) {
+        await activation.dispose();
+        reportPluginEvent({ event: "plugin.deactivated", pluginId, surface: PLUGIN_SURFACE.SERVICE });
+      }
+      activations.clear();
+    },
+  });
 }

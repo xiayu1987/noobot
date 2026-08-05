@@ -72,12 +72,8 @@ export class ModelMessageRuntimeHelpers {
     }, {});
   }
 
-  createResolveModelMessages({
-    agentPluginOptions = {},
-    botPluginOptions = {},
-  } = {}) {
-    void agentPluginOptions;
-    void botPluginOptions;
+  createResolveModelMessages({ pluginOptions = {} } = {}) {
+    void pluginOptions;
     return ({ ctx = {}, purpose = "" } = {}) => {
       const blocks = requireAuthoritativeMessageBlocks(ctx);
       const resolved = resolveMainModelFinalMessages({

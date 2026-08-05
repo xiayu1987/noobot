@@ -121,33 +121,19 @@ When you need runtime tool filtering, prefer the agent-level unified field:
 }
 ```
 
-`denyToolNames` is the canonical field. Legacy aliases (such as snake_case variants) are only for backward compatibility.
-
-#### Migration note (effective from June 5, 2026)
-
-Prefer the canonical run-level field:
-
-- `toolPolicy.denyToolNames`
-
-Legacy fields are still accepted temporarily, but marked as deprecated:
-
-- `toolPolicy.disableAgentCollabTools`
-- `toolPolicy.disable_agent_collab_tools`
-- `toolPolicy.deny_tool_names`
+`denyToolNames` is the only tool-denial field.
 
 ### Plugin register API (policy contract)
 
-Agent injects a unified policy API into plugin registration (`registerNoobotPlugin(api, options)`):
+Agent injects a unified policy API into plugin registration (`registerHarnessCore(api, options)`):
 
-- `api.policy.appendDenyToolNames(names: string[])`
-- `api.policy.setToolPolicy(patch: object)`
-- `api.policy.getToolPolicy(): object`
+- `api.policy.patch(patch: object)`
 
 Harness plugin should declare and apply policy via this API instead of hardcoding agent internals. Example:
 
 ```js
-if (api?.policy?.appendDenyToolNames && Array.isArray(options?.denyToolNames)) {
-  api.policy.appendDenyToolNames(options.denyToolNames);
+if (api?.policy?.patch && Array.isArray(options?.denyToolNames)) {
+  api.policy.patch({ denyToolNames: options.denyToolNames });
 }
 ```
 
@@ -400,7 +386,7 @@ Conflict strategy:
 Example:
 
 ```js
-registerNoobotPlugin({ hookManager }, {
+registerHarnessCore({ hookManager }, {
   capabilityHandlers: {
     assistance: async ({ point }) => {
       if (point !== "before_tool_calls") return null;
@@ -492,11 +478,11 @@ Manual registration is still supported when running outside `SessionExecutionEng
 
 ```js
 import { createHookManager } from "@noobot/hook-protocol";
-import { registerNoobotPlugin } from "./plugin/noobot-plugin-harness/src/index.js";
+import { registerHarnessCore } from "./plugin/noobot-plugin-harness/src/index.js";
 
 const hookManager = createHookManager();
 
-registerNoobotPlugin({ hookManager }, {
+registerHarnessCore({ hookManager }, {
   basePath: "/path/to/workspace/user",
   promptPolicy: true,
   trace: true

@@ -13,7 +13,7 @@ import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import { registerHarnessCore } from "../../src/index.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -184,7 +184,7 @@ test("dynamic policy prompt change refreshes the unique main-flow policy selecti
 test("harness policy prompt survives agent-side system message compaction", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       basePath,
@@ -221,7 +221,7 @@ test("harness policy prompt survives agent-side system message compaction", asyn
 test("harness policy preservation ignores ordinary system text that only mentions policy marker", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       basePath,

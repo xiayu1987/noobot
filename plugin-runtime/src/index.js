@@ -4,530 +4,236 @@
  * SPDX-License-Identifier: MIT
  */
 import path from "node:path";
-import { readdir, readFile, access } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { z } from "zod";
 import {
-  normalizePluginCapabilities,
-  PLUGIN_CAPABILITY,
-  PLUGIN_RUNTIME_SURFACE,
-  resolveCapabilityRuntimeSurface,
-} from "./contracts.mjs";
-export * from "./contracts.mjs";
+  contributionsForSurface,
+  manifestContributesToSurface,
+  parsePluginManifest,
+  PLUGIN_PROTOCOL_VERSION,
+  PLUGIN_SURFACE,
+  requirePluginSurface,
+  validatePluginActivationResult,
+} from "@noobot/plugin-protocol";
 
 const MANIFEST_FILE_NAME = "manifest.json";
-const DEFAULT_REQUIRED_API_VERSION = "1";
 const runtimeCache = new Map();
 
-export function validateManifestCapabilityEntries(manifest = {}) {
-  const entries = manifest?.entries && typeof manifest.entries === "object" ? manifest.entries : {};
-  return normalizePluginCapabilities(manifest?.capabilities).flatMap((capability) => {
-    const runtimeSurface = resolveCapabilityRuntimeSurface(capability);
-    if (!runtimeSurface || String(entries?.[runtimeSurface] || "").trim()) return [];
-    return [{ capability, runtimeSurface, reason: `missing_${runtimeSurface}_entry` }];
+function normalizePluginIds(pluginIds = []) {
+  return Array.from(new Set(
+    (Array.isArray(pluginIds) ? pluginIds : [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean),
+  )).sort((left, right) => left.localeCompare(right));
+}
+
+function normalizeLoadOptions({ pluginRootDir = "", pluginIds = [], surface = PLUGIN_SURFACE.AGENT } = {}) {
+  return Object.freeze({
+    pluginRootDir: path.resolve(String(pluginRootDir || "").trim() || resolveDefaultPluginRootDir()),
+    pluginIds: normalizePluginIds(pluginIds),
+    surface: requirePluginSurface(surface),
   });
 }
 
-export function manifestSupportsCapability(manifest = {}, capability = "") {
-  const normalizedCapability = String(capability || "").trim();
-  if (!normalizedCapability) return false;
-  if (normalizePluginCapabilities(manifest?.capabilities).includes(normalizedCapability)) return true;
-  const runtimeOptions =
-    manifest?.runtimeOptions && typeof manifest.runtimeOptions === "object" && !Array.isArray(manifest.runtimeOptions)
-      ? manifest.runtimeOptions
-      : {};
-  return Boolean(runtimeOptions[normalizedCapability]);
+function runtimeCacheKey(options = {}) {
+  return JSON.stringify(normalizeLoadOptions(options));
 }
 
-export function resolveManifestRuntimeOptionsByCapability(manifest = {}, capability = "") {
-  const normalizedCapability = String(capability || "").trim();
-  if (!normalizedCapability) return {};
-  const runtimeOptions =
-    manifest?.runtimeOptions && typeof manifest.runtimeOptions === "object" && !Array.isArray(manifest.runtimeOptions)
-      ? manifest.runtimeOptions
-      : {};
-  const item = runtimeOptions[normalizedCapability];
-  return item && typeof item === "object" && !Array.isArray(item) ? { ...item } : {};
+function pathIsInside(rootDir = "", candidatePath = "") {
+  const relative = path.relative(path.resolve(rootDir), path.resolve(candidatePath));
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
-const pluginManifestSchema = z.object({
-  id: z.string().trim().min(1),
-  name: z.string().trim().min(1),
-  version: z.string().trim().min(1),
-  pluginKey: z.string().trim().optional().default(""),
-  capabilities: z.array(z.string().trim()).optional().default([]),
-  description: z.string().trim().optional().default(""),
-  permissions: z.array(z.string().trim()).optional().default([]),
-  runtimeOptions: z.record(z.unknown()).optional().default({}),
-  apiVersion: z.string().trim().min(1).default(DEFAULT_REQUIRED_API_VERSION),
-  entries: z.object({
-    agent: z.string().trim().min(1).optional(),
-    service: z.string().trim().min(1).optional(),
-    frontend: z.string().trim().min(1).optional(),
-  }),
-  enabledByDefault: z.boolean().optional().default(true),
-});
-
-function toSafeErrorMessage(error) {
-  if (error instanceof Error) return error.message;
-  return String(error || "unknown error");
-}
-
-async function readJsonFileSafe(filePath = "") {
-  const content = await readFile(filePath, "utf8");
-  return JSON.parse(content);
-}
-
-function normalizePluginIdList(pluginIds = []) {
-  return Array.from(
-    new Set(
-      (Array.isArray(pluginIds) ? pluginIds : [])
-        .map((item) => String(item || "").trim())
-        .filter(Boolean),
-    ),
-  ).sort((a, b) => a.localeCompare(b));
-}
-
-function normalizeLoadOptions({
-  pluginRootDir = "",
-  pluginIds = [],
-  requiredApiVersion = DEFAULT_REQUIRED_API_VERSION,
-  runtimeSurface = PLUGIN_RUNTIME_SURFACE.AGENT,
-} = {}) {
-  const normalizedPluginRootDir = path.resolve(
-    String(pluginRootDir || "").trim() || resolveDefaultPluginRootDir(),
-  );
-  const normalizedPluginIds = normalizePluginIdList(pluginIds);
-  const normalizedRequiredApiVersion =
-    String(requiredApiVersion || "").trim() || DEFAULT_REQUIRED_API_VERSION;
-  const normalizedRuntimeSurface = String(runtimeSurface || "").trim().toLowerCase();
-  if (!Object.values(PLUGIN_RUNTIME_SURFACE).includes(normalizedRuntimeSurface)) {
-    throw new Error(`unsupported plugin runtime surface: ${normalizedRuntimeSurface}`);
-  }
-  return {
-    pluginRootDir: normalizedPluginRootDir,
-    pluginIds: normalizedPluginIds,
-    requiredApiVersion: normalizedRequiredApiVersion,
-    runtimeSurface: normalizedRuntimeSurface,
-  };
-}
-
-function buildRuntimeCacheKey(options = {}) {
-  const normalized = normalizeLoadOptions(options);
-  return JSON.stringify(normalized);
-}
-
-function ensurePathInsideRoot(rootDir = "", candidatePath = "") {
-  const resolvedRoot = path.resolve(String(rootDir || "").trim());
-  const resolvedCandidate = path.resolve(String(candidatePath || "").trim());
-  const relativePath = path.relative(resolvedRoot, resolvedCandidate);
-  return Boolean(relativePath) && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
-}
-
-export function resolveDefaultPluginRootDirFromLoaderDir(loaderDir = "") {
-  const normalizedLoaderDir = path.resolve(String(loaderDir || "").trim());
-  const directBackendPluginDir = path.resolve(normalizedLoaderDir, "../../../../plugin");
-  const packagedAgentPluginDir = path.resolve(normalizedLoaderDir, "../../../../../plugin");
-  return normalizedLoaderDir.includes(`${path.sep}node_modules${path.sep}`)
-    ? packagedAgentPluginDir
-    : directBackendPluginDir;
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error || "unknown error");
 }
 
 export function resolveDefaultPluginRootDir() {
-  const loaderDir = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(loaderDir, "../../plugin");
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../plugin");
 }
 
-export async function discoverNoobotPluginManifests({
-  pluginRootDir = "",
-} = {}) {
-  const resolvedRoot = path.resolve(String(pluginRootDir || "").trim() || resolveDefaultPluginRootDir());
-  let rootEntries = [];
+export async function discoverNoobotPluginManifests({ pluginRootDir = "" } = {}) {
+  const root = path.resolve(String(pluginRootDir || "").trim() || resolveDefaultPluginRootDir());
+  let directoryEntries;
   try {
-    rootEntries = await readdir(resolvedRoot, { withFileTypes: true });
+    directoryEntries = await readdir(root, { withFileTypes: true });
   } catch {
     return [];
   }
-  const discovered = [];
-  for (const rootEntry of rootEntries) {
-    if (!rootEntry?.isDirectory?.()) continue;
-    const dirName = String(rootEntry.name || "").trim();
-    if (!dirName) continue;
-    const pluginDir = path.join(resolvedRoot, dirName);
+  const manifests = [];
+  for (const directoryEntry of directoryEntries) {
+    if (!directoryEntry.isDirectory()) continue;
+    const pluginDir = path.join(root, directoryEntry.name);
     const manifestPath = path.join(pluginDir, MANIFEST_FILE_NAME);
     try {
       await access(manifestPath);
+      manifests.push({ directoryName: directoryEntry.name, pluginDir, manifestPath });
     } catch {
-      continue;
     }
-    discovered.push({
-      directoryName: dirName,
-      pluginDir,
-      manifestPath,
-    });
   }
-  return discovered.sort((a, b) =>
-    String(a?.directoryName || "").localeCompare(String(b?.directoryName || "")),
-  );
+  return manifests.sort((left, right) => left.directoryName.localeCompare(right.directoryName));
 }
 
-export async function loadNoobotPlugins({
-  pluginRootDir = "",
-  pluginIds = [],
-  requiredApiVersion = DEFAULT_REQUIRED_API_VERSION,
-  runtimeSurface = PLUGIN_RUNTIME_SURFACE.AGENT,
-} = {}) {
-  const normalized = normalizeLoadOptions({
-    pluginRootDir,
-    pluginIds,
-    requiredApiVersion,
-    runtimeSurface,
-  });
-  const includeSet = new Set(normalized.pluginIds);
-  const targetApiVersion = normalized.requiredApiVersion;
-  const discovered = await discoverNoobotPluginManifests({
-    pluginRootDir: normalized.pluginRootDir,
-  });
+export async function loadNoobotPlugins(options = {}) {
+  const normalized = normalizeLoadOptions(options);
+  const include = new Set(normalized.pluginIds);
+  const discovered = await discoverNoobotPluginManifests({ pluginRootDir: normalized.pluginRootDir });
   const registry = new Map();
   const skipped = [];
   const errors = [];
-  const seenPluginIds = new Set();
-  for (const discoveredItem of discovered) {
-    const {
-      pluginDir = "",
-      manifestPath = "",
-      directoryName = "",
-    } = discoveredItem || {};
+  const lifecycleEvents = discovered.map((item) => Object.freeze({
+    event: "plugin.discovered",
+    pluginId: item.directoryName,
+    surface: normalized.surface,
+  }));
+
+  for (const item of discovered) {
     try {
-      const rawManifest = await readJsonFileSafe(manifestPath);
-      const manifest = pluginManifestSchema.parse(rawManifest || {});
-      const pluginId = String(manifest?.id || "").trim() || directoryName;
-      const capabilityEntryErrors = validateManifestCapabilityEntries(manifest);
-      if (capabilityEntryErrors.length) {
-        errors.push({
-          pluginId,
-          pluginDir,
-          manifestPath,
-          stage: "validate_capability_entries",
-          message: capabilityEntryErrors
-            .map((item) => `${item.capability} requires entries.${item.runtimeSurface}`)
-            .join(", "),
-          details: capabilityEntryErrors,
-        });
+      const manifest = parsePluginManifest(JSON.parse(await readFile(item.manifestPath, "utf8")));
+      lifecycleEvents.push(Object.freeze({
+        event: "plugin.manifest_validated",
+        pluginId: manifest.id,
+        pluginVersion: manifest.version,
+        protocolVersion: manifest.protocolVersion,
+        surface: normalized.surface,
+      }));
+      if (include.size && !include.has(manifest.id)) {
+        skipped.push({ pluginId: manifest.id, reason: "not_selected", ...item });
         continue;
       }
-      if (includeSet.size && !includeSet.has(pluginId)) {
-        skipped.push({
-          pluginId,
-          pluginDir,
-          manifestPath,
-          reason: "not_in_include_set",
-        });
+      if (!manifest.enabledByDefault && !include.has(manifest.id)) {
+        skipped.push({ pluginId: manifest.id, reason: "not_enabled", ...item });
         continue;
       }
-      if (manifest.enabledByDefault !== true) {
-        skipped.push({
-          pluginId,
-          pluginDir,
-          manifestPath,
-          reason: "disabled_by_manifest",
-        });
+      if (!manifestContributesToSurface(manifest, normalized.surface)) {
+        skipped.push({ pluginId: manifest.id, reason: `no_${normalized.surface}_contributions`, ...item });
         continue;
       }
-      if (seenPluginIds.has(pluginId)) {
-        errors.push({
-          pluginId,
-          pluginDir,
-          manifestPath,
-          stage: "validate_unique_id",
-          message: `duplicate plugin id: ${pluginId}`,
-        });
-        continue;
+      if (registry.has(manifest.id)) throw new Error(`duplicate plugin id: ${manifest.id}`);
+      const entryRelativePath = manifest.entries[normalized.surface];
+      const entryPath = path.resolve(item.pluginDir, entryRelativePath);
+      if (!pathIsInside(item.pluginDir, entryPath)) {
+        throw new Error(`entry path escapes plugin root: ${entryRelativePath}`);
       }
-      seenPluginIds.add(pluginId);
-      if (String(manifest?.apiVersion || "").trim() !== targetApiVersion) {
-        errors.push({
-          pluginId,
-          pluginDir,
-          manifestPath,
-          stage: "validate_api_version",
-          message: `unsupported apiVersion: ${String(manifest?.apiVersion || "")}`,
-        });
-        continue;
-      }
-      const entry = String(manifest?.entries?.[normalized.runtimeSurface] || "").trim();
-      if (!entry) {
-        skipped.push({ pluginId, pluginDir, manifestPath, reason: `no_${normalized.runtimeSurface}_entry` });
-        continue;
-      }
-      const entryPath = path.resolve(pluginDir, entry);
-      if (!ensurePathInsideRoot(pluginDir, entryPath)) {
-        errors.push({
-          pluginId,
-          pluginDir,
-          manifestPath,
-          stage: "validate_entry_path",
-          message: `entry path escapes plugin root: ${entry}`,
-        });
-        continue;
-      }
-      try {
-        await access(entryPath);
-      } catch {
-        errors.push({
-          pluginId,
-          pluginDir,
-          manifestPath,
-          stage: "validate_entry_exists",
-          message: `entry file not found: ${entryPath}`,
-        });
-        continue;
-      }
+      await access(entryPath);
       const moduleNamespace = await import(pathToFileURL(entryPath).href);
-      const registerNoobotPlugin =
-        typeof moduleNamespace?.registerNoobotPlugin === "function"
-          ? moduleNamespace.registerNoobotPlugin
-          : null;
-      if (normalized.runtimeSurface === PLUGIN_RUNTIME_SURFACE.AGENT && typeof registerNoobotPlugin !== "function") {
-        errors.push({
-          pluginId,
-          pluginDir,
-          manifestPath,
-          stage: "resolve_register",
-          message: "registerNoobotPlugin export not found",
-        });
-        continue;
+      if (typeof moduleNamespace.activate !== "function") {
+        throw new Error(`plugin surface entry must export activate: ${manifest.id}/${normalized.surface}`);
       }
-      registry.set(pluginId, {
-        pluginId,
-        pluginDir,
-        manifestPath,
-        manifest: {
-          ...manifest,
-          id: pluginId,
-          pluginKey: String(manifest.pluginKey || "").trim(),
-          capabilities: normalizePluginCapabilities(manifest.capabilities),
-          permissions: Array.isArray(manifest.permissions)
-            ? manifest.permissions.map((item) => String(item || "").trim()).filter(Boolean)
-            : [],
-          runtimeOptions:
-            manifest?.runtimeOptions &&
-            typeof manifest.runtimeOptions === "object" &&
-            !Array.isArray(manifest.runtimeOptions)
-              ? { ...manifest.runtimeOptions }
-              : {},
-        },
+      lifecycleEvents.push(Object.freeze({
+        event: "plugin.module_loaded",
+        pluginId: manifest.id,
+        pluginVersion: manifest.version,
+        protocolVersion: manifest.protocolVersion,
+        surface: normalized.surface,
+      }));
+      registry.set(manifest.id, Object.freeze({
+        pluginId: manifest.id,
+        pluginDir: item.pluginDir,
+        manifestPath: item.manifestPath,
+        manifest,
+        surface: normalized.surface,
         entryPath,
-        runtimeSurface: normalized.runtimeSurface,
-        moduleNamespace,
-        registerNoobotPlugin,
-      });
+        activate: moduleNamespace.activate,
+      }));
     } catch (error) {
+      lifecycleEvents.push(Object.freeze({
+        event: "plugin.failed",
+        pluginId: item.directoryName,
+        surface: normalized.surface,
+        errorCode: "PLUGIN_LOAD_FAILED",
+        message: errorMessage(error),
+      }));
       errors.push({
-        pluginId: directoryName,
-        pluginDir,
-        manifestPath,
+        pluginId: item.directoryName,
         stage: "load",
-        message: toSafeErrorMessage(error),
+        message: errorMessage(error),
+        pluginDir: item.pluginDir,
+        manifestPath: item.manifestPath,
       });
     }
   }
-  return {
+
+  return Object.freeze({
+    protocolVersion: PLUGIN_PROTOCOL_VERSION,
     pluginRootDir: normalized.pluginRootDir,
-    requiredApiVersion: targetApiVersion,
-    runtimeSurface: normalized.runtimeSurface,
+    surface: normalized.surface,
     pluginIds: normalized.pluginIds,
     discoveredCount: discovered.length,
     loadedCount: registry.size,
     skippedCount: skipped.length,
-    skipped,
+    skipped: Object.freeze(skipped),
     registry,
-    errors,
+    errors: Object.freeze(errors),
+    lifecycleEvents: Object.freeze(lifecycleEvents),
     loadedAt: new Date().toISOString(),
-  };
+  });
 }
 
 export async function getNoobotPluginRuntime(options = {}) {
-  const key = buildRuntimeCacheKey(options);
-  if (!runtimeCache.has(key)) {
-    runtimeCache.set(key, loadNoobotPlugins(options));
-  }
+  const key = runtimeCacheKey(options);
+  if (!runtimeCache.has(key)) runtimeCache.set(key, loadNoobotPlugins(options));
   return runtimeCache.get(key);
 }
 
 export async function refreshNoobotPluginRuntime(options = {}) {
-  const key = buildRuntimeCacheKey(options);
-  const refreshed = loadNoobotPlugins(options);
-  runtimeCache.set(key, refreshed);
-  return refreshed;
+  const key = runtimeCacheKey(options);
+  const runtime = loadNoobotPlugins(options);
+  runtimeCache.set(key, runtime);
+  return runtime;
 }
 
-export function clearNoobotPluginRuntimeCache(options = null) {
-  if (!options) {
-    runtimeCache.clear();
-    return;
-  }
-  runtimeCache.delete(buildRuntimeCacheKey(options));
+export function clearNoobotPluginRuntimeCache() {
+  runtimeCache.clear();
 }
 
-export function resolvePluginRegisterFromLoaded(
-  loadedPlugins = null,
-  pluginId = "",
-  fallbackRegister = null,
-) {
-  const normalizedPluginId = String(pluginId || "").trim();
-  const registerFn =
-    loadedPlugins?.registry instanceof Map
-      ? loadedPlugins.registry.get(normalizedPluginId)?.registerNoobotPlugin
-      : null;
-  if (typeof registerFn === "function") return registerFn;
-  return typeof fallbackRegister === "function" ? fallbackRegister : null;
+export function listLoadedNoobotPluginEntries(runtime = null) {
+  return runtime?.registry instanceof Map ? Array.from(runtime.registry.values()) : [];
 }
 
-export function listLoadedNoobotPluginEntries(loadedPlugins = null) {
-  return loadedPlugins?.registry instanceof Map
-    ? Array.from(loadedPlugins.registry.values())
-    : [];
+export function resolveLoadedNoobotPlugin(runtime = null, pluginId = "") {
+  const normalized = String(pluginId || "").trim();
+  return normalized && runtime?.registry instanceof Map ? runtime.registry.get(normalized) || null : null;
 }
 
-export function resolveLoadedNoobotPluginsByCapability(
-  loadedPlugins = null,
-  capability = "",
-) {
-  const normalizedCapability = String(capability || "").trim();
-  if (!normalizedCapability) return [];
-  return listLoadedNoobotPluginEntries(loadedPlugins).filter((item = {}) =>
-    Array.isArray(item?.manifest?.capabilities) &&
-    item.manifest.capabilities.includes(normalizedCapability),
+export function listPluginsContributingHook(runtime = null, point = "") {
+  const normalized = String(point || "").trim();
+  return listLoadedNoobotPluginEntries(runtime).filter((entry) =>
+    (contributionsForSurface(entry.manifest, entry.surface)?.hooks?.registers || []).includes(normalized),
   );
 }
 
-export function resolvePluginRegisterByPluginKey(
-  loadedPlugins = null,
-  pluginKey = "",
-  fallbackRegister = null,
-) {
-  const normalizedPluginKey = String(pluginKey || "").trim();
-  if (!normalizedPluginKey) {
-    return typeof fallbackRegister === "function" ? fallbackRegister : null;
-  }
-  const matched = listLoadedNoobotPluginEntries(loadedPlugins).find(
-    (item = {}) => String(item?.manifest?.pluginKey || "").trim() === normalizedPluginKey,
-  );
-  const registerFn = typeof matched?.registerNoobotPlugin === "function" ? matched.registerNoobotPlugin : null;
-  if (typeof registerFn === "function") return registerFn;
-  return typeof fallbackRegister === "function" ? fallbackRegister : null;
+export function resolvePluginExecutionIntent(runtime = null, pluginId = "") {
+  const plugin = resolveLoadedNoobotPlugin(runtime, pluginId);
+  const declaration = plugin?.manifest?.contributes?.agent?.executionIntent;
+  if (!declaration) return null;
+  return Object.freeze({ ...declaration, pluginId: plugin.pluginId });
 }
 
-export function resolveLoadedNoobotPluginByPluginKey(
-  loadedPlugins = null,
-  pluginKey = "",
-) {
-  const normalizedPluginKey = String(pluginKey || "").trim();
-  if (!normalizedPluginKey) return null;
-  return listLoadedNoobotPluginEntries(loadedPlugins).find((item = {}) => {
-    const manifestPluginKey = String(item?.manifest?.pluginKey || "").trim();
-    const pluginId = String(item?.manifest?.id || item?.pluginId || "").trim();
-    return manifestPluginKey === normalizedPluginKey || pluginId === normalizedPluginKey;
-  }) || null;
+export async function activateLoadedNoobotPlugin(entry = null, { host = null, config = {} } = {}) {
+  if (!entry || typeof entry.activate !== "function") throw new TypeError("loaded plugin entry is required");
+  const result = await entry.activate(host, config);
+  return validatePluginActivationResult(result, { pluginId: entry.pluginId, surface: entry.surface });
 }
 
-export function resolvePluginExecutionIntentDeclaration(
-  loadedPlugins = null,
-  pluginKey = "",
-) {
-  const plugin = resolveLoadedNoobotPluginByPluginKey(loadedPlugins, pluginKey);
-  if (!plugin || !manifestSupportsCapability(plugin.manifest, PLUGIN_CAPABILITY.AGENT_EXECUTION_INTENT)) {
-    return null;
-  }
-  const declaration = resolveManifestRuntimeOptionsByCapability(
-    plugin.manifest,
-    PLUGIN_CAPABILITY.AGENT_EXECUTION_INTENT,
-  );
-  const executionKind = String(declaration.executionKind || "").trim().toLowerCase();
-  const executionIdPrefix = String(declaration.executionIdPrefix || "").trim();
-  if (!executionKind || !executionIdPrefix) return null;
+export function buildNoobotPluginDiagnostics(runtime = null) {
   return Object.freeze({
-    executionKind,
-    executionIdPrefix,
-    originType: String(declaration.originType || executionKind).trim(),
-    originIdKey: String(declaration.originIdKey || "executionId").trim(),
-    stage: String(declaration.stage || "").trim(),
-    pluginKey: String(plugin?.manifest?.pluginKey || plugin?.manifest?.id || "").trim(),
+    protocolVersion: PLUGIN_PROTOCOL_VERSION,
+    pluginRootDir: String(runtime?.pluginRootDir || ""),
+    surface: String(runtime?.surface || ""),
+    discoveredCount: Number(runtime?.discoveredCount || 0),
+    loadedCount: Number(runtime?.loadedCount || 0),
+    pluginIds: listLoadedNoobotPluginEntries(runtime).map((entry) => entry.pluginId),
+    skippedCount: Number(runtime?.skippedCount || 0),
+    loaded: listLoadedNoobotPluginEntries(runtime).map((entry) => ({
+      id: entry.pluginId,
+      name: entry.manifest.name,
+      version: entry.manifest.version,
+      protocolVersion: entry.manifest.protocolVersion,
+      entries: { ...entry.manifest.entries },
+      surface: entry.surface,
+    })),
+    errors: Array.isArray(runtime?.errors) ? runtime.errors.map((item) => ({ ...item })) : [],
+    skipped: Array.isArray(runtime?.skipped) ? runtime.skipped.map((item) => ({ ...item })) : [],
   });
-}
-
-export function resolveFirstLoadedNoobotPluginByCapability(
-  loadedPlugins = null,
-  capability = "",
-) {
-  const matched = resolveLoadedNoobotPluginsByCapability(loadedPlugins, capability);
-  return matched.length ? matched[0] : null;
-}
-
-export function resolvePluginRegisterByCapability(
-  loadedPlugins = null,
-  capability = "",
-  fallbackRegister = null,
-) {
-  const matched = resolveFirstLoadedNoobotPluginByCapability(loadedPlugins, capability);
-  const registerFn = typeof matched?.registerNoobotPlugin === "function" ? matched.registerNoobotPlugin : null;
-  if (typeof registerFn === "function") return registerFn;
-  return typeof fallbackRegister === "function" ? fallbackRegister : null;
-}
-
-export function buildNoobotPluginDiagnostics(loadedPlugins = null) {
-  const registryEntries =
-    loadedPlugins?.registry instanceof Map
-      ? Array.from(loadedPlugins.registry.values())
-      : [];
-  const loaded = registryEntries.map((item = {}) => ({
-    id: String(item?.manifest?.id || item?.pluginId || "").trim(),
-    name: String(item?.manifest?.name || "").trim(),
-    version: String(item?.manifest?.version || "").trim(),
-    pluginKey: String(item?.manifest?.pluginKey || "").trim(),
-    capabilities: Array.isArray(item?.manifest?.capabilities)
-      ? item.manifest.capabilities.map((capability) => String(capability || "").trim()).filter(Boolean)
-      : [],
-    description: String(item?.manifest?.description || "").trim(),
-    apiVersion: String(item?.manifest?.apiVersion || "").trim(),
-    permissions: Array.isArray(item?.manifest?.permissions)
-      ? item.manifest.permissions.map((permission) => String(permission || "").trim()).filter(Boolean)
-      : [],
-    entries: { ...(item?.manifest?.entries || {}) },
-    entryPath: String(item?.entryPath || "").trim(),
-    runtimeSurface: String(item?.runtimeSurface || loadedPlugins?.runtimeSurface || "").trim(),
-    pluginDir: String(item?.pluginDir || "").trim(),
-    manifestPath: String(item?.manifestPath || "").trim(),
-  }));
-  const errors = (Array.isArray(loadedPlugins?.errors) ? loadedPlugins.errors : []).map(
-    (errorItem = {}) => ({
-      pluginId: String(errorItem?.pluginId || "").trim(),
-      stage: String(errorItem?.stage || "").trim(),
-      message: String(errorItem?.message || "").trim(),
-      pluginDir: String(errorItem?.pluginDir || "").trim(),
-      manifestPath: String(errorItem?.manifestPath || "").trim(),
-    }),
-  );
-  const skipped = (Array.isArray(loadedPlugins?.skipped) ? loadedPlugins.skipped : []).map(
-    (item = {}) => ({
-      pluginId: String(item?.pluginId || "").trim(),
-      reason: String(item?.reason || "").trim(),
-      pluginDir: String(item?.pluginDir || "").trim(),
-      manifestPath: String(item?.manifestPath || "").trim(),
-    }),
-  );
-  return {
-    pluginRootDir: String(loadedPlugins?.pluginRootDir || "").trim(),
-    requiredApiVersion: String(loadedPlugins?.requiredApiVersion || DEFAULT_REQUIRED_API_VERSION).trim(),
-    runtimeSurface: String(loadedPlugins?.runtimeSurface || "").trim(),
-    pluginIds: normalizePluginIdList(loadedPlugins?.pluginIds || []),
-    discoveredCount: Number(loadedPlugins?.discoveredCount || 0),
-    loadedCount: Number(loadedPlugins?.loadedCount || loaded.length),
-    skippedCount: Number(loadedPlugins?.skippedCount || skipped.length),
-    loaded,
-    skipped,
-    errors,
-    loadedAt: String(loadedPlugins?.loadedAt || "").trim(),
-  };
 }

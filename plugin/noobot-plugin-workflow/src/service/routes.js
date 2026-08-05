@@ -20,21 +20,11 @@ function parseExecutionPage(query = {}) {
   return { cursor, limit };
 }
 
-function registerGet(app, paths = [], handler) {
-  for (const routePath of paths) {
-    app.get(routePath, handler);
-  }
-}
-
-export function registerServiceRoutes(app, context = {}) {
-  const jsonRoute = context?.jsonRoute;
-  if (!app || typeof app.get !== "function" || typeof jsonRoute !== "function") {
-    return { registered: false, routes: [] };
-  }
+export function createWorkflowServiceRouteHandlers(context = {}) {
   const sessions = context?.ports?.sessions;
   const badRequestStatus = context?.ports?.http?.status?.BAD_REQUEST || 400;
   if (!sessions || typeof sessions.readWorkflowSnapshot !== "function" || typeof sessions.readWorkflowThinkingDetail !== "function") {
-    return { registered: false, routes: [] };
+    throw new Error("workflow service session ports are required");
   }
   const logDetail = ({ userId = "", sessionId = "", dialogProcessId = "", traceId = "", event = "", level = "debug", data = {} } = {}) =>
     writeRoutedRuntimeEvent({
@@ -45,11 +35,7 @@ export function registerServiceRoutes(app, context = {}) {
       data: { traceId: String(traceId || "").trim(), ...(data && typeof data === "object" ? data : {}) },
     });
 
-  const sessionDetailPaths = [
-    "/internal/workflow/session/:userId/:sessionId/:dialogProcessId",
-    "/api/internal/workflow/session/:userId/:sessionId/:dialogProcessId",
-  ];
-  registerGet(app, sessionDetailPaths, jsonRoute(async (req, res) => {
+  const sessionDetailHandler = async (req, res) => {
     const { userId, sessionId, dialogProcessId } = req.params;
     const traceId = normalizeRouteText(req.query?.traceId);
     const executionPage = parseExecutionPage(req.query);
@@ -104,13 +90,9 @@ export function registerServiceRoutes(app, context = {}) {
         meta,
       },
     });
-  }));
+  };
 
-  const thinkingDetailPaths = [
-    "/internal/workflow/session/:userId/:sessionId/:dialogProcessId/thinking-detail",
-    "/api/internal/workflow/session/:userId/:sessionId/:dialogProcessId/thinking-detail",
-  ];
-  registerGet(app, thinkingDetailPaths, jsonRoute(async (req, res) => {
+  const thinkingDetailHandler = async (req, res) => {
     const { userId, sessionId, dialogProcessId: routeDialogProcessId } = req.params;
     const dialogProcessId = normalizeRouteText(req.query?.dialogProcessId);
     const turnScopeId = normalizeRouteText(req.query?.turnScopeId);
@@ -127,10 +109,10 @@ export function registerServiceRoutes(app, context = {}) {
       dialogProcessId: String(routeDialogProcessId || "").trim(),
       ...detail,
     });
-  }));
+  };
 
   return {
-    registered: true,
-    routes: [...sessionDetailPaths, ...thinkingDetailPaths],
+    "workflow.detail": sessionDetailHandler,
+    "workflow.thinking-detail": thinkingDetailHandler,
   };
 }

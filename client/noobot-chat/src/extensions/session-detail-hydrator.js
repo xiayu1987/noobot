@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { provideExtensionValues } from "./extension-registry.js";
-import { EXTENSION_POINTS } from "./extension-point-ids.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 
 export function hydrateSessionDetailExtensions(payload = {}, context = {}) {
   const hydrators = provideExtensionValues(EXTENSION_POINTS.SESSION_DETAIL_HYDRATOR, {

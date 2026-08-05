@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearExtensionRegistry, contributeExtension } from "../../../src/extensions/extension-registry.js";
-import { EXTENSION_POINTS } from "../../../src/extensions/extension-point-ids.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { routeRuntimeStreamEvent } from "../../../src/extensions/runtime-stream-router.js";
 
 describe("runtime stream projector boundary", () => {

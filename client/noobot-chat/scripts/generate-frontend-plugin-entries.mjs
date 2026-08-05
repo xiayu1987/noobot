@@ -7,6 +7,7 @@
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
+import { parsePluginManifest } from "@noobot/plugin-protocol/manifest";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
@@ -36,12 +37,9 @@ function toEntryModuleItem(item = {}, outputDir = "") {
   const entryImportPath = normalizeEntryImportPath(outputDir, item.entryPath);
   return {
     pluginId: item.pluginId,
-    pluginKey: item.pluginKey,
     name: item.name,
     version: item.version,
-    apiVersion: item.apiVersion,
-    capabilities: item.capabilities,
-    authenticatedRoutePatterns: item.authenticatedRoutePatterns,
+    manifest: item.manifest,
     entryImportPath,
   };
 }
@@ -50,12 +48,9 @@ function buildOutputSource(entries = []) {
   const objectLines = entries.map(
     (item) => `  {
     pluginId: ${JSON.stringify(item.pluginId)},
-    pluginKey: ${JSON.stringify(item.pluginKey)},
     name: ${JSON.stringify(item.name)},
     version: ${JSON.stringify(item.version)},
-    apiVersion: ${JSON.stringify(item.apiVersion)},
-    capabilities: ${JSON.stringify(item.capabilities)},
-    authenticatedRoutePatterns: ${JSON.stringify(item.authenticatedRoutePatterns)},
+    manifest: Object.freeze(${JSON.stringify(item.manifest)}),
     loadModule: () => import(${JSON.stringify(item.entryImportPath)}),
   }`,
   );
@@ -82,14 +77,12 @@ async function discoverFrontendPluginEntries() {
     if (!dirent?.isDirectory?.()) continue;
     const pluginDir = path.resolve(pluginRoot, dirent.name);
     const manifestPath = path.resolve(pluginDir, "manifest.json");
-    const manifest = await readJsonSafe(manifestPath);
-    if (!manifest || typeof manifest !== "object") continue;
-    const frontend =
-      manifest.frontend && typeof manifest.frontend === "object" ? manifest.frontend : null;
-    if (!frontend) continue;
+    const sourceManifest = await readJsonSafe(manifestPath);
+    if (!sourceManifest || typeof sourceManifest !== "object") continue;
+    const manifest = parsePluginManifest(sourceManifest);
+    if (!manifest.contributes.frontend) continue;
     const frontendEntry = String(manifest?.entries?.frontend || "").trim();
     if (!frontendEntry) continue;
-    const apiVersion = String(frontend.apiVersion || "").trim() || "1";
     const entryPath = path.resolve(pluginDir, frontendEntry);
     try {
       await fs.access(entryPath);
@@ -101,14 +94,9 @@ async function discoverFrontendPluginEntries() {
     }
     output.push({
       pluginId: String(manifest.id || dirent.name).trim(),
-      pluginKey: String(manifest.pluginKey || manifest.id || dirent.name).trim(),
       name: String(manifest.name || "").trim(),
       version: String(manifest.version || "").trim(),
-      apiVersion,
-      capabilities: Array.isArray(manifest.capabilities) ? manifest.capabilities.map(String) : [],
-      authenticatedRoutePatterns: Array.isArray(frontend.authenticatedRoutePatterns)
-        ? frontend.authenticatedRoutePatterns.map(String)
-        : [],
+      manifest,
       entryPath,
     });
   }

@@ -12,14 +12,14 @@ import {
   os,
   path,
   readJsonl,
-  registerNoobotPlugin,
+  registerHarnessCore,
   test,
   waitForFile,
 } from "../helpers/harness-planning-helper.js";
 
 test("harness planning accepts numbered plain-text plan output", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
@@ -45,7 +45,7 @@ test("harness planning accepts numbered plain-text plan output", async () => {
 
 test("harness planning ignores wrapped non-plan payload even when non-empty", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
@@ -95,7 +95,7 @@ test("harness planning ignores wrapped non-plan payload even when non-empty", as
 
 test("harness planning rejects malformed non-plan json text", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
@@ -121,7 +121,7 @@ test("harness planning rejects malformed non-plan json text", async () => {
 test("harness planning uses plan text flow without json repair", async () => {
   const hookManager = createAgentHookManager();
   const purposes = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -158,7 +158,7 @@ test("harness planning uses plan text flow without json repair", async () => {
 test("harness planning requires parseable main plan payload", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,

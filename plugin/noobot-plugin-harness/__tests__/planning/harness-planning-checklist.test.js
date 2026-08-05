@@ -12,14 +12,14 @@ import {
   os,
   path,
   readJsonl,
-  registerNoobotPlugin,
+  registerHarnessCore,
   test,
   waitForFile,
 } from "../helpers/harness-planning-helper.js";
 
 test("harness planning captures checklist and forces acceptance at final output", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const agentContext = {
     payload: {
@@ -79,7 +79,7 @@ test("harness planning captures checklist and forces acceptance at final output"
 
 test("harness planning retries injection when first response has no checklist", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },
@@ -118,7 +118,7 @@ test("harness planning retries injection when first response has no checklist", 
 
 test("harness planning does not mutate runtime forceTool config", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
   const runtimeConfig = { forceTool: true };
   const agentContext = {
     payload: {
@@ -160,7 +160,7 @@ test("harness planning does not mutate runtime forceTool config", async () => {
 
 test("harness planning blocks tool-call turn without assistant text and schedules retry", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = {
     payload: {
       tools: { registry: [{ name: "read_file", invoke: async () => ({ ok: true }) }] },

@@ -11,8 +11,8 @@ import {
   assertHookManager,
 } from "../../src/core/context.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "../../src/core/error-messages.js";
-import { createRegisterNoobotPlugin } from "../../src/core/plugin.js";
-import { createHarnessPluginFactory } from "../../src/core/plugin.js";
+import { createHarnessRegistration } from "../../src/core/plugin.js";
+import { createHarnessCoreFactory } from "../../src/core/plugin.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "../../src/core/constants.js";
 
 test("createPluginRuntimeContextFactory wires injected deps and normalizes planning guidance", () => {
@@ -46,8 +46,8 @@ test("createPluginRuntimeContextFactory wires injected deps and normalizes plann
   const api = {
     hookManager,
     policy: {
-      appendDenyToolNames: (toolNames = []) => {
-        calls.push(["appendDenyToolNames", toolNames]);
+      patch: (policy = {}) => {
+        calls.push(["policy.patch", policy]);
       },
     },
   };
@@ -90,9 +90,9 @@ test("formatHarnessCoreError supports localized cleanup warning", () => {
   assert.match(enText, /cleanupOldRuns failed during plugin registration/);
 });
 
-test("createRegisterNoobotPlugin returns early when disabled", () => {
+test("createHarnessRegistration returns early when disabled", () => {
   let registerHarnessHooksCalled = false;
-  const registerNoobotPlugin = createRegisterNoobotPlugin({
+  const registerHarnessCore = createHarnessRegistration({
     createPluginRuntimeContext: () => ({
       options: { enabled: false },
       hookManager: { on() {} },
@@ -104,12 +104,12 @@ test("createRegisterNoobotPlugin returns early when disabled", () => {
     },
   });
 
-  const result = registerNoobotPlugin({}, {});
+  const result = registerHarnessCore({}, {});
   assert.deepEqual(result, { name: PLUGIN_NAME, version: PLUGIN_VERSION, disposers: [] });
   assert.equal(registerHarnessHooksCalled, false);
 });
 
-test("createRegisterNoobotPlugin uses injected collaborators on happy path", async () => {
+test("createHarnessRegistration uses injected collaborators on happy path", async () => {
   const calls = [];
   const warnings = [];
   const originalWarn = console.warn;
@@ -120,7 +120,7 @@ test("createRegisterNoobotPlugin uses injected collaborators on happy path", asy
   const capabilityRuntime = { hookMap: {} };
   const options = { enabled: true, tracePriority: 20 };
 
-  const registerNoobotPlugin = createRegisterNoobotPlugin({
+  const registerHarnessCore = createHarnessRegistration({
     createPluginRuntimeContext: (api, userOptions) => {
       calls.push(["createPluginRuntimeContext", api, userOptions]);
       return { options, hookManager, capabilityRuntime };
@@ -146,7 +146,7 @@ test("createRegisterNoobotPlugin uses injected collaborators on happy path", asy
   const userOptions = { enabled: true };
   let result = null;
   try {
-    result = registerNoobotPlugin(api, userOptions);
+    result = registerHarnessCore(api, userOptions);
     await new Promise((resolve) => setImmediate(resolve));
   } finally {
     console.warn = originalWarn;
@@ -169,9 +169,9 @@ test("createRegisterNoobotPlugin uses injected collaborators on happy path", asy
   );
 });
 
-test("createRegisterNoobotPlugin appends denyToolNames via unified policy api", () => {
+test("createHarnessRegistration patches denyToolNames via unified policy api", () => {
   const calls = [];
-  const registerNoobotPlugin = createRegisterNoobotPlugin({
+  const registerHarnessCore = createHarnessRegistration({
     createPluginRuntimeContext: () => ({
       options: { enabled: true, denyToolNames: ["plan_multi_task_collaboration"] },
       hookManager: { on() {} },
@@ -183,39 +183,39 @@ test("createRegisterNoobotPlugin appends denyToolNames via unified policy api", 
     registerHarnessHooks: () => [],
   });
 
-  const result = registerNoobotPlugin({
+  const result = registerHarnessCore({
     policy: {
-      appendDenyToolNames: (toolNames = []) => calls.push([...(toolNames || [])]),
+      patch: (policyPatch = {}) => calls.push(policyPatch),
     },
   });
 
   assert.equal(result.name, PLUGIN_NAME);
-  assert.deepEqual(calls, [["plan_multi_task_collaboration"]]);
+  assert.deepEqual(calls, [{ denyToolNames: ["plan_multi_task_collaboration"] }]);
 });
 
-test("createHarnessPluginFactory binds normalized options into register", () => {
+test("createHarnessCoreFactory binds normalized options into register", () => {
   const calls = [];
   const normalized = { enabled: true, trace: false };
   const expectedRegistration = { name: "x", version: "y", disposers: [] };
 
-  const createHarnessPlugin = createHarnessPluginFactory({
+  const createHarnessCore = createHarnessCoreFactory({
     normalizeOptions: (userOptions) => {
       calls.push(["normalizeOptions", userOptions]);
       return normalized;
     },
-    registerNoobotPlugin: (api, userOptions) => {
-      calls.push(["registerNoobotPlugin", api, userOptions]);
+    registerHarnessCore: (api, userOptions) => {
+      calls.push(["registerHarnessCore", api, userOptions]);
       return expectedRegistration;
     },
   });
 
-  const plugin = createHarnessPlugin({ trace: false });
+  const plugin = createHarnessCore({ trace: false });
   assert.equal(plugin.name, PLUGIN_NAME);
   assert.equal(plugin.version, PLUGIN_VERSION);
   assert.equal(plugin.options, normalized);
 
   const registration = plugin.register({ hookManager: { on() {} } });
   assert.equal(registration, expectedRegistration);
-  assert.deepEqual(calls.map((item) => item[0]), ["normalizeOptions", "registerNoobotPlugin"]);
+  assert.deepEqual(calls.map((item) => item[0]), ["normalizeOptions", "registerHarnessCore"]);
   assert.equal(calls[1][2], normalized);
 });

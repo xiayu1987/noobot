@@ -12,7 +12,7 @@ import {
   clearExtensionRegistry,
   contributeExtension,
 } from "../../../src/extensions/extension-registry.js";
-import { EXTENSION_POINTS } from "../../../src/extensions/extension-point-ids.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 
 const TEST_POINT = EXTENSION_POINTS.MESSAGE_CARD_PRE;
 

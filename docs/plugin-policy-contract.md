@@ -1,6 +1,6 @@
 # Plugin Policy Contract (Agent-owned, Plugin-declared)
 
-Last updated: **June 5, 2026**
+Last updated: **August 5, 2026**
 
 This document defines the unified runtime policy contract between Agent and plugins (for example harness/workflow).
 
@@ -22,19 +22,17 @@ So plugins should not patch agent internals directly.
 
 ## 2) Register-time API contract
 
-When `registerNoobotPlugin(api, options)` is called, Agent injects:
+When an agent plugin's `activate(host, config)` entry is called, Agent injects:
 
 ```ts
-api.policy.appendDenyToolNames(names: string[]): object
-api.policy.setToolPolicy(patch: object): object
-api.policy.getToolPolicy(): object
+host.policy.patch(patch: object): object
 ```
 
 Notes:
 
 - return value is merged toolPolicy snapshot
 - plugin should call API only for its own intent
-- plugin can call none/one/multiple methods
+- plugin may call `patch` multiple times; Agent merges each declaration
 
 ---
 
@@ -44,13 +42,7 @@ Canonical field:
 
 - `runConfig.toolPolicy.denyToolNames: string[]`
 
-Legacy compatibility aliases (accepted, deprecated):
-
-- `runConfig.toolPolicy.deny_tool_names`
-- `runConfig.toolPolicy.disableAgentCollabTools`
-- `runConfig.toolPolicy.disable_agent_collab_tools`
-
-Migration recommendation (since **June 5, 2026**): use only `denyToolNames`.
+No aliases are accepted. Unknown policy fields do not participate in tool filtering.
 
 ---
 
@@ -61,7 +53,7 @@ Migration recommendation (since **June 5, 2026**): use only `denyToolNames`.
 For one run:
 
 1. base `runConfig.toolPolicy`
-2. plugin policy patch (via `api.policy.*`)
+2. plugin policy patch (via `host.policy.patch`)
 3. canonical normalization (`denyToolNames` de-duplicated)
 
 ### 4.2 Tool filtering order
@@ -79,9 +71,9 @@ At runtime tool build phase, deny is enforced again for safety.
 ## 5) Expected plugin usage pattern
 
 ```js
-export function registerNoobotPlugin(api = {}, options = {}) {
-  if (api?.policy?.appendDenyToolNames && Array.isArray(options?.denyToolNames)) {
-    api.policy.appendDenyToolNames(options.denyToolNames);
+export function activate(host = {}, config = {}) {
+  if (host?.policy?.patch && Array.isArray(config?.denyToolNames)) {
+    host.policy.patch({ denyToolNames: config.denyToolNames });
   }
   // ...register hooks
 }
@@ -89,18 +81,7 @@ export function registerNoobotPlugin(api = {}, options = {}) {
 
 ---
 
-## 6) Compatibility matrix
-
-| Field | Status | Effective date |
-|---|---|---|
-| `toolPolicy.denyToolNames` | Canonical | June 5, 2026 |
-| `toolPolicy.deny_tool_names` | Deprecated (compat) | kept after June 5, 2026 |
-| `toolPolicy.disableAgentCollabTools` | Deprecated (compat) | kept after June 5, 2026 |
-| `toolPolicy.disable_agent_collab_tools` | Deprecated (compat) | kept after June 5, 2026 |
-
----
-
-## 7) Practical guidance
+## 6) Practical guidance
 
 - New plugin: only call `api.policy.*`, do not assume engine internals.
 - Existing plugin: migrate old fields to `denyToolNames`.

@@ -66,7 +66,18 @@ export class ExecutionLogService {
     await this.executionRepo.appendLog(
       userId,
       sessionId,
-      { dialogProcessId, event, category, type, data, ts },
+      {
+        userId,
+        sessionId,
+        parentSessionId: resolvedParentSessionId,
+        dialogProcessId,
+        turnScopeId: String(data?.turnScopeId || "").trim(),
+        event,
+        category,
+        type,
+        data,
+        ts,
+      },
       resolvedParentSessionId,
       persistenceContext,
     );

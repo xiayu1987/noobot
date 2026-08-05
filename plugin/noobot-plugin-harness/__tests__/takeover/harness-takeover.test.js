@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import { registerHarnessCore } from "../../src/index.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 import { createModelContext } from "@noobot/context-protocol";
 
@@ -24,7 +24,7 @@ function withModelContext(ctx = {}, { messages = [], messageBlocks = null } = {}
 
 test("harness capability hook can take over tool calls", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -66,7 +66,7 @@ test("harness capability hook can take over tool calls", async () => {
 
 test("harness capability hook can force inject system message in mid hooks", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -104,7 +104,7 @@ test("harness capability hook can force inject system message in mid hooks", asy
 
 test("harness capability hook can take over and remove agent internal forced messages", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -165,7 +165,7 @@ test("harness capability hook can take over and remove agent internal forced mes
 
 test("harness message takeover keeps system context before injected ctx messages", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -214,7 +214,7 @@ test("harness message takeover keeps system context before injected ctx messages
 
 test("harness ctx message takeover writes through message store views", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -270,7 +270,7 @@ test("harness ctx message takeover writes through message store views", async ()
 
 test("harness agent system takeover does not write ctx message store", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -318,7 +318,7 @@ test("harness agent system takeover does not write ctx message store", async () 
 
 test("harness ctx message takeover syncs store when removal dedupes injection", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,

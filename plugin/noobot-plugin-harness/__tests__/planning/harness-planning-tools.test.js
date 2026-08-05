@@ -12,7 +12,7 @@ import {
   os,
   path,
   readJsonl,
-  registerNoobotPlugin,
+  registerHarnessCore,
   test,
   waitForFile,
 } from "../helpers/harness-planning-helper.js";
@@ -20,7 +20,7 @@ import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 test("harness planning disables blocked tools (except help) and injects request_task_acceptance tool", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const ctx = {
     userId: "u10",
@@ -50,7 +50,7 @@ test("harness planning disables blocked tools (except help) and injects request_
 
 test("harness planning skips auxiliary scope llm hooks", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const messages = [{ role: "user", content: "auxiliary planning call" }];
   const ctx = {
@@ -74,7 +74,7 @@ test("harness planning skips auxiliary scope llm hooks", async () => {
 test("harness planning injects refinement tool and tool call runs plugin-side refinement directly", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -163,7 +163,7 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
 
 test("harness planning does not inject refinement tool by default in programming scenario", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -226,7 +226,7 @@ test("harness planning does not inject refinement tool by default in programming
 test("harness request_plan_refinement falls back to closure meta when configurable meta lacks harness", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -295,7 +295,7 @@ test("harness request_plan_refinement falls back to closure meta when configurab
 
 test("harness planning allows tool-call turn without assistant text when planning tools are allowed", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -336,7 +336,7 @@ test("harness planning allows tool-call turn without assistant text when plannin
 test("harness planning separate model uses resolved planning tool allowlist", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,

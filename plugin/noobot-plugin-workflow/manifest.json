@@ -1,45 +1,83 @@
 {
+  "protocolVersion": 2,
   "id": "workflow",
-  "pluginKey": "workflow",
   "name": "noobot-plugin-workflow",
   "version": "4.1.5",
-  "capabilities": [
-    "agent.workflow",
-    "agent.execution_intent",
-    "service.after_session_delete",
-    "service.http_routes",
-    "bot.register",
-    "frontend.runtime_projection"
-  ],
-  "runtimeOptions": {
-    "agent.execution_intent": {
-      "executionKind": "workflow",
-      "executionIdPrefix": "workflow",
-      "originType": "workflow",
-      "originIdKey": "workflowRunId",
-      "stage": "planning"
-    },
-    "service.after_session_delete": {
-      "enabled": true,
-      "mode": "on",
-      "priority": 10,
-      "timeoutMs": 5000
-    },
-    "service.http_routes": {
-      "enabled": true,
-      "mode": "on",
-      "priority": 10
-    }
-  },
-  "apiVersion": "1",
   "entries": {
     "agent": "src/entries/agent.js",
     "service": "src/entries/service.js",
     "frontend": "frontend/index.js"
   },
-  "frontend": {
-    "apiVersion": "1",
-    "authenticatedRoutePatterns": [
+  "contributes": {
+    "agent": {
+      "hooks": {
+        "registers": ["bot.before_agent_dispatch"],
+        "emits": ["workflow.node_agent_execute"]
+      },
+      "executionIntent": {
+        "kind": "workflow",
+        "idPrefix": "workflow",
+        "originType": "workflow",
+        "originIdKey": "workflowRunId",
+        "stage": "planning"
+      }
+    },
+    "service": {
+      "hooks": {
+        "registers": ["service.after_session_delete"],
+        "emits": []
+      },
+      "routes": [
+        {
+          "id": "workflow.detail",
+          "method": "GET",
+          "paths": [
+            "/internal/workflow/session/:userId/:sessionId/:dialogProcessId",
+            "/api/internal/workflow/session/:userId/:sessionId/:dialogProcessId"
+          ],
+          "auth": "connected_user"
+        },
+        {
+          "id": "workflow.thinking-detail",
+          "method": "GET",
+          "paths": [
+            "/internal/workflow/session/:userId/:sessionId/:dialogProcessId/thinking-detail",
+            "/api/internal/workflow/session/:userId/:sessionId/:dialogProcessId/thinking-detail"
+          ],
+          "auth": "connected_user"
+        }
+      ]
+    },
+    "frontend": {
+      "extensions": [
+        { "id": "workflow-model-extension", "point": "composer.options.model" },
+        { "id": "workflow-card", "point": "message.card.pre" },
+        { "id": "workflow-session-detail-hydrator", "point": "session.detail.hydrator" },
+        { "id": "workflow-runtime-projector", "point": "runtime.stream.route" }
+      ]
+    }
+  },
+  "requires": {
+    "ports": [
+      "hooks.register",
+      "hooks.emit",
+      "policy.patch",
+      "model.invoke",
+      "artifacts.write",
+      "events.emit",
+      "routes.bind",
+      "authenticated_request",
+      "frontend.contribute"
+    ],
+    "permissions": [
+      "session.read",
+      "session.child.create",
+      "session.delete.observe",
+      "model.invoke",
+      "artifact.write",
+      "http.authenticated"
+    ],
+    "authenticatedRoutes": [
       "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId",
       "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId/thinking-detail"
     ]

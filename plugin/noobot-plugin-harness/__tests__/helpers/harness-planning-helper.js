@@ -13,7 +13,7 @@ import {
   createTestHookManager as createAgentHookManager,
   createTestResolveModelMessages,
 } from "./public-runtime-fixtures.js";
-import { registerNoobotPlugin as registerNoobotPluginImpl } from "../../src/index.js";
+import { registerHarnessCore as registerHarnessCoreImpl } from "../../src/index.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
 function assertFlatCapabilityMessages(messages = []) {
@@ -27,8 +27,8 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
 }
 
-function registerNoobotPlugin(api = {}, options = {}) {
-  return registerNoobotPluginImpl(api, {
+function registerHarnessCore(api = {}, options = {}) {
+  return registerHarnessCoreImpl(api, {
     resolveModelMessages: createTestResolveModelMessages(),
     ...options,
   });
@@ -43,7 +43,7 @@ export {
   os,
   path,
   readJsonl,
-  registerNoobotPlugin,
+  registerHarnessCore,
   test,
   waitForFile,
 };

@@ -7,8 +7,7 @@ import WorkflowMessageCard from "./components/WorkflowMessageCard.vue";
 import WorkflowModelExtension from "./components/WorkflowModelExtension.vue";
 import { hydrateWorkflowRegistryFromSessionDetail } from "./runtime/sessionHydration.js";
 import { routeWorkflowDiagnosticsPayload } from "./runtime/workflowDiagnosticsRoute.js";
-
-export const FRONTEND_PLUGIN_API_VERSION = "1";
+import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 
 const WORKFLOW_NODE_STATE_EVENT = "workflow_node_state_committed";
 const WORKFLOW_PLANNING_EVENT = "workflow_planning_message_prepared";
@@ -104,7 +103,7 @@ function isWorkflowMessageLike(messageItem = {}) {
   return type === "workflow" && source === "workflow-plugin" && kind === "workflow" && Boolean(phase);
 }
 
-export function registerFrontendPlugin(ctx = {}) {
+export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
   const authenticatedGet = ctx?.services?.authenticatedRequest?.get;
@@ -179,4 +178,5 @@ export function registerFrontendPlugin(ctx = {}) {
     when: ({ event } = {}) => [WORKFLOW_NODE_STATE_EVENT, WORKFLOW_PLANNING_EVENT, SUBAGENT_MESSAGE_EVENT].includes(event),
     provide: () => [routeWorkflowRuntimeEvent],
   });
+  return createPluginActivationResult({ pluginId: "workflow", surface: PLUGIN_SURFACE.FRONTEND });
 }

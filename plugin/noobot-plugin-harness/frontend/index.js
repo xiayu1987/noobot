@@ -6,14 +6,10 @@
 import { ThinkingPanel } from "noobot-chat/plugin-api/chat-ui";
 import HarnessModelExtension from "./components/HarnessModelExtension.vue";
 import { createThinkingDetailService } from "./services/thinkingDetailService.js";
+import { createPluginActivationResult, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
+import { matchesThinkingPanel } from "./thinking-panel-matcher.js";
 
-export function matchesThinkingPanel(messageItem = {}) {
-  return messageItem?.role === "assistant";
-}
-
-export const FRONTEND_PLUGIN_API_VERSION = "1";
-
-export function registerFrontendPlugin(ctx = {}) {
+export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
   const thinkingDetailService = createThinkingDetailService(ctx?.services?.authenticatedRequest?.get);
@@ -59,4 +55,5 @@ export function registerFrontendPlugin(ctx = {}) {
           },
         }),
   });
+  return createPluginActivationResult({ pluginId: "harness", surface: PLUGIN_SURFACE.FRONTEND });
 }

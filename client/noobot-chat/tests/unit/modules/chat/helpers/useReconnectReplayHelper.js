@@ -17,8 +17,8 @@ import {
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { replacePluginExtensions } from "../../../../../src/extensions/extension-registry.js";
-import { EXTENSION_POINTS } from "../../../../../src/extensions/extension-point-ids.js";
-import { registerFrontendPlugin as registerWorkflowFrontendPlugin } from "../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import { activate as activateWorkflowFrontend } from "../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
 
 function createSession(id) {
   return {
@@ -129,7 +129,7 @@ export function createFakeProcessStore() {
 
 export function createFixture({ activeId = "s-1", processStore = null, currentRun = null } = {}) {
   const workflowContributions = [];
-  registerWorkflowFrontendPlugin({
+  void activateWorkflowFrontend({
     contributeExtension: (point, contribution) => {
       workflowContributions.push({ point, contribution });
       return true;

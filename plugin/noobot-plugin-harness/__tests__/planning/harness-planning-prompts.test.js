@@ -12,14 +12,14 @@ import {
   os,
   path,
   readJsonl,
-  registerNoobotPlugin,
+  registerHarnessCore,
   test,
   waitForFile,
 } from "../helpers/harness-planning-helper.js";
 
 test("harness planning prompt includes current tool names and descriptions", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const messages = [{ role: "user", content: "开始任务" }];
   const ctx = {
@@ -59,7 +59,7 @@ test("harness planning prompt includes current tool names and descriptions", asy
 
 test("harness initial planning keeps scenario policy out of text protocol and responsibility", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const messages = [{ role: "user", content: "整理这些文本资料" }];
   const ctx = {
@@ -103,7 +103,7 @@ test("harness initial planning keeps scenario policy out of text protocol and re
 
 test("harness planning followup uses text deliverable-batch policy in text scenario", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -145,7 +145,7 @@ test("harness planning followup uses text deliverable-batch policy in text scena
 
 test("harness planning captures dynamic policy prompt protocol from separate model", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -197,7 +197,7 @@ test("harness planning captures dynamic policy prompt protocol from separate mod
 
 test("harness planning followup uses dynamic programming scenario over initial text scenario", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -254,7 +254,7 @@ test("harness planning followup uses dynamic programming scenario over initial t
 test("harness planning separate model keeps latest user goal in planning context summary", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -297,7 +297,7 @@ test("harness planning separate model keeps latest user goal in planning context
 
 test("harness planning operation directory uses sandbox view without losing host view", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const hostBasePath = "/host/user-a";
   const sandboxBasePath = "/workspace/user-a";
@@ -357,7 +357,7 @@ test("harness planning operation directory uses sandbox view without losing host
 
 test("harness separate-model plan relay includes operation directory for main agent", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,

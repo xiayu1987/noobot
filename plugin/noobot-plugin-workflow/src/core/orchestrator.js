@@ -12,9 +12,8 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { handleBeforeAgentDispatch } from "./orchestrator/hook-handler.js";
 import { registerWorkflowSessionCleanupHook } from "./orchestrator/session-cleanup.js";
 
-export function createRegisterWorkflowHooks() {
-  return function registerWorkflowHooks({ hookManager, options }) {
-    const disposers = [];
+export function registerWorkflowAgentHooks({ hookManager, options }) {
+  const disposers = [];
     const hookPoint = HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH;
 
     disposers.push(
@@ -37,9 +36,19 @@ export function createRegisterWorkflowHooks() {
       ),
     );
 
-    disposers.push(registerWorkflowSessionCleanupHook({ hookManager, options }));
+  return disposers;
+}
 
-    return disposers;
+export function registerWorkflowServiceHooks({ hookManager, options }) {
+  return [registerWorkflowSessionCleanupHook({ hookManager, options })];
+}
+
+export function createRegisterWorkflowHooks() {
+  return function registerWorkflowHooks({ hookManager, options }) {
+    return [
+      ...registerWorkflowAgentHooks({ hookManager, options }),
+      ...registerWorkflowServiceHooks({ hookManager, options }),
+    ];
   };
 }
 

@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { registerFrontendPlugin } from "../index.js";
+import { activate } from "../index.js";
 
 describe("Harness frontend registration", () => {
-  it("shows the model extension only while Harness is selected", () => {
+  it("shows the model extension only while Harness is selected", async () => {
     const contributions = [];
-    registerFrontendPlugin({
+    await activate({
       contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
       extensionPoints: {
         MARKDOWN_COLLAPSE_MARKERS: "markdown-collapse-markers",
@@ -34,9 +34,9 @@ describe("Harness frontend registration", () => {
     expect(modelExtension.when({})).toBe(false);
   });
 
-  it("leaves canonical message assets at the host-owned render outlet", () => {
+  it("leaves canonical message assets at the host-owned render outlet", async () => {
     const contributions = [];
-    registerFrontendPlugin({
+    await activate({
       contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
       extensionPoints: {
         MARKDOWN_COLLAPSE_MARKERS: "markdown-collapse-markers",

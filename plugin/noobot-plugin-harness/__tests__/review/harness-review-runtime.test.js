@@ -11,7 +11,7 @@ import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers } from "../helpers/public-runtime-fixtures.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import { registerHarnessCore } from "../../src/index.js";
 import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
@@ -30,7 +30,7 @@ function assertFlatCapabilityMessages(messages = []) {
 
 test("harness review keeps its report internal by default", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const agentContext = {
     payload: {
@@ -78,7 +78,7 @@ test("harness review keeps its report internal by default", async () => {
 
 test("harness review attaches to final output only when explicitly enabled", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     { trace: false, promptPolicy: false, review: { attachToFinalOutput: true } },
   );
@@ -100,7 +100,7 @@ test("harness review attaches to final output only when explicitly enabled", asy
 test("harness before_final_output capability runtime runs once", async () => {
   const hookManager = createAgentHookManager();
   let count = 0;
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -238,7 +238,7 @@ test("acceptance checklist attachments are bound to final assistant turn output"
 
 test("harness finalResponseGuard false skips final policy injection but keeps review", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: true, finalResponseGuard: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: true, finalResponseGuard: false });
 
   const result = { output: "done" };
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
@@ -259,7 +259,7 @@ test("harness finalResponseGuard false skips final policy injection but keeps re
 test("harness promptPolicy false still traces before_llm_call", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { basePath, promptPolicy: false, trace: true });
+  registerHarnessCore({ hookManager }, { basePath, promptPolicy: false, trace: true });
 
   await hookManager.emit("agent.before_llm_call", {
     executionScope: "primary",
@@ -277,7 +277,7 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
 
 test("harness review records reports on error and abort hooks", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
 
   await hookManager.emit("agent.on_error", {
@@ -305,7 +305,7 @@ test("harness review records reports on error and abort hooks", async () => {
 
 test("harness full engineering capability flow plans, guides, accepts and reviews", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const agentContext = {
     payload: {
@@ -420,7 +420,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
 
 test("harness review attachToFinalOutput false keeps report internal", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     { trace: false, promptPolicy: false, review: { attachToFinalOutput: false } },
   );
@@ -447,7 +447,7 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
 
 test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn start", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const agentContext = {
     payload: {
@@ -486,7 +486,7 @@ test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn
 
 test("harness forced acceptance is owned by acceptance without appending to final output", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   const agentContext = {
     payload: {

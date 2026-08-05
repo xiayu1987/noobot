@@ -14,7 +14,7 @@ import {
   createTestHookManager as createAgentHookManager,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import { registerHarnessCore } from "../../src/index.js";
 import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
@@ -114,7 +114,7 @@ test("final acceptance separate model receives revised plan, all phase checklist
 test("harness active request_task_acceptance semantic validation receives agent ctx via tool config", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -168,7 +168,7 @@ test("harness active request_task_acceptance semantic validation receives agent 
 test("harness active request_task_acceptance falls back to closure meta when configurable meta lacks harness", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,

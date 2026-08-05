@@ -149,25 +149,17 @@ Workflow 默认会向该字段追加多 agent 协作工具（避免节点子会�
 
 - `runConfig.toolPolicy.denyToolNames`
 
-兼容但已废弃（不建议新增使用）：
-
-- `runConfig.toolPolicy.disableAgentCollabTools`
-- `runConfig.toolPolicy.disable_agent_collab_tools`
-- `runConfig.toolPolicy.deny_tool_names`
-
 ### 插件注册 API（policy 契约）
 
-Agent 在插件注册时会注入统一策略 API（`registerNoobotPlugin(api, options)` 的 `api.policy`）：
+Agent 在插件注册时会注入统一策略 API（`registerWorkflowCore(api, options)` 的 `api.policy`）：
 
-- `api.policy.appendDenyToolNames(names: string[])`
-- `api.policy.setToolPolicy(patch: object)`
-- `api.policy.getToolPolicy(): object`
+- `api.policy.patch(patch: object)`
 
 Workflow 插件只需要声明策略并调用 API，不需要改 agent 侧逻辑。例如：
 
 ```js
-if (api?.policy?.appendDenyToolNames && Array.isArray(options?.denyToolNames)) {
-  api.policy.appendDenyToolNames(options.denyToolNames);
+if (api?.policy?.patch && Array.isArray(options?.denyToolNames)) {
+  api.policy.patch({ denyToolNames: options.denyToolNames });
 }
 ```
 

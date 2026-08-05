@@ -7,8 +7,8 @@ import { mount } from "@vue/test-utils";
 import { vi } from "vitest";
 import ThinkingPanel from "../../../../../../src/modules/chat/components/thinking/ThinkingPanel.vue";
 import { contributeExtension } from "../../../../../../src/extensions/extension-registry.js";
-import { EXTENSION_POINTS } from "../../../../../../src/extensions/extension-point-ids.js";
-import { registerFrontendPlugin as registerHarnessFrontendPlugin } from "../../../../../../../../plugin/noobot-plugin-harness/frontend/index.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import { activate as activateHarnessFrontend } from "../../../../../../../../plugin/noobot-plugin-harness/frontend/index.js";
 
 if (!globalThis.localStorage?.getItem) {
   const values = new Map();
@@ -93,7 +93,7 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
 });
 
 export function mountThinkingPanel(messageItem, props = {}) {
-  registerHarnessFrontendPlugin({
+  void activateHarnessFrontend({
     contributeExtension: (point, contribution) => contributeExtension(point, {
       ...contribution,
       pluginId: "harness",

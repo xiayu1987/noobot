@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { matchesThinkingPanel } from "../index.js";
+import { matchesThinkingPanel } from "../thinking-panel-matcher.js";
 
 describe("harness thinking panel renderer", () => {
   it("does not attach to user messages", () => {

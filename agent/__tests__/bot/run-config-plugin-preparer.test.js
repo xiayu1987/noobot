@@ -5,515 +5,108 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import path from "node:path";
+import { RunConfigPluginPreparer } from "../../src/bot/session/run-config-plugin-preparer.js";
 
-import {
-  AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS,
-  AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS,
-  RunConfigPluginPreparer,
-} from "../../src/bot/session/run-config-plugin-preparer.js";
-import { createSessionPluginRuntime } from "../../src/bot/session/session-plugin-runtime-adapter.js";
-import { PLUGIN_CAPABILITY } from "../../src/extensions/plugins/capabilities.js";
-
-function normalizeStringArray(input = []) {
-  return Array.isArray(input)
-    ? input.map((item) => String(item || "").trim()).filter(Boolean)
-    : [];
-}
-
-function createWorkspaceService(baseDir = "/tmp/noobot-plugin-preparer") {
+function entry({ id, hooks = [], emits = [], executionIntent, activate } = {}) {
   return {
-    getWorkspacePath(userId = "") {
-      return path.join(baseDir, userId);
+    pluginId: id,
+    surface: "agent",
+    manifest: {
+      protocolVersion: 2,
+      id,
+      name: id,
+      version: "1.0.0",
+      entries: { agent: "agent.js" },
+      contributes: { agent: {
+        hooks: { registers: hooks, emits },
+        ...(executionIntent ? { executionIntent } : {}),
+      } },
+      requires: { ports: ["hooks.register"], permissions: [], authenticatedRoutes: [] },
+      enabledByDefault: true,
     },
+    activate,
   };
 }
 
-function createLoadedPlugins({ capability = PLUGIN_CAPABILITY.AGENT_REGISTER, register = null } = {}) {
-  return {
-    registry: new Map([
-      [
-        "test-plugin",
-        {
-          manifest: {
-            id: "test-plugin",
-            pluginKey: "test-plugin",
-            capabilities: [capability],
-          },
-          registerNoobotPlugin: typeof register === "function" ? register : () => {},
-        },
-      ],
-    ]),
+function activation(id, hostAction = () => {}) {
+  return (host, config) => {
+    hostAction(host, config);
+    return { protocolVersion: 2, pluginId: id, surface: "agent", dispose() {} };
   };
 }
 
-function createPreparer({
-  globalConfig = {},
-  workspaceService = createWorkspaceService(),
-  loadedDynamicPlugins = { registry: new Map() },
-  pluginRuntime = {},
-} = {}) {
+function preparer(entries) {
   return new RunConfigPluginPreparer({
-    globalConfig,
-    workspaceService,
-    loadedDynamicPlugins,
-    pluginRuntime: {
-      agentPluginKey: "agentPlugin",
-      botPluginKey: "botPlugin",
-      agentPluginSelectors: new Set(["agentPlugin"]),
-      botPluginSelectors: new Set(["botPlugin"]),
-      ...pluginRuntime,
-    },
-    normalizeStringArray,
-    mergePluginOptions: (...items) =>
-      items.reduce((acc, item) => ({ ...acc, ...(item && typeof item === "object" ? item : {}) }), {}),
+    loadedDynamicPlugins: { registry: new Map(entries.map((item) => [item.pluginId, item])) },
+    normalizeStringArray: (input) => Array.isArray(input) ? input : [],
     createPluginResolveModelMessages: () => () => [],
-    createBotSubSessionRunner: () => async () => ({}),
-    createGeneratedArtifactPersister: () => async () => [],
-    createBotPluginScopedJsonWriter: () => async () => ({}),
-    createBotPluginScopedEventLogger: () => async () => ({}),
   });
 }
 
-test("RunConfigPluginPreparer leaves agent plugin runConfig untouched when disabled", () => {
-  const preparer = createPreparer();
-  const runConfig = { runtimeModel: "m1" };
-
-  const prepared = preparer.prepareAgentPluginRunConfig({
-    userId: "u1",
-    runConfig,
-  });
-
-  assert.equal(prepared, runConfig);
-  assert.equal(prepared.hookManager, undefined);
-});
-
-test("createSessionPluginRuntime exposes generic plugin slots without concrete plugin aliases", () => {
-  const runtime = createSessionPluginRuntime({
-    descriptors: [
-      {
-        keyProperty: "agentPluginKey",
-        selectorsProperty: "agentPluginSelectors",
-        fallbackKey: "agentPlugin",
-      },
-      {
-        keyProperty: "botPluginKey",
-        selectorsProperty: "botPluginSelectors",
-        fallbackKey: "botPlugin",
-      },
-    ],
-  });
-
-  assert.equal(runtime.agentPluginKey, "agentPlugin");
-  assert.equal(runtime.botPluginKey, "botPlugin");
-  assert.deepEqual([...runtime.agentPluginSelectors], ["agentPlugin"]);
-  assert.deepEqual([...runtime.botPluginSelectors], ["botPlugin"]);
-});
-
-test("RunConfigPluginPreparer resolves agent plugin options with workspace basePath and safe defaults", () => {
-  const preparer = createPreparer({
-    workspaceService: createWorkspaceService("/tmp/noobot-preparer-base"),
-  });
-
-  const options = preparer.resolveAgentPluginOptions({
-    userId: "u1",
-    runConfig: {
-      selectedPlugins: ["agentPlugin"],
-      plugins: {
-        agentPlugin: {
-          miniRunnerMaxTurns: 99,
-          timeoutMs: 1000,
-        },
-      },
-    },
-  });
-
-  assert.equal(options.enabled, true);
-  assert.equal(options.mode, "on");
-  assert.equal(options.basePath, path.join("/tmp/noobot-preparer-base", "u1"));
-  assert.equal(options.miniRunnerMaxTurns, AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS);
-  assert.equal(options.planningGuidanceMode, "separate_model");
-  assert.equal(options.timeoutMs, AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS);
-  assert.equal(typeof options.resolveModelMessages, "function");
-  assert.equal(options.resolveMessageBlock, undefined);
-  assert.equal(options.markMessagesSummarized, undefined);
-  assert.equal(typeof options.capabilityModelInvoker, "function");
-});
-
-test("RunConfigPluginPreparer resolves agent plugin options via generic runtime selectors", () => {
-  const preparer = createPreparer({
-    pluginRuntime: {
-      agentPluginKey: "assistant-driver",
-      agentPluginSelectors: new Set(["assistant-driver"]),
-    },
-  });
-
-  const options = preparer.resolveAgentPluginOptions({
-    userId: "u1",
-    runConfig: {
-      selectedPlugins: ["assistant-driver"],
-      plugins: {
-        "assistant-driver": {
-          miniRunnerMaxTurns: 2,
-        },
-      },
-    },
-  });
-
-  assert.equal(options.enabled, true);
-  assert.equal(options.mode, "on");
-  assert.equal(options.miniRunnerMaxTurns, 2);
-});
-
-test("RunConfigPluginPreparer merges agent plugin model config by generic plugin key", () => {
-  const preparer = createPreparer({
-    pluginRuntime: {
-      agentPluginKey: "assistant-driver",
-      agentPluginSelectors: new Set(["assistant-driver"]),
-    },
-  });
-
-  const options = preparer.resolveAgentPluginOptions({
-    userId: "u1",
-    runConfig: {
-      selectedPlugins: ["assistant-driver"],
-      pluginModelConfig: {
-        "assistant-driver": {
-          stepModels: {
-            planning: "planner_run",
-            guidance: "guidance_run",
-            empty: "",
-          },
-        },
-      },
-      plugins: {
-        "assistant-driver": {
-          stepModels: {
-            planning: "planner_default",
-            acceptance: "acceptance_default",
-          },
-        },
-      },
-    },
-  });
-
-  assert.deepEqual(options.stepModels, {
-    planning: "planner_run",
-    acceptance: "acceptance_default",
-    guidance: "guidance_run",
-  });
-});
-
-test("RunConfigPluginPreparer merges agent plugin capability profile without losing disabled flags", () => {
-  const preparer = createPreparer({
-    pluginRuntime: {
-      agentPluginKey: "assistant-driver",
-      agentPluginSelectors: new Set(["assistant-driver"]),
-    },
-  });
-
-  const options = preparer.resolveAgentPluginOptions({
-    userId: "u1",
-    runConfig: {
-      selectedPlugins: ["assistant-driver"],
-      pluginModelConfig: {
-        "assistant-driver": {
-          capabilityProfile: {
-            planning: { enabled: false },
-            guidance: { enabled: false },
-            acceptance: { enabled: false },
-          },
-        },
-      },
-      plugins: {
-        "assistant-driver": {
-          capabilityProfile: {
-            planning: { enabled: true, priority: 3 },
-            review: { enabled: false },
-          },
-        },
-      },
-    },
-  });
-
-  assert.deepEqual(options.capabilityProfile, {
-    planning: { enabled: false, priority: 3 },
-    review: { enabled: false },
-    guidance: { enabled: false },
-    acceptance: { enabled: false },
-  });
-});
-
-test("RunConfigPluginPreparer merges agent plugin guidance runtime options", () => {
-  const preparer = createPreparer({
-    pluginRuntime: {
-      agentPluginKey: "assistant-driver",
-      agentPluginSelectors: new Set(["assistant-driver"]),
-    },
-  });
-
-  const options = preparer.resolveAgentPluginOptions({
-    userId: "u1",
-    runConfig: {
-      selectedPlugins: ["assistant-driver"],
-      pluginModelConfig: {
-        "assistant-driver": {
-          guidance: {
-            analysis: { turnsThreshold: 4 },
-          },
-        },
-      },
-      plugins: {
-        "assistant-driver": {
-          guidance: {
-            analysis: { turnsThreshold: 9 },
-            summary: { turnsThreshold: 12 },
-          },
-        },
-      },
-    },
-  });
-
-  assert.deepEqual(options.guidance, {
-    analysis: { turnsThreshold: 4 },
-    summary: { turnsThreshold: 12 },
-  });
-});
-
-test("RunConfigPluginPreparer registers agent plugin once", () => {
-  let registerCount = 0;
-  const loadedDynamicPlugins = createLoadedPlugins({
-    capability: PLUGIN_CAPABILITY.AGENT_REGISTER,
-    register(api = {}) {
-      registerCount += 1;
-      api.policy.appendDenyToolNames(["registered_tool"]);
-    },
-  });
-  const preparer = createPreparer({ loadedDynamicPlugins });
-
-  const first = preparer.prepareAgentPluginRunConfig({
-    userId: "u1",
-    runConfig: {
-      plugins: {
-        agentPlugin: {
-          enabled: true,
-          mode: "on",
-          denyToolNames: ["first_run_tool"],
-        },
-      },
-    },
-  });
-
-  assert.equal(registerCount, 1);
-  assert.ok(first.hookManager);
-  assert.equal(Object.hasOwn(first.hookManager, "__noobotAgentPluginRegistered"), false);
-  assert.equal(Object.hasOwn(first.hookManager, "runtime"), false);
-  assert.equal(first.plugins.agentPlugin.enabled, true);
-  assert.deepEqual(first.toolPolicy.denyToolNames, ["registered_tool"]);
-
-  const second = preparer.prepareAgentPluginRunConfig({
-    userId: "u1",
-    runConfig: {
-      ...first,
-      plugins: {
-        ...first.plugins,
-        agentPlugin: {
-          ...first.plugins.agentPlugin,
-          denyToolNames: ["second_run_tool"],
-        },
-      },
-    },
-  });
-
-  assert.equal(registerCount, 1);
-  assert.equal(second.hookManager, first.hookManager);
-  assert.deepEqual(second.toolPolicy.denyToolNames, [
-    "registered_tool",
-    "second_run_tool",
-  ]);
-});
-
-test("RunConfigPluginPreparer resolves bot plugin options and injects runtime helpers", () => {
-  const preparer = createPreparer({
-    globalConfig: {
-      plugins: {
-        botPlugin: {
-          enabled: true,
-          mode: "on",
-        },
-      },
-    },
-  });
-
-  const options = preparer.resolveBotPluginOptions({
-    runConfig: {},
-    userConfig: {},
-  });
-
-  assert.equal(options.enabled, true);
-  assert.equal(options.mode, "on");
-  assert.equal(options.timeoutMs, undefined);
-  assert.equal(options.miniRunnerMaxTurns, undefined);
-  assert.equal(options.maxAutoTransitions, undefined);
-  assert.equal(options.maxParallelNodeAgents, undefined);
-  assert.equal(options.semanticMode, "separate_model");
-  assert.equal(typeof options.resolveModelMessages, "function");
-  assert.equal(typeof options.capabilityModelInvoker, "function");
-  assert.equal(typeof options.subSessionRunner, "function");
-  assert.equal(typeof options.generatedArtifactPersister, "function");
-  assert.equal(typeof options.botPluginDialogPersister, "function");
-  assert.equal(typeof options.botPluginEventLogger, "function");
-});
-
-test("RunConfigPluginPreparer resolves bot plugin options via generic runtime selectors", () => {
-  const preparer = createPreparer({
-    pluginRuntime: {
-      botPluginKey: "task-orchestrator",
-      botPluginSelectors: new Set(["task-orchestrator"]),
-    },
-  });
-
-  const options = preparer.resolveBotPluginOptions({
-    runConfig: {
-      selectedPlugins: ["task-orchestrator"],
-      plugins: {
-        "task-orchestrator": {
-          semanticMode: "inline",
-        },
-      },
-    },
-  });
-
-  assert.equal(options.enabled, true);
-  assert.equal(options.mode, "on");
-  assert.equal(options.semanticMode, "inline");
-});
-
-test("RunConfigPluginPreparer resolves declared workflow execution identity before dispatch", () => {
-  const loadedDynamicPlugins = {
-    registry: new Map([["workflow", {
-      manifest: {
-        id: "workflow",
-        pluginKey: "workflow",
-        capabilities: [PLUGIN_CAPABILITY.BOT_REGISTER, "agent.execution_intent"],
-        runtimeOptions: {
-          "agent.execution_intent": {
-            executionKind: "workflow",
-            executionIdPrefix: "workflow",
-            originType: "workflow",
-            originIdKey: "workflowRunId",
-            stage: "planning",
-          },
-        },
-      },
-      registerNoobotPlugin() {},
-    }]]),
-  };
-  const preparer = createPreparer({
-    loadedDynamicPlugins,
-    pluginRuntime: {
-      botPluginKey: "workflow",
-      botPluginSelectors: new Set(["workflow"]),
-    },
-  });
-  const intent = preparer.resolveExecutionIntent({
-    runConfig: { selectedPlugins: ["workflow"] },
-    turnScopeId: "client-turn-1",
-  });
-  assert.deepEqual(intent, {
-    executionId: "workflow:client-turn-1",
-    executionKind: "workflow",
-    parentExecutionId: "",
-    rootExecutionId: "workflow:client-turn-1",
-    origin: { type: "workflow", workflowRunId: "workflow:client-turn-1" },
-    stage: "planning",
-  });
-  assert.deepEqual(preparer.resolveExecutionIntent({
-    runConfig: {},
-    turnScopeId: "client-turn-2",
-  }), {
-    executionId: "agent:client-turn-2",
-    executionKind: "agent",
-    parentExecutionId: "",
-    rootExecutionId: "agent:client-turn-2",
-    origin: {},
-    stage: "",
-  });
-});
-
-test("RunConfigPluginPreparer applies bot plugin model config by generic plugin key", () => {
-  const preparer = createPreparer({
-    pluginRuntime: {
-      botPluginKey: "task-orchestrator",
-      botPluginSelectors: new Set(["task-orchestrator"]),
-    },
-  });
-
-  const options = preparer.resolveBotPluginOptions({
-    runConfig: {
-      selectedPlugins: ["task-orchestrator"],
-      pluginModelConfig: {
-        "task-orchestrator": {
-          semanticModel: "semantic_run",
-        },
-      },
-      plugins: {
-        "task-orchestrator": {
-          semanticModel: "semantic_default",
-        },
-      },
-    },
-  });
-
-  assert.equal(options.semanticModel, "semantic_run");
-});
-
-test("RunConfigPluginPreparer prepares bot plugin botHookManager", () => {
-  let registerCount = 0;
-  const preparer = createPreparer({
-    loadedDynamicPlugins: createLoadedPlugins({
-      capability: PLUGIN_CAPABILITY.BOT_REGISTER,
-      register() {
-        registerCount += 1;
-      },
+test("activates selected Manifest ids and scopes declared hook registrations", () => {
+  const demo = entry({
+    id: "demo",
+    hooks: ["agent.before_turn"],
+    activate: activation("demo", (host) => {
+      host.hooks.register("agent.before_turn", () => {}, { id: "before", priority: 10 });
+      host.policy.patch({ denyToolNames: ["unsafe_tool"] });
     }),
-    globalConfig: {
-      plugins: {
-        botPlugin: {
-          enabled: true,
-          mode: "on",
-        },
-      },
-    },
+  });
+  const prepared = preparer([demo]).prepareRunConfig({
+    runConfig: { selectedPlugins: ["demo"], plugins: { demo: { trace: false } } },
   });
 
-  const disabled = preparer.resolveBotPluginOptions({
-    runConfig: {
-      plugins: {
-        botPlugin: {
-          enabled: false,
-          mode: "off",
-        },
-      },
-    },
-  });
-  assert.deepEqual(disabled, { enabled: false, mode: "off" });
+  assert.equal(prepared.plugins.demo.enabled, true);
+  assert.equal(prepared.plugins.demo.mode, "on");
+  assert.deepEqual(prepared.toolPolicy.denyToolNames, ["unsafe_tool"]);
+  assert.equal(prepared.hookManager.list("agent.before_turn")[0].id, "demo:before");
+  assert.equal("agentPlugin" in prepared.plugins, false);
+  assert.equal("botPlugin" in prepared.plugins, false);
+});
 
-  const prepared = preparer.prepareBotPluginRunConfig({
-    runConfig: {
-      plugins: {
-        botPlugin: {
-          enabled: true,
-          mode: "on",
-        },
-      },
-    },
+test("rejects registration of an undeclared hook", () => {
+  const demo = entry({
+    id: "demo",
+    activate: activation("demo", (host) => host.hooks.register("agent.before_turn", () => {}, { id: "hidden" })),
   });
+  assert.throws(
+    () => preparer([demo]).prepareRunConfig({ runConfig: { selectedPlugins: ["demo"] } }),
+    /did not declare hook/,
+  );
+});
 
-  assert.ok(prepared.botHookManager);
-  assert.equal(registerCount, 1);
-  assert.equal(Object.hasOwn(prepared.botHookManager, "__noobotBotPluginRegistered"), false);
-  assert.equal(Object.hasOwn(prepared.botHookManager, "runtime"), false);
-  assert.equal(prepared.plugins.botPlugin.enabled, true);
-  assert.equal(prepared.plugins.botPlugin.mode, "on");
+test("routes declared bot hooks and workflow emissions through the orchestration manager", async () => {
+  const demo = entry({
+    id: "demo",
+    hooks: ["bot.before_agent_dispatch"],
+    emits: ["workflow.node_agent_execute"],
+    activate: activation("demo", (host) => {
+      host.hooks.register("bot.before_agent_dispatch", () => {}, { id: "dispatch" });
+      void host.hooks.emit("workflow.node_agent_execute", {});
+    }),
+  });
+  const prepared = preparer([demo]).prepareRunConfig({ runConfig: { selectedPlugins: ["demo"] } });
+  assert.equal(prepared.botHookManager.list("bot.before_agent_dispatch")[0].id, "demo:dispatch");
+  assert.equal(prepared.hookManager.list("bot.before_agent_dispatch").length, 0);
+});
+
+test("derives the single selected execution intent from Manifest", () => {
+  const workflow = entry({
+    id: "workflow",
+    hooks: ["bot.before_agent_dispatch"],
+    executionIntent: {
+      kind: "workflow",
+      idPrefix: "workflow",
+      originType: "workflow",
+      originIdKey: "workflowRunId",
+      stage: "planning",
+    },
+    activate: activation("workflow"),
+  });
+  const intent = preparer([workflow]).resolveExecutionIntent({
+    runConfig: { selectedPlugins: ["workflow"], turnScopeId: "turn-1" },
+  });
+  assert.equal(intent.executionId, "workflow:turn-1");
+  assert.equal(intent.executionKind, "workflow");
+  assert.deepEqual(intent.origin, { type: "workflow", workflowRunId: "workflow:turn-1" });
 });

@@ -6,8 +6,29 @@
 import express from "express";
 export { express };
 export default express;
-import { registerSessionRoutes } from "../../routes/session-routes.js";
-export { registerSessionRoutes };
+import { registerSessionRoutes as registerSessionRoutesImpl } from "../../routes/session-routes.js";
+
+const testPluginHost = Object.freeze({
+  getPluginDiagnostics: async () => ({
+    protocolVersion: 2,
+    surface: "service",
+    discoveredCount: 0,
+    loadedCount: 0,
+    skippedCount: 0,
+    pluginIds: [],
+    loaded: [],
+    skipped: [],
+    errors: [],
+  }),
+  emitAfterSessionDelete: async () => {},
+});
+
+export function registerSessionRoutes(app, options = {}) {
+  return registerSessionRoutesImpl(app, {
+    ...options,
+    pluginHost: options?.pluginHost || testPluginHost,
+  });
+}
 
 export async function withTestServer(app, run) {
   const server = await new Promise((resolve) => {

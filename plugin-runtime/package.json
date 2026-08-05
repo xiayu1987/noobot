@@ -6,11 +6,10 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./contracts": "./src/contracts.mjs",
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "@noobot/plugin-protocol": "file:../plugin-protocol"
   },
   "scripts": {
     "test": "node --test __tests__/*.test.js"

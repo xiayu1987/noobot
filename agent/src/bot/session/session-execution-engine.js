@@ -724,19 +724,6 @@ export class SessionExecutionEngine {
     return this.modelMessageRuntimeHelpers.createResolveModelMessages(payload);
   }
 
-  _prepareBotHookRunConfig({ runConfig = {} } = {}) {
-    return this.runConfigPluginPreparer.prepareBotHookRunConfig({ runConfig });
-  }
-
-  _buildPluginRegisterApi({ manager = null, pluginName = "", options = {}, runConfig = {} } = {}) {
-    return this.runConfigPluginPreparer.buildPluginRegisterApi({
-      manager,
-      pluginName,
-      options,
-      runConfig,
-    });
-  }
-
   async runSession({
     userId,
     sessionId,
