@@ -21,6 +21,10 @@
     "build": "vite build",
     "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
     "test:watch": "vitest",
+    "test:e2e:protocol": "playwright test -c tests/e2e/protocol/playwright.protocol.config.js",
+    "test:e2e:protocol:smoke": "playwright test -c tests/e2e/protocol/playwright.protocol.config.js --grep @smoke",
+    "test:e2e:protocol:core": "playwright test -c tests/e2e/protocol/playwright.protocol.config.js --grep '@smoke|@core'",
+    "test:e2e:protocol:full": "playwright test -c tests/e2e/protocol/playwright.protocol.config.js",
     "preview": "vite preview",
     "serve:caddy": "bash ./deploy/run-caddy.sh",
     "serve:caddy:restart": "bash ./deploy/restart-caddy.sh",
@@ -42,6 +46,7 @@
     "@noobot/event-protocol": "file:../../event-protocol"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.11",
     "es-module-lexer": "^2.1.0",

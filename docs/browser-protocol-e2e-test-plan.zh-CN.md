@@ -1,0 +1,564 @@
+# Noobot 浏览器协议闭环自动化测试方案
+
+## 1. 目标与原则
+
+本文定义一套基于 Playwright 的真实浏览器自动化验收方案，覆盖：
+
+- Session 创建、持久化、刷新和并发版本控制
+- `turn.send`、`turn.resend`、`turn.continue`、`turn.stop`
+- 权威 Turn Lifecycle、receipt、reconnect 和实时事件投影
+- 用户停止、模型消息快照以及停止后继续
+- 无附件、带附件、附件保留、增加、删除和快照恢复
+- Harness 插件连接、Hook、Context Snapshot 和辅助模型调用
+- Workflow 根执行、子执行、附件传递以及与 Harness 的联合运行
+- 多标签页、断网重连、并发停止和非法协议拒绝
+
+测试必须验证完整数据链，而不只是页面是否看起来正常。每个业务操作都必须同时满足：
+
+```text
+浏览器状态正确
+AND WebSocket 协议正确
+AND 生命周期正确
+AND Session 持久化正确
+AND 停止快照正确
+AND 附件事实正确
+AND Harness/Workflow 记录正确
+AND 无禁止错误
+```
+
+遵循以下工程原则：
+
+1. 浏览器是业务操作的唯一发起者；文件系统、HTTP、WebSocket 和日志只用于取证及断言。
+2. 每条用例创建独立 Session，不依赖人工 Session，不与其他用例共享业务状态。
+3. Agent Transport、Turn Lifecycle、Session、附件和 Context 各自只有一个权威协议。
+4. 不允许 UI 定时推断后端业务状态，不允许用 WebSocket close 推导 Turn 终态。
+5. 不允许测试依赖产品中的旁路、兼容分支或测试专用业务接口。
+6. 测试失败必须保留足以复现和定位问题的浏览器、协议及持久化证据。
+
+## 2. 代码协议入口
+
+测试实现应直接以以下代码为协议事实源：
+
+- Agent Transport 命令构造和校验：`agent-transport-protocol/src/commands.mjs`
+- Agent Transport 命令及协议版本：`agent-transport-protocol/src/constants.mjs`
+- Turn Lifecycle 和 receipt：`event-protocol/src/turn-lifecycle-protocol.mjs`
+- 浏览器 WebSocket 分派：`client/noobot-chat/src/infrastructure/websocket/chatWebSocketClient.js`
+- reconnect 协调与投影：`client/noobot-chat/src/modules/chat/runtime/session/reconnectCoordinator.js`
+- 编辑重发事务：`client/noobot-chat/src/modules/chat/runtime/engine/resendTransaction.js`
+- 前端附件序列化：`client/noobot-chat/src/modules/chat/runtime/engine/attachmentSerialization.js`
+- 停止快照存取：`agent/src/runtime/resume/model-message-snapshot-store.js`
+- Harness 运行路径：`plugin/noobot-plugin-harness/src/core/context.js`
+- Harness Context Snapshot：`plugin/noobot-plugin-harness/src/tracing/buffer-manager.js`
+- Harness 默认配置：`plugin/noobot-plugin-harness/src/core/options.js`
+
+协议版本基线：
+
+| 协议 | 当前版本/事件 |
+| --- | --- |
+| Agent Transport | `protocolVersion: 2` |
+| Turn Lifecycle | `protocolVersion: 4` |
+| Lifecycle transport | `transportProtocolVersion: 3` |
+| Lifecycle wire event | `turn_lifecycle` |
+| Lifecycle receipt | `action: turn.lifecycle.received` |
+| Model Context Snapshot | `version: 2` |
+
+版本变化时应同步修改协议库、生产代码和本文断言，不得在测试中接受多个版本。
+
+## 3. 建议目录结构
+
+```text
+client/noobot-chat/tests/e2e/protocol/
+├── fixtures/
+│   ├── auth.fixture.js
+│   ├── noobot.fixture.js
+│   ├── session.fixture.js
+│   ├── protocol-capture.fixture.js
+│   └── artifacts.fixture.js
+├── helpers/
+│   ├── browser-actions.js
+│   ├── websocket-capture.js
+│   ├── http-capture.js
+│   ├── lifecycle-assertions.js
+│   ├── session-assertions.js
+│   ├── snapshot-assertions.js
+│   ├── attachment-assertions.js
+│   ├── harness-assertions.js
+│   ├── workflow-assertions.js
+│   └── log-assertions.js
+├── specs/
+│   ├── 001-connect-session.spec.js
+│   ├── 002-send-no-attachment.spec.js
+│   ├── 003-send-with-attachment.spec.js
+│   ├── 004-stop-and-snapshot.spec.js
+│   ├── 005-continue-from-snapshot.spec.js
+│   ├── 006-repeated-stop-continue.spec.js
+│   ├── 007-resend-no-attachment.spec.js
+│   ├── 008-resend-attachments.spec.js
+│   ├── 009-reconnect.spec.js
+│   ├── 010-harness.spec.js
+│   ├── 011-workflow-harness.spec.js
+│   └── 099-full-chain-audit.spec.js
+└── playwright.protocol.config.js
+```
+
+每次执行单独输出证据：
+
+```text
+test-results/protocol/<run-id>/
+├── browser-console.jsonl
+├── websocket-sent.jsonl
+├── websocket-received.jsonl
+├── http-requests.jsonl
+├── http-responses.jsonl
+├── lifecycle.json
+├── session-audit.json
+├── snapshot-audit.json
+├── attachment-audit.json
+├── harness-audit.json
+├── workflow-audit.json
+├── model-context-audit.json
+├── screenshot-final.png
+└── trace.zip
+```
+
+认证凭证只能由 fixture 在运行时读取，禁止写入日志、截图、trace 或测试报告。
+
+## 4. 统一协议捕获与断言
+
+### 4.1 WebSocket 发出帧
+
+每个业务命令必须通过 Agent Transport Protocol v2。统一断言：
+
+- `protocolVersion === 2`。
+- 业务命令只能使用 `turn.send`、`turn.resend`、`turn.continue`、`turn.stop`。
+- 不允许旧的 `action: send/continue/stop` 业务协议。
+- 不允许未知顶层字段或命令类型不允许的字段。
+- `commandId` 非空，并且在一次业务操作中唯一。
+- `identity.sessionId` 等于浏览器当前 Session。
+- `identity.turnScopeId` 为规范 `client-turn:*`。
+- run 命令的 `expectedTurnRevision === 0`。
+- stop 命令的 `expectedTurnRevision >= 1`。
+- `input.attachments` 必须始终是数组。
+- Continue 来源只能位于 `continuation.dialogProcessId/turnScopeId`。
+- receipt 必须使用 `turn.lifecycle.received`，不得使用业务命令替代确认。
+
+### 4.2 WebSocket 接收帧与 Lifecycle
+
+自然完成的基本顺序：
+
+```text
+turn.action_accepted
+  → turn.processing_started
+  → turn.processing_completed
+  → turn.completed
+```
+
+用户停止的基本顺序：
+
+```text
+turn.processing_started
+  → turn.stop_accepted
+  → turn.stop_processing_completed
+  → turn.stop_completed
+```
+
+统一断言：
+
+- `eventId` 非空且同一 Turn 内不重复。
+- `sequence` 严格单调递增，`revision` 不倒退。
+- `sessionId/dialogProcessId/turnScopeId` 与命令身份一致。
+- 浏览器对每个合法 lifecycle 发出一次 receipt。
+- 同一 lifecycle 不得被业务 reducer 重复消费。
+- Stop 显示只能来自权威 lifecycle/snapshot 投影出的 `canStop`。
+- 终态只能由权威 lifecycle 或 snapshot 确认。
+- WebSocket close 只能是传输事实，不能成为业务终态。
+- reconnect 控制事件只归 reconnect handler，活动 run 事件只归 active stream。
+
+### 4.3 Session 审计
+
+每条用例结束后审计：
+
+```text
+workspace/<userId>/runtime/session/<sessionId>/
+├── session.json
+├── session-summary.json
+├── execution.json
+├── turns/
+├── execution-events/
+├── model-message-snapshots/
+└── events/
+```
+
+断言：
+
+- 浏览器、Transport 和持久化目录的 userId/sessionId 完全一致。
+- 每个 run 的 `dialogProcessId + turnScopeId` 唯一。
+- 同一 Turn 不得存在两套 active 事实。
+- Resend 的旧 Turn 和 replacement 关系明确，且不会同时 active。
+- Session version 单调增长。
+- UI 可见消息与持久化可见消息语义一致。
+- hydration 不得自造后端不存在的 lifecycle 或 persistence 字段。
+
+### 4.4 停止快照审计
+
+快照路径：
+
+```text
+workspace/<userId>/runtime/session/<sessionId>/model-message-snapshots/
+<dialogProcessId>__<turnScopeId>.json
+```
+
+断言：
+
+- `version === 2`。
+- `sessionId/dialogProcessId/turnScopeId` 与停止轮次一致。
+- `messageBlocks.system/history/incremental` 都是数组。
+- 每个 block 元素都是 plain object，整个文件可 JSON 序列化。
+- 不含函数、class instance、Proxy 或 Vue reactive 对象。
+- `messages` 与 `messageBlocks` 的投影一致。
+- `updatedAt >= createdAt`。
+- 日志存在 `stopped_model_message_snapshot_saved`。
+- 不存在 `stopped_model_message_snapshot_save_failed`。
+- Continue 必须加载其 `continuation` 指定的停止快照。
+
+### 4.5 附件事实审计
+
+附件链路必须唯一：
+
+```text
+浏览器 File
+  → contentBase64
+  → HTTP/WS command
+  → Service canonical attachment
+  → Session user message
+  → Agent attachment metadata
+  → Model Context
+  → Stop snapshot
+  → Continue 恢复
+```
+
+断言：
+
+- 浏览器原始文件使用固定内容并预先计算 SHA256。
+- `name/mimeType/size/contentSha256` 在全链路一致。
+- `clientAttachmentId` 只负责上传关联。
+- 持久化后必须产生且只产生一个 canonical `attachmentId`。
+- Model Context 使用持久化 `attachmentId/path`。
+- Continue 命令不得重复发送停止快照中的附件。
+- Continue Model Context 必须从 snapshot 恢复附件。
+- 被用户删除的附件不得进入新 Turn 的 Model Context。
+- 附件路径必须位于当前用户、当前 Session 的 scoped 目录。
+
+### 4.6 Harness 审计
+
+运行目录：
+
+```text
+workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
+├── harness-run.json
+├── context-snapshot.json
+├── events.jsonl
+├── prompts.jsonl
+├── policy-checks.json
+└── capability-traces.jsonl
+```
+
+断言：
+
+- `selectedPlugins` 精确等于浏览器实际选择的插件。
+- Harness run ID 等于 `dialogProcessId`。
+- manifest 身份与 Session/Turn 一致。
+- Hook 顺序合法，开始和结束事件成对。
+- 用户停止时最终状态为 `abort`，自然完成时为 `success`。
+- Context Snapshot 可以独立解析。
+- runtime/tool 实例不得写入 Agent Context envelope。
+- 辅助模型调用写入 `capability-traces.jsonl`，且与主模型身份可区分。
+
+## 5. 浏览器自动化测试用例
+
+### PBE-001：连接并创建独立 Session
+
+步骤：
+
+1. 生成唯一测试 run ID。
+2. 打开 Noobot UI。
+3. fixture 在运行时读取认证信息并完成连接。
+4. 等待 `Connection established`。
+5. 通过 UI 创建新 Session。
+6. 记录 URL、页面 Session ID、WebSocket 和 HTTP 证据。
+7. 截图。
+
+断言：收到 `transport_ready`；Session ID 非空；Session 目录存在；浏览器、HTTP 和持久化身份一致；控制台无 error；不存在旧 reconnect cursor 字段。
+
+### PBE-002：无附件普通发送
+
+步骤：选择 Harness，输入唯一消息，点击发送，捕获 `turn.send`，等待 Stop 出现并等待自然完成。
+
+断言：只有一个 `turn.send`；`input.attachments` 为 `[]`；生命周期自然完成；UI 不再 sending；Session 只有一个对应 user turn；Harness run 为 success；没有停止快照。
+
+### PBE-003：带附件普通发送
+
+步骤：创建固定测试文件并计算 SHA256，通过 UI 添加附件并发送，等待模型调用后自然完成。
+
+断言：命令、Service、Session 和 Model Context 附件数均为 1；名称、MIME、大小和 SHA256 一致；持久化文件存在；Harness Context Snapshot 包含规范附件元数据；没有第二个 canonical attachment。
+
+### PBE-004：无附件运行中停止并保存快照
+
+步骤：发送持续执行请求，等待 `processing_started`，点击 Stop，等待 `stop_completed`，读取快照。
+
+断言：Stop identity 和 revision 正确；Stop 只发一次；快照身份一致；所有 block 为 plain object；Session 为 `user_stopped`；Harness 为 `abort`；不存在 `socket_close` 或 Context envelope 错误。
+
+### PBE-005：带附件停止快照
+
+步骤：上传附件并发送，等待模型读取附件，点击 Stop，审计 Session、附件和停止快照。
+
+断言：快照包含文件名、canonical attachmentId、SHA256 和 scoped path；快照与 Session 指向同一附件事实；停止过程不创建第二份附件。
+
+### PBE-006：无附件停止后继续
+
+步骤：执行 PBE-004，在 Continue 输入框输入唯一提示，点击 Continue，等待新 run 启动后再次 Stop。
+
+断言：Continue 使用新的 command/dialog/turn identity；`continuation` 精确引用旧停止轮次；`input.attachments` 为 `[]`；恢复旧快照内容；第二次 Stop 只停止新 run；不出现 plain-object 错误。
+
+### PBE-007：带附件停止后继续
+
+步骤：执行 PBE-005，点击 Continue，读取 Continue Model Context，然后 Stop。
+
+断言：Continue 命令附件数为 0；Continue Context 附件数为 1；文件名、SHA256、canonical ID 和持久化路径正确；新停止快照仍含附件元数据。
+
+### PBE-008：连续三次停止和继续
+
+步骤：依次执行 Send→Stop→Continue→Stop→Continue→Stop→Continue→Stop，收集全部 identity、lifecycle 和快照。
+
+断言：四轮 identity 均唯一；每次 Continue 只引用前一停止轮次；每轮事件单调且不串线；四份停止快照一一匹配；旧轮 Stop 不得停止新轮；snapshot query cleanup 不得关闭 run 连接。
+
+### PBE-009：无附件编辑重发
+
+步骤：创建一轮无附件消息，打开编辑重发，修改内容并发送，捕获 replace-turn HTTP 和 `turn.resend`，随后 Stop。
+
+断言：HTTP anchor 只使用旧 `turnScopeId`；`expectedVersion` 正确；replacement 使用新 turnScopeId；附件为 `[]`；旧 Turn 明确 replaced；Session version 权威增长；UI 不残留旧 pending 状态。
+
+### PBE-010：保留原附件编辑重发
+
+步骤：创建带附件停止轮次，打开该 user message 的编辑重发，不增加或删除附件，修改内容并发送，然后 Stop。
+
+断言：编辑卡显示一个原附件；replace-turn 和 resend 附件数均为 1；attachmentId/SHA256 与原附件一致；没有重复附件记录；Model Context 只有一个逻辑附件。
+
+### PBE-011：删除原附件后重发
+
+步骤：打开带附件消息的编辑重发，删除附件，确认附件数为 0，发送并 Stop。
+
+断言：replace-turn、resend、新 user turn、新 Model Context 和新停止快照均不含旧附件。原文件即使按存储策略保留，也不得继续属于新 Turn。
+
+### PBE-012：新增附件后重发
+
+步骤：选择无附件历史消息，编辑重发时添加新文件，发送、等待模型读取并 Stop。
+
+断言：上传阶段有 clientAttachmentId；持久化后只有一个 canonical attachmentId；HTTP/WS 附件数均为 1；Model Context 使用 canonical ID 和 scoped path；SHA256 一致。
+
+### PBE-013：活动轮次刷新页面 reconnect
+
+步骤：启动长运行，记录 lifecycle sequence，刷新页面，捕获 reconnect、`reconnect_data` 和 `reconnect_complete`，确认 Stop 可见并停止原轮次。
+
+断言：reconnect 带 `knownLifecycleSequenceMap`；不带已删除的消息 cursor；authority baseline 在 live buffer 前提交；snapshot 后只回放 tail；UI 只投影一次 active Turn；重连后 Stop 正常。
+
+### PBE-014：reconnect 与新 run 并发
+
+步骤：页面连接后立即触发 reconnect，未完成时立即发起 Resend 或 Continue，捕获 lifecycle，等待 Stop 并停止。
+
+断言：reconnect 控制事件只归 reconnect handler；run lifecycle/delta 只归 active stream；`turn.action_accepted` 不丢失、不重复；原页面 Stop 立即可用；snapshot query cleanup 不关闭 run connection；不存在 `socket_close`。
+
+### PBE-015：双标签页生命周期一致性
+
+步骤：两个独立浏览器 Context 打开同一 Session，A 发起 Send，B 点击 Stop，比较双方事件和最终 UI。
+
+断言：双方收到相同 eventId/sequence；每个 socket 各发 receipt；只产生一条权威 Stop；双方最终为 user_stopped；Session 只有一个终态；关闭一端不会终止另一端链路。
+
+### PBE-016：Harness 插件连接
+
+步骤：只选择 Harness，发送简单请求，捕获 `preferences.selectedPlugins`，等待完成并读取 Harness 目录。
+
+断言：选择结果精确为 `['harness']`；Agent 加载结果一致；run 目录以 dialogProcessId 命名；manifest、Context Snapshot 和 events 存在；不得通过默认分支启用未选择插件。
+
+### PBE-017：Harness Hook 与 Model Context
+
+步骤：开启 Harness trace、Context Snapshot 和 prompts，发送会触发工具调用的请求，工具开始后 Stop，读取 Harness、Agent Context debug 和模型快照。
+
+断言：非模型 Hook 不携带 Model Context；`before_llm_call` 使用 Model Context v2；bindings 不进入 envelope；Harness mutation 使用规范 Context 命令；所有 block 为 plain object；prompt 只有一个权威存储。
+
+### PBE-018：Harness 辅助模型连接
+
+步骤：配置 `planningGuidanceMode: separate_model`，发送会触发 planning/guidance 的请求，捕获辅助模型和主模型调用。
+
+断言：辅助调用具有明确 purpose；主模型与辅助模型身份可区分；capability trace start/end 成对；Harness 输出通过规范 Context mutation 注入；不得伪装成原始用户消息。
+
+### PBE-019：Workflow + Harness 联合运行
+
+步骤：同时选择 Workflow 和 Harness，发送会产生子执行的请求，捕获 root command、workflow execution/message events 和 child execution，最后完成或 Stop。
+
+断言：root/child execution identity 完整；child terminal 不覆盖 root lifecycle 或 channel retention；Harness root/child run 分别绑定正确 dialogProcessId；UI、execution tree 和持久化终态一致。
+
+### PBE-020：Workflow 带附件
+
+步骤：选择 Workflow + Harness，上传固定附件并要求工作流读取，等待 child 工具使用附件，最后完成或 Stop。
+
+断言：root canonical attachment 只有一份；child 通过规范 reference 或 transfer envelope 获取；child 不生成第二个用户附件事实；路径和所有权正确；Harness trace 不复制二进制内容。
+
+### PBE-021：自然完成后刷新 Session
+
+步骤：等待普通 Send 自然完成，记录 UI，刷新页面并等待 reconnect/hydration，再比较状态。
+
+断言：刷新前后消息语义一致；已完成轮次不会重回 sending；不产生新 run、dialogProcessId 或 Session version；hydration 不制造业务事实。
+
+### PBE-022：停止后关闭浏览器，再打开并继续
+
+步骤：带附件 Send 后 Stop，关闭整个浏览器 Context，新建 Context 并重新打开同一 Session，点击 Continue，再 Stop。
+
+断言：Continue 只依赖持久化事实；命令附件数为 0；Model Context 恢复附件；Stop 正常；不创建旁路 snapshot；不出现非法 Context envelope。
+
+### PBE-023：Session version 冲突
+
+步骤：两个页面打开同一 Session，A 先完成编辑重发，B 使用旧页面版本再次重发，观察 409 和权威刷新流程。
+
+断言：旧版本 mutation 不提交；不得忽略 `expectedVersion`；不得创建本地伪 replacement；最终 replacement chain 唯一；Session version 单调增长。
+
+### PBE-024：停止命令幂等性
+
+步骤：两个页面近乎同时点击 Stop，捕获两次请求结果，等待终态并审计 lifecycle 和快照。
+
+断言：只有一个 stop transition 被接受；只生成一个 `stop_completed` 和一份匹配快照；第二次请求获得明确 revision/terminal 结果；不得通过吞错伪造成功。
+
+### PBE-025：断网重连后停止
+
+步骤：启动长运行，设置浏览器离线，等待后恢复在线，完成 reconnect，确认原 run active 并点击 Stop。
+
+断言：断网不生成 Turn failed 或 user_stopped；close 只属于 transport；snapshot 恢复原 run；最终终态来自 `turn.stop_completed`。
+
+### PBE-026：非法和旧协议拒绝
+
+该用例使用浏览器创建的原始测试 WebSocket，不经产品 UI 注入业务状态。
+
+步骤：分别发送旧 `action: continue`、未知顶层字段、缺少 continuation identity 的 Continue、revision 为 0 的 Stop。
+
+断言：全部明确失败；不创建 Turn、lifecycle 或 snapshot；不进入兼容 route；Proxy 不自动补字段；错误来自唯一协议 validator。
+
+## 6. 全链路总审计 PBE-099
+
+顺序执行：
+
+```text
+连接
+→ 新建 Session
+→ Harness Send 无附件
+→ Stop
+→ Continue
+→ Stop
+→ 无附件 Resend
+→ Stop
+→ 添加附件 Resend
+→ Stop
+→ 带附件 Continue
+→ 浏览器刷新 Reconnect
+→ Stop
+→ Workflow + Harness 带附件
+→ 完成或 Stop
+→ Session/快照/附件/Harness/Workflow/事件统一审计
+```
+
+最终断言：
+
+- 所有 run identity 唯一。
+- 所有 continuation 引用存在且唯一。
+- 所有 replacement chain 闭合。
+- 所有 lifecycle 有且只有一个权威终态。
+- 所有 lifecycle receipt 可以对应到唯一事件。
+- 每个停止轮次有且只有一个模型快照。
+- 所有快照 block 都是 plain object。
+- 所有逻辑附件只有一个 canonical 事实。
+- Continue 不重复传附件。
+- Harness run 与 dialogProcessId 一一对应。
+- Workflow root/child identity 不串线。
+- 没有 `socket_close` 业务失败。
+- 没有非法 Context envelope。
+- 没有未知协议字段或 legacy action route。
+- 没有 UI 本地终态推断。
+- 没有未释放 reconnect transaction。
+- 没有 active run 被 snapshot cleanup 关闭。
+
+## 7. Debug 日志和禁止错误
+
+协议测试环境应启用并收集以下 debug 类型：
+
+- `agent-context-protocol`
+- `agent-context`
+- `context-identity`
+- `agent-transport`
+- `workflow-diagnostics`
+- state machine/reconnect diagnostics
+- Harness trace、prompts、Context Snapshot 和 capability traces
+
+日志查询必须按本用例的 `sessionId/dialogProcessId/turnScopeId` 过滤，禁止用全局历史错误判断当前用例失败。
+
+以下错误在当前用例时间窗内一旦出现即失败：
+
+- `invalid agent context envelope`
+- `must be a plain object`
+- `socket_close` 被归类为业务或 Hook 致命错误
+- `authoritative_snapshot_failed`
+- `snapshot_timeout`
+- lifecycle sequence/revision 回退
+- duplicate canonical attachment
+- Session identity conflict
+- reconnect transaction 未完成或被错误替代
+
+用户 Stop 导致的 `HOOK_EXECUTION_FAILED` 只有在错误类型明确为 `user_stop`、生命周期最终为 `turn.stop_completed` 且快照保存成功时才属于合法中止表示。
+
+## 8. 执行分层
+
+建议提供三个入口：
+
+```bash
+# 连接、发送、停止、继续
+npm run test:e2e:protocol:smoke
+
+# Session、快照、附件、reconnect、Harness
+npm run test:e2e:protocol:core
+
+# Workflow、多标签、断网、并发、负向协议和总审计
+npm run test:e2e:protocol:full
+```
+
+推荐分组：
+
+| 级别 | 用例 |
+| --- | --- |
+| Smoke | PBE-001、002、004、006 |
+| Core | PBE-003、005、007～018、021、022 |
+| Full | PBE-019、020、023～026、099 |
+
+## 9. CI 失败产物要求
+
+每个失败用例必须保留：
+
+- Playwright trace 和最后截图
+- 浏览器 console error/warning
+- WebSocket 收发帧
+- HTTP replace-turn 请求和响应
+- Session 审计摘要
+- 生命周期和 receipt 审计摘要
+- 模型停止快照审计摘要
+- 附件 identity/SHA/path 审计摘要
+- Harness 和 Workflow 审计摘要
+- 与当前用例 identity 匹配的 Agent Proxy、Service、Agent 日志
+
+报告必须指出数据链在哪个边界首次断裂，例如：
+
+```text
+UI 已发送
+→ HTTP replacement 已提交
+→ WS turn.resend 已发送
+→ Service 已接受
+→ lifecycle 未到达浏览器
+```
+
+不得只报告“Stop 按钮超时”或“页面断言失败”。测试的价值是定位第一个违反协议的边界，并证明其上游和下游状态。
