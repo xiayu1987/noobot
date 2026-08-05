@@ -42,3 +42,6 @@ model-proxy/model-proxy.config.json
 *~
 
 report/
+
+# Generated test artifacts (Playwright traces, screenshots, videos and reports)
+/test-results/
