@@ -91,6 +91,9 @@ export function resolveHookRuntimeMeta(runtime = {}) {
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
     parentSessionId: resolveParentSessionId({ runtime }),
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
+    turnScopeId: String(
+      systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || runtime?.turnScopeId || "",
+    ).trim(),
     caller: String(systemRuntime?.caller || "").trim(),
   };
 }

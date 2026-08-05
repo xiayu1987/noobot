@@ -241,15 +241,18 @@ export function createChatWebSocketClient({
             return;
           }
           commandRequests.settle(event, data);
-          const owner = reconnecting && activeReconnectContext
+          const reconnectControlEvent =
+            event === StreamEventEnum.RECONNECT_DATA ||
+            event === StreamEventEnum.RECONNECT_COMPLETE;
+          const owner = reconnecting && activeReconnectContext && reconnectControlEvent
             ? "reconnect_handler"
             : activeStreamContext?.handleProtocolEvent
               ? "stream_handler"
-              : hasLiveSubscriber &&
-                  event !== StreamEventEnum.RECONNECT_DATA &&
-                  event !== StreamEventEnum.RECONNECT_COMPLETE
-                ? "transport_live_subscriber"
-                : "unowned";
+              : reconnecting && activeReconnectContext
+                ? "reconnect_handler"
+                : hasLiveSubscriber
+                  ? "transport_live_subscriber"
+                  : "unowned";
           const dispatchEligible = owner !== "unowned";
           if (event === TURN_LIFECYCLE_WIRE_EVENT) {
             if (

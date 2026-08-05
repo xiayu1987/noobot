@@ -240,6 +240,68 @@ test("reconnect opens a query transport without replaying the stale run command"
   );
 });
 
+test("snapshot query completion cannot close a connection claimed by a concurrent run", async () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const sessionId = "session-query-run-race";
+  const turnScopeId = "turn-query-run-race";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  manager.pushChannelEvent(channel, "turn_lifecycle", authoritativeLifecycle({
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    eventId: "query-run-race-active",
+    sessionId,
+    turnScopeId,
+    revision: 1,
+    sequence: 1,
+  }));
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  const reconnectPromise = manager.handleReconnect(client, { currentSessionId: sessionId });
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  const snapshotCommand = JSON.parse(upstream.sent[0]);
+  assert.equal(channel.transport.status().purpose, "snapshot_query");
+
+  assert.equal(manager.forwardToUpstream(channel, {
+    protocolVersion: 2,
+    commandType: "turn.continue",
+    commandId: "continue-query-run-race",
+    identity: { sessionId, turnScopeId: "turn-query-run-race-next" },
+  }), true);
+  assert.equal(channel.transport.status().purpose, "run");
+
+  upstream.emit("message", JSON.stringify({
+    event: "turn_snapshot",
+    data: {
+      protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
+      eventType: "turn.snapshot",
+      commandId: snapshotCommand.commandId,
+      sessionId,
+      sequence: 1,
+      activeTurnScopeId: turnScopeId,
+      activeTurn: {
+        turnScopeId,
+        messageId: "message-query-run-race",
+        presentationMessageId: "presentation-query-run-race",
+        revision: 1,
+        sequence: 1,
+        state: "processing",
+      },
+      recentTerminalTurns: [],
+    },
+  }));
+  await reconnectPromise;
+
+  assert.equal(channel.upstreamSocket, upstream);
+  assert.equal(upstream.readyState, FakeUpstreamWebSocket.OPEN);
+  assert.equal(channel.transport.status().purpose, "run");
+});
+
 test("terminal lifecycle removes the reconnect active-run projection", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const sessionId = "session-authoritative-terminal";

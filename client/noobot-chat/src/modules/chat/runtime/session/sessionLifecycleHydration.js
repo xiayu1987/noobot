@@ -53,10 +53,6 @@ export function installSessionLifecycleHydration({
           phase: activeTurn.phase,
           executionState: activeTurn.executionState,
           startedAt: activeTurn.startedAt,
-          persistenceScope: {
-            scopeId: sessionId,
-            parentSessionId: sessionItem?.parentSessionId || "",
-          },
         });
       }
       logThinkingReplayDebug("frontend.lifecycle.hydrateApplied", () => ({
