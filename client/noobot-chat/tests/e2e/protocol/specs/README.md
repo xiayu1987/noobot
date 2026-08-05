@@ -14,7 +14,7 @@
 
 ### PBE-033：Harness 低轮次完整流程
 
-步骤：从 Harness 自有 UI 把 guidance analysis、summary、plan update 和 phase acceptance 的本次运行阈值分别设为 2、2、3、1，启用 planning/acceptance，并驱动五步依赖工具链。Summary 使用 2 以便在任务中段触发一次小结，避免在任务已完成边界制造“完成后继续”的语义冲突；Plan update 使用 3 是为了给初始 planning refinement 和 phase acceptance 保留调度轮次。
+步骤：从 Harness UI 设置 guidance analysis 强度并启用 planning/acceptance；summary、plan update 和 phase acceptance 阈值不在界面展示，测试通过正式 `update:pluginModelConfig` 参数边界把本次运行阈值设为 2、3、1，再驱动五步依赖工具链。Summary 使用 2 以便在任务中段触发一次小结，避免在任务已完成边界制造“完成后继续”的语义冲突；Plan update 使用 3 是为了给初始 planning refinement 和 phase acceptance 保留调度轮次。
 
 断言：transport 中只有 `pluginModelConfig.harness` 的正式字段；planning、guidance analysis、plan revision/refinement、summary、phase acceptance、semantic validation 和 review 都形成 decision/execution 事实；阈值事件记录 `thresholdSource=runtime`；Harness summary 生成后唯一 Session checkpoint、消息 `summarized` 标记和 capability 模型观测闭合，主业务严格执行五次 `execute_script`，不得在小结后重做计算链。
 

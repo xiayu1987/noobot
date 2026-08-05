@@ -7,7 +7,9 @@ import {
   markCurrentTurnModelMessagesSummarized,
   markCurrentTurnStoreSummarized,
 } from "../../context/session/summarized-message-policy.js";
-import { TASK_SUMMARY_TOOL_NAME } from "../constants/index.js";
+import {
+  DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
+} from "@noobot/context-protocol/summary-policy";
 
 export const FINAL_STREAMING_RESULT_META_KEY = "__noobotFinalStreaming";
 

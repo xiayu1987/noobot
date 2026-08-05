@@ -8,7 +8,10 @@ import assert from "node:assert/strict";
 
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
-import { createModelContext } from "@noobot/context-protocol";
+import {
+  CONTEXT_INJECTED_MESSAGE_TRIGGER,
+  createModelContext,
+} from "@noobot/context-protocol";
 
 test("task_summary sends one checkpoint command without mutating messages before commit", async () => {
   const oldSystem = { role: "system", content: "old system" };
@@ -52,6 +55,7 @@ test("task_summary sends one checkpoint command without mutating messages before
     },
   };
   let invocation = 0;
+  const lifecycleTriggers = [];
   const run = createTurnOrchestrator({
     resolveLlmForTurnFn: () => {},
     assertNotAbortedFn: () => {},
@@ -80,7 +84,10 @@ test("task_summary sends one checkpoint command without mutating messages before
       hasFinalAnswerCall: false,
     }),
     buildLoopResultFn: ({ output }) => ({ output }),
-    removePhaseSummaryPromptMessagesFn: () => {},
+    consumeInjectedContextMessagesFn: (_modelContext, { trigger }) => {
+      lifecycleTriggers.push(trigger);
+      return { removedCount: 0, removedMessageIds: [], removedInternalTypes: [] };
+    },
     maybeRequestPhaseSummaryFn: () => {},
     maybePromptHelpToolByLoopFn: () => {},
     maybePromptHelpToolByFailureFn: () => {},
@@ -109,4 +116,12 @@ test("task_summary sends one checkpoint command without mutating messages before
     new Set(checkpointCalls[0].summaryCompletion.summarizedMessageIds),
     new Set(["sm_1", "sm_2", "sm_3"]),
   );
+  assert.deepEqual(lifecycleTriggers, [
+    { type: CONTEXT_INJECTED_MESSAGE_TRIGGER.MODEL_INVOCATION_COMPLETED },
+    {
+      type: CONTEXT_INJECTED_MESSAGE_TRIGGER.TOOL_CALLS_COMPLETED,
+      toolNames: ["task_summary"],
+    },
+    { type: CONTEXT_INJECTED_MESSAGE_TRIGGER.MODEL_INVOCATION_COMPLETED },
+  ]);
 });

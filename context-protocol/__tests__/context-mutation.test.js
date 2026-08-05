@@ -11,7 +11,9 @@ import {
   CONTEXT_MUTATION_TYPES,
   createContextMutation,
   dispatchContextMutation,
+  removeContextMessagesByIds,
 } from "../src/context-mutation.js";
+import { getModelContextRevision } from "../src/model-context-runtime.js";
 
 test("model context document excludes runtime capabilities and is JSON serializable", () => {
   const document = createModelContext({
@@ -42,4 +44,30 @@ test("context mutation consumes one exact revision and rejects replay", () => {
   assert.equal(document.messageBlocks.incremental.length, 1);
   assert.equal(consumed[0].commandId, command.commandId);
   assert.throws(() => dispatchContextMutation(document, command), /revision conflict/);
+});
+
+test("remove-by-id mutation updates authoritative blocks and projection atomically", () => {
+  const retained = {
+    role: "user",
+    content: "retained",
+    additional_kwargs: { noobotMessageId: "retained_1" },
+  };
+  const removed = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call_1", name: "task_summary" }],
+    additional_kwargs: { noobotMessageId: "removed_1" },
+  };
+  const document = createModelContext({
+    messageBlocks: { system: [], history: [retained], incremental: [removed] },
+  });
+  const revision = getModelContextRevision(document);
+
+  assert.deepEqual(removeContextMessagesByIds(document, ["removed_1"]), {
+    removedCount: 1,
+    removedMessageIds: ["removed_1"],
+  });
+  assert.equal(getModelContextRevision(document), revision + 1);
+  assert.deepEqual(document.messageBlocks.incremental, []);
+  assert.deepEqual(document.messages, [retained]);
 });

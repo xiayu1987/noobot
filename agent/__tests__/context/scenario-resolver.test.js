@@ -126,6 +126,7 @@ test("resolveScenarioProfile supports builtin text scenario without a hard-coded
     "process_content_task",
     "user_interaction",
     "task_summary",
+    "task_check",
     "request_help",
     "web_search",
   ]);

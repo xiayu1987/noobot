@@ -8,6 +8,8 @@ import {
   appendMessage,
   markMessagesSummarizedByIds,
   pruneSummarizedIncrementalMessages,
+  removeMessagesByInternalTypes,
+  removeMessagesByIds,
   replaceMessageProjection,
   replaceMessages,
   writeMessageBlocks,
@@ -28,6 +30,8 @@ export const CONTEXT_MUTATION_TYPES = Object.freeze({
   WRITE_BLOCKS: "context.blocks.write",
   MARK_SUMMARIZED: "context.messages.mark-summarized",
   PRUNE_SUMMARIZED_INCREMENTAL: "context.incremental.prune-summarized",
+  CONSUME_INJECTED_MESSAGES: "context.injected-messages.consume",
+  REMOVE_MESSAGES_BY_ID: "context.messages.remove-by-id",
 });
 
 let nextCommandSequence = 1;
@@ -88,6 +92,12 @@ export function dispatchContextMutation(document, command = {}) {
     case CONTEXT_MUTATION_TYPES.PRUNE_SUMMARIZED_INCREMENTAL:
       value = pruneSummarizedIncrementalMessages(document);
       break;
+    case CONTEXT_MUTATION_TYPES.CONSUME_INJECTED_MESSAGES:
+      value = removeMessagesByInternalTypes(document, payload.internalTypes);
+      break;
+    case CONTEXT_MUTATION_TYPES.REMOVE_MESSAGES_BY_ID:
+      value = removeMessagesByIds(document, payload.messageIds);
+      break;
     default:
       throw new TypeError(`unsupported context mutation command: ${command.commandType}`);
   }
@@ -124,4 +134,16 @@ export function markContextMessagesSummarized(document, messageIds) {
 
 export function pruneContextSummarizedIncremental(document) {
   return executeContextMutation(document, CONTEXT_MUTATION_TYPES.PRUNE_SUMMARIZED_INCREMENTAL).value;
+}
+
+export function consumeContextInjectedMessages(document, internalTypes) {
+  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.CONSUME_INJECTED_MESSAGES, {
+    internalTypes,
+  }).value;
+}
+
+export function removeContextMessagesByIds(document, messageIds) {
+  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.REMOVE_MESSAGES_BY_ID, {
+    messageIds,
+  }).value;
 }
