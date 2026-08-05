@@ -64,6 +64,8 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
   const [line] = (await fs.readFile(traceFile, "utf8")).trim().split("\n");
   const record = JSON.parse(line);
   assert.equal(record.event, "capability_model_trace");
+  assert.equal(typeof record.traceId, "string");
+  assert.equal(record.traceId.length > 0, true);
   assert.equal(record.detail.purpose, "planning");
   assert.equal(record.detail.traces[0].toolCalls[0].status, "executed");
 

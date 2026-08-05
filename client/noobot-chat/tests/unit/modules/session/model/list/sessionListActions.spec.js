@@ -18,7 +18,7 @@ function ref(value) {
 
 function createHarness(overrides = {}) {
   const sessions = ref([
-    { id: "s1", backendSessionId: "backend-s1", title: "Old title", caller: "user", messages: [{ role: "user", content: "hello" }] },
+    { sessionId: "s1", title: "Old title", caller: "user", messages: [{ role: "user", content: "hello" }] },
   ]);
   const notify = vi.fn();
   const renameSessionApi = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
@@ -27,7 +27,7 @@ function createHarness(overrides = {}) {
     json: async () => ({
       ok: true,
       sessions: [
-        { sessionId: "s1", id: "s1", title: "New title", caller: "user", updatedAt: "2026-01-01T00:00:00.000Z" },
+        { sessionId: "s1", title: "New title", caller: "user", updatedAt: "2026-01-01T00:00:00.000Z" },
       ],
     }),
   });
@@ -58,19 +58,19 @@ function createHarness(overrides = {}) {
 }
 
 describe("createSessionListActions.fetchSessions identity reconciliation", () => {
-  it("atomically promotes the optimistic Session runtime when a summary reveals its canonical identity", async () => {
+  it("reconciles an optimistic Session by its preallocated identity", async () => {
     const turnScopeId = "client-turn:refresh-1";
     const sessions = ref([{
-      id: "local-1",
+      sessionId: "session-1",
       isLocal: true,
       caller: "user",
       messages: [{ role: "assistant", turnScopeId, pending: true }],
     }]);
-    const activeSessionId = ref("local-1");
+    const activeSessionId = ref("session-1");
     const registry = createTurnRuntimeRegistryState();
     applyTurnRuntimeEvent(registry, {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
-      sessionId: "local-1",
+      sessionId: "session-1",
       turnScopeId,
       dialogProcessId: "dp-1",
       source: "test",
@@ -81,8 +81,7 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
       json: async () => ({
         ok: true,
         sessions: [{
-          sessionId: "backend-1",
-          id: "backend-1",
+          sessionId: "session-1",
           caller: "user",
           updatedAt: "2026-01-01T00:00:00.000Z",
           turnLifecycleSnapshot: {
@@ -94,13 +93,11 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
     });
     const { actions } = createHarness({ sessions, activeSessionId, turnRuntimeRegistry, getSessionsApi });
 
-    await expect(actions.fetchSessions("local-1", { silent: true })).resolves.toBe(true);
+    await expect(actions.fetchSessions("session-1", { silent: true })).resolves.toBe(true);
 
-    expect(activeSessionId.value).toBe("backend-1");
-    expect(turnRuntimeRegistry.value.sessionAliases["local-1"]).toBe("backend-1");
-    expect(turnRuntimeRegistry.value.sessions["local-1"]).toBeUndefined();
-    expect(turnRuntimeRegistry.value.sessions["backend-1"]?.turns?.[turnScopeId]).toMatchObject({
-      sessionId: "backend-1",
+    expect(activeSessionId.value).toBe("session-1");
+    expect(turnRuntimeRegistry.value.sessions["session-1"]?.turns?.[turnScopeId]).toMatchObject({
+      sessionId: "session-1",
       turnScopeId,
     });
   });
@@ -135,7 +132,7 @@ describe("createSessionListActions.renameSession", () => {
   });
 
   it("renames local sessions locally without calling backend", async () => {
-    const sessions = ref([{ id: "local-1", title: "Local old", isLocal: true }]);
+    const sessions = ref([{ sessionId: "local-1", title: "Local old", isLocal: true }]);
     const { actions, renameSessionApi } = createHarness({ sessions, activeSessionId: ref("local-1") });
 
     await expect(actions.renameSession("local-1", " Local new ")).resolves.toBe(true);
@@ -153,7 +150,7 @@ describe("createSessionListActions.renameSession", () => {
 
     expect(ensureConnected).toHaveBeenCalled();
     expect(renameSessionApi).toHaveBeenCalledWith(
-      { userId: "u1", sessionId: "backend-s1", title: "New title" },
+      { userId: "u1", sessionId: "s1", title: "New title" },
       { fetcher: authFetch },
     );
     expect(getSessionsApi).toHaveBeenCalledWith({ userId: "u1" }, { fetcher: authFetch });
@@ -169,8 +166,8 @@ describe("createSessionListActions.deleteSession", () => {
       pending: true,
     };
     const activeSession = {
-      id: "s-active",
-      backendSessionId: "s-active",
+      sessionId: "s-active",
+      sessionId: "s-active",
       title: "Active",
       caller: "user",
       loaded: true,
@@ -179,7 +176,7 @@ describe("createSessionListActions.deleteSession", () => {
     };
     const sessions = ref([
       activeSession,
-      { id: "s-delete", backendSessionId: "s-delete", title: "Delete", caller: "user" },
+      { sessionId: "s-delete", title: "Delete", caller: "user" },
     ]);
     const activeSessionId = ref("s-active");
     const registry = createTurnRuntimeRegistryState();

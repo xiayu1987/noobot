@@ -96,6 +96,7 @@ export function useChatSession({
   botScenario,
   selectedModel,
   pluginModelConfig,
+  summaryPolicy,
   selectedPlugins,
   connected,
   ensureConnected,
@@ -130,26 +131,21 @@ export function useChatSession({
   let resolveDiscoveredTerminalTurn = null;
   function resolveActiveSessionIdentity() {
     const sessionId = String(
-      activeSession.value?.backendSessionId
-      || activeSession.value?.sessionId
+      activeSession.value?.sessionId
       || activeSessionId.value
-      || activeSession.value?.id
       || "",
     ).trim();
-    return String(turnRuntimeRegistry.value?.sessionAliases?.[sessionId] || sessionId).trim();
+    return sessionId;
   }
 
   function resolveActiveTurnScopeIdentity() {
     const sessionId = resolveActiveSessionIdentity();
-    const canonicalSessionId = String(
-      turnRuntimeRegistry.value?.sessionAliases?.[sessionId] || sessionId,
-    ).trim();
     const activeTurn = resolveSessionTurnRuntime(
       turnRuntimeRegistry.value,
-      canonicalSessionId,
+      sessionId,
     );
     const continuableStoppedTurn = !activeTurn
-      ? resolveLatestContinuableStoppedTurn(turnRuntimeRegistry.value, canonicalSessionId)
+      ? resolveLatestContinuableStoppedTurn(turnRuntimeRegistry.value, sessionId)
       : null;
     return String(
       activeTurn?.turnScopeId || continuableStoppedTurn?.turnScopeId || "",
@@ -310,7 +306,7 @@ export function useChatSession({
       isTurnRuntimeDeleted,
     });
     const sessionId = String(
-      sessionItem?.backendSessionId || sessionItem?.sessionId || sessionItem?.id || "",
+      sessionItem?.sessionId || "",
     ).trim();
     const terminalTurn = null;
     const isCurrentSession = Boolean(sessionId && sessionId === resolveActiveSessionIdentity());
@@ -416,7 +412,7 @@ export function useChatSession({
     sessionLogWebSocketClient.log({
       category: "system",
       event,
-      sessionId: payload?.sessionId || String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
+      sessionId: payload?.sessionId || String(activeSession.value?.sessionId || activeSessionId.value || ""),
       dialogProcessId: payload?.dialogProcessId || "",
       turnScopeId: payload?.turnScopeId || "",
       data: {
@@ -497,6 +493,7 @@ export function useChatSession({
     botScenario,
     selectedModel,
     pluginModelConfig,
+    summaryPolicy,
     selectedPlugins,
     isImageMime,
     classifyRealtimeLog,

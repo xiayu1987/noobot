@@ -63,8 +63,8 @@ export function isRunStateForActiveSession(stateSnapshot = {}, activeSession = {
   const stateSessionId = trim(stateSnapshot?.sessionId);
   if (!stateSessionId) return true;
   const activeIds = [
-    activeSession?.id,
-    activeSession?.backendSessionId,
+    activeSession?.sessionId,
+    activeSession?.sessionId,
   ].map((item) => trim(item)).filter(Boolean);
   return !activeIds.length || activeIds.includes(stateSessionId);
 }
@@ -113,19 +113,13 @@ export function buildSessionRunMessageRuntimeKey(stateItem = {}) {
 
 export function getMessageChannelState(messageItem = {}) {
   const channelState = messageItem?.channelState;
-  const legacyChannelState = messageItem?.channel_state;
   if (channelState && typeof channelState === "object" && !Array.isArray(channelState)) {
     return { ...channelState, state: normalizeState(channelState.state || channelState.status) };
-  }
-  if (legacyChannelState && typeof legacyChannelState === "object" && !Array.isArray(legacyChannelState)) {
-    return { ...legacyChannelState, state: normalizeState(legacyChannelState.state || legacyChannelState.status) };
   }
   const state = normalizeState(
     typeof channelState === "string"
       ? channelState
-      : typeof legacyChannelState === "string"
-        ? legacyChannelState
-        : messageItem?.status || messageItem?.state,
+      : messageItem?.status || messageItem?.state,
   );
   return state ? { state } : {};
 }

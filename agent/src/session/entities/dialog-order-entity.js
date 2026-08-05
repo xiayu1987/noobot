@@ -13,11 +13,11 @@ function normalizeText(value) {
 function isDialogAnchor(message = {}) {
   if (normalizeText(message?.role) !== "user") return false;
   if (message?.injectedMessage === true || message?.pluginMessage === true) return false;
-  if (normalizeText(message?.injectedMessageType || message?.injected_message_type)) return false;
+  if (normalizeText(message?.injectedMessageType)) return false;
   return normalizeText(message?.messageOrigin).toLowerCase() !== "internal";
 }
 
-function compareLegacyAnchors(left, right) {
+function compareDialogAnchors(left, right) {
   const leftTime = Date.parse(left.startedAt);
   const rightTime = Date.parse(right.startedAt);
   if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
@@ -56,7 +56,7 @@ export function deriveDialogOrderFromMessages(messages = []) {
     });
   });
   return [...anchorsByDialog.values()]
-    .sort(compareLegacyAnchors)
+    .sort(compareDialogAnchors)
     .map(({ sourceIndex, ...entry }, index) => ({ ...entry, dialogOrdinal: index + 1 }));
 }
 
@@ -65,12 +65,12 @@ export function normalizeDialogOrderEntity(dialogOrder = [], messages = []) {
   const liveDialogIds = new Set(derived.map((entry) => entry.dialogProcessId));
   const persisted = (Array.isArray(dialogOrder) ? dialogOrder : [])
     .map((entry = {}, index) => ({
-      dialogProcessId: normalizeText(entry.dialogProcessId || entry.dialogId),
+      dialogProcessId: normalizeText(entry.dialogProcessId),
       turnScopeId: normalizeText(entry.turnScopeId),
       userMessageUid: normalizeText(entry.userMessageUid),
       startedAt: normalizeText(entry.startedAt),
-      dialogOrdinal: Number.isInteger(Number(entry.dialogOrdinal ?? entry.sequence)) && Number(entry.dialogOrdinal ?? entry.sequence) > 0
-        ? Number(entry.dialogOrdinal ?? entry.sequence)
+      dialogOrdinal: Number.isInteger(Number(entry.dialogOrdinal)) && Number(entry.dialogOrdinal) > 0
+        ? Number(entry.dialogOrdinal)
         : index + 1,
     }))
     .filter((entry) => entry.dialogProcessId && liveDialogIds.has(entry.dialogProcessId));

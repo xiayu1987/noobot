@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents } from "./channel-manager.state-consistency.test-helpers.js";
-import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/event-protocol";
+import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
 import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
 
 function interactionResponse({ sessionId, requestId, response = { confirmed: true } }) {

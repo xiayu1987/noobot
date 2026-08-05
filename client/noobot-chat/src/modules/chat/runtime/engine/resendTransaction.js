@@ -13,7 +13,7 @@ import {
   summarizeDebugMessage,
   summarizeDebugMessages,
 } from "../../../debug/loggers/resendDebugLogger.js";
-import { createSessionVersionManager } from "./sessionVersionManager.js";
+import { createSessionAggregateVersionManager } from "./sessionAggregateVersionManager.js";
 import { serializeAttachments } from "./attachmentSerialization.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import { nowMs } from "../../model/timeFields.js";
@@ -22,7 +22,7 @@ import {
   summarizeStateMachineMessage,
 } from "../../../debug/loggers/stateMachineLogger.js";
 import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
-import { assertTurnReplacementMaterialization } from "@noobot/shared/turn-replacement-protocol";
+import { assertTurnReplacementMaterialization } from "@noobot/session-protocol";
 
 
 function normalizeAttachmentMeta(attachment = {}) {
@@ -79,7 +79,7 @@ function mergeAttachmentMetas(historyAttachments = [], transportAttachments = []
 
 function resolveSessionId(activeSession, activeSessionId) {
   return normalizeTrimmedString(
-    activeSession?.value?.backendSessionId || activeSession?.value?.sessionId || activeSessionId?.value,
+    activeSession?.value?.sessionId || activeSessionId?.value,
   );
 }
 
@@ -149,7 +149,7 @@ export function createResendMessageTransaction({
     return true;
   }
 
-  const sessionVersionManager = createSessionVersionManager({
+  const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
     fetchSessionDetail,
     applySessionDetail,
@@ -159,14 +159,14 @@ export function createResendMessageTransaction({
     })),
   });
 
-  async function requestReplaceTurn({ sessionId, originalSession, anchor, text, resendTurnScopeId, idempotencyKey, attempt, expectedVersion, attachments }) {
+  async function requestReplaceTurn({ sessionId, originalSession, anchor, text, resendTurnScopeId, commandId, attempt, expectedAggregateVersion, attachments }) {
     logResendDebug("resend.replaceTurn.request", () => ({
       sessionId,
       turnScopeId: resendTurnScopeId,
       anchor,
-      expectedVersion,
+      expectedAggregateVersion,
       attempt,
-      idempotencyKey,
+      commandId,
       attachments: summarizeDebugAttachments(attachments),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
     }));
@@ -177,8 +177,8 @@ export function createResendMessageTransaction({
       anchor,
       newContent: text,
       turnScopeId: resendTurnScopeId,
-      expectedVersion,
-      idempotencyKey,
+      expectedAggregateVersion,
+      commandId,
       attachments,
     }, { fetcher: authFetch });
     const payload = typeof result?.json === "function" ? await result.json() : result;
@@ -277,25 +277,25 @@ export function createResendMessageTransaction({
     });
     let replacementCommitted = false;
     try {
-      const mutationResult = await sessionVersionManager.runVersionedMutation({
+      const mutationResult = await sessionAggregateVersionManager.runAggregateVersionedMutation({
         refreshOptions: {
           sessionId,
           detailOptions: { source: "resendVersionConflict" },
           logContext: { turnScopeId: resendTurnScopeId },
         },
-        mutate: ({ expectedVersion, attempt }) => requestReplaceTurn({
+        mutate: ({ expectedAggregateVersion, attempt }) => requestReplaceTurn({
           sessionId,
           originalSession,
           anchor,
           text,
           resendTurnScopeId,
-          expectedVersion,
-          idempotencyKey: operation?.opId || "",
+          expectedAggregateVersion,
+          commandId: operation?.opId || "",
           attempt,
           attachments: finalAttachments,
         }),
       });
-      let { result, payload, expectedVersion } = mutationResult || {};
+      let { result, payload, expectedAggregateVersion } = mutationResult || {};
       logResendDebug("resend.replaceTurn.result", () => ({
         sessionId,
         turnScopeId: resendTurnScopeId,
@@ -312,8 +312,8 @@ export function createResendMessageTransaction({
           status: result?.status,
           statusText: result?.statusText,
           anchor,
-          expectedVersion,
-          idempotencyKey: operation?.opId || "",
+          expectedAggregateVersion,
+          commandId: operation?.opId || "",
           payload,
           target: summarizeDebugMessage(userTargetMessage),
           messages: summarizeDebugMessages(activeSession?.value?.messages),
@@ -388,7 +388,7 @@ export function createResendMessageTransaction({
       logStateMachineDebug("stateMachine.resend.materializationCommitted", () => ({
         sessionId,
         turnScopeId: resendTurnScopeId,
-        committedVersion: turnReplacement.committedVersion,
+        committedAggregateVersion: turnReplacement.committedAggregateVersion,
         replacedTurnScopeIds,
         replacementUser: summarizeStateMachineMessage(replacementUserMessage),
         messages: (activeSession?.value?.messages || []).map(summarizeStateMachineMessage),
@@ -427,6 +427,7 @@ export function createResendMessageTransaction({
         messageText: text,
         reuseExistingUserTurn: true,
         userMessageId: normalizeTrimmedString(replacementUserMessage?.messageId),
+        dialogProcessId: turnReplacement.replacementDialogProcessId,
         turnScopeId: resendTurnScopeId,
         allowDuringResend: true,
         attachmentFiles: [],

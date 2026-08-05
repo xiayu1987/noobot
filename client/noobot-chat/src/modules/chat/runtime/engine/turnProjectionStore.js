@@ -54,9 +54,7 @@ export function projectTurnRuntimeToMessages({
   const activeSessionValue = activeSession?.value || activeSession;
   const targetSession = session
     || sessionItems.find((item) => sessionRuntimeId(item) === resolvedState.sessionId)
-    || ([activeSessionValue?.id, activeSessionValue?.backendSessionId]
-      .map(sessionRuntimeId)
-      .includes(resolvedState.sessionId)
+    || (sessionRuntimeId(activeSessionValue) === resolvedState.sessionId
       ? activeSessionValue
       : null);
   if (!targetSession) {
@@ -224,13 +222,7 @@ export function dispatchTurnEnvelope({
 export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence = 0 } = {}) {
   const identity = resolveTurnIdentity(snapshot);
   const targetIdentity = resolveTurnIdentity(targetMessage);
-  const legacyUnscopedSession = Boolean(
-    identity.turnScopeId &&
-    identity.turnScopeId === targetIdentity.turnScopeId &&
-    !identity.sessionId &&
-    !targetIdentity.sessionId,
-  );
-  const turnKey = createTurnKey(identity) || (legacyUnscopedSession ? `legacy::${identity.turnScopeId}` : "");
+  const turnKey = createTurnKey(identity);
   const observe = (values = {}) => createTurnObservation({
     requestedSessionId: identity.sessionId,
     canonicalSessionId: targetIdentity.sessionId || identity.sessionId,
@@ -240,7 +232,7 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
     authority: snapshot?.authority,
     ...values,
   });
-  if (!turnKey || !targetMessage || (!legacyUnscopedSession && !messageOwnsTurn(targetMessage, identity))) {
+  if (!turnKey || !targetMessage || !messageOwnsTurn(targetMessage, identity)) {
     return observe({ applied: false, result: "snapshot_identity_conflict", reason: "snapshot_identity_conflict" });
   }
   const currentSequence = Number(targetMessage?.messageEventState?.lastSequence || 0);

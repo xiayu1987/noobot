@@ -35,7 +35,7 @@ export function prepareChatSend({
   input.value = "";
 
   const filesToSend = Array.isArray(attachmentFiles) ? [...attachmentFiles] : [...uploadFiles.value];
-  const sessionId = String(activeSession.value?.backendSessionId || activeSession.value?.id || "");
+  const sessionId = String(activeSession.value?.sessionId || "");
   const resolvedUserAttachments = Array.isArray(userAttachments) ? [...userAttachments] : filesToSend.map((fileItem) => {
     const clientAttachmentId = String(
       fileItem?.clientAttachmentId || fileItem?.draftAttachmentId || "",

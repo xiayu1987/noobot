@@ -8,7 +8,8 @@ import {
 } from "../../model/reconnectReplayModel.js";
 import { _trimStr } from "./utils.js";
 import { normalizeTurnMeta } from "../../model/messageIdentity.js";
-import { replayEventTail, validateReplayBatch, validateTurnLifecycleSnapshot } from "@noobot/event-protocol";
+import { replayEventTail, validateReplayBatch } from "@noobot/event-protocol";
+import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import {
   logStateMachineDebug,
   summarizeTurnLifecycleSnapshot,

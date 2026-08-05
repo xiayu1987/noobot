@@ -13,7 +13,7 @@ import {
   resolveTurnRuntimeByScope,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/event-protocol";
+import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/session-protocol";
 
 function event(registry, type, sessionId, turnScopeId, dialogProcessId, extra = {}) {
   return applyTurnRuntimeEvent(registry, { type, sessionId, turnScopeId, dialogProcessId, ...extra });
@@ -136,7 +136,7 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
     expect(registry.sessions.main).toBeUndefined();
   });
 
-  it("promotes one optimistic child alias without moving the main Session Turn", () => {
+  it("keeps same-scoped child Turns isolated by their declared Session identity", () => {
     const registry = createTurnRuntimeRegistryState();
     start(registry, "main", "main-turn", "dp-main");
     event(registry, SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED, "child-local", "child-turn", "", { seq: 1 });
@@ -150,10 +150,11 @@ describe("turnRuntimeRegistry main/sub-session concurrent fault isolation", () =
       capabilities: { actionLocked: true, canStop: true },
     }));
 
-    expect(turn(registry, "child-local", "child-turn")?.sessionId).toBe("child-canonical");
+    expect(turn(registry, "child-local", "child-turn")?.sessionId).toBe("child-local");
     expect(turn(registry, "child-canonical", "child-turn")).toBeTruthy();
     expect(settle(registry, "child-canonical", "child-turn").applied).toBe(true);
     expect(turn(registry, "child-canonical", "child-turn")?.terminal).toBe("completed");
+    expect(turn(registry, "child-local", "child-turn")?.terminal).toBeUndefined();
     expect(turn(registry, "main", "main-turn")?.terminal).toBeNull();
   });
 });

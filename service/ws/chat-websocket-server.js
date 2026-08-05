@@ -23,7 +23,7 @@ import { recoverSnapshotOrphan, recoverTurnFinalize } from "./chat-websocket/fin
 import {
   TURN_LIFECYCLE_WIRE_EVENT,
   validateTurnLifecycleEnvelope,
-} from "@noobot/event-protocol";
+} from "@noobot/session-protocol";
 import {
   detachRunTransport,
   findActiveRun,

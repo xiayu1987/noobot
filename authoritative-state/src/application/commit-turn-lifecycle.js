@@ -6,7 +6,7 @@
 import {
   createTurnLifecycleEnvelope,
   deriveAuthoritativeTurnCapabilities,
-} from "@noobot/event-protocol/turn-lifecycle";
+} from "@noobot/session-protocol/turn-lifecycle";
 import {
   findAuthorityEventEnvelope,
   normalizeAuthorityEventOutbox,
@@ -53,7 +53,6 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
     rootExecutionId: event.rootExecutionId || turn.rootExecutionId,
     origin: event.origin || turn.origin,
     stage: event.stage || turn.stage,
-    persistenceScope: event.persistenceScope,
     continuationSource: turn.continuationSource,
     continuedByTurnScopeId: turn.continuedByTurnScopeId,
   });

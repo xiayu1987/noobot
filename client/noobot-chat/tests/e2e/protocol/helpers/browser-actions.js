@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
+import { waitForTurnTerminal } from "./scenario-assertions.js";
 
 export async function sendMessage(page, message) {
   await page.locator(".chat-input textarea").fill(message);
@@ -29,7 +30,8 @@ export async function addAttachment(page, file) {
 
 export async function selectPlugins(page, pluginKeys = []) {
   const panel = page.locator(".more-panel");
-  if (!await panel.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  const overlay = page.locator(".more-panel-overlay");
+  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
   const buttons = page.locator(".plugin-option-button");
   for (let index = 0; index < await buttons.count(); index += 1) {
     const button = buttons.nth(index);
@@ -42,9 +44,119 @@ export async function selectPlugins(page, pluginKeys = []) {
   await expect(page.locator(".more-panel-overlay")).toBeHidden();
 }
 
-export async function waitForNaturalCompletion(page) {
+export async function setHarnessCapability(page, label, enabled) {
+  const panel = page.locator(".more-panel");
+  const overlay = page.locator(".more-panel-overlay");
+  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  const field = panel.locator(".plugin-model-field").filter({
+    has: page.locator(".plugin-model-label").getByText(label, { exact: true }),
+  });
+  const target = field.locator(".plugin-capability-toggle .el-radio-button").nth(enabled ? 0 : 1);
+  await target.click();
+  await expect(target).toHaveClass(/is-active/);
+  await page.locator(".more-collapse-btn").click();
+  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+}
+
+export async function setHarnessGuidanceAnalysisIntensity(page, value) {
+  const panel = page.locator(".more-panel");
+  const overlay = page.locator(".more-panel-overlay");
+  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  const control = panel.locator(".plugin-guidance-analysis-control");
+  await expect(control).toBeVisible();
+  const slider = control.locator(".el-slider__button-wrapper[role='slider']");
+  const display = control.locator("strong");
+  let current = Number(await display.textContent());
+  if (current === value) {
+    const key = value > 1 ? "ArrowLeft" : "ArrowRight";
+    current += value > 1 ? -1 : 1;
+    await slider.press(key);
+    await expect(display).toHaveText(String(current));
+  }
+  while (current !== value) {
+    const step = current < value ? 1 : -1;
+    await slider.press(step > 0 ? "ArrowRight" : "ArrowLeft");
+    current += step;
+    await expect(display).toHaveText(String(current));
+  }
+  await page.locator(".more-collapse-btn").click();
+  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+}
+
+export async function setHarnessTurnsThreshold(page, key, value) {
+  const panel = page.locator(".more-panel");
+  const overlay = page.locator(".more-panel-overlay");
+  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  const control = panel.locator(`[data-threshold-key="${key}"]`);
+  await expect(control).toBeVisible();
+  const input = control.locator("input");
+  await input.fill(String(value));
+  await input.press("Enter");
+  await expect(input).toHaveValue(String(value));
+  await page.locator(".more-collapse-btn").click();
+  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+}
+
+export async function setRunSummaryPolicy(page, policy = {}) {
+  const panel = page.locator(".more-panel");
+  const overlay = page.locator(".more-panel-overlay");
+  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  await expect(panel.locator("[data-summary-policy-key]")).toHaveCount(0);
+  const normalizedPolicy = Object.fromEntries(
+    Object.entries(policy)
+      .map(([key, value]) => [key, Number(value)])
+      .filter(([, value]) => Number.isInteger(value) && value > 0),
+  );
+  await panel.locator(".composer-options").evaluate((_element, nextPolicy) => {
+    const rootVNode = document.querySelector("#app")?._vnode;
+    const visited = new Set();
+    let updateSummaryPolicy = null;
+    const visit = (vnode, depth = 0) => {
+      if (!vnode || typeof vnode !== "object" || visited.has(vnode) || depth > 40) return;
+      visited.add(vnode);
+      if (Array.isArray(vnode)) {
+        vnode.forEach((child) => visit(child, depth));
+        return;
+      }
+      const component = vnode.component;
+      if (component) {
+        const name = String(component.type?.__name || component.type?.name || "");
+        if (name === "AppShellLayout") {
+          updateSummaryPolicy = component.vnode?.props?.["onUpdate:summaryPolicy"] || null;
+          return;
+        }
+        visit(component.subTree, depth + 1);
+      }
+      if (Array.isArray(vnode.children)) {
+        vnode.children.forEach((child) => visit(child, depth + 1));
+      }
+    };
+    visit(rootVNode);
+    if (typeof updateSummaryPolicy !== "function") {
+      throw new Error("AppShellLayout summary-policy event boundary is unavailable");
+    }
+    updateSummaryPolicy(nextPolicy);
+  }, normalizedPolicy);
+  await page.locator(".more-collapse-btn").click();
+  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+}
+
+export async function setMainSummaryTurnsThreshold(page, value) {
+  await setRunSummaryPolicy(page, { phaseSummaryLoopTurns: value });
+}
+
+export async function waitForNaturalCompletion({
+  page,
+  capture,
+  sessionId,
+  turnScopeId,
+  timeoutMs = 120_000,
+}) {
   await expect(page.locator(".stop-float-btn")).toBeVisible();
-  await expect(page.locator(".stop-float-btn")).toBeHidden({ timeout: 120_000 });
+  const terminal = await waitForTurnTerminal(capture, sessionId, turnScopeId, { timeoutMs });
+  expect(terminal.eventType, JSON.stringify(terminal.failure || {})).toBe("turn.completed");
+  await expect(page.locator(".stop-float-btn")).toBeHidden({ timeout: timeoutMs });
+  return terminal;
 }
 
 export async function editLatestUserMessage(page, content, { attachment = null, removeAttachments = false } = {}) {

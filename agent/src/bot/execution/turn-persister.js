@@ -488,7 +488,7 @@ export class SessionTurnPersister {
             : null,
         injectedMessage: messageItem.injectedMessage === true,
         injectedBy: String(messageItem.injectedBy || "").trim(),
-        injectedMessageType: String(messageItem.injectedMessageType || messageItem.injected_message_type || "").trim(),
+        injectedMessageType: String(messageItem.injectedMessageType || "").trim(),
         frontendUserMessage: messageItem.frontendUserMessage === true,
         pluginMessage: messageItem.pluginMessage === true,
         pluginMeta:

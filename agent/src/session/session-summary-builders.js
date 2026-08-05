@@ -734,8 +734,7 @@ export function buildSessionDisplaySummary(session = {}) {
     title: customTitle || (firstUserMessage
       ? String(firstUserMessage.content || "").slice(0, 20)
       : sessionId.slice(0, 8)),
-    version: session?.version,
-    revision: session?.revision,
+    aggregateVersion: session?.aggregateVersion,
     turnTimings,
     turnStatuses,
     turnLifecycleSnapshot,

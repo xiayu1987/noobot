@@ -469,7 +469,7 @@ for (const state of ["processing", "completed"]) {
                 ok: true,
                 sessionId: "child-session-a",
                 workflowSession: {
-                  snapshotVersion: 1,
+                  aggregateVersion: 1,
                   session: {
                     sessionId: "child-session-a",
                     state,
@@ -521,7 +521,7 @@ test("classifies an unmaterialized Execution session as pending", async () => {
         getThinkingDetail: async () => null,
         getDetail: async () => ({
           ok: true,
-          async json() { return { ok: true, workflowSession: { snapshotVersion: 1 } }; },
+          async json() { return { ok: true, workflowSession: { aggregateVersion: 1 } }; },
         }),
       },
     },
@@ -545,7 +545,7 @@ test("classifies a materialized Execution session without messages as empty", as
         getThinkingDetail: async () => null,
         getDetail: async () => ({
           ok: true,
-          async json() { return { ok: true, workflowSession: { snapshotVersion: 1, session: { sessionId: "child-session-empty", messages: [] } } }; },
+          async json() { return { ok: true, workflowSession: { aggregateVersion: 1, session: { sessionId: "child-session-empty", messages: [] } } }; },
         }),
       },
     },

@@ -9,11 +9,11 @@ import { WebSocket } from "ws";
 import { startServerWithWs, closeServer, stopChatWs, createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
-  TURN_EVENT,
   acknowledgeAuthorityEventDelivery,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
+import { TURN_EVENT } from "@noobot/session-protocol";
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
 
 test("chat-websocket-server: stop persists and emits authoritative stop completion identity", async () => {

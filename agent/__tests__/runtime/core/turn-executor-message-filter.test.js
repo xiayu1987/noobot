@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext, writeMessageBlocks } from "@noobot/context-protocol";
+import { createEmptyHookResult } from "@noobot/hook-protocol";
 
 import {
   invokeNoToolsTurn as invokeNoToolsTurnProduction,
@@ -153,10 +154,10 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     systemRuntime: {},
     hookManager: {
       async emit(point, ctx = {}) {
-        if (point !== "agent.before_llm_call") return [];
+        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
         // A detached flat projection is not a writable context source. The
         // authoritative blocks remain unchanged.
-        return [];
+        return createEmptyHookResult(point, ctx);
       },
     },
   };
@@ -225,7 +226,7 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     systemRuntime: {},
     hookManager: {
       async emit(point, ctx = {}) {
-        if (point !== "agent.before_llm_call") return [];
+        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
         writeMessageBlocks(ctx.modelContext, {
           incremental: [...ctx.modelContext.messageBlocks.incremental, summary],
         });
@@ -233,7 +234,7 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
           source: "plugin.summary",
           summarizedMessageIds: ["tool-call", "tool-result"],
         });
-        return [];
+        return createEmptyHookResult(point, ctx);
       },
     },
     async commitSummaryCheckpoint() {
@@ -293,13 +294,13 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     systemRuntime: {},
     hookManager: {
       async emit(point, ctx = {}) {
-        if (point !== "agent.before_llm_call") return [];
+        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
         writeMessageBlocks(ctx.modelContext, {
           system: [...ctx.modelContext.messageBlocks.system, harnessSystem],
           history: [...ctx.modelContext.messageBlocks.history],
           incremental: [...ctx.modelContext.messageBlocks.incremental],
         });
-        return [];
+        return createEmptyHookResult(point, ctx);
       },
     },
   };
@@ -355,9 +356,15 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
   assert.equal(loopState.modelContext.messageBlocks.system.at(-1), harnessSystem);
 });
 
-test("invokeWithToolsTurn adopts canonical hook messages on first stopped-snapshot resume turn", async () => {
+test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stopped-snapshot resume turn", async () => {
   let capturedMessages = [];
-  const harnessSystem = { role: "developer", content: "harness-policy", messageUid: "hook-system" };
+  const harnessSystem = {
+    role: "developer",
+    content: "harness-policy",
+    messageUid: "hook-system",
+    dialogProcessId: "d-resume",
+    turnScopeId: "turn-current",
+  };
   const latestGuidance = {
     role: "user",
     content: "latest-guidance",
@@ -365,13 +372,15 @@ test("invokeWithToolsTurn adopts canonical hook messages on first stopped-snapsh
     injectedMessage: true,
     injectedBy: "noobot-plugin-harness",
     injectedMessageType: "separate_model_relay:guidance",
+    dialogProcessId: "d-resume",
+    turnScopeId: "turn-current",
   };
   const runtime = {
     resumeFromStoppedSnapshot: true,
     systemRuntime: {},
     hookManager: {
       async emit(point, ctx = {}) {
-        if (point !== "agent.before_llm_call") return [];
+        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
         writeMessageBlocks(ctx.modelContext, {
           system: [...ctx.modelContext.messageBlocks.system, harnessSystem],
           history: [...ctx.modelContext.messageBlocks.history],
@@ -380,7 +389,7 @@ test("invokeWithToolsTurn adopts canonical hook messages on first stopped-snapsh
             latestGuidance,
           ],
         });
-        return [];
+        return createEmptyHookResult(point, ctx);
       },
     },
   };
@@ -487,8 +496,8 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
   const runtime = {
     systemRuntime: { sessionId: "s1", dialogProcessId: "d-current" },
     hookManager: {
-      async emit() {
-        return [];
+      async emit(point, ctx = {}) {
+        return createEmptyHookResult(point, ctx);
       },
     },
   };

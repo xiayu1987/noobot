@@ -309,6 +309,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       parentSessionId: "root-agent",
       role: "user",
       content: "node task",
+      dialogProcessId: "dialog-workflow-node-agent",
       turnScopeId: "workflow-node:agent",
       persistenceContext: context,
     });
@@ -316,6 +317,7 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
       userId: "alice",
       sessionId: "child-agent",
       parentSessionId: "root-agent",
+      dialogProcessId: "dialog-workflow-node-agent",
       turnScopeId: "workflow-node:agent",
       persistenceContext: context,
       messages: [

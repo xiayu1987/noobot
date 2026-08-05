@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_PHASE, validateTurnLifecycleSnapshot } from "@noobot/event-protocol";
+import { TURN_PHASE, validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import {
   EXECUTION_QUERY_COMMAND,
   EXECUTION_CHILDREN_WIRE_EVENT,

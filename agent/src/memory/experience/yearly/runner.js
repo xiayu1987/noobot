@@ -48,7 +48,7 @@ export async function runYearlySummaryIfNeeded({
       });
       let parsedSummary = { domain_name: domainName, categories: [] };
       try {
-        const res = await llm.invoke(prompt, { signal: abortSignal });
+        const res = await llm.invoke([{ role: "user", content: prompt }], { signal: abortSignal });
         parsedSummary = normalizeYearlySummary(res?.content, domainName, { basePath });
       } catch (error) {
         if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
@@ -90,4 +90,3 @@ export async function runYearlySummaryIfNeeded({
   }
   return hasWrittenSummary;
 }
-

@@ -6,6 +6,10 @@
 
 const CONFIRMATION_LEVELS = new Set(["low", "medium", "high", "critical"]);
 const CONNECTOR_KEYS = Object.freeze(["database", "terminal", "email"]);
+const SUMMARY_POLICY_KEYS = Object.freeze([
+  "phaseSummaryLoopTurns",
+  "taskCheckLoopTurns",
+]);
 const PREFERENCE_KEYS = new Set([
   "allowUserInteraction",
   "sanitizeOutput",
@@ -16,6 +20,7 @@ const PREFERENCE_KEYS = new Set([
   "selectedModel",
   "memoryModel",
   "pluginModelConfig",
+  "summaryPolicy",
   "selectedConnectors",
   "selectedPlugins",
 ]);
@@ -40,9 +45,24 @@ function pluginModelConfig(value) {
   return entries.length ? Object.fromEntries(entries.map(([key, item]) => [clean(key), { ...item }])) : undefined;
 }
 
+function summaryPolicy(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const phaseSummaryLoopTurns = Number(value.phaseSummaryLoopTurns);
+  const taskCheckLoopTurns = Number(value.taskCheckLoopTurns);
+  const normalized = {};
+  if (Number.isInteger(phaseSummaryLoopTurns) && phaseSummaryLoopTurns > 0) {
+    normalized.phaseSummaryLoopTurns = phaseSummaryLoopTurns;
+  }
+  if (Number.isInteger(taskCheckLoopTurns) && taskCheckLoopTurns > 0) {
+    normalized.taskCheckLoopTurns = taskCheckLoopTurns;
+  }
+  return Object.keys(normalized).length ? normalized : undefined;
+}
+
 export function createRunPreferences(input = {}) {
   const confirmationLevel = clean(input.confirmationLevel).toLowerCase();
   const normalizedPluginModelConfig = pluginModelConfig(input.pluginModelConfig);
+  const normalizedSummaryPolicy = summaryPolicy(input.summaryPolicy);
   return {
     allowUserInteraction: input.allowUserInteraction !== false,
     sanitizeOutput: input.sanitizeOutput !== false,
@@ -55,6 +75,7 @@ export function createRunPreferences(input = {}) {
     selectedModel: clean(input.selectedModel),
     memoryModel: clean(input.memoryModel),
     ...(normalizedPluginModelConfig ? { pluginModelConfig: normalizedPluginModelConfig } : {}),
+    ...(normalizedSummaryPolicy ? { summaryPolicy: normalizedSummaryPolicy } : {}),
     selectedConnectors: selectedConnectors(input.selectedConnectors),
     selectedPlugins: stringList(input.selectedPlugins),
   };
@@ -93,6 +114,25 @@ export function validateRunPreferences(preferences) {
   if (Object.prototype.hasOwnProperty.call(preferences, "pluginModelConfig") &&
       (!preferences.pluginModelConfig || typeof preferences.pluginModelConfig !== "object" || Array.isArray(preferences.pluginModelConfig))) {
     errors.push("invalid_plugin_model_config");
+  }
+  if (Object.prototype.hasOwnProperty.call(preferences, "summaryPolicy")) {
+    const policy = preferences.summaryPolicy;
+    if (!policy || typeof policy !== "object" || Array.isArray(policy)) {
+      errors.push("invalid_summary_policy");
+    } else {
+      for (const key of Object.keys(policy)) {
+        if (!SUMMARY_POLICY_KEYS.includes(key)) errors.push(`unknown_summary_policy_field:${key}`);
+      }
+      if (Object.prototype.hasOwnProperty.call(policy, "phaseSummaryLoopTurns") &&
+          (!Number.isInteger(policy.phaseSummaryLoopTurns) || policy.phaseSummaryLoopTurns <= 0)) {
+        errors.push("invalid_phase_summary_loop_turns");
+      }
+      if (Object.prototype.hasOwnProperty.call(policy, "taskCheckLoopTurns") &&
+          (!Number.isInteger(policy.taskCheckLoopTurns) || policy.taskCheckLoopTurns <= 0)) {
+        errors.push("invalid_task_check_loop_turns");
+      }
+      if (!Object.keys(policy).length) errors.push("empty_summary_policy");
+    }
   }
   return { valid: errors.length === 0, errors };
 }

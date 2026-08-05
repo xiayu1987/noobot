@@ -91,7 +91,7 @@ describe("sessionRunStateMachine message runtime", () => {
     const assistant = { role: "assistant", dialogProcessId: "d1", turnScopeId: "turn-1", content: "" };
     const activeSession = {
       id: "s1",
-      backendSessionId: "s1",
+      sessionId: "s1",
       messages: [{ role: "user", content: "q" }, assistant],
     };
 
@@ -140,7 +140,7 @@ describe("sessionRunStateMachine message runtime", () => {
     };
     const activeSession = {
       id: "s-active",
-      backendSessionId: "s-active",
+      sessionId: "s-active",
       messages: [{ role: "user", content: "q" }, assistant],
     };
 
@@ -185,7 +185,7 @@ describe("sessionRunStateMachine message runtime", () => {
     };
     const activeSession = {
       id: "s1",
-      backendSessionId: "s1",
+      sessionId: "s1",
       messages: [{ role: "user", content: "q" }, assistant],
     };
 
@@ -219,7 +219,7 @@ describe("sessionRunStateMachine message runtime", () => {
     const latestAssistant = { role: "assistant", pending: false, content: "new" };
     const activeSession = {
       id: "s1",
-      backendSessionId: "s1",
+      sessionId: "s1",
       messages: [
         { role: "user", content: "old q" },
         oldAssistant,
@@ -280,7 +280,7 @@ describe("sessionRunStateMachine message runtime", () => {
 
     expect(resolveSessionRunMessageRuntimeView({
       role: "assistant",
-      channel_state: { status: "reconnecting" },
+      channelState: { status: "reconnecting" },
     })).toMatchObject({
       state: BackendChannelState.RECONNECTING,
       running: true,

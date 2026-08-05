@@ -270,8 +270,11 @@ test("session artifact persistence should normalize attachment fields before wri
         caller: "user",
         messages: [
           {
+            messageUid: "sm_attachment_user",
             role: "user",
             content: "canonical survives",
+            dialogProcessId: "dialog-attachments",
+            turnScopeId: "turn-attachments",
             attachments: [
               {
                 attachmentId: "att-canonical",
@@ -283,8 +286,11 @@ test("session artifact persistence should normalize attachment fields before wri
             attachment_metas: [{ attachmentId: "att-legacy-snake" }],
           },
           {
+            messageUid: "sm_attachment_assistant",
             role: "assistant",
             content: "legacy only is ignored",
+            dialogProcessId: "dialog-attachments",
+            turnScopeId: "turn-attachments",
             attachmentMetas: [{ attachmentId: "att-legacy-only" }],
             attachment_metas: [{ attachmentId: "att-legacy-only-snake" }],
           },

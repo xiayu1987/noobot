@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 
 import { MemoryManager } from "../../src/memory/index.js";
 import { resetModelAdapter, setModelAdapter } from "../../src/models/index.js";
+import { writeSessionArtifact } from "../../src/session/session-artifact-store.js";
 
 async function waitFor(asyncGetter, { retries = 20, intervalMs = 20 } = {}) {
   let lastError = null;
@@ -348,30 +349,30 @@ test("captureSessionToShortMemory skips injected messages", async () => {
   const userRoot = path.join(workspaceRoot, userId);
   await mkdir(path.join(userRoot, "runtime/session/s1"), { recursive: true });
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
-  await writeFile(
-    path.join(userRoot, "runtime/session/s1/session.json"),
-    JSON.stringify(
-      {
+  await writeSessionArtifact({
+    sessionDir: path.join(userRoot, "runtime/session/s1"),
+    sessionPayload: {
         sessionId: "s1",
         messages: [
           {
+            messageUid: "sm_memory_user",
             role: "user",
             content: "真实用户消息",
             dialogProcessId: "d1",
+            turnScopeId: "t1",
           },
           {
+            messageUid: "sm_memory_injected",
             role: "user",
             content: "注入消息",
             dialogProcessId: "d1",
+            turnScopeId: "t1",
             injectedMessage: true,
             injectedBy: "agentPlugin",
           },
         ],
       },
-      null,
-      2,
-    ),
-  );
+  });
 
   const service = new MemoryManager({ workspaceRoot });
   const ok = await service.captureSessionToShortMemory({

@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol/turn-lifecycle";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol/turn-lifecycle";
 import { recoverOrphanedTurn, recoverTurnFinalize } from "../src/application/recovery-policy.js";
 
 const staleTurn = (overrides = {}) => ({

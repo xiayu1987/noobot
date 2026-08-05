@@ -15,8 +15,8 @@ import {
   isPendingInteractionReplay,
 } from "../src/index.mjs";
 
-test("event registry classifies authority, interaction, data and transport events", () => {
-  assert.equal(getEventDefinition("turn.completed").category, EVENT_DEFINITION_CATEGORY.AUTHORITY);
+test("event registry classifies interaction, data and transport events", () => {
+  assert.equal(getEventDefinition("turn.completed"), null);
   assert.equal(getEventDefinition(EVENT_TYPE.INTERACTION_REQUEST).category, EVENT_CATEGORY.INTERACTION);
   assert.equal(getEventDefinition(EVENT_TYPE.DELTA).category, EVENT_CATEGORY.DATA);
   assert.equal(getEventDefinition(EVENT_TYPE.RECONNECT_DATA).category, EVENT_CATEGORY.TRANSPORT);

@@ -255,6 +255,14 @@ export function createDoc2DataTool({ agentContext }) {
           globalConfig,
           userConfig,
           streaming: false,
+          context: {
+            runtime,
+            invocation: {
+              flow: "tool.doc2data",
+              purpose: "document_extraction",
+              domain: "data_processing",
+            },
+          },
         });
         const text = normalizeModelOutput(modelResult?.response?.content);
         batchResults.push({ batch: batchIndex + 1, pages: pageNumbers, totalBytes: batch.reduce((sum, item) => sum + item.sizeBytes, 0), text });

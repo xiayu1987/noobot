@@ -3,9 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { validateTurnLifecycleEnvelope } from "@noobot/event-protocol/turn-lifecycle";
-
 const clean = (value) => String(value || "").trim();
+
+function validateAuthorityEnvelope(envelope = {}) {
+  return Boolean(
+    envelope && typeof envelope === "object" && !Array.isArray(envelope) &&
+    clean(envelope.eventId) && clean(envelope.eventType) && clean(envelope.sessionId) &&
+    Number.isInteger(Number(envelope.sequence)) && Number(envelope.sequence) > 0,
+  );
+}
 
 export const AUTHORITY_EVENT_DELIVERY_STATUS = Object.freeze({
   PENDING: "pending",
@@ -33,7 +39,7 @@ export function normalizeAuthorityEventOutbox(source = []) {
     const envelope = item.envelope && typeof item.envelope === "object" && !Array.isArray(item.envelope)
       ? { ...item.envelope, eventId }
       : null;
-    if (!eventId || eventIds.has(eventId) || !validateTurnLifecycleEnvelope(envelope || {}).valid) continue;
+    if (!eventId || eventIds.has(eventId) || !validateAuthorityEnvelope(envelope)) continue;
     eventIds.add(eventId);
     normalized.push({
       eventId,
@@ -127,7 +133,7 @@ export function compactAuthorityEventOutbox(source = [], {
       clean(receipt?.commandId) === clean(item.envelope.commandId) &&
       clean(receipt?.eventType) === clean(item.envelope.eventType) &&
       clean(receipt?.eventId || receipt?.envelope?.eventId) === item.eventId &&
-      validateTurnLifecycleEnvelope(receipt?.envelope || {}).valid,
+      validateAuthorityEnvelope(receipt?.envelope),
     );
     return !durableReceipt;
   });

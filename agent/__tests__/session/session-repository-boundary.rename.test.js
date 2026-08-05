@@ -64,7 +64,13 @@ test("renameSession should persist custom title to full, display summary and ses
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
     await runtime.sessionCrudService.ensureSession(userId, "A", "");
     const session = await runtime.repositories.sessionRepository.findById(userId, "A", "");
-    session.messages = [{ role: "user", content: "old generated title" }];
+    session.messages = [{
+      messageUid: "sm_rename_user",
+      role: "user",
+      content: "old generated title",
+      dialogProcessId: "dialog-rename",
+      turnScopeId: "turn-rename",
+    }];
     await runtime.repositories.sessionRepository.save(userId, session, "");
 
     const renamed = await runtime.sessionCrudService.renameSession({

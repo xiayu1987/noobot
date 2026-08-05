@@ -13,7 +13,7 @@ import {
 import { isPluginDebugEnabled, resolveEffectiveRunTimeoutMs, resolveEffectiveStreamingEnabled, summarizePluginConfig } from "./run-config.js";
 import { isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/event-protocol";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { recoverOrphanedTurn } from "@noobot/authoritative-state/application";
 import { createAgentApplication } from "#agent/application";
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
@@ -251,7 +251,7 @@ export function createMessageRunHandler({
         event: "service.websocket.pluginDebug.runConfig",
         userId: String(userId || "").trim(),
         sessionId: String(sessionId || "").trim(),
-        dialogProcessId: "",
+        dialogProcessId: String(dialogProcessId || "").trim(),
         turnScopeId: String(normalizedRunConfig?.turnScopeId || state.currentTurnScopeId || "").trim(),
         data: {
           requestedSelectedPlugins: command.preferences.selectedPlugins,
@@ -291,7 +291,7 @@ export function createMessageRunHandler({
       sessionId: String(sessionId || "").trim(),
       parentSessionId: String(parentSessionId || "").trim(),
       parentDialogProcessId: String(parentDialogProcessId || "").trim(),
-      dialogProcessId: "",
+      dialogProcessId: String(dialogProcessId || "").trim(),
       turnScopeId: String(normalizedRunConfig?.turnScopeId || state.currentTurnScopeId || "").trim(),
     };
     const runMeta = state.currentRunMeta;
@@ -420,7 +420,7 @@ export function createMessageRunHandler({
           data: routeData,
         });
       },
-      onCommittedTurnLifecycle: async (committed = {}) => {
+      onCommittedTurnLifecycle: async (committed = {}, context = {}) => {
         const recordDispatchFailure = (reason = "", delivered = 0) => {
           void recordServiceWebSocketLifecycle({
             sessionLogConfig,
@@ -432,7 +432,7 @@ export function createMessageRunHandler({
             data: {
               childSessionId: committed.sessionId || "",
               parentSessionId: committed.parentSessionId || parentSessionId,
-              persistenceScopeId: committed.persistenceScope?.scopeId || "",
+              persistenceScopeId: context.persistenceScope?.scopeId || "",
               lifecycleEventType: committed.eventType || "",
               reason,
               delivered: Number(delivered || 0),
@@ -444,7 +444,7 @@ export function createMessageRunHandler({
             userId: committed.userId || userId,
             sessionId: committed.sessionId,
             parentSessionId: committed.parentSessionId || parentSessionId,
-            persistenceScope: committed.persistenceScope,
+            persistenceScope: context.persistenceScope,
           });
           if (dispatch?.dispatched !== true) {
             recordDispatchFailure(
@@ -505,6 +505,7 @@ export function createMessageRunHandler({
       userId,
       sessionId,
       parentSessionId,
+      dialogProcessId,
       parentDialogProcessId,
       caller: "user",
       message,

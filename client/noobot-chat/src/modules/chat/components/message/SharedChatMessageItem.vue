@@ -260,7 +260,7 @@ function resolveRendererContext() {
     if (subSession) {
       return {
         ...subSession,
-        sessionId: String(subSession?.sessionId || subSession?.id || id).trim(),
+        sessionId: String(subSession?.sessionId || id).trim(),
         messages: Array.isArray(subSession?.messages) ? subSession.messages : [],
       };
     }
@@ -329,7 +329,7 @@ watch(extensionContextDiagnosticsSignature, () => {
     turnScopeId: String(props.messageItem?.turnScopeId || ""),
     subSessionMessageRegistryVersion: Number(context.subSessionMessageRegistryVersion || 0),
     subSessions: Object.values(sessions).map((session = {}) => ({
-      sessionId: String(session?.sessionId || session?.id || ""),
+      sessionId: String(session?.sessionId || ""),
       messages: (Array.isArray(session?.messages) ? session.messages : []).map((message = {}) => ({
         id: String(message?.id || message?.messageId || ""),
         role: String(message?.role || ""),

@@ -15,7 +15,7 @@ import {
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleReceipt,
   validateSessionProvisionIntent,
-} from "@noobot/event-protocol/turn-lifecycle";
+} from "@noobot/session-protocol/turn-lifecycle";
 
 import {
   acknowledgeAuthorityEventDelivery,
@@ -70,7 +70,7 @@ test("turn lifecycle envelope requires stable identity and monotonic coordinates
   assert.equal(envelope.messageId, "turn-message-1");
 });
 
-test("turn lifecycle envelope carries only a serializable scoped persistence locator", () => {
+test("turn lifecycle envelope does not expose persistence locators", () => {
   const persistenceScope = {
     scopeId: "agent:node-1",
     parentSessionId: "root-session",
@@ -91,10 +91,9 @@ test("turn lifecycle envelope carries only a serializable scoped persistence loc
     state: TURN_STATE.PROCESSING,
     persistenceScope,
   });
-  assert.deepEqual(envelope.persistenceScope, persistenceScope);
-  assert.equal(Object.isFrozen(envelope.persistenceScope), true);
+  assert.equal("persistenceScope" in envelope, false);
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
-  assert.equal(validateTurnLifecycleEnvelope({ ...envelope, persistenceScope: {} }).valid, false);
+  assert.deepEqual(validateTurnLifecycleEnvelope({ ...envelope, persistenceScope }).errors, ["unsupported_persistence_scope"]);
 });
 
 test("authority outbox tracks attempts and acknowledges delivery idempotently", () => {

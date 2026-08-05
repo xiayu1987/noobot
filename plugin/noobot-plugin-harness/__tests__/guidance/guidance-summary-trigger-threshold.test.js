@@ -55,6 +55,25 @@ test("guidance summary threshold by turns is independent from plan update attemp
   );
 });
 
+test("guidance summary uses the canonical per-run threshold and records its source", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext({ counters: { summaryTurns: 1 } });
+  const ctx = { messages: [{ role: "user", content: "继续任务" }], agentContext };
+
+  await handler({
+    capability: "guidance",
+    point: "agent.before_llm_call",
+    ctx,
+    meta: { harness: { guidance: { summary: { turnsThreshold: 1 } } } },
+  });
+
+  const event = agentContext.payload.harness.logs.guidance.find(
+    (item = {}) => item?.event === "summary_scheduled_by_turn_threshold",
+  );
+  assert.equal(event?.detail?.triggerTurns, 1);
+  assert.equal(event?.detail?.thresholdSource, "runtime");
+});
+
 test("guidance summary threshold by chars is independent from plan update attempts", async () => {
   const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });

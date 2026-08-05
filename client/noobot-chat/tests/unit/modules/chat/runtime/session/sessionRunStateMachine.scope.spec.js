@@ -14,7 +14,7 @@ import {
   resolveRememberedStopRequestedEvent,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { reduceTurnRuntimeEvent, TURN_TRANSITION_REASON } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 
 const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, phase: TURN_PHASE.PROCESSING, state: TURN_STATE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
 const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, phase: TURN_PHASE.ACTION, state: TURN_STATE.ACTION_REQUESTING, action: "send" };

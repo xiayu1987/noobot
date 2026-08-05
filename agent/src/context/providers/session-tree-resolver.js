@@ -8,25 +8,27 @@ export async function resolveSessionTreeWithRootSessionId({
   sessionManager = null,
   userId = "",
   sessionId = "",
+  parentSessionId = "",
   now = new Date().toISOString(),
 } = {}) {
+  const rootAnchorSessionId = String(parentSessionId || sessionId || "").trim();
   if (!runtimeBasePath || !sessionManager?.getSessionTree) {
     return {
       sessionTree: { roots: [], nodes: {}, updatedAt: now },
-      rootSessionId: String(sessionId || "").trim(),
+      rootSessionId: rootAnchorSessionId,
     };
   }
   const sessionTree = await sessionManager.getSessionTree({ userId });
   const rootSessionId =
-    sessionManager?.getRootSessionId && userId && sessionId
+    sessionManager?.getRootSessionId && userId && rootAnchorSessionId
       ? await sessionManager.getRootSessionId({
           userId,
-          sessionId,
+          sessionId: rootAnchorSessionId,
           sessionTree,
         })
-      : sessionId;
+      : rootAnchorSessionId;
   return {
     sessionTree,
-    rootSessionId: String(rootSessionId || sessionId || "").trim(),
+    rootSessionId: String(rootSessionId || rootAnchorSessionId).trim(),
   };
 }

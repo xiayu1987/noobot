@@ -11,8 +11,8 @@ import { sendAndStop, continueAndStop, uniquePrompt } from "../helpers/turn-scen
 
 test("@core PBE-021 自然完成后刷新 Session", async ({ noobot, protocolCapture }, testInfo) => {
   await sendMessage(noobot.page, uniquePrompt(testInfo, "complete naturally"));
-  await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
-  await waitForNaturalCompletion(noobot.page);
+  const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
+  await waitForNaturalCompletion({ page: noobot.page, capture: protocolCapture, sessionId: noobot.sessionId, turnScopeId: send.identity.turnScopeId });
   const count = commandsForSession(protocolCapture, noobot.sessionId).filter((item) => item.commandType === "turn.send").length;
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
   expect(commandsForSession(protocolCapture, noobot.sessionId).filter((item) => item.commandType === "turn.send")).toHaveLength(count);

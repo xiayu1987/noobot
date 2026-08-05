@@ -37,7 +37,8 @@ import {
 } from "./turnRuntimeRegistryTestFixtures.js";
 import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
-import { createTurnLifecycleEnvelope, replayEventTail } from "@noobot/event-protocol";
+import { replayEventTail } from "@noobot/event-protocol";
+import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 
 const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revision, sequence }) => createTurnLifecycleEnvelope({
   eventType,
@@ -175,10 +176,11 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
       recentTerminalTurns: [],
       replacedTurns: ["turn-old", "turn-tail"].map((turnScopeId) => ({
         turnScopeId,
+        replacementDialogProcessId: "dialog-new",
         replacementTurnScopeId: "turn-new",
         replacementUserMessageId: "user-new",
         commandId: "replace-old-chain",
-        committedVersion: 7,
+        committedAggregateVersion: 7,
         replacedTurnScopeIds: ["turn-old", "turn-tail"],
         sequence: 5,
         committedAt: "2026-08-02T10:00:00.000Z",

@@ -4,3 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "@noobot/event-protocol";
+export * from "@noobot/session-protocol";

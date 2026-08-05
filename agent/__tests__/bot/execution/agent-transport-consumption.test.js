@@ -40,11 +40,11 @@ test("Agent transport consumption proves normalized fields reached their runtime
       selectedPlugins: ["harness"],
       pluginModelConfig: { harness: { enabled: true } },
       selectedConnectors: { terminal: "local" },
-      idempotencyKey: "turn-1",
-      expectedVersion: 3,
+      commandId: "turn-1",
+      expectedAggregateVersion: 3,
     },
-    turnCommand: { idempotencyKey: "turn-1", expectedVersion: 3 },
-    committedTurnResult: { version: 4 },
+    turnCommand: { commandId: "turn-1", expectedAggregateVersion: 3 },
+    committedTurnResult: { aggregateVersion: 4 },
     dispatchRuntime: {
       systemRuntime: {
         messageEventStream: { activePresentationMessageId: "assistant-message-1" },
@@ -76,9 +76,9 @@ test("Agent transport consumption proves normalized fields reached their runtime
   });
   assert.equal(result.presentation.userMessageIdConsumed, true);
   assert.equal(result.presentation.assistantMessageIdConsumed, true);
-  assert.equal(result.concurrency.idempotencyKeyConsumed, true);
-  assert.equal(result.concurrency.expectedSessionVersion, 3);
-  assert.equal(result.concurrency.expectedSessionVersionConsumed, true);
+  assert.equal(result.concurrency.commandIdConsumed, true);
+  assert.equal(result.concurrency.expectedAggregateVersion, 3);
+  assert.equal(result.concurrency.expectedAggregateVersionConsumed, true);
   assert.equal(result.concurrency.committedSessionVersion, 4);
   assert.equal(JSON.stringify(result).includes("hello"), false);
 });

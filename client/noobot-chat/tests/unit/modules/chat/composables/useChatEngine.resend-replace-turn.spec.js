@@ -34,11 +34,11 @@ describe("useChatEngine.resend replace turn", () => {
       json: async () => ({
         ok: true,
         sessionId: "resend-delete-race",
-        sessionVersion: 3,
+        aggregateVersion: 3,
         deletedTurnScopeIds: ["client-turn:old"],
         session: {
           sessionId: "resend-delete-race",
-          version: 3,
+          aggregateVersion: 3,
           revision: 3,
           messages: [],
           rawMessages: [],
@@ -72,7 +72,7 @@ describe("useChatEngine.resend replace turn", () => {
     };
     activeSession.value.messages = [user, assistant];
     activeSession.value.rawMessages = [user, assistant];
-    activeSession.value.version = 1;
+    activeSession.value.aggregateVersion = 1;
 
     const resendPromise = engine.resendMonotonicMessage(assistant, "edited question", {
       turnScopeId: "client-turn:replacement",
@@ -82,9 +82,9 @@ describe("useChatEngine.resend replace turn", () => {
     await expect(engine.deleteMonotonicMessage(user)).resolves.toBe(true);
     const resendRequest = replaceSessionTurnApi.mock.calls[0][0];
     resolveReplace(makeTurnReplacementResponse({
-      commandId: resendRequest.idempotencyKey,
+      commandId: resendRequest.commandId,
       sessionId: "resend-delete-race",
-      version: 2,
+      aggregateVersion: 2,
       replacedTurnScopeIds: ["client-turn:old"],
       replacementUser: {
         id: "replacement-user",
@@ -109,12 +109,12 @@ describe("useChatEngine.resend replace turn", () => {
       removedWorkflowRunIds: ["workflow:client-turn:old"],
       removedSessionIds: ["child-session-old"],
     }));
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = { id: "msg-user-replace-success", messageId: "msg-user-replace-success", turnScopeId, role: RoleEnum.USER, content: "edited question" };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-replace-success",
-        version: 4,
+        aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
         session: { messageCount: 1 },
@@ -139,7 +139,7 @@ describe("useChatEngine.resend replace turn", () => {
     const target = { turnScopeId: "client-turn:old", role: RoleEnum.ASSISTANT, content: "target" };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
     input.value = "draft before replace";
   
     await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
@@ -150,8 +150,8 @@ describe("useChatEngine.resend replace turn", () => {
       anchor: { turnScopeId: "client-turn:old" },
       newContent: "edited question",
       turnScopeId: expect.stringMatching(/^client-turn:/),
-      expectedVersion: 3,
-      idempotencyKey: expect.any(String),
+      expectedAggregateVersion: 3,
+      commandId: expect.any(String),
     }), expect.any(Object));
     expect(applySessionDetail.mock.calls[0][1]).toEqual({
       mode: "delete-confirmed",
@@ -207,7 +207,7 @@ describe("useChatEngine.resend replace turn", () => {
     const removedAttachment = { attachmentId: "removed", name: "removed.txt" };
     const newAttachment = { name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" };
     const localFile = new File(["new"], "new.txt", { type: "text/plain" });
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
       const canonicalAttachments = attachments.map((attachment, index) => (
         attachment.contentBase64
           ? {
@@ -227,9 +227,9 @@ describe("useChatEngine.resend replace turn", () => {
         attachments: canonicalAttachments.map(({ contentBase64, ...attachment }) => attachment),
       };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-attachments",
-        version: 4,
+        aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
       });
@@ -257,7 +257,7 @@ describe("useChatEngine.resend replace turn", () => {
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
 
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited with attachments", {
       attachments: [keptAttachment],
@@ -299,12 +299,12 @@ describe("useChatEngine.resend replace turn", () => {
   it("preserves target attachments when the editor did not explicitly remove them", async () => {
     const originalAttachment = { attachmentId: "original", name: "original.docx" };
     const localFile = new File(["new"], "new.txt", { type: "text/plain" });
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
       const replacementUser = { id: "msg-user-preserve-baseline", messageId: "msg-user-preserve-baseline", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-preserve-baseline",
-        version: 2,
+        aggregateVersion: 2,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
       });
@@ -355,12 +355,12 @@ describe("useChatEngine.resend replace turn", () => {
       mimeType: "text/plain",
       contentBase64: "YQ==",
     };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
       const replacementUser = { id: "msg-user-unchanged-attachment", messageId: "msg-user-unchanged-attachment", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-unchanged-attachment",
-        version: 4,
+        aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
       });
@@ -388,7 +388,7 @@ describe("useChatEngine.resend replace turn", () => {
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
 
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "old with attachment A", {
       attachments: [originalAttachment],
@@ -433,12 +433,12 @@ describe("useChatEngine.resend replace turn", () => {
       size: richAttachment.size,
     };
     const stream = vi.fn(async () => {});
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
       const replacementUser = { id: "msg-user-rich-raw", messageId: "msg-user-rich-raw", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-rich-raw",
-        version: 4,
+        aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
       });
@@ -466,7 +466,7 @@ describe("useChatEngine.resend replace turn", () => {
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
 
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "old with rich attachment", {
       attachments: [richAttachment],
@@ -497,12 +497,12 @@ describe("useChatEngine.resend replace turn", () => {
   it("resendMonotonicMessage preserves explicit empty attachment deletion", async () => {
     const stream = vi.fn(async () => {});
     const oldAttachment = { attachmentId: "old", name: "old.txt", parsedResultAttachmentId: "parsed-old" };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
       const replacementUser = { id: "msg-user-delete-attachments", messageId: "msg-user-delete-attachments", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-delete-attachments",
-        version: 4,
+        aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
       });
@@ -530,7 +530,7 @@ describe("useChatEngine.resend replace turn", () => {
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
 
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "old", {
       attachments: [],
@@ -550,7 +550,7 @@ describe("useChatEngine.resend replace turn", () => {
     const fetchSessionDetail = vi.fn(async () => ({
       sessionId: "local-resend-version-retry",
       sessions: [makeSession("local-resend-version-retry", {
-        version: 5,
+        aggregateVersion: 5,
         revision: 5,
         messages: [
           { turnScopeId: "client-turn:old-version", role: RoleEnum.USER, content: "old" },
@@ -558,8 +558,8 @@ describe("useChatEngine.resend replace turn", () => {
         ],
       })],
     }));
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, expectedVersion, idempotencyKey, anchor }) => {
-      if (expectedVersion === 3) {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, expectedAggregateVersion, commandId, anchor }) => {
+      if (expectedAggregateVersion === 3) {
         return {
           ok: false,
           status: 409,
@@ -570,9 +570,9 @@ describe("useChatEngine.resend replace turn", () => {
       }
       const replacementUser = { id: "msg-user-version-retry", messageId: "msg-user-version-retry", turnScopeId, role: RoleEnum.USER, content: newContent };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-version-retry",
-        version: 6,
+        aggregateVersion: 6,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
         session: { revision: 6 },
@@ -591,16 +591,16 @@ describe("useChatEngine.resend replace turn", () => {
     const stoppedAssistant = { turnScopeId: "client-turn:old-version", role: RoleEnum.ASSISTANT, content: "partial", stopState: "user_stopped" };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
     activeSession.value.revision = 3;
   
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited after conflict")).resolves.toBe(true);
   
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(2);
-    expect(replaceSessionTurnApi.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedVersion: 3 }));
-    expect(replaceSessionTurnApi.mock.calls[1][0]).toEqual(expect.objectContaining({ expectedVersion: 5 }));
-    expect(replaceSessionTurnApi.mock.calls[1][0].idempotencyKey).toBe(
-      replaceSessionTurnApi.mock.calls[0][0].idempotencyKey,
+    expect(replaceSessionTurnApi.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedAggregateVersion: 3 }));
+    expect(replaceSessionTurnApi.mock.calls[1][0]).toEqual(expect.objectContaining({ expectedAggregateVersion: 5 }));
+    expect(replaceSessionTurnApi.mock.calls[1][0].commandId).toBe(
+      replaceSessionTurnApi.mock.calls[0][0].commandId,
     );
     expect(fetchSessionDetail).toHaveBeenCalledWith("local-resend-version-retry", expect.objectContaining({
       force: true,
@@ -630,7 +630,7 @@ describe("useChatEngine.resend replace turn", () => {
     const fetchSessionDetail = vi.fn(async () => ({
       sessionId: "local-resend-version-no-change",
       sessions: [makeSession("local-resend-version-no-change", {
-        version: 3,
+        aggregateVersion: 3,
         revision: 3,
         messages: [{ turnScopeId: "client-turn:no-change", role: RoleEnum.USER, content: "old" }],
       })],
@@ -655,7 +655,7 @@ describe("useChatEngine.resend replace turn", () => {
     const stoppedAssistant = { turnScopeId: "client-turn:no-change", role: RoleEnum.ASSISTANT, content: "partial", stopState: "user_stopped" };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
     activeSession.value.revision = 3;
     input.value = "draft before failed retry";
   
@@ -672,7 +672,7 @@ describe("useChatEngine.resend replace turn", () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitAuthorityProcessing(onEvent, payload);
     });
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, commandId, anchor }) => {
       const replacementUser = {
         id: "msg-user-fresh-stopped-assistant",
         messageId: "msg-user-fresh-stopped-assistant",
@@ -681,9 +681,9 @@ describe("useChatEngine.resend replace turn", () => {
         content: newContent,
       };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-fresh-stopped-assistant",
-        version: 1,
+        aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
       });

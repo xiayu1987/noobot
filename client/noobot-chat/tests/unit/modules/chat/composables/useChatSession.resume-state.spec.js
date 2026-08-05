@@ -61,7 +61,7 @@ function terminalLifecycleSnapshot({
 }) {
   const completionCommitId = `commit:${sessionId}:${turnScopeId}:${revision}`;
   return {
-    protocolVersion: 4,
+    protocolVersion: 1,
     eventType: "turn.snapshot",
     commandId: `summary:${sessionId}:${sequence}`,
     sessionId,
@@ -118,7 +118,7 @@ function terminalResolution({ sessionId, turnScopeId, state, revision = 2, seque
       ...(startedAt ? { startedAt } : {}),
     },
     materialization: {
-      sessionVersion: 1,
+      aggregateVersion: 1,
       terminalStatus: { status: state },
       messages: [],
       completionCommitId,
@@ -150,10 +150,10 @@ describe("useChatSession summary and reconnect state", () => {
   it("replays an authoritative completed lifecycle snapshot after refresh", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
-      id: "s-snapshot", backendSessionId: "s-snapshot",
+      id: "s-snapshot", sessionId: "s-snapshot",
       turnStatuses: [{ status: "processing", turnScopeId: "t-snapshot", dialogProcessId: "dp-snapshot" }],
       turnLifecycleSnapshot: {
-        protocolVersion: 4, eventType: "turn.snapshot", commandId: "summary:s-snapshot:2",
+        protocolVersion: 1, eventType: "turn.snapshot", commandId: "summary:s-snapshot:2",
         userId: "", sessionId: "s-snapshot", sequence: 2, activeTurnScopeId: "",
         activeTurn: null, unchanged: false, generatedAt: "2026-07-10T00:00:00.000Z", replacedTurns: [],
         recentTerminalTurns: [{
@@ -185,9 +185,9 @@ describe("useChatSession summary and reconnect state", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "local-refresh-shell",
-      backendSessionId: "s-late-identity",
+      sessionId: "s-late-identity",
       turnLifecycleSnapshot: {
-        protocolVersion: 4,
+        protocolVersion: 1,
         eventType: "turn.snapshot",
         commandId: "summary:s-late-identity:2",
         userId: "",
@@ -240,9 +240,9 @@ describe("useChatSession summary and reconnect state", () => {
     const turnScopeId = "t-active-refresh";
     store.sessions = [createSessionFixture({
       id: sessionId,
-      backendSessionId: sessionId,
+      sessionId: sessionId,
       turnLifecycleSnapshot: {
-        protocolVersion: 4,
+        protocolVersion: 1,
         eventType: "turn.snapshot",
         commandId: "summary:s-active-refresh:4",
         sessionId,
@@ -312,7 +312,7 @@ describe("useChatSession summary and reconnect state", () => {
       caller: "user",
       messages: [],
       turnLifecycleSnapshot: {
-        protocolVersion: 4,
+        protocolVersion: 1,
         eventType: "turn.snapshot",
         commandId: "summary:s-async-refresh:4",
         sessionId: "s-async-refresh",
@@ -359,7 +359,7 @@ describe("useChatSession summary and reconnect state", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "local-pending",
-      backendSessionId: "",
+      sessionId: "",
       loaded: true,
       messages: [],
     })];
@@ -429,7 +429,7 @@ describe("useChatSession summary and reconnect state", () => {
 
     store.sessions.push(createSessionFixture({
       id: "s-detail-race",
-      backendSessionId: "s-detail-race",
+      sessionId: "s-detail-race",
       loaded: false,
     }));
     await session.selectSession("s-detail-race", { force: true });
@@ -445,7 +445,7 @@ describe("useChatSession summary and reconnect state", () => {
   it("does not reconcile completion from a transport channel_state before Turn hydration", async () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
-      id: "s-processing-race", backendSessionId: "s-processing-race", loaded: false, messages: [],
+      id: "s-processing-race", sessionId: "s-processing-race", loaded: false, messages: [],
     })];
     store.activeSessionId = "s-processing-race";
     const turnScopeId = "turn-processing-race";
@@ -482,7 +482,7 @@ describe("useChatSession summary and reconnect state", () => {
 
   it("keeps dialogProcessId and turnScopeId conversation state keys separate", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({ id: "s-state", backendSessionId: "s-state" })];
+    store.sessions = [createSessionFixture({ id: "s-state", sessionId: "s-state" })];
     store.activeSessionId = "s-state";
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       onReconnectData({ event: StreamEventEnum.CHANNEL_STATE, data: {
@@ -506,7 +506,7 @@ describe("useChatSession summary and reconnect state", () => {
 
   it("does not let a bare backend stopped reconnect acquire the global interaction lock", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({ id: "s-reconnect", backendSessionId: "s-reconnect" })];
+    store.sessions = [createSessionFixture({ id: "s-reconnect", sessionId: "s-reconnect" })];
     store.activeSessionId = "s-reconnect";
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       onReconnectData({ event: StreamEventEnum.CHANNEL_STATE, data: {
@@ -529,7 +529,7 @@ describe("useChatSession summary and reconnect state", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "s-stop",
-      backendSessionId: "s-stop",
+      sessionId: "s-stop",
       loaded: false,
       turnStatuses: [{ status: "user_stopped", turnScopeId: "turn-stop", dialogProcessId: "dp-stop" }],
     })];
@@ -586,7 +586,7 @@ describe("useChatSession summary and reconnect state", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "s-refresh",
-      backendSessionId: "s-refresh",
+      sessionId: "s-refresh",
       loaded: false,
       turnStatuses: [{ status: "user_stopped", turnScopeId: "turn-refresh", dialogProcessId: "dp-refresh" }],
     })];
@@ -619,7 +619,7 @@ describe("useChatSession summary and reconnect state", () => {
     async (status) => {
       const store = useChatStore();
       const sessionId = `s-${status}`;
-      store.sessions = [createSessionFixture({ id: sessionId, backendSessionId: sessionId, loaded: false })];
+      store.sessions = [createSessionFixture({ id: sessionId, sessionId: sessionId, loaded: false })];
       store.activeSessionId = sessionId;
       const terminalState = status === "completed" ? "completed" : "processing_failed";
       const session = createChatSession({ authFetch: routeAwareFetcher({
@@ -638,7 +638,7 @@ describe("useChatSession summary and reconnect state", () => {
 
   it("does not invent a turn result when completion-summary loading fails", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({ id: "s-fail", backendSessionId: "s-fail", loaded: false, turnStatuses: [] })];
+    store.sessions = [createSessionFixture({ id: "s-fail", sessionId: "s-fail", loaded: false, turnStatuses: [] })];
     store.activeSessionId = "s-fail";
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-fail").sending).toBe(false);
     expect(store.activeSession.turnStatuses || []).toEqual([]);
@@ -647,7 +647,7 @@ describe("useChatSession summary and reconnect state", () => {
   it("a newer completed message prevents an older stopped turn from becoming the primary action", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
-      id: "s-newer", backendSessionId: "s-newer",
+      id: "s-newer", sessionId: "s-newer",
       messages: [
         { role: RoleEnum.ASSISTANT, content: "old", dialogProcessId: "dp-old", turnScopeId: "turn-old" },
         { role: RoleEnum.ASSISTANT, content: "new", dialogProcessId: "dp-new", turnScopeId: "turn-new" },

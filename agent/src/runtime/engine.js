@@ -266,22 +266,23 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
           modelContext,
         }),
       });
+    } else {
+      await runAgentRuntimeHook({
+        runtime,
+        point: HOOK_POINT.AGENT.ON_ERROR,
+        context: buildHookContext(HOOK_POINT.AGENT.ON_ERROR, runtime, {
+          phase: "agent_turn",
+          status: "error",
+          startedAt,
+          endedAt: new Date(failedAtMs).toISOString(),
+          durationMs: failedAtMs - startedAtMs,
+          agentContext,
+          userMessage,
+          error,
+          modelContext,
+        }),
+      });
     }
-    await runAgentRuntimeHook({
-      runtime,
-      point: HOOK_POINT.AGENT.ON_ERROR,
-      context: buildHookContext(HOOK_POINT.AGENT.ON_ERROR, runtime, {
-        phase: "agent_turn",
-        status: "error",
-        startedAt,
-        endedAt: new Date(failedAtMs).toISOString(),
-        durationMs: failedAtMs - startedAtMs,
-        agentContext,
-        userMessage,
-        error,
-        modelContext,
-      }),
-    });
     throw error;
   }
 }

@@ -2,10 +2,32 @@
 
 场景编号和验收条件以项目根目录 `docs/browser-protocol-e2e-test-plan.zh-CN.md` 为唯一事实源。
 
-- `001`～`008`：连接、发送、附件、停止、快照和连续继续。
+- `001`～`008`：连接、发送、附件、停止、快照和连续继续；PBE-005 已合并到 PBE-007。
 - `009`～`012`：无附件、保留附件、删除附件和新增附件编辑重发。
 - `013`～`015`：刷新 reconnect、并发 reconnect 和双页面状态一致性。
-- `016`～`020`：Harness、Hook、辅助模型、Workflow 和附件传递。
+- `016`～`018`：Harness、Hook 和辅助模型。
 - `021`～`026`：Session 恢复、版本冲突、停止幂等、断网和非法协议拒绝。
-- `099`：跨域全链路总审计。
-- PBE-001～PBE-026 与 PBE-099 已全部落地；禁止提交永久 `skip` 或无业务断言的占位场景。
+- `027`～`032`：插件协议、Session 协议、本地 Session 刷新和 Workflow 生命周期。
+- `033`～`035`：Harness 各流程低轮次触发、主 Agent `task_summary` checkpoint，以及周期 `task_check` 切片/模型输入闭环。
+- PBE-019、PBE-020 已分别合并到 PBE-032、PBE-028；PBE-099 的重复组合审计已删除。
+- 当前 31 条场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
+
+### PBE-033：Harness 低轮次完整流程
+
+步骤：从 Harness 自有 UI 把 guidance analysis、summary、plan update 和 phase acceptance 的本次运行阈值分别设为 2、2、3、1，启用 planning/acceptance，并驱动五步依赖工具链。Summary 使用 2 以便在任务中段触发一次小结，避免在任务已完成边界制造“完成后继续”的语义冲突；Plan update 使用 3 是为了给初始 planning refinement 和 phase acceptance 保留调度轮次。
+
+断言：transport 中只有 `pluginModelConfig.harness` 的正式字段；planning、guidance analysis、plan revision/refinement、summary、phase acceptance、semantic validation 和 review 都形成 decision/execution 事实；阈值事件记录 `thresholdSource=runtime`；Harness summary 生成后唯一 Session checkpoint、消息 `summarized` 标记和 capability 模型观测闭合，主业务严格执行五次 `execute_script`，不得在小结后重做计算链。
+
+### PBE-034：主 Agent 低轮次阶段小结
+
+步骤：不选择 Harness，通过核心 Composer 设置 `preferences.summaryPolicy.phaseSummaryLoopTurns=2`，发送不包含小结或 `task_summary` 指令的三步依赖工具链。前两个业务工具完成后由主流程阈值自主注入阶段小结要求，小结后继续完成第三步。
+
+断言：主流程阈值不从插件配置读取；`phase_summary_required`、`summary_checkpoint_committed` 和 `turn.completed` 依次发生；唯一 checkpoint receipt 的 UID 与 turn journal 中 `summarized=true` 消息完全对应，tool-call/result 不拆对；每个 receipt 提交后的主 Agent provider 输入不再含该 receipt 已小结 UID，阶段小结 marker 不累积；全程严格产生三次 `execute_script` 和一次 `task_summary`，专用模型仍按自己的消息生产协议观测。
+
+### PBE-035 周期任务检查
+
+步骤：Composer 界面不显示任何主流程阈值控件；测试通过 Composer 正式 `update:summaryPolicy` 事件把 `taskCheckLoopTurns` 和 `phaseSummaryLoopTurns` 降低，仅用于缩短真实浏览器运行时间。执行五步顺序工具链，随后发送一条依赖上一轮结果的普通消息。
+
+步骤：用户任务明确要求模型在收到周期提示时调用 `task_check`，使真实模型 E2E 确定覆盖工具分支；这不改变生产系统提示的“按需调用”语义。
+
+断言：每次主模型输入的 `Current execution context` 小于 256 字符且不含 Session 路由身份、Session tree 或执行器安全字段；`task_check_required` 每次只对应一个模型输入 marker，下一轮不残留；`task_check` 输入严格遵循 `NOOBOT_TASK_CHECK/1`，结果只含协议回执且不保存附件；最后一次 checkpoint 前的最新检查 call/result 保持 `summarized!=true`，思考面板展示本轮最新检查摘要，下一轮主模型的 history 仍能看到该工具结果。

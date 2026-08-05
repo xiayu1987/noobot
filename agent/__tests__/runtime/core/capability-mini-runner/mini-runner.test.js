@@ -11,6 +11,7 @@ import {
   createAgentCapabilityModelInvoker,
 } from "../../../../src/runtime/capability-runner/index.js";
 import { bindAssistantMessageEventStream } from "../../../../src/events/message-event-stream.js";
+import { createTestAgentExecutionScope } from "../../../helpers/agent-execution-scope.js";
 
 function createFakeModel(responses = []) {
   let index = 0;
@@ -43,6 +44,10 @@ function createLegacyFakeModel(responses = []) {
   };
 }
 
+function createCapabilityAgentContext({ runtime = {}, tools = [] } = {}) {
+  return createTestAgentExecutionScope(runtime, { tools });
+}
+
 test("mini-runner appends assistant tool-call message before tool result", async () => {
   const first = {
     content: "need tool",
@@ -58,7 +63,7 @@ test("mini-runner appends assistant tool-call message before tool result", async
 
   const result = await invoker({
     messages: [{ role: "user", content: "go" }],
-    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
   });
 
   assert.equal(result.output, "done");
@@ -83,7 +88,7 @@ test("mini-runner supports OpenAI function-style tool calls and JSON args", asyn
     executeToolCallFn: async ({ call }) => { capturedCall = call; return { toolResultText: "ok" }; },
   });
 
-  await invoker({ ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } } });
+  await invoker({ ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) } });
   assert.equal(capturedCall.name, "echo");
   assert.deepEqual(capturedCall.args, { text: "hi" });
 });
@@ -106,7 +111,7 @@ test("mini-runner records rejected and missing tool call statuses in traces", as
   });
 
   const result = await invoker({
-    ctx: { agentContext: { payload: { tools: { registry: [{ name: "missing" }] } } } },
+    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "missing" }] }) },
   });
 
   assert.deepEqual(
@@ -132,6 +137,7 @@ test("mini-runner preserves standalone system previous-summary context", async (
 
   await invoker({
     purpose: "summary",
+    ctx: { agentContext: createCapabilityAgentContext() },
     messages: [
       { role: "user", content: "继续" },
       { role: "system", content: "<!-- plugin-current-complete-plan-checklist -->\n当前完整计划\n1. A" },
@@ -177,7 +183,7 @@ test("mini-runner sends guidance analysis response through execution event liste
       emitHookClientEvent(event, data) {
         hookEvents.push({ event, data });
       },
-      agentContext: {
+      agentContext: createCapabilityAgentContext({
         runtime: {
           systemRuntime: {
             sessionId: "s1",
@@ -201,8 +207,7 @@ test("mini-runner sends guidance analysis response through execution event liste
             },
           },
         },
-        payload: { tools: { registry: [] } },
-      },
+      }),
     },
   });
 
@@ -250,7 +255,7 @@ test("mini-runner uses harness flow for plugin flow header without changing purp
     domain: "guidance",
     ctx: {
       sessionId: "s1",
-      agentContext: {
+      agentContext: createCapabilityAgentContext({
         runtime: {
           systemRuntime: {
             sessionId: "s1",
@@ -269,8 +274,7 @@ test("mini-runner uses harness flow for plugin flow header without changing purp
           },
           eventListener: { onEvent() {} },
         },
-        payload: { tools: { registry: [] } },
-      },
+      }),
     },
   });
 
@@ -297,7 +301,7 @@ test("mini-runner keeps ordinary guidance on guidance flow header", async () => 
   await invoker({
     purpose: "guidance",
     domain: "guidance",
-    ctx: { agentContext: { payload: { tools: { registry: [] } } } },
+    ctx: { agentContext: createCapabilityAgentContext() },
   });
 
   assert.equal(capturedHeaders?.["X-Plugin-Flow"], "plugin.guidance");
@@ -334,7 +338,7 @@ test("mini-runner maps harness flow headers for main and sub workflows", async (
       purpose: item.purpose,
       pluginFlow: item.pluginFlow,
       domain: item.domain,
-      ctx: { agentContext: { payload: { tools: { registry: [] } } } },
+      ctx: { agentContext: createCapabilityAgentContext() },
     });
   }
 
@@ -371,7 +375,7 @@ test("mini-runner preserves custom flow prefix while using harness flow name", a
     purpose: "semantic",
     pluginFlow: "semantic_check",
     domain: "bot",
-    ctx: { agentContext: { payload: { tools: { registry: [] } } } },
+    ctx: { agentContext: createCapabilityAgentContext() },
   });
 
   assert.equal(capturedHeaders?.["X-Plugin-Flow"], "botPlugin.semantic_check");
@@ -393,7 +397,7 @@ test("mini-runner does not classify plain guidance as guidance analysis", async 
   await invoker({
     purpose: "guidance",
     ctx: {
-      agentContext: {
+      agentContext: createCapabilityAgentContext({
         runtime: {
           eventListener: {
             onEvent(eventPayload) {
@@ -401,8 +405,7 @@ test("mini-runner does not classify plain guidance as guidance analysis", async 
             },
           },
         },
-        payload: { tools: { registry: [] } },
-      },
+      }),
     },
   });
 
@@ -426,7 +429,7 @@ test("mini-runner does not emit harness capability response for non-guidance ana
       emitHookClientEvent(event, data) {
         emitted.push({ event, data });
       },
-      agentContext: { payload: { tools: { registry: [] } } },
+      agentContext: createCapabilityAgentContext(),
     },
   });
 
@@ -436,7 +439,7 @@ test("mini-runner does not emit harness capability response for non-guidance ana
       emitHookClientEvent(event, data) {
         emitted.push({ event, data });
       },
-      agentContext: { payload: { tools: { registry: [] } } },
+      agentContext: createCapabilityAgentContext(),
     },
   });
 
@@ -478,7 +481,7 @@ test("mini-runner emits workflow semantic output as a canonical thinking activit
     domain: "workflow",
     ctx: {
       sessionId: "session-workflow",
-      agentContext: { runtime, payload: { tools: { registry: [] } } },
+      agentContext: createCapabilityAgentContext({ runtime }),
     },
   });
 
@@ -515,9 +518,9 @@ test("mini-runner treats * as all tools in current registry", async () => {
 
   const result = await invoker({
     ctx: {
-      agentContext: {
-        payload: { tools: { registry: [{ name: "echo" }, { name: "other" }] } },
-      },
+      agentContext: createCapabilityAgentContext({
+        tools: [{ name: "echo" }, { name: "other" }],
+      }),
     },
   });
 
@@ -546,7 +549,7 @@ test("mini-runner finalizes with no-tools follow-up when max turns reached witho
   });
 
   const result = await invoker({
-    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
   });
 
   assert.equal(result.finishedReason, "max_turn_reached_finalized");
@@ -581,7 +584,7 @@ test("mini-runner caps tool turns at 5 and returns default planning output when 
   const result = await invoker({
     purpose: "planning",
     locale: "zh-CN",
-    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
   });
 
   assert.equal(executedCount, MAX_MINI_RUNNER_TOOL_TURNS);
@@ -612,6 +615,7 @@ test("mini-runner uses configured capability model name when provided", async ()
     model: "planner_model_alias",
     purpose: "planning",
     messages: [{ role: "user", content: "go" }],
+    ctx: { agentContext: createCapabilityAgentContext() },
   });
 
   assert.equal(defaultFactoryCalled, false);
@@ -634,18 +638,30 @@ test("mini-runner defaults to no-tool binding invocation", async () => {
     }),
   });
   const result = await invoker({
+    purpose: "planning",
+    domain: "planning",
+    locale: "zh-CN",
     messages: [{ role: "user", content: "go" }],
     ctx: {
-      agentContext: {
-        payload: {
-          tools: { registry: [{ name: "echo" }] },
-        },
-      },
+      agentContext: createTestAgentExecutionScope({}, {
+        tools: [{ name: "echo" }],
+      }),
     },
   });
   assert.equal(bindCalled, false);
   assert.equal(result.finishedReason, "tool_binding_disabled");
   assert.equal(result.output, "plain result");
+  assert.deepEqual(result.traces, [
+    {
+      turn: 1,
+      purpose: "planning",
+      domain: "planning",
+      model: undefined,
+      locale: "zh-CN",
+      toolCalls: [],
+      finishedReason: "tool_binding_disabled",
+    },
+  ]);
 });
 
 test("mini-runner bound dashscope requests force thinking disabled options", async () => {
@@ -658,7 +674,7 @@ test("mini-runner bound dashscope requests force thinking disabled options", asy
   });
 
   await invoker({
-    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
   });
 
   assert.equal(fakeModel.invocations[0].options.preserve_thinking, false);
@@ -681,7 +697,7 @@ test("mini-runner bound openai compatible requests use tool_reasoning_effort", a
 
   await invoker({
     model: "named-openai",
-    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
   });
 
   assert.equal(fakeModel.invocations[0].options.reasoning_effort, "medium");
@@ -697,7 +713,7 @@ test("mini-runner does not inject bound-tool overrides without bound tools", asy
   });
 
   await invoker({
-    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
   });
 
   assert.equal("preserve_thinking" in fakeModel.invocations[0].options, false);
@@ -729,7 +745,7 @@ test("mini-runner filters only summarized history before first model invoke", as
       { role: "user", content: "keep-user" },
       { role: "assistant", content: "drop-summarized", summarized: true },
     ],
-    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
   });
 
   assert.deepEqual(
@@ -787,7 +803,7 @@ test("mini-runner compacts semantic-transfer tool messages before model invoke",
         tool_call_id: "c1",
       },
     ],
-    ctx: { agentContext: { payload: { tools: { registry: [{ name: "echo" }] } } } },
+    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
   });
 
   const compactedToolPayload = JSON.parse(firstInvokeMessages.find((item) => item.role === "tool").content);

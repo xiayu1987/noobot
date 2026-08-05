@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { createTerminalResolutionCoordinator } from "../../../../../../src/modules/chat/runtime/terminalResolutionCoordinator.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/event-protocol";
+import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/session-protocol";
 import {
   applyTurnRuntimeEvent,
   applyTurnLifecycleEnvelope,
@@ -110,7 +110,7 @@ describe("terminalResolutionCoordinator", () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
-  it("carries the authoritative persistence scope into terminal resolution", async () => {
+  it("does not expose persistence location in terminal resolution", async () => {
     const fetcher = vi.fn(async () => response());
     const coordinator = createTerminalResolutionCoordinator({
       userId: "u-1",
@@ -133,8 +133,8 @@ describe("terminalResolutionCoordinator", () => {
     });
 
     const requestUrl = fetcher.mock.calls[0][0];
-    const encodedScope = new URL(requestUrl, "http://localhost").searchParams.get("persistenceScope");
-    expect(JSON.parse(encodedScope)).toEqual(persistenceScope);
+    const request = new URL(requestUrl, "http://localhost");
+    expect(request.searchParams.has("persistenceScope")).toBe(false);
   });
 
   it("caches an applied commit and only queries again for a newer target version", async () => {

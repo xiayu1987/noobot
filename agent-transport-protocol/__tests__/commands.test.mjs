@@ -22,9 +22,8 @@ test("turn send command has one canonical location for transport fields", () => 
     preferences: { streaming: true, selectedPlugins: ["planning"] },
     presentation: { userMessageId: "user-1", assistantMessageId: "assistant-1" },
     concurrency: {
-      idempotencyKey: "turn-1",
       expectedTurnRevision: 0,
-      expectedSessionVersion: 3,
+      expectedAggregateVersion: 3,
     },
     session: { createIfAbsent: false },
   });
@@ -35,7 +34,7 @@ test("turn send command has one canonical location for transport fields", () => 
   assert.equal(command.session.createIfAbsent, false);
   assert.equal(command.protocolVersion, 2);
   assert.equal(command.concurrency.expectedTurnRevision, 0);
-  assert.equal(command.concurrency.expectedSessionVersion, 3);
+  assert.equal(command.concurrency.expectedAggregateVersion, 3);
   assert.equal("config" in command, false);
   assert.equal("userId" in command, false);
   assert.equal("thinkingStartedAt" in command.preferences, false);
@@ -48,7 +47,7 @@ test("session provision intent is explicit and only valid for turn.send", () => 
     identity: { sessionId: "session-new", turnScopeId: "turn-new" },
     input: { message: "hello", attachments: [] },
     preferences: {}, presentation: {},
-    concurrency: { expectedTurnRevision: 0, expectedSessionVersion: 0 },
+    concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 0 },
     session: { createIfAbsent: true },
   });
   assert.equal(parseAgentCommand(initialSend).session.createIfAbsent, true);
@@ -61,6 +60,26 @@ test("session provision intent is explicit and only valid for turn.send", () => 
   assert.throws(() => parseAgentCommand(resend), /create_if_absent_requires_send/);
 });
 
+test("turn resend requires the dialog identity committed by session replacement", () => {
+  const resend = createTurnRunCommand({
+    commandType: AGENT_COMMAND.RESEND,
+    commandId: "turn-resend",
+    identity: {
+      sessionId: "session-1",
+      dialogProcessId: "dialog-resend",
+      turnScopeId: "turn-resend",
+    },
+    input: { message: "edited", attachments: [] },
+    preferences: {},
+    presentation: { userMessageId: "user-resend" },
+    concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 4 },
+    session: { createIfAbsent: false },
+  });
+  assert.equal(parseAgentCommand(resend).identity.dialogProcessId, "dialog-resend");
+  delete resend.identity.dialogProcessId;
+  assert.throws(() => parseAgentCommand(resend), /missing_resend_dialog_process_id/);
+});
+
 test("run concurrency separates turn revision from session version", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,
@@ -68,7 +87,7 @@ test("run concurrency separates turn revision from session version", () => {
     identity: { sessionId: "session-1", turnScopeId: "turn-1" },
     input: { message: "hello", attachments: [] },
     preferences: {}, presentation: {},
-    concurrency: { expectedTurnRevision: 0, expectedSessionVersion: 7 },
+    concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 7 },
   });
   assert.equal(parseAgentCommand(command), command);
 
@@ -129,6 +148,33 @@ test("protocol rejects ambiguous boolean strings", () => {
   });
   command.preferences.streaming = "false";
   assert.throws(() => parseAgentCommand(command), /invalid_streaming/);
+});
+
+test("run summary and task-check policy has one strict per-run transport shape", () => {
+  const command = createTurnRunCommand({
+    commandType: AGENT_COMMAND.SEND,
+    commandId: "turn-summary",
+    identity: { sessionId: "session-1", turnScopeId: "turn-summary" },
+    input: { message: "summarize after one loop", attachments: [] },
+    preferences: { summaryPolicy: { phaseSummaryLoopTurns: 1, taskCheckLoopTurns: 2 } },
+    presentation: {},
+    concurrency: {},
+  });
+
+  assert.deepEqual(command.preferences.summaryPolicy, {
+    phaseSummaryLoopTurns: 1,
+    taskCheckLoopTurns: 2,
+  });
+  assert.equal(parseAgentCommand(command), command);
+
+  command.preferences.summaryPolicy.legacyTurns = 1;
+  assert.throws(() => parseAgentCommand(command), /unknown_summary_policy_field:legacyTurns/);
+  delete command.preferences.summaryPolicy.legacyTurns;
+  command.preferences.summaryPolicy.phaseSummaryLoopTurns = 0;
+  assert.throws(() => parseAgentCommand(command), /invalid_phase_summary_loop_turns/);
+  command.preferences.summaryPolicy.phaseSummaryLoopTurns = 1;
+  command.preferences.summaryPolicy.taskCheckLoopTurns = 0;
+  assert.throws(() => parseAgentCommand(command), /invalid_task_check_loop_turns/);
 });
 
 test("protocol rejects unknown nested fields and irrelevant command sections", () => {

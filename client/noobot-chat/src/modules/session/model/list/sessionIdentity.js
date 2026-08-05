@@ -10,11 +10,8 @@ export function normalizeSessionId(value = "") {
 }
 
 export function collectSessionIdentityIds(sessionItem = null) {
-  return [
-    sessionItem?.id,
-    sessionItem?.backendSessionId,
-    sessionItem?.sessionId,
-  ].map(normalizeSessionId).filter(Boolean);
+  const sessionId = normalizeSessionId(sessionItem?.sessionId);
+  return sessionId ? [sessionId] : [];
 }
 
 export function createSessionIdentityHelpers({ sessions } = {}) {

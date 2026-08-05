@@ -18,6 +18,7 @@ test("legacy message terminal fields neither create turnStatuses nor survive nor
   const session = normalizeSessionEntity({
     sessionId: "s1",
     messages: [{
+      messageUid: "sm_noncanonical_terminal_user",
       role: "user",
       content: "legacy",
       turnScopeId: "t1",
@@ -39,7 +40,7 @@ test("legacy message terminal fields neither create turnStatuses nor survive nor
 test("summary projects explicit turnStatuses without message fallback", () => {
   const session = normalizeSessionEntity({
     sessionId: "s1",
-    messages: [{ role: "user", content: "hello", turnScopeId: "t1" }],
+    messages: [{ messageUid: "sm_timeout_user", role: "user", content: "hello", turnScopeId: "t1", dialogProcessId: "dp1" }],
     turnStatuses: [{
       turnScopeId: "t1",
       status: "timeout",
@@ -60,7 +61,7 @@ test("summary projects an authoritative lifecycle snapshot for refresh replay", 
   const session = normalizeSessionEntity({
     sessionId: "s-lifecycle",
     updatedAt: now(),
-    messages: [{ role: "assistant", content: "done", turnScopeId: "t1" }],
+    messages: [{ messageUid: "sm_lifecycle_assistant", role: "assistant", content: "done", turnScopeId: "t1", dialogProcessId: "dp1" }],
     turnLifecycle: {
       sequence: 2,
       activeTurnScopeId: "",
@@ -103,6 +104,7 @@ test("synthetic status placeholders cannot enter session persistence or summary"
   const session = normalizeSessionEntity({
     sessionId: "s-placeholder",
     messages: [{
+      messageUid: "sm_placeholder_assistant",
       role: "assistant",
       content: "本轮异常停止",
       turnScopeId: "t1",

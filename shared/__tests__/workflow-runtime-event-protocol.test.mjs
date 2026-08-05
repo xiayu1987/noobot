@@ -21,7 +21,7 @@ test("canonicalizes every turn-scoped workflow snapshot fact", () => {
       parentSessionId: "parent-session",
       workflowRunId: "run-1",
       nodeExecutionId: "node-1",
-      snapshotVersion: 1,
+      aggregateVersion: 1,
       turnStatuses: [{ turnScopeId: "workflow-node_node-1", status: "completed" }],
       turnTimings: [{ turnScopeId: "workflow-node_node-1", thinkingStartedAt: "2026-01-01T00:00:00.000Z" }],
       messages: [{ id: "message-1", turnScopeId: "workflow-node_node-1" }],
@@ -100,7 +100,7 @@ test("requires an authoritative version for workflow session snapshots", () => {
     "missing_snapshot_workflow_run",
     "missing_snapshot_node_execution",
     "missing_snapshot_parent_session",
-    "invalid_snapshot_version",
+    "invalid_aggregate_version",
   ]);
   assert.equal(missingVersion.sequence, 0);
 
@@ -111,7 +111,7 @@ test("requires an authoritative version for workflow session snapshots", () => {
       parentSessionId: "parent-session-1",
       workflowRunId: "workflow-run-1",
       nodeExecutionId: "node-execution-1",
-      snapshotVersion: 7,
+      aggregateVersion: 7,
       messages: [],
     },
   });

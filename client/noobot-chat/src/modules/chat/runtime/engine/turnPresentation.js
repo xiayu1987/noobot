@@ -17,19 +17,16 @@ function text(value = "") {
 }
 
 function sessionIdFromSession(session = {}) {
-  return text(session?.backendSessionId || session?.sessionId || session?.id);
+  return text(session?.sessionId);
 }
 
 function effectiveMessageSessionId(message = {}, fallbackSessionId = "") {
-  return text(fallbackSessionId) || getMessageSessionId(message);
+  return getMessageSessionId(message) || text(fallbackSessionId);
 }
 
 function sessionIdentitySet(session = {}) {
-  return new Set([
-    session?.backendSessionId,
-    session?.sessionId,
-    session?.id,
-  ].map(text).filter(Boolean));
+  const sessionId = sessionIdFromSession(session);
+  return new Set(sessionId ? [sessionId] : []);
 }
 
 function turnKey(sessionId = "", turnScopeId = "") {

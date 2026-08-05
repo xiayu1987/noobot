@@ -93,7 +93,6 @@ export function createTerminalResolutionCoordinator({
       entry = {
         sessionId: "",
         turnScopeId: "",
-        persistenceScope: null,
         inFlight: null,
         timer: null,
         targetVersion: {},
@@ -126,9 +125,6 @@ export function createTerminalResolutionCoordinator({
     const entry = getEntry(key);
     entry.sessionId = session;
     entry.turnScopeId = scope;
-    if (options.persistenceScope && typeof options.persistenceScope === "object") {
-      entry.persistenceScope = options.persistenceScope;
-    }
     const requestedVersion = versionOf(options);
     onDiscovery({
       sessionId: session, turnScopeId: scope, source: options.source || "unknown",
@@ -188,8 +184,6 @@ export function createTerminalResolutionCoordinator({
     trace("stateMachine.terminal.fetch.start", {
       sessionId: session, turnScopeId: scope, source: options.source || "unknown", retry,
       revision: Number(requestedVersion.revision || 0), sequence: Number(requestedVersion.sequence || 0),
-      persistenceScopeId: clean(entry.persistenceScope?.scopeId),
-      persistenceParentSessionId: clean(entry.persistenceScope?.parentSessionId),
     });
     const request = Promise.resolve()
       .then(() => resolveTurnTerminalStateApi({
@@ -197,7 +191,6 @@ export function createTerminalResolutionCoordinator({
         sessionId: session,
         turnScopeId: scope,
         commandId,
-        persistenceScope: entry.persistenceScope,
       }, { fetcher }))
       .then((response) => {
         trace("stateMachine.terminal.fetch.result", {
@@ -307,7 +300,6 @@ export function createTerminalResolutionCoordinator({
       commandId: event.commandId || "",
       source: "realtime_notification",
       ...versionOf(event.raw || event),
-      persistenceScope: event.persistenceScope || event.raw?.persistenceScope || null,
     });
   };
 

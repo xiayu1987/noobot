@@ -30,6 +30,44 @@ function toolTimeline(count = 1, prefix = "cmd") {
   });
 }
 
+function taskCheckTimeline(abstract = "目标未漂移") {
+  const output = JSON.stringify({
+    toolName: "task_check",
+    ok: true,
+    protocolVersion: 1,
+    summary: {
+      state: "CONTINUE",
+      abstract,
+      nextAction: "继续验证",
+      contentHash: `sha256:${"a".repeat(64)}`,
+    },
+  });
+  return [{
+    key: "call:task-check-1",
+    toolCallId: "task-check-1",
+    tool: "task_check",
+    status: "completed",
+    args: { checkContent: "NOOBOT_TASK_CHECK/1" },
+    result: output,
+    call: {
+      eventId: "task-check-call-event",
+      sequence: 1,
+      sequenceScopeId: "message-task-check",
+      sequenceDomain: "message-event",
+      authority: "authoritative",
+      log: { event: "tool_call", type: "tool_call", toolCallId: "task-check-1", text: "task_check" },
+    },
+    resultEvent: {
+      eventId: "task-check-result-event",
+      sequence: 2,
+      sequenceScopeId: "message-task-check",
+      sequenceDomain: "message-event",
+      authority: "authoritative",
+      log: { event: "tool_result", type: "tool_result", toolCallId: "task-check-1", text: "task_check" },
+    },
+  }];
+}
+
 describe("ThinkingPanel canonical execution timeline", () => {
   beforeEach(() => localStorage.clear());
   afterEach(() => vi.useRealTimers());
@@ -41,6 +79,27 @@ describe("ThinkingPanel canonical execution timeline", () => {
       "调用：cmd-1", "返回：cmd-1",
     ]);
     expect(wrapper.findAll(".execution-log-detail")).toHaveLength(0);
+  });
+
+  it("renders the latest strict task_check receipt as a dedicated thinking block", () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      pending: false,
+      toolTimeline: taskCheckTimeline("当前目标清晰且没有偏移"),
+    });
+    const block = wrapper.find('[data-thinking-block="task-check"]');
+    expect(block.exists()).toBe(true);
+    expect(block.text()).toContain("Task Check");
+    expect(block.text()).toContain("当前目标清晰且没有偏移");
+  });
+
+  it("does not render task_check data that violates the canonical receipt", () => {
+    const timeline = taskCheckTimeline();
+    const payload = JSON.parse(timeline[0].result);
+    payload.summary.details = "not allowed in receipt";
+    timeline[0].result = JSON.stringify(payload);
+    const wrapper = mountThinkingPanel({ role: "assistant", pending: false, toolTimeline: timeline });
+    expect(wrapper.find('[data-thinking-block="task-check"]').exists()).toBe(false);
   });
 
   it("reacts to canonical timeline increments after refresh", async () => {

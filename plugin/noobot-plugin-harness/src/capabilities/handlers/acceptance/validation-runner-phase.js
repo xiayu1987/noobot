@@ -189,7 +189,7 @@ export async function runPhaseAcceptanceBySeparateModel(
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
-        await appendCapabilityModelTraceLog(ctx, meta, {
+        await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.ACCEPTANCE,
           purpose: "phase_acceptance",
           response: retryResponse,
@@ -321,7 +321,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
-        await appendCapabilityModelTraceLog(ctx, meta, {
+        await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.ACCEPTANCE,
           purpose: "phase_acceptance_before_final",
           response: retryResponse,

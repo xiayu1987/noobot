@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TURN_EVENT, validateTurnLifecycleEnvelope } from "./turn-lifecycle-protocol.mjs";
-
 export const EVENT_DEFINITION_CATEGORY = Object.freeze({
   AUTHORITY: "authority",
   INTERACTION: "interaction",
@@ -13,7 +11,6 @@ export const EVENT_DEFINITION_CATEGORY = Object.freeze({
 });
 
 export const EVENT_TYPE = Object.freeze({
-  ...TURN_EVENT,
   TURN_LIFECYCLE: "turn_lifecycle",
   TURN_SNAPSHOT: "turn_snapshot",
   TRANSPORT_READY: "transport_ready",
@@ -40,11 +37,6 @@ export const EVENT_TYPE = Object.freeze({
 });
 
 const definitions = new Map([
-  ...Object.values(TURN_EVENT).map((eventType) => [eventType, {
-    eventType,
-    category: EVENT_DEFINITION_CATEGORY.AUTHORITY,
-    authoritative: true,
-  }]),
   [EVENT_TYPE.INTERACTION_REQUEST, {
     eventType: EVENT_TYPE.INTERACTION_REQUEST,
     category: EVENT_DEFINITION_CATEGORY.INTERACTION,
@@ -107,9 +99,5 @@ export function validateRegisteredEvent(event = {}) {
   const eventType = event?.eventType || event?.identity?.eventType;
   const typeResult = validateEventType(eventType);
   if (!typeResult.valid) return typeResult;
-  if (typeResult.definition.authoritative) {
-    const result = validateTurnLifecycleEnvelope(event);
-    return { ...result, definition: typeResult.definition };
-  }
   return { valid: true, errors: [], definition: typeResult.definition };
 }

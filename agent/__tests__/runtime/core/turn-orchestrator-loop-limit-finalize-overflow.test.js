@@ -182,7 +182,7 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
 });
 
-test("phaseSummaryNoToolsNextTurn enforces one no-tools round even when tools are available", async () => {
+test("canonical main-flow instruction enforces one no-tools round even when tools are available", async () => {
   let toolInvokeCount = 0;
   const tool = {
     name: "execute_script",
@@ -201,7 +201,13 @@ test("phaseSummaryNoToolsNextTurn enforces one no-tools round even when tools ar
   ]);
 
   const modelState = createModelState(llm);
-  modelState.runtime.systemRuntime.phaseSummaryNoToolsNextTurn = true;
+  modelState.runtime.systemRuntime.mainFlowControlInstruction = {
+    action: "final_no_tools_turn",
+    reason: "task_summary_complete",
+    source: "task_summary",
+    requestedAt: new Date().toISOString(),
+    detail: {},
+  };
   const result = await runFunctionCallLoop({
     modelState,
     loopState: createLoopState({ maxTurns: 3, tool }),
@@ -211,7 +217,7 @@ test("phaseSummaryNoToolsNextTurn enforces one no-tools round even when tools ar
   assert.equal(result.output, "overflow fallback answer");
   assert.equal(toolInvokeCount, 0);
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "none");
-  assert.equal(modelState.runtime.systemRuntime.phaseSummaryNoToolsNextTurn, false);
+  assert.equal(modelState.runtime.systemRuntime.mainFlowControlInstruction, undefined);
 });
 
 test("main flow final-no-tools instruction from before_llm hook skips with-tools model call", async () => {
@@ -241,7 +247,7 @@ test("main flow final-no-tools instruction from before_llm hook skips with-tools
       reason: "context_overflow_after_summary",
       source: "harness_summary_overflow",
     };
-  });
+  }, { id: "test-main-flow-final-instruction" });
   modelState.runtime.hookManager = hookManager;
 
   const result = await runFunctionCallLoop({

@@ -232,7 +232,7 @@ export async function runPlanUpdateAfterSummary(
       domain: CAPABILITY_DOMAIN.PLANNING,
       appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
-        await appendCapabilityModelTraceLog(ctx, meta, {
+        await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.PLANNING,
           purpose: "planning_revision",
           response: retryResponse,
@@ -483,7 +483,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
-        await appendCapabilityModelTraceLog(ctx, meta, {
+        await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.GUIDANCE,
           purpose,
           pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,

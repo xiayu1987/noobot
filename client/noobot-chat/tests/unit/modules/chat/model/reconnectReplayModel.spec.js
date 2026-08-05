@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { createReplayBatch, createTurnLifecycleSnapshot } from "@noobot/event-protocol";
+import { createReplayBatch } from "@noobot/event-protocol";
+import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   findLatestPendingAssistantAfterLastUser,

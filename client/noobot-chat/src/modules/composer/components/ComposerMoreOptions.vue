@@ -26,6 +26,7 @@ const props = defineProps({
   memoryModel: { type: String, default: "" },
   modelOptions: { type: Array, default: () => [] },
   pluginModelConfig: { type: Object, default: () => ({}) },
+  summaryPolicy: { type: Object, default: () => ({}) },
   resolveScenarioLabel: { type: Function, required: true },
 });
 
@@ -41,6 +42,7 @@ const emit = defineEmits([
   "update:selectedModel",
   "update:memoryModel",
   "update:pluginModelConfig",
+  "update:summaryPolicy",
 ]);
 
 const { translate } = useLocale();

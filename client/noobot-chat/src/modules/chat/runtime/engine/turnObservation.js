@@ -16,7 +16,6 @@ export function createTurnObservation({
   authority = "none",
   applied = false,
   reason = "",
-  aliasPromoted = false,
   finalState = "",
   messageEffect = "none",
   ...details
@@ -31,7 +30,6 @@ export function createTurnObservation({
     authority: text(authority || "none") || "none",
     applied: applied === true,
     reason: text(reason),
-    aliasPromoted: aliasPromoted === true,
     finalState: text(finalState),
     messageEffect: text(messageEffect || "none") || "none",
     ...details,

@@ -12,7 +12,43 @@ import {
   normalizeAttachmentMetas,
   normalizeAttachmentParsedResultMeta,
   normalizeAttachmentTurnScopeMeta,
+  projectCanonicalAttachmentIdentity,
 } from "../../src/artifacts/meta-ops.js";
+
+test("projectCanonicalAttachmentIdentity emits only immutable authority fields", () => {
+  assert.deepEqual(projectCanonicalAttachmentIdentity({
+    attachmentId: "att_1",
+    sessionId: "s1",
+    attachmentSource: "user",
+    path: "/runtime/att_1.txt",
+    contentSha256: "sha_1",
+    name: "display.txt",
+    downloadUrl: "/api/attachments/att_1",
+    previewUrl: "",
+    parsedResult: { path: "/runtime/parsed.md" },
+  }, "s1"), {
+    attachmentId: "att_1",
+    sessionId: "s1",
+    attachmentSource: "user",
+    path: "/runtime/att_1.txt",
+    contentSha256: "sha_1",
+  });
+});
+
+test("projectCanonicalAttachmentIdentity rejects aliases and incomplete ownership", () => {
+  for (const attachment of [
+    { id: "att_1", sessionId: "s1", attachmentSource: "user", path: "/runtime/att_1.txt" },
+    { attachmentId: "att_1", attachmentSource: "user", path: "/runtime/att_1.txt" },
+    { attachmentId: "att_1", sessionId: "s2", attachmentSource: "user", path: "/runtime/att_1.txt" },
+    { attachmentId: "att_1", sessionId: "s1", path: "/runtime/att_1.txt" },
+    { attachmentId: "att_1", sessionId: "s1", attachmentSource: "user", relativePath: "runtime/att_1.txt" },
+  ]) {
+    assert.throws(
+      () => projectCanonicalAttachmentIdentity(attachment, "s1"),
+      (error) => error?.errorCode === "INVALID_CANONICAL_ATTACHMENT",
+    );
+  }
+});
 
 test("normalizeAttachmentMetas accepts legacy aliases but emits canonical attachment fields", () => {
   const [meta] = normalizeAttachmentMetas([

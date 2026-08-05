@@ -75,6 +75,11 @@ export async function summarizeByModel({
     userConfig,
     streaming: false,
     context: { runtime },
+    invocation: {
+      flow: "tool.web2data",
+      purpose: "content_extraction",
+      domain: "data_processing",
+    },
   });
   const userPrompt =
     prompt ||

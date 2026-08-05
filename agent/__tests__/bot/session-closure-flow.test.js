@@ -55,7 +55,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         attachments: payload.attachments || [],
       };
       persistedTurns.push(userMessage);
-      return { userMessage, attachments: userMessage.attachments, version: 1 };
+      return { userMessage, attachments: userMessage.attachments, aggregateVersion: 1 };
     },
     async saveCurrentTurnTasks(payload = {}) {
       savedCurrentTurnTasksPayload = payload;
@@ -371,7 +371,7 @@ test("continue mode closed-loop: should build continue context and persist paren
         attachments: payload.attachments || [],
       };
       persistedTurns.push(userMessage);
-      return { userMessage, attachments: userMessage.attachments, version: 1 };
+      return { userMessage, attachments: userMessage.attachments, aggregateVersion: 1 };
     },
     async saveCurrentTurnTasks() {},
   };

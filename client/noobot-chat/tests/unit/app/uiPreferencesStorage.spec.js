@@ -14,6 +14,7 @@ import {
   persistSelectedModelPreference,
   persistMemoryModelPreference,
   normalizeAvailableBotScenarios,
+  normalizePluginModelConfig,
   readPluginModelConfigPreference,
   readSelectedModelPreference,
   readStorageValue,
@@ -95,6 +96,20 @@ describe("ui preferences storage", () => {
     }).harness.capabilityProfile).toEqual({
       planning: { enabled: true },
       acceptance: { enabled: true },
+    });
+  });
+
+  it("preserves numeric plugin configuration values", () => {
+    expect(normalizePluginModelConfig({
+      harness: {
+        guidance: { summary: { turnsThreshold: 1 } },
+        thresholds: [1, 2],
+      },
+    })).toEqual({
+      harness: {
+        guidance: { summary: { turnsThreshold: 1 } },
+        thresholds: [1, 2],
+      },
     });
   });
 

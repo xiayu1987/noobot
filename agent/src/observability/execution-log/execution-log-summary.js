@@ -47,6 +47,7 @@ const TOOL_LABELS = {
   call_service: "调用外部服务",
   request_help: "请求帮助",
   task_summary: "提交阶段小结",
+  task_check: "提交任务检查",
 };
 
 function getToolLabel(tool = "") {

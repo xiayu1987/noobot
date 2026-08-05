@@ -5,6 +5,7 @@
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { validateRegisteredEvent } from "@noobot/event-protocol";
+import { validateSessionEvent } from "@noobot/session-protocol";
 import { normalizeReplayCacheKey } from "./replayCache.js";
 import { _trimStr } from "./utils.js";
 import { normalizeTurnTransportEnvelope } from "../engine/turnTransportEnvelope.js";
@@ -20,7 +21,6 @@ export async function applyReconnectEventReplay({
   data: incomingData,
   replayCache,
   isCurrentActiveSession,
-  isCurrentActiveDialogProcess,
   consumeReplayCacheForSession,
   applyReconnectMessagesToActiveSession,
   applyTurnLifecycleEnvelope,
@@ -83,37 +83,35 @@ export async function applyReconnectEventReplay({
     const dialogProcessId = _trimStr(data?.dialogProcessId || data?.messageEvent?.dialogProcessId);
     const sessionId = _trimStr(data?.sessionId || data?.messageEvent?.sessionId);
     const turnScopeId = _trimStr(data?.turnScopeId || data?.messageEvent?.turnScopeId);
-    if (sessionId && isCurrentActiveSession(sessionId)) {
+    if (!sessionId || !turnScopeId) {
+      return { applied: false, reason: "message_event_missing_turn_identity" };
+    }
+    if (isCurrentActiveSession(sessionId)) {
       await consumeReplayCacheForSession(sessionId);
       await applyReconnectMessagesToActiveSession([{ event: replayEvent, data }], dialogProcessId, {
         turnScopeId,
       });
       return { applied: true, reason: "message_event_replayed" };
     }
-    if (!sessionId && dialogProcessId && isCurrentActiveDialogProcess?.(dialogProcessId)) {
-      await applyReconnectMessagesToActiveSession([{ event: replayEvent, data }], dialogProcessId, {
-        turnScopeId,
-      });
-      return { applied: true, reason: "message_event_replayed" };
-    }
-    if (sessionId) {
-      const replayKey = normalizeReplayCacheKey(dialogProcessId, sessionId, turnScopeId);
-      if (!replayCache[sessionId]) replayCache[sessionId] = {};
-      if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
-      replayCache[sessionId][replayKey].push({ event: replayEvent, data });
-      return { applied: false, reason: "message_event_cached" };
-    }
-    return { applied: false, reason: "message_event_missing_identity" };
+    const replayKey = normalizeReplayCacheKey(sessionId, turnScopeId);
+    if (!replayCache[sessionId]) replayCache[sessionId] = {};
+    if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
+    replayCache[sessionId][replayKey].push({ event: replayEvent, data });
+    return { applied: false, reason: "message_event_cached" };
   }
   const { routed: runtimeRouted, result: runtimeResult } = routeRuntimeEvent();
   if (runtimeRouted) return runtimeResult || { applied: true };
   // Let registered extensions consume their own events before applying the
   // core registry. Core authority events are excluded by the router, so they
   // still always pass through the authoritative protocol validation below.
-  const protocolResult = validateRegisteredEvent({
+  const protocolEvent = {
     eventType: replayEvent,
     ...(data && typeof data === "object" ? data : {}),
-  });
+  };
+  const sessionResult = validateSessionEvent(protocolEvent);
+  const protocolResult = sessionResult.recognized
+    ? sessionResult
+    : validateRegisteredEvent(protocolEvent);
   if (!protocolResult.valid) {
     return { applied: false, reason: "unsupported_replay_event", errors: protocolResult.errors };
   }
@@ -159,15 +157,8 @@ export async function applyReconnectEventReplay({
     return;
   }
 
-  if (!sessionId && dialogProcessId && isCurrentActiveDialogProcess?.(dialogProcessId)) {
-    await applyReconnectMessagesToActiveSession([{ event: replayEvent, data }], dialogProcessId, {
-      turnScopeId,
-    });
-    return;
-  }
-
-  if (sessionId) {
-    const replayKey = normalizeReplayCacheKey(dialogProcessId, sessionId, turnScopeId);
+  if (sessionId && turnScopeId) {
+    const replayKey = normalizeReplayCacheKey(sessionId, turnScopeId);
     if (!replayCache[sessionId]) replayCache[sessionId] = {};
     if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
     replayCache[sessionId][replayKey].push({ event: replayEvent, data });

@@ -101,6 +101,7 @@ const {
   selectedModel,
   memoryModel,
   pluginModelConfig,
+  summaryPolicy,
   selectedPlugins,
   availableBotScenarios,
   availableModelOptions,
@@ -115,6 +116,7 @@ const {
   onSelectedModelUpdate,
   onMemoryModelUpdate,
   onPluginModelConfigUpdate,
+  onSummaryPolicyUpdate,
   onSelectedPluginsUpdate,
   onUserIdUpdate,
 } = useAppShellPreferences();
@@ -142,7 +144,7 @@ const {
       navigateToLastMessage: false,
       forceCurrentSessionRerender: true,
     });
-    await applyPseudoRoute(route);
+    await applyInitialPseudoRoute(route);
     await locateDoneMessageAfterRender();
     chatWebSocketClient.connect();
     reconnectActiveSession({ force: true });
@@ -217,6 +219,7 @@ const {
   selectedModel,
   memoryModel,
   pluginModelConfig,
+  summaryPolicy,
   selectedPlugins,
   connected,
   ensureConnected,
@@ -311,7 +314,7 @@ const {
 
 const {
   parsePseudoRouteFromLocation,
-  applyPseudoRoute,
+  applyInitialPseudoRoute,
   pushPseudoRoute,
   replacePseudoRoute,
   addPseudoRoutePopStateListener,
@@ -409,12 +412,8 @@ const {
 async function onAppMounted() {
   addPseudoRoutePopStateListener();
   const autoConnected = await tryAutoConnect();
-  if (autoConnected) {
-    replacePseudoRoute();
-    return;
-  }
+  if (autoConnected || connected.value) return;
   await initSessionsAfterMount({ navigateToLastMessage: false });
-  replacePseudoRoute();
   await locateDoneMessageAfterRender();
 }
 
@@ -515,6 +514,7 @@ const drawerPanels = computed(() =>
       :memory-model="memoryModel"
       :available-model-options="availableModelOptions"
       :plugin-model-config="pluginModelConfig"
+      :summary-policy="summaryPolicy"
       :available-bot-scenarios="availableBotScenarios"
       :available-plugins="availablePlugins"
       :selected-plugins="selectedPlugins"
@@ -556,6 +556,7 @@ const drawerPanels = computed(() =>
       @update:selected-model="onSelectedModelUpdate"
       @update:memory-model="onMemoryModelUpdate"
       @update:plugin-model-config="onPluginModelConfigUpdate"
+      @update:summary-policy="onSummaryPolicyUpdate"
       @update:selected-plugins="onSelectedPluginsUpdate"
       @update:more-panel-visible="handleComposerMorePanelVisibleUpdate"
       @clear-uploads="clearUploads"

@@ -10,8 +10,6 @@ import {
   resolveBoundToolModelRequestOverrides,
   resolveNonThinkingCallOverrides,
 } from "./tool-choice-strategy.js";
-import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
-import { summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
 
 export function createBoundLlmToolChoiceInvoker({
   adaptedBinding,
@@ -62,12 +60,6 @@ export function createBoundLlmToolChoiceInvoker({
           boundToolOverrides,
         );
         const modelMessages = filterForModelContext(messages);
-        emitModelContextTrace(runtime, "llm_invoke_messages", {
-          turn,
-          mode: invokeMode,
-          toolChoice: effectiveToolChoice,
-          messages: summarizeDiagnosticMessages(modelMessages),
-        });
         return effectiveBoundLlm.invoke(modelMessages, {
           callbacks,
           signal: abortSignal,

@@ -9,9 +9,8 @@ function normalizeSessionId(sessionId = "") {
 }
 
 function getSessionIdentityList(sessionItem = {}) {
-  return [sessionItem?.id, sessionItem?.backendSessionId]
-    .map(normalizeSessionId)
-    .filter(Boolean);
+  const sessionId = normalizeSessionId(sessionItem?.sessionId);
+  return sessionId ? [sessionId] : [];
 }
 
 function buildSessionIdentityMap(sessionItems = []) {
@@ -36,7 +35,7 @@ function findSessionByAnyId(sessionItems = [], sessionId = "") {
 
 function resolveSessionPrimaryId(sessionItems = [], sessionId = "") {
   const targetSession = findSessionByAnyId(sessionItems, sessionId);
-  return normalizeSessionId(targetSession?.id || sessionId);
+  return normalizeSessionId(targetSession?.sessionId || sessionId);
 }
 
 function isSessionIdInIdentity(sessionItem = {}, sessionId = "") {
@@ -47,7 +46,7 @@ function isSessionIdInIdentity(sessionItem = {}, sessionId = "") {
 
 function getActiveSessionIdCandidates({ activeSession, activeSessionId } = {}) {
   return new Set(
-    [activeSession?.backendSessionId, activeSession?.id, activeSessionId]
+    [activeSession?.sessionId, activeSessionId]
       .map(normalizeSessionId)
       .filter(Boolean),
   );
@@ -70,32 +69,20 @@ function isCurrentActiveSessionId({
   );
 }
 
-function promoteSessionIdentityToBackendId({
+function confirmSessionIdentity({
   sessionItem,
-  backendSessionId = "",
+  sessionId = "",
   activeSessionId = "",
 } = {}) {
-  const normalizedBackendSessionId = normalizeSessionId(backendSessionId);
-  if (!sessionItem || !normalizedBackendSessionId) {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  if (!sessionItem || !normalizedSessionId) {
     return { changed: false, nextActiveSessionId: activeSessionId };
   }
 
-  const previousSessionId = normalizeSessionId(sessionItem.id);
-  const wasActive = getSessionIdentityList(sessionItem).includes(
-    normalizeSessionId(activeSessionId),
-  );
-
-  sessionItem.backendSessionId = normalizedBackendSessionId;
-  sessionItem.isLocal = false;
-
-  if (previousSessionId !== normalizedBackendSessionId) {
-    sessionItem.id = normalizedBackendSessionId;
-    return {
-      changed: true,
-      nextActiveSessionId: wasActive ? normalizedBackendSessionId : activeSessionId,
-    };
+  if (sessionItem.sessionId !== normalizedSessionId) {
+    throw new Error("session identity mismatch");
   }
-
+  sessionItem.isLocal = false;
   return { changed: false, nextActiveSessionId: activeSessionId };
 }
 
@@ -107,6 +94,6 @@ export {
   isCurrentActiveSessionId,
   isSessionIdInIdentity,
   normalizeSessionId,
-  promoteSessionIdentityToBackendId,
+  confirmSessionIdentity,
   resolveSessionPrimaryId,
 };

@@ -57,8 +57,10 @@ export async function resendAndStop({ page, capture, sessionId, content, attachm
   await editLatestUserMessage(page, content, { attachment, removeAttachments });
   const resend = await waitForCommand(capture, sessionId, "turn.resend", beforeCommands);
   const processing = await waitForLifecycle(capture, sessionId, "turn.processing_started", 0, resend.identity.turnScopeId);
+  expect(resend.identity.dialogProcessId).toBeTruthy();
+  expect(processing.dialogProcessId).toBe(resend.identity.dialogProcessId);
   await stopActiveTurn(page);
   await waitForLifecycle(capture, sessionId, "turn.stop_completed", 0, resend.identity.turnScopeId);
   assertTurnLifecycle(capture, sessionId, resend.identity.turnScopeId);
-  return { ...resend, identity: { ...resend.identity, dialogProcessId: processing.dialogProcessId } };
+  return resend;
 }

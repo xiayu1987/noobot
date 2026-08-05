@@ -15,7 +15,8 @@ import { applyTurnRuntimeEvent } from "../../../../../src/modules/chat/runtime/r
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { clearExtensionRegistry } from "../../../../../src/extensions/extension-registry.js";
-import { createReplayBatch, createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/event-protocol";
+import { createReplayBatch } from "@noobot/event-protocol";
+import { createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/session-protocol";
 
 afterEach(() => {
   vi.useRealTimers();

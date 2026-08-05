@@ -34,8 +34,7 @@ function baseSession(overrides = {}) {
   return {
     sessionId: "s1",
     parentSessionId: "",
-    version: 2,
-    revision: 2,
+    aggregateVersion: 2,
     messages: [
       { turnScopeId: "scope-keep", role: "user", content: "keep", dialogProcessId: "dp-keep" },
       { role: "user", content: "old", dialogProcessId: "dp-old", turnScopeId: "scope-old" },
@@ -78,8 +77,8 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
     anchor: { turnScopeId: "scope-old" },
     newContent: "edited",
     turnScopeId: "turn-scope-new",
-    expectedVersion: 2,
-    idempotencyKey: "idem-1",
+    expectedAggregateVersion: 2,
+    commandId: "idem-1",
   });
 
   assert.deepEqual(Object.keys(result).sort(), ["deduplicated", "session", "turnReplacement"]);
@@ -88,8 +87,9 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
     eventType: "turn.replaced",
     commandId: "idem-1",
     sessionId: "s1",
-    committedVersion: 3,
+    committedAggregateVersion: 3,
     replacedTurnScopeIds: ["scope-old", "scope-tail"],
+    replacementDialogProcessId: saved[0].messages[1].dialogProcessId,
     replacementTurnScopeId: "turn-scope-new",
     replacementUserMessageId: saved[0].messages[1].messageId,
     committedAt: "2026-06-22T00:00:00.000Z",
@@ -102,9 +102,12 @@ test("SessionMessageService.replaceTurn matches turnScopeId and returns snapshot
   assert.equal(saved[0].messages[1].messageId, saved[0].messages[1].messageUid);
   assert.equal(saved[0].messages[1].id, saved[0].messages[1].messageUid);
   assert.equal(saved[0].messages[1].turnScopeId, "turn-scope-new");
-  assert.equal(saved[0].messages[1].dialogProcessId, "");
-  assert.equal(saved[0].version, 3);
-  assert.equal(saved[0].revision, 3);
+  assert.match(saved[0].messages[1].dialogProcessId, /^[0-9a-f-]{36}$/);
+  assert.equal(
+    saved[0].messages[1].dialogProcessId,
+    result.turnReplacement.replacementDialogProcessId,
+  );
+  assert.equal(saved[0].aggregateVersion, 3);
   assert.equal(saved[0].updatedAt, "2026-06-22T00:00:00.000Z");
   assert.deepEqual(Object.keys(saved[0].turnLifecycle.turns), ["scope-keep"]);
   assert.deepEqual(saved[0].turnLifecycle.commandReceipts.map((item) => item.turnScopeId), ["scope-keep"]);
@@ -140,7 +143,7 @@ test("SessionMessageService.replaceTurn cleans only the owning session turn stat
     anchor: { turnScopeId: "scope-old" },
     newContent: "edited",
     turnScopeId: "scope-new",
-    idempotencyKey: "replace-statuses",
+    commandId: "replace-statuses",
   });
 
   assert.deepEqual(
@@ -180,7 +183,7 @@ test("SessionMessageService.replaceTurn preserves rich attachment fields when pa
     anchor: { turnScopeId: "scope-old" },
     newContent: "edited",
     turnScopeId: "scope-new",
-    idempotencyKey: "replace-rich-attachment",
+    commandId: "replace-rich-attachment",
     attachments: [{ name: "report.docx", mimeType: richAttachment.mimeType, size: 123 }],
   });
 
@@ -217,7 +220,7 @@ test("SessionMessageService.replaceTurn does not merge same-name attachments wit
     anchor: { turnScopeId: "scope-old" },
     newContent: "edited",
     turnScopeId: "scope-new",
-    idempotencyKey: "replace-attachment-identity",
+    commandId: "replace-attachment-identity",
     attachments: [incomingAttachment],
   });
 
@@ -225,76 +228,31 @@ test("SessionMessageService.replaceTurn does not merge same-name attachments wit
   assert.deepEqual(saved[0].messages[0].attachments, [incomingAttachment]);
 });
 
-test("SessionMessageService.stampReusedUserTurnDialogProcessId does not merge same-name attachments without stable identity", async () => {
-  const richAttachment = {
+test("SessionMessageService.assertReusedUserTurnIdentity rejects attachment divergence", async () => {
+  const committedAttachment = {
     attachmentId: "att-rich",
-    name: "report.docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    size: 123,
-    path: "/workspace/att-rich.docx",
-    parsedResult: { attachmentId: "parsed-rich" },
-  };
-  const incomingAttachment = {
-    name: "report.docx",
-    mimeType: "application/pdf",
-    size: 456,
-  };
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
-        { role: "user", content: "edited", dialogProcessId: "dp-old", turnScopeId: "scope-edited", attachments: [richAttachment] },
-      ],
-    }),
-  });
-
-  await service.stampReusedUserTurnDialogProcessId({
-    userId: "u1",
-    sessionId: "s1",
-    turnScopeId: "scope-edited",
-    dialogProcessId: "dp-new",
-    attachments: [incomingAttachment],
-  });
-
-  assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].messages[0].attachments, [incomingAttachment]);
-});
-
-test("SessionMessageService.stampReusedUserTurnDialogProcessId preserves rich fields when resend payload is raw", async () => {
-  const richAttachment = {
-    attachmentId: "att-rich-resend",
-    name: "report.docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    size: 123,
     sessionId: "s1",
     attachmentSource: "user",
-    path: "/workspace/admin/runtime/attach/scoped/s1/user/att-rich-resend/report.docx",
-    relativePath: "runtime/attach/scoped/s1/user/att-rich-resend/report.docx",
-    sandboxPath: "/workspace/admin/runtime/attach/scoped/s1/user/att-rich-resend/report.docx",
-    previewUrl: "/api/attachments/preview/att-rich-resend",
-    downloadUrl: "/api/attachments/download/att-rich-resend",
-    parsedResultUrl: "/api/attachments/download/parsed-rich-resend",
-    parsedResultAttachmentId: "parsed-rich-resend",
-    parsedResult: { attachmentId: "parsed-rich-resend", path: "/workspace/parsed.md" },
+    path: "/runtime/att-rich.docx",
+    name: "report.docx",
   };
   const { service, saved } = createService({
     initialSession: baseSession({
       messages: [
-        { role: "user", content: "edited", dialogProcessId: "dp-old", turnScopeId: "scope-edited", attachments: [richAttachment] },
+        { role: "user", content: "edited", dialogProcessId: "dp-new", turnScopeId: "scope-edited", attachments: [committedAttachment] },
       ],
     }),
   });
 
-  await service.stampReusedUserTurnDialogProcessId({
+  await assert.rejects(service.assertReusedUserTurnIdentity({
     userId: "u1",
     sessionId: "s1",
     turnScopeId: "scope-edited",
     dialogProcessId: "dp-new",
-    attachments: [{ name: "report.docx", mimeType: richAttachment.mimeType, size: 123 }],
-  });
+    attachments: [{ ...committedAttachment, attachmentId: "att-other" }],
+  }), /attachments do not match Session authority/);
 
-  assert.equal(saved.length, 1);
-  assert.equal(saved[0].messages[0].dialogProcessId, "dp-new");
-  assert.deepEqual(saved[0].messages[0].attachments, [richAttachment]);
+  assert.equal(saved.length, 0);
 });
 
 test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
@@ -305,7 +263,7 @@ test("SessionMessageService.replaceTurn rejects ts anchors", async () => {
     ] }),
   });
   await assert.rejects(
-    tsService.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { ts: "ts-assistant" }, newContent: "by ts", turnScopeId: "scope-new", idempotencyKey: "replace-ts" }),
+    tsService.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { ts: "ts-assistant" }, newContent: "by ts", turnScopeId: "scope-new", commandId: "replace-ts" }),
     (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
   );
   assert.equal(tsSaved.length, 0);
@@ -327,7 +285,7 @@ test("SessionMessageService.replaceTurn rejects dialogId compatibility anchors",
       anchor: { dialogId: "dp-compat" },
       newContent: "edited compat",
       turnScopeId: "scope-new",
-      idempotencyKey: "replace-dialog-id",
+      commandId: "replace-dialog-id",
     }),
     (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
   );
@@ -335,14 +293,14 @@ test("SessionMessageService.replaceTurn rejects dialogId compatibility anchors",
 });
 
 test("SessionMessageService.replaceTurn rejects conflicts and missing anchors without saving", async () => {
-  const { service, saved } = createService({ initialSession: baseSession({ version: 5, revision: 5 }) });
+  const { service, saved } = createService({ initialSession: baseSession({ aggregateVersion: 5 }) });
 
   await assert.rejects(
-    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit", turnScopeId: "scope-new", idempotencyKey: "replace-conflict", expectedVersion: 4 }),
+    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit", turnScopeId: "scope-new", commandId: "replace-conflict", expectedAggregateVersion: 4 }),
     (error) => error?.statusCode === 409 && error?.currentVersion === 5,
   );
   await assert.rejects(
-    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "missing" }, newContent: "edit", turnScopeId: "scope-new", idempotencyKey: "replace-missing" }),
+    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "missing" }, newContent: "edit", turnScopeId: "scope-new", commandId: "replace-missing" }),
     (error) => error?.statusCode === 404 && /anchor not found/.test(error.message),
   );
   assert.equal(saved.length, 0);
@@ -356,171 +314,165 @@ test("SessionMessageService.replaceTurn validates required payload", async () =>
     (error) => error?.statusCode === 400 && /newContent is required/.test(error.message),
   );
   await assert.rejects(
-    service.replaceTurn({ userId: "u1", sessionId: "s1", newContent: "edit", turnScopeId: "scope-new", idempotencyKey: "replace-no-anchor" }),
+    service.replaceTurn({ userId: "u1", sessionId: "s1", newContent: "edit", turnScopeId: "scope-new", commandId: "replace-no-anchor" }),
     (error) => error?.statusCode === 400 && /anchor is required/.test(error.message),
   );
   await assert.rejects(
-    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit", idempotencyKey: "replace-no-scope" }),
+    service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit", commandId: "replace-no-scope" }),
     (error) => error?.statusCode === 400 && /turnScopeId is required/.test(error.message),
   );
   await assert.rejects(
     service.replaceTurn({ userId: "u1", sessionId: "s1", anchor: { turnScopeId: "scope-old" }, newContent: "edit", turnScopeId: "scope-new" }),
-    (error) => error?.statusCode === 400 && /idempotencyKey is required/.test(error.message),
+    (error) => error?.statusCode === 400 && /commandId is required/.test(error.message),
   );
   assert.equal(saved.length, 0);
 });
 
-test("SessionMessageService.stampReusedUserTurnDialogProcessId updates the reused real user", async () => {
+test("SessionMessageService.assertReusedUserTurnIdentity accepts the exact committed identity without saving", async () => {
+  const attachments = [{
+    attachmentId: "att-1",
+    sessionId: "s1",
+    attachmentSource: "user",
+    path: "/runtime/att-1.txt",
+    contentSha256: "sha-1",
+    name: "report.txt",
+  }];
   const { service, saved } = createService({
     initialSession: baseSession({
       messages: [
-        { role: "user", content: "keep", dialogProcessId: "dp-keep", turnScopeId: "scope-keep" },
         {
           role: "user",
           content: "edited",
-          dialogProcessId: "dp-old",
+          dialogProcessId: "dp-new",
           turnScopeId: "scope-edited",
           frontendUserMessage: true,
-        },
-        {
-          role: "user",
-          content: "plugin relay",
-          dialogProcessId: "dp-old",
-          turnScopeId: "scope-edited",
-          injectedMessage: true,
+          attachments,
         },
       ],
     }),
   });
 
-  const result = await service.stampReusedUserTurnDialogProcessId({
+  const result = await service.assertReusedUserTurnIdentity({
     userId: "u1",
     sessionId: "s1",
     turnScopeId: "scope-edited",
     dialogProcessId: "dp-new",
+    attachments,
   });
 
-  assert.equal(result.stamped, true);
-  assert.equal(result.messageIndex, 1);
-  assert.equal(saved.length, 1);
-  assert.equal(saved[0].messages[0].dialogProcessId, "dp-keep");
-  assert.equal(saved[0].messages[1].dialogProcessId, "dp-new");
-  assert.equal(saved[0].messages[2].dialogProcessId, "dp-old");
-  assert.equal(saved[0].version, 2);
+  assert.equal(result.asserted, true);
+  assert.equal(result.messageIndex, 0);
+  assert.equal(result.userMessage.dialogProcessId, "dp-new");
+  assert.deepEqual(result.userMessage.attachments, attachments);
+  assert.equal(saved.length, 0);
 });
 
-test("SessionMessageService.stampReusedUserTurnDialogProcessId syncs reused user attachments", async () => {
-  const { service, saved } = createService({
-    initialSession: baseSession({
-      messages: [
-        { role: "user", content: "keep", dialogProcessId: "dp-keep", turnScopeId: "scope-keep" },
-        {
-          role: "user",
-          content: "edited",
-          dialogProcessId: "dp-old",
-          turnScopeId: "scope-edited",
-          frontendUserMessage: true,
-          attachments: [{ attachmentId: "old", name: "old.txt" }],
-        },
-      ],
-    }),
-  });
-
-  const nextAttachments = [
-    { attachmentId: "kept", name: "kept.txt" },
-    { attachmentId: "new", name: "new.txt" },
-  ];
-  const result = await service.stampReusedUserTurnDialogProcessId({
-    userId: "u1",
+test("SessionMessageService.assertReusedUserTurnIdentity ignores derived attachment presentation fields", async () => {
+  const committedAttachment = {
+    attachmentId: "att-1",
     sessionId: "s1",
-    turnScopeId: "scope-edited",
-    dialogProcessId: "dp-new",
-    attachments: nextAttachments,
-  });
-
-  assert.equal(result.stamped, true);
-  assert.equal(saved.length, 1);
-  assert.equal(saved[0].messages[1].dialogProcessId, "dp-new");
-  assert.deepEqual(saved[0].messages[1].attachments, nextAttachments);
-  assert.equal(saved[0].version, 2);
-});
-
-test("SessionMessageService.stampReusedUserTurnDialogProcessId preserves rich fields when prepared payload is raw-matching", async () => {
-  const richAttachment = {
-    attachmentId: "att-rich",
-    name: "report.docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    size: 123,
-    sessionId: "s1",
-    path: "/workspace/att-rich.docx",
-    relativePath: "runtime/attach/s1/user/att-rich.docx",
-    sandboxPath: "/workspace/att-rich.docx",
-    parsedResult: { attachmentId: "parsed-rich", path: "/workspace/parsed-rich.md" },
+    attachmentSource: "user",
+    path: "/runtime/att-1.txt",
+    contentSha256: "sha-1",
+    name: "report.txt",
   };
   const { service, saved } = createService({
     initialSession: baseSession({
-      messages: [
-        {
-          role: "user",
-          content: "edited",
-          dialogProcessId: "dp-old",
-          turnScopeId: "scope-edited",
-          frontendUserMessage: true,
-          attachments: [richAttachment],
-        },
-      ],
+      messages: [{
+        role: "user",
+        content: "edited",
+        dialogProcessId: "dp-new",
+        turnScopeId: "scope-edited",
+        attachments: [committedAttachment],
+      }],
     }),
   });
 
-  await service.stampReusedUserTurnDialogProcessId({
+  const result = await service.assertReusedUserTurnIdentity({
     userId: "u1",
     sessionId: "s1",
     turnScopeId: "scope-edited",
     dialogProcessId: "dp-new",
-    attachments: [{ name: "report.docx", mimeType: richAttachment.mimeType, size: 123 }],
+    attachments: [{
+      ...committedAttachment,
+      name: "derived-display-name.txt",
+      downloadUrl: "/api/attachments/att-1",
+      previewUrl: "",
+      generatedByModel: false,
+      parsedResult: {},
+    }],
   });
 
-  assert.equal(saved.length, 1);
-  assert.equal(saved[0].messages[0].dialogProcessId, "dp-new");
-  assert.deepEqual(saved[0].messages[0].attachments[0], richAttachment);
+  assert.equal(result.asserted, true);
+  assert.equal(saved.length, 0);
 });
 
-test("SessionMessageService.stampReusedUserTurnDialogProcessId preserves empty attachments as delete-all", async () => {
+test("SessionMessageService.assertReusedUserTurnIdentity rejects immutable attachment identity divergence", async () => {
+  const committedAttachment = {
+    attachmentId: "att-1",
+    sessionId: "s1",
+    attachmentSource: "user",
+    path: "/runtime/att-1.txt",
+    contentSha256: "sha-1",
+  };
+  const { service, saved } = createService({
+    initialSession: baseSession({
+      messages: [{
+        role: "user",
+        content: "edited",
+        dialogProcessId: "dp-new",
+        turnScopeId: "scope-edited",
+        attachments: [committedAttachment],
+      }],
+    }),
+  });
+
+  for (const divergentAttachment of [
+    { ...committedAttachment, attachmentId: "att-2" },
+    { ...committedAttachment, sessionId: "s2" },
+    { ...committedAttachment, attachmentSource: "model" },
+    { ...committedAttachment, path: "/runtime/other.txt" },
+    { ...committedAttachment, contentSha256: "sha-2" },
+  ]) {
+    await assert.rejects(service.assertReusedUserTurnIdentity({
+      userId: "u1",
+      sessionId: "s1",
+      turnScopeId: "scope-edited",
+      dialogProcessId: "dp-new",
+      attachments: [divergentAttachment],
+    }), (error) => error?.errorCode === "INVALID_CANONICAL_ATTACHMENT" ||
+      /attachments do not match Session authority/.test(error?.message || ""));
+  }
+  assert.equal(saved.length, 0);
+});
+
+test("SessionMessageService.assertReusedUserTurnIdentity rejects dialog identity divergence", async () => {
   const { service, saved } = createService({
     initialSession: baseSession({
       messages: [
-        {
-          role: "user",
-          content: "edited",
-          dialogProcessId: "dp-old",
-          turnScopeId: "scope-edited",
-          attachments: [{ attachmentId: "old", name: "old.txt" }],
-        },
+        { role: "user", content: "edited", dialogProcessId: "dp-committed", turnScopeId: "scope-edited" },
       ],
     }),
   });
 
-  await service.stampReusedUserTurnDialogProcessId({
+  await assert.rejects(service.assertReusedUserTurnIdentity({
     userId: "u1",
     sessionId: "s1",
     turnScopeId: "scope-edited",
-    dialogProcessId: "dp-new",
-    attachments: [],
-  });
+    dialogProcessId: "dp-other",
+  }), /dialogProcessId does not match Session authority/);
 
-  assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].messages[0].attachments, []);
+  assert.equal(saved.length, 0);
 });
 
-test("SessionMessageService.stampReusedUserTurnDialogProcessId does not stamp without turnScopeId", async () => {
+test("SessionMessageService.assertReusedUserTurnIdentity requires complete identity", async () => {
   const { service, saved } = createService({ initialSession: baseSession() });
 
-  const result = await service.stampReusedUserTurnDialogProcessId({
+  await assert.rejects(service.assertReusedUserTurnIdentity({
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "dp-new",
-  });
+  }), /turnScopeId is required/);
 
-  assert.deepEqual(result, { stamped: false, reason: "missing_turn_scope" });
   assert.equal(saved.length, 0);
 });

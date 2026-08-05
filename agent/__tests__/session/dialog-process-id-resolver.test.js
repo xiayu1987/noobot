@@ -12,9 +12,9 @@ import {
   resolveMessageDialogProcessId,
 } from "../../src/context/session/dialog-process-id-resolver.js";
 
-test("resolveMessageDialogProcessId supports dialogProcessId and dialogId", () => {
+test("resolveMessageDialogProcessId reads only the canonical dialogProcessId field", () => {
   assert.equal(resolveMessageDialogProcessId({ dialogProcessId: "d1" }), "d1");
-  assert.equal(resolveMessageDialogProcessId({ dialogId: "d2" }), "d2");
+  assert.equal(resolveMessageDialogProcessId({ dialogId: "d2" }), "");
 });
 
 test("resolveDialogProcessIdFromContext reads only the explicit field", () => {

@@ -6,7 +6,6 @@
   "description": "Noobot versioned authority event protocol, replay and delivery contracts",
   "exports": {
     ".": "./src/index.mjs",
-    "./turn-lifecycle": "./src/turn-lifecycle-protocol.mjs",
     "./outbox": "./src/authority-event-outbox.mjs",
     "./package.json": "./package.json"
   },

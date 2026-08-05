@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
-import { TURN_EVENT } from "@noobot/event-protocol";
+import { TURN_EVENT } from "@noobot/session-protocol";
 
 function stoppedLifecycle({ sessionId = "s1", turnScopeId = "turn-stopped", dialogProcessId = "dp-stopped" } = {}) {
   return {
@@ -50,16 +50,18 @@ test("chat-websocket-server: edit resend turnScopeId reaches runConfig", async (
     await callChatWs({
       port,
       payload: {
-        userId: "u1",
+        commandType: "turn.resend",
         sessionId: "s1",
+        dialogProcessId: "dp-resend",
         message: "全仓回归测试",
         turnScopeId: " client-turn:resend ",
-        config: { locale: "zh-CN", reuseExistingUserTurn: true },
+        config: { locale: "zh-CN" },
       },
     });
 
     assert.equal(capturedPayload?.runConfig?.turnScopeId, "client-turn:resend");
     assert.equal(capturedPayload?.runConfig?.reuseExistingUserTurn, true);
+    assert.equal(capturedPayload?.dialogProcessId, "dp-resend");
   } finally {
     await closeServer(server);
   }

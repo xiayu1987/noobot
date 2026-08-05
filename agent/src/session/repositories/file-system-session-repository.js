@@ -17,7 +17,6 @@ import {
 } from "../session-summary-builders.js";
 import {
   buildSessionArtifactFileMap,
-  migrateSessionArtifacts,
   readJsonArtifactFile,
   readSessionDisplaySummaryArtifact,
   readSessionArtifact,
@@ -555,24 +554,9 @@ export class FileSystemSessionRepository {
     if (!manifest || Number(manifest.schemaVersion) === currentSchemaVersion) {
       return { migrated: false };
     }
-    return this.withSessionMutation(
-      userId,
-      normalizedSessionId,
-      parentSessionId,
-      async () => {
-        const lockedManifest = await readJsonArtifactFile(scope.sessionFile, null);
-        if (!lockedManifest || Number(lockedManifest.schemaVersion) === currentSchemaVersion) {
-          return { migrated: false };
-        }
-        await migrateSessionArtifacts({
-          sessionDir: scope.sessionDir,
-          sessionId: normalizedSessionId,
-          mutationCoordinator: null,
-        });
-        return { migrated: true };
-      },
-      persistenceContext,
-    );
+    const error = new Error("Session artifact requires offline protocol migration");
+    error.code = "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED";
+    throw error;
   }
 
   async getTurnMessageCount(userId = "", sessionId = "", parentSessionId = "", persistenceContext = null) {
@@ -695,7 +679,7 @@ export class FileSystemSessionRepository {
     }, { now: this.now, sessionId, parentSessionId: resolvedParentSessionId });
   }
 
-  async save(userId, session = {}, parentSessionId = "", { expectedVersion, createOnly = false, persistenceContext = null } = {}) {
+  async save(userId, session = {}, parentSessionId = "", { expectedAggregateVersion, createOnly = false, persistenceContext = null } = {}) {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
@@ -715,7 +699,7 @@ export class FileSystemSessionRepository {
           persistenceContext,
         );
         const persistedForChecks =
-          createOnly || expectedVersion !== undefined && expectedVersion !== null
+          createOnly || expectedAggregateVersion !== undefined && expectedAggregateVersion !== null
             ? await this.findById(userId, sessionId, resolvedParentSessionId, persistenceContext)
             : null;
         if (createOnly && persistedForChecks) {
@@ -724,12 +708,12 @@ export class FileSystemSessionRepository {
           error.errorCode = "SESSION_ALREADY_EXISTS";
           throw error;
         }
-        if (expectedVersion !== undefined && expectedVersion !== null) {
-          const actualVersion = Number(persistedForChecks?.version ?? persistedForChecks?.revision ?? 0);
-          if (actualVersion !== Number(expectedVersion)) {
-            const error = new Error("session version conflict");
+        if (expectedAggregateVersion !== undefined && expectedAggregateVersion !== null) {
+          const actualVersion = Number(persistedForChecks?.aggregateVersion || 0);
+          if (actualVersion !== Number(expectedAggregateVersion)) {
+            const error = new Error("session aggregate version conflict");
             error.statusCode = 409;
-            error.errorCode = "SESSION_VERSION_CONFLICT";
+            error.errorCode = "SESSION_AGGREGATE_VERSION_CONFLICT";
             error.currentVersion = actualVersion;
             throw error;
           }

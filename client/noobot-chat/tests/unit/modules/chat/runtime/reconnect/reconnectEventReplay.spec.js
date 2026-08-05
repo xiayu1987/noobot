@@ -9,6 +9,7 @@ import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatCo
 import { clearExtensionRegistry, replacePluginExtensions } from "../../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { activate as activateWorkflowFrontend } from "../../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
+import { createTurnKey } from "../../../../../../src/modules/chat/runtime/engine/turnIdentity.js";
 
 describe("applyReconnectEventReplay", () => {
   beforeEach(() => {
@@ -81,7 +82,7 @@ describe("applyReconnectEventReplay", () => {
     const replayCache = {};
     const applyTurnLifecycleEnvelope = vi.fn(() => ({ applied: true }));
     const envelope = {
-      protocolVersion: 4,
+      protocolVersion: 1,
       eventId: "event-1",
       messageId: "message-1",
       presentationMessageId: "presentation-1",
@@ -138,7 +139,7 @@ describe("applyReconnectEventReplay", () => {
 
     await applyReconnectEventReplay({
       event: "message",
-      data: { sessionId: "s-1", dialogProcessId: "dp-1", content: "hello" },
+      data: { sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1", content: "hello" },
       replayCache,
       isCurrentActiveSession: vi.fn((sessionId) => sessionId === "s-1"),
       consumeReplayCacheForSession,
@@ -148,9 +149,9 @@ describe("applyReconnectEventReplay", () => {
 
     expect(consumeReplayCacheForSession).toHaveBeenCalledWith("s-1");
     expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
-      [{ event: "message", data: { sessionId: "s-1", dialogProcessId: "dp-1", content: "hello" } }],
+      [{ event: "message", data: { sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1", content: "hello" } }],
       "dp-1",
-      { turnScopeId: "" },
+      { turnScopeId: "turn-1" },
     );
     expect(replayCache).toEqual({});
   });
@@ -160,7 +161,7 @@ describe("applyReconnectEventReplay", () => {
 
     await applyReconnectEventReplay({
       event: "message",
-      data: { sessionId: " s-2 ", dialogProcessId: " dp-2 ", content: "cached" },
+      data: { sessionId: " s-2 ", dialogProcessId: " dp-2 ", turnScopeId: " turn-2 ", content: "cached" },
       replayCache,
       isCurrentActiveSession: vi.fn(() => false),
       consumeReplayCacheForSession: vi.fn(),
@@ -170,17 +171,17 @@ describe("applyReconnectEventReplay", () => {
 
     expect(replayCache).toEqual({
       "s-2": {
-        "dp-2": [
+        [createTurnKey({ sessionId: "s-2", turnScopeId: "turn-2" })]: [
           {
             event: "message",
-            data: { sessionId: " s-2 ", dialogProcessId: " dp-2 ", content: "cached" },
+            data: { sessionId: " s-2 ", dialogProcessId: " dp-2 ", turnScopeId: " turn-2 ", content: "cached" },
           },
         ],
       },
     });
   });
 
-  it("applies active dialog process events even when live reconnect payload lacks sessionId", async () => {
+  it("rejects dialog-only replay events without Session and Turn identity", async () => {
     const replayCache = {};
     const consumeReplayCacheForSession = vi.fn(async () => {});
     const applyReconnectMessagesToActiveSession = vi.fn(async () => {});
@@ -190,18 +191,13 @@ describe("applyReconnectEventReplay", () => {
       data: { dialogProcessId: "dp-1", text: "tool running" },
       replayCache,
       isCurrentActiveSession: vi.fn(() => false),
-      isCurrentActiveDialogProcess: vi.fn((dialogProcessId) => dialogProcessId === "dp-1"),
       consumeReplayCacheForSession,
       applyReconnectMessagesToActiveSession,
       applyChannelState: vi.fn(),
     });
 
     expect(consumeReplayCacheForSession).not.toHaveBeenCalled();
-    expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledWith(
-      [{ event: "message", data: { dialogProcessId: "dp-1", text: "tool running" } }],
-      "dp-1",
-      { turnScopeId: "" },
-    );
+    expect(applyReconnectMessagesToActiveSession).not.toHaveBeenCalled();
     expect(replayCache).toEqual({});
   });
 

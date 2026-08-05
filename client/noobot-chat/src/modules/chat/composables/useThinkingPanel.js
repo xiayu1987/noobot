@@ -34,6 +34,7 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
     getLatestMainModelContentLog: timeline.getLatestMainModelContentLog,
     getExecutionLogs: timeline.getExecutionLogs,
     currentExecutionLogs: timeline.currentExecutionLogs,
+    latestTaskCheckReceipt: timeline.latestTaskCheckReceipt,
     loadedThinkingDetail: timeline.loadedThinkingDetail,
     getExecutionLogCount: timeline.getExecutionLogCount,
     getThinkingDetailLabel: presentation.getThinkingDetailLabel,

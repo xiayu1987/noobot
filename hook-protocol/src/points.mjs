@@ -16,6 +16,11 @@ export const HOOK_FAILURE_MODE = Object.freeze({
   FAIL_FLOW: "fail_flow",
 });
 
+export const HOOK_CANCELLATION_MODE = Object.freeze({
+  PROPAGATE: "propagate",
+  DETACHED: "detached",
+});
+
 export const HOOK_POINT = Object.freeze({
   AGENT: Object.freeze({
     BEFORE_TURN: "agent.before_turn",
@@ -66,6 +71,16 @@ const failFlowPoints = new Set([
   HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH,
 ]);
 
+const detachedCancellationPoints = new Set([
+  HOOK_POINT.AGENT.ON_ERROR,
+  HOOK_POINT.AGENT.ON_ABORT,
+  HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
+  HOOK_POINT.AGENT.LLM_CALL_ERROR,
+  HOOK_POINT.AGENT.TOOL_CALL_ERROR,
+  HOOK_POINT.BOT.AGENT_DISPATCH_ERROR,
+  HOOK_POINT.BOT.SESSION_RUN_ERROR,
+]);
+
 const allHookPoints = Object.values(HOOK_POINT).flatMap((domain) => Object.values(domain));
 
 export const HOOK_POINT_DESCRIPTORS = Object.freeze(
@@ -79,6 +94,9 @@ export const HOOK_POINT_DESCRIPTORS = Object.freeze(
         failureMode: failFlowPoints.has(point)
           ? HOOK_FAILURE_MODE.FAIL_FLOW
           : HOOK_FAILURE_MODE.CONTINUE,
+        cancellationMode: detachedCancellationPoints.has(point)
+          ? HOOK_CANCELLATION_MODE.DETACHED
+          : HOOK_CANCELLATION_MODE.PROPAGATE,
       }),
     ]),
   ),

@@ -57,7 +57,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     sections: {
       staticInfo: "System runtime environment",
       pathGuidance: "Path rules",
-      dynamicInfo: "Current session dynamic context",
+      dynamicInfo: "Current execution context",
       scenario: "Current scenario config (name, description, constraints)",
       workspaceDirectories: "Workspace directories",
       longMemory: "Related long-term memory",

@@ -97,6 +97,32 @@ test("execution listener persists events in source order and exposes a durabilit
   assert.deepEqual(calls, [4, 5]);
 });
 
+test("execution listener forwarding port delivers without taking persistence ownership", async () => {
+  const persisted = [];
+  const forwarded = [];
+  const listener = createExecutionEventListener({
+    sessionManager: {
+      appendExecutionLog: async (record) => persisted.push(record),
+    },
+    userId: "user-a",
+    sessionId: "parent-session",
+    upstream: {
+      onEvent: async (event) => forwarded.push(event),
+    },
+  });
+
+  await listener.forwardEvent({
+    event: "model_context_trace",
+    data: { sessionId: "child-session", invocationId: "invoke-1" },
+  });
+  await listener.flushPersistence();
+
+  assert.equal(persisted.length, 0);
+  assert.equal(forwarded.length, 1);
+  assert.equal(forwarded[0].data.sessionId, "child-session");
+  assert.equal(forwarded[0].data.invocationId, "invoke-1");
+});
+
 test("execution listener classifies context identity diagnostics under one protocol category", async () => {
   const persisted = [];
   const listener = createExecutionEventListener({

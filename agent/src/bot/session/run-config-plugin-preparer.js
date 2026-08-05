@@ -124,27 +124,22 @@ export class RunConfigPluginPreparer {
 
   resolveOptions({ entry, userId = "", runConfig = {}, userConfig = {} }) {
     const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
+    const modelConfig = pluginModelConfig(runConfig, entry.pluginId);
     const options = this.mergePluginOptions(
       entry.manifest.configuration?.defaults,
       pluginConfig(effectiveConfig, entry.pluginId),
       pluginConfig(runConfig, entry.pluginId),
+      modelConfig,
     );
     const basePath = String(options.basePath || "").trim() || (
       this.workspaceService && userId ? this.workspaceService.getWorkspacePath(userId) : ""
     );
     const next = { ...options, enabled: true, mode: "on", basePath };
-    const modelConfig = pluginModelConfig(runConfig, entry.pluginId);
     const registeredHooks = entry.manifest.contributes.agent?.hooks?.registers || [];
     const hasAgentLifecycle = registeredHooks.some((point) => point.startsWith("agent."));
     const hasExecutionIntent = Boolean(entry.manifest.contributes.agent?.executionIntent);
 
     if (hasAgentLifecycle) {
-      const stepModels = plainObject(modelConfig.stepModels);
-      if (Object.keys(stepModels).length) next.stepModels = { ...plainObject(next.stepModels), ...stepModels };
-      const capabilityProfile = plainObject(modelConfig.capabilityProfile);
-      if (Object.keys(capabilityProfile).length) next.capabilityProfile = { ...plainObject(next.capabilityProfile), ...capabilityProfile };
-      const guidance = plainObject(modelConfig.guidance);
-      if (Object.keys(guidance).length) next.guidance = { ...plainObject(next.guidance), ...guidance };
       next.resolveModelMessages = this.createPluginResolveModelMessages?.({ pluginId: entry.pluginId, pluginOptions: next });
       next.miniRunnerMaxTurns = Number.isFinite(Number(next.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
         ? Math.min(Number(next.miniRunnerMaxTurns), AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS)
@@ -161,8 +156,6 @@ export class RunConfigPluginPreparer {
     }
 
     if (hasExecutionIntent) {
-      const semanticModel = String(modelConfig.semanticModel || "").trim();
-      if (semanticModel) next.semanticModel = semanticModel;
       next.resolveModelMessages = this.createPluginResolveModelMessages?.({ pluginId: entry.pluginId, pluginOptions: next });
       next.semanticMode = String(next.semanticMode || "separate_model");
       if (next.semanticMode === "separate_model" && typeof next.capabilityModelInvoker !== "function") {

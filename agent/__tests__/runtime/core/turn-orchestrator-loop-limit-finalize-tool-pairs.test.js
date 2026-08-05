@@ -186,10 +186,18 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
   const afterLlmContexts = [];
   const beforeToolCallContexts = [];
   const afterToolCallContexts = [];
-  hookManager.on("agent.before_llm_call", (ctx = {}) => beforeLlmContexts.push(ctx));
-  hookManager.on("agent.after_llm_call", (ctx = {}) => afterLlmContexts.push(ctx));
-  hookManager.on("agent.before_tool_calls", (ctx = {}) => beforeToolCallContexts.push(ctx));
-  hookManager.on("agent.after_tool_calls", (ctx = {}) => afterToolCallContexts.push(ctx));
+  hookManager.on("agent.before_llm_call", (ctx = {}) => beforeLlmContexts.push(ctx), {
+    id: "test-before-llm",
+  });
+  hookManager.on("agent.after_llm_call", (ctx = {}) => afterLlmContexts.push(ctx), {
+    id: "test-after-llm",
+  });
+  hookManager.on("agent.before_tool_calls", (ctx = {}) => beforeToolCallContexts.push(ctx), {
+    id: "test-before-tool-calls",
+  });
+  hookManager.on("agent.after_tool_calls", (ctx = {}) => afterToolCallContexts.push(ctx), {
+    id: "test-after-tool-calls",
+  });
   modelState.runtime.hookManager = hookManager;
   modelState.runtime.systemRuntime.config = { safeConfirm: false };
   const result = await runFunctionCallLoop({

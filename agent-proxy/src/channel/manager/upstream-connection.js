@@ -17,7 +17,7 @@ import {
 } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 import { writeAgentTransportDebugEvent } from "../../runtime-events/agent-transport-debug-runtime-events.js";
-import { TURN_EVENT } from "@noobot/event-protocol";
+import { TURN_EVENT } from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_DEBUG_TYPE,
   summarizeAgentTransportCommand,
@@ -106,7 +106,10 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
       event: "agentProxy.route.upstreamConnect.succeeded",
       channel,
     });
-    if (channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED) {
+    if (
+      channel.retention.phase === CHANNEL_RETENTION_PHASE.TERMINAL_RETAINED &&
+      options.purpose !== "snapshot_query"
+    ) {
       this.closeUpstreamChannel(channel, 1000, UPSTREAM_CLOSE_REASON.CLOSED);
       return;
     }

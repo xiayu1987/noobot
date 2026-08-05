@@ -55,7 +55,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const first = engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
     await vi.waitFor(() => expect(releaseResponse).toBeTypeOf("function"));
     expect(applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, {
-      protocolVersion: 4,
+      protocolVersion: 1,
       eventType: "turn.snapshot",
       commandId: "snapshot-refresh",
       userId: "u-1",
@@ -87,7 +87,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const second = await engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
     expect(second).toMatchObject({ applied: true });
     expect(terminalResolutionFetcher).toHaveBeenCalledTimes(1);
-    expect(sessions.value[0]).toMatchObject({ backendSessionId: sessionId });
+    expect(sessions.value[0]).toMatchObject({ sessionId: sessionId });
     expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId)).toMatchObject({
       terminal: "completed",
       sending: false,
@@ -97,7 +97,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
 
   it("commits backend terminal identity without promoting the optimistic Session", async () => {
     const localSessionId = "local-refresh-session";
-    const backendSessionId = "3801ff60-0a8d-4dd8-903f-139febe37254";
+    const sessionId = "3801ff60-0a8d-4dd8-903f-139febe37254";
     const turnScopeId = "client-turn:mryihoqc:3qrncu3i";
     const terminalResolutionFetcher = vi.fn(async () => ({
       ok: true,
@@ -106,12 +106,12 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         protocolVersion: 1,
         eventType: "turn.terminal_resolved",
         commandId: "terminal-resolution:identity-promotion",
-        sessionId: backendSessionId,
+        sessionId: sessionId,
         turnScopeId,
         resolved: true,
         retryable: false,
         turn: {
-          sessionId: backendSessionId,
+          sessionId: sessionId,
           turnScopeId,
           state: "completed",
           revision: 4,
@@ -130,7 +130,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     sessions.value[0].isLocal = true;
     sessions.value[0].messages = [{ turnScopeId }];
 
-    const result = await engine.resolveTurnTerminalState(backendSessionId, turnScopeId, {
+    const result = await engine.resolveTurnTerminalState(sessionId, turnScopeId, {
       revision: 4,
       sequence: 4,
     });
@@ -138,20 +138,19 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     expect(result).toMatchObject({ applied: true });
     expect(activeSessionId.value).toBe(localSessionId);
     expect(sessions.value[0]).toMatchObject({
-      id: localSessionId,
-      backendSessionId: localSessionId,
+      sessionId: localSessionId,
       isLocal: true,
     });
-    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, backendSessionId, turnScopeId)).toMatchObject({
+    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId)).toMatchObject({
       terminal: "completed",
       sending: false,
       canStop: false,
     });
   });
 
-  it("reconciles an optimistic Session before committing one authoritative terminal response", async () => {
-    const localSessionId = "local-refresh-e2e";
-    const backendSessionId = "backend-refresh-e2e";
+  it("commits one authoritative terminal response under the preallocated Session identity", async () => {
+    const sessionId = "backend-refresh-e2e";
+    const localSessionId = sessionId;
     const turnScopeId = "client-turn:refresh-e2e";
     const terminalResolutionFetcher = vi.fn(async () => ({
       ok: true,
@@ -160,12 +159,12 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         protocolVersion: 1,
         eventType: "turn.terminal_resolved",
         commandId: "terminal-resolution:refresh-e2e",
-        sessionId: backendSessionId,
+        sessionId: sessionId,
         turnScopeId,
         resolved: true,
         retryable: false,
         turn: {
-          sessionId: backendSessionId,
+          sessionId: sessionId,
           turnScopeId,
           state: "completed",
           revision: 2,
@@ -206,8 +205,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         json: async () => ({
           ok: true,
           sessions: [{
-            sessionId: backendSessionId,
-            id: backendSessionId,
+            sessionId: sessionId,
             caller: RoleEnum.USER,
             updatedAt: "2026-07-24T05:42:15.485Z",
             turnLifecycleSnapshot: {
@@ -230,22 +228,21 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     });
 
     await expect(listActions.fetchSessions(localSessionId, { silent: true })).resolves.toBe(true);
-    expect(harness.activeSessionId.value).toBe(backendSessionId);
-    expect(harness.turnRuntimeRegistry.value.sessionAliases[localSessionId]).toBe(backendSessionId);
+    expect(harness.activeSessionId.value).toBe(sessionId);
 
-    const resolution = await harness.engine.resolveTurnTerminalState(backendSessionId, turnScopeId, {
+    const resolution = await harness.engine.resolveTurnTerminalState(sessionId, turnScopeId, {
       revision: 2,
       sequence: 2,
     });
 
     expect(resolution).toMatchObject({ applied: true });
     expect(terminalResolutionFetcher).toHaveBeenCalledTimes(1);
-    expect(harness.turnRuntimeRegistry.value.sessions[backendSessionId]?.turns?.[turnScopeId]).toMatchObject({
+    expect(harness.turnRuntimeRegistry.value.sessions[sessionId]?.turns?.[turnScopeId]).toMatchObject({
       terminalResolved: true,
     });
     expect(selectSessionTurnRuntime(
       harness.turnRuntimeRegistry.value,
-      backendSessionId,
+      sessionId,
       turnScopeId,
     )).toMatchObject({
       terminal: "completed",

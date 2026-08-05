@@ -183,6 +183,32 @@ test("executeToolCall publishes write_file artifacts on the canonical tool_call_
   assert.equal(completed?.presentationMessageId, "child-assistant-1");
 });
 
+test("canonical tool_call_end preserves a complete JSON tool result beyond 200 characters", async () => {
+  const events = [];
+  const resultPayload = JSON.stringify({
+    toolName: "task_check",
+    ok: true,
+    protocolVersion: 1,
+    summary: {
+      state: "CONTINUE",
+      abstract: "a".repeat(80),
+      nextAction: "b".repeat(80),
+      contentHash: `sha256:${"c".repeat(64)}`,
+    },
+  });
+  assert.equal(resultPayload.length > 200, true);
+
+  await executeToolCall({
+    call: { id: "call-task-check", name: "task_check", args: {} },
+    tool: { invoke: async () => resultPayload },
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+
+  const completed = events.find((event = {}) => event.event === "tool_call_end")?.data;
+  assert.equal(completed?.result, resultPayload);
+  assert.deepEqual(JSON.parse(completed.result), JSON.parse(resultPayload));
+});
+
 test("executeToolCall returns toToolJsonResult when tool is missing", async () => {
   const result = await executeToolCall({
     call: { id: "call_missing", name: "unknown_tool", args: {} },
@@ -559,7 +585,14 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
       toolName: "task_summary",
       ok: true,
       status: "completed",
-      message: "小结完毕，请继续当前任务",
+      protocolVersion: 1,
+      summary: {
+        state: "CONTINUE",
+        abstract: "完成阶段工作。",
+        nextAction: "继续验证。",
+        contentHash: "sha256:0123456789abcdef",
+      },
+      message: "请根据小结后的状态、摘要和下一步处理后续流程。",
       phaseSummary: summaryContent,
       summarizedMessages: { currentTurn: 3 },
       extraField: "should be omitted for task_summary",
@@ -599,6 +632,13 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
   assert.equal(payload.toolName, "task_summary");
   assert.equal(payload.ok, true);
   assert.equal(payload.status, "completed");
+  assert.equal(payload.protocolVersion, 1);
+  assert.deepEqual(payload.summary, {
+    state: "CONTINUE",
+    abstract: "完成阶段工作。",
+    nextAction: "继续验证。",
+    contentHash: "sha256:0123456789abcdef",
+  });
   assert.equal(payload.phaseSummary, undefined);
   assert.equal(payload.extraField, undefined);
   assert.equal(payload.toolInputOverflow, undefined);

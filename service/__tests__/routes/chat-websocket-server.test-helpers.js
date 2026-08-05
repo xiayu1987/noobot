@@ -40,7 +40,7 @@ export function createProtocolTestCommand(payload = {}) {
     parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
     turnScopeId: String(turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim(),
   };
-  const resolvedCommandId = String(payload?.commandId || payload?.idempotencyKey || turnScopeId).trim();
+  const resolvedCommandId = String(payload?.commandId || turnScopeId).trim();
   if (action === "stop") {
     return createTurnStopCommand({
       commandId: resolvedCommandId || `stop:${turnScopeId}`,
@@ -78,10 +78,11 @@ export function createProtocolTestCommand(payload = {}) {
       options: { terminalLimit: payload?.terminalLimit },
     });
   }
-  const resolvedRunCommandType = action === "continue" || action === "resume"
-    ? AGENT_COMMAND.CONTINUE
-    : config.reuseExistingUserTurn === true
-      ? AGENT_COMMAND.RESEND
+  const resolvedRunCommandType = [AGENT_COMMAND.SEND, AGENT_COMMAND.CONTINUE, AGENT_COMMAND.RESEND]
+    .includes(commandType)
+    ? commandType
+    : action === "continue" || action === "resume"
+      ? AGENT_COMMAND.CONTINUE
       : AGENT_COMMAND.SEND;
   return createTurnRunCommand({
     commandType: resolvedRunCommandType,
@@ -109,9 +110,8 @@ export function createProtocolTestCommand(payload = {}) {
       assistantMessageId: payload?.presentationMessageId || config.presentationMessageId,
     },
     concurrency: {
-      idempotencyKey: payload?.idempotencyKey || config.idempotencyKey,
       expectedTurnRevision: payload?.expectedTurnRevision ?? 0,
-      expectedSessionVersion: payload?.expectedSessionVersion ?? payload?.expectedVersion ?? 0,
+      expectedAggregateVersion: payload?.expectedAggregateVersion ?? config.expectedAggregateVersion ?? 0,
     },
     continuation: {
       dialogProcessId: config.resumeDialogProcessId,

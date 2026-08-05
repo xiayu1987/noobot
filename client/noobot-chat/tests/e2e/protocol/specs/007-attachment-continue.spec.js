@@ -11,9 +11,11 @@ test("@core PBE-007 带附件停止后继续", async ({ noobot, protocolCapture 
   const file = fixedAttachment("pbe-007.txt");
   const { send } = await sendAndStop({ page: noobot.page, capture: protocolCapture, sessionId: noobot.sessionId,
     prompt: uniquePrompt(testInfo, "read attachment and run long"), attachment: file });
+  expect(send.input.attachments).toHaveLength(1);
   const continued = await continueAndStop({ page: noobot.page, capture: protocolCapture, sessionId: noobot.sessionId,
     previous: send, prompt: uniquePrompt(testInfo, "continue using the original attachment") });
   expect(continued.input.attachments).toEqual([]);
   const snapshots = await assertPersistedSnapshots(noobot.userId, noobot.sessionId, 2);
+  expect(snapshots[0]).toMatchObject(send.identity);
   snapshots.forEach((snapshot) => expect(JSON.stringify(snapshot)).toContain(file.name));
 });

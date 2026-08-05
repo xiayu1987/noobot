@@ -26,7 +26,7 @@ const IDENTITY_KEYS = new Set([
 const INPUT_KEYS = new Set(["message", "attachments"]);
 const PRESENTATION_KEYS = new Set(["userMessageId", "assistantMessageId"]);
 const RUN_CONCURRENCY_KEYS = new Set([
-  "idempotencyKey", "expectedTurnRevision", "expectedSessionVersion",
+  "expectedTurnRevision", "expectedAggregateVersion",
 ]);
 const STOP_CONCURRENCY_KEYS = new Set(["expectedTurnRevision"]);
 const SESSION_KEYS = new Set(["createIfAbsent"]);
@@ -81,9 +81,8 @@ export function createTurnRunCommand(input = {}) {
       assistantMessageId: clean(input.presentation?.assistantMessageId),
     }),
     concurrency: compactObject({
-      idempotencyKey: clean(input.concurrency?.idempotencyKey),
       expectedTurnRevision: input.concurrency?.expectedTurnRevision ?? 0,
-      expectedSessionVersion: input.concurrency?.expectedSessionVersion ?? 0,
+      expectedAggregateVersion: input.concurrency?.expectedAggregateVersion ?? 0,
     }),
     session: {
       createIfAbsent: input.session?.createIfAbsent === true,
@@ -199,6 +198,9 @@ export function validateAgentCommand(command) {
 
   if (RUN_COMMAND_SET.has(commandType)) {
     if (!clean(command.identity?.turnScopeId)) errors.push("missing_turn_scope_id");
+    if (commandType === AGENT_COMMAND.RESEND && !clean(command.identity?.dialogProcessId)) {
+      errors.push("missing_resend_dialog_process_id");
+    }
     if (!isObject(command.input)) errors.push("input_not_object");
     else {
       rejectUnknownFields(command.input, INPUT_KEYS, "input", errors);
@@ -212,7 +214,7 @@ export function validateAgentCommand(command) {
     else {
       rejectUnknownFields(command.concurrency, RUN_CONCURRENCY_KEYS, "concurrency", errors);
       if (command.concurrency.expectedTurnRevision !== 0) errors.push("run_turn_revision_must_be_zero");
-      if (!Number.isInteger(command.concurrency.expectedSessionVersion) || command.concurrency.expectedSessionVersion < 0) {
+      if (!Number.isInteger(command.concurrency.expectedAggregateVersion) || command.concurrency.expectedAggregateVersion < 0) {
         errors.push("invalid_expected_session_version");
       }
     }

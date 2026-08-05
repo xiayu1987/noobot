@@ -20,6 +20,16 @@ import {
   normalizeWorkflowRuntimeEvent,
   WORKFLOW_RUNTIME_EVENT,
 } from "@noobot/shared/workflow-runtime-event-protocol";
+import { assertSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
+
+function decodeSessionCommand(body, { type, userId, sessionId }) {
+  const command = assertSessionCommand(body);
+  if (command.type !== type) throw new TypeError(`unexpected session command type: ${command.type}`);
+  if (command.scope.userId !== userId || command.scope.sessionId !== sessionId) {
+    throw new TypeError("session command scope does not match route identity");
+  }
+  return command;
+}
 
 const WORKFLOW_RUNTIME_EVENTS = new Set([
   "workflow_planning_message_prepared",
@@ -261,8 +271,7 @@ export function registerSessionRoutes(
           sessionDocCount: sessionDocs.length,
           sessionDocs: sessionDocs.map((doc = {}) => ({
             sessionId: String(doc.sessionId || "").trim(),
-            version: Number(doc.version || 0),
-            revision: Number(doc.revision || 0),
+            aggregateVersion: Number(doc.aggregateVersion || 0),
             turnOrderCount: Array.isArray(doc.turnOrder) ? doc.turnOrder.length : 0,
             turnOrderMessageCount: Array.isArray(doc.turnOrder)
               ? doc.turnOrder.reduce((count, item = {}) => count + Math.max(0, Number(item.messageCount || 0)), 0)
@@ -333,12 +342,12 @@ export function registerSessionRoutes(
 
   const resolveTurnTerminalHandler = jsonRoute(async (req, res) => {
     const { userId, sessionId, turnScopeId } = req.params;
+    if (Object.keys(req.query || {}).some((key) => key !== "commandId")) {
+      throw new TypeError("unsupported terminal resolution query field");
+    }
     const commandId = String(req.query?.commandId || "").trim() || crypto.randomUUID();
-    const persistenceScope = req.query?.persistenceScope
-      ? JSON.parse(String(req.query.persistenceScope))
-      : null;
     const resolution = await bot.session.resolveTurnTerminalState({
-      userId, sessionId, turnScopeId, commandId, persistenceScope,
+      userId, sessionId, turnScopeId, commandId,
     });
     void writeRoutedRuntimeEvent({
       scope: "session",
@@ -365,13 +374,11 @@ export function registerSessionRoutes(
         startedAt: String(resolution?.turn?.startedAt || "").trim(),
         finishedAt: String(resolution?.turn?.finishedAt || "").trim(),
         hasTerminalStatus: Boolean(resolution?.turn?.terminalStatus),
-        persistenceScopeId: String(persistenceScope?.scopeId || "").trim(),
       },
     });
     res.json({ ok: true, ...resolution });
   });
   app.get("/internal/session/:userId/:sessionId/turns/:turnScopeId/terminal", resolveTurnTerminalHandler);
-  app.get("/api/internal/session/:userId/:sessionId/turns/:turnScopeId/terminal", resolveTurnTerminalHandler);
 
   app.get(
     "/internal/session/:userId/:sessionId/thinking-detail",
@@ -399,15 +406,18 @@ export function registerSessionRoutes(
     "/internal/session/:userId/:sessionId/messages/delete-from",
     jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
+      const command = decodeSessionCommand(req.body, {
+        type: SESSION_COMMAND.MESSAGE_DELETE_FROM, userId, sessionId,
+      });
       const payload = {
         userId,
         sessionId,
-        parentSessionId: String(req.body?.parentSessionId || "").trim(),
-        anchor: req.body?.anchor || {},
-        expectedVersion: req.body?.expectedVersion,
-        idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
+        parentSessionId: command.scope.parentSessionId,
+        anchor: command.payload.anchor || {},
+        expectedAggregateVersion: command.expectedAggregateVersion,
+        commandId: command.commandId,
       };
-      if (Array.isArray(req.body?.attachments)) payload.attachments = req.body.attachments;
+      if (Array.isArray(command.payload.attachments)) payload.attachments = command.payload.attachments;
       const logDeleteMutation = (event, data = {}, level = "debug") =>
         writeRoutedRuntimeEvent({
           scope: "session",
@@ -426,8 +436,8 @@ export function registerSessionRoutes(
       void logDeleteMutation("service.messageDelete.requestReceived", {
         parentSessionId: payload.parentSessionId,
         anchor: payload.anchor,
-        expectedVersion: payload.expectedVersion ?? null,
-        idempotencyKey: payload.idempotencyKey,
+        expectedAggregateVersion: payload.expectedAggregateVersion ?? null,
+        commandId: payload.commandId,
       });
       try {
         const result = await bot.session.deleteFromMessage(payload);
@@ -439,7 +449,7 @@ export function registerSessionRoutes(
           deletedTurnScopeIds: Array.isArray(result?.deletedTurnScopeIds)
             ? result.deletedTurnScopeIds.map((value) => String(value || "").trim()).filter(Boolean)
             : [],
-          version: Number(result?.version || result?.session?.version || 0),
+          aggregateVersion: Number(result?.aggregateVersion || result?.session?.aggregateVersion || 0),
           deduplicated: result?.deduplicated === true,
           remainingMessages: messages.map((message = {}, index) => ({
             index,
@@ -469,18 +479,21 @@ export function registerSessionRoutes(
   );
 
   const replaceTurnHandler = jsonRoute(async (req, res) => {
-      const { userId, sessionId } = req.params;
-      const payload = {
-        userId,
-        sessionId,
-        parentSessionId: String(req.body?.parentSessionId || "").trim(),
-        anchor: req.body?.anchor || {},
-        newContent: String(req.body?.newContent || "").trim(),
-        turnScopeId: String(req.body?.turnScopeId || "").trim(),
-        expectedVersion: req.body?.expectedVersion,
-        idempotencyKey: String(req.body?.idempotencyKey || "").trim(),
-      };
-      if (Array.isArray(req.body?.attachments)) payload.attachments = req.body.attachments;
+    const { userId, sessionId } = req.params;
+    const command = decodeSessionCommand(req.body, {
+      type: SESSION_COMMAND.TURN_REPLACE, userId, sessionId,
+    });
+    const payload = {
+      userId,
+      sessionId,
+      parentSessionId: command.scope.parentSessionId,
+      anchor: command.payload.anchor || {},
+      newContent: String(command.payload.newContent || "").trim(),
+      turnScopeId: String(command.payload.turnScopeId || "").trim(),
+      expectedAggregateVersion: command.expectedAggregateVersion,
+      commandId: command.commandId,
+    };
+    if (Array.isArray(command.payload.attachments)) payload.attachments = command.payload.attachments;
       const replaceSessionTurn = typeof bot?.replaceSessionTurn === "function"
         ? bot.replaceSessionTurn.bind(bot)
         : bot.session.replaceTurn.bind(bot.session);
@@ -499,10 +512,12 @@ export function registerSessionRoutes(
         event: "service.turnReplacement.authorityCommitted",
         userId: String(userId || "").trim(),
         sessionId: String(sessionId || "").trim(),
+        dialogProcessId: String(result?.turnReplacement?.replacementDialogProcessId || "").trim(),
         turnScopeId: String(result?.turnReplacement?.replacementTurnScopeId || "").trim(),
         data: {
           commandId: String(result?.turnReplacement?.commandId || "").trim(),
-          committedVersion: Number(result?.turnReplacement?.committedVersion || 0),
+          replacementDialogProcessId: String(result?.turnReplacement?.replacementDialogProcessId || "").trim(),
+          committedAggregateVersion: Number(result?.turnReplacement?.committedAggregateVersion || 0),
           lifecycleSequence: Number(lifecycle?.sequence || 0),
           activeTurnScopeId: String(lifecycle?.activeTurnScopeId || "").trim(),
           remainingTurnScopeIds: Object.keys(lifecycle?.turns || {}).sort(),
@@ -521,10 +536,6 @@ export function registerSessionRoutes(
 
   app.post(
     "/internal/session/:userId/:sessionId/messages/replace-turn",
-    replaceTurnHandler,
-  );
-  app.post(
-    "/api/internal/session/:userId/:sessionId/messages/replace-turn",
     replaceTurnHandler,
   );
 
@@ -547,10 +558,6 @@ export function registerSessionRoutes(
 
   app.post(
     "/internal/session/:userId/:sessionId/rename",
-    renameSessionHandler,
-  );
-  app.post(
-    "/api/internal/session/:userId/:sessionId/rename",
     renameSessionHandler,
   );
 

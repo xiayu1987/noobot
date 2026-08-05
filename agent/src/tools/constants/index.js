@@ -72,6 +72,7 @@ export const TOOL_NAME = Object.freeze({
   WEB_SEARCH: "web_search",
   MULTIMODAL_GENERATE: "multimodal_generate",
   TASK_SUMMARY: "task_summary",
+  TASK_CHECK: "task_check",
   REQUEST_HELP: "request_help",
   FINAL_ANSWER: "final_answer",
   DATABASE_CONNECT_CONNECTOR: "database_connect_connector",

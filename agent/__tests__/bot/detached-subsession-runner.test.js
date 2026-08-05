@@ -56,7 +56,7 @@ function createDeps(overrides = {}) {
           turnMessages: [{ role: "assistant", content: "agent answer" }],
           dialogProcessId: payload.dialogProcessId || "sub-dialog",
           lifecycle: { executionState: "completed" },
-          session: { sessionId: payload.sessionId, version: 3, revision: 3 },
+          session: { sessionId: payload.sessionId, aggregateVersion: 3 },
         };
       },
     },
@@ -64,10 +64,26 @@ function createDeps(overrides = {}) {
       async applyTurnLifecycleEvent(payload = {}) {
         calls.lifecyclePayloads.push(payload);
         const sequence = calls.lifecyclePayloads.length;
+        const stateByEventType = {
+          "turn.action_accepted": "action_accepted",
+          "turn.processing_started": "processing",
+          "turn.processing_completed": "processing_completed",
+          "turn.completed": "completed",
+          "turn.stop_accepted": "stop_accepted",
+          "turn.stop_processing_completed": "stop_processing_completed",
+          "turn.stop_completed": "stop_completed",
+          "turn.failed": "processing_failed",
+        };
+        const turn = {
+          ...payload,
+          state: stateByEventType[payload.eventType] || "",
+          sequence,
+          revision: sequence,
+        };
         return {
           applied: true,
-          envelope: { ...payload, sequence, revision: sequence },
-          turn: { ...payload, sequence, revision: sequence },
+          envelope: turn,
+          turn,
         };
       },
       createScopedPersistenceContext(payload = {}) {
@@ -152,7 +168,10 @@ test("detached sub-session delegates execution and persistence to the main runne
     attachments: [{ name: "a.txt" }],
     systemMessages: ["system"],
     runConfigPatch: { turnScopeId: "turn-1", extra: true },
-    eventListener: { onEvent: (event) => events.push(event) },
+    eventListener: {
+      onEvent: (event) => events.push(event),
+      forwardEvent: (event) => events.push(event),
+    },
     strategy: {
       sessionId: "sub1",
       parentSessionId: "parent1",
@@ -249,11 +268,68 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(result.dialogProcessId, payload.dialogProcessId);
   assert.equal(result.dialogProcessId, "sub-dialog");
   assert.equal(calls.lifecyclePayloads.every((item) => item.dialogProcessId === result.dialogProcessId), true);
-  assert.equal(result.persisted.version, 3);
+  assert.equal(result.persisted.aggregateVersion, 3);
   assert.equal(result.lifecycle.executionState, "completed");
   assert.equal(result.result.answer, "agent answer");
   assert.deepEqual(result.result.messages, [{ role: "assistant", content: "agent answer" }]);
   assert.deepEqual(result.result.turnTasks, [{ taskId: "t1" }]);
+});
+
+test("detached sub-session transfers canonical parent attachments into child ownership", async () => {
+  const transferred = {
+    attachmentId: "child-attachment",
+    sessionId: "sub1",
+    attachmentSource: "user",
+    path: "/tmp/workspace/u1/runtime/attach/user/sub1/child-attachment.txt",
+    name: "a.txt",
+    mimeType: "text/plain",
+  };
+  const attachmentService = {
+    async getAttachmentById(payload) {
+      assert.deepEqual(payload, {
+        userId: "u1",
+        attachmentId: "parent-attachment",
+        sessionId: "parent1",
+        attachmentSource: "user",
+      });
+      return {
+        attachmentId: "parent-attachment",
+        sessionId: "parent1",
+        attachmentSource: "user",
+        path: "/tmp/workspace/u1/runtime/attach/user/parent1/parent-attachment.txt",
+        name: "a.txt",
+        mimeType: "text/plain",
+      };
+    },
+    async readAttachmentContent() {
+      return { content: Buffer.from("attachment body", "utf8") };
+    },
+    async ingest(payload) {
+      assert.equal(payload.sessionId, "sub1");
+      assert.equal(payload.attachments[0].clientAttachmentId, "session-transfer:parent-attachment");
+      assert.equal(payload.attachments[0].contentBase64, Buffer.from("attachment body", "utf8").toString("base64"));
+      return [transferred];
+    },
+  };
+  const { calls, deps } = createDeps({ attachmentService });
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await runner({
+    parentExecutionScope: createParentExecutionScope(),
+    parentContext: createParentContext(),
+    message: "read attachment",
+    attachments: [{
+      attachmentId: "parent-attachment",
+      sessionId: "parent1",
+      attachmentSource: "user",
+      path: "/tmp/workspace/u1/runtime/attach/user/parent1/parent-attachment.txt",
+      name: "a.txt",
+      mimeType: "text/plain",
+    }],
+    strategy: createCompleteStrategy(),
+  });
+
+  assert.deepEqual(calls.runSessionPayloads[0].attachments, [transferred]);
 });
 
 test("detached sub-session rejects an incomplete persistence and identity strategy", async () => {
@@ -319,17 +395,16 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
       return normalizeSessionEntity({
         sessionId,
         parentSessionId,
-        version: 0,
-        revision: 0,
+        aggregateVersion: 0,
         messages: [],
       }, { now: fixedNow });
     },
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted), { now: fixedNow }) : null;
     },
-    async save(_userId, next, _context, { expectedVersion, createOnly } = {}) {
+    async save(_userId, next, _context, { expectedAggregateVersion, createOnly } = {}) {
       if (createOnly) assert.equal(persisted, null);
-      else assert.equal(expectedVersion, Number(persisted?.version ?? persisted?.revision ?? 0));
+      else assert.equal(expectedAggregateVersion, Number(persisted?.aggregateVersion ?? 0));
       persisted = structuredClone(normalizeSessionEntity(next, { now: fixedNow }));
     },
   };
@@ -400,7 +475,10 @@ test("detached sub-session rejects a runner result with a second dialog identity
         dialogProcessId: "authoritative-dialog",
         executionId: "agent:turn-identity-mismatch",
       }),
-      eventListener: { onEvent: (event) => events.push(event) },
+      eventListener: {
+        onEvent: (event) => events.push(event),
+        forwardEvent: (event) => events.push(event),
+      },
     }),
     (error) => (
       error?.code === "DETACHED_DIALOG_IDENTITY_MISMATCH" &&
@@ -437,8 +515,8 @@ test("detached sub-session does not inherit parent turn transaction identity", a
         resumeFromStoppedSnapshot: true,
         resumeDialogProcessId: "root-old-dialog",
         resumeTurnScopeId: "root-old-turn",
-        expectedVersion: 7,
-        idempotencyKey: "root-continue-command",
+        expectedAggregateVersion: 7,
+        commandId: "root-continue-command",
         reuseExistingUserTurn: true,
         thinkingStartedAt: "2026-07-26T12:00:00.000Z",
         messageId: "root-canonical-message",
@@ -464,8 +542,8 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.equal(runConfig.resumeFromStoppedSnapshot, undefined);
   assert.equal(runConfig.resumeDialogProcessId, undefined);
   assert.equal(runConfig.resumeTurnScopeId, undefined);
-  assert.equal(runConfig.expectedVersion, undefined);
-  assert.equal(runConfig.idempotencyKey, undefined);
+  assert.equal(runConfig.expectedAggregateVersion, undefined);
+  assert.equal(runConfig.commandId, undefined);
   assert.equal(runConfig.reuseExistingUserTurn, undefined);
   assert.equal(Number.isFinite(Date.parse(runConfig.thinkingStartedAt)), true);
   assert.notEqual(runConfig.thinkingStartedAt, "2026-07-26T12:00:00.000Z");
@@ -482,8 +560,8 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.equal(runConfig.turnScopeId, "child-turn");
   assert.equal(runConfig.executionId, "agent:child-turn");
   assert.deepEqual(runConfig.selectedPlugins, ["harness", "workflow"]);
-  assert.equal(calls.mergePayload.baseRunConfig.expectedVersion, undefined);
-  assert.equal(calls.mergePayload.baseRunConfig.idempotencyKey, undefined);
+  assert.equal(calls.mergePayload.baseRunConfig.expectedAggregateVersion, undefined);
+  assert.equal(calls.mergePayload.baseRunConfig.commandId, undefined);
 });
 
 test("detached sub-session preserves child-owned transaction fields from its patch", async () => {
@@ -493,12 +571,12 @@ test("detached sub-session preserves child-owned transaction fields from its pat
   await runner({
     parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext({
-      runConfig: { expectedVersion: 7, idempotencyKey: "root-command" },
+      runConfig: { expectedAggregateVersion: 7, commandId: "root-command" },
     }),
     runConfigPatch: {
       turnScopeId: "child-turn",
-      expectedVersion: 0,
-      idempotencyKey: "child-command",
+      expectedAggregateVersion: 0,
+      commandId: "child-command",
       thinkingStartedAt: "2026-07-26T12:30:00.000Z",
     },
     strategy: createCompleteStrategy({
@@ -508,8 +586,8 @@ test("detached sub-session preserves child-owned transaction fields from its pat
   });
 
   const runConfig = calls.runSessionPayloads[0].runConfig;
-  assert.equal(runConfig.expectedVersion, 0);
-  assert.equal(runConfig.idempotencyKey, "child-command");
+  assert.equal(runConfig.expectedAggregateVersion, 0);
+  assert.equal(runConfig.commandId, "child-command");
   assert.equal(runConfig.thinkingStartedAt, "2026-07-26T12:30:00.000Z");
 });
 
@@ -524,10 +602,15 @@ test("detached sub-session propagates main runner abort and failure contracts", 
     },
   });
   const runner = createDetachedSubSessionRunner(deps);
+  const events = [];
   await assert.rejects(
     () => runner({
       parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext(),
+      eventListener: {
+        onEvent: (event) => events.push(event),
+        forwardEvent: (event) => events.push(event),
+      },
       strategy: createCompleteStrategy({
         turnScopeId: "internal-turn:abort-test",
         executionId: "agent:internal-turn:abort-test",
@@ -555,6 +638,19 @@ test("detached sub-session propagates main runner abort and failure contracts", 
     command: "user_stopped",
     description: "子 Agent 已停止",
   });
+  assert.equal(abortError.lifecycle.state, "stop_completed");
+  assert.equal(
+    events.some((event) => (
+      event?.event === "detached_sub_session_stop_committed" &&
+      event?.data?.reason === "user_stop" &&
+      event?.data?.state === "stop_completed"
+    )),
+    true,
+  );
+  assert.equal(
+    events.some((event) => event?.event === "detached_sub_session_failure_committed"),
+    false,
+  );
 });
 
 test("detached terminal receipt adapts persisted Agent success and failure states", () => {
@@ -640,7 +736,7 @@ test("createDetachedSubSessionRunner falls back to empty userConfig when loading
 test("createScopedSubSessionEventListener injects child session coordinates", () => {
   const received = [];
   const listener = createScopedSubSessionEventListener(
-    { onEvent: (event) => received.push(event) },
+    { onEvent() {}, forwardEvent: (event) => received.push(event) },
     {
       userId: "u1",
       sessionId: "sub1",
@@ -663,7 +759,7 @@ test("createScopedSubSessionEventListener injects child session coordinates", ()
 test("createScopedSubSessionEventListener preserves explicit event coordinates", () => {
   const received = [];
   const listener = createScopedSubSessionEventListener(
-    { onEvent: (event) => received.push(event) },
+    { onEvent() {}, forwardEvent: (event) => received.push(event) },
     { userId: "fallback-user", sessionId: "fallback-session" },
   );
   listener.onEvent({
@@ -682,4 +778,11 @@ test("createScopedSubSessionEventListener preserves explicit event coordinates",
 
 test("createScopedSubSessionEventListener returns null without a listener", () => {
   assert.equal(createScopedSubSessionEventListener(null, { sessionId: "sub1" }), null);
+});
+
+test("createScopedSubSessionEventListener rejects a persistence-owning listener without a forwarding port", () => {
+  assert.throws(
+    () => createScopedSubSessionEventListener({ onEvent() {} }, { sessionId: "sub1" }),
+    /forwardEvent port/,
+  );
 });

@@ -51,7 +51,7 @@ const presentedMessages = computed(() => {
   });
 });
 const presentationDiagnosticsSignature = computed(() => [
-  String(props.activeSession?.backendSessionId || props.activeSession?.id || ""),
+  String(props.activeSession?.sessionId || ""),
   Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
   presentedMessages.value.length,
   Number(chatStore.workflowNodeStateRegistry?.version || 0),
@@ -59,7 +59,7 @@ const presentationDiagnosticsSignature = computed(() => [
 ].join("|"));
 watch(presentationDiagnosticsSignature, () => {
   logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", () => ({
-    sessionId: String(props.activeSession?.backendSessionId || props.activeSession?.id || ""),
+    sessionId: String(props.activeSession?.sessionId || ""),
     sourceMessageCount: Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
     presentationMessageCount: presentedMessages.value.length,
     workflowPresentations: summarizeWorkflowMessages(presentedMessages.value),
@@ -128,7 +128,7 @@ const renderDiagnosticsSignature = computed(() => JSON.stringify(renderedMessage
 }))));
 watch(renderDiagnosticsSignature, (signature) => {
   logStateMachineDebug("stateMachine.presentation.renderList.committed", () => ({
-    sessionId: String(props.activeSession?.backendSessionId || props.activeSession?.id || ""),
+    sessionId: String(props.activeSession?.sessionId || ""),
     sourceMessageCount: Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
     presentationMessageCount: presentedMessages.value.length,
     renderedMessageCount: renderedMessages.value.length,

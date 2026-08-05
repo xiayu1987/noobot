@@ -96,18 +96,19 @@ test("state-builder canonicalizes model messages and block views through one sto
     messages: loopState.modelContext.messages,
     messageBlocks: loopState.modelContext.messageBlocks,
   });
+  const contextIdentityEvents = identityEvents.filter(
+    (event) => event.event.startsWith("agent.contextIdentity."),
+  );
   assert.deepEqual(
-    identityEvents
-      .filter((event) => event.event.startsWith("agent.contextIdentity."))
-      .map((event) => event.event),
+    contextIdentityEvents.map((event) => event.event),
     [
       "agent.contextIdentity.modelContextCreated",
       "agent.contextIdentity.snapshotCandidateCreated",
     ],
   );
-  assert.equal(identityEvents[0].data.debugType, "context-identity");
-  assert.equal(identityEvents[0].data.sourceMessageUid, "sm_current_task");
-  assert.equal(identityEvents[0].data.contentProjectionId, "sm_current_task");
-  assert.equal(identityEvents[0].data.userMetaProjectionId, "");
-  assert.equal(identityEvents[1].data.messageIds.includes("sm_current_task"), true);
+  assert.equal(contextIdentityEvents[0].data.debugType, "context-identity");
+  assert.equal(contextIdentityEvents[0].data.sourceMessageUid, "sm_current_task");
+  assert.equal(contextIdentityEvents[0].data.contentProjectionId, "sm_current_task");
+  assert.equal(contextIdentityEvents[0].data.userMetaProjectionId, "");
+  assert.equal(contextIdentityEvents[1].data.messageIds.includes("sm_current_task"), true);
 });

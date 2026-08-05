@@ -13,15 +13,17 @@ import {
 } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
-  createTurnLifecycleEnvelope,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
+} from "@noobot/event-protocol";
+import {
+  createTurnLifecycleEnvelope,
   TURN_EVENT,
   TURN_LIFECYCLE_WIRE_EVENT,
   TURN_COMMAND,
   TURN_PHASE,
   TURN_STATE,
-} from "@noobot/event-protocol";
+} from "@noobot/session-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
@@ -629,17 +631,17 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   });
   const listener = createRunEventListener({
     sessionId: "root-session",
-    onCommittedTurnLifecycle: (envelope) => dispatchAuthorityEvents({
+    onCommittedTurnLifecycle: (envelope, context) => dispatchAuthorityEvents({
       userId: envelope.userId,
       sessionId: envelope.sessionId,
       parentSessionId: envelope.parentSessionId,
-      persistenceScope: envelope.persistenceScope,
+      persistenceScope: context.persistenceScope,
     }),
   });
 
   const result = await listener.onEvent({
     event: "turn_lifecycle_committed",
-    data: { envelope: pending.at(-1).envelope },
+    data: { envelope: pending.at(-1).envelope, persistenceScope },
   });
 
   assert.deepEqual(result, { dispatched: true, delivered: 4 });
@@ -649,9 +651,7 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   assert.equal(calls.every(({ input }) => (
     JSON.stringify(input.persistenceScope) === JSON.stringify(persistenceScope)
   )), true);
-  assert.equal(sent.every(({ envelope }) => (
-    JSON.stringify(envelope.persistenceScope) === JSON.stringify(persistenceScope)
-  )), true);
+  assert.equal(sent.every(({ envelope }) => "persistenceScope" in envelope === false), true);
   assert.equal(pending.length, 0);
 });
 

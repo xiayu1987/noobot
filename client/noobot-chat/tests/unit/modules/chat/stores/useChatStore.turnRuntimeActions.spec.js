@@ -9,7 +9,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { applyTurnTerminalResolution, selectTurnMessageRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnTerminalResolution } from "@noobot/event-protocol";
+import { createTurnTerminalResolution } from "@noobot/session-protocol";
 
 function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
   const revision = 100;
@@ -51,28 +51,27 @@ describe("useChatStore turn runtime actions", () => {
     expect(runtime.value.startedAt).toBe("2026-07-21T10:00:00.000Z");
   });
 
-  it("promotes the optimistic session list identity when the backend assigns a session id", () => {
+  it("keeps the preallocated Session identity stable across backend events", () => {
     setActivePinia(createPinia());
     const store = useChatStore();
     store.sessions = [{
-      id: "local-session",
-      backendSessionId: "",
+      sessionId: "session-1",
       isLocal: true,
       title: "New session",
       messages: [],
     }];
-    store.activeSessionId = "local-session";
+    store.activeSessionId = "session-1";
 
     store.applyTurnRuntimeEvent({
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
-      sessionId: "local-session",
+      sessionId: "session-1",
       turnScopeId: "client-turn:identity:promotion",
       dialogProcessId: "dp-identity-promotion",
       updatedAt: "2026-07-21T10:00:00.000Z",
     });
     const result = store.applyTurnRuntimeEvent({
       type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-      sessionId: "backend-session",
+      sessionId: "session-1",
       turnScopeId: "client-turn:identity:promotion",
       dialogProcessId: "dp-identity-promotion",
       state: "sending",
@@ -82,16 +81,13 @@ describe("useChatStore turn runtime actions", () => {
 
     expect(result).toMatchObject({
       applied: true,
-      aliasPromoted: true,
-      previousSessionId: "local-session",
     });
     expect(store.sessions).toHaveLength(1);
     expect(store.sessions[0]).toMatchObject({
-      id: "backend-session",
-      backendSessionId: "backend-session",
-      isLocal: false,
+      sessionId: "session-1",
+      isLocal: true,
     });
-    expect(store.activeSessionId).toBe("backend-session");
+    expect(store.activeSessionId).toBe("session-1");
     expect(store.activeSession).toBe(store.sessions[0]);
   });
 

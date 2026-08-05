@@ -14,7 +14,7 @@ test("transport diagnostics expose correlation metadata without business payload
     commandId: "command-1",
     identity: { sessionId: "session-1", turnScopeId: "turn-1", userId: "secret-user" },
     input: { message: "secret message", attachments: [{ content: "secret attachment" }] },
-    concurrency: { expectedTurnRevision: 0, expectedSessionVersion: 7 },
+    concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 7 },
     session: { createIfAbsent: false },
     interaction: { response: { token: "secret-token" } },
   });
@@ -24,7 +24,7 @@ test("transport diagnostics expose correlation metadata without business payload
   assert.equal(summary.messageLength, 14);
   assert.equal(summary.attachmentCount, 1);
   assert.equal(summary.expectedTurnRevision, 0);
-  assert.equal(summary.expectedSessionVersion, 7);
+  assert.equal(summary.expectedAggregateVersion, 7);
   assert.equal(summary.createSessionIfAbsent, false);
   assert.equal(summary.hasUserIdField, true);
   const serialized = JSON.stringify(summary);

@@ -32,14 +32,14 @@ export function createTurnCommand({ userId = "", sessionId = "", parentSessionId
     turnScopeId: trim(turnScopeId), message: String(message || "").trim(),
     messageId: trim(runConfig?.userMessageId),
     attachments: Array.isArray(attachments) ? attachments : [],
-    expectedVersion: runConfig?.expectedVersion,
-    idempotencyKey: trim(runConfig?.idempotencyKey || turnScopeId),
+    expectedAggregateVersion: runConfig?.expectedAggregateVersion,
+    commandId: trim(runConfig?.commandId || turnScopeId),
     sourceIdentity: resume ? {
       dialogProcessId: trim(runConfig?.resumeDialogProcessId),
       turnScopeId: trim(runConfig?.resumeTurnScopeId),
     } : null,
   };
-  if (!command.userId || !command.sessionId || !command.turnScopeId || !command.idempotencyKey) {
+  if (!command.userId || !command.sessionId || !command.turnScopeId || !command.commandId) {
     const error = new Error("turn command identity is incomplete");
     error.statusCode = 400; error.errorCode = "INVALID_TURN_COMMAND"; throw error;
   }
@@ -62,7 +62,7 @@ export function toCommitTurnPayload(command = {}) {
     dialogProcessId: command.dialogProcessId, parentDialogProcessId: command.parentDialogProcessId,
     turnScopeId: command.turnScopeId, action: command.type,
     frontendUserMessage: command.origin === TURN_COMMAND_ORIGIN.USER,
-    idempotencyKey: command.idempotencyKey, expectedVersion: command.expectedVersion,
+    commandId: command.commandId, expectedAggregateVersion: command.expectedAggregateVersion,
     resumeDialogProcessId: command.sourceIdentity?.dialogProcessId,
     resumeTurnScopeId: command.sourceIdentity?.turnScopeId,
   };

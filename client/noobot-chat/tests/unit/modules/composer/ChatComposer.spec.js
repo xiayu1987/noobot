@@ -137,6 +137,7 @@ function mountComposer(props = {}) {
       uploadFiles: [],
       sending: false,
       connected: true,
+      sessionReady: true,
       ...props,
     },
     global: globalMountOptions,
@@ -233,6 +234,14 @@ afterEach(() => {
 });
 
 describe("ChatComposer interactions", () => {
+  it("keeps send disabled until the active session is loaded", async () => {
+    const wrapper = mountComposer({ modelValue: "hello", sessionReady: false });
+    expect(inputActions(wrapper).props("sendDisabled")).toBe(true);
+
+    await wrapper.setProps({ sessionReady: true });
+    expect(inputActions(wrapper).props("sendDisabled")).toBe(false);
+  });
+
   it("keeps send button disabled until connected input or attachments are available", async () => {
     const wrapper = mountComposer({ connected: false });
     expect(inputActions(wrapper).props("sendDisabled")).toBe(true);
@@ -319,7 +328,7 @@ describe("ChatComposer interactions", () => {
         return { composerRef, uploadFiles, onAppendUploads, onClearUploads };
       },
       template:
-        '<ChatComposer ref="composerRef" :connected="true" :upload-files="uploadFiles" @append-uploads="onAppendUploads" @clear-uploads="onClearUploads" />',
+        '<ChatComposer ref="composerRef" :connected="true" :session-ready="true" :upload-files="uploadFiles" @append-uploads="onAppendUploads" @clear-uploads="onClearUploads" />',
     });
 
     const wrapper = mount(OwnerHarness, {

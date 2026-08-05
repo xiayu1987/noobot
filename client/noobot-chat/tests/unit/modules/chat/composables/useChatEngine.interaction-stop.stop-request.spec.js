@@ -43,9 +43,8 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
 
   it("stopSending disables repeated stop and sends stable channel identity payload", async () => {
     const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
-      sessionId: "local-stop-payload",
+      sessionId: "backend-stop-payload",
     });
-    activeSession.value.backendSessionId = "backend-stop-payload";
     activeSession.value.parentSessionId = "parent-session";
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-payload", turnScopeId: "turn-stop-payload", dialogProcessId: "dp-stop-payload" });
     activeSession.value.messages.push({
@@ -98,9 +97,8 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
 
   it("stopSending can stop a refreshed in-flight assistant with channelState but no pending flag", async () => {
     const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
-      sessionId: "local-stop-refreshed",
+      sessionId: "backend-stop-refreshed",
     });
-    activeSession.value.backendSessionId = "backend-stop-refreshed";
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-refreshed", turnScopeId: "turn-refreshed", dialogProcessId: "dp-refreshed" });
     activeSession.value.messages = [
       { role: RoleEnum.USER, content: "edited", turnScopeId: "turn-refreshed" },
@@ -127,9 +125,8 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
 
   it("stopSending uses Registry identity when the message has no direct turn identity", async () => {
     const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
-      sessionId: "local-stop-channel-identity",
+      sessionId: "backend-stop-channel-identity",
     });
-    activeSession.value.backendSessionId = "backend-stop-channel-identity";
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-channel-identity", turnScopeId: "turn-channel-identity", dialogProcessId: "dp-channel-identity" });
     activeSession.value.messages = [
       { role: RoleEnum.USER, content: "running", turnScopeId: "turn-channel-identity" },
@@ -162,9 +159,8 @@ describe("useChatEngine.interaction-stop: stop-request", () => {
 
   it("stopSending can recover turnScopeId from the latest matching user message after refresh", async () => {
     const { engine, deps, sending, canStop, activeSession, turnRuntimeRegistry } = createHarness({
-      sessionId: "local-stop-user-turn-fallback",
+      sessionId: "backend-stop-user-turn-fallback",
     });
-    activeSession.value.backendSessionId = "backend-stop-user-turn-fallback";
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId: "backend-stop-user-turn-fallback", turnScopeId: "turn-user-fallback", dialogProcessId: "dp-user-turn-fallback" });
     activeSession.value.messages = [
       {

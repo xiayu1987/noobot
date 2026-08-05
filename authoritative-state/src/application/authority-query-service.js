@@ -11,7 +11,7 @@ import {
   createTurnLifecycleSnapshot,
   createTurnTerminalResolution,
   deriveAuthoritativeTurnCapabilities,
-} from "@noobot/event-protocol/turn-lifecycle";
+} from "@noobot/session-protocol/turn-lifecycle";
 import {
   isTerminalTurnLifecycleState,
   normalizeTurnLifecycleEntity,

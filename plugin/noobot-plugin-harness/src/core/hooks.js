@@ -6,7 +6,6 @@
 import { flushAllManifests, flushAllJsonlBuffers } from "../store/store.js";
 import { cleanupRunsBySessionIds } from "../utils/cleanup.js";
 import { injectPrompt, traceHook } from "../tracing/buffer-manager.js";
-import { createRunTraceSink } from "../tracing/run-trace-sink.js";
 import { safeError } from "../data/record-builders.js";
 import {
   emitHarnessHookProgress,
@@ -63,7 +62,6 @@ export function createRegisterHarnessHooks(deps = {}) {
   const shouldInjectPromptAtPointFn = deps.shouldInjectPromptAtPoint || shouldInjectPromptAtPoint;
   const injectPromptFn = deps.injectPrompt || injectPrompt;
   const traceHookFn = deps.traceHook || traceHook;
-  const createRunTraceSinkFn = deps.createRunTraceSink || createRunTraceSink;
   const safeErrorFn = deps.safeError || safeError;
   const flushAllManifestsFn = deps.flushAllManifests || flushAllManifests;
   const flushAllJsonlBuffersFn = deps.flushAllJsonlBuffers || flushAllJsonlBuffers;
@@ -95,23 +93,8 @@ export function createRegisterHarnessHooks(deps = {}) {
                 pluginName: plugin.name,
                 pluginVersion: plugin.version,
                 harness: {
+                  ...options,
                   globalBootstrap,
-                  planningGuidanceMode: options.planningGuidanceMode,
-                  summaryOnToolBurstThreshold: options.summaryOnToolBurstThreshold === true,
-                  summaryDetailSaveToAttachment: options.summaryDetailSaveToAttachment === true,
-                  saveSummaryDetailToAttachment: options.summaryDetailSaveToAttachment === true,
-                  capabilityModelInvoker: options.capabilityModelInvoker,
-                  capabilityModelByPurpose: options.capabilityModelByPurpose,
-                  stepModels: options.stepModels,
-                  guidance: options.guidance,
-                  resolveModelMessages: options.resolveModelMessages,
-                  capabilityToolAllowlist: options.capabilityToolAllowlist,
-                  capabilityToolAllowlistByPurpose: options.capabilityToolAllowlistByPurpose,
-                  acceptance: options.acceptance,
-                  review: options.review,
-                  pendingTtlHookTurns: options.pendingTtlHookTurns,
-                  planRefinementEnabled: options.planRefinementEnabled,
-                  runTraceSink: createRunTraceSinkFn(ctx, options),
                 },
               });
               emitHarnessHookProgressFn(ctx, "capability_runtime_done", { point });

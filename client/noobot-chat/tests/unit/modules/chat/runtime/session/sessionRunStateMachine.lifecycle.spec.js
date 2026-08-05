@@ -13,7 +13,7 @@ import {
   normalizeSessionRunEvent,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { deriveTurnCapabilities, reduceTurnRuntimeEvent } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnReducer.js";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 
 const processingStarted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.PROCESSING_STARTED, state: TURN_STATE.PROCESSING, phase: TURN_PHASE.PROCESSING, executionState: BackendChannelState.SENDING, capabilities: { actionLocked: true, canStop: true } };
 const actionAccepted = { type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE, eventType: TURN_EVENT.ACTION_ACCEPTED, state: TURN_STATE.ACTION_REQUESTING, phase: TURN_PHASE.ACTION, action: "send" };

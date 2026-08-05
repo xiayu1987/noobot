@@ -47,6 +47,7 @@ function summarizeMessageDimensions(messages = []) {
   const dialogGroups = [];
   const dialogById = new Map();
   let missingDialogIdCount = 0;
+  let missingMessageIdCount = 0;
   let summarizedCount = 0;
   for (const message of Array.isArray(messages) ? messages : []) {
     incrementCount(roles, resolveDiagnosticRole(message));
@@ -62,6 +63,7 @@ function summarizeMessageDimensions(messages = []) {
       }
       group.count += 1;
     }
+    if (!readField(message, "noobotMessageId")) missingMessageIdCount += 1;
     if (
       message?.summarized === true ||
       message?.lc_kwargs?.summarized === true ||
@@ -69,7 +71,13 @@ function summarizeMessageDimensions(messages = []) {
       message?.lc_kwargs?.additional_kwargs?.summarized === true
     ) summarizedCount += 1;
   }
-  return { roles, dialogGroups, missingDialogIdCount, summarizedCount };
+  return {
+    roles,
+    dialogGroups,
+    missingDialogIdCount,
+    missingMessageIdCount,
+    summarizedCount,
+  };
 }
 
 export function resolveDiagnosticRole(message = {}) {
@@ -98,6 +106,7 @@ function messageTraceItem(message = {}, index = 0, block = "") {
     injectedMessageType: readField(message, "injectedMessageType") || readField(message, "injected_message_type") || undefined,
     internalType: readField(message, "noobotInternalMessageType") || undefined,
     summarized: message?.summarized === true || message?.lc_kwargs?.summarized === true || message?.additional_kwargs?.summarized === true || undefined,
+    contentLength: content.length,
     contentHash: textHash(content),
     contentPreview: content.replace(/\s+/g, " ").slice(0, DEFAULT_CONTENT_CHARS),
   };

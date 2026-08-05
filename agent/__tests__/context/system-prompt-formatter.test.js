@@ -60,31 +60,56 @@ test("composeSystemInfoSections includes MCP/connectors/attachments when data ex
   assert.equal(joined.includes("Current attachment metadata"), true);
 });
 
-test("composeSystemInfoSections excludes turn identity from every system projection depth", () => {
+test("composeSystemInfoSections projects only model-owned execution context", () => {
   const sections = composeSystemInfoSections({
     locale: "en-US",
     dynamicInfo: {
-      sessionId: "session-kept",
+      now: "2026-08-05T12:00:00.000Z",
+      caller: "user",
+      sessionId: "session-secret",
       dialogProcessId: "dialog-secret",
       currentDialogProcessId: "dialog-current-secret",
       parentDialogProcessId: "dialog-parent-secret",
       turnScopeId: "turn-secret",
-      config: { turnScopeId: "turn-config-secret", safeConfirm: true },
+      config: {
+        allowUserInteraction: false,
+        turnScopeId: "turn-config-secret",
+        safeConfirm: true,
+        safeConfirmLevel: "critical",
+        sanitizeOutput: true,
+        streaming: true,
+        toolPolicy: { denyToolNames: ["secret-tool"] },
+      },
+      sessionTree: {
+        roots: ["unrelated-session-secret"],
+        nodes: { "unrelated-session-secret": { sessionId: "unrelated-session-secret" } },
+      },
       nested: [{ dialogProcessId: "dialog-nested-secret", value: "kept" }],
     },
   });
 
   const joined = sections.join("\n\n");
-  assert.equal(joined.includes("session-kept"), true);
-  assert.equal(joined.includes("\"safeConfirm\": true"), true);
-  assert.equal(joined.includes("\"value\": \"kept\""), true);
+  assert.equal(joined.includes("2026-08-05T12:00:00.000Z"), true);
+  assert.equal(joined.includes("\"caller\": \"user\""), true);
+  assert.equal(joined.includes("\"allowUserInteraction\": false"), true);
   for (const forbidden of [
+    "session-secret",
     "dialogProcessId",
     "currentDialogProcessId",
     "parentDialogProcessId",
     "turnScopeId",
+    "sessionTree",
+    "unrelated-session-secret",
     "dialog-secret",
     "turn-secret",
+    "safeConfirm",
+    "safeConfirmLevel",
+    "sanitizeOutput",
+    "streaming",
+    "toolPolicy",
+    "secret-tool",
+    "nested",
+    "value",
   ]) {
     assert.equal(joined.includes(forbidden), false, forbidden);
   }

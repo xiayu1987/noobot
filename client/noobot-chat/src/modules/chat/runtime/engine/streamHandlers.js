@@ -76,7 +76,7 @@ export function handleConnectorStatusStreamEvent({
       connectorName,
       status,
     });
-    refreshSessionConnectorsAsync(activeSession.value?.id || "");
+    refreshSessionConnectorsAsync(activeSession.value?.sessionId || "");
   }
 }
 
@@ -195,7 +195,7 @@ export function handleDoneStreamEvent({
     applyConversationState?.(
       {
         state: BackendChannelState.COMPLETED,
-        sessionId: String(data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || ""),
+        sessionId: String(data?.sessionId || activeSession?.value?.sessionId || ""),
         dialogProcessId: String(getMessageDialogProcessId(botMessage) || data?.dialogProcessId || ""),
         turnScopeId: String(getMessageTurnScopeId(botMessage) || turnMeta.turnScopeId || ""),
         sourceEvent: "done",

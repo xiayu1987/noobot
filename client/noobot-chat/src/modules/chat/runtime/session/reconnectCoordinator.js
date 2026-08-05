@@ -89,7 +89,7 @@ export function createReconnectCoordinator({
     let reconnectReplayQueue = Promise.resolve();
     const reconnectReplayFailures = [];
     const directExecutionRestoreCommandIds = new Set();
-    const reconnectSessionId = String(activeSession.value?.backendSessionId || "").trim();
+    const reconnectSessionId = String(activeSession.value?.sessionId || "").trim();
     if (!reconnectSessionId) return false;
     const knownLifecycleSequence = Number(
       turnRuntimeRegistry.value?.sessions?.[reconnectSessionId]?.authoritativeSequence || 0,
@@ -215,7 +215,7 @@ export function createReconnectCoordinator({
         activeTurnAfter: summarizeStateMachineTurn(replayRuntime),
       }));
       if (typeof chatWebSocketClient.requestJson !== "function") return;
-      const sessionId = String(activeSession.value?.backendSessionId || "").trim();
+      const sessionId = String(activeSession.value?.sessionId || "").trim();
       const currentTurn = resolveSessionTurnRuntime(
         turnRuntimeRegistry.value,
         sessionId,

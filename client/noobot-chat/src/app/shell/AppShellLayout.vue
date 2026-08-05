@@ -61,6 +61,7 @@ defineProps({
   memoryModel: { type: String, default: "" },
   availableModelOptions: { type: Array, default: () => [] },
   pluginModelConfig: { type: Object, default: () => ({}) },
+  summaryPolicy: { type: Object, default: () => ({}) },
   availableBotScenarios: { type: Array, default: () => [] },
   availablePlugins: { type: Array, default: () => [] },
   selectedPlugins: { type: Array, default: () => [] },
@@ -103,6 +104,7 @@ const emit = defineEmits([
   "update:input",
   "update:more-panel-visible",
   "update:plugin-model-config",
+  "update:summary-policy",
   "update:selected-model",
   "update:selected-plugins",
   "update:stream-output",
@@ -272,6 +274,7 @@ defineExpose({
           :composer-action-state="composerActionState"
           :can-stop="canStop"
           :connected="connected"
+          :session-ready="activeSession?.loaded === true && !loadingSessionDetail"
           :allow-user-interaction="allowUserInteraction"
           :safe-confirm="safeConfirm"
           :safe-confirm-level="safeConfirmLevel"
@@ -282,6 +285,7 @@ defineExpose({
           :memory-model="memoryModel"
           :model-options="availableModelOptions"
           :plugin-model-config="pluginModelConfig"
+          :summary-policy="summaryPolicy"
           :scenario-options="availableBotScenarios"
           :available-plugins="availablePlugins"
           :selected-plugins="selectedPlugins"
@@ -298,6 +302,7 @@ defineExpose({
           @update:selected-model="emit('update:selected-model', $event)"
           @update:memory-model="emit('update:memory-model', $event)"
           @update:plugin-model-config="emit('update:plugin-model-config', $event)"
+          @update:summary-policy="emit('update:summary-policy', $event)"
           @update:selected-plugins="emit('update:selected-plugins', $event)"
           @update:more-panel-visible="emit('update:more-panel-visible', $event)"
           @clear-uploads="emit('clear-uploads')"

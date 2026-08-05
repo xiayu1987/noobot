@@ -85,7 +85,7 @@ export function hasCompletableRunIdentity(data = {}, botMessage = {}) {
 export function buildFinalDoneEventData({ data = {}, activeSession, botMessage } = {}) {
   return {
     ...(data || {}),
-    sessionId: data?.sessionId || activeSession?.value?.backendSessionId || activeSession?.value?.id || "",
+    sessionId: data?.sessionId || activeSession?.value?.sessionId || "",
     dialogProcessId: data?.dialogProcessId || normalizeTrimmedString(botMessage?.dialogProcessId),
     turnScopeId: data?.turnScopeId || normalizeTrimmedString(botMessage?.turnScopeId),
   };

@@ -23,6 +23,7 @@ const props = defineProps({
   sending: { type: Boolean, default: false },
   composerActionState: { type: Object, default: () => ({}) },
   connected: { type: Boolean, default: false },
+  sessionReady: { type: Boolean, default: false },
   canStop: { type: Boolean, default: false },
   allowUserInteraction: { type: Boolean, default: true },
   safeConfirm: { type: Boolean, default: true },
@@ -35,6 +36,7 @@ const props = defineProps({
   memoryModel: { type: String, default: "" },
   modelOptions: { type: Array, default: () => [] },
   pluginModelConfig: { type: Object, default: () => ({}) },
+  summaryPolicy: { type: Object, default: () => ({}) },
   availablePlugins: { type: Array, default: () => [] },
   selectedPlugins: { type: Array, default: () => [] },
   interactionActive: { type: Boolean, default: false },
@@ -53,6 +55,7 @@ const emit = defineEmits([
   "update:selectedModel",
   "update:memoryModel",
   "update:pluginModelConfig",
+  "update:summaryPolicy",
   "update:selectedPlugins",
   "update:morePanelVisible",
   "append-uploads",
@@ -99,14 +102,17 @@ const sendDisabledState = computed(() => {
   const inputLength = String(props.modelValue || "").trim().length;
   const noInput = !inputLength && !attachmentCount.value;
   const disconnected = !props.connected;
+  const sessionNotReady = !props.sessionReady;
   const blockedByMessageState = ["requesting", "sending", "completing", "stopping"].includes(
     props.composerActionState?.displayState,
   );
-  const disabled = noInput || disconnected || blockedByMessageState;
+  const disabled = noInput || disconnected || sessionNotReady || blockedByMessageState;
   const disabledReason = noInput
     ? "empty"
     : disconnected
       ? "disconnected"
+      : sessionNotReady
+        ? "sessionNotReady"
       : blockedByMessageState
         ? "lastMessageInFlight"
         : "";
@@ -336,6 +342,7 @@ defineExpose({
                 :memory-model="memoryModel"
                 :model-options="modelOptions"
                 :plugin-model-config="pluginModelConfig"
+                :summary-policy="summaryPolicy"
                 :normalized-scenario-options="normalizedScenarioOptions"
                 :selected-scenario-description="selectedScenarioDescription"
                 :normalized-plugin-options="normalizedPluginOptions"
@@ -349,6 +356,7 @@ defineExpose({
                 @update:selected-model="emit('update:selectedModel', $event)"
                 @update:memory-model="emit('update:memoryModel', $event)"
                 @update:plugin-model-config="emit('update:pluginModelConfig', $event)"
+                @update:summary-policy="emit('update:summaryPolicy', $event)"
                 @select-scenario="onScenarioSelect"
                 @toggle-programming-scenario="onProgrammingScenarioToggle"
                 @toggle-plugin="onPluginToggle"

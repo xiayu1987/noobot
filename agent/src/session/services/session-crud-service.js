@@ -10,7 +10,7 @@ import {
   isSessionDisplaySummaryPayload,
 } from "../session-summary-builders.js";
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
-import { createTurnTerminalResolution } from "@noobot/event-protocol";
+import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
 
 function projectSessionTreeDepth(summary = {}, depth = 0) {

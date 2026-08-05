@@ -17,7 +17,6 @@ import {
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
 } from "../../src/session/session-summary-builders.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(
@@ -37,6 +36,18 @@ async function exists(filePath) {
   } catch {
     return false;
   }
+}
+
+function canonicalMessages(messages = [], namespace = "summary") {
+  return messages.map((message, index) => {
+    const turnScopeId = String(message?.turnScopeId || `turn-${namespace}-${index + 1}`);
+    return {
+      messageUid: String(message?.messageUid || `sm_${namespace}_${index + 1}`),
+      dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
+      turnScopeId,
+      ...message,
+    };
+  });
 }
 
 
@@ -71,11 +82,11 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     await runtime.sessionCrudService.ensureSession(userId, "B", "A");
 
     const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
-    sessionB.messages = [
+    sessionB.messages = canonicalMessages([
       { role: "system", content: "ignored" },
       { role: "user", content: "1234567890123456789012345" },
       { role: "assistant", content: "done", attachmentMetas: [{ id: "big" }] },
-    ];
+    ], "list_b");
     sessionB.currentTaskId = "task-b";
     await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
 
@@ -101,7 +112,7 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
-test("display maintenance migrates legacy session artifacts before rebuilding summaries", async () => {
+test("display maintenance rejects artifacts that require offline protocol migration", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "legacy";
@@ -133,17 +144,17 @@ test("display maintenance migrates legacy session artifacts before rebuilding su
     );
 
     const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
-    assert.deepEqual(maintenance.failures, []);
-    assert.deepEqual(maintenance.migratedSessionIds, [sessionId]);
+    assert.deepEqual(maintenance.failures, [{
+      sessionId,
+      code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
+      message: "Session artifact requires offline protocol migration",
+    }]);
+    assert.deepEqual(maintenance.migratedSessionIds, []);
     assert.deepEqual(maintenance.rebuiltSessionIds, []);
 
     const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
-    assert.equal(manifest.schemaVersion, TURN_THRESHOLDS.session.turnJournalSchemaVersion);
-    assert.equal("messages" in manifest, false);
-    const summary = JSON.parse(await readFile(path.join(sessionDir, "session-summary.json"), "utf8"));
-    assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
-    const display = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId });
-    assert.equal(display.sessions[0].messages[0].content, "legacy message");
+    assert.equal(manifest.schemaVersion, 4);
+    assert.equal("messages" in manifest, true);
   });
 });
 
@@ -194,7 +205,7 @@ test("session save refreshes the display projection with live activity timeline"
     await runtime.sessionCrudService.ensureSession(userId, "live", "");
 
     const session = await runtime.repositories.sessionRepository.findById(userId, "live", "");
-    session.messages = [{
+    session.messages = canonicalMessages([{
       role: "assistant",
       type: "tool_call",
       chatPresentation: false,
@@ -209,7 +220,7 @@ test("session save refreshes the display projection with live activity timeline"
         authority: "authoritative",
         text: "analysis in progress",
       }],
-    }];
+    }], "live");
     await runtime.repositories.sessionRepository.save(userId, session, "");
 
     const display = await runtime.repositories.sessionRepository.readSessionDisplaySummary(userId, "live", "");
@@ -236,7 +247,7 @@ test("session save writes the display summary once", async () => {
       return originalWriteJsonAtomic(filePath, payload);
     };
     const session = await repository.findById(userId, "single-summary-write", "");
-    session.messages = [{ role: "user", content: "one durable update" }];
+    session.messages = canonicalMessages([{ role: "user", content: "one durable update" }], "single_write");
 
     await repository.save(userId, session, "");
 
@@ -338,8 +349,8 @@ test("concurrent saves for different sessions preserve every sessions summary en
       runtime.repositories.sessionRepository.findById(userId, "A", ""),
       runtime.repositories.sessionRepository.findById(userId, "B", ""),
     ]);
-    sessionA.messages = [{ role: "user", content: "updated A" }];
-    sessionB.messages = [{ role: "user", content: "updated B" }];
+    sessionA.messages = canonicalMessages([{ role: "user", content: "updated A" }], "concurrent_a");
+    sessionB.messages = canonicalMessages([{ role: "user", content: "updated B" }], "concurrent_b");
 
     await Promise.all([
       runtime.repositories.sessionRepository.save(userId, sessionA, ""),
@@ -489,7 +500,7 @@ test("full and summary Session Detail expose the same canonical active Turn mess
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
 
     const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, "");
-    session.messages = [{
+    session.messages = canonicalMessages([{
       id: "user-active-full",
       messageId: "user-active-full",
       messageUid: "user-active-full",
@@ -497,7 +508,7 @@ test("full and summary Session Detail expose the same canonical active Turn mess
       type: "message",
       content: "resend request",
       turnScopeId: "turn-active-full",
-    }];
+    }], "active_full");
     session.turnLifecycle = {
       activeTurnScopeId: "turn-active-full",
       sequence: 1,
@@ -719,13 +730,14 @@ test("session display summary should keep chat view lightweight and rebuild stal
     };
 
     const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
-    sessionB.messages = [
+    sessionB.messages = canonicalMessages([
       {
         id: "u1",
         messageId: "u1",
         messageUid: "sm-u1",
         role: "user",
         turnScopeId: "turn-scope-u1",
+        dialogProcessId: "dp-u1",
         content: longUserContent,
         attachments: [{ id: "att-1", name: "a.txt", type: "text/plain", size: 12, raw: "large" }],
       },
@@ -899,7 +911,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         tool_call_id: "call-tool-only",
         content: "tool only result detail should not be in summary",
       },
-    ];
+    ], "lightweight_b");
     await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
 
     const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "B", "A");

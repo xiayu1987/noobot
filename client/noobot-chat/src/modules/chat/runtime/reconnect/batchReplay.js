@@ -150,14 +150,14 @@ export function applyReconnectEnvelopeToTargetMessage({
     eventName === StreamEventEnum.DONE ||
     eventName === StreamEventEnum.ERROR
   ) {
-    logWorkflowDiagnostics("frontend.workflowReplay.legacyMessageMutationSkipped", () => ({
+    logWorkflowDiagnostics("frontend.workflowReplay.unaddressedEventRejected", () => ({
       dialogProcessId: _trimStr(normalizedDpId),
       turnScopeId: _trimStr(eventData?.turnScopeId),
       event: eventName,
       reason: "stable_message_id_required",
     }));
   } else {
-    logWorkflowDiagnostics("frontend.workflowReplay.legacyMessageMutationSkipped", () => ({
+    logWorkflowDiagnostics("frontend.workflowReplay.unaddressedEventRejected", () => ({
       dialogProcessId: _trimStr(normalizedDpId),
       turnScopeId: _trimStr(eventData?.turnScopeId),
       event: eventName,
@@ -221,7 +221,7 @@ export function finalizeReconnectReplayBatch({
   navigateToLastMessage,
   shouldNavigate = false,
 } = {}) {
-  markReconnectSequenceApplied?.(normalizedDpId, maxAppliedSeq, {
+  markReconnectSequenceApplied?.(maxAppliedSeq, {
     sessionId,
     turnScopeId,
     eventKindsAtSequence,
@@ -268,7 +268,7 @@ export async function applyReconnectReplayBatchToActiveSession({
     turnScopeId: normalizedTurnScopeId,
   });
   logThinkingReplayDebug("frontend.thinkingReplay.reconnectBatchPlanned", () => ({
-    sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
+    sessionId: _trimStr(activeSession.value?.sessionId),
     dialogProcessId: normalizedDpId,
     turnScopeId: normalizedTurnScopeId,
     inputCount: _ensureArray(messages).length,
@@ -278,7 +278,7 @@ export async function applyReconnectReplayBatchToActiveSession({
     maxSequence,
   }));
   logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchPlanned", () => ({
-    sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
+    sessionId: _trimStr(activeSession.value?.sessionId),
     dialogProcessId: normalizedDpId,
     turnScopeId: normalizedTurnScopeId,
     inputCount: _ensureArray(messages).length,
@@ -294,7 +294,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   }));
   if (!nextMessages.length) {
     logWorkflowDiagnostics("frontend.workflowReplay.reconnectBatchIgnored", () => ({
-      sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
+      sessionId: _trimStr(activeSession.value?.sessionId),
       dialogProcessId: normalizedDpId,
       turnScopeId: normalizedTurnScopeId,
       reason: "all_envelopes_filtered_by_transport_cursor",
@@ -321,7 +321,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   });
   finalizeReconnectReplayBatch({
     normalizedDpId,
-    sessionId: _trimStr(activeSession.value?.backendSessionId || activeSession.value?.id),
+    sessionId: _trimStr(activeSession.value?.sessionId),
     turnScopeId: normalizedTurnScopeId,
     maxAppliedSeq,
     eventKindsAtSequence: Array.from(new Set(

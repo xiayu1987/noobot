@@ -69,10 +69,14 @@ export function useAppShellPseudoRoute({
     if (!targetSessionId || !currentSession?.loaded) return false;
     const currentIds = [
       activeSessionId?.value,
-      currentSession.id,
-      currentSession.backendSessionId,
+      currentSession.sessionId,
     ].map((value) => String(value || "").trim()).filter(Boolean);
     return currentIds.includes(targetSessionId);
+  }
+
+  function resolveRoutableSessionId() {
+    if (activeSession?.value?.isLocal === true) return "";
+    return String(activeSessionId?.value || "").trim();
   }
 
   async function applyPseudoRouteToUi(route = {}) {
@@ -112,18 +116,26 @@ export function useAppShellPseudoRoute({
     addPseudoRoutePopStateListener,
     removePseudoRoutePopStateListener,
   } = usePseudoRoute({
-    resolveCurrentSessionId: () => activeSessionId?.value,
+    resolveCurrentSessionId: resolveRoutableSessionId,
     resolveCurrentPanel: resolveActivePseudoPanel,
     resolveCurrentAnchor: () => currentMessageAnchorId?.value,
     applyRoute: applyPseudoRouteToUi,
   });
+
+  async function applyInitialPseudoRoute(route = parsePseudoRouteFromLocation()) {
+    if (initialPseudoRouteApplied.value) return false;
+    initialPseudoRouteApplied.value = true;
+    await applyPseudoRoute(route);
+    replacePseudoRoute();
+    return true;
+  }
 
   async function handleSelectSession(sessionId, options = {}) {
     const { fromHistory = false, ...selectOptions } = options || {};
     const previousSessionId = String(activeSessionId?.value || "").trim();
     closeMobileSidebarOnSelect?.(isMobile, mobileSidebarOpen);
     await selectSession?.(sessionId, selectOptions);
-    const nextSessionId = String(activeSessionId?.value || "").trim();
+    const nextSessionId = resolveRoutableSessionId();
     if (
       !fromHistory &&
       !selectOptions.silent &&
@@ -158,32 +170,16 @@ export function useAppShellPseudoRoute({
       thinkingDetailsVisible,
     ],
     () => {
+      if (!initialPseudoRouteApplied.value) return;
       replacePseudoRoute();
     },
-  );
-
-  watch(
-    () => activeSessionId?.value,
-    async (nextSessionId) => {
-      if (!nextSessionId || initialPseudoRouteApplied.value) return;
-      const route = parsePseudoRouteFromLocation();
-      const hasPseudoRoute = Boolean(route.sessionId || route.panel);
-      if (!hasPseudoRoute) {
-        initialPseudoRouteApplied.value = true;
-        replacePseudoRoute();
-        return;
-      }
-      initialPseudoRouteApplied.value = true;
-      await applyPseudoRoute(route);
-      replacePseudoRoute();
-    },
-    { immediate: true },
   );
 
   return {
     initialPseudoRouteApplied,
     parsePseudoRouteFromLocation,
     applyPseudoRoute,
+    applyInitialPseudoRoute,
     pushPseudoRoute,
     replacePseudoRoute,
     addPseudoRoutePopStateListener,

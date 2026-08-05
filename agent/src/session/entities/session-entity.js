@@ -6,7 +6,6 @@
 
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
-import { createHash } from "node:crypto";
 import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
 import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
@@ -31,24 +30,6 @@ function normalizeMessageUid(value = "") {
 
 export { createSessionMessageUid };
 
-function deriveLegacyMessageUid(message = {}, { sessionId = "", index = 0 } = {}) {
-  const runtimeMessageId = String(message?.messageId || message?.id || "").trim();
-  const seed = runtimeMessageId
-    ? [sessionId, resolveMessageDialogProcessId(message), message?.turnScopeId, runtimeMessageId]
-    : [
-        sessionId,
-        resolveMessageDialogProcessId(message),
-        message?.turnScopeId,
-        message?.role,
-        message?.type,
-        message?.ts,
-        message?.tool_call_id,
-        index,
-        message?.content,
-      ];
-  return `sm_legacy_${createHash("sha256").update(JSON.stringify(seed)).digest("hex").slice(0, 32)}`;
-}
-
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =
     selectedConnectors && typeof selectedConnectors === "object"
@@ -62,28 +43,6 @@ export function normalizeSelectedConnectors(selectedConnectors = {}) {
       ])
       .filter(([connectorType]) => connectorType),
   );
-}
-
-function lifecycleWithLegacyTerminalStatuses(session = {}) {
-  const source = session?.turnLifecycle && typeof session.turnLifecycle === "object"
-    ? session.turnLifecycle
-    : {};
-  const turns = { ...(source.turns || {}) };
-  const commits = session?.turnTerminalCommits;
-  if (commits && typeof commits === "object" && !Array.isArray(commits)) {
-    for (const [scopeId, commit] of Object.entries(commits)) {
-      const turnScopeId = String(scopeId || commit?.turnScopeId || "").trim();
-      const current = turns[turnScopeId];
-      if (!turnScopeId || !current || !commit || typeof commit !== "object") continue;
-      turns[turnScopeId] = {
-        ...current,
-        completionCommitId: current.completionCommitId || commit.completionCommitId,
-        summaryVersion: current.summaryVersion || commit.summaryVersion,
-        terminalStatus: current.terminalStatus || commit.terminalStatus || null,
-      };
-    }
-  }
-  return { ...source, turns };
 }
 
 export function normalizeMessageEntity(
@@ -132,12 +91,12 @@ export function normalizeMessageEntity(
   }
   if (message?.turnCommit && typeof message.turnCommit === "object" && !Array.isArray(message.turnCommit)) {
     const action = String(message.turnCommit.action || "").trim().toLowerCase();
-    const idempotencyKey = String(message.turnCommit.idempotencyKey || "").trim();
+    const commandId = String(message.turnCommit.commandId || "").trim();
     const runState = String(message.turnCommit.runState || "").trim().toLowerCase();
-    if (idempotencyKey) {
+    if (commandId) {
       normalizedMessage.turnCommit = {
         action: action === "continue" ? "continue" : "send",
-        idempotencyKey,
+        commandId,
         runState: runState || "pending_start",
       };
       const requestHash = String(message.turnCommit.requestHash || "").trim();
@@ -161,10 +120,8 @@ export function normalizeMessageEntity(
   if (String(message?.injectedBy || "").trim()) {
     normalizedMessage.injectedBy = String(message.injectedBy || "").trim();
   }
-  if (String(message?.injectedMessageType || message?.injected_message_type || "").trim()) {
-    normalizedMessage.injectedMessageType = String(
-      message.injectedMessageType || message.injected_message_type || "",
-    ).trim();
+  if (String(message?.injectedMessageType || "").trim()) {
+    normalizedMessage.injectedMessageType = String(message.injectedMessageType).trim();
   }
   if (message?.frontendUserMessage === true) {
     normalizedMessage.frontendUserMessage = true;
@@ -228,7 +185,11 @@ export function normalizeMessagesEntity(
 ) {
   return (messages || []).map((messageItem, index) => {
     const normalized = normalizeMessageEntity(messageItem, now);
-    normalized.messageUid ||= deriveLegacyMessageUid(normalized, { sessionId, index });
+    if (!normalized.messageUid) {
+      const error = new TypeError(`session message is missing messageUid at index ${index}`);
+      error.code = "SESSION_MESSAGE_UID_MISSING";
+      throw error;
+    }
     return normalized;
   });
 }
@@ -284,12 +245,12 @@ function normalizeMutationReceipts(receipts = []) {
   return (Array.isArray(receipts) ? receipts : []).map((receipt) => {
     if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
     const operation = String(receipt.operation || "").trim();
-    const idempotencyKey = String(receipt.idempotencyKey || "").trim();
-    if (!operation || !idempotencyKey) return null;
+    const commandId = String(receipt.commandId || "").trim();
+    if (!operation || !commandId) return null;
     return {
       operation,
-      idempotencyKey,
-      version: Number(receipt.version || 0),
+      commandId,
+      aggregateVersion: Number(receipt.aggregateVersion || 0),
       requestHash: String(receipt.requestHash || "").trim(),
       result: receipt.result && typeof receipt.result === "object" && !Array.isArray(receipt.result)
         ? receipt.result
@@ -358,6 +319,9 @@ export function normalizeSessionEntity(
     parentSessionId = "",
   } = {},
 ) {
+  if ("version" in session || "revision" in session) {
+    throw new TypeError("legacy session version fields are not supported; run the session protocol migration");
+  }
   const nowValue = now();
   const normalizedSessionId = String(session?.sessionId || sessionId || "").trim();
   const normalizedParentSessionId = String(
@@ -377,6 +341,7 @@ export function normalizeSessionEntity(
     ...(session && typeof session === "object" ? session : {}),
     sessionId: normalizedSessionId,
     parentSessionId: normalizedParentSessionId,
+    aggregateVersion: Math.max(0, Number(session?.aggregateVersion) || 0),
     caller: String(session?.caller || "user").trim() || "user",
     modelAlias: String(session?.modelAlias || ""),
     currentTaskId: String(session?.currentTaskId || "").trim(),
@@ -387,13 +352,12 @@ export function normalizeSessionEntity(
     dialogOrder: normalizeDialogOrderEntity(session?.dialogOrder || [], normalizedMessages),
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     turnStatuses: normalizeTurnStatusesEntity(session?.turnStatuses || [], now),
-    turnLifecycle: normalizeTurnLifecycleEntity(lifecycleWithLegacyTerminalStatuses(session)),
+    turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
     authorityEventOutbox: normalizeAuthorityEventOutbox(session?.authorityEventOutbox || []),
     selectedConnectors: normalizeSelectedConnectors(session?.selectedConnectors || {}),
     createdAt: String(session?.createdAt || "").trim() || nowValue,
     updatedAt: String(session?.updatedAt || "").trim() || nowValue,
   };
-  delete normalizedSession.turnTerminalCommits;
   if (normalizedCustomTitle) normalizedSession.customTitle = normalizedCustomTitle;
   else delete normalizedSession.customTitle;
   if (normalizedMutationReceipts.length) normalizedSession.mutationReceipts = normalizedMutationReceipts;
@@ -403,6 +367,7 @@ export function normalizeSessionEntity(
   } else {
     delete normalizedSession.turnSummaryCheckpoints;
   }
+  delete normalizedSession.turnTerminalCommits;
   return normalizedSession;
 }
 

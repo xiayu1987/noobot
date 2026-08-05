@@ -15,6 +15,7 @@ import { createConnectorAccessTool } from "./connectors/connector-access-tool.js
 import { createWebSearchTool } from "./ai-models/web-search-tool.js";
 import { createMultimodalGenerateTool } from "./ai-models/multimodal-generate-tool.js";
 import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
+import { createTaskCheckTool } from "./collaboration/task-check-tool.js";
 import { createRequestHelpTool } from "./collaboration/request-help-tool.js";
 import { emitEvent } from "../events/index.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
@@ -146,6 +147,7 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.WEB_SEARCH]: [TOOL_NAME.WEB_SEARCH],
   [TOOL_NAME.MULTIMODAL_GENERATE]: [TOOL_NAME.MULTIMODAL_GENERATE],
   [TOOL_NAME.TASK_SUMMARY]: [TOOL_NAME.TASK_SUMMARY],
+  [TOOL_NAME.TASK_CHECK]: [TOOL_NAME.TASK_CHECK],
   [TOOL_NAME.REQUEST_HELP]: [TOOL_NAME.REQUEST_HELP],
 };
 
@@ -223,6 +225,7 @@ async function buildToolsDefault(ctx) {
     ...createConnectorAccessTool(ctx),
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),
+    ...createTaskCheckTool(ctx),
     ...createRequestHelpTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];

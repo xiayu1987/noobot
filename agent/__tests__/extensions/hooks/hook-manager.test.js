@@ -78,6 +78,46 @@ test("agent adapter exposes the sanitized plugin event capability", async () => 
   assert.equal(Object.hasOwn(pluginEvent?.data?.data || {}, "agentContext"), false);
 });
 
+test("agent adapter propagates cancellation without recording hook failure", async () => {
+  const hookManager = createHookManager();
+  const events = [];
+  const controller = new AbortController();
+  const reason = { type: "user_stop", reason: "user stop action" };
+  hookManager.on(HOOK_POINT.AGENT.BEFORE_LLM_CALL, async (_context, invocation) => {
+    await new Promise((resolve) => invocation.signal.addEventListener("abort", resolve, { once: true }));
+  }, { id: "test.agent-adapter.parent-abort" });
+
+  const invocation = runAgentRuntimeHook({
+    runtime: { hookManager, abortSignal: controller.signal },
+    point: HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+    context: {},
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+  controller.abort(reason);
+
+  await assert.rejects(invocation, (error) => error === reason);
+  assert.equal(events.some((event) => event?.event === "hook_error"), false);
+});
+
+test("agent adapter executes detached terminal hooks after parent cancellation", async () => {
+  const hookManager = createHookManager();
+  const controller = new AbortController();
+  controller.abort({ type: "user_stop", reason: "user stop action" });
+  let calls = 0;
+  hookManager.on(HOOK_POINT.AGENT.ON_ABORT, () => {
+    calls += 1;
+  }, { id: "test.agent-adapter.detached-abort" });
+
+  const result = await runAgentRuntimeHook({
+    runtime: { hookManager, abortSignal: controller.signal },
+    point: HOOK_POINT.AGENT.ON_ABORT,
+    context: {},
+  });
+
+  assert.equal(calls, 1);
+  assert.deepEqual(result.failures, []);
+});
+
 test("withHookRuntimeMeta projects the canonical runtime identity", () => {
   const context = withHookRuntimeMeta({
     systemRuntime: {

@@ -627,6 +627,14 @@ export function createMedia2DataTool({ agentContext }) {
         globalConfig,
         userConfig,
         streaming: false,
+        context: {
+          runtime,
+          invocation: {
+            flow: "tool.media2data",
+            purpose: "media_extraction",
+            domain: "data_processing",
+          },
+        },
       });
       const extractedText = String(modelResult.text || "");
       const persistedOutput = await persistMedia2DataTextAttachment({

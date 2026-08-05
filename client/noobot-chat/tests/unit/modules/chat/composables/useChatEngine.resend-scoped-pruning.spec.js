@@ -23,7 +23,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     const stream = vi.fn(async () => {
       observedUserMessage = activeSession.value.messages.find((message) => message.role === RoleEnum.USER);
     });
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, commandId, anchor }) => {
       const staleReplacementUser = {
         id: "msg-user-replace-stale",
         messageId: "msg-user-replace-stale",
@@ -32,9 +32,9 @@ describe("useChatEngine.resend scoped pruning", () => {
         content: newContent,
       };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-replace-stale",
-        version: 1,
+        aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser: staleReplacementUser,
       });
@@ -81,7 +81,7 @@ describe("useChatEngine.resend scoped pruning", () => {
       role: RoleEnum.ASSISTANT,
       content: "old answer",
     };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
         id: "new-user",
         messageId: "new-user",
@@ -90,9 +90,9 @@ describe("useChatEngine.resend scoped pruning", () => {
         content: "edited question",
       };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-replace-mapping",
-        version: 4,
+        aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
         session: { messageCount: 1 },
@@ -109,7 +109,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     });
     activeSession.value.messages = [oldUser, oldAssistant];
     activeSession.value.rawMessages = [oldUser, oldAssistant];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
 
     await expect(engine.resendMonotonicMessage(oldAssistant, "edited question")).resolves.toBe(true);
 
@@ -153,7 +153,7 @@ describe("useChatEngine.resend scoped pruning", () => {
       content: "old answer",
       turnScopeId: "client-turn:old",
     };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = {
         id: "u-new",
         messageId: "u-new",
@@ -162,9 +162,9 @@ describe("useChatEngine.resend scoped pruning", () => {
         turnScopeId,
       };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-duplicate-scoped-latest",
-        version: 4,
+        aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
         messages: [previousUser, previousAssistant, replacementUser],
@@ -188,7 +188,7 @@ describe("useChatEngine.resend scoped pruning", () => {
     };
     activeSession.value.messages = [previousUser, previousAssistant, latestUser];
     activeSession.value.rawMessages = [previousUser, previousAssistant, latestUser];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
 
     await expect(engine.resendMonotonicMessage(latestUser, "same question")).resolves.toBe(true);
 
@@ -217,12 +217,12 @@ describe("useChatEngine.resend scoped pruning", () => {
   it("resendMonotonicMessage starts generation from the user-only replace-turn snapshot", async () => {
     const stream = vi.fn(async () => {});
     const deleteSessionMessagesFromApi = vi.fn();
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, idempotencyKey, anchor }) => {
+    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
       const replacementUser = { id: "msg-user-replace-completed", messageId: "msg-user-replace-completed", turnScopeId, role: RoleEnum.USER, content: "edited question" };
       return makeTurnReplacementResponse({
-        commandId: idempotencyKey,
+        commandId: commandId,
         sessionId: "local-resend-replace-completed",
-        version: 4,
+        aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
         replacementUser,
       });

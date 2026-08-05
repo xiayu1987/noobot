@@ -382,8 +382,8 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.upsertTurnTiming(payload);
     },
 
-    async stampReusedUserTurnDialogProcessId(payload = {}) {
-      return sessionMessageService.stampReusedUserTurnDialogProcessId(payload);
+    async assertReusedUserTurnIdentity(payload = {}) {
+      return sessionMessageService.assertReusedUserTurnIdentity(payload);
     },
 
     async commitTurnSummaryCheckpoint(payload = {}) {

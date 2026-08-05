@@ -55,6 +55,7 @@ const {
   getLatestMainModelContentLog,
   getExecutionLogs,
   currentExecutionLogs,
+  latestTaskCheckReceipt,
   loadedThinkingDetail,
   getExecutionLogCount,
   getThinkingDetailLabel,
@@ -81,6 +82,7 @@ const {
     :latest-main-model-content-log="getLatestMainModelContentLog(messageItem)"
     :execution-logs="currentExecutionLogs"
     :execution-log-count="getExecutionLogCount(messageItem)"
+    :task-check-receipt="latestTaskCheckReceipt"
     :thinking-detail-label="getThinkingDetailLabel(messageItem)"
     :open-names="thinkingOpenNames"
     :get-detail-key="getThinkingDetailItemKey"
@@ -98,6 +100,7 @@ const {
     :grouped-tool-logs="groupCompletedToolLogs(messageItem)"
     :thinking-content-items="thinkingContentItems"
     :detail-count="getExecutionLogCount(messageItem)"
+    :task-check-receipt="latestTaskCheckReceipt"
     :get-tree-prefix="getThinkingTreePrefix"
     :get-detail-key="getThinkingDetailItemKey"
     :is-expanded="isThinkingDetailExpanded"

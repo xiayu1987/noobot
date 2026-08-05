@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { SessionCrudService } from "../../src/session/services/session-crud-service.js";
@@ -13,14 +13,14 @@ import { SessionCrudService } from "../../src/session/services/session-crud-serv
 const now = () => "2026-07-18T00:00:00.000Z";
 
 function harness(initial = {}) {
-  let persisted = structuredClone({ sessionId: "s1", parentSessionId: "", version: 3, revision: 3, messages: [], ...initial });
+  let persisted = structuredClone({ sessionId: "s1", parentSessionId: "", aggregateVersion: 3, messages: [], ...initial });
   let saveFailure = null;
   const repo = {
     async withSessionMutation(_u, _s, _p, operation) { return operation(); },
     async resolveParentSessionId() { return ""; },
     async findById() { return normalizeSessionEntity(structuredClone(persisted), { now }); },
-    async save(_u, next, _p, { expectedVersion } = {}) {
-      assert.equal(expectedVersion, Number(persisted.version ?? persisted.revision ?? 0));
+    async save(_u, next, _p, { expectedAggregateVersion } = {}) {
+      assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
       if (saveFailure) {
         const error = saveFailure;
         saveFailure = null;
@@ -42,14 +42,14 @@ function newSessionHarness() {
     async withSessionMutation(_u, _s, _p, operation) { return operation(); },
     async resolveParentSessionId() { return ""; },
     createInitialSession({ sessionId }) {
-      return normalizeSessionEntity({ sessionId, parentSessionId: "", version: 0, revision: 0, messages: [] }, { now });
+      return normalizeSessionEntity({ sessionId, parentSessionId: "", aggregateVersion: 0, messages: [] }, { now });
     },
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted), { now }) : null;
     },
-    async save(_u, next, _p, { expectedVersion, createOnly } = {}) {
+    async save(_u, next, _p, { expectedAggregateVersion, createOnly } = {}) {
       if (createOnly) assert.equal(persisted, null);
-      else assert.equal(expectedVersion, Number(persisted.version ?? persisted.revision ?? 0));
+      else assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
       persisted = structuredClone(normalizeSessionEntity(next, { now }));
     },
   };
@@ -325,7 +325,7 @@ test("terminal resolution reads status from the Turn without returning messages"
   assert.equal(JSON.stringify(response).includes('"messages"'), false);
 });
 
-test("legacy terminal snapshots migrate onto Turns and are discarded", () => {
+test("noncanonical terminal snapshots are discarded without mutating Turns", () => {
   const normalized = normalizeSessionEntity({
     sessionId: "legacy",
     messages: [],
@@ -342,7 +342,7 @@ test("legacy terminal snapshots migrate onto Turns and are discarded", () => {
     },
   }, { now });
 
-  assert.equal(normalized.turnLifecycle.turns.t1.terminalStatus.status, "completed");
+  assert.equal(normalized.turnLifecycle.turns.t1.terminalStatus, null);
   assert.equal(normalized.turnTerminalCommits, undefined);
 });
 
@@ -413,7 +413,7 @@ test("session mutex, turn revision and session version conflicts do not mutate s
   await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "c1", 0, { action: "send", phase: TURN_PHASE.ACTION }));
   const second = await h.service.applyTurnLifecycleEvent({ ...event(TURN_EVENT.ACTION_ACCEPTED, "c2", 0, { action: "resend", phase: TURN_PHASE.ACTION }), turnScopeId: "t2" });
   const stale = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "c3", 0, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
-  const sessionStale = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "c4", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending", expectedSessionVersion: 2 }));
+  const sessionStale = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "c4", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending", expectedAggregateVersion: 2 }));
   assert.equal(second.reason, "session_action_conflict");
   assert.equal(stale.reason, "turn_revision_conflict");
   assert.equal(sessionStale.reason, "session_version_conflict");

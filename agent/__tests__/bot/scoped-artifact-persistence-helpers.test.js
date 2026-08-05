@@ -108,7 +108,16 @@ test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot fr
         assert.equal(payload.userId, "u1");
         assert.equal(payload.sessionId, "s1");
         return {
-          session: { sessionId: "s1", messages: [{ role: "assistant", content: "ok" }] },
+          session: {
+            sessionId: "s1",
+            messages: [{
+              messageUid: "sm_scoped_snapshot",
+              role: "assistant",
+              content: "ok",
+              dialogProcessId: "dialog-scoped-snapshot",
+              turnScopeId: "turn-scoped-snapshot",
+            }],
+          },
           turnTasks: [{ taskId: "t1" }],
         };
       },

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { createMockSocket, getEvent, listEvents, FakeUpstreamWebSocket } from "./channel-manager.state-consistency.test-helpers.js";
-import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/event-protocol";
+import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
 import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
 
 test("invalid authoritative lifecycle has no journal or state projection side effects", () => {

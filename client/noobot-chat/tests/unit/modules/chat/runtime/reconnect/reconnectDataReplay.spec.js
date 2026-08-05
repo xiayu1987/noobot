@@ -5,7 +5,8 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { applyReconnectDataReplay } from "../../../../../../src/modules/chat/runtime/reconnect/reconnectDataReplay.js";
-import { createReplayBatch, createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/event-protocol";
+import { createReplayBatch } from "@noobot/event-protocol";
+import { createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/session-protocol";
 
 function snapshot({ sessionId = "s-1", turnScopeId = "turn-1", sequence = 4, state = TURN_STATE.PROCESSING } = {}) {
   return createTurnLifecycleSnapshot({

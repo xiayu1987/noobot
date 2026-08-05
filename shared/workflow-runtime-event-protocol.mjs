@@ -83,14 +83,14 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
     }
   }
   if (event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
-    const sessionId = text(data?.sessionId || data?.id || data?.backendSessionId);
+    const sessionId = text(data?.sessionId);
     if (!sessionId) errors.push("missing_snapshot_session");
     if (!text(data?.workflowRunId)) errors.push("missing_snapshot_workflow_run");
     if (!text(data?.nodeExecutionId)) errors.push("missing_snapshot_node_execution");
     if (!text(data?.parentSessionId)) errors.push("missing_snapshot_parent_session");
-    const snapshotVersion = Number(data?.snapshotVersion || data?.sessionVersion || data?.revision || 0);
-    if (!Number.isInteger(snapshotVersion) || snapshotVersion <= 0) {
-      errors.push("invalid_snapshot_version");
+    const aggregateVersion = Number(data?.aggregateVersion || 0);
+    if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
+      errors.push("invalid_aggregate_version");
     }
     const messages = Array.isArray(data?.messages) ? data.messages : [];
     if (messages.some((message = {}) => !text(message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId))) {
@@ -100,7 +100,7 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
   const sequence = event === WORKFLOW_RUNTIME_EVENT.PLANNING
     ? 0
     : event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT
-      ? Number(data?.snapshotVersion || data?.sessionVersion || data?.revision || 0)
+      ? Number(data?.aggregateVersion || 0)
       : Number(data?.sequence || 0);
   if (![WORKFLOW_RUNTIME_EVENT.PLANNING, WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT].includes(event) && (!Number.isInteger(sequence) || sequence <= 0)) {
     errors.push("invalid_authoritative_sequence");

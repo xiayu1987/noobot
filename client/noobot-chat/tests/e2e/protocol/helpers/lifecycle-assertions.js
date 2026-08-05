@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
+import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
 
 export function assertLifecycleSequence(events = []) {
   expect(events.length).toBeGreaterThan(0);
@@ -11,7 +12,7 @@ export function assertLifecycleSequence(events = []) {
   let sequence = -1;
   let revision = -1;
   for (const event of events) {
-    expect(event.protocolVersion).toBe(4);
+    expect(event.protocolVersion).toBe(TURN_LIFECYCLE_PROTOCOL_VERSION);
     expect(event.eventId).toBeTruthy();
     expect(eventIds.has(event.eventId)).toBe(false);
     expect(event.sequence).toBeGreaterThan(sequence);

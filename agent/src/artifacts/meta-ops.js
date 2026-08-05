@@ -77,6 +77,51 @@ function firstValue(...values) {
   return "";
 }
 
+export function projectCanonicalAttachmentIdentity(attachmentItem = {}, expectedSessionId = "") {
+  if (!isPlainObject(attachmentItem)) {
+    const error = new Error("attachment must be a canonical plain object");
+    error.statusCode = 400;
+    error.errorCode = "INVALID_CANONICAL_ATTACHMENT";
+    throw error;
+  }
+  const identity = {
+    attachmentId: safeStr(attachmentItem.attachmentId),
+    sessionId: safeStr(attachmentItem.sessionId),
+    attachmentSource: safeStr(attachmentItem.attachmentSource),
+    path: safeStr(attachmentItem.path),
+    contentSha256: safeStr(attachmentItem.contentSha256),
+  };
+  const normalizedExpectedSessionId = safeStr(expectedSessionId);
+  if (
+    !identity.attachmentId ||
+    !identity.sessionId ||
+    !identity.attachmentSource ||
+    !identity.path ||
+    (normalizedExpectedSessionId && identity.sessionId !== normalizedExpectedSessionId)
+  ) {
+    const error = new Error("attachment must be canonical and belong to the current session");
+    error.statusCode = 400;
+    error.errorCode = "INVALID_CANONICAL_ATTACHMENT";
+    throw error;
+  }
+  return identity;
+}
+
+export function projectCanonicalAttachmentIdentities(attachments = [], expectedSessionId = "") {
+  if (!Array.isArray(attachments)) {
+    const error = new Error("attachments must be a canonical array");
+    error.statusCode = 400;
+    error.errorCode = "INVALID_CANONICAL_ATTACHMENT";
+    throw error;
+  }
+  return attachments.map((attachmentItem) =>
+    projectCanonicalAttachmentIdentity(attachmentItem, expectedSessionId));
+}
+
+export function assertCanonicalAttachments(attachments = [], expectedSessionId = "") {
+  projectCanonicalAttachmentIdentities(attachments, expectedSessionId);
+}
+
 export function normalizeAttachmentOwnerMeta(attachmentItem = {}) {
   const explicitOwner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : null;
   const baseOwner = cleanPlainObject(explicitOwner) || {};
@@ -251,7 +296,6 @@ export function normalizeAttachmentMetas(attachmentMetas = []) {
         sessionId: safeStr(firstValue(
           attachmentItem?.sessionId,
           attachmentItem?.session_id,
-          attachmentItem?.backendSessionId,
         )),
         attachmentSource: safeStr(firstValue(
           attachmentItem?.attachmentSource,

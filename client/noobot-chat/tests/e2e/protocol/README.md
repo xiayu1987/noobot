@@ -7,7 +7,7 @@
 
 - `fixtures/`：浏览器、认证、Session、协议捕获及证据输出生命周期。
 - `helpers/`：浏览器操作和各协议域断言，不产生业务状态。
-- `specs/`：PBE-001～PBE-028、PBE-099 的浏览器业务场景，包括 Manifest V2 插件激活和 runtime-events 身份闭环。
+- `specs/`：31 条去重后的 PBE 浏览器业务场景，包括 Manifest V2 插件激活、runtime-events 身份闭环、Workflow 停止继续、Harness 低轮次工作流和主流程小结 checkpoint。
 - `playwright.protocol.config.js`：协议测试唯一 Playwright 配置。
 
 运行前必须提供：
@@ -16,9 +16,16 @@
 export NOOBOT_E2E_USER_ID='...'
 export NOOBOT_E2E_CONNECT_CODE='...'
 export NOOBOT_E2E_BASE_URL='http://127.0.0.1:10060'
-export NOOBOT_E2E_WORKSPACE_ROOT='/absolute/path/to/noobot/workspace'
+export NOOBOT_WORKSPACE_ROOT='/absolute/path/to/noobot/workspace'
+export NOOBOT_E2E_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
+export NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
 export NOOBOT_PLUGIN_DEBUG='1'
 ```
+
+`NOOBOT_E2E_WORKSPACE_ROOT` 是审计进程读取 Session、快照和 runtime-events 的根目录。
+所有被测服务和 E2E 审计必须使用同一个 `NOOBOT_WORKSPACE_ROOT`。两个专用变量只声明各进程的
+读取职责，其值必须派生自该唯一根目录。禁止让代理和 E2E 审计使用不同的 workspace 根目录，
+否则 runtime-events 数据链不闭合，测试配置应视为无效。三个变量只要显式设置就必须使用绝对路径。
 
 服务应由测试外部启动。测试不使用模拟后端，也不通过文件系统或内部接口创建业务事实。
 
@@ -31,9 +38,42 @@ npm run test:e2e:protocol:full
 
 证据默认写入仓库根目录的 `test-results/protocol/`。凭证禁止进入日志、trace、截图或报告。
 
+## 模型调用观测协议
+
+所有生产模型实例必须由 `agent/src/models/factory/chat-model.js` 创建，并在 provider
+`invoke()` 边界由 `agent/src/models/invoke/observed-chat-model.js` 统一观测。唯一权威事件为：
+
+```text
+event = model_context_trace
+data.stage = llm_invoke_messages
+data.authority = model_invoke_port
+data.protocolVersion = 1
+```
+
+主 Agent、瞬态重试、最终 streaming、tool binding、capability、memory、MCP、协作和数据处理
+不得在各自业务分支重复发出该事件。每次实际 provider 调用生成唯一 `invocationId`；同一模型
+实例及其 `bindTools()` 派生实例共享 `modelInstanceId`，并按 `invocationSequence` 单调递增。
+E2E 只读取 `authority=model_invoke_port` 的记录，并校验消息数量、角色、dialog 分组、
+messageId 缺失数、hash、preview 与 truncated 闭合。源码边界由
+`agent/__tests__/architecture/model-invocation-observation-boundary.test.js` 强制守卫。
+
+模型观测不是某几条业务用例的局部断言。所有 PBE 用例的调用期望由
+`helpers/model-observation-policy.js` 唯一定义为 `required` 或 `forbidden`；
+Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭合。统一 `noobot` fixture 在每条
+用例结束后读取根 Session 的完整 execution-event tree，审计所有权威模型调用，并输出：
+
+- `protocol-evidence/model-invocations.jsonl`：本用例全部权威 provider 调用记录。
+- `protocol-evidence/model-observation-audit.json`：调用期望、计数、模型实例、Session、purpose 与 domain 汇总。
+
+业务 spec 只保留主 Agent、Workflow 子 Session 或专用模型的领域身份断言，不得重复实现通用
+消息闭合规则。`required` 无调用、`forbidden` 有调用、未登记 PBE、重复 PBE 或废弃策略项均直接失败。
+统一观测只约束最终 provider `invoke(messages)` 的消息协议。主 Agent 仍由 system、历史窗口、
+小结与增量 Context 生产消息；capability、工具、MCP、memory 等专用模型仍由各自领域生产者组装
+消息，E2E 不把这些专用调用错误套用成主 Agent 的 Context 策略。
+
 ## 实现状态
 
 基础配置、证据捕获、认证和 Session fixture、协议断言入口已经建立。新增用例必须从
 `fixtures/noobot.fixture.js` 导入 `test` 和 `expect`，从而保证所有用例使用同一套捕获和审计链。
-PBE-001～PBE-028 与 PBE-099 已全部落地。所有场景从统一 fixture 运行，禁止用
+PBE-001～004、PBE-006～018、PBE-021～034 已全部落地。所有场景从统一 fixture 运行，禁止用
 `test.skip` 或无业务断言的占位测试伪装覆盖率。

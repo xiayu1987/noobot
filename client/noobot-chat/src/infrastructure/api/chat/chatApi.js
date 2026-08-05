@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
 function resolveFetcher(fetcher) {
   return fetcher || fetch;
 }
@@ -49,7 +50,7 @@ export function resolveAttachmentSessionId(attachmentItem = {}) {
   return firstNormalizedString(
     attachmentItem?.sessionId,
     attachmentItem?.session_id,
-    attachmentItem?.backendSessionId,
+    attachmentItem?.sessionId,
   );
 }
 
@@ -159,15 +160,12 @@ export async function getSessionDetailApi(
 }
 
 export async function resolveTurnTerminalStateApi(
-  { userId = "", sessionId = "", turnScopeId = "", commandId = "", persistenceScope = null },
+  { userId = "", sessionId = "", turnScopeId = "", commandId = "" },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
   const queryParams = [];
   if (commandId) queryParams.push(`commandId=${encodeURIComponent(commandId)}`);
-  if (persistenceScope && typeof persistenceScope === "object") {
-    queryParams.push(`persistenceScope=${encodeURIComponent(JSON.stringify(persistenceScope))}`);
-  }
   const query = queryParams.length ? `?${queryParams.join("&")}` : "";
   const response = await runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnScopeId)}/terminal${query}`,
@@ -212,20 +210,19 @@ export async function deleteSessionMessagesFromApi(
     sessionId = "",
     parentSessionId = "",
     anchor = {},
-    expectedVersion = undefined,
-    idempotencyKey = "",
+    expectedAggregateVersion = undefined,
+    commandId = "",
   },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
-  const body = {
-    parentSessionId: String(parentSessionId || "").trim(),
-    anchor: anchor && typeof anchor === "object" && !Array.isArray(anchor) ? anchor : {},
-    idempotencyKey: String(idempotencyKey || "").trim(),
-  };
-  if (expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== "") {
-    body.expectedVersion = expectedVersion;
-  }
+  const body = createSessionCommand({
+    commandId,
+    type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
+    scope: { userId, sessionId, parentSessionId },
+    expectedAggregateVersion,
+    payload: { anchor },
+  });
   return runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/messages/delete-from`,
     {
@@ -244,24 +241,25 @@ export async function replaceSessionTurnApi(
     anchor = {},
     newContent = "",
     turnScopeId = "",
-    expectedVersion = undefined,
-    idempotencyKey = "",
+    expectedAggregateVersion = undefined,
+    commandId = "",
     attachments = undefined,
   },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
-  const body = {
-    parentSessionId: String(parentSessionId || "").trim(),
-    anchor: anchor && typeof anchor === "object" && !Array.isArray(anchor) ? anchor : {},
-    newContent: String(newContent || "").trim(),
-    turnScopeId: String(turnScopeId || "").trim(),
-    idempotencyKey: String(idempotencyKey || "").trim(),
-  };
-  if (Array.isArray(attachments)) body.attachments = attachments;
-  if (expectedVersion !== undefined && expectedVersion !== null && expectedVersion !== "") {
-    body.expectedVersion = expectedVersion;
-  }
+  const body = createSessionCommand({
+    commandId,
+    type: SESSION_COMMAND.TURN_REPLACE,
+    scope: { userId, sessionId, parentSessionId },
+    expectedAggregateVersion,
+    payload: {
+      anchor,
+      newContent: String(newContent || "").trim(),
+      turnScopeId: String(turnScopeId || "").trim(),
+      ...(Array.isArray(attachments) ? { attachments } : {}),
+    },
+  });
   return runFetch(
     `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/messages/replace-turn`,
     {

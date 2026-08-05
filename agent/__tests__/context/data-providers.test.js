@@ -48,6 +48,27 @@ test("resolveSessionTreeWithRootSessionId reads sessionTree and root from sessio
   assert.equal(result.sessionTree.roots[0], "root");
 });
 
+test("resolveSessionTreeWithRootSessionId anchors detached sessions at their durable parent", async () => {
+  const calls = [];
+  const result = await resolveSessionTreeWithRootSessionId({
+    runtimeBasePath: "/workspace/u1",
+    sessionManager: {
+      async getSessionTree() {
+        return { roots: ["root"], nodes: { root: { sessionId: "root" } } };
+      },
+      async getRootSessionId({ sessionId }) {
+        calls.push(sessionId);
+        return "root";
+      },
+    },
+    userId: "u1",
+    sessionId: "scoped-detached-session",
+    parentSessionId: "root",
+  });
+  assert.deepEqual(calls, ["root"]);
+  assert.equal(result.rootSessionId, "root");
+});
+
 test("resolveAttachments should bypass ingest when attachment already ingested", async () => {
   let ingestCalled = false;
   const result = await resolveAttachments({
@@ -245,10 +266,15 @@ test("resolveLongMemory only reads static long memory payload from memoryService
 
 test("buildDynamicInfo exposes safeConfirm in config", () => {
   const dynamic = buildDynamicInfo({
+    sessionTree: {
+      roots: ["unrelated-session"],
+      nodes: { "unrelated-session": { sessionId: "unrelated-session" } },
+    },
     runConfig: {
       safeConfirm: true,
     },
   });
   assert.equal(dynamic.config.safeConfirm, true);
   assert.equal("forceTool" in dynamic.config, false);
+  assert.equal("sessionTree" in dynamic, false);
 });

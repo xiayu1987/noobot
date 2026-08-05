@@ -15,7 +15,7 @@
     "test": "node --test __tests__/*.test.mjs"
   },
   "dependencies": {
-    "@noobot/event-protocol": "file:../event-protocol",
+    "@noobot/session-protocol": "file:../session-protocol",
     "@noobot/shared": "file:../shared"
   }
 }

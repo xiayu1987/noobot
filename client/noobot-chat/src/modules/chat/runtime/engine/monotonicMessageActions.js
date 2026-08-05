@@ -6,7 +6,7 @@
 import { normalizeTrimmedString } from "./utils.js";
 import { createResendMessageTransaction } from "./resendTransaction.js";
 import { findVisibleLastMessage } from "../../model/messageModel.js";
-import { createSessionVersionManager } from "./sessionVersionManager.js";
+import { createSessionAggregateVersionManager } from "./sessionAggregateVersionManager.js";
 import {
   buildMessageAnchor,
   getMessageDialogProcessId,
@@ -111,10 +111,8 @@ function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
     sessions: [
       {
         ...session,
-        ...(source.version !== undefined ? { version: source.version } : {}),
-        ...(source.revision !== undefined ? { revision: source.revision } : {}),
-        ...(source.sessionVersion !== undefined
-          ? { version: source.sessionVersion, revision: source.sessionVersion }
+        ...(source.aggregateVersion !== undefined
+          ? { aggregateVersion: source.aggregateVersion }
           : {}),
         sessionId: normalizeTrimmedString(session.sessionId || sessionId),
       },
@@ -288,15 +286,15 @@ export function createMonotonicMessageActions({
     const userTargetMessage = resolveMonotonicUserTarget(targetMessage);
     if (!userTargetMessage) return false;
     const initialSessionId = normalizeTrimmedString(
-      activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
+      activeSession.value?.sessionId || activeSessionId.value,
     );
     const initialTurnScopeId = getMessageTurnScopeId(userTargetMessage);
     const anchor = buildMessageAnchor(userTargetMessage);
     if (!Object.keys(anchor).length) return false;
-    const deleteIdempotencyKey = `delete:${initialSessionId}:${anchor.turnScopeId || anchor.dialogProcessId || anchor.id || "anchor"}`;
+    const deleteCommandId = `delete:${initialSessionId}:${anchor.turnScopeId || anchor.dialogProcessId || anchor.id || "anchor"}`;
     const deleteOperation = messageOperationStore?.registerOperation?.({
       type: "delete",
-      opId: deleteIdempotencyKey,
+      opId: deleteCommandId,
       sessionId: initialSessionId,
       status: "stopping",
       turnScopeId: anchor.turnScopeId || "",
@@ -318,7 +316,7 @@ export function createMonotonicMessageActions({
       if (prepared === false) return false;
       if (typeof deleteSessionMessagesFromApi === "function") {
         const sessionId = normalizeTrimmedString(
-          activeSession.value?.backendSessionId || activeSession.value?.sessionId || activeSessionId.value,
+          activeSession.value?.sessionId || activeSessionId.value,
         );
         const locallyDeletedTurnScopeIds = collectMessageCascadeTurnScopeIds(userTargetMessage);
         messageOperationStore?.updateOperation?.(deleteOperation?.opId, { status: "deleting" });
@@ -328,22 +326,22 @@ export function createMonotonicMessageActions({
           turnScopeId: getMessageTurnScopeId(userTargetMessage),
           anchor,
           locallyDeletedTurnScopeIds,
-          idempotencyKey: deleteIdempotencyKey,
+          commandId: deleteCommandId,
         }));
-        const sessionVersionManager = createSessionVersionManager({
+        const sessionAggregateVersionManager = createSessionAggregateVersionManager({
           activeSession,
           fetchSessionDetail,
           applySessionDetail,
         });
-        const mutationResult = await sessionVersionManager.runVersionedMutation({
-          mutate: async ({ expectedVersion }) => {
+        const mutationResult = await sessionAggregateVersionManager.runAggregateVersionedMutation({
+          mutate: async ({ expectedAggregateVersion }) => {
             const result = await deleteSessionMessagesFromApi({
               userId: userId?.value || userId,
               sessionId,
               parentSessionId: normalizeTrimmedString(activeSession.value?.parentSessionId),
               anchor,
-              expectedVersion,
-              idempotencyKey: deleteIdempotencyKey,
+              expectedAggregateVersion,
+              commandId: deleteCommandId,
             }, { fetcher: authFetch });
             const payload = typeof result?.json === "function" ? await result.json() : result;
             return { result, payload };

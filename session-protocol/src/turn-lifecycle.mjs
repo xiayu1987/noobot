@@ -9,7 +9,7 @@ import {
 } from "@noobot/shared/execution-lifecycle-protocol";
 import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "@noobot/shared/turn-scope-identity";
 
-export const TURN_LIFECYCLE_PROTOCOL_VERSION = 4;
+export const TURN_LIFECYCLE_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";
 export const TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION = 3;
 export const TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION = 1;
@@ -128,19 +128,6 @@ export function normalizeTurnContinuationSource(source = null) {
     : null;
 }
 
-export function normalizeTurnPersistenceScope(scope = null) {
-  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return null;
-  const normalized = {
-    scopeId: clean(scope.scopeId),
-    parentSessionId: clean(scope.parentSessionId),
-    relativeDir: clean(scope.relativeDir),
-    allowedRoot: clean(scope.allowedRoot),
-  };
-  return normalized.scopeId && normalized.relativeDir && normalized.allowedRoot
-    ? Object.freeze(normalized)
-    : null;
-}
-
 export function validateSessionProvisionIntent(input = {}) {
   if (input.createSessionIfAbsent === undefined || input.createSessionIfAbsent === false) {
     return { valid: true, requested: false, errors: [] };
@@ -210,10 +197,11 @@ function snapshotTurn(turn = {}) {
 function snapshotReplacedTurn(replacement = {}) {
   return {
     turnScopeId: canonicalizeTurnScopeId(replacement.turnScopeId),
+    replacementDialogProcessId: clean(replacement.replacementDialogProcessId),
     replacementTurnScopeId: canonicalizeTurnScopeId(replacement.replacementTurnScopeId),
     replacementUserMessageId: clean(replacement.replacementUserMessageId),
     commandId: clean(replacement.commandId),
-    committedVersion: Number(replacement.committedVersion || 0),
+    committedAggregateVersion: Number(replacement.committedAggregateVersion || 0),
     replacedTurnScopeIds: [...new Set(
       (Array.isArray(replacement.replacedTurnScopeIds)
         ? replacement.replacedTurnScopeIds
@@ -276,11 +264,12 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
     else if (!isCanonicalTurnScopeId(replacement.turnScopeId)) errors.push("non_canonical_replaced_turn_scope_id");
     if (replacementScopes.has(turnScopeId)) errors.push("duplicate_replaced_turn_scope_id");
     replacementScopes.add(turnScopeId);
+    if (!clean(replacement?.replacementDialogProcessId)) errors.push("missing_replacement_dialog_process_id");
     if (!replacementTurnScopeId) errors.push("missing_replacement_turn_scope_id");
     else if (!isCanonicalTurnScopeId(replacement.replacementTurnScopeId)) errors.push("non_canonical_replacement_turn_scope_id");
     if (!clean(replacement?.replacementUserMessageId)) errors.push("missing_replacement_user_message_id");
     if (!clean(replacement?.commandId)) errors.push("missing_replacement_command_id");
-    if (!Number.isInteger(Number(replacement?.committedVersion)) || Number(replacement.committedVersion) < 1) errors.push("invalid_replacement_committed_version");
+    if (!Number.isInteger(Number(replacement?.committedAggregateVersion)) || Number(replacement.committedAggregateVersion) < 1) errors.push("invalid_replacement_committed_version");
     if (!replacedTurnScopeIds.length || !replacedTurnScopeIds.includes(turnScopeId)) errors.push("invalid_replaced_turn_scope_ids");
     if (replacedTurnScopeIds.includes(replacementTurnScopeId)) errors.push("replacement_scope_reuses_replaced_scope");
     if (!Number.isInteger(Number(replacement?.sequence)) || Number(replacement.sequence) < 1 || Number(replacement.sequence) > Number(snapshot.sequence)) errors.push("invalid_replacement_sequence");
@@ -328,7 +317,6 @@ export function createTurnLifecycleEnvelope({
   rootExecutionId = "",
   origin = {},
   stage = "",
-  persistenceScope = null,
   continuationSource = null,
   continuedByTurnScopeId = "",
 } = {}) {
@@ -365,7 +353,6 @@ export function createTurnLifecycleEnvelope({
     capabilities: capabilities && typeof capabilities === "object" ? capabilities : undefined,
     failure: failure && typeof failure === "object" ? failure : undefined,
     payload: payload && typeof payload === "object" ? payload : {},
-    persistenceScope: normalizeTurnPersistenceScope(persistenceScope) || undefined,
     continuationSource: normalizeTurnContinuationSource(continuationSource) || undefined,
     continuedByTurnScopeId: canonicalizeTurnScopeId(continuedByTurnScopeId),
     ...executionIdentity,
@@ -393,9 +380,7 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
   const expectedPhase = eventType === TURN_EVENT.FAILED ? phase : EVENT_PHASE[eventType];
   if (!expectedPhase || phase !== expectedPhase) errors.push("event_phase_mismatch");
   if (!expectedState || clean(envelope.state) !== expectedState) errors.push("event_state_mismatch");
-  if (envelope.persistenceScope !== undefined && !normalizeTurnPersistenceScope(envelope.persistenceScope)) {
-    errors.push("invalid_persistence_scope");
-  }
+  if (envelope.persistenceScope !== undefined) errors.push("unsupported_persistence_scope");
   if (clean(envelope.eventType) === TURN_EVENT.ACTION_ACCEPTED && clean(envelope.action) === "continue") {
     if (!normalizeTurnContinuationSource(envelope.continuationSource)) errors.push("missing_continuation_source");
   } else if (clean(envelope.eventType) === TURN_EVENT.ACTION_ACCEPTED && envelope.continuationSource !== undefined) {
@@ -410,6 +395,14 @@ export function validateTurnLifecycleEnvelope(envelope = {}) {
 
 export function isAuthoritativeTurnLifecycleEnvelope(envelope = {}) {
   return validateTurnLifecycleEnvelope(envelope).valid;
+}
+
+export function validateSessionEvent(event = {}) {
+  const eventType = clean(event?.eventType || event?.identity?.eventType);
+  if (!EVENT_VALUES.has(eventType)) {
+    return { valid: false, recognized: false, errors: ["unsupported_session_event"] };
+  }
+  return { ...validateTurnLifecycleEnvelope(event), recognized: true };
 }
 
 const TERMINAL_STATE_VALUES = new Set([

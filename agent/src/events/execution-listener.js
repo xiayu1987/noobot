@@ -122,6 +122,12 @@ export function createExecutionEventListener({
     return task;
   };
 
+  const forwardEvent = (evt = {}) => forwardUpstream({
+    event: evt?.event || "",
+    data: evt?.data || {},
+    ts: evt?.ts || new Date().toISOString(),
+  });
+
   return {
     flushPersistence: () => persistenceTail,
     flushDelivery: async () => {
@@ -133,13 +139,14 @@ export function createExecutionEventListener({
         throw error;
       }
     },
+    forwardEvent,
     onEvent: (evt = {}) => {
       const event = evt?.event || "";
       const data = evt?.data || {};
       const ts = evt?.ts || new Date().toISOString();
 
       if (event === "llm_delta" || INTERNAL_TRANSPORT_EVENTS.has(event)) {
-        return forwardUpstream({ event, data, ts });
+        return forwardEvent({ event, data, ts });
       }
 
       const { category, type } = classifyExecutionEvent(event);
@@ -158,7 +165,7 @@ export function createExecutionEventListener({
       } catch {
       }
 
-      return forwardUpstream({ event, data, ts });
+      return forwardEvent({ event, data, ts });
     },
   };
 }

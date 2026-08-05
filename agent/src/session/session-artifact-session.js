@@ -11,30 +11,27 @@ import { assertSessionMessageIdentityInvariants, normalizeSessionEntity } from "
 import { resolveMessageDialogProcessId } from "../context/session/dialog-process-id-resolver.js";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import { buildSessionArtifactFileMap, SESSION_ARTIFACT_FILE_NAMES, assertArtifactSessionWritable, readJsonArtifactFile, writeJsonArtifactFile } from "./session-artifact-files.js";
-import { appendRollingJsonlArtifactLog, readJsonlArtifactFile } from "./session-artifact-execution-logs.js";
+import { appendRollingJsonlArtifactLog } from "./session-artifact-execution-logs.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 function splitSessionMessages(messages = [], dialogOrder = []) {
   const source = Array.isArray(messages) ? messages : [];
   const logicalOrder = new Map(
     (Array.isArray(dialogOrder) ? dialogOrder : []).map((entry, index) => [
-      String(entry?.dialogProcessId || entry?.dialogId || "").trim(),
+      String(entry?.dialogProcessId || "").trim(),
       Number(entry?.dialogOrdinal) || index + 1,
     ]),
   );
   const buckets = new Map();
-  let legacySegment = 0;
-  let previousLegacyKey = "";
   source.forEach((message, sourceIndex) => {
     const dialogProcessId = resolveMessageDialogProcessId(message);
     const turnScopeId = String(message?.turnScopeId || "").trim();
-    let key = dialogProcessId ? `dialog:${dialogProcessId}` : "";
-    if (!key) {
-      const scopeKey = turnScopeId ? `scope:${turnScopeId}` : "scope:missing";
-      if (scopeKey !== previousLegacyKey || (!turnScopeId && message?.role === "user")) legacySegment += 1;
-      previousLegacyKey = scopeKey;
-      key = `legacy:${legacySegment}:${scopeKey}`;
+    if (!turnScopeId || !dialogProcessId) {
+      const error = new TypeError(`session message is missing Turn identity at index ${sourceIndex}`);
+      error.code = "SESSION_TURN_IDENTITY_REQUIRED";
+      throw error;
     }
+    const key = `turn:${turnScopeId}`;
     const bucket = buckets.get(key) || {
       dialogProcessId,
       turnScopeId,
@@ -42,6 +39,11 @@ function splitSessionMessages(messages = [], dialogOrder = []) {
       messages: [],
       sourceIndices: [],
     };
+    if (bucket.dialogProcessId !== dialogProcessId) {
+      const error = new TypeError(`turnScopeId ${turnScopeId} maps to multiple dialogProcessId values`);
+      error.code = "SESSION_TURN_IDENTITY_CONFLICT";
+      throw error;
+    }
     bucket.messages.push(message);
     bucket.sourceIndices.push(sourceIndex);
     buckets.set(key, bucket);
@@ -108,7 +110,7 @@ function messageHash(message) {
 }
 
 function turnKey(turn = {}) {
-  return `${String(turn.dialogProcessId || "").trim()}\u0000${String(turn.turnScopeId || "").trim()}`;
+  return String(turn.turnScopeId || "").trim();
 }
 
 function turnIdOrdinal(turnId = "") {
@@ -197,57 +199,20 @@ async function replaceJournal(file, messages) {
   return Buffer.byteLength(payload, "utf8");
 }
 
-async function readLegacySessionArtifact({ storageService = null, sessionDir = "", fallback = null } = {}) {
-  const files = buildSessionArtifactFileMap(sessionDir);
-  const session = await readJsonWithStorage({ storageService, artifactPath: files.session, fallback });
-  if (!session || typeof session !== "object") return fallback;
-  if (Array.isArray(session.messages)) return session;
-  const messages = [];
-  const messagesByTurnId = new Map();
-  for (const item of Array.isArray(session.turnOrder) ? session.turnOrder : []) {
-    const file = typeof item === "string" ? item : item?.file;
-    if (!file) continue;
-    const turn = await readJsonWithStorage({ storageService, artifactPath: resolveTurnArtifactPath(sessionDir, file), fallback: null });
-    if (!turn || !Array.isArray(turn.messages)) {
-      const error = new Error(`session turn artifact is missing or invalid: ${file}`);
-      error.code = "SESSION_TURN_ARTIFACT_MISSING";
-      throw error;
-    }
-    const turnId = String(item?.turnId || turn?.turnId || "").trim();
-    if (turnId) messagesByTurnId.set(turnId, turn.messages);
-    messages.push(...turn.messages);
-  }
-  const order = Array.isArray(session.messageOrder) ? session.messageOrder : [];
-  return { ...session, messages: order.length
-    ? order.map((reference) => messagesByTurnId.get(String(reference?.turnId || "").trim())?.[Number(reference?.messageIndex)]).filter(Boolean)
-    : messages };
-}
-
 export async function readRecentSessionTurns({ sessionDir = "", limit = 10, fallback = null } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = await readJsonArtifactFile(files.session, fallback);
   if (!session || typeof session !== "object") return [];
   const count = Math.max(0, Number(limit) || 0);
-  if (Number(session.schemaVersion) === TURN_JOURNAL_SCHEMA_VERSION) {
-    const turns = [];
-    for (const item of (Array.isArray(session.turnOrder) ? session.turnOrder : []).slice(-count)) {
-      const records = await readJournalRecords(journalPath(sessionDir, item.turnId), item.committedBytes);
-      turns.push({ turnId: item.turnId, artifactOrdinal: item.artifactOrdinal, turnScopeId: item.turnScopeId, dialogProcessId: item.dialogProcessId, messages: materializeJournal(records, item.messageOrder) });
-    }
-    return turns;
+  if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
+    const error = new Error("recent Session turns require the canonical turn journal schema");
+    error.code = "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED";
+    throw error;
   }
-  if (Array.isArray(session.messages)) return splitSessionMessages(session.messages, session.dialogOrder).turns.slice(-count);
-  const order = (Array.isArray(session.turnOrder) ? session.turnOrder : []).slice(-count);
   const turns = [];
-  for (const item of order) {
-    const file = typeof item === "string" ? item : item?.file;
-    const turn = await readJsonArtifactFile(resolveTurnArtifactPath(sessionDir, file), null);
-    if (!turn || !Array.isArray(turn.messages)) {
-      const error = new Error(`session turn artifact is missing or invalid: ${file}`);
-      error.code = "SESSION_TURN_ARTIFACT_MISSING";
-      throw error;
-    }
-    turns.push(turn);
+  for (const item of (Array.isArray(session.turnOrder) ? session.turnOrder : []).slice(-count)) {
+    const records = await readJournalRecords(journalPath(sessionDir, item.turnId), item.committedBytes);
+    turns.push({ turnId: item.turnId, artifactOrdinal: item.artifactOrdinal, turnScopeId: item.turnScopeId, dialogProcessId: item.dialogProcessId, messages: materializeJournal(records, item.messageOrder) });
   }
   return turns;
 }
@@ -267,8 +232,8 @@ export async function readSessionTurn({
   }
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   const normalizedDialogProcessId = String(dialogProcessId || "").trim();
-  if (!normalizedTurnScopeId && !normalizedDialogProcessId) {
-    const error = new Error("turnScopeId or dialogProcessId is required");
+  if (!normalizedTurnScopeId) {
+    const error = new Error("turnScopeId is required");
     error.code = "SESSION_TURN_IDENTITY_REQUIRED";
     throw error;
   }
@@ -330,7 +295,11 @@ export async function readSessionArtifact({
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = await readJsonWithStorage({ storageService, artifactPath: files.session, fallback });
   if (!session || typeof session !== "object") return fallback;
-  if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) return readLegacySessionArtifact({ storageService, sessionDir, fallback });
+  if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
+    const error = new Error("Session artifact requires the canonical turn journal schema");
+    error.code = "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED";
+    throw error;
+  }
   const messagesByUid = new Map();
   for (const item of Array.isArray(session.turnOrder) ? session.turnOrder : []) {
     const records = await readJournalRecords(journalPath(sessionDir, item.turnId), item.committedBytes);
@@ -339,76 +308,6 @@ export async function readSessionArtifact({
   const restoredMessages = (Array.isArray(session.messageOrder) ? session.messageOrder : [])
     .map((reference) => messagesByUid.get(String(reference?.messageUid || "").trim())).filter(Boolean);
   return { ...session, messages: restoredMessages };
-}
-
-export async function migrateSessionArtifacts({
-  sessionDir = "",
-  sessionId = "",
-  now = () => new Date().toISOString(),
-  withMutationLock = null,
-  mutationCoordinator = sessionMutationCoordinator,
-  mutationLockDir = "",
-  assertSessionWritable = null,
-} = {}) {
-  if (typeof withMutationLock === "function") {
-    return withMutationLock(() => migrateSessionArtifacts({
-      sessionDir,
-      sessionId,
-      now,
-      assertSessionWritable,
-      mutationCoordinator: null,
-      mutationLockDir: "",
-    }));
-  }
-  if (mutationLockDir && mutationCoordinator?.run) {
-    return mutationCoordinator.run(mutationLockDir, () => migrateSessionArtifacts({
-      sessionDir,
-      sessionId,
-      now,
-      assertSessionWritable,
-      mutationCoordinator: null,
-      mutationLockDir: "",
-    }));
-  }
-  await assertArtifactSessionWritable({ assertSessionWritable, sessionId, sessionDir, operation: "migrate_session_artifacts" });
-  const files = buildSessionArtifactFileMap(sessionDir);
-  const legacySession = await readJsonArtifactFile(files.session, null);
-  const effectiveSessionId = String(sessionId || legacySession?.sessionId || "").trim();
-  await assertArtifactSessionWritable({ assertSessionWritable, sessionId: effectiveSessionId, sessionDir, operation: "migrate_session_artifacts" });
-  const legacyLogs = await (async () => {
-    try {
-      const raw = await readFile(files.executionEvents, "utf8");
-      return raw.trim() ? raw.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)) : [];
-    } catch (error) {
-      if (error?.code === "ENOENT") return [];
-      throw error;
-    }
-  })();
-  const legacyPayload = legacySession && Number(legacySession.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION
-    ? await readLegacySessionArtifact({ sessionDir, fallback: legacySession })
-    : null;
-  if (legacyPayload) {
-    await writeSessionArtifact({ sessionDir, sessionPayload: legacyPayload, now });
-  }
-  if (legacyLogs.length && !(await readJsonArtifactFile(path.join(files.executionEventsDir, "index.json"), null))) {
-    await rm(files.executionEventsDir, { recursive: true, force: true });
-    for (const log of legacyLogs) await appendRollingJsonlArtifactLog({ sessionDir, log });
-  }
-  const migrated = await readSessionArtifact({ sessionDir, fallback: legacySession });
-  const logs = await readJsonlArtifactFile(files.executionEvents);
-  const expectedLegacyMessageCount = legacyPayload?.messages?.length || 0;
-  if (expectedLegacyMessageCount && migrated?.messages?.length !== expectedLegacyMessageCount) {
-    const error = new Error("session migration message count mismatch");
-    error.code = "SESSION_MIGRATION_VALIDATION_FAILED";
-    throw error;
-  }
-  if (legacyLogs.length && logs.length !== legacyLogs.length) {
-    const error = new Error("execution migration record count mismatch");
-    error.code = "EXECUTION_MIGRATION_VALIDATION_FAILED";
-    throw error;
-  }
-  await rm(files.executionEvents, { force: true });
-  return { files, session: migrated, executionLogs: logs };
 }
 
 async function writeJsonWithStorage({

@@ -84,7 +84,7 @@ function createRunner({
       callOrder.push("appendSessionTurn");
       const messageUid = `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
       return {
-        version: 1,
+        aggregateVersion: 1,
         attachments: payload.attachments || [],
         userMessage: {
           messageUid,

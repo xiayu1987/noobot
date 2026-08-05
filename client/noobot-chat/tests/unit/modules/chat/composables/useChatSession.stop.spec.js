@@ -16,7 +16,7 @@ import { nextTick, ref } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { logResendDebug, setResendDebugLogSink } from "../../../../../src/modules/debug/loggers/resendDebugLogger.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import { createTurnLifecycleEnvelope } from "@noobot/event-protocol";
+import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 import {
   BackendChannelState,
   SESSION_RUN_EVENT,
@@ -105,7 +105,7 @@ describe("useChatSession reconnect replay", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "s-stop-request",
-      backendSessionId: "s-stop-request",
+      sessionId: "s-stop-request",
       messages: [
         { role: RoleEnum.USER, content: "hello", turnScopeId: "turn-stop" },
         {
@@ -172,7 +172,7 @@ describe("useChatSession reconnect replay", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "s-stop-error",
-      backendSessionId: "s-stop-error",
+      sessionId: "s-stop-error",
       messages: [
         { role: RoleEnum.USER, content: "hello", turnScopeId: "turn-stop-error" },
         {
@@ -214,7 +214,7 @@ describe("useChatSession reconnect replay", () => {
     const store = useChatStore();
     store.sessions = [createSessionFixture({
       id: "s-stop-async-error",
-      backendSessionId: "s-stop-async-error",
+      sessionId: "s-stop-async-error",
       messages: [
         { role: RoleEnum.USER, content: "hello", turnScopeId: "turn-stop-async-error" },
         {

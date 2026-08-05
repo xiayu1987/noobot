@@ -40,8 +40,12 @@ test("workflow service reads persisted segmented child execution events after re
   ]);
 
   const workflowDir = path.join(workspaceRoot, "runtime/workflow/session/root-s/wf_node_1");
-  await fs.mkdir(workflowDir, { recursive: true });
-  await fs.writeFile(path.join(workflowDir, "session.json"), JSON.stringify({ sessionId: "child-s" }), "utf8");
+  await persistSessionArtifactSnapshot({
+    outputDir: workflowDir,
+    sessionPayload: { sessionId: "child-s", aggregateVersion: 0, messages: [] },
+    taskPayload: { sessionId: "child-s", tasks: [] },
+    executionPayload: { sessionId: "child-s", logs: [] },
+  });
   const ports = createPluginServicePorts({ bot: { getWorkspacePath: () => workspaceRoot } });
   const { executionLogs: logs } = await ports.sessions.readWorkflowSnapshot({
     userId: "u1", sessionId: "root-s", dialogProcessId: "wf_node_1",
@@ -57,8 +61,14 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     outputDir: workflowDir,
     sessionPayload: {
       sessionId: "node-s",
-      revision: 1,
-      messages: [{ role: "assistant", content: "done" }],
+      aggregateVersion: 1,
+      messages: [{
+        messageUid: "workflow-message-1",
+        role: "assistant",
+        content: "done",
+        dialogProcessId: "wf_node_1",
+        turnScopeId: "workflow-node:wf_node_1",
+      }],
     },
     taskPayload: { sessionId: "node-s", tasks: [] },
     executionPayload: { sessionId: "node-s", logs: [{ event: "x" }] },
@@ -89,11 +99,11 @@ test("session-routes: workflow session returns summary and execution jsonl from 
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1`);
     const payload = await response.json();
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 200, JSON.stringify(payload));
     assert.equal(payload.ok, true);
     assert.equal(payload.workflowSession.session.sessionId, "node-s");
     assert.equal(payload.workflowSession.sessionSummary.sessionId, "node-s");
-    assert.equal(payload.workflowSession.snapshotVersion, 1);
+    assert.equal(payload.workflowSession.aggregateVersion, 1);
     assert.deepEqual(payload.workflowSession.executionLogs, [{ event: "x" }]);
     assert.equal("dir" in payload.workflowSession, false);
   });
@@ -102,13 +112,14 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-thinking-route-"));
   const workflowDir = path.join(workspaceRoot, "runtime/workflow/session/root-s/wf_node_1");
   const turnScopeId = "workflow-node:wf_node_1";
-  await fs.mkdir(workflowDir, { recursive: true });
-  await fs.writeFile(
-    path.join(workflowDir, "session.json"),
-    `${JSON.stringify({
+  await persistSessionArtifactSnapshot({
+    outputDir: workflowDir,
+    sessionPayload: {
       sessionId: "node-s",
+      aggregateVersion: 1,
       messages: [
         {
+          messageUid: "a1",
           id: "a1",
           role: "assistant",
           type: "message",
@@ -121,14 +132,15 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
             { key: "call:call-2", toolCallId: "call-2", status: "completed" },
           ],
         },
-        { id: "i1", role: "system", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, injectedMessage: true, injectedBy: "harness-plugin", content: "injected" },
-        { id: "t1", role: "assistant", type: "tool_call", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, content: "tool call" },
-        { id: "t2", role: "tool", type: "tool_result", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, content: "tool result" },
-        { id: "other", role: "assistant", type: "tool_call", sessionId: "node-s", dialogProcessId: "dp-2", turnScopeId: "workflow-node:other", content: "other" },
+        { messageUid: "i1", id: "i1", role: "system", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, injectedMessage: true, injectedBy: "harness-plugin", content: "injected" },
+        { messageUid: "t1", id: "t1", role: "assistant", type: "tool_call", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, content: "tool call" },
+        { messageUid: "t2", id: "t2", role: "tool", type: "tool_result", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, content: "tool result" },
+        { messageUid: "other", id: "other", role: "assistant", type: "tool_call", sessionId: "node-s", dialogProcessId: "dp-2", turnScopeId: "workflow-node:other", content: "other" },
       ],
-    })}\n`,
-    "utf8",
-  );
+    },
+    taskPayload: { sessionId: "node-s", tasks: [] },
+    executionPayload: { sessionId: "node-s", logs: [] },
+  });
 
   const app = express();
   const bot = {

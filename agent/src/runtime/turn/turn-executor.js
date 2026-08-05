@@ -180,12 +180,6 @@ export async function invokeNoToolsTurn({
       mode: "no_tools",
       invoke: ({ callbacks }) => {
         const modelMessages = filterForModelContext(messages);
-        emitModelContextTrace(runtime, "llm_invoke_messages", {
-          turn,
-          mode: "no_tools",
-          toolChoice: forceToolChoiceNone ? "none" : "",
-          messages: summarizeDiagnosticMessages(modelMessages),
-        });
         return invokeLlm.invoke(modelMessages, {
           callbacks,
           signal: abortSignal,

@@ -16,7 +16,7 @@ import {
   applyTurnTerminalResolution,
   resolveSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import { createTurnTerminalResolution } from "@noobot/event-protocol";
+import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import {
   RoleEnum,
 } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -172,13 +172,13 @@ describe("useChatEngine.delete", () => {
     const tail = { id: "m3", role: RoleEnum.USER, content: "tail" };
     activeSession.value.messages = [first, target, tail];
     activeSession.value.rawMessages = [first, target, tail];
-    activeSession.value.version = 2;
+    activeSession.value.aggregateVersion = 2;
 
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(expect.objectContaining({
       anchor: { turnScopeId: "client-turn:delete-1" },
-      expectedVersion: 2,
+      expectedAggregateVersion: 2,
     }), expect.any(Object));
     expect(applySessionDetail).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: "local-delete-api",
@@ -234,7 +234,7 @@ describe("useChatEngine.delete", () => {
     };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
-    activeSession.value.version = 3;
+    activeSession.value.aggregateVersion = 3;
 
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(true);
 
@@ -256,7 +256,7 @@ describe("useChatEngine.delete", () => {
     const target = { id: "m2", role: RoleEnum.ASSISTANT, content: "target" };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
-    activeSession.value.version = 2;
+    activeSession.value.aggregateVersion = 2;
 
     await expect(engine.deleteMonotonicMessage(target)).resolves.toBe(false);
 
@@ -307,7 +307,7 @@ describe("useChatEngine.delete", () => {
     };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [{ ...first }, { ...target }];
-    activeSession.value.version = 7;
+    activeSession.value.aggregateVersion = 7;
     applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
       type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
       sessionId: "local-delete-stopped-sending",
@@ -325,7 +325,7 @@ describe("useChatEngine.delete", () => {
       .toBe(null);
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledWith(expect.objectContaining({
       anchor: { turnScopeId: "turn-stopped-sending" },
-      expectedVersion: 7,
+      expectedAggregateVersion: 7,
     }), expect.any(Object));
     expect(activeSession.value.messages).toEqual([]);
   });
@@ -422,7 +422,7 @@ describe("useChatEngine.delete", () => {
     };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
-    activeSession.value.version = 4;
+    activeSession.value.aggregateVersion = 4;
     activateRuntimeTurn({ turnRuntimeRegistry, sessionId, turnScopeId });
     settleStoppedTurn(turnRuntimeRegistry, {
       sessionId,

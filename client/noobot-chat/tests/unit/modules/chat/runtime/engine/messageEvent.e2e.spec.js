@@ -25,7 +25,7 @@ function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent({
     event: "workflow_session_snapshot_loaded",
     data: {
-      snapshotVersion: 1,
+      aggregateVersion: 1,
       parentSessionId: "parent-session",
       workflowRunId: "workflow-run-1",
       nodeExecutionId: "node-execution-1",
@@ -135,7 +135,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     );
 
     applySessionSnapshot(store, {
-      id: "child-session",
+      sessionId: "child-session",
       messages: [{
         id: presentationMessageId,
       messageId: presentationMessageId,

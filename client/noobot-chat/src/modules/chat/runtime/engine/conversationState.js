@@ -78,7 +78,7 @@ export function createChatEngineConversationState({
           connectorName,
           status,
         });
-        refreshSessionConnectorsAsync(activeSession.value?.id || "");
+        refreshSessionConnectorsAsync(activeSession.value?.sessionId || "");
       }
     }
     try {
@@ -164,8 +164,8 @@ export function createChatEngineConversationState({
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return true;
     return (
-      normalizedSessionId === String(activeSession.value?.id || "").trim() ||
-      normalizedSessionId === String(activeSession.value?.backendSessionId || "").trim()
+      normalizedSessionId === String(activeSession.value?.sessionId || "").trim() ||
+      normalizedSessionId === String(activeSession.value?.sessionId || "").trim()
     );
   }
 

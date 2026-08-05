@@ -94,7 +94,7 @@ test("session-routes: 插件诊断接口返回发现/加载/错误信息", async
   });
 });
 
-test("session-routes: terminal resolution forwards the authoritative persistence scope", async () => {
+test("session-routes: terminal resolution uses only canonical Session identity", async () => {
   const calls = [];
   const app = express();
   registerSessionRoutes(app, {
@@ -123,20 +123,12 @@ test("session-routes: terminal resolution forwards the authoritative persistence
     getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
-  const persistenceScope = {
-    scopeId: "agent:workflow-node-a",
-    parentSessionId: "parent-session",
-    relativeDir: "runtime/workflow/session/parent-session/node-a",
-    allowedRoot: "runtime/workflow/session/parent-session",
-  };
-
   await withTestServer(app, async (baseUrl) => {
     const query = new URLSearchParams({
       commandId: "terminal-command",
-      persistenceScope: JSON.stringify(persistenceScope),
     });
     const response = await fetch(
-      `${baseUrl}/api/internal/session/user-a/child-session/turns/turn-a/terminal?${query}`,
+      `${baseUrl}/internal/session/user-a/child-session/turns/turn-a/terminal?${query}`,
     );
     const payload = await response.json();
     assert.equal(response.status, 200);
@@ -148,11 +140,10 @@ test("session-routes: terminal resolution forwards the authoritative persistence
     sessionId: "child-session",
     turnScopeId: "turn-a",
     commandId: "terminal-command",
-    persistenceScope,
   }]);
 });
 
-test("session-routes: terminal resolution rejects malformed persistence scope JSON", async () => {
+test("session-routes: terminal resolution rejects storage locator query fields", async () => {
   let called = false;
   const app = express();
   registerSessionRoutes(app, {

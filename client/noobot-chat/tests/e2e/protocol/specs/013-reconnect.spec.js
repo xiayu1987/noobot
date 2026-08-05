@@ -28,8 +28,26 @@ test("@core PBE-014 reconnect 与新 Continue 并发", async ({ noobot, protocol
   const receivedAtStart = protocolCapture.websocketReceived.length;
   await beginReload(noobot.page);
   await noobot.page.locator(".chat-input textarea").fill(uniquePrompt(testInfo, "continue during reconnect"));
-  await noobot.page.locator(".send-btn").click();
+  const continueButton = noobot.page.locator(".send-btn");
+  await expect(continueButton).toBeDisabled();
+  await expect(continueButton).toBeEnabled();
+  await continueButton.click();
   await waitForReconnect(protocolCapture, receivedAtStart);
   const continued = await waitForCommand(protocolCapture, noobot.sessionId, "turn.continue");
   expect(continued.continuation.turnScopeId).toBe(send.identity.turnScopeId);
+  await waitForLifecycle(
+    protocolCapture,
+    noobot.sessionId,
+    "turn.processing_started",
+    0,
+    continued.identity.turnScopeId,
+  );
+  await stopActiveTurn(noobot.page);
+  await waitForLifecycle(
+    protocolCapture,
+    noobot.sessionId,
+    "turn.stop_completed",
+    0,
+    continued.identity.turnScopeId,
+  );
 });

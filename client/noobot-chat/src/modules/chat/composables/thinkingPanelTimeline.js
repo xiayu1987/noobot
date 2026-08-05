@@ -28,6 +28,7 @@ import {
 import {
   selectToolTimelineCount,
   selectToolTimelineLogs,
+  selectLatestTaskCheckReceipt,
 } from "../runtime/engine/toolTimeline.js";
 import {
   selectActivityTimelineLogs,
@@ -312,6 +313,13 @@ export function useThinkingTimeline(
     if (liveLogs.length > 0) return liveLogs;
     return getExecutionLogs(detail?.messageItem || props.messageItem);
   });
+  const latestTaskCheckReceipt = computed(() => {
+    const liveReceipt = selectLatestTaskCheckReceipt(timelineMessage(props.messageItem));
+    if (liveReceipt) return liveReceipt;
+    return selectLatestTaskCheckReceipt(
+      timelineMessage(loadedThinkingDetail.value?.messageItem || {}),
+    );
+  });
 
   const {
     getLatestMainModelContentLog,
@@ -564,6 +572,7 @@ export function useThinkingTimeline(
     hasThinking,
     loadedThinkingDetail,
     currentExecutionLogs,
+    latestTaskCheckReceipt,
     getLatestPluginAnalysisLog,
     getLatestMainModelContentLog,
     getExecutionLogs,

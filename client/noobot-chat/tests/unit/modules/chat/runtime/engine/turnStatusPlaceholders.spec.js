@@ -39,7 +39,7 @@ function status(value, overrides = {}) {
 
 function project(turnStatuses = [], messages = [user, assistant]) {
   return selectTurnPresentations({
-    activeSession: { id: "session-1", messages, turnStatuses },
+    activeSession: { sessionId: "session-1", messages, turnStatuses },
   });
 }
 
@@ -104,7 +104,7 @@ describe("turn status presentations", () => {
     const once = project([status("user_stopped")], [user]);
     const twice = selectTurnPresentations({
       activeSession: {
-        id: "session-1",
+        sessionId: "session-1",
         messages: [user],
         turnStatuses: [status("user_stopped")],
       },

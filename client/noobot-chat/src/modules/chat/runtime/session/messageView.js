@@ -38,9 +38,9 @@ export function createSessionMessageView({
     if (!normalizedSessionId || !normalizedMessageId) return null;
     const sessionItems = Array.isArray(sessions?.value) ? sessions.value : [];
     const targetSession = sessionItems.find((sessionItem) => [
-      sessionItem?.id,
       sessionItem?.sessionId,
-      sessionItem?.backendSessionId,
+      sessionItem?.sessionId,
+      sessionItem?.sessionId,
     ].some((candidate) => String(candidate || "").trim() === normalizedSessionId));
     const messages = Array.isArray(targetSession?.messages)
       ? targetSession.messages
@@ -56,7 +56,7 @@ export function createSessionMessageView({
     const normalizedMessageId = String(messageId || "").trim();
     if (!normalizedMessageId) return null;
     const sessionId = String(
-      identity?.sessionId || activeSession.value?.backendSessionId || activeSession.value?.id || activeSessionId.value || "",
+      identity?.sessionId || activeSession.value?.sessionId || activeSessionId.value || "",
     ).trim();
     const existing = findCanonicalMessageById(sessionId, normalizedMessageId);
     if (existing) return existing;
@@ -85,7 +85,7 @@ export function createSessionMessageView({
     const summary = summarizeWorkflowMessage(messageItem);
     if (summary.type === "workflow" || summary.pluginSource === "workflow-plugin" || childWorkflowMessage) {
       logWorkflowDiagnostics("frontend.workflowRender.messageVisibilityEvaluated", () => ({
-        sessionId: String(activeSession.value?.backendSessionId || activeSessionId.value || ""),
+        sessionId: String(activeSession.value?.sessionId || activeSessionId.value || ""),
         dialogProcessId: summary.dialogProcessId,
         turnScopeId: summary.turnScopeId,
         workflowRunId: summary.workflowRunId,

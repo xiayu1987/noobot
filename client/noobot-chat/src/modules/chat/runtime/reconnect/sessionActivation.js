@@ -56,7 +56,7 @@ export async function ensureReconnectSessionActive({
   );
   if (!resolvedTargetSession) return false;
 
-  await chatList.selectSession(resolvedTargetSession.id, {
+  await chatList.selectSession(resolvedTargetSession.sessionId, {
     force: true,
     silent: true,
   });

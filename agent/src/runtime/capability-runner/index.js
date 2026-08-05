@@ -336,6 +336,11 @@ export function createAgentCapabilityModelInvoker({
             sessionId: resolvedSessionId,
           },
           additionalHeaders,
+          invocation: {
+            flow: flowValue,
+            purpose: normalizedPurpose,
+            domain: normalizedDomain,
+          },
         })
       : createChatModelFn({
           globalConfig,
@@ -347,6 +352,11 @@ export function createAgentCapabilityModelInvoker({
             sessionId: resolvedSessionId,
           },
           additionalHeaders,
+          invocation: {
+            flow: flowValue,
+            purpose: normalizedPurpose,
+            domain: normalizedDomain,
+          },
         });
     const modelSpec = normalizedModelName
       ? resolveModelSpecByNameFn({
@@ -376,7 +386,17 @@ export function createAgentCapabilityModelInvoker({
       return {
         content: text,
         output: text,
-        traces: [],
+        traces: [
+          {
+            turn: 1,
+            purpose,
+            domain,
+            model: normalizedModelName || undefined,
+            locale,
+            toolCalls: [],
+            finishedReason: "tool_binding_disabled",
+          },
+        ],
         turn: 1,
         finishedReason: "tool_binding_disabled",
         toolTurnLimitReached: false,

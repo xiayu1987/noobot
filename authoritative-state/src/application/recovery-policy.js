@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/event-protocol/turn-lifecycle";
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol/turn-lifecycle";
 
 const RECOVERABLE_FINALIZE_STATES = new Set([
   TURN_STATE.COMPLETION_REQUESTING,

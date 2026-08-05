@@ -47,7 +47,7 @@ function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "
     const session = sessionRuntimeId(active) === sessionId
       ? active
       : {
-          backendSessionId: sessionId,
+          sessionId: sessionId,
           sessionId,
           id: sessionId,
           parentSessionId: execution.parentSessionId || "",
@@ -74,7 +74,7 @@ function buildStopPayload({ activeSession, session: targetSession, pendingAssist
   return createTurnStopCommand({
     commandId: `stop:${turnScopeId}`,
     identity: {
-      sessionId: String(session.backendSessionId || session.sessionId || session.id || ""),
+      sessionId: String(session.sessionId || ""),
       parentSessionId: String(session.parentSessionId || pendingAssistantMessage?.parentSessionId || ""),
       dialogProcessId,
       parentDialogProcessId: String(

@@ -72,8 +72,7 @@ describe("useChatList", () => {
   it("keeps a new Session local across navigation until the backend identity is provisioned", async () => {
     const { api, refs, mocks } = createUseChatListFixture();
     const persisted = {
-      id: "persisted-1",
-      backendSessionId: "persisted-1",
+      sessionId: "persisted-1",
       title: "Persisted",
       isLocal: false,
       loaded: true,
@@ -82,13 +81,12 @@ describe("useChatList", () => {
       connectorPanelState: { selectedConnectors: {} },
     };
     refs.sessions.value = [persisted];
-    refs.activeSessionId.value = persisted.id;
+    refs.activeSessionId.value = persisted.sessionId;
 
     api.newSession();
     const local = refs.sessions.value[0];
     expect(local).toMatchObject({
-      id: "local-generated",
-      backendSessionId: "",
+      sessionId: "local-generated",
       isLocal: true,
       loaded: true,
     });
@@ -101,13 +99,12 @@ describe("useChatList", () => {
     expect(mocks.notify).not.toHaveBeenCalled();
   });
 
-  it("fetchSessions preserves active optimistic detail while promoting its canonical identity", async () => {
+  it("fetchSessions preserves active optimistic detail under its preallocated identity", async () => {
     const fixture = createUseChatListFixture();
     const { api, refs, mocks } = fixture;
     const existingMessages = [{ role: RoleEnum.USER, content: "local" }];
     const existingSession = {
-      id: "local-1",
-      backendSessionId: "backend-1",
+      sessionId: "backend-1",
       title: "old",
       isLocal: true,
       loaded: true,
@@ -124,7 +121,7 @@ describe("useChatList", () => {
     };
 
     refs.sessions.value.push(existingSession);
-    refs.activeSessionId.value = "local-1";
+    refs.activeSessionId.value = "backend-1";
     const sessionsArrayRef = refs.sessions.value;
     const existingSessionRef = refs.sessions.value[0];
     const existingMessagesRef = refs.sessions.value[0].messages;
@@ -154,7 +151,7 @@ describe("useChatList", () => {
       }),
     });
 
-    await api.fetchSessions("local-1", {
+    await api.fetchSessions("backend-1", {
       silent: true,
     });
 
@@ -201,6 +198,90 @@ describe("useChatList", () => {
     expect(fixture.refs.loadingSessions.value).toBe(false);
   });
 
+  it("loads an explicitly requested Session from detail when the list projection is behind", async () => {
+    const fixture = createUseChatListFixture({
+      getSessionsApi: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ ok: true, sessions: [] }),
+      })),
+      getSessionDetailApi: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          exists: true,
+          sessionId: "session-from-route",
+          sessions: [{
+            sessionId: "session-from-route",
+            caller: RoleEnum.USER,
+            messages: [{
+              id: "route-message",
+              messageId: "route-message",
+              role: RoleEnum.USER,
+              content: "authority",
+              turnScopeId: "route-turn",
+              dialogProcessId: "route-dialog",
+            }],
+          }],
+        }),
+      })),
+    });
+
+    await expect(fixture.api.fetchSessions("session-from-route", {
+      forceCurrentSessionRerender: true,
+    })).resolves.toBe(true);
+
+    expect(fixture.mocks.getSessionDetailApi).toHaveBeenCalledTimes(1);
+    expect(fixture.refs.activeSessionId.value).toBe("session-from-route");
+    expect(fixture.refs.sessions.value[0]).toMatchObject({
+      sessionId: "session-from-route",
+      isLocal: false,
+      loaded: true,
+    });
+    expect(fixture.refs.sessions.value[0].messages).toEqual([
+      expect.objectContaining({ role: RoleEnum.USER, content: "authority" }),
+    ]);
+  });
+
+  it("keeps the authoritative list when an explicit Session route does not exist", async () => {
+    const getSessionDetailApi = vi.fn(async ({ sessionId }) => ({
+      ok: true,
+      json: async () => sessionId === "missing-session"
+        ? { ok: true, exists: false, sessionId }
+        : {
+            ok: true,
+            exists: true,
+            sessionId,
+            sessions: [{ sessionId, caller: RoleEnum.USER, messages: [] }],
+          },
+    }));
+    const fixture = createUseChatListFixture({
+      getSessionsApi: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          sessions: [{
+            sessionId: "persisted-session",
+            caller: RoleEnum.USER,
+            updatedAt: "2026-08-05T00:00:00.000Z",
+          }],
+        }),
+      })),
+      getSessionDetailApi,
+    });
+
+    await expect(fixture.api.fetchSessions("missing-session", {
+      forceCurrentSessionRerender: true,
+    })).resolves.toBe(true);
+
+    expect(fixture.refs.sessions.value.map((session) => session.sessionId)).toEqual(["persisted-session"]);
+    expect(fixture.refs.activeSessionId.value).toBe("persisted-session");
+    expect(fixture.mocks.notify).not.toHaveBeenCalled();
+    expect(getSessionDetailApi).toHaveBeenCalledWith(
+      { userId: "u-1", sessionId: "missing-session" },
+      { fetcher: null },
+    );
+  });
+
   it("fetchSessions can force the unchanged active session to reload and rerender messages", async () => {
     const existingMessages = [{ role: RoleEnum.USER, content: "stale local" }];
     const fixture = createUseChatListFixture({
@@ -243,7 +324,7 @@ describe("useChatList", () => {
     const { api, refs, mocks } = fixture;
     refs.sessions.value = [{
       id: "backend-refresh",
-      backendSessionId: "backend-refresh",
+      sessionId: "backend-refresh",
       title: "loaded",
       isLocal: false,
       loaded: true,
@@ -317,7 +398,7 @@ describe("useChatList", () => {
     const { api, refs } = createUseChatListFixture({ getSessionDetailApi });
     refs.sessions.value = [{
       id: "s-loaded",
-      backendSessionId: "s-loaded",
+      sessionId: "s-loaded",
       title: "loaded",
       isLocal: false,
       loaded: true,
@@ -341,8 +422,7 @@ describe("useChatList", () => {
   it("applySessionDetail can skip scrolling when session detail is restored on reload", () => {
     const { api, refs, mocks } = createUseChatListFixture();
     const session = {
-      id: "reload-local",
-      backendSessionId: "reload-backend",
+      sessionId: "reload-backend",
       title: "old title",
       isLocal: true,
       loaded: false,
@@ -358,7 +438,7 @@ describe("useChatList", () => {
       lastMessage: null,
     };
     refs.sessions.value.push(session);
-    refs.activeSessionId.value = "reload-local";
+    refs.activeSessionId.value = "reload-backend";
 
     api.applySessionDetail(
       {
@@ -397,7 +477,7 @@ describe("useChatList", () => {
     refs.sessions.value = [
       {
         id: "s-1",
-        backendSessionId: "s-1",
+        sessionId: "s-1",
         title: "A",
         isLocal: true,
         loaded: true,
@@ -408,7 +488,7 @@ describe("useChatList", () => {
       },
       {
         id: "s-2",
-        backendSessionId: "s-2",
+        sessionId: "s-2",
         title: "B",
         isLocal: true,
         loaded: true,

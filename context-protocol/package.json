@@ -24,7 +24,10 @@
     "./agent-context-identity": "./src/agent-context-identity.js",
     "./agent-context-accessors": "./src/agent-context-accessors.js",
     "./agent-context-validation": "./src/agent-context-validation.js",
-    "./agent-context-envelope": "./src/agent-context-envelope.js"
+    "./agent-context-envelope": "./src/agent-context-envelope.js",
+    "./task-summary-protocol": "./src/task-summary-protocol.js",
+    "./task-check-protocol": "./src/task-check-protocol.js",
+    "./task-check-receipt": "./src/task-check-receipt.js"
   },
   "scripts": {
     "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(error=>{console.error(error);process.exit(1)})\"",

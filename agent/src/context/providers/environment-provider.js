@@ -95,7 +95,6 @@ export function buildDynamicInfo({
   rootSessionId = "",
   caller = "user",
   dialogProcessId = "",
-  sessionTree = {},
   runConfig = {},
   now = new Date().toISOString(),
 } = {}) {
@@ -137,7 +136,6 @@ export function buildDynamicInfo({
     caller: String(caller || "user").trim(),
     dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
     turnScopeId: normalizedTurnScopeId,
-    sessionTree,
     now,
     config: {
       ...config,

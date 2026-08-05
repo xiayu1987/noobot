@@ -53,6 +53,24 @@ test("summary policy preserves latest task summary pair and latest injection", (
   assert.deepEqual(result.map((message) => message.summarized === true), [true, true, true, false, false, false]);
 });
 
+test("summary checkpoint preserves only the latest task_check call and result pair", () => {
+  const result = markCurrentTurnArraySummarized([
+    { role: "assistant", tool_calls: [{ id: "check-old", name: "task_check" }] },
+    { role: "tool", tool_call_id: "check-old", toolName: "task_check", content: "old" },
+    { role: "assistant", tool_calls: [{ id: "business", name: "execute_script" }] },
+    { role: "tool", tool_call_id: "business", toolName: "execute_script", content: "ok" },
+    { role: "assistant", tool_calls: [{ id: "check-latest", name: "task_check" }] },
+    { role: "tool", tool_call_id: "check-latest", toolName: "task_check", content: "latest" },
+    { role: "assistant", tool_calls: [{ id: "summary", name: "task_summary" }] },
+    { role: "tool", tool_call_id: "summary", toolName: "task_summary", content: "summary" },
+  ]);
+
+  assert.deepEqual(
+    result.map((message) => message.summarized === true),
+    [true, true, true, true, false, false, false, false],
+  );
+});
+
 test("checkpoint targets use the completed authoritative scope to select one injection per type", () => {
   const oldGuidance = {
     role: "user",

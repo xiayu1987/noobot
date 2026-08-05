@@ -7,16 +7,86 @@ import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/event-protocol";
+import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import {
   normalizeTrimmedStringList,
 } from "./session-execution-engine-utils.js";
+
+async function transferCanonicalAttachmentsToSubSession({
+  attachmentService = null,
+  userId = "",
+  parentSessionId = "",
+  subSessionId = "",
+  attachments = [],
+  attachmentPolicy = {},
+} = {}) {
+  const source = Array.isArray(attachments) ? attachments : [];
+  if (!source.length) return [];
+  const output = [];
+  for (const attachment of source) {
+    const attachmentId = String(attachment?.attachmentId || "").trim();
+    const path = String(attachment?.path || "").trim();
+    if (!attachmentId || !path) {
+      output.push(attachment);
+      continue;
+    }
+    const attachmentSessionId = String(attachment?.sessionId || "").trim();
+    if (attachmentSessionId === subSessionId) {
+      output.push(attachment);
+      continue;
+    }
+    if (attachmentSessionId !== parentSessionId) {
+      throw new Error("detached sub-session attachment must belong to its parent session");
+    }
+    if (
+      !attachmentService ||
+      typeof attachmentService.getAttachmentById !== "function" ||
+      typeof attachmentService.readAttachmentContent !== "function" ||
+      typeof attachmentService.ingest !== "function"
+    ) {
+      throw new Error("detached sub-session canonical attachment transfer requires AttachmentService");
+    }
+    const attachmentSource = String(attachment?.attachmentSource || "user").trim() || "user";
+    const parentRecord = await attachmentService.getAttachmentById({
+      userId,
+      attachmentId,
+      sessionId: parentSessionId,
+      attachmentSource,
+    });
+    if (!parentRecord) {
+      throw new Error("detached sub-session source attachment does not exist in its parent session");
+    }
+    const sourceContent = await attachmentService.readAttachmentContent({ userId, attachmentId });
+    if (!sourceContent?.content) {
+      throw new Error("detached sub-session source attachment content is unavailable");
+    }
+    const [transferred] = await attachmentService.ingest({
+      userId,
+      sessionId: subSessionId,
+      attachmentSource: "user",
+      attachmentPolicy: attachmentPolicy && typeof attachmentPolicy === "object" ? attachmentPolicy : {},
+      attachments: [{
+        clientAttachmentId: String(attachment?.clientAttachmentId || `session-transfer:${attachmentId}`).trim(),
+        name: String(parentRecord?.name || attachment?.name || "attachment").trim(),
+        mimeType: String(parentRecord?.mimeType || attachment?.mimeType || "application/octet-stream").trim(),
+        contentBase64: sourceContent.content.toString("base64"),
+        ...(typeof attachment?.isSandbox === "boolean" ? { isSandbox: attachment.isSandbox } : {}),
+      }],
+    });
+    if (!transferred || String(transferred?.sessionId || "").trim() !== subSessionId) {
+      throw new Error("detached sub-session attachment transfer did not create child ownership");
+    }
+    output.push(transferred);
+  }
+  return output;
+}
 
 export function createDetachedSubSessionRunner({
   workspaceService = null,
   configService = null,
   sessionRunner = null,
   session = null,
+  attachmentService = null,
   pluginRuntime = {},
   mergeRunConfigWithPluginStrategy = null,
   prepareRunConfig = null,
@@ -134,6 +204,14 @@ export function createDetachedSubSessionRunner({
     effectiveRunConfig.presentationMessageId = childPresentationMessageId;
     effectiveRunConfig.messageId = childMessageId;
     delete effectiveRunConfig.assistantMessageId;
+    const subSessionAttachments = await transferCanonicalAttachmentsToSubSession({
+      attachmentService,
+      userId,
+      parentSessionId,
+      subSessionId,
+      attachments,
+      attachmentPolicy: effectiveRunConfig?.attachments,
+    });
     emitEvent(eventListener, "detached_sub_session_message_identity_bound", {
       userId,
       sessionId: subSessionId,
@@ -204,7 +282,7 @@ export function createDetachedSubSessionRunner({
       stage: String(metadata?.scope || "detached_sub_session").trim(),
     };
     const lifecycleCommandId = String(
-      strategy?.commandId || runConfigPatch?.idempotencyKey || turnScopeId || subSessionId,
+      strategy?.commandId || runConfigPatch?.commandId || turnScopeId || subSessionId,
     ).trim();
     const commitLifecycle = async (event = {}) => {
       if (typeof session.applyTurnLifecycleEvent !== "function") {
@@ -222,6 +300,7 @@ export function createDetachedSubSessionRunner({
           event: "turn_lifecycle_committed",
           data: {
             envelope: committed.envelope,
+            persistenceScope,
           },
         });
       }
@@ -255,7 +334,7 @@ export function createDetachedSubSessionRunner({
         dialogProcessId: subDialogProcessId,
         caller: CALLER_ROLE.BOT,
         message,
-        attachments: Array.isArray(attachments) ? attachments : [],
+        attachments: subSessionAttachments,
         systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
         eventListener: scopedEventListener,
         abortSignal: inheritedAbortSignal,
@@ -285,7 +364,8 @@ export function createDetachedSubSessionRunner({
       }
     } catch (error) {
       let terminalLifecycle = null;
-      if (inheritedAbortSignal?.aborted || error?.name === "AbortError") {
+      const stopped = inheritedAbortSignal?.aborted || error?.name === "AbortError";
+      if (stopped) {
         await commitLifecycle({
           commandId: `${lifecycleCommandId}:stop-accepted`,
           eventType: TURN_EVENT.STOP_ACCEPTED,
@@ -327,17 +407,21 @@ export function createDetachedSubSessionRunner({
         error.lifecycle = createDetachedTerminalReceipt({
           lifecycle: terminalLifecycle?.turn || error.lifecycle,
           executionId: mergedRunConfig.executionId,
-          failed: true,
+          failed: !stopped,
         });
       }
-      emitEvent(eventListener, "detached_sub_session_failure_committed", {
+      emitEvent(eventListener, stopped
+        ? "detached_sub_session_stop_committed"
+        : "detached_sub_session_failure_committed", {
         userId,
         sessionId: subSessionId,
         parentSessionId,
         dialogProcessId: subDialogProcessId,
         turnScopeId,
         executionId: mergedRunConfig.executionId,
-        errorCode: String(error?.code || "detached_sub_session_failed").trim(),
+        ...(stopped
+          ? { reason: "user_stop" }
+          : { errorCode: String(error?.code || "detached_sub_session_failed").trim() }),
         state: String(terminalLifecycle?.turn?.state || "").trim(),
         revision: Number(terminalLifecycle?.turn?.revision || 0),
         sequence: Number(terminalLifecycle?.turn?.sequence || 0),
@@ -395,8 +479,8 @@ function clearParentTurnTransactionIdentity(runConfig = {}) {
   delete runConfig.resumeFromStoppedSnapshot;
   delete runConfig.resumeDialogProcessId;
   delete runConfig.resumeTurnScopeId;
-  delete runConfig.expectedVersion;
-  delete runConfig.idempotencyKey;
+  delete runConfig.expectedAggregateVersion;
+  delete runConfig.commandId;
   delete runConfig.reuseExistingUserTurn;
   delete runConfig.thinkingStartedAt;
   delete runConfig.messageId;
@@ -434,11 +518,14 @@ export function createDetachedTerminalReceipt({ lifecycle = null, executionId = 
 export function createScopedSubSessionEventListener(eventListener = null, identity = {}) {
   const target = resolveObjectEventListener(eventListener);
   if (!target) return null;
+  if (typeof target.forwardEvent !== "function") {
+    throw new TypeError("detached sub-session requires an execution event listener forwardEvent port");
+  }
   return {
     onEvent(event = {}) {
       const source = event && typeof event === "object" ? event : {};
       const data = source.data && typeof source.data === "object" ? source.data : {};
-      return target.onEvent({
+      return target.forwardEvent({
         ...source,
         data: {
           ...data,

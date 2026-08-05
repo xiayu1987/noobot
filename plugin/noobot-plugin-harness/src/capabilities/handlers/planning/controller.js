@@ -44,22 +44,31 @@ function normalizePositiveInteger(value = 0, fallback = 0) {
   return Math.floor(num);
 }
 
-function resolvePlanningTurnThresholds(ctx = {}) {
+function resolvePlanningTurnThresholds(ctx = {}, meta = {}) {
   const modeThresholds = WORKFLOW_PARAMS.modeThresholds || {};
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full;
   const scoped = scopedMode?.planning || {};
-  const scopedGuidance = scopedMode?.guidance || {};
+  const runtimePlanUpdateThreshold = normalizePositiveInteger(
+    meta?.harness?.planning?.planUpdate?.triggerTurnsThreshold,
+    0,
+  );
+  const runtimePhaseAcceptanceThreshold = normalizePositiveInteger(
+    meta?.harness?.acceptance?.phase?.triggerTurnsThreshold,
+    0,
+  );
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
-    planUpdateTriggerTurnsThreshold: normalizePositiveInteger(
-      scoped?.planUpdate?.triggerTurnsThreshold,
-      DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-    ),
-    phaseAcceptanceTriggerTurnsThreshold: normalizePositiveInteger(
-      scopedMode?.acceptance?.phase?.triggerTurnsThreshold,
-      DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-    ),
+    planUpdateTriggerTurnsThreshold: runtimePlanUpdateThreshold || normalizePositiveInteger(
+        scoped?.planUpdate?.triggerTurnsThreshold,
+        DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+      ),
+    phaseAcceptanceTriggerTurnsThreshold: runtimePhaseAcceptanceThreshold || normalizePositiveInteger(
+        scopedMode?.acceptance?.phase?.triggerTurnsThreshold,
+        DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
+      ),
+    planUpdateThresholdSource: runtimePlanUpdateThreshold ? "runtime" : "workflow_params",
+    phaseAcceptanceThresholdSource: runtimePhaseAcceptanceThreshold ? "runtime" : "workflow_params",
   };
 }
 
@@ -151,7 +160,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
           Number(holder.state.counters.planUpdateTurns || 0) + turnIncrement;
         holder.state.counters.phaseAcceptanceTurns =
           Number(holder.state.counters.phaseAcceptanceTurns || 0) + turnIncrement;
-        const planningThresholds = resolvePlanningTurnThresholds(ctx);
+        const planningThresholds = resolvePlanningTurnThresholds(ctx, meta);
         const planUpdateTriggerTurnsThreshold = planningThresholds.planUpdateTriggerTurnsThreshold;
         const phaseAcceptanceTriggerTurnsThreshold =
           planningThresholds.phaseAcceptanceTriggerTurnsThreshold;
@@ -174,6 +183,10 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
               thresholds: {
                 planUpdateTriggerTurnsThreshold,
                 phaseAcceptanceTriggerTurnsThreshold,
+              },
+              thresholdSources: {
+                planUpdate: planningThresholds.planUpdateThresholdSource,
+                phaseAcceptance: planningThresholds.phaseAcceptanceThresholdSource,
               },
               reached: {
                 planUpdateTurns: reachedPlanUpdateTurns,
@@ -201,6 +214,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
               detail: {
                 triggerTurns: planUpdateTriggerTurnsThreshold,
                 thresholdMode: planningThresholds.mode,
+                thresholdSource: planningThresholds.planUpdateThresholdSource,
                 summaryPending: holder.state.pending?.summary === true,
               },
             });
@@ -237,6 +251,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
               detail: {
                 triggerTurns: phaseAcceptanceTriggerTurnsThreshold,
                 thresholdMode: planningThresholds.mode,
+                thresholdSource: planningThresholds.phaseAcceptanceThresholdSource,
                 summaryPending: holder.state.pending?.summary === true,
                 guidancePending: Boolean(holder.state.pending?.guidance),
                 planUpdatePending: resolvePendingPlanUpdate(holder.state).active === true,

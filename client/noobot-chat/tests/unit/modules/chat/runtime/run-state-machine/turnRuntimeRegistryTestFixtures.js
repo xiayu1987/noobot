@@ -9,7 +9,7 @@ import {
   applyTurnTerminalResolution,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/event-protocol";
+import { createTurnLifecycleEnvelope, createTurnTerminalResolution } from "@noobot/session-protocol";
 
 export function sendStart(registry, { sessionId, turnScopeId, seq = 1 }) {
   return applyTurnRuntimeEvent(registry, { type: SESSION_RUN_EVENT.LOCAL_SEND_REQUEST_STARTED, sessionId, turnScopeId, seq });
@@ -108,7 +108,7 @@ export function snapshot(overrides = {}) {
     ? overrides.recentTerminalTurns
     : []).map(withMessageIdentity);
   return {
-    protocolVersion: 4, eventType: "turn.snapshot", commandId: "snapshot-1",
+    protocolVersion: 1, eventType: "turn.snapshot", commandId: "snapshot-1",
     userId: "u1", sessionId: "s1", sequence: 2,
     activeTurnScopeId: activeTurn?.turnScopeId || "", activeTurn,
     recentTerminalTurns, replacedTurns: [], unchanged: false, generatedAt: "2026-01-01T00:00:02.000Z",

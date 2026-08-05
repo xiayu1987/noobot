@@ -123,7 +123,7 @@ function snapshotEvent({ version = 1, status = "running", content = "snapshot re
       parentSessionId: "root-1",
       workflowRunId: "run-1",
       nodeExecutionId: "node-1",
-      snapshotVersion: version,
+      aggregateVersion: version,
       status,
       messages: [{ id: "assistant-1", messageId: "assistant-1", role: "assistant", content }],
     },
