@@ -7,13 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyReconnectEventReplay } from "../../../../../../src/modules/chat/runtime/reconnect/reconnectEventReplay.js";
 import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 import { clearExtensionRegistry, replacePluginExtensions } from "../../../../../../src/extensions/extension-registry.js";
-import { EXTENSION_POINTS } from "../../../../../../src/extensions/extension-point-ids.js";
-import { registerFrontendPlugin as registerWorkflowFrontendPlugin } from "../../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import { activate as activateWorkflowFrontend } from "../../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
 
 describe("applyReconnectEventReplay", () => {
   beforeEach(() => {
     const workflowContributions = [];
-    registerWorkflowFrontendPlugin({
+    void activateWorkflowFrontend({
       contributeExtension: (point, contribution) => {
         workflowContributions.push({ point, contribution });
         return true;

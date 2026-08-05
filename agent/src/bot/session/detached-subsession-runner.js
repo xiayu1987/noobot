@@ -10,13 +10,7 @@ import { CALLER_ROLE } from "../config/constants.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/event-protocol";
 import {
   normalizeTrimmedStringList,
-  resolvePluginOptionsFromConfig,
 } from "./session-execution-engine-utils.js";
-import {
-  createPluginSelectorSet,
-  PLUGIN_RUNTIME_PROPERTY,
-  PLUGIN_SLOT_KEY,
-} from "../../extensions/plugins/plugin-constants.js";
 
 export function createDetachedSubSessionRunner({
   workspaceService = null,
@@ -478,34 +472,18 @@ async function loadSubSessionUserConfig({ workspaceService = null, configService
   }
 }
 
-function buildRuntimePluginState({ effectiveRunConfig = {}, disabledPlugins = [], pluginRuntime = {} } = {}) {
-  const {
-    [PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY]: agentPluginKey = "",
-    [PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_KEY]: botPluginKey = "",
-    [PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_SELECTORS]: agentPluginSelectors = null,
-    [PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_SELECTORS]: botPluginSelectors = null,
-  } = pluginRuntime && typeof pluginRuntime === "object" ? pluginRuntime : {};
-  const resolvedAgentPluginKey = String(agentPluginKey || PLUGIN_SLOT_KEY.AGENT).trim() || PLUGIN_SLOT_KEY.AGENT;
-  const resolvedBotPluginKey = String(botPluginKey || PLUGIN_SLOT_KEY.BOT).trim() || PLUGIN_SLOT_KEY.BOT;
-  const resolvedAgentPluginSelectors = agentPluginSelectors || createPluginSelectorSet(PLUGIN_SLOT_KEY.AGENT);
-  const resolvedBotPluginSelectors = botPluginSelectors || createPluginSelectorSet(PLUGIN_SLOT_KEY.BOT);
+function buildRuntimePluginState({ effectiveRunConfig = {}, disabledPlugins = [] } = {}) {
   const selectedPlugins = normalizeTrimmedStringList(effectiveRunConfig?.selectedPlugins);
-  const agentPluginRuntimeOptions = resolvePluginOptionsFromConfig(effectiveRunConfig, resolvedAgentPluginSelectors);
-  const botPluginRuntimeOptions = resolvePluginOptionsFromConfig(effectiveRunConfig, resolvedBotPluginSelectors);
+  const plugins = effectiveRunConfig?.plugins && typeof effectiveRunConfig.plugins === "object"
+    ? effectiveRunConfig.plugins
+    : {};
   return {
     selectedPlugins,
-    agentPlugin: {
-      pluginKey: resolvedAgentPluginKey,
-      enabled: agentPluginRuntimeOptions?.enabled === true,
-      mode: String(agentPluginRuntimeOptions?.mode || "").trim().toLowerCase(),
-      hookManagerReady: Boolean(effectiveRunConfig?.hookManager),
-    },
-    botPlugin: {
-      pluginKey: resolvedBotPluginKey,
-      enabled: botPluginRuntimeOptions?.enabled === true,
-      mode: String(botPluginRuntimeOptions?.mode || "").trim().toLowerCase(),
-      botHookManagerReady: Boolean(effectiveRunConfig?.botHookManager),
-    },
+    plugins: Object.fromEntries(selectedPlugins.map((pluginId) => [pluginId, {
+      enabled: plugins?.[pluginId]?.enabled === true,
+      mode: String(plugins?.[pluginId]?.mode || "").trim().toLowerCase(),
+    }])),
+    hookManagersReady: Boolean(effectiveRunConfig?.hookManager && effectiveRunConfig?.botHookManager),
     disabledPlugins: normalizeTrimmedStringList(disabledPlugins),
     scope: "detached_sub_session",
   };

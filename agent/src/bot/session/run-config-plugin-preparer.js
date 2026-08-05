@@ -4,40 +4,44 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHookManager } from "@noobot/hook-protocol";
+import {
+  PLUGIN_SURFACE,
+  requireDeclaredPluginHook,
+  requireDeclaredPluginHookEmission,
+  validatePluginActivationResult,
+} from "@noobot/plugin-protocol";
+import { listLoadedNoobotPluginEntries, resolvePluginExecutionIntent } from "@noobot/plugin-runtime";
 import { mergeConfig } from "../../config/index.js";
-import { resolvePluginRegisterByCapability } from "../../extensions/plugins/plugin-loader.js";
-import { resolvePluginExecutionIntentDeclaration } from "@noobot/plugin-runtime";
-import { PLUGIN_CAPABILITY } from "../../extensions/plugins/capabilities.js";
-import {
-  createPluginSelectorSet,
-  PLUGIN_REGISTRATION_FLAG,
-  PLUGIN_RUNTIME_PROPERTY,
-  PLUGIN_SLOT_KEY,
-} from "../../extensions/plugins/plugin-constants.js";
 import { createAgentCapabilityModelInvoker } from "../../runtime/capability-runner/index.js";
-import {
-  createPluginPolicyApi,
-  hasToolPolicyPatchContent,
-  mergeToolPolicyPatch,
-} from "./plugin-policy-api.js";
-import {
-  normalizeTrimmedStringList,
-  resolvePluginOptionsFromConfig,
-  selectHookManager,
-} from "./session-execution-engine-utils.js";
+import { createPluginPolicyApi, hasToolPolicyPatchContent, mergeToolPolicyPatch } from "./plugin-policy-api.js";
+import { normalizeTrimmedStringList, selectHookManager } from "./session-execution-engine-utils.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import {
-  RUNTIME_EVENT_CATEGORIES,
-  RUNTIME_EVENT_CHANNELS,
-  writeRoutedRuntimeEvent,
-} from "@noobot/runtime-events";
 
-export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS =
-  TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
-export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
-  TIME_THRESHOLDS.capability.separateModelMinTimeoutMs;
-const hookManagerRegistrations = new WeakMap();
+export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
+export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS = TIME_THRESHOLDS.capability.separateModelMinTimeoutMs;
+
+const activationsByManager = new WeakMap();
+
+function plainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function pluginConfig(source = {}, pluginId = "") {
+  return plainObject(plainObject(source?.plugins)[pluginId]);
+}
+
+function pluginModelConfig(source = {}, pluginId = "") {
+  return plainObject(plainObject(source?.pluginModelConfig)[pluginId]);
+}
+
+function pluginIsSelected({ pluginId, runConfig, effectiveConfig }) {
+  const disabled = new Set(normalizeTrimmedStringList(runConfig?.disabledPlugins));
+  if (disabled.has(pluginId)) return false;
+  const selected = new Set(normalizeTrimmedStringList(runConfig?.selectedPlugins));
+  if (selected.has(pluginId)) return true;
+  return pluginConfig(runConfig, pluginId).mode === "on" || pluginConfig(effectiveConfig, pluginId).mode === "on";
+}
 
 function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
   const scopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
@@ -47,31 +51,22 @@ function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
     executionKind: "agent",
     parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
     rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
-    origin: Object.freeze(
-      runConfig?.origin && typeof runConfig.origin === "object" ? { ...runConfig.origin } : {},
-    ),
+    origin: Object.freeze(plainObject(runConfig?.origin)),
     stage: String(runConfig?.stage || "").trim(),
   });
 }
 
-function isPluginDebugEnabled() {
-  const value = String(process.env.NOOBOT_PLUGIN_DEBUG || "").trim().toLowerCase();
-  return value === "1" || value === "true" || value === "yes" || value === "on";
+function managerForPoint(point = "", agentHooks, orchestrationHooks) {
+  const normalized = String(point || "").trim();
+  return normalized.startsWith("bot.") || normalized.startsWith("workflow.")
+    ? orchestrationHooks
+    : agentHooks;
 }
 
-function debugPluginPreparer(message = "", details = {}) {
-  if (!isPluginDebugEnabled()) return;
-  void writeRoutedRuntimeEvent({
-    source: "agent",
-    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-    level: "debug",
-    event: "agent.plugin.runConfigPreparer.debug",
-    data: {
-      message: String(message || ""),
-      detailKeys: details && typeof details === "object" ? Object.keys(details).slice(0, 20) : [],
-    },
-  });
+function scopeHandlerId(pluginId = "", handlerId = "") {
+  const normalized = String(handlerId || "").trim();
+  if (!normalized) throw new TypeError(`plugin ${pluginId} hook handler id is required`);
+  return `${pluginId}:${normalized}`;
 }
 
 export class RunConfigPluginPreparer {
@@ -79,580 +74,208 @@ export class RunConfigPluginPreparer {
     globalConfig = {},
     workspaceService = null,
     loadedDynamicPlugins = null,
-    pluginRuntime = {},
     normalizeStringArray = null,
     mergePluginOptions = null,
     createPluginResolveModelMessages = null,
     createDetachedSubSessionRunner = null,
     createBotSubSessionRunner = null,
     createGeneratedArtifactPersister = null,
-    createBotPluginScopedJsonWriter = null,
-    createScopedJsonWriter = null,
-    createBotPluginScopedEventLogger = null,
-    createScopedEventLogger = null,
   } = {}) {
     this.globalConfig = globalConfig;
     this.workspaceService = workspaceService;
     this.loadedDynamicPlugins = loadedDynamicPlugins;
-    this.pluginRuntime = pluginRuntime && typeof pluginRuntime === "object" ? pluginRuntime : {};
-    this.normalizeStringArray =
-      typeof normalizeStringArray === "function" ? normalizeStringArray : (input) => input;
-    this.mergeAgentPluginOptions =
-      typeof mergePluginOptions === "function"
-        ? mergePluginOptions
-        : (...items) => Object.assign({}, ...items.filter((item) => item && typeof item === "object"));
-    this.createAgentPluginResolveModelMessages = createPluginResolveModelMessages;
-    this.createBotSubSessionRunner =
-      createDetachedSubSessionRunner || createBotSubSessionRunner;
+    this.normalizeStringArray = typeof normalizeStringArray === "function" ? normalizeStringArray : normalizeTrimmedStringList;
+    this.mergePluginOptions = typeof mergePluginOptions === "function"
+      ? mergePluginOptions
+      : (...items) => Object.assign({}, ...items.map(plainObject));
+    this.createPluginResolveModelMessages = createPluginResolveModelMessages;
+    this.createDetachedSubSessionRunner = createDetachedSubSessionRunner || createBotSubSessionRunner;
     this.createGeneratedArtifactPersister = createGeneratedArtifactPersister;
-    this.createBotPluginScopedJsonWriter =
-      createBotPluginScopedJsonWriter || createScopedJsonWriter;
-    this.createBotPluginScopedEventLogger =
-      createBotPluginScopedEventLogger || createScopedEventLogger;
+  }
+
+  selectedEntries({ runConfig = {}, userConfig = {} } = {}) {
+    const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
+    return listLoadedNoobotPluginEntries(this.loadedDynamicPlugins).filter((entry) =>
+      pluginIsSelected({ pluginId: entry.pluginId, runConfig, effectiveConfig }),
+    );
+  }
+
+  resolveExecutionIntent({ runConfig = {}, userConfig = {}, turnScopeId = "" } = {}) {
+    const selected = this.selectedEntries({ runConfig, userConfig });
+    const declarations = selected
+      .map((entry) => resolvePluginExecutionIntent(this.loadedDynamicPlugins, entry.pluginId))
+      .filter(Boolean);
+    if (declarations.length > 1) {
+      throw new Error(`multiple selected plugins declare execution intent: ${declarations.map((item) => item.pluginId).join(", ")}`);
+    }
+    const declaration = declarations[0];
+    if (!declaration) return createAgentExecutionIntent({ runConfig, turnScopeId });
+    const scopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
+    const executionId = String(runConfig?.executionId || `${declaration.idPrefix}:${scopeId}`).trim();
+    return Object.freeze({
+      executionId,
+      executionKind: declaration.kind,
+      parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+      rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
+      origin: Object.freeze({ type: declaration.originType, [declaration.originIdKey]: executionId }),
+      stage: String(declaration.stage || "").trim(),
+    });
+  }
+
+  resolveOptions({ entry, userId = "", runConfig = {}, userConfig = {} }) {
+    const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
+    const options = this.mergePluginOptions(
+      entry.manifest.configuration?.defaults,
+      pluginConfig(effectiveConfig, entry.pluginId),
+      pluginConfig(runConfig, entry.pluginId),
+    );
+    const basePath = String(options.basePath || "").trim() || (
+      this.workspaceService && userId ? this.workspaceService.getWorkspacePath(userId) : ""
+    );
+    const next = { ...options, enabled: true, mode: "on", basePath };
+    const modelConfig = pluginModelConfig(runConfig, entry.pluginId);
+    const registeredHooks = entry.manifest.contributes.agent?.hooks?.registers || [];
+    const hasAgentLifecycle = registeredHooks.some((point) => point.startsWith("agent."));
+    const hasExecutionIntent = Boolean(entry.manifest.contributes.agent?.executionIntent);
+
+    if (hasAgentLifecycle) {
+      const stepModels = plainObject(modelConfig.stepModels);
+      if (Object.keys(stepModels).length) next.stepModels = { ...plainObject(next.stepModels), ...stepModels };
+      const capabilityProfile = plainObject(modelConfig.capabilityProfile);
+      if (Object.keys(capabilityProfile).length) next.capabilityProfile = { ...plainObject(next.capabilityProfile), ...capabilityProfile };
+      const guidance = plainObject(modelConfig.guidance);
+      if (Object.keys(guidance).length) next.guidance = { ...plainObject(next.guidance), ...guidance };
+      next.resolveModelMessages = this.createPluginResolveModelMessages?.({ pluginId: entry.pluginId, pluginOptions: next });
+      next.miniRunnerMaxTurns = Number.isFinite(Number(next.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
+        ? Math.min(Number(next.miniRunnerMaxTurns), AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS)
+        : AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS;
+      next.planningGuidanceMode = String(next.planningGuidanceMode || "separate_model");
+      if (next.planningGuidanceMode === "separate_model") {
+        if (!Number.isFinite(Number(next.timeoutMs)) || Number(next.timeoutMs) < AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS) {
+          next.timeoutMs = AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS;
+        }
+        if (typeof next.capabilityModelInvoker !== "function") {
+          next.capabilityModelInvoker = createAgentCapabilityModelInvoker({ maxTurns: next.miniRunnerMaxTurns, enableToolBinding: false });
+        }
+      }
+    }
+
+    if (hasExecutionIntent) {
+      const semanticModel = String(modelConfig.semanticModel || "").trim();
+      if (semanticModel) next.semanticModel = semanticModel;
+      next.resolveModelMessages = this.createPluginResolveModelMessages?.({ pluginId: entry.pluginId, pluginOptions: next });
+      next.semanticMode = String(next.semanticMode || "separate_model");
+      if (next.semanticMode === "separate_model" && typeof next.capabilityModelInvoker !== "function") {
+        next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
+          maxTurns: next.miniRunnerMaxTurns,
+          enableToolBinding: false,
+          headerNamespace: "plugin",
+          flowPrefix: entry.pluginId,
+          fallbackGlobalConfig: this.globalConfig || {},
+          fallbackUserConfig: plainObject(userConfig),
+        });
+      }
+      if (typeof next.subSessionRunner !== "function") next.subSessionRunner = this.createDetachedSubSessionRunner?.();
+      if (typeof next.generatedArtifactPersister !== "function") next.generatedArtifactPersister = this.createGeneratedArtifactPersister?.();
+    }
+    return next;
   }
 
   prepareRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    const preparedAgentPluginConfig = this.prepareAgentPluginRunConfig({
-      userId,
-      runConfig,
-      userConfig,
-    });
-    const preparedBotHookConfig = this.prepareBotHookRunConfig({
-      runConfig: preparedAgentPluginConfig,
-    });
-    return this.prepareBotPluginRunConfig({
-      userId,
-      runConfig: preparedBotHookConfig,
-      userConfig,
-    });
-  }
-
-  resolveExecutionIntent({ userId = "", runConfig = {}, userConfig = {}, turnScopeId = "" } = {}) {
-    const botPluginKey = resolveBotPluginKey(this.pluginRuntime);
-    const activation = this.resolveBotPluginActivation({ userId, runConfig, userConfig });
-    if (!activation.enabled) return createAgentExecutionIntent({ runConfig, turnScopeId });
-    const declaration = resolvePluginExecutionIntentDeclaration(
-      this.loadedDynamicPlugins,
-      botPluginKey,
-    );
-    if (!declaration) return createAgentExecutionIntent({ runConfig, turnScopeId });
-    const scopeId = String(turnScopeId || runConfig?.turnScopeId || "").trim();
-    const executionId = String(runConfig?.executionId || `${declaration.executionIdPrefix}:${scopeId}`).trim();
-    const rootExecutionId = String(runConfig?.rootExecutionId || executionId).trim();
-    return Object.freeze({
-      executionId,
-      executionKind: declaration.executionKind,
-      parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
-      rootExecutionId,
-      origin: Object.freeze({
-        type: declaration.originType,
-        [declaration.originIdKey]: executionId,
-      }),
-      stage: declaration.stage,
-    });
-  }
-
-  resolveAgentPluginOptions({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    const agentPluginSelectors = resolveAgentPluginSelectors(this.pluginRuntime);
-    if (isPluginExplicitlyDisabled(
-      runConfig,
-      agentPluginSelectors,
-      resolveAgentPluginKey(this.pluginRuntime),
-    )) {
-      return { enabled: false, mode: "off" };
-    }
-    const effectiveConfig = mergeConfig(
-      this.globalConfig || {},
-      userConfig && typeof userConfig === "object" ? userConfig : {},
-    );
-    const effectiveAgentPlugin = resolvePluginOptionsFromConfig(
-      effectiveConfig,
-      agentPluginSelectors,
-    );
-    if (effectiveAgentPlugin?.enabled === false) return { enabled: false, mode: "off" };
-    const runAgentPlugin = resolvePluginOptionsFromConfig(
-      runConfig,
-      agentPluginSelectors,
-    );
-    if (runAgentPlugin?.enabled === false) return { enabled: false, mode: "off" };
-    const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
-      ? runConfig.selectedPlugins
-      : [];
-    const agentPluginSelected = selectedPlugins.some((item) =>
-      agentPluginSelectors.has(String(item || "").trim()),
-    );
-    const options = this.mergeAgentPluginOptions(
-      effectiveAgentPlugin,
-      runAgentPlugin,
-    );
-    const normalizedMode = String(agentPluginSelected ? "on" : options?.mode ?? "off")
-      .trim()
-      .toLowerCase();
-    const resolvedMode = normalizedMode === "on" ? "on" : "off";
-    debugPluginPreparer("resolve agent plugin", {
-      selectedPlugins,
-      selectors: Array.from(agentPluginSelectors || []),
-      agentPluginSelected,
-      effectiveMode: effectiveAgentPlugin?.mode,
-      runMode: runAgentPlugin?.mode,
-      resolvedMode,
-      pluginKey: resolveAgentPluginKey(this.pluginRuntime),
-    });
-    if (resolvedMode !== "on") return { enabled: false, mode: "off" };
-    const basePath =
-      typeof options.basePath === "string" && options.basePath.trim()
-        ? options.basePath.trim()
-        : this.workspaceService && userId
-          ? this.workspaceService.getWorkspacePath(userId)
-          : "";
-    const next = { ...options, enabled: true, mode: "on", basePath };
-    const pluginScopedModelConfig = resolvePluginScopedModelConfig({
-      runConfig,
-      pluginKey: resolveAgentPluginKey(this.pluginRuntime),
-      slotKey: PLUGIN_SLOT_KEY.AGENT,
-      modelConfigKeys: resolveAgentPluginModelConfigKeys(this.pluginRuntime),
-    });
-    const scopedStepModels = normalizePluginStepModels(pluginScopedModelConfig?.stepModels);
-    if (Object.keys(scopedStepModels).length) {
-      next.stepModels = {
-        ...(next?.stepModels && typeof next.stepModels === "object" ? next.stepModels : {}),
-        ...scopedStepModels,
-      };
-    }
-    const scopedCapabilityProfile = normalizePluginCapabilityProfile(pluginScopedModelConfig?.capabilityProfile);
-    if (Object.keys(scopedCapabilityProfile).length) {
-      next.capabilityProfile = mergeCapabilityProfile(next?.capabilityProfile, scopedCapabilityProfile);
-    }
-    const scopedGuidance = normalizePlainObject(pluginScopedModelConfig?.guidance);
-    if (Object.keys(scopedGuidance).length) {
-      next.guidance = mergePlainObject(next?.guidance, scopedGuidance);
-    }
-    next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
-      agentPluginOptions: next,
-    });
-    next.miniRunnerMaxTurns =
-      Number.isFinite(Number(next?.miniRunnerMaxTurns)) && Number(next.miniRunnerMaxTurns) > 0
-        ? Math.min(Number(next.miniRunnerMaxTurns), AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS)
-        : AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS;
-    if (!String(next?.planningGuidanceMode || "").trim()) {
-      next.planningGuidanceMode = "separate_model";
-    }
-    if (String(next?.planningGuidanceMode || "").trim().toLowerCase() === "separate_model") {
-      const timeoutMs = Number(next?.timeoutMs);
-      if (!Number.isFinite(timeoutMs) || timeoutMs < AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS) {
-        next.timeoutMs = AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS;
-      }
-    }
-    if (
-      String(next?.planningGuidanceMode || "").trim().toLowerCase() === "separate_model" &&
-      typeof next?.capabilityModelInvoker !== "function"
-    ) {
-      next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
-        maxTurns: next?.miniRunnerMaxTurns,
-        enableToolBinding: false,
-      });
-    }
-    return next;
-  }
-
-
-  prepareAgentPluginRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    const agentPluginKey = resolveAgentPluginKey(this.pluginRuntime);
-    const agentPluginOptions = this.resolveAgentPluginOptions({
-      userId,
-      runConfig,
-      userConfig,
-    });
-    if (!agentPluginOptions.enabled) return runConfig;
-    return this.prepareRegisteredPluginRunConfig({
-      runConfig,
-      options: agentPluginOptions,
-      pluginName: agentPluginKey,
-      capability: PLUGIN_CAPABILITY.AGENT_REGISTER,
-      managerKey: "hookManager",
-      runtimeKey: PLUGIN_SLOT_KEY.AGENT,
-      registrationFlag: PLUGIN_REGISTRATION_FLAG.AGENT,
-      createManager: createHookManager,
-    });
-  }
-
-
-  resolveBotPluginOptions({ runConfig = {}, userConfig = {} } = {}) {
-    const activation = this.resolveBotPluginActivation({ runConfig, userConfig });
-    if (!activation.enabled) return { enabled: false, mode: "off" };
-    const { effectiveBotPlugin, runBotPlugin } = activation;
-    const options = {
-      ...(effectiveBotPlugin && typeof effectiveBotPlugin === "object" ? effectiveBotPlugin : {}),
-      ...(runBotPlugin && typeof runBotPlugin === "object" ? runBotPlugin : {}),
-    };
-    const next = { ...options, enabled: true, mode: "on" };
-    const pluginScopedModelConfig = resolvePluginScopedModelConfig({
-      runConfig,
-      pluginKey: resolveBotPluginKey(this.pluginRuntime),
-      slotKey: PLUGIN_SLOT_KEY.BOT,
-      modelConfigKeys: resolveBotPluginModelConfigKeys(this.pluginRuntime),
-    });
-    const scopedSemanticModel = normalizePluginModelName(pluginScopedModelConfig?.semanticModel);
-    if (scopedSemanticModel) {
-      next.semanticModel = scopedSemanticModel;
-    }
-    next.resolveModelMessages = this.createAgentPluginResolveModelMessages({
-      botPluginOptions: next,
-    });
-    if (!String(next?.semanticMode || "").trim()) {
-      next.semanticMode = "separate_model";
-    }
-    if (
-      String(next?.semanticMode || "").trim().toLowerCase() === "separate_model" &&
-      typeof next?.capabilityModelInvoker !== "function"
-    ) {
-      next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
-        maxTurns: next?.miniRunnerMaxTurns,
-        enableToolBinding: false,
-        headerNamespace: "plugin",
-        flowPrefix: "botPlugin",
-        fallbackGlobalConfig: this.globalConfig || {},
-        fallbackUserConfig: userConfig && typeof userConfig === "object" ? userConfig : {},
-      });
-    }
-    if (typeof next?.subSessionRunner !== "function") {
-      next.subSessionRunner = this.createBotSubSessionRunner();
-    }
-    if (typeof next?.generatedArtifactPersister !== "function") {
-      next.generatedArtifactPersister = this.createGeneratedArtifactPersister();
-    }
-    if (typeof next?.botPluginDialogPersister !== "function") {
-      next.botPluginDialogPersister = this.createBotPluginScopedJsonWriter();
-    }
-    if (typeof next?.botPluginEventLogger !== "function") {
-      next.botPluginEventLogger = this.createBotPluginScopedEventLogger();
-    }
-    return next;
-  }
-
-  resolveBotPluginActivation({ runConfig = {}, userConfig = {} } = {}) {
-    const botPluginSelectors = resolveBotPluginSelectors(this.pluginRuntime);
-    if (isPluginExplicitlyDisabled(
-      runConfig,
-      botPluginSelectors,
-      resolveBotPluginKey(this.pluginRuntime),
-    )) {
-      return { enabled: false };
-    }
-    const effectiveConfig = mergeConfig(
-      this.globalConfig || {},
-      userConfig && typeof userConfig === "object" ? userConfig : {},
-    );
-    const effectiveBotPlugin = resolvePluginOptionsFromConfig(
-      effectiveConfig,
-      botPluginSelectors,
-    );
-    if (effectiveBotPlugin?.enabled === false) return { enabled: false };
-    const runBotPlugin = resolvePluginOptionsFromConfig(
-      runConfig,
-      botPluginSelectors,
-    );
-    if (runBotPlugin?.enabled === false) return { enabled: false };
-    const selectedPlugins = Array.isArray(runConfig?.selectedPlugins)
-      ? runConfig.selectedPlugins
-      : [];
-    const botPluginSelected = selectedPlugins.some((item) =>
-      botPluginSelectors.has(String(item || "").trim()),
-    );
-    const normalizedEffectiveMode = String(effectiveBotPlugin?.mode ?? "off")
-      .trim()
-      .toLowerCase();
-    const normalizedRunMode = String(runBotPlugin?.mode ?? "")
-      .trim()
-      .toLowerCase();
-    const resolvedMode =
-      botPluginSelected || normalizedRunMode === "on" || normalizedEffectiveMode === "on"
-        ? "on"
-        : "off";
-    debugPluginPreparer("resolve bot plugin", {
-      selectedPlugins,
-      selectors: Array.from(botPluginSelectors || []),
-      botPluginSelected,
-      effectiveMode: effectiveBotPlugin?.mode,
-      runMode: runBotPlugin?.mode,
-      resolvedMode,
-      pluginKey: resolveBotPluginKey(this.pluginRuntime),
-    });
-    return {
-      enabled: resolvedMode === "on",
-      effectiveBotPlugin,
-      runBotPlugin,
-    };
-  }
-
-
-  prepareBotPluginRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    const botPluginKey = resolveBotPluginKey(this.pluginRuntime);
-    const botPluginOptions = this.resolveBotPluginOptions({
-      userId,
-      runConfig,
-      userConfig,
-    });
-    if (!botPluginOptions.enabled) return runConfig;
-    return this.prepareRegisteredPluginRunConfig({
-      runConfig,
-      options: botPluginOptions,
-      pluginName: botPluginKey,
-      capability: PLUGIN_CAPABILITY.BOT_REGISTER,
-      managerKey: "botHookManager",
-      runtimeKey: PLUGIN_SLOT_KEY.BOT,
-      registrationFlag: PLUGIN_REGISTRATION_FLAG.BOT,
-      createManager: createHookManager,
-    });
-  }
-
-
-  prepareBotHookRunConfig({ runConfig = {} } = {}) {
-    const botHookManager = selectHookManager({
-      runConfig,
-      managerKey: "botHookManager",
-      createManager: createHookManager,
-    });
-    return {
-      ...runConfig,
-      botHookManager,
-    };
-  }
-
-  prepareRegisteredPluginRunConfig({
-    runConfig = {},
-    options = {},
-    pluginName = "",
-    capability = "",
-    managerKey = "",
-    runtimeKey = "",
-    registrationFlag = "",
-    createManager = null,
-  } = {}) {
-    const manager = selectHookManager({
-      runConfig,
-      managerKey,
-      createManager,
-    });
-    const pluginApi = this.buildPluginRegisterApi({
-      manager,
-      pluginName,
-      options,
-      runConfig,
-    });
-    const registrationFlags = normalizeRegistrationFlags([registrationFlag]);
-    const registeredFlags = hookManagerRegistrations.get(manager) || new Set();
-    const alreadyRegistered = registrationFlags.some((flag) => registeredFlags.has(flag));
-    if (!alreadyRegistered) {
-      const registerPlugin = resolvePluginRegisterByCapability(
-        this.loadedDynamicPlugins,
-        capability,
-      );
-      if (typeof registerPlugin === "function") {
-        debugPluginPreparer("register plugin", { pluginName, capability, runtimeKey });
-        registerPlugin(pluginApi, options);
-        for (const registrationFlagName of registrationFlags) {
-          registeredFlags.add(registrationFlagName);
-        }
-        hookManagerRegistrations.set(manager, registeredFlags);
-      } else {
-        debugPluginPreparer("register plugin missing", { pluginName, capability, runtimeKey });
-      }
-    } else if (typeof pluginApi?.policy?.appendDenyToolNames === "function") {
-      pluginApi.policy.appendDenyToolNames(options?.denyToolNames || []);
-    }
-    const pluginToolPolicyPatch = pluginApi?.policy?.getToolPolicyPatch?.() || {};
-    const shouldAttachToolPolicy =
-      (runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object") ||
-      hasToolPolicyPatchContent({
-        toolPolicyPatch: pluginToolPolicyPatch,
-        normalizeStringArray: (input) => this.normalizeStringArray(input),
-      });
-    return {
-      ...runConfig,
-      [managerKey]: manager,
-      ...(shouldAttachToolPolicy
-        ? {
-            toolPolicy: mergeToolPolicyPatch({
-              baseToolPolicy: runConfig?.toolPolicy,
-              toolPolicyPatch: pluginToolPolicyPatch,
-              normalizeStringArray: (input) => this.normalizeStringArray(input),
-            }),
-          }
-        : {}),
-      plugins: {
-        ...(runConfig?.plugins || {}),
-        [runtimeKey]: options,
-        [pluginName]: options,
-      },
-    };
-  }
-
-  buildPluginRegisterApi({ manager = null, pluginName = "", options = {}, runConfig = {} } = {}) {
-    const hookManager = manager && typeof manager === "object" ? manager : null;
-    const safePluginName = String(pluginName || "").trim();
-    const safeOptions = options && typeof options === "object" ? options : {};
+    const entries = this.selectedEntries({ runConfig, userConfig });
+    const agentHooks = selectHookManager({ runConfig, managerKey: "hookManager", createManager: createHookManager });
+    const orchestrationHooks = selectHookManager({ runConfig, managerKey: "botHookManager", createManager: createHookManager });
     const policy = createPluginPolicyApi({
       baseToolPolicy: runConfig?.toolPolicy,
       normalizeStringArray: (input) => this.normalizeStringArray(input),
     });
-    return {
-      hookManager,
-      policy,
-      runtime: {
-        plugin: safePluginName,
-        options: safeOptions,
-      },
-      runConfig: {
-        plugins: {
-          [safePluginName]: safeOptions,
+    const configuredPlugins = { ...plainObject(runConfig?.plugins) };
+    const activated = activationsByManager.get(agentHooks) || new Map();
+    const pluginLifecycleEvents = [];
+
+    for (const entry of entries) {
+      const options = this.resolveOptions({ entry, userId, runConfig, userConfig });
+      configuredPlugins[entry.pluginId] = options;
+      if (activated.has(entry.pluginId)) continue;
+      const host = Object.freeze({
+        hooks: Object.freeze({
+          register: (point, handler, registrationOptions = {}) => {
+            requireDeclaredPluginHook(entry.manifest, PLUGIN_SURFACE.AGENT, point);
+            const manager = managerForPoint(point, agentHooks, orchestrationHooks);
+            return manager.on(point, handler, {
+              ...registrationOptions,
+              id: scopeHandlerId(entry.pluginId, registrationOptions?.id),
+            });
+          },
+          emit: (point, payload, emitOptions) => {
+            requireDeclaredPluginHookEmission(entry.manifest, PLUGIN_SURFACE.AGENT, point);
+            return managerForPoint(point, agentHooks, orchestrationHooks).emit(point, payload, emitOptions);
+          },
+        }),
+        policy: Object.freeze({ patch: (patch) => policy.patch(patch) }),
+      });
+      let result;
+      try {
+        result = entry.activate(host, options);
+        if (result && typeof result.then === "function") {
+          throw new TypeError(`agent plugin ${entry.pluginId} activate must be synchronous`);
+        }
+        activated.set(entry.pluginId, validatePluginActivationResult(result, {
+          pluginId: entry.pluginId,
+          surface: PLUGIN_SURFACE.AGENT,
+        }));
+      } catch (error) {
+        error.pluginLifecycleEvent = {
+          event: "plugin.failed",
+          data: {
+            pluginId: entry.pluginId,
+            pluginVersion: entry.manifest.version,
+            protocolVersion: entry.manifest.protocolVersion,
+            surface: PLUGIN_SURFACE.AGENT,
+            errorCode: String(error?.code || "PLUGIN_ACTIVATION_FAILED"),
+            message: String(error?.message || error),
+          },
+        };
+        throw error;
+      }
+      pluginLifecycleEvents.push({
+        event: "plugin.activated",
+        data: {
+          pluginId: entry.pluginId,
+          pluginVersion: entry.manifest.version,
+          protocolVersion: entry.manifest.protocolVersion,
+          surface: PLUGIN_SURFACE.AGENT,
         },
-      },
+      });
+      pluginLifecycleEvents.push({
+        event: "plugin.contribution_committed",
+        data: {
+          pluginId: entry.pluginId,
+          pluginVersion: entry.manifest.version,
+          protocolVersion: entry.manifest.protocolVersion,
+          surface: PLUGIN_SURFACE.AGENT,
+          hookCount: entry.manifest.contributes.agent?.hooks?.registers?.length || 0,
+        },
+      });
+    }
+    activationsByManager.set(agentHooks, activated);
+
+    const toolPolicyPatch = policy.snapshot();
+    const shouldAttachPolicy = Object.keys(plainObject(runConfig?.toolPolicy)).length > 0
+      || hasToolPolicyPatchContent({ toolPolicyPatch, normalizeStringArray: (input) => this.normalizeStringArray(input) });
+    return {
+      ...runConfig,
+      hookManager: agentHooks,
+      botHookManager: orchestrationHooks,
+      pluginLifecycleEvents,
+      ...(shouldAttachPolicy ? {
+        toolPolicy: mergeToolPolicyPatch({
+          baseToolPolicy: runConfig?.toolPolicy,
+          toolPolicyPatch,
+          normalizeStringArray: (input) => this.normalizeStringArray(input),
+        }),
+      } : {}),
+      plugins: configuredPlugins,
     };
   }
-}
-
-function isPluginExplicitlyDisabled(
-  runConfig = {},
-  pluginSelectors = new Set(),
-  pluginKey = "",
-) {
-  const disabledPlugins = new Set(normalizeTrimmedStringList(runConfig?.disabledPlugins));
-  const normalizedPluginKey = String(pluginKey || "").trim();
-  if (normalizedPluginKey && disabledPlugins.has(normalizedPluginKey)) return true;
-  for (const selector of pluginSelectors || []) {
-    const normalizedSelector = String(selector || "").trim();
-    if (normalizedSelector && disabledPlugins.has(normalizedSelector)) return true;
-  }
-  return resolvePluginOptionsFromConfig(runConfig, pluginSelectors)?.enabled === false;
-}
-
-function resolveAgentPluginKey(pluginRuntime = {}) {
-  return String(
-    pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_KEY] || PLUGIN_SLOT_KEY.AGENT,
-  ).trim() || PLUGIN_SLOT_KEY.AGENT;
-}
-
-function normalizeRegistrationFlags(flags = []) {
-  return (Array.isArray(flags) ? flags : [])
-    .map((flag) => String(flag || "").trim())
-    .filter(Boolean);
-}
-
-function resolveBotPluginKey(pluginRuntime = {}) {
-  return String(
-    pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_KEY] || PLUGIN_SLOT_KEY.BOT,
-  ).trim() || PLUGIN_SLOT_KEY.BOT;
-}
-
-function resolveAgentPluginSelectors(pluginRuntime = {}) {
-  return pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.AGENT_PLUGIN_SELECTORS] ||
-    createPluginSelectorSet(PLUGIN_SLOT_KEY.AGENT);
-}
-
-function resolveBotPluginSelectors(pluginRuntime = {}) {
-  return pluginRuntime?.[PLUGIN_RUNTIME_PROPERTY.BOT_PLUGIN_SELECTORS] ||
-    createPluginSelectorSet(PLUGIN_SLOT_KEY.BOT);
-}
-
-function resolveAgentPluginModelConfigKeys(pluginRuntime = {}) {
-  return pluginRuntime?.agentPluginModelConfigKeys || createPluginSelectorSet(PLUGIN_SLOT_KEY.AGENT);
-}
-
-function resolveBotPluginModelConfigKeys(pluginRuntime = {}) {
-  return pluginRuntime?.botPluginModelConfigKeys || createPluginSelectorSet(PLUGIN_SLOT_KEY.BOT);
-}
-
-function resolvePluginModelConfig(runConfig = {}) {
-  const directConfig = runConfig?.pluginModelConfig;
-  if (directConfig && typeof directConfig === "object" && !Array.isArray(directConfig)) {
-    return directConfig;
-  }
-  return {};
-}
-
-function resolvePluginScopedModelConfig({
-  runConfig = {},
-  pluginKey = "",
-  slotKey = "",
-  modelConfigKeys = [],
-} = {}) {
-  const modelConfig = resolvePluginModelConfig(runConfig);
-  const candidates = [
-    pluginKey,
-    slotKey,
-    ...(modelConfigKeys && typeof modelConfigKeys[Symbol.iterator] === "function"
-      ? Array.from(modelConfigKeys)
-      : []),
-  ]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
-    .filter((item, index, list) => list.indexOf(item) === index);
-  for (const candidate of candidates) {
-    const value = modelConfig?.[candidate];
-    if (value && typeof value === "object" && !Array.isArray(value)) return value;
-  }
-  return {};
-}
-
-function normalizePluginModelName(value = "") {
-  return String(value || "").trim();
-}
-
-function normalizePluginStepModels(stepModels = {}) {
-  const source = stepModels && typeof stepModels === "object" && !Array.isArray(stepModels)
-    ? stepModels
-    : {};
-  return Object.fromEntries(
-    Object.entries(source)
-      .map(([key, value]) => [String(key || "").trim(), normalizePluginModelName(value)])
-      .filter(([key, value]) => key && value),
-  );
-}
-
-function normalizePluginCapabilityProfile(capabilityProfile = {}) {
-  const source = capabilityProfile && typeof capabilityProfile === "object" && !Array.isArray(capabilityProfile)
-    ? capabilityProfile
-    : {};
-  return Object.fromEntries(
-    Object.entries(source)
-      .map(([key, value]) => {
-        const capabilityKey = String(key || "").trim();
-        if (!capabilityKey || !value || typeof value !== "object" || Array.isArray(value)) {
-          return ["", null];
-        }
-        const nextValue = { ...value };
-        if (Object.prototype.hasOwnProperty.call(nextValue, "enabled")) {
-          nextValue.enabled = nextValue.enabled !== false;
-        }
-        return [capabilityKey, nextValue];
-      })
-      .filter(([key, value]) => key && value && typeof value === "object" && Object.keys(value).length),
-  );
-}
-
-function normalizePlainObject(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function mergePlainObject(baseValue = {}, scopedValue = {}) {
-  return {
-    ...normalizePlainObject(baseValue),
-    ...normalizePlainObject(scopedValue),
-  };
-}
-
-function mergeCapabilityProfile(baseProfile = {}, scopedProfile = {}) {
-  const nextProfile = {
-    ...(baseProfile && typeof baseProfile === "object" && !Array.isArray(baseProfile) ? baseProfile : {}),
-  };
-  for (const [capabilityKey, capabilityConfig] of Object.entries(scopedProfile)) {
-    nextProfile[capabilityKey] = {
-      ...(nextProfile[capabilityKey] && typeof nextProfile[capabilityKey] === "object" && !Array.isArray(nextProfile[capabilityKey])
-        ? nextProfile[capabilityKey]
-        : {}),
-      ...capabilityConfig,
-    };
-  }
-  return nextProfile;
 }

@@ -22,7 +22,6 @@ function removeDeniedToolNamesFromAllow({
   if (!allowToolNames.length) return policy;
   const denySet = new Set([
     ...normalize(policy?.denyToolNames),
-    ...normalize(policy?.deny_tool_names),
   ]);
   if (!denySet.size) return policy;
   return {
@@ -43,7 +42,6 @@ export function mergeToolPolicyDenyToolNames({
   const mergedDenyToolNames = Array.from(
     new Set([
       ...normalize(basePolicy?.denyToolNames),
-      ...normalize(basePolicy?.deny_tool_names),
       ...normalize(appendToolNames),
     ]),
   );
@@ -75,12 +73,9 @@ export function mergeToolPolicyPatch({
   };
   const appendToolNames = [
     ...normalize(basePolicy?.denyToolNames),
-    ...normalize(basePolicy?.deny_tool_names),
     ...normalize(patchPolicy?.denyToolNames),
-    ...normalize(patchPolicy?.deny_tool_names),
   ];
   delete merged.denyToolNames;
-  delete merged.deny_tool_names;
   return mergeToolPolicyDenyToolNames({
     toolPolicy: merged,
     appendToolNames,
@@ -97,10 +92,9 @@ export function hasToolPolicyPatchContent({
     ? normalizeStringArray
     : normalizeStringArrayFallback;
   const hasPatchDenyToolNames =
-    normalize(patch?.denyToolNames).length > 0 ||
-    normalize(patch?.deny_tool_names).length > 0;
+    normalize(patch?.denyToolNames).length > 0;
   const hasOtherPatchKeys = Object.keys(patch).some(
-    (key) => key !== "denyToolNames" && key !== "deny_tool_names",
+    (key) => key !== "denyToolNames",
   );
   return hasPatchDenyToolNames || hasOtherPatchKeys;
 }
@@ -115,28 +109,19 @@ export function createPluginPolicyApi({
   const toolPolicyPatch = {};
   const applyToolPolicyPatch = (patch = {}) => {
     const nextPatch = patch && typeof patch === "object" ? patch : {};
+    const accumulatedDenyToolNames = [
+      ...normalize(toolPolicyPatch?.denyToolNames),
+      ...normalize(nextPatch?.denyToolNames),
+    ];
     Object.assign(toolPolicyPatch, nextPatch);
     if (
-      Object.prototype.hasOwnProperty.call(nextPatch, "denyToolNames") ||
-      Object.prototype.hasOwnProperty.call(nextPatch, "deny_tool_names")
+      Object.prototype.hasOwnProperty.call(nextPatch, "denyToolNames")
     ) {
-      const merged = mergeToolPolicyDenyToolNames({
-        toolPolicy: {
-          ...toolPolicyPatch,
-          denyToolNames: undefined,
-        },
-        appendToolNames: [
-          ...normalize(toolPolicyPatch?.denyToolNames),
-          ...normalize(toolPolicyPatch?.deny_tool_names),
-        ],
-        normalizeStringArray: normalize,
-      });
-      delete merged.deny_tool_names;
-      Object.assign(toolPolicyPatch, merged);
+      toolPolicyPatch.denyToolNames = Array.from(new Set(accumulatedDenyToolNames));
     }
   };
   return {
-    setToolPolicy: (patch = {}) => {
+    patch: (patch = {}) => {
       applyToolPolicyPatch(patch);
       return mergeToolPolicyPatch({
         baseToolPolicy,
@@ -144,28 +129,6 @@ export function createPluginPolicyApi({
         normalizeStringArray: normalize,
       });
     },
-    appendDenyToolNames: (toolNames = []) => {
-      const nextDenyToolNames = [
-        ...normalize(toolPolicyPatch?.denyToolNames),
-        ...normalize(toolPolicyPatch?.deny_tool_names),
-        ...normalize(toolNames),
-      ];
-      applyToolPolicyPatch({
-        ...toolPolicyPatch,
-        denyToolNames: Array.from(new Set(nextDenyToolNames)),
-      });
-      return mergeToolPolicyPatch({
-        baseToolPolicy,
-        toolPolicyPatch,
-        normalizeStringArray: normalize,
-      });
-    },
-    getToolPolicy: () =>
-      mergeToolPolicyPatch({
-        baseToolPolicy,
-        toolPolicyPatch,
-        normalizeStringArray: normalize,
-      }),
-    getToolPolicyPatch: () => ({ ...toolPolicyPatch }),
+    snapshot: () => ({ ...toolPolicyPatch }),
   };
 }

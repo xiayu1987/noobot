@@ -41,9 +41,19 @@ export function createExecutionEventListener({
   const deliveryFailures = [];
 
   const appendExecutionLog = (record) => {
+    const data = enrichEventData(record?.data, defaults);
+    const canonicalRecord = {
+      ...record,
+      userId,
+      sessionId: data.sessionId,
+      parentSessionId: data.parentSessionId,
+      dialogProcessId: data.dialogProcessId,
+      turnScopeId: data.turnScopeId,
+      data,
+    };
     persistenceTail = persistenceTail
       .catch(() => {})
-      .then(() => sessionManager?.appendExecutionLog?.(record))
+      .then(() => sessionManager?.appendExecutionLog?.(canonicalRecord))
       .catch(() => {});
     return persistenceTail;
   };

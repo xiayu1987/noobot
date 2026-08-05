@@ -13,7 +13,7 @@ import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import { registerHarnessCore } from "../../src/index.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -27,7 +27,7 @@ import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 test("harness plugin writes manifest, events and context snapshot", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { basePath, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { basePath, promptPolicy: false });
 
   const agentContext = {
     environment: {
@@ -83,7 +83,7 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
 test("harness plugin emits hook summary via client emitter by default", async () => {
   const hookManager = createAgentHookManager();
   const channelEvents = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     { trace: false, promptPolicy: false },
   );
@@ -111,7 +111,7 @@ test("harness plugin emits hook summary via client emitter by default", async ()
 test("harness plugin keeps hook start/end via client emitter in verbose mode", async () => {
   const hookManager = createAgentHookManager();
   const channelEvents = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     { trace: false, promptPolicy: false, hookRuntimeEventsMode: "verbose" },
   );
@@ -153,7 +153,7 @@ test("harness plugin deletes related run records on after_session_delete", async
   );
 
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { basePath, trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { basePath, trace: false, promptPolicy: false });
   await hookManager.emit("service.after_session_delete", {
     userId: "u-cleanup",
     sessionId: "s-delete",
@@ -200,7 +200,7 @@ test("harness plugin deletes workflow child run records by manifest.parentSessio
   );
 
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { basePath, trace: false, promptPolicy: false });
+  registerHarnessCore({ hookManager }, { basePath, trace: false, promptPolicy: false });
   await hookManager.emit("service.after_session_delete", {
     userId: "u-cleanup-parent",
     sessionId: "root-session-delete",

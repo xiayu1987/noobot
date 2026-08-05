@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { routeWorkflowDiagnosticsPayload } from "../runtime/workflowDiagnosticsRoute.js";
-import { registerFrontendPlugin } from "../index.js";
+import { activate } from "../index.js";
 
 describe("Workflow frontend registration", () => {
   it("routes node diagnostics to the parent session and preserves node identity", () => {
@@ -40,9 +40,9 @@ describe("Workflow frontend registration", () => {
     );
   });
 
-  it("contributes one plugin-runtime projector with canonical record semantics", () => {
+  it("contributes one plugin-runtime projector with canonical record semantics", async () => {
     const contributions = [];
-    registerFrontendPlugin({
+    await activate({
       contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
       extensionPoints: {
         COMPOSER_OPTIONS_MODEL: "composer.options.model",

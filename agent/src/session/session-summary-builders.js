@@ -286,7 +286,7 @@ function hasPluginPayloadSnapshot(message = {}) {
 
 function pickLightPluginMeta(message = {}) {
   const pluginMeta = pickLightObject(message?.pluginMeta, [
-    "pluginId", "pluginName", "pluginKey", "name", "title", "status", "state", "icon", "color",
+    "pluginId", "pluginName", "name", "title", "status", "state", "icon", "color",
     "source", "kind", "phase", "nodeId", "nodeName", "nodeType", "stepId", "stepName",
   ]);
   if (pluginMeta && hasPluginPayloadSnapshot(message)) {

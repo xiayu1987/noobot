@@ -9,6 +9,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+import { createServicePluginHost } from "../../services/service-plugin-host.js";
+import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
 
 test("session-routes: 删除 session 时清理 harness 运行记录", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-session-route-harness-"));
@@ -29,18 +31,25 @@ test("session-routes: 删除 session 时清理 harness 运行记录", async () =
   );
 
   const app = express();
-  registerSessionRoutes(app, {
-    bot: {
-      session: {
-        getSessionData: async () => ({}),
-        getRootSessionId: async () => "",
-        deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }),
-        getAllSessionsData: async () => [],
-      },
-      getWorkspacePath: () => basePath,
-      deleteScopedAttachmentsBySessionIds: async () => ({ deletedCount: 0, deletedSessionIds: [] }),
-      getAttachmentById: async () => null,
+  const bot = {
+    session: {
+      getSessionData: async () => ({}),
+      getRootSessionId: async () => "",
+      deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }),
+      getAllSessionsData: async () => [],
     },
+    getWorkspacePath: () => basePath,
+    deleteScopedAttachmentsBySessionIds: async () => ({ deletedCount: 0, deletedSessionIds: [] }),
+    getAttachmentById: async () => null,
+  };
+  const pluginHost = createServicePluginHost();
+  await pluginHost.registerServiceRoutes(app, {
+    ports: createPluginServicePorts({ bot, translateText: (key) => key }),
+    translateText: (key) => key,
+  });
+  registerSessionRoutes(app, {
+    bot,
+    pluginHost,
     handleChat: (_req, res) => res.json({ ok: true }),
     getConnectorChannelStore: () => ({}),
     getConnectorHistoryStore: () => ({}),

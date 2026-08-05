@@ -7,7 +7,7 @@
 
 - `fixtures/`：浏览器、认证、Session、协议捕获及证据输出生命周期。
 - `helpers/`：浏览器操作和各协议域断言，不产生业务状态。
-- `specs/`：PBE-001～PBE-026、PBE-099 的浏览器业务场景。
+- `specs/`：PBE-001～PBE-028、PBE-099 的浏览器业务场景，包括 Manifest V2 插件激活和 runtime-events 身份闭环。
 - `playwright.protocol.config.js`：协议测试唯一 Playwright 配置。
 
 运行前必须提供：
@@ -35,5 +35,5 @@ npm run test:e2e:protocol:full
 
 基础配置、证据捕获、认证和 Session fixture、协议断言入口已经建立。新增用例必须从
 `fixtures/noobot.fixture.js` 导入 `test` 和 `expect`，从而保证所有用例使用同一套捕获和审计链。
-PBE-001～PBE-026 与 PBE-099 已全部落地。所有场景从统一 fixture 运行，禁止用
+PBE-001～PBE-028 与 PBE-099 已全部落地。所有场景从统一 fixture 运行，禁止用
 `test.skip` 或无业务断言的占位测试伪装覆盖率。

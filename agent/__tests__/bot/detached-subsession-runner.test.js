@@ -75,12 +75,6 @@ function createDeps(overrides = {}) {
         return Object.freeze({ locationResolver: { marker: payload.relativeDir }, metadataContributor: payload.metadataContributor });
       },
     },
-    pluginRuntime: {
-      agentPluginKey: "harness",
-      botPluginKey: "workflow",
-      agentPluginSelectors: new Set(["agentPlugin"]),
-      botPluginSelectors: new Set(["botPlugin"]),
-    },
     mergeRunConfigWithPluginStrategy(payload = {}) {
       calls.mergePayload = payload;
       return {
@@ -97,10 +91,10 @@ function createDeps(overrides = {}) {
       calls.prepareRunConfigPayload = payload;
       return {
         ...payload.runConfig,
-        selectedPlugins: ["agentPlugin", "botPlugin"],
+        selectedPlugins: ["harness", "workflow"],
         plugins: {
-          agentPlugin: { enabled: true, mode: "on" },
-          botPlugin: { enabled: true, mode: "on" },
+          harness: { enabled: true, mode: "on" },
+          workflow: { enabled: true, mode: "on" },
         },
       };
     },
@@ -487,7 +481,7 @@ test("detached sub-session does not inherit parent turn transaction identity", a
   assert.equal(runConfig.workflowNodeExecutionId, "node-execution-1");
   assert.equal(runConfig.turnScopeId, "child-turn");
   assert.equal(runConfig.executionId, "agent:child-turn");
-  assert.deepEqual(runConfig.selectedPlugins, ["agentPlugin", "botPlugin"]);
+  assert.deepEqual(runConfig.selectedPlugins, ["harness", "workflow"]);
   assert.equal(calls.mergePayload.baseRunConfig.expectedVersion, undefined);
   assert.equal(calls.mergePayload.baseRunConfig.idempotencyKey, undefined);
 });

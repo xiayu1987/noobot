@@ -108,7 +108,6 @@ export class RunConfigResolver {
     const denyToolNames = Array.from(
       new Set([
         ...this.normalizeStringArray(toolPolicy?.denyToolNames),
-        ...this.normalizeStringArray(toolPolicy?.deny_tool_names),
       ]),
     );
     if (denyToolNames.length) {
@@ -167,7 +166,6 @@ export class RunConfigResolver {
     if (!allowToolNames.length) return toolPolicy;
     const denySet = new Set([
       ...this.normalizeStringArray(toolPolicy?.denyToolNames),
-      ...this.normalizeStringArray(toolPolicy?.deny_tool_names),
     ]);
     if (!denySet.size) return toolPolicy;
     return {

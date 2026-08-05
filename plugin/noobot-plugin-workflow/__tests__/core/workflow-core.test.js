@@ -11,7 +11,7 @@ import path from "node:path";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 
 import { DEFAULT_WORKFLOW_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
-import { createRegisterNoobotPlugin } from "../../src/core/plugin.js";
+import { createWorkflowRegistration } from "../../src/core/plugin.js";
 import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
 import { PLUGIN_NAME, WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
 import { getWorkflowDefaultSemanticPrompt } from "../../src/core/i18n.js";
@@ -298,20 +298,20 @@ test("parseWorkflowDslText injects locale-aware default start/end names", () => 
   assert.equal(end?.name, "End");
 });
 
-test("createRegisterNoobotPlugin returns empty disposers when workflow disabled", () => {
-  const registerNoobotPlugin = createRegisterNoobotPlugin({
+test("createWorkflowRegistration returns empty disposers when workflow disabled", () => {
+  const registerWorkflowCore = createWorkflowRegistration({
     createPluginRuntimeContext: () => ({
       options: { enabled: false, mode: "off" },
       hookManager: { on() {} },
     }),
   });
-  const result = registerNoobotPlugin({}, {});
+  const result = registerWorkflowCore({}, {});
   assert.equal(result?.name, PLUGIN_NAME);
   assert.deepEqual(result?.disposers || [], []);
 });
 
-test("createRegisterNoobotPlugin appends denyToolNames via unified policy api", () => {
-  const registerNoobotPlugin = createRegisterNoobotPlugin({
+test("createWorkflowRegistration declares denyToolNames through policy.patch", () => {
+  const registerWorkflowCore = createWorkflowRegistration({
     createPluginRuntimeContext: () => ({
       options: {
         enabled: true,
@@ -324,14 +324,14 @@ test("createRegisterNoobotPlugin appends denyToolNames via unified policy api", 
     registerWorkflowHooks: () => [],
   });
   const calls = [];
-  const result = registerNoobotPlugin({
+  const result = registerWorkflowCore({
     policy: {
-      appendDenyToolNames: (names = []) => calls.push([...(names || [])]),
+      patch: (policy = {}) => calls.push(policy),
     },
   });
 
   assert.equal(result?.name, PLUGIN_NAME);
-  assert.deepEqual(calls, [["delegate_task_async"]]);
+  assert.deepEqual(calls, [{ denyToolNames: ["delegate_task_async"] }]);
 });
 
 test("workflow hook skips when source text is empty", async () => {

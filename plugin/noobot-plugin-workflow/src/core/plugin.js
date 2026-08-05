@@ -9,12 +9,12 @@ import { normalizeOptions } from "./options.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "./constants.js";
 import { registerWorkflowHooks } from "./hooks/index.js";
 
-export function createRegisterNoobotPlugin(deps = {}) {
+export function createWorkflowRegistration(deps = {}) {
   const createPluginRuntimeContextFn = deps.createPluginRuntimeContext || createPluginRuntimeContext;
   const assertHookManagerFn = deps.assertHookManager || assertHookManager;
   const registerWorkflowHooksFn = deps.registerWorkflowHooks || registerWorkflowHooks;
 
-  return function registerNoobotPlugin(api = {}, userOptions = {}) {
+  return function registerWorkflowCore(api = {}, userOptions = {}) {
     const { options, hookManager } = createPluginRuntimeContextFn(api, userOptions);
     assertHookManagerFn(hookManager);
     if (!options.enabled || options.mode !== "on") {
@@ -22,11 +22,11 @@ export function createRegisterNoobotPlugin(deps = {}) {
     }
     if (
       api?.policy &&
-      typeof api.policy.appendDenyToolNames === "function" &&
+      typeof api.policy.patch === "function" &&
       Array.isArray(options?.denyToolNames) &&
       options.denyToolNames.length
     ) {
-      api.policy.appendDenyToolNames(options.denyToolNames);
+      api.policy.patch({ denyToolNames: options.denyToolNames });
     }
 
     const disposers = registerWorkflowHooksFn({
@@ -38,23 +38,23 @@ export function createRegisterNoobotPlugin(deps = {}) {
   };
 }
 
-export const registerNoobotPlugin = createRegisterNoobotPlugin();
+export const registerWorkflowCore = createWorkflowRegistration();
 
-export function createWorkflowPluginFactory(deps = {}) {
+export function createWorkflowCoreFactory(deps = {}) {
   const normalizeOptionsFn = deps.normalizeOptions || normalizeOptions;
-  const registerNoobotPluginFn = deps.registerNoobotPlugin || registerNoobotPlugin;
+  const registerWorkflowCoreFn = deps.registerWorkflowCore || registerWorkflowCore;
 
-  return function createWorkflowPlugin(userOptions = {}) {
+  return function createWorkflowCore(userOptions = {}) {
     const options = normalizeOptionsFn(userOptions);
     return {
       name: PLUGIN_NAME,
       version: PLUGIN_VERSION,
       options,
       register(api = {}) {
-        return registerNoobotPluginFn(api, options);
+        return registerWorkflowCoreFn(api, options);
       },
     };
   };
 }
 
-export const createWorkflowPlugin = createWorkflowPluginFactory();
+export const createWorkflowCore = createWorkflowCoreFactory();

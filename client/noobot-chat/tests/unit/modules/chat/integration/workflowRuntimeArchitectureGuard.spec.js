@@ -163,15 +163,18 @@ describe("workflow runtime architecture guard", () => {
     expect(store).not.toMatch(/onTurnCommitted[\s\S]*applyRunStateMessageRuntimePatch/);
   });
 
-  it("keeps workflow transport projection in the declared plugin-runtime capability", () => {
+  it("keeps workflow transport projection in the declared extension point", () => {
     const sendRouter = source("src/modules/chat/runtime/engine/sendStreamEventRouter.js");
     const reconnectRouter = source("src/modules/chat/runtime/reconnect/reconnectEventReplay.js");
     const workflowPlugin = source("../../plugin/noobot-plugin-workflow/frontend/index.js");
-    const manifest = source("../../plugin/noobot-plugin-workflow/manifest.json");
+    const manifest = JSON.parse(source("../../plugin/noobot-plugin-workflow/manifest.json"));
 
     expect(sendRouter).not.toMatch(/workflow_(?:planning_message_prepared|node_state_committed)|workflow_message_event/);
     expect(reconnectRouter).not.toMatch(/workflow_(?:planning_message_prepared|node_state_committed)|workflow_message_event/);
     expect(workflowPlugin).toMatch(/RUNTIME_STREAM_ROUTE|workflow-runtime-projector/);
-    expect(manifest).toMatch(/frontend\.runtime_projection/);
+    expect(manifest.contributes.frontend.extensions).toContainEqual({
+      id: "workflow-runtime-projector",
+      point: "runtime.stream.route",
+    });
   });
 });

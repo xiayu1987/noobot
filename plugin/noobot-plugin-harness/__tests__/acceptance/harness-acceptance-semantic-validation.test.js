@@ -14,7 +14,7 @@ import {
   createTestHookManager as createAgentHookManager,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import { registerHarnessCore } from "../../src/index.js";
 import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
@@ -36,7 +36,7 @@ test("harness acceptance semantic validation uses separate model when enabled", 
   const hookManager = createAgentHookManager();
   const invocations = [];
   const runtimeHelpers = new ModelMessageRuntimeHelpers();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -179,7 +179,7 @@ test("acceptance semantic validation relays via unified ctx.modelContext.message
 
 test("harness acceptance semantic validation failure does not block active acceptance", async () => {
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,

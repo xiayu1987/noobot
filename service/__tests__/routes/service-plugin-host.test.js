@@ -7,75 +7,64 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
 
-test("service plugin host exposes only the restricted route contract", async () => {
-  let receivedContext = null;
-  let receivedOptions = null;
-  const registerServiceRoutes = async (_app, context, options) => {
-    receivedContext = context;
-    receivedOptions = options;
-    return "registered";
+function serviceEntry({ activate, routes = [], hooks = [] } = {}) {
+  const manifest = {
+    protocolVersion: 2,
+    id: "demo",
+    name: "demo",
+    version: "1.0.0",
+    entries: { service: "service.mjs" },
+    contributes: { service: { hooks: { registers: hooks, emits: [] }, routes } },
+    requires: { ports: ["hooks.register", "routes.bind"], permissions: [], authenticatedRoutes: [] },
+    enabledByDefault: true,
   };
-  const runtime = {
-    registry: new Map([
-      ["demo", {
-        pluginId: "demo",
-        pluginDir: "/plugins/demo",
-        manifest: {
-          id: "demo",
-          capabilities: ["service.http_routes"],
-          runtimeOptions: { "service.http_routes": { priority: 10 } },
-        },
-        moduleNamespace: { registerServiceRoutes },
-      }],
-    ]),
-  };
-  const ports = Object.freeze({ sessions: Object.freeze({ readSnapshot() {} }) });
-  const bot = { getWorkspacePath() { throw new Error("must not be exposed"); } };
-  const host = createServicePluginHost({ loadPluginRuntime: async () => runtime });
+  return { pluginId: "demo", manifest, surface: "service", activate };
+}
 
-  const result = await host.registerServiceRoutes({ get() {} }, { ports, bot, translateText: () => "" });
+test("service plugin host binds declared routes without exposing Express", async () => {
+  let receivedHost;
+  const entry = serviceEntry({
+    routes: [{ id: "demo.detail", method: "GET", paths: ["/demo/:id"], auth: "connected_user" }],
+    activate(host) {
+      receivedHost = host;
+      host.routes.bind("demo.detail", (_req, res) => res.json({ ok: true }));
+      return { protocolVersion: 2, pluginId: "demo", surface: "service", dispose() {} };
+    },
+  });
+  const registrations = [];
+  const app = { get(path, handler) { registrations.push({ path, handler }); } };
+  const ports = Object.freeze({ sessions: Object.freeze({ readSnapshot() {} }) });
+  const host = createServicePluginHost({ loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }) });
+
+  const result = await host.registerServiceRoutes(app, { ports, translateText: () => "" });
 
   assert.equal(result.length, 1);
-  assert.equal(result[0].result, "registered");
-  assert.equal(receivedContext.ports, ports);
-  assert.equal("bot" in receivedContext, false);
-  assert.deepEqual(Object.keys(receivedContext).sort(), [
-    "createJsonRouteWrapper", "jsonRoute", "plugin", "ports", "translateText",
-  ]);
-  assert.deepEqual(receivedOptions, { priority: 10 });
+  assert.equal(receivedHost.ports, ports);
+  assert.deepEqual(Object.keys(receivedHost).sort(), ["hooks", "ports", "routes"]);
+  assert.deepEqual(registrations.map((item) => item.path), ["/demo/:id"]);
 });
 
-test("service plugin host ignores plugins without the route capability", async () => {
-  let called = false;
-  const runtime = {
-    registry: new Map([["demo", {
-      pluginId: "demo",
-      manifest: { id: "demo", capabilities: ["agent.register"] },
-      moduleNamespace: { registerServiceRoutes() { called = true; } },
-    }]]),
-  };
-  const host = createServicePluginHost({ loadPluginRuntime: async () => runtime });
-  const result = await host.registerServiceRoutes({ get() {} }, { ports: {} });
-  assert.deepEqual(result, []);
-  assert.equal(called, false);
+test("service plugin host rejects an undeclared route", async () => {
+  const entry = serviceEntry({
+    activate(host) {
+      host.routes.bind("demo.hidden", () => {});
+      return { protocolVersion: 2, pluginId: "demo", surface: "service" };
+    },
+  });
+  const host = createServicePluginHost({ loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }) });
+  await assert.rejects(() => host.registerServiceRoutes({ get() {} }, { ports: {} }), /did not declare route/);
 });
 
-test("service plugin host loads routes from the configured plugin root", async () => {
+test("service plugin host loads the service surface from the configured plugin root", async () => {
   const calls = [];
   const pluginRootDir = "/packaged/backend/plugin";
   const host = createServicePluginHost({
     pluginRootDir,
     loadPluginRuntime: async (options) => {
       calls.push(options);
-      return { registry: new Map() };
+      return { registry: new Map(), errors: [] };
     },
   });
-
   await host.registerServiceRoutes({ get() {} }, { ports: {} });
-
-  assert.deepEqual(calls, [{
-    requiredApiVersion: "1",
-    runtimeSurface: "service",
-    pluginRootDir,
-  }]);
+  assert.deepEqual(calls, [{ surface: "service", pluginRootDir }]);
 });

@@ -34,7 +34,7 @@ test("mergeToolPolicyPatch merges base/patched deny tool names", () => {
   assert.deepEqual(merged.denyToolNames, ["a", "b"]);
 });
 
-test("createPluginPolicyApi appends deny tool names without dropping base policy", () => {
+test("createPluginPolicyApi patches deny tool names without dropping base policy", () => {
   const policyApi = createPluginPolicyApi({
     baseToolPolicy: {
       mode: "append_custom",
@@ -42,12 +42,22 @@ test("createPluginPolicyApi appends deny tool names without dropping base policy
     },
     normalizeStringArray,
   });
-  policyApi.appendDenyToolNames(["delegate_task_async"]);
-  const merged = policyApi.getToolPolicy();
+  const merged = policyApi.patch({ denyToolNames: ["delegate_task_async"] });
 
   assert.equal(merged.mode, "append_custom");
   assert.deepEqual(merged.allowToolNames, ["read_file"]);
   assert.deepEqual(merged.denyToolNames, ["delegate_task_async"]);
+});
+
+test("createPluginPolicyApi accumulates deny declarations from multiple plugins", () => {
+  const policyApi = createPluginPolicyApi({
+    baseToolPolicy: { denyToolNames: ["base_tool"] },
+    normalizeStringArray,
+  });
+  policyApi.patch({ denyToolNames: ["harness_tool"] });
+  const merged = policyApi.patch({ denyToolNames: ["workflow_tool", "harness_tool"] });
+
+  assert.deepEqual(merged.denyToolNames, ["base_tool", "harness_tool", "workflow_tool"]);
 });
 
 test("mergeToolPolicyPatch removes denied tools from allowToolNames", () => {

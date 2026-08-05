@@ -8,11 +8,19 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createJsonRouteWrapper } from "../../routes/route-wrapper.js";
 import { createPluginServicePorts } from "../../services/plugin-service-ports.js";
+import { createServicePluginHost } from "../../services/service-plugin-host.js";
 import { persistSessionArtifactSnapshot } from "noobot-agent/session";
-import { registerServiceRoutes as registerWorkflowServiceRoutes } from "../../../plugin/noobot-plugin-workflow/src/service/routes.js";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+
+async function registerWorkflowPluginRoutes(app, { bot, translateText }) {
+  const pluginHost = createServicePluginHost();
+  await pluginHost.registerServiceRoutes(app, {
+    ports: createPluginServicePorts({ bot, translateText }),
+    translateText,
+  });
+  return pluginHost;
+}
 
 test("workflow service reads persisted segmented child execution events after refresh", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-child-events-"));
@@ -76,11 +84,7 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     getConnectorHistoryStore: () => ({}),
     translateText,
   });
-  registerWorkflowServiceRoutes(app, {
-    ports: createPluginServicePorts({ bot, translateText }),
-    translateText,
-    jsonRoute: createJsonRouteWrapper({ translateText }),
-  });
+  await registerWorkflowPluginRoutes(app, { bot, translateText });
 
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/internal/workflow/session/u1/root-s/wf_node_1`);
@@ -145,11 +149,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     getConnectorHistoryStore: () => ({}),
     translateText,
   });
-  registerWorkflowServiceRoutes(app, {
-    ports: createPluginServicePorts({ bot, translateText }),
-    translateText,
-    jsonRoute: createJsonRouteWrapper({ translateText }),
-  });
+  await registerWorkflowPluginRoutes(app, { bot, translateText });
 
   await withTestServer(app, async (baseUrl) => {
     const response = await fetch(

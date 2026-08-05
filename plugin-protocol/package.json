@@ -1,0 +1,21 @@
+{
+  "name": "@noobot/plugin-protocol",
+  "version": "4.1.5",
+  "private": true,
+  "type": "module",
+  "description": "Authoritative Noobot plugin manifest and activation protocol",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./manifest": "./src/manifest.mjs",
+    "./activation": "./src/activation.mjs",
+    "./frontend": "./src/frontend.mjs",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@noobot/hook-protocol": "file:../hook-protocol",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.mjs"
+  }
+}

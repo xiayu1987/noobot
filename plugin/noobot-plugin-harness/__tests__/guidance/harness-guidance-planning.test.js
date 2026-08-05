@@ -11,7 +11,7 @@ import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers } from "../helpers/public-runtime-fixtures.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import { registerHarnessCore } from "../../src/index.js";
 import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
@@ -31,7 +31,7 @@ function assertFlatCapabilityMessages(messages = []) {
 test("harness summary triggers complete revised plan and acceptance uses latest checklist", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -159,7 +159,7 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
 test("planning_revision reuses summary model messages in separate_model flow", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -254,7 +254,7 @@ test("planning_revision reuses summary model messages in separate_model flow", a
 test("planning_refinement is scheduled independently after revision main-plan change", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,
@@ -306,7 +306,7 @@ test("planning_refinement is scheduled independently after revision main-plan ch
 test("harness summary without completion marker still triggers planning revision", async () => {
   const hookManager = createAgentHookManager();
   const invocations = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       trace: false,

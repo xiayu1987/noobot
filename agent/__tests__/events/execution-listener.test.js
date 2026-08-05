@@ -121,6 +121,13 @@ test("execution listener classifies context identity diagnostics under one proto
   await listener.flushPersistence();
 
   assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].userId, "user-a");
+  assert.equal(persisted[0].sessionId, "session-a");
+  assert.equal(persisted[0].dialogProcessId, "dialog-a");
+  assert.equal(persisted[0].turnScopeId, "turn-a");
+  assert.equal(persisted[0].data.sessionId, persisted[0].sessionId);
+  assert.equal(persisted[0].data.dialogProcessId, persisted[0].dialogProcessId);
+  assert.equal(persisted[0].data.turnScopeId, persisted[0].turnScopeId);
   assert.equal(persisted[0].category, "context_identity");
   assert.equal(persisted[0].type, "context_identity_debug");
   assert.equal(persisted[0].data.debugType, "context-identity");

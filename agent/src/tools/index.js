@@ -46,21 +46,6 @@ const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
   "planMultiTaskCollaboration",
 ]);
 
-function isAgentCollabDisabledByRuntimePolicy(runtime = {}) {
-  const runConfig =
-    runtime?.runConfig && typeof runtime.runConfig === "object"
-      ? runtime.runConfig
-      : {};
-  const toolPolicy =
-    runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
-      ? runConfig.toolPolicy
-      : {};
-  return (
-    toolPolicy?.disableAgentCollabTools === true ||
-    toolPolicy?.disable_agent_collab_tools === true
-  );
-}
-
 function normalizeToolNameList(input = []) {
   return Array.isArray(input)
     ? input.map((item) => String(item || "").trim()).filter(Boolean)
@@ -105,13 +90,7 @@ function resolveDeniedToolNamesByRuntimePolicy(runtime = {}) {
       : {};
   const denyToolNames = new Set([
     ...normalizeToolNameList(toolPolicy?.denyToolNames),
-    ...normalizeToolNameList(toolPolicy?.deny_tool_names),
   ]);
-  if (isAgentCollabDisabledByRuntimePolicy(runtime)) {
-    for (const toolName of BLOCKED_AGENT_COLLAB_TOOL_NAMES) {
-      denyToolNames.add(toolName);
-    }
-  }
   const alwaysIncludedToolNames = resolveAlwaysIncludedToolNames(runtime);
   for (const toolName of alwaysIncludedToolNames) {
     denyToolNames.delete(toolName);
@@ -284,7 +263,6 @@ async function filterToolsByRuntimePolicy({
   const sessionManager = runtime?.sessionManager || null;
   const maxSubAgentDepth = resolveMaxSubAgentDepth(effectiveConfig);
   const depthTargetSessionId = sessionId || parentSessionId;
-  const collabDisabledByLegacyPolicy = isAgentCollabDisabledByRuntimePolicy(runtime);
   const deniedToolNames = resolveDeniedToolNamesByRuntimePolicy(runtime);
 
   if (deniedToolNames.size) {
@@ -299,13 +277,6 @@ async function filterToolsByRuntimePolicy({
         parentSessionId,
         disabledTools: Array.from(deniedToolNames),
       });
-      if (collabDisabledByLegacyPolicy) {
-        emitEvent(eventListener, "agent_collab_tools_disabled_by_runtime_policy", {
-          sessionId: depthTargetSessionId,
-          parentSessionId,
-          disabledTools: Array.from(BLOCKED_AGENT_COLLAB_TOOL_NAMES),
-        });
-      }
     }
     return filteredTools;
   }

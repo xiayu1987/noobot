@@ -243,6 +243,8 @@ export class SessionExecutionRunner {
           ? runConfig
           : {}),
         ...(normalizedRequestTurnScopeId ? { turnScopeId: normalizedRequestTurnScopeId } : {}),
+        sessionId: usedSessionId,
+        dialogProcessId,
       };
       const scenarioResolvedRunConfig = this.resolveScenarioRunConfig(
         requestRunConfig,
@@ -313,6 +315,15 @@ export class SessionExecutionRunner {
       resolvedUsedSessionId = usedSessionId;
       resolvedDialogProcessId = dialogProcessId;
       resolvedRuntimeEventListener = runtimeEventListener;
+      for (const record of resolvedRunConfig.pluginLifecycleEvents || []) {
+        emitEvent(runtimeEventListener, record.event, {
+          ...record.data,
+          sessionId: usedSessionId,
+          dialogProcessId,
+          turnScopeId: resolvedTurnScopeId,
+        });
+      }
+      delete resolvedRunConfig.pluginLifecycleEvents;
       emitEvent(
         runtimeEventListener,
         "plugin_runtime_resolved",

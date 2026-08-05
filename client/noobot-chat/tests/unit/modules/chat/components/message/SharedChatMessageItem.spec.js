@@ -13,7 +13,7 @@ import {
   clearExtensionRegistry,
   contributeExtension,
 } from "../../../../../../src/extensions/extension-registry.js";
-import { EXTENSION_POINTS } from "../../../../../../src/extensions/extension-point-ids.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { clearSessionTurnUiStates } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
 
 vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {

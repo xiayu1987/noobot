@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import { registerHarnessCore } from "../../src/index.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -24,7 +24,7 @@ import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 test("harness plugin injects prompt into before_llm_call messages", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin({ hookManager }, { basePath, trace: false });
+  registerHarnessCore({ hookManager }, { basePath, trace: false });
   const messages = [{ role: "user", content: "hello" }];
 
   await hookManager.emit("agent.before_llm_call", {
@@ -44,7 +44,7 @@ test("harness plugin exposes capability handler skeleton and hook mapping in man
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
   const calls = [];
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       basePath,

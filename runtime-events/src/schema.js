@@ -16,6 +16,10 @@ export function buildProcessInfo(includeProcess = true) {
   return { pid: process.pid, platform: process.platform, arch: process.arch, nodeVersion: process.version, uptimeMs: Math.round(process.uptime() * 1000) };
 }
 
+function normalizeIdentity(value) {
+  return String(value ?? '').trim().slice(0, 256);
+}
+
 export function normalizeRuntimeEvent(event = {}, defaults = {}) {
   const scope = event.scope || defaults.scope || RUNTIME_EVENT_SCOPES.SYSTEM;
   if (!scopes.has(scope)) throw new Error(`Invalid runtime event scope: ${scope}`);
@@ -42,7 +46,7 @@ export function normalizeRuntimeEvent(event = {}, defaults = {}) {
   };
   for (const key of ['userId', 'sessionId', 'dialogProcessId', 'turnScopeId']) {
     const value = event[key] ?? defaults[key];
-    if (value) record[key] = safeSegment(value);
+    if (value) record[key] = normalizeIdentity(value);
   }
   for (const key of ['parentSessionId', 'rootSessionId', 'storageSessionId']) {
     const value = normalizeOptionalSessionId(event[key] ?? defaults[key]);

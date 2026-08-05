@@ -5,7 +5,7 @@
  */
 import MarkdownIt from "markdown-it";
 import { provideExtensionValues } from "../../../../extensions/extension-registry.js";
-import { EXTENSION_POINTS } from "../../../../extensions/extension-point-ids.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 
 const MERMAID_PREFIXES = [
   "graph ",

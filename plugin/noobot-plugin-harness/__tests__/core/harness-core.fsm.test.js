@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
-import { registerNoobotPlugin } from "../../src/index.js";
+import { registerHarnessCore } from "../../src/index.js";
 import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
@@ -24,7 +24,7 @@ import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 test("harness plugin rejects illegal FSM transitions and audits state commits", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     { basePath, promptPolicy: false, manifestDebounceMs: 0 },
   );
@@ -71,7 +71,7 @@ test("harness plugin can resume FSM from manifest checkpoint", async () => {
 
   {
     const hookManager = createAgentHookManager();
-    registerNoobotPlugin(
+    registerHarnessCore(
       { hookManager },
       { basePath, promptPolicy: false, manifestDebounceMs: 0 },
     );
@@ -103,7 +103,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
   const runId = "dp-fsm-matrix";
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       basePath,
@@ -205,7 +205,7 @@ test("harness FSM transition matrix (table-driven)", async () => {
 test("harness FSM remains planning when checklist is absent", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       basePath,

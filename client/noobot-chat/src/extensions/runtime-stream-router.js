@@ -8,7 +8,7 @@ import {
   provideResolvedExtensionValues,
   resolveExtensionPoint,
 } from "./extension-registry.js";
-import { EXTENSION_POINTS } from "./extension-point-ids.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 
 const AUTHORITATIVE_STATE_EVENTS = new Set([
   "turn_lifecycle",

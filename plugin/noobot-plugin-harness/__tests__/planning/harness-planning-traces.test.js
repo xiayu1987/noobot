@@ -12,7 +12,7 @@ import {
   os,
   path,
   readJsonl,
-  registerNoobotPlugin,
+  registerHarnessCore,
   test,
   waitForFile,
 } from "../helpers/harness-planning-helper.js";
@@ -20,7 +20,7 @@ import {
 test("harness writes capability model traces to dedicated jsonl artifact", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
   const hookManager = createAgentHookManager();
-  registerNoobotPlugin(
+  registerHarnessCore(
     { hookManager },
     {
       basePath,

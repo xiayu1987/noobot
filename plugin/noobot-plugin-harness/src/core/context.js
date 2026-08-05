@@ -23,15 +23,10 @@ export function normalizePlanningGuidance(options = {}) {
   }
 }
 
-export function extractRuntime(ctx = {}) {
-  return ctx?.agentContext?.bindings?.runtime || null;
-}
-
 export function extractBasePath(ctx = {}, options = {}) {
   return String(
     options.basePath ||
       ctx.basePath ||
-      extractRuntime(ctx)?.basePath ||
       ctx?.agentContext?.context?.environment?.workspace?.basePath ||
       "",
   ).trim();

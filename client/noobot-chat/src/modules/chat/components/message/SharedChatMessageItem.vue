@@ -36,7 +36,7 @@ import {
   BaseMessageTypeTag,
   BasePreviewContent,
 } from "../../../../shared/public-api/ui.js";
-import { EXTENSION_POINTS } from "../../../../extensions/extension-point-ids.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
 import { resolveExtensionPoint } from "../../../../extensions/extension-registry.js";
 import {

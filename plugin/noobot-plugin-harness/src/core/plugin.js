@@ -11,25 +11,25 @@ import { normalizeOptions } from "./options.js";
 import { extractBasePath } from "./context.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "./error-messages.js";
 
-export function createRegisterNoobotPlugin(deps = {}) {
+export function createHarnessRegistration(deps = {}) {
   const createPluginRuntimeContextFn = deps.createPluginRuntimeContext || createPluginRuntimeContext;
   const assertHookManagerFn = deps.assertHookManager || assertHookManager;
   const extractBasePathFn = deps.extractBasePath || extractBasePath;
   const cleanupOldRunsFn = deps.cleanupOldRuns || cleanupOldRuns;
   const registerHarnessHooksFn = deps.registerHarnessHooks || registerHarnessHooks;
 
-  return function registerNoobotPlugin(api = {}, userOptions = {}) {
+  return function registerHarnessCore(api = {}, userOptions = {}) {
     const { options, hookManager, capabilityRuntime } = createPluginRuntimeContextFn(api, userOptions);
     const locale = String(options?.locale || "").trim() || "en-US";
     assertHookManagerFn(hookManager, { locale });
     if (!options.enabled) return { name: PLUGIN_NAME, version: PLUGIN_VERSION, disposers: [] };
     if (
       api?.policy &&
-      typeof api.policy.appendDenyToolNames === "function" &&
+      typeof api.policy.patch === "function" &&
       Array.isArray(options?.denyToolNames) &&
       options.denyToolNames.length
     ) {
-      api.policy.appendDenyToolNames(options.denyToolNames);
+      api.policy.patch({ denyToolNames: options.denyToolNames });
     }
 
     const basePath = extractBasePathFn({}, options);
@@ -54,23 +54,23 @@ export function createRegisterNoobotPlugin(deps = {}) {
   };
 }
 
-export const registerNoobotPlugin = createRegisterNoobotPlugin();
+export const registerHarnessCore = createHarnessRegistration();
 
-export function createHarnessPluginFactory(deps = {}) {
+export function createHarnessCoreFactory(deps = {}) {
   const normalizeOptionsFn = deps.normalizeOptions || normalizeOptions;
-  const registerNoobotPluginFn = deps.registerNoobotPlugin || registerNoobotPlugin;
+  const registerHarnessCoreFn = deps.registerHarnessCore || registerHarnessCore;
 
-  return function createHarnessPlugin(userOptions = {}) {
+  return function createHarnessCore(userOptions = {}) {
     const options = normalizeOptionsFn(userOptions);
     return {
       name: PLUGIN_NAME,
       version: PLUGIN_VERSION,
       options,
       register(api = {}) {
-        return registerNoobotPluginFn(api, options);
+        return registerHarnessCoreFn(api, options);
       },
     };
   };
 }
 
-export const createHarnessPlugin = createHarnessPluginFactory();
+export const createHarnessCore = createHarnessCoreFactory();

@@ -47,7 +47,7 @@ export class ExecutionLogRepository {
       sessionId,
       parentSessionId,
       dialogProcessId: resolveMessageDialogProcessId(normalizedLog),
-      turnScopeId: String(normalizedLog?.data?.turnScopeId || "").trim(),
+      turnScopeId: normalizedLog.turnScopeId,
       source: "agent",
       category: mapExecutionLogToSessionChannelCategory(normalizedLog),
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,

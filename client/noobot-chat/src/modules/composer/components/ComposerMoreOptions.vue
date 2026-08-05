@@ -7,7 +7,7 @@
 import { computed } from "vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import ExtensionOutlet from "../../../extensions/components/ExtensionOutlet.vue";
-import { EXTENSION_POINTS } from "../../../extensions/extension-point-ids.js";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { provideExtensionValues, resolveExtensionPoint } from "../../../extensions/extension-registry.js";
 import { createPluginContext } from "../../../extensions/create-plugin-context.js";
 

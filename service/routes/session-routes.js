@@ -5,7 +5,6 @@
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
-import { createServicePluginHost } from "../services/service-plugin-host.js";
 import {
   normalizeSessionThinkingRouteText as normalizeRouteText,
   readJsonlArtifactFile,
@@ -21,8 +20,6 @@ import {
   normalizeWorkflowRuntimeEvent,
   WORKFLOW_RUNTIME_EVENT,
 } from "@noobot/shared/workflow-runtime-event-protocol";
-
-const servicePluginHost = createServicePluginHost();
 
 const WORKFLOW_RUNTIME_EVENTS = new Set([
   "workflow_planning_message_prepared",
@@ -197,8 +194,10 @@ export function registerSessionRoutes(
     getConnectorChannelStore,
     getConnectorHistoryStore,
     translateText,
+    pluginHost,
   } = {},
 ) {
+  if (!pluginHost) throw new TypeError("session routes require the activated service plugin host");
   const jsonRoute = createJsonRouteWrapper({ translateText });
 
   function resolveDeletedSessionIds(result = {}, fallbackSessionId = "") {
@@ -218,7 +217,7 @@ export function registerSessionRoutes(
         String(req.query?.refresh || "").trim().toLowerCase() === "true";
       res.json({
         ok: true,
-        plugins: await servicePluginHost.getPluginDiagnostics({ refresh }),
+        plugins: await pluginHost.getPluginDiagnostics({ refresh }),
       });
     }),
   );
@@ -588,7 +587,7 @@ export function registerSessionRoutes(
         sessionId,
       });
       const deletedSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
-      await servicePluginHost.emitAfterSessionDelete({
+      await pluginHost.emitAfterSessionDelete({
         bot,
         userId,
         sessionId: normalizedSessionId,

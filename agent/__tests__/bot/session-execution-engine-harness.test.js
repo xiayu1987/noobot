@@ -29,18 +29,6 @@ async function createTempRoot() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-plugin-engine-"));
 }
 
-test("RunConfigPluginPreparer.prepareAgentPluginRunConfig keeps runConfig unchanged when harness is disabled", () => {
-  const runConfig = { runtimeModel: "m1" };
-  const engine = new SessionExecutionEngine({
-    workspaceService: createWorkspaceService("/tmp/noobot-test"),
-  });
-
-  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({ userId: "u1", runConfig });
-
-  assert.equal(prepared, runConfig);
-  assert.equal(prepared.hookManager, undefined);
-});
-
 test("_prepareRunConfig attaches independent botHookManager", () => {
   const engine = new SessionExecutionEngine({
     workspaceService: createWorkspaceService("/tmp/noobot-test"),
@@ -107,13 +95,13 @@ test("_finalizeRunSession forwards staged persistence state unchanged", async ()
   assert.equal(forwarded.summaryCheckpointPromotionSources, summaryCheckpointPromotionSources);
 });
 
-test("RunConfigPluginPreparer.prepareAgentPluginRunConfig registers harness plugin and resolves basePath from user workspace", async () => {
+test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id and resolves basePath", async () => {
   const tempRoot = await createTempRoot();
   const engine = new SessionExecutionEngine({
     workspaceService: createWorkspaceService(tempRoot),
   });
 
-  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
     userId: "u1",
     runConfig: {
       plugins: {
@@ -167,7 +155,7 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
   const engine = new SessionExecutionEngine({
     workspaceService: createWorkspaceService(tempRoot),
   });
-  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
     userId: "u-identity",
     runConfig: {
       plugins: {
@@ -219,14 +207,14 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
   assert.equal(historyIds.some((id) => incrementalIds.includes(id)), false);
 });
 
-test("RunConfigPluginPreparer.prepareAgentPluginRunConfig reuses existing hookManager instead of replacing it", () => {
+test("RunConfigPluginPreparer.prepareRunConfig reuses existing hookManager instead of replacing it", () => {
   const hookManager = createHookManager();
   hookManager.on(HOOK_POINT.AGENT.BEFORE_LLM_CALL, () => {}, { id: "existing.before_llm_call" });
   const engine = new SessionExecutionEngine({
     workspaceService: createWorkspaceService("/tmp/noobot-test"),
   });
 
-  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
     userId: "u1",
     runConfig: {
       hookManager,
@@ -237,7 +225,7 @@ test("RunConfigPluginPreparer.prepareAgentPluginRunConfig reuses existing hookMa
   assert.equal(prepared.hookManager, hookManager);
   assert.equal(hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 2);
 
-  const preparedAgain = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({ userId: "u1", runConfig: prepared });
+  const preparedAgain = engine.runConfigPluginPreparer.prepareRunConfig({ userId: "u1", runConfig: prepared });
   assert.equal(preparedAgain.hookManager, hookManager);
   assert.equal(hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 2);
 });
@@ -249,77 +237,12 @@ test("globalConfig.plugins.harness.mode=on enables harness by default", () => {
     workspaceService: createWorkspaceService(tempRoot),
   });
 
-  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({ userId: "u2", runConfig: {} });
+  const prepared = engine.runConfigPluginPreparer.prepareRunConfig({ userId: "u2", runConfig: {} });
 
   assert.ok(prepared.hookManager);
   assert.equal(prepared.plugins.harness.enabled, true);
   assert.equal(prepared.plugins.harness.trace, false);
   assert.equal(prepared.plugins.harness.basePath, path.join(tempRoot, "u2"));
-});
-
-test("RunConfigPluginPreparer.resolveBotPluginOptions keeps workflow on when user/global config is on", () => {
-  const engine = new SessionExecutionEngine({
-    globalConfig: { plugins: { workflow: { enabled: true, mode: "off" } } },
-    workspaceService: createWorkspaceService("/tmp/noobot-bot-plugin-test"),
-  });
-  const options = engine.runConfigPluginPreparer.resolveBotPluginOptions({
-    runConfig: {
-      plugins: {
-        workflow: { mode: "off" },
-      },
-    },
-    userConfig: {
-      plugins: {
-        workflow: { enabled: true, mode: "on", semanticModel: "GLM_5_1" },
-      },
-    },
-  });
-  assert.equal(options.enabled, true);
-  assert.equal(options.mode, "on");
-  assert.equal(options.semanticModel, "GLM_5_1");
-});
-
-test("RunConfigPluginPreparer.resolveBotPluginOptions respects explicit enabled=false in runConfig", () => {
-  const engine = new SessionExecutionEngine({
-    globalConfig: { plugins: { workflow: { enabled: true, mode: "on" } } },
-    workspaceService: createWorkspaceService("/tmp/noobot-bot-plugin-test"),
-  });
-  const options = engine.runConfigPluginPreparer.resolveBotPluginOptions({
-    runConfig: {
-      plugins: {
-        workflow: { enabled: false, mode: "off" },
-      },
-    },
-    userConfig: {
-      plugins: {
-        workflow: { enabled: true, mode: "on" },
-      },
-    },
-  });
-  assert.equal(options.enabled, false);
-  assert.equal(options.mode, "off");
-});
-
-test("RunConfigPluginPreparer.resolveBotPluginOptions keeps strategy-disabled workflow off", () => {
-  const engine = new SessionExecutionEngine({
-    globalConfig: { plugins: { workflow: { enabled: true, mode: "on" } } },
-    workspaceService: createWorkspaceService("/tmp/noobot-bot-plugin-test"),
-  });
-  const options = engine.runConfigPluginPreparer.resolveBotPluginOptions({
-    runConfig: {
-      disabledPlugins: ["workflow"],
-      selectedPlugins: ["workflow"],
-      plugins: {
-        workflow: { enabled: true, mode: "on" },
-      },
-    },
-    userConfig: {
-      plugins: {
-        workflow: { enabled: true, mode: "on" },
-      },
-    },
-  });
-  assert.deepEqual(options, { enabled: false, mode: "off" });
 });
 
 test("runSession smoke writes harness artifacts through full execution pipeline", async () => {
@@ -434,7 +357,7 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     message: "hello plugin",
     runConfig: {
       turnScopeId: "turn-scope-smoke",
-      selectedPlugins: ["agentPlugin"],
+      selectedPlugins: ["harness"],
       plugins: {
         harness: {
           manifestDebounceMs: 0,
@@ -490,7 +413,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
   });
   const dialogProcessId = "dp-tool-state-smoke";
   const sessionId = randomUUID();
-  const prepared = engine.runConfigPluginPreparer.prepareAgentPluginRunConfig({
+  const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
     userId: "u1",
     runConfig: {
       hookManager,

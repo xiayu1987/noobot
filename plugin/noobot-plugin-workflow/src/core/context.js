@@ -15,14 +15,11 @@ export function assertHookManager(hookManager = null) {
 
 export function createPluginRuntimeContext(api = {}, userOptions = {}) {
   const options = normalizeOptions(userOptions);
-  const botHookManager =
-    api?.hookManager && typeof api.hookManager === "object"
-        ? api.hookManager
-      : api?.botHookManager && typeof api.botHookManager === "object"
-        ? api.botHookManager
-        : null;
+  const hookManager = api?.hookManager && typeof api.hookManager === "object"
+    ? api.hookManager
+    : null;
   return {
     options,
-    hookManager: botHookManager,
+    hookManager,
   };
 }

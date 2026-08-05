@@ -90,17 +90,18 @@ test('session runtime events write to runtime session events path', async () => 
     event: 'agent.doc2data.failed',
     userId: 'admin',
     sessionId: 's:1',
-    dialogProcessId: 'dialog-1',
-    turnScopeId: 'turn-1',
+    dialogProcessId: 'dialog:1',
+    turnScopeId: 'client-turn:1',
     workspaceRoot,
   });
 
   assert.equal(result.ok, true);
   assert.match(result.file, /admin\/runtime\/session\/s_1\/events\/system\.jsonl$/);
   const [record] = await readJsonl(result.file);
-  assert.equal(record.sessionId, 's_1');
+  assert.equal(record.sessionId, 's:1');
   assert.equal(record.userId, 'admin');
-  assert.equal(record.dialogProcessId, 'dialog-1');
+  assert.equal(record.dialogProcessId, 'dialog:1');
+  assert.equal(record.turnScopeId, 'client-turn:1');
   assert.equal(result.record.workspaceRoot, undefined);
   assert.equal(record.workspaceRoot, undefined);
 });
@@ -121,7 +122,7 @@ test('routed runtime events write session when full session context exists', asy
 
   assert.equal(result.ok, true);
   assert.equal(result.record.scope, 'session');
-  assert.equal(result.record.sessionId, 'session_1');
+  assert.equal(result.record.sessionId, 'session:1');
   assert.equal(result.record.data.token, '[Redacted]');
   assert.match(result.file, /admin\/runtime\/session\/session_1\/events\/system\.jsonl$/);
 });

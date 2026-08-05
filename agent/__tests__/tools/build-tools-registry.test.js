@@ -131,25 +131,6 @@ test("buildTools: runtime toolPolicy.denyToolNames 可按统一字段禁用工�
   assert.equal(names.has("process_content_task"), true);
 });
 
-test("buildTools: 兼容 legacy disableAgentCollabTools 字段", async () => {
-  const tools = await buildTools(
-    createContext({
-      runtimePatch: {
-        runConfig: {
-          toolPolicy: {
-            disableAgentCollabTools: true,
-          },
-        },
-      },
-    }),
-  );
-  const names = new Set(tools.map((tool) => tool?.name).filter(Boolean));
-
-  assert.equal(names.has("delegate_task_async"), false);
-  assert.equal(names.has("wait_async_task_result"), false);
-  assert.equal(names.has("plan_multi_task_collaboration"), false);
-});
-
 test("buildTools: coding 场景应强制保留编程基础工具", async () => {
   const tools = await buildTools(
     createContext({

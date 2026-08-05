@@ -127,16 +127,19 @@ export async function registerHttpModules(
     translateText,
   });
 
+  const servicePluginHost = createServicePluginHost({ pluginRootDir });
+  await servicePluginHost.registerServiceRoutes(app, {
+    translateText,
+    ports: createPluginServicePorts({ bot, translateText }),
+  });
+
   registerSessionRoutes(app, {
     bot,
     handleChat,
     getConnectorChannelStore,
     getConnectorHistoryStore,
     translateText,
+    pluginHost: servicePluginHost,
   });
 
-  await createServicePluginHost({ pluginRootDir }).registerServiceRoutes(app, {
-    translateText,
-    ports: createPluginServicePorts({ bot, translateText }),
-  });
 }
