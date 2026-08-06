@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { ref } from "vue";
-import { resolveTimeMs } from "../model/timeFields.js";
 import {
   getTurnUiState,
   isTurnDetailExpanded,
@@ -12,49 +11,24 @@ import {
   toggleTurnDetailKey,
 } from "../runtime/engine/turnUiStore.js";
 import { selectToolTimelineCount } from "../runtime/engine/toolTimeline.js";
-import { normalizeToolLog, toolLogDetailKey } from "../model/toolLogIdentity.js";
+import { toolLogDetailKey } from "../model/toolLogIdentity.js";
 
 export function createThinkingPanelPresentation({
   props,
   emit,
   translate,
   getThinkingDetailForMessage,
-  getExecutionLogsForMessage,
+  getCanonicalExecutionLogs,
   getCompletedToolLogsForMessage,
   getSummaryThinkingDetailCount,
 }) {
   const timelineMessage = (messageItem = {}) => messageItem;
   const detailExpansionTick = ref(0);
 
-  function groupCompletedToolLogs(messageItem = {}) {
-    const toolLogs = getCompletedToolLogsForMessage(messageItem)
-      .map((logItem, sourceIndex) => ({ logItem, sourceIndex }))
-      .sort((left, right) => {
-        const leftTime = resolveTimeMs(left.logItem?.ts);
-        const rightTime = resolveTimeMs(right.logItem?.ts);
-        if (leftTime !== null && rightTime !== null && leftTime !== rightTime) {
-          return leftTime - rightTime;
-        }
-        return left.sourceIndex - right.sourceIndex;
-      })
-      .map(({ logItem }) => logItem);
-    if (toolLogs.length <= 0) return [];
-    return [{
-      key: "tool-timeline",
-      label: "",
-      items: toolLogs,
-    }];
-  }
-
   function groupExecutionLogs(messageItem = {}) {
-    const completedLogs = getCompletedToolLogsForMessage(messageItem);
-    const logs = completedLogs.length > 0
-      ? completedLogs
-      : typeof getExecutionLogsForMessage === "function"
-        ? getExecutionLogsForMessage(messageItem)
-        : [];
+    const logs = getCanonicalExecutionLogs(messageItem);
     if (!Array.isArray(logs) || logs.length <= 0) return [];
-    return [{ key: "tool-timeline", label: "", items: logs.map(normalizeToolLog) }];
+    return [{ key: "tool-timeline", label: "", items: logs }];
   }
 
   function collapseThinkingPanel(messageItem = {}) {
@@ -124,7 +98,6 @@ export function createThinkingPanelPresentation({
     getThinkingDetailLabel,
     openThinkingDetailDrawer,
     collapseThinkingPanel,
-    groupCompletedToolLogs,
     groupExecutionLogs,
     getThinkingDetailCount,
     getThinkingTreePrefix,

@@ -137,7 +137,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
 
     expect(getDetail).toHaveBeenCalledTimes(1);
     expect(wrapper.findAll(".execution-log-line").map((item) => item.text()))
-      .toContain("details-tool");
+      .toContain("返回：details-tool · 已完成");
   });
 
   it("refreshes an empty cached detail in details mode", async () => {
@@ -167,7 +167,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
 
     expect(getDetail).toHaveBeenCalledTimes(1);
     expect(wrapper.findAll(".execution-log-line").map((item) => item.text()))
-      .toContain("fresh-details-tool");
+      .toContain("返回：fresh-details-tool · 已完成");
   });
 
   it("does not fetch canonical details while a message is pending or local logs exist", async () => {

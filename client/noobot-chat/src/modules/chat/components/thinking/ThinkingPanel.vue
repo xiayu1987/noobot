@@ -63,7 +63,6 @@ const {
   openThinkingDetailDrawer,
   collapseThinkingPanel,
   isMessageRuntimeRunning,
-  groupCompletedToolLogs,
   groupExecutionLogs,
   getThinkingDetailCount,
   getThinkingTreePrefix,
