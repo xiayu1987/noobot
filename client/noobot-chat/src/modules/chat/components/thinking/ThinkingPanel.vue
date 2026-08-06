@@ -56,6 +56,7 @@ const {
   getExecutionLogs,
   currentExecutionLogs,
   latestTaskCheckReceipt,
+  taskCheckReceipts,
   loadedThinkingDetail,
   getExecutionLogCount,
   getThinkingDetailLabel,
@@ -63,6 +64,7 @@ const {
   collapseThinkingPanel,
   isMessageRuntimeRunning,
   groupCompletedToolLogs,
+  groupExecutionLogs,
   getThinkingDetailCount,
   getThinkingTreePrefix,
   getThinkingDetailItemKey,
@@ -97,10 +99,10 @@ const {
     :message-item="messageItem"
     :translate="translate"
     :is-running="isMessageRuntimeRunning(messageItem)"
-    :grouped-tool-logs="groupCompletedToolLogs(messageItem)"
+    :grouped-tool-logs="groupExecutionLogs(messageItem)"
     :thinking-content-items="thinkingContentItems"
     :detail-count="getExecutionLogCount(messageItem)"
-    :task-check-receipt="latestTaskCheckReceipt"
+    :task-check-receipts="taskCheckReceipts"
     :get-tree-prefix="getThinkingTreePrefix"
     :get-detail-key="getThinkingDetailItemKey"
     :is-expanded="isThinkingDetailExpanded"

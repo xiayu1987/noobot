@@ -55,6 +55,43 @@ test("guidance summary threshold by turns is independent from plan update attemp
   );
 });
 
+test("final acceptance completion closes planning and guidance threshold scheduling", async () => {
+  const guidanceHandler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const planningHandler = createPlanningHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createPlanningAgentContext({
+    counters: {
+      summaryTurns: FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD + 1,
+      planUpdateTurns: FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
+      phaseAcceptanceTurns: FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
+    },
+  });
+  agentContext.payload.harness.state.flags = {
+    planningCaptured: true,
+    acceptanceRequested: true,
+    acceptanceCompleted: true,
+  };
+  const ctx = { messages: [{ role: "tool", content: "acceptance completed" }], agentContext };
+
+  await planningHandler({ capability: "planning", point: "agent.before_llm_call", ctx, meta: {} });
+  await guidanceHandler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta: {} });
+
+  const state = agentContext.payload.harness.state;
+  assert.equal(state.pending.summary, false);
+  assert.equal(state.pending.planRevision, false);
+  assert.equal(state.pending.phaseAcceptance, false);
+  assert.equal(state.pending.analysis, false);
+  assert.equal(
+    agentContext.payload.harness.logs.guidance.some((item = {}) =>
+      String(item?.event || "").includes("scheduled_by_turn_threshold")),
+    false,
+  );
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some((item = {}) =>
+      String(item?.event || "").includes("scheduled_by_turn_threshold")),
+    false,
+  );
+});
+
 test("guidance summary uses the canonical per-run threshold and records its source", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createPlanningAgentContext({ counters: { summaryTurns: 1 } });

@@ -36,7 +36,15 @@ test("before_final_output retains the supplied authoritative modelContext entity
 
 test("non-model hook context and diagnostics use the canonical runtime turn identity", () => {
   const events = [];
+  const modelContext = createModelContext({
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "active turn" }],
+    },
+  });
   const runtime = {
+    activeMessageContext: modelContext,
     systemRuntime: {
       userId: "u1",
       sessionId: "s1",
@@ -53,12 +61,12 @@ test("non-model hook context and diagnostics use the canonical runtime turn iden
 
   assert.equal(context.dialogProcessId, "d1");
   assert.equal(context.turnScopeId, "t1");
-  assert.equal(context.modelContext, null);
+  assert.equal(context.modelContext, modelContext);
   const diagnostic = events.find(
     (event) => event.event === "agent.contextProtocol.hookDocumentConsumed",
   );
   assert.equal(diagnostic.data.dialogProcessId, "d1");
   assert.equal(diagnostic.data.turnScopeId, "t1");
-  assert.equal(diagnostic.data.hasModelContext, false);
-  assert.equal(diagnostic.data.modelContextProtocolVersion, 0);
+  assert.equal(diagnostic.data.hasModelContext, true);
+  assert.equal(diagnostic.data.modelContextProtocolVersion, 2);
 });

@@ -19,6 +19,7 @@ import {
   MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS,
   MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
 } from "./constants.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 
 const MEMORY_PROMPT_I18N = Object.freeze({
   "zh-CN": Object.freeze(zhSystemPromptI18n?.memoryPrompt || {}),
@@ -130,6 +131,7 @@ export class MemoryManager {
         flow: "memory.summary",
         purpose: "memory_consolidation",
         domain: "memory",
+        contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
       },
     });
 

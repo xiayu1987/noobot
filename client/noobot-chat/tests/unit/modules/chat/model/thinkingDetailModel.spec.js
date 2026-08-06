@@ -6,18 +6,17 @@
 import { describe, expect, it } from "vitest";
 import { normalizeThinkingToolLogs } from "../../../../../src/modules/chat/model/thinkingDetailModel.js";
 
-const fact = (eventId, sequence, event, text) => ({
+const fact = (eventId, sequence) => ({
   eventId, sequence, sequenceScopeId: "message-1", sequenceDomain: "message-event",
   authority: "authoritative", timestamp: `2026-07-25T01:00:0${sequence}.000Z`,
-  log: { event, type: event, toolCallId: "call-1", text },
 });
 
 describe("thinking detail model canonical timeline", () => {
   it("projects call and result logs exclusively from toolTimeline", () => {
     const logs = normalizeThinkingToolLogs({ messageItem: { toolTimeline: [{
-      key: "call:call-1", toolCallId: "call-1", status: "completed",
-      call: fact("call-1", 1, "tool_call", "read_file"),
-      resultEvent: fact("result-1", 2, "tool_result", "read_file done"),
+      key: "call:call-1", toolCallId: "call-1", tool: "read_file", status: "completed",
+      call: fact("call-1", 1),
+      resultEvent: fact("result-1", 2),
     }] } });
     expect(logs.map((item) => item.event)).toEqual(["tool_call", "tool_result"]);
   });
@@ -26,27 +25,12 @@ describe("thinking detail model canonical timeline", () => {
     const logs = normalizeThinkingToolLogs({ messageItem: { toolTimeline: [{
       key: "call:call-detail",
       toolCallId: "call-detail",
+      tool: "write_file",
       status: "completed",
       args: { filePath: "notes.txt", content: "hello" },
       result: { ok: true, filePath: "notes.txt" },
-      call: {
-        ...fact("call-detail", 1, "tool_call", "write_file"),
-        log: {
-          event: "tool_call",
-          type: "tool_call",
-          toolCallId: "call-detail",
-          text: "write_file",
-        },
-      },
-      resultEvent: {
-        ...fact("result-detail", 2, "tool_result", "write_file done"),
-        log: {
-          event: "tool_result",
-          type: "tool_result",
-          toolCallId: "call-detail",
-          text: "write_file done",
-        },
-      },
+      call: fact("call-detail", 1),
+      resultEvent: fact("result-detail", 2),
     }] } });
 
     expect(logs[0].detailText).toContain('"filePath": "notes.txt"');

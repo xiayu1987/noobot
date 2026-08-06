@@ -110,7 +110,7 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
         previousLastSequence: lastSequence,
       }));
     }
-    targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event, log);
+    targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event);
     targetMessage.activityTimeline = reduceActivityTimeline(
       targetMessage.activityTimeline,
       log

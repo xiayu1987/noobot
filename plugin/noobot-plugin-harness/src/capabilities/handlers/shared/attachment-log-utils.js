@@ -294,6 +294,28 @@ export function appendCapabilityLog(
   return true;
 }
 
+export function deferCapabilityLogs(ctx = {}, entries = []) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder) return 0;
+  const logs = Array.isArray(entries) ? entries.filter((entry) => entry && typeof entry === "object") : [];
+  if (!logs.length) return 0;
+  if (!Array.isArray(holder.bucket.capabilityLogOutbox)) {
+    holder.bucket.capabilityLogOutbox = [];
+  }
+  holder.bucket.capabilityLogOutbox.push(...logs);
+  return logs.length;
+}
+
+export function consumeDeferredCapabilityLogs(ctx = {}) {
+  const holder = ensureHarnessBucket(ctx);
+  if (!holder || !Array.isArray(holder.bucket.capabilityLogOutbox)) return 0;
+  const logs = holder.bucket.capabilityLogOutbox.splice(0);
+  if (!logs.length) return 0;
+  if (!Array.isArray(ctx.harnessCapabilityLogs)) ctx.harnessCapabilityLogs = [];
+  ctx.harnessCapabilityLogs.push(...logs);
+  return logs.length;
+}
+
 function sanitizeArtifactFileNamePart(value = "") {
   return String(value || "")
     .trim()

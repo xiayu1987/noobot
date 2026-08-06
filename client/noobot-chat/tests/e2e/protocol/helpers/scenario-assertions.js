@@ -23,14 +23,14 @@ export async function waitForCommand(capture, sessionId, commandType, after = 0)
 
 export async function waitForLifecycle(capture, sessionId, eventType, after = 0, turnScopeId = "") {
   return waitForCaptured(() => lifecycleForSession(capture, sessionId)
-    .slice(after).find((event) => event.eventType === eventType && (!turnScopeId || event.turnScopeId === turnScopeId)), { timeoutMs: 120_000 });
+    .slice(after).find((event) => event.eventType === eventType && (!turnScopeId || event.turnScopeId === turnScopeId)), { timeoutMs: 120000 });
 }
 
 export async function waitForTurnTerminal(
   capture,
   sessionId,
   turnScopeId = "",
-  { timeoutMs = 120_000 } = {},
+  { timeoutMs = 120000 } = {},
 ) {
   const terminalTypes = new Set(["turn.completed", "turn.stop_completed", "turn.failed"]);
   return waitForCaptured(() => lifecycleForSession(capture, sessionId)

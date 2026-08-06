@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
+import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
 import {
   createModelContext,
 } from "@noobot/context-protocol";
@@ -17,6 +18,15 @@ import {
   maybeRequestPhaseSummary,
   maybeRequestTaskCheck,
 } from "../../../src/runtime/loop-control.js";
+
+function attachCanonicalTurn(modelState, loopState) {
+  modelState.runtime.currentTurnMessages = createCurrentTurnMessagesStore();
+  loopState.dialogProcessId = "dialog-1";
+  loopState.modelContext.activeTurnIdentity = {
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+  };
+}
 
 test("task check prompt is periodic and independent from phase summary state", () => {
   const events = [];
@@ -32,10 +42,16 @@ test("task check prompt is periodic and independent from phase summary state", (
     taskCheckLoopTurns: 2,
     modelContext,
   };
+  attachCanonicalTurn(modelState, loopState);
 
   assert.equal(maybeRequestTaskCheck({ modelState, loopState }), false);
   assert.equal(maybeRequestTaskCheck({ modelState, loopState }), true);
   assert.equal(modelContext.messageBlocks.incremental.length, 1);
+  const taskCheckEntity = modelState.runtime.currentTurnMessages.toArray()[0];
+  assert.equal(taskCheckEntity.role, "user");
+  assert.equal(modelContext.messages[0] instanceof HumanMessage, true);
+  assert.equal(taskCheckEntity.messageUid, modelContext.messages[0].additional_kwargs.noobotMessageId);
+  assert.equal(taskCheckEntity.additional_kwargs.noobotInternalMessageType, "noobot.task_check_prompt");
   assert.equal(
     modelContext.messageBlocks.incremental[0].additional_kwargs.noobotInternalMessageType,
     "noobot.task_check_prompt",
@@ -57,6 +73,7 @@ test("a task_check call starts the next periodic slice without adding a prompt",
     taskCheckLoopTurns: 10,
     modelContext,
   };
+  attachCanonicalTurn(modelState, loopState);
   assert.equal(maybeRequestTaskCheck({
     modelState,
     loopState,
@@ -86,7 +103,7 @@ test("maybePromptHelpToolByFailure injects prompt and resets failure counter", (
       messageBlocks: { system: [], history: [], incremental: [] },
     }),
   };
-
+  attachCanonicalTurn(modelState, loopState);
   const triggered = maybePromptHelpToolByFailure({
     modelState,
     loopState,
@@ -122,12 +139,15 @@ test("maybePromptHelpToolByLoop injects prompt through message store", () => {
       messageBlocks: { system: [], history: [], incremental: [] },
     }),
   };
-
+  attachCanonicalTurn(modelState, loopState);
   const triggered = maybePromptHelpToolByLoop({ modelState, loopState });
 
   assert.equal(triggered, true);
   assert.equal(loopState.modelContext.messages.length, 1);
-  assert.equal(loopState.modelContext.messageBlocks.system[0], loopState.modelContext.messages[0]);
+  assert.equal(loopState.modelContext.messages[0] instanceof HumanMessage, true);
+  assert.equal(loopState.modelContext.messageBlocks.incremental[0], loopState.modelContext.messages[0]);
+  assert.deepEqual(loopState.modelContext.messageBlocks.system, []);
+  assert.equal(modelState.runtime.currentTurnMessages.toArray()[0].role, "user");
   assert.ok(loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
   assert.equal(loopState.modelContext.messageBlocks.systemIds, undefined);
   assert.equal(events.some((item) => item?.event === "help_tool_loop_prompted"), true);
@@ -153,6 +173,7 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
       messageBlocks: { system: [], history: [], incremental: [] },
     }),
   };
+  attachCanonicalTurn(modelState, loopState);
 
   const triggered = maybeRequestPhaseSummary({
     modelState,
@@ -164,6 +185,10 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
   assert.equal(loopState.modelContext.messages.length, 1);
   assert.equal(loopState.modelContext.messages[0] instanceof HumanMessage, true);
   assert.equal(loopState.modelContext.messageBlocks.incremental[0], loopState.modelContext.messages[0]);
+  const phaseEntity = modelState.runtime.currentTurnMessages.toArray()[0];
+  assert.equal(phaseEntity.role, "user");
+  assert.equal(phaseEntity.messageUid, loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
+  assert.equal(phaseEntity.additional_kwargs.noobotInternalMessageType, "noobot.phase_summary_prompt");
   assert.ok(loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
   assert.equal(events.some((item) => item?.event === "phase_summary_required"), true);
@@ -194,6 +219,7 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
       },
     }),
   };
+  attachCanonicalTurn(modelState, loopState);
 
   const triggered = maybeRequestPhaseSummary({
     modelState,

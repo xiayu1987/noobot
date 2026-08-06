@@ -65,13 +65,13 @@ test("@core PBE-027 Manifest V2 激活与 runtime-events 身份闭环", async ({
 });
 
 test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async ({ noobot, protocolCapture }, testInfo) => {
-  test.setTimeout(420_000);
+  test.setTimeout(420000);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
   const file = fixedAttachment("pbe-028.txt");
   await addAttachment(noobot.page, file);
   await sendMessage(noobot.page, uniquePrompt(
     testInfo,
-    "execute one workflow child that reads the attached file and reports its exact content",
+    "execute one workflow child that reads the attached file with read_file riskLevel=low and reports its exact content",
   ));
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await waitForNaturalCompletion({
@@ -79,7 +79,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: send.identity.turnScopeId,
-    timeoutMs: 300_000,
+    timeoutMs: 300000,
   });
   expect(send.input.attachments).toHaveLength(1);
   const events = await waitForPluginRuntimeEvents(noobot.userId, noobot.sessionId, (records) =>

@@ -113,10 +113,7 @@ export function createSessionDetailApplicator({
     // session object.  sessionLifecycleHydration is the single consumer that
     // projects it into turnRuntimeRegistry; dropping it here makes a detail
     // refresh silently fall back to the non-authoritative session view.
-    const turnLifecycleSnapshot = [
-      mainSessionDoc?.turnLifecycleSnapshot,
-      detail?.turnLifecycleSnapshot,
-    ].find((value) => value && typeof value === "object") || null;
+    const turnLifecycleSnapshot = mainSessionDoc?.turnLifecycleSnapshot;
     if (turnLifecycleSnapshot) {
       sessionItem.turnLifecycleSnapshot = turnLifecycleSnapshot;
     }

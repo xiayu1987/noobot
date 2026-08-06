@@ -24,9 +24,6 @@ export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
   const index = next.findIndex((item) => item.key === key);
   const current = index >= 0 ? next[index] : { key, toolCallId };
   const isCall = envelope.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START;
-  const log = isCall
-    ? { ...envelope, event: "tool_call", type: "tool_call", text: String(envelope.tool || "").trim() }
-    : { ...envelope, event: "tool_result", type: "tool_result", text: String(envelope.result ?? "") };
   const fact = {
     eventId: envelope.eventId,
     sequence: envelope.sequence,
@@ -34,7 +31,15 @@ export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
     sequenceDomain: envelope.sequenceDomain,
     authority: "authoritative",
     timestamp: envelope.timestamp,
-    log,
+    sessionId: String(envelope.sessionId || "").trim(),
+    dialogProcessId: String(envelope.dialogProcessId || "").trim(),
+    turnScopeId: String(envelope.turnScopeId || "").trim(),
+    ...(Array.isArray(envelope.attachments) && envelope.attachments.length
+      ? { attachments: envelope.attachments }
+      : {}),
+    ...(Array.isArray(envelope.writtenFiles) && envelope.writtenFiles.length
+      ? { writtenFiles: envelope.writtenFiles }
+      : {}),
   };
   const updated = isCall
     ? { ...current, tool: String(envelope.tool || "").trim(), args: envelope.args || {}, call: fact, status: current.resultEvent ? "completed" : "running" }

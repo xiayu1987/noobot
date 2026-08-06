@@ -14,6 +14,7 @@ const now = () => "2026-07-18T00:00:00.000Z";
 
 function harness(initial = {}) {
   let persisted = structuredClone({ sessionId: "s1", parentSessionId: "", aggregateVersion: 3, messages: [], ...initial });
+  let displaySummarySession = null;
   let saveFailure = null;
   const repo = {
     async withSessionMutation(_u, _s, _p, operation) { return operation(); },
@@ -28,10 +29,17 @@ function harness(initial = {}) {
       }
       persisted = structuredClone(normalizeSessionEntity(next, { now }));
     },
+    async writeSessionDisplaySummary(_u, session) {
+      displaySummarySession = structuredClone(normalizeSessionEntity(session, { now }));
+    },
   };
   return {
     service: new SessionMessageService({ sessionRepo: repo, now }),
     reload: () => normalizeSessionEntity(structuredClone(persisted), { now }),
+    reloadDisplaySummarySession: () => displaySummarySession && normalizeSessionEntity(
+      structuredClone(displaySummarySession),
+      { now },
+    ),
     failNextSave: (error = new Error("session_save_failed")) => { saveFailure = error; },
   };
 }
@@ -228,6 +236,10 @@ test("authoritative lifecycle persists, sequences and restores the complete path
   assert.equal(restored.activeTurnScopeId, "");
   assert.equal(restored.turns.t1.state, TURN_STATE.COMPLETED);
   assert.equal(restored.turns.t1.executionState, "completed");
+  const displayLifecycle = h.reloadDisplaySummarySession().turnLifecycle;
+  assert.equal(displayLifecycle.sequence, restored.sequence);
+  assert.equal(displayLifecycle.turns.t1.state, TURN_STATE.COMPLETED);
+  assert.equal(displayLifecycle.turns.t1.executionState, "completed");
   assert.equal(restored.turns.t1.summaryVersion, 1);
   assert.equal(restored.turns.t1.terminalStatus.status, "completed");
   assert.equal(h.reload().turnStatuses.length, 1);

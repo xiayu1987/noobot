@@ -78,16 +78,12 @@ export function normalizeInteractionRequestPayload(payload = {}) {
   );
   const ackMode = normalizeInteractionAckMode(
     payload?.ackMode ||
-      payload?.ack_mode ||
       interactionData?.ackMode ||
-      interactionData?.ack_mode ||
       "",
   );
   const resolvedBy = normalizeInteractionResolvedBy(
     payload?.resolvedBy ||
-      payload?.resolved_by ||
       interactionData?.resolvedBy ||
-      interactionData?.resolved_by ||
       "",
   );
   const notification = normalizeInteractionNotification(

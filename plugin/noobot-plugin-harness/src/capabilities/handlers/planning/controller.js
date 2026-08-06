@@ -136,6 +136,10 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       return { capability, point, status: "active", changed: false };
     }
     if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
+      const current = ensureHarnessBucket(ctx);
+      if (current?.state?.flags?.acceptanceCompleted === true) {
+        return { capability, point, status: "active", changed: false };
+      }
       const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.PLANNING }) === true;
       let setupChanged = invariantChanged;
       const holder = ensureHarnessBucket(ctx);

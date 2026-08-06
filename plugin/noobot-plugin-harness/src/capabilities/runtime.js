@@ -13,7 +13,10 @@ import { applyMemoryTakeover } from "./takeover/memory-takeover.js";
 import { resolveTakeoverPriority, sortTakeovers } from "./takeover/priority.js";
 import { cleanupExpiredPendingOnHook } from "./pending-cleanup.js";
 import { markHarnessTurnLifecycle } from "./handlers/shared/runtime/lifecycle-utils.js";
-import { appendCapabilityLog } from "./handlers/shared/attachment-log-utils.js";
+import {
+  appendCapabilityLog,
+  consumeDeferredCapabilityLogs,
+} from "./handlers/shared/attachment-log-utils.js";
 import { safeError } from "../data/record-builders.js";
 import { WORKFLOW_PARAMS } from "../core/workflow-params.js";
 import { applyAgentResolvedModelMessages } from "../core/model-message-context.js";
@@ -102,6 +105,7 @@ export function createCapabilityRuntime({ profile = {}, handlers = {} } = {}) {
     },
     async runHook(point = "", ctx = {}, meta = {}) {
       markHarnessTurnLifecycle(point, ctx);
+      consumeDeferredCapabilityLogs(ctx);
       cleanupExpiredPendingOnHook(point, ctx, meta);
       applyAgentResolvedModelMessages(point, ctx, meta?.harness || {});
       await runInternalGlobalBootstrap(point, ctx, meta);

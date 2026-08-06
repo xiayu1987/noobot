@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
 import { createModelContext } from "@noobot/context-protocol/hook-context";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/injected-message-types";
 
 test("summary checkpoint persists unmodified messages before atomically marking exact UIDs", async () => {
   const messages = [
@@ -63,6 +64,102 @@ test("failed summary transaction leaves canonical memory and persisted messages 
 
   assert.equal(persisted.every((message) => message.summarized !== true), true);
   assert.deepEqual(runtime.currentTurnMessages.toArray(), messages);
+});
+
+test("summary checkpoint atomically marks persisted scope and context control prompts", async () => {
+  const persistedMessage = { messageUid: "sm_1", role: "assistant", content: "M1" };
+  const phasePrompt = {
+    role: "user",
+    content: "summarize now",
+    additional_kwargs: {
+      noobotMessageId: "phase_prompt_1",
+      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+    },
+  };
+  const runtime = {
+    currentTurnMessages: createCurrentTurnMessagesStore([
+      persistedMessage,
+      {
+        messageUid: "phase_prompt_1",
+        role: "user",
+        content: "summarize now",
+        additional_kwargs: phasePrompt.additional_kwargs,
+      },
+    ]),
+    activeMessageContext: createModelContext({
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [
+          { ...persistedMessage, additional_kwargs: { noobotMessageId: "sm_1" } },
+          phasePrompt,
+        ],
+      },
+    }),
+  };
+
+  await commitSummaryCheckpoint({
+    session: {
+      async commitTurnSummaryCheckpoint() {
+        assert.equal(phasePrompt.summarized, undefined);
+        return { committed: true, markedCount: 2, checkpointRevision: 1 };
+      },
+    },
+    turnPersister: { async appendAgentMessages() {} },
+    runtime,
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
+    summaryCompletion: {
+      summarizedMessageIds: ["sm_1", "phase_prompt_1"],
+    },
+  });
+
+  assert.deepEqual(runtime.currentTurnMessages.toArray(), []);
+  assert.deepEqual(runtime.activeMessageContext.messageBlocks.incremental, []);
+  assert.equal(phasePrompt.summarized, true);
+});
+
+test("failed summary checkpoint preserves context control prompts", async () => {
+  const phasePrompt = {
+    role: "user",
+    content: "summarize now",
+    additional_kwargs: {
+      noobotMessageId: "phase_prompt_1",
+      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+    },
+  };
+  const runtime = {
+    currentTurnMessages: createCurrentTurnMessagesStore([
+      { messageUid: "sm_1", role: "assistant", content: "M1" },
+      {
+        messageUid: "phase_prompt_1",
+        role: "user",
+        content: "summarize now",
+        additional_kwargs: phasePrompt.additional_kwargs,
+      },
+    ]),
+    activeMessageContext: createModelContext({
+      messageBlocks: { system: [], history: [], incremental: [phasePrompt] },
+    }),
+  };
+
+  await assert.rejects(commitSummaryCheckpoint({
+    session: { async commitTurnSummaryCheckpoint() { throw new Error("checkpoint failed"); } },
+    turnPersister: { async appendAgentMessages() {} },
+    runtime,
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
+    summaryCompletion: {
+      summarizedMessageIds: ["sm_1", "phase_prompt_1"],
+    },
+  }), /checkpoint failed/);
+
+  assert.equal(phasePrompt.summarized, undefined);
+  assert.deepEqual(runtime.activeMessageContext.messageBlocks.incremental, [phasePrompt]);
 });
 
 test("summary completion never falls back to content identity", async () => {

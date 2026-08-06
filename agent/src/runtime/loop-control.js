@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { emitEvent } from "../events/index.js";
 import { tEngine } from "./i18n-adapter.js";
 import {
@@ -19,9 +18,7 @@ import {
 } from "@noobot/context-protocol/summary-policy";
 import { REQUEST_HELP_TOOL_NAME } from "../tools/collaboration/request-help-tool.js";
 import { extractMessageTextContent } from "../context/session/message-content-utils.js";
-import {
-  appendContextMessage as appendMessage,
-} from "@noobot/context-protocol/context-mutation";
+import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
 import {
   MAIN_FLOW_CONTROL_REASON,
   requestMainFlowFinalNoToolsTurn,
@@ -165,12 +162,12 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   if (reachedCharsThreshold) {
     systemRuntime.phaseSummaryByCharsPrompted = true;
   }
-  appendMessage(loopState.modelContext, new HumanMessage({
+  appendTurnContextControlMessage({
+    runtime,
+    loopState,
     content: tEngine(runtime, "phaseSummaryPrompt"),
-    additional_kwargs: {
-      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
-    },
-  }), { block: "incremental" });
+    internalType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+  });
   emitEvent(modelState?.eventListener || null, "phase_summary_required", {
     loopCount: nextCount,
     loopThreshold,
@@ -208,12 +205,12 @@ export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults =
   if (!Number.isFinite(threshold) || threshold <= 0 || nextCount < threshold) return false;
 
   systemRuntime.taskCheckLoopCount = 0;
-  appendMessage(loopState.modelContext, new HumanMessage({
+  appendTurnContextControlMessage({
+    runtime,
+    loopState,
     content: tEngine(runtime, "taskCheckPrompt"),
-    additional_kwargs: {
-      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
-    },
-  }), { block: "incremental" });
+    internalType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
+  });
   emitEvent(modelState?.eventListener || null, "task_check_required", {
     loopCount: nextCount,
     threshold,
@@ -235,16 +232,16 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
   systemRuntime.helpPromptLoopCount = nextCount;
   if (nextCount < threshold) return false;
   systemRuntime.helpPromptLoopCount = 0;
-  appendMessage(loopState.modelContext, new SystemMessage({
+  appendTurnContextControlMessage({
+    runtime,
+    loopState,
     content: tEngine(runtime, "helpToolLoopPrompt", {
       loopCount: nextCount,
       threshold,
       helpToolName: REQUEST_HELP_TOOL_NAME,
     }),
-    additional_kwargs: {
-      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
-    },
-  }), { block: "system" });
+    internalType: CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT,
+  });
   emitEvent(modelState?.eventListener || null, "help_tool_loop_prompted", {
     loopCount: nextCount,
     threshold,
@@ -266,16 +263,16 @@ export function maybePromptHelpToolByFailure({
   if (hasRequestHelpCall) return false;
   const failureCount = Number(loopState?.toolConsecutiveFailureCount || 0);
   if (!Number.isFinite(failureCount) || failureCount < threshold) return false;
-  appendMessage(loopState.modelContext, new HumanMessage({
+  appendTurnContextControlMessage({
+    runtime,
+    loopState,
     content: tEngine(runtime, "toolConsecutiveFailureHelpPrompt", {
       failureCount,
       threshold,
       helpToolName: REQUEST_HELP_TOOL_NAME,
     }),
-    additional_kwargs: {
-      noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_FAILURE_PROMPT,
-    },
-  }), { block: "incremental" });
+    internalType: CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_FAILURE_PROMPT,
+  });
   loopState.toolConsecutiveFailureCount = 0;
   systemRuntime.toolConsecutiveFailureCount = 0;
   emitEvent(modelState?.eventListener || null, "help_tool_failure_prompted", {

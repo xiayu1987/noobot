@@ -87,7 +87,7 @@ test("interaction_request resolved by one client should be consistent across all
   assert.equal("conversationStates" in resolvedSession, false);
 });
 
-test("interaction_pending channel_state should carry pendingInteractions snapshot", () => {
+test("interaction_pending channel_state carries state only; interaction events own request payloads", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-snapshot" });
   const channel = manager.ensureChannel(channelKey, {
@@ -122,12 +122,10 @@ test("interaction_pending channel_state should carry pendingInteractions snapsho
   assert.equal(stateEvents.length, 2);
   const latestState = stateEvents.at(-1);
   assert.equal(latestState?.data?.state, "interaction_pending");
-  assert.equal(latestState?.data?.pendingInteraction?.requestId, "req-a");
-  assert.deepEqual(
-    latestState?.data?.pendingInteractions?.map((item) => item.requestId),
-    ["req-a", "req-b"],
-  );
-  assert.deepEqual(latestState?.data?.pendingRequestIds, ["req-a", "req-b"]);
+  assert.equal("pendingInteraction" in latestState.data, false);
+  assert.equal("pendingInteractions" in latestState.data, false);
+  assert.equal("pendingRequestIds" in latestState.data, false);
+  assert.deepEqual([...channel.pendingInteractionRequests.keys()], ["req-a", "req-b"]);
 });
 
 test("resolving one concurrent interaction atomically publishes the remaining pending snapshot", () => {
@@ -179,13 +177,13 @@ test("resolving one concurrent interaction atomically publishes the remaining pe
   const latestState = stateEventsAfterResponse.at(-1);
   assert.equal(latestState?.data?.state, "interaction_pending");
   assert.equal(latestState?.data?.sourceEvent, "interaction.response");
-  assert.deepEqual(latestState?.data?.pendingRequestIds, ["req-b"]);
-  assert.equal(latestState?.data?.pendingInteraction?.requestId, "req-b");
+  assert.equal("pendingRequestIds" in latestState.data, false);
+  assert.equal("pendingInteraction" in latestState.data, false);
   assert.equal(channel.pendingInteractionRequests.has("req-a"), false);
   assert.equal(channel.pendingInteractionRequests.has("req-b"), true);
 });
 
-test("channel_state snapshot should carry pendingInteraction payload for interaction_pending", () => {
+test("channel_state snapshot never duplicates the pending interaction payload", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
@@ -210,14 +208,8 @@ test("channel_state snapshot should carry pendingInteraction payload for interac
     (eventItem) => eventItem?.data?.state === "interaction_pending",
   );
   assert.ok(interactionPendingState);
-  assert.equal(
-    String(interactionPendingState?.data?.pendingInteraction?.requestId || ""),
-    "req-snapshot",
-  );
-  assert.equal(
-    String(interactionPendingState?.data?.pendingInteraction?.dialogProcessId || ""),
-    "dp-snapshot",
-  );
+  assert.equal("pendingInteraction" in interactionPendingState.data, false);
+  assert.equal("pendingInteractions" in interactionPendingState.data, false);
 });
 
 test("workflow child terminal events cannot discard a pending interaction owned by the root channel", async () => {

@@ -6,6 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  consumeDeferredCapabilityLogs,
+  deferCapabilityLogs,
   mergeAttachments,
 } from "../../src/capabilities/handlers/shared/attachment-log-utils.js";
 import { containsExecutableScriptText } from "../../src/capabilities/handlers/shared/script-content-risk.js";
@@ -40,4 +42,16 @@ test("mergeAttachments promotes duplicate attachment metadata to plugin ownershi
   assert.equal(merged.length, 1);
   assert.equal(merged[0].owner?.type, "plugin");
   assert.equal(merged[0].owner?.id, "harness-plugin");
+});
+
+test("deferred capability log outbox is consumed exactly once by the next hook context", () => {
+  const agentContext = {};
+  const toolContext = { agentContext };
+  const acceptanceLog = { domain: "acceptance", event: "acceptance_semantic_validation_completed" };
+
+  assert.equal(deferCapabilityLogs(toolContext, [acceptanceLog]), 1);
+  const afterToolHookContext = { agentContext };
+  assert.equal(consumeDeferredCapabilityLogs(afterToolHookContext), 1);
+  assert.deepEqual(afterToolHookContext.harnessCapabilityLogs, [acceptanceLog]);
+  assert.equal(consumeDeferredCapabilityLogs({ agentContext }), 0);
 });

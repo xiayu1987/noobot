@@ -699,18 +699,34 @@ assertFileContains("plugin/noobot-plugin-harness/src/capabilities/handlers/share
 ]);
 
 const loopControlText = assertFileContains("agent/src/runtime/loop-control.js", [
-  { name: "help tool loop marker", pattern: /HELP_TOOL_LOOP_PROMPT_MARKER/ },
+  {
+    name: "help tool loop protocol marker",
+    pattern: /CONTEXT_INJECTED_MESSAGE_TYPE\.HELP_TOOL_LOOP_PROMPT/,
+  },
+  {
+    name: "help tool loop uses canonical control-message appender",
+    pattern: /appendTurnContextControlMessage\(\{[\s\S]{0,500}CONTEXT_INJECTED_MESSAGE_TYPE\.HELP_TOOL_LOOP_PROMPT/,
+  },
 ]);
 if (loopControlText) {
-  const markerIndex = loopControlText.indexOf("HELP_TOOL_LOOP_PROMPT_MARKER");
-  const appendIndex = loopControlText.indexOf("appendMessage(loopState.modelContext, new SystemMessage", Math.max(0, markerIndex - 1000));
-  const blockIndex = loopControlText.indexOf('block: "system"', appendIndex >= 0 ? appendIndex : 0);
-  if (appendIndex >= 0 && blockIndex >= appendIndex && blockIndex - appendIndex < 900) {
-    pass("help tool loop prompt writes SystemMessage to system block");
+  const markerIndex = loopControlText.indexOf("CONTEXT_INJECTED_MESSAGE_TYPE.HELP_TOOL_LOOP_PROMPT");
+  const nearbySource = loopControlText.slice(Math.max(0, markerIndex - 1000), markerIndex + 200);
+  if (/new\s+SystemMessage|block:\s*["']system["']/.test(nearbySource)) {
+    fail(
+      "help tool loop prompt still enters the system block",
+      "Runtime control prompts must use the canonical user + incremental control-message protocol.",
+    );
   } else {
-    fail("help tool loop prompt is not guarded as system block", "SystemMessage produced by maybePromptHelpToolByLoop must use { block: \"system\" }.");
+    pass("help tool loop prompt uses user + incremental control-message protocol");
   }
 }
+
+assertFileContains("agent/src/runtime/turn/turn-context-message-appender.js", [
+  { name: "control messages persist as user", pattern: /role:\s*["']user["']/ },
+  { name: "control messages persist as context_control", pattern: /type:\s*["']context_control["']/ },
+  { name: "control messages project as HumanMessage", pattern: /new\s+HumanMessage\s*\(/ },
+  { name: "control messages enter incremental block", pattern: /block:\s*["']incremental["']/ },
+]);
 
 
 function extractJsonObjectsAfterBody(text = "") {

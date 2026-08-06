@@ -37,6 +37,45 @@ function textHash(text = "") {
   return crypto.createHash("sha256").update(String(text || "")).digest("hex").slice(0, 16);
 }
 
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [key, stableValue(value[key])]),
+  );
+}
+
+function providerMessageValue(message = {}) {
+  const dictionary = typeof message?.toDict === "function" ? message.toDict() : null;
+  if (dictionary?.data && typeof dictionary.data === "object") {
+    const { response_metadata: omittedResponseMetadata, ...data } = dictionary.data;
+    void omittedResponseMetadata;
+    return { type: dictionary.type, data };
+  }
+  const {
+    response_metadata: omittedResponseMetadata,
+    responseMetadata: omittedResponseMetadataCamel,
+    ...providerFields
+  } = message && typeof message === "object" ? message : {};
+  void omittedResponseMetadata;
+  void omittedResponseMetadataCamel;
+  return providerFields;
+}
+
+function sha256(value) {
+  return crypto.createHash("sha256").update(JSON.stringify(stableValue(value))).digest("hex");
+}
+
+export function fingerprintDiagnosticMessages(messages = []) {
+  const source = Array.isArray(messages) ? messages : [];
+  const fingerprints = source.map((message) => sha256(providerMessageValue(message)));
+  return {
+    fingerprintProtocolVersion: 1,
+    fingerprints,
+    sequenceHash: sha256(fingerprints),
+  };
+}
+
 function incrementCount(counts, key) {
   const normalized = String(key || "unknown").trim() || "unknown";
   counts[normalized] = Number(counts[normalized] || 0) + 1;
@@ -118,6 +157,7 @@ export function summarizeDiagnosticMessages(messages = [], { limit = DEFAULT_PRE
   return {
     count: source.length,
     ...summarizeMessageDimensions(source),
+    ...fingerprintDiagnosticMessages(source),
     preview: source.slice(0, safeLimit).map((message, index) => messageTraceItem(message, index, block)),
     truncated: source.length > safeLimit ? source.length - safeLimit : 0,
   };

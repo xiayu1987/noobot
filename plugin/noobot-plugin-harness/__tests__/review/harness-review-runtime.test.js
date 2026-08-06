@@ -457,6 +457,7 @@ test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn
           flags: {
             planningCaptured: true,
             acceptanceRequested: true,
+            acceptanceCompleted: true,
             checklistArtifactsAttached: true,
           },
           counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
@@ -481,6 +482,7 @@ test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn
   });
 
   assert.equal(agentContext.payload.harness.state.flags.acceptanceRequested, false);
+  assert.equal(agentContext.payload.harness.state.flags.acceptanceCompleted, false);
   assert.equal(agentContext.payload.harness.state.flags.checklistArtifactsAttached, false);
 });
 

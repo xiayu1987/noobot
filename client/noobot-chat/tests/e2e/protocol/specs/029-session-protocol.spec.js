@@ -87,7 +87,7 @@ test("@core PBE-029 统一 Session 协议闭环审计", async ({ noobot, protoco
 
   await expect.poll(
     () => readSessionFact(noobot.userId, noobot.sessionId),
-    { timeout: 15_000 },
+    { timeout: 15000 },
   ).toMatchObject({ sessionId: noobot.sessionId, schemaVersion: 5 });
 
   const persisted = await readSessionFact(noobot.userId, noobot.sessionId);

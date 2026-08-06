@@ -448,45 +448,11 @@ buildChannelStateSnapshot(channel) {
     }));
 }
 
-_findPendingInteractionsByDialogProcessId(channel, dialogProcessId = "") {
-  if (!channel?.pendingInteractionRequests?.size) return [];
-  const normalizedDpId = String(dialogProcessId || "").trim();
-  if (!normalizedDpId) return [];
-  const pendingInteractions = [];
-  for (const envelope of channel.pendingInteractionRequests.values()) {
-    const envelopeDpId = String(envelope?.data?.dialogProcessId || "").trim();
-    if (!envelopeDpId || envelopeDpId !== normalizedDpId) continue;
-    const sequence = Number(envelope?.data?.seq || envelope?.sequence || 0);
-    if (!envelope?.data || typeof envelope.data !== "object") continue;
-    pendingInteractions.push({
-      ...envelope.data,
-      __agentProxySequence: sequence,
-    });
-  }
-  return pendingInteractions.sort(
-    (left, right) =>
-      Number(left?.__agentProxySequence || 0) - Number(right?.__agentProxySequence || 0),
-  );
-}
-
-_findLatestPendingInteractionByDialogProcessId(channel, dialogProcessId = "") {
-  const pendingInteractions = this._findPendingInteractionsByDialogProcessId(
-    channel,
-    dialogProcessId,
-  );
-  return pendingInteractions[pendingInteractions.length - 1] || null;
-}
-
 _buildConversationStatePayload(channel, stateItem = {}, overrides = {}) {
   const state = String(stateItem?.state || "").trim();
   const dialogProcessId = String(stateItem?.dialogProcessId || "").trim();
   const createdAtMs = Number(stateItem?.createdAtMs || stateItem?.updatedAtMs || nowMs());
   const updatedAtMs = Number(overrides?.updatedAtMs ?? stateItem?.updatedAtMs ?? nowMs());
-  const pendingInteractions =
-    state === CONVERSATION_STATE.INTERACTION_PENDING
-      ? this._findPendingInteractionsByDialogProcessId(channel, dialogProcessId)
-      : [];
-  const firstPendingInteraction = pendingInteractions[0] || null;
   return {
     sessionId: String(stateItem?.sessionId || ""),
     dialogProcessId,
@@ -499,15 +465,6 @@ _buildConversationStatePayload(channel, stateItem = {}, overrides = {}) {
     updatedAtMs,
     ...(String(stateItem?.requestId || "").trim()
       ? { requestId: String(stateItem.requestId).trim() }
-      : {}),
-    ...(pendingInteractions.length
-      ? {
-          pendingInteraction: firstPendingInteraction,
-          pendingInteractions,
-          pendingRequestIds: pendingInteractions
-            .map((item) => String(item?.requestId || "").trim())
-            .filter(Boolean),
-        }
       : {}),
   };
 }

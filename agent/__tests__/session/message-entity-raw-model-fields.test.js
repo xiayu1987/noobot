@@ -8,6 +8,18 @@ import assert from "node:assert/strict";
 
 import { normalizeMessageEntity } from "../../src/session/entities.js";
 
+test("normalizeMessageEntity preserves the canonical internal control message type", () => {
+  const normalized = normalizeMessageEntity({
+    role: "user",
+    type: "context_control",
+    content: "checkpoint",
+    additional_kwargs: { noobotInternalMessageType: "noobot.phase_summary_prompt" },
+  });
+
+  assert.equal(normalized.noobotInternalMessageType, "noobot.phase_summary_prompt");
+  assert.equal("additional_kwargs" in normalized, false);
+});
+
 test("normalizeMessageEntity does not persist heavy raw model fields", () => {
   const normalized = normalizeMessageEntity({
     role: "assistant",

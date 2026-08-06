@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isPendingInteractionReplay } from "./interaction.mjs";
 
 const clean = (value) => String(value || "").trim();
 const eventSequence = (event = {}) => Number(
@@ -10,6 +11,9 @@ const eventSequence = (event = {}) => Number(
 );
 const eventSessionId = (event = {}) => clean(
   event?.identity?.sessionId ?? event?.sessionId ?? event?.data?.sessionId,
+);
+const eventParentSessionId = (event = {}) => clean(
+  event?.identity?.parentSessionId ?? event?.parentSessionId ?? event?.data?.parentSessionId,
 );
 const eventId = (event = {}) => clean(
   event?.identity?.eventId ?? event?.eventId ?? event?.data?.eventId,
@@ -99,6 +103,18 @@ export function validateReplayBatch(batch = {}) {
     if (sessionId && sessionId !== clean(batch.sessionId)) errors.push("event_session_mismatch");
     if (!Number.isInteger(sequence) || sequence !== previous + 1) errors.push("invalid_event_sequence");
     previous = sequence;
+  }
+  for (const interaction of Array.isArray(batch.pendingInteractions) ? batch.pendingInteractions : []) {
+    if (!isPendingInteractionReplay(interaction)) {
+      errors.push("invalid_pending_interaction");
+      continue;
+    }
+    if (
+      eventSessionId(interaction) !== clean(batch.sessionId) &&
+      eventParentSessionId(interaction) !== clean(batch.sessionId)
+    ) {
+      errors.push("pending_interaction_session_mismatch");
+    }
   }
   if (Number(batch?.cursor?.fromSequence ?? snapshotSequence) !== snapshotSequence) {
     errors.push("invalid_cursor_from_sequence");

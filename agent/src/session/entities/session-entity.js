@@ -117,6 +117,15 @@ export function normalizeMessageEntity(
   if (message?.injectedMessage === true) {
     normalizedMessage.injectedMessage = true;
   }
+  const noobotInternalMessageType = String(
+    message?.noobotInternalMessageType ||
+      message?.additional_kwargs?.noobotInternalMessageType ||
+      message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      "",
+  ).trim();
+  if (noobotInternalMessageType) {
+    normalizedMessage.noobotInternalMessageType = noobotInternalMessageType;
+  }
   if (String(message?.injectedBy || "").trim()) {
     normalizedMessage.injectedBy = String(message.injectedBy || "").trim();
   }

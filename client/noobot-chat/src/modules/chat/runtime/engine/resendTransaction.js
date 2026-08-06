@@ -278,11 +278,7 @@ export function createResendMessageTransaction({
     let replacementCommitted = false;
     try {
       const mutationResult = await sessionAggregateVersionManager.runAggregateVersionedMutation({
-        refreshOptions: {
-          sessionId,
-          detailOptions: { source: "resendVersionConflict" },
-          logContext: { turnScopeId: resendTurnScopeId },
-        },
+        shouldRetry: false,
         mutate: ({ expectedAggregateVersion, attempt }) => requestReplaceTurn({
           sessionId,
           originalSession,

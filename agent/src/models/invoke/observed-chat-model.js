@@ -5,6 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
+import { requireModelContextSequencePolicy } from "@noobot/context-protocol/model-invocation-policy";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
 
 const OBSERVED_MODEL = Symbol("noobot.observed-model");
@@ -34,6 +35,10 @@ export function createObservedChatModel(model, {
   }
   if (model[OBSERVED_MODEL] === true) return model;
 
+  const contextSequencePolicy = requireModelContextSequencePolicy(
+    invocation?.contextSequencePolicy,
+  );
+
   const observationState = state || { modelInstanceId: randomUUID(), sequence: 0 };
   return new Proxy(model, {
     get(target, property) {
@@ -44,7 +49,7 @@ export function createObservedChatModel(model, {
           const messages = requireMessageArray(input);
           observationState.sequence += 1;
           emitModelContextTrace(runtime, "llm_invoke_messages", {
-            protocolVersion: 1,
+            protocolVersion: 2,
             authority: "model_invoke_port",
             modelInstanceId: observationState.modelInstanceId,
             invocationId: randomUUID(),
@@ -60,6 +65,13 @@ export function createObservedChatModel(model, {
               flow: String(invocation?.flow || "").trim(),
               purpose: String(invocation?.purpose || "").trim(),
               domain: String(invocation?.domain || "").trim(),
+              contextSequencePolicy,
+            },
+            context: {
+              summaryCheckpointRevision: Math.max(
+                0,
+                Number(runtime?.summaryCheckpointRevision) || 0,
+              ),
             },
             messages: summarizeDiagnosticMessages(messages),
           });

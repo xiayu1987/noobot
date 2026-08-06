@@ -66,6 +66,9 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
     modelContext: suppliedModelContext,
     ...hookFields
   } = safeRaw;
+  const modelContext = suppliedModelContext?.protocolVersion
+    ? suppliedModelContext
+    : runtime?.activeMessageContext;
   const call = resolveCall(safeRaw);
   const merged = {
     ...hookFields,
@@ -89,7 +92,7 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
     payload: safeRaw?.payload ?? null,
   };
   const context = withHookRuntimeMeta(runtime, merged);
-  attachModelContext(context, suppliedModelContext?.protocolVersion ? suppliedModelContext : null);
+  attachModelContext(context, modelContext?.protocolVersion ? modelContext : null);
   emitAgentContextProtocolDebug(runtime?.eventListener || null, "hookDocumentConsumed", {
     userId: context.userId,
     sessionId: context.sessionId,

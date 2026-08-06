@@ -22,7 +22,7 @@ export function createSendStreamEventHandler(context) {
   const {
     activeSession, activeSessionId, applyConversationState, applyConversationStateFromEvent,
     applyRunStateEvent, applyTurnLifecycleEnvelope, applyWorkflowRuntimeEvent, botMessage: botMsg, classifyRealtimeLog,
-    clearMissingInteractionPayloadTimer, clearPendingInteraction, connectorTypeSet,
+    clearMissingInteractionPayloadTimer, clearPendingInteraction, clearPendingInteractionIfObsolete, connectorTypeSet,
     doneTurnFinalizer, foldMessagesForView, locateDoneMessage, locateSendingStartedMessageOnce,
     logSessionEvent, makeViewMessage, mergeAssistantAttachments, navigateOnFirstResponseOnce,
     refreshSessionConnectorsAsync, requestedTextStreaming, sessionId, setPendingInteractionRequest,
@@ -120,7 +120,7 @@ export function createSendStreamEventHandler(context) {
     })) return;
     if (routeCurrentTurnLifecycleEvent(event, data, {
       activeSession, applyTurnLifecycleEnvelope, findCanonicalMessageById,
-      logSessionEvent, makeViewMessage, sessionId,
+      clearPendingInteractionIfObsolete, logSessionEvent, makeViewMessage, sessionId,
     })) return;
     if (routeRuntimeStreamEvent(event, data, {
       source: "live", logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,

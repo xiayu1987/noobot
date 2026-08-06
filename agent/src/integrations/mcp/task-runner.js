@@ -18,6 +18,7 @@ import { buildLangChainMcpTools } from "./tool-adapter.js";
 import { resolveBoundToolModelRequestOverrides } from "../../runtime/turn/tool-choice-strategy.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 
 function toText(content) {
   if (typeof content === "string") return content;
@@ -110,6 +111,7 @@ export async function executeMcpTask({
           flow: "mcp.task",
           purpose: "mcp_tool_execution",
           domain: "mcp",
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
         },
       })
     : createChatModel({
@@ -121,6 +123,7 @@ export async function executeMcpTask({
           flow: "mcp.task",
           purpose: "mcp_tool_execution",
           domain: "mcp",
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
         },
       });
   const modelSpec = modelName

@@ -350,22 +350,6 @@ export function normalizeExecutionLogForRealtime(logItem = {}) {
   };
 }
 
-export function normalizePendingInteractionPayloads(statePayload = {}) {
-  const pendingInteractions = Array.isArray(statePayload?.pendingInteractions)
-    ? statePayload.pendingInteractions
-    : [];
-  if (pendingInteractions.length) {
-    return pendingInteractions.filter(
-      (item) => item && typeof item === "object" && !Array.isArray(item),
-    );
-  }
-  return statePayload?.pendingInteraction &&
-    typeof statePayload.pendingInteraction === "object" &&
-    !Array.isArray(statePayload.pendingInteraction)
-    ? [statePayload.pendingInteraction]
-    : [];
-}
-
 export function isInFlightConversationState(state = "") {
   return [
     BackendChannelState.SENDING,

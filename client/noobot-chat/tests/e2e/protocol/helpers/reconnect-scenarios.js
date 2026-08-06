@@ -10,7 +10,7 @@ export async function reloadAndWaitForReconnect(page, capture) {
   const receivedAtStart = capture.websocketReceived.length;
   await page.reload();
   await waitForCaptured(() => findProtocolObjects(capture.websocketReceived.slice(receivedAtStart))
-    .find(({ event }) => event === "reconnect_complete"), { timeoutMs: 60_000 });
+    .find(({ event }) => event === "reconnect_complete"), { timeoutMs: 60000 });
   await expect(page.locator(".status-btn.connected")).toBeVisible();
 }
 
@@ -21,7 +21,7 @@ export async function beginReload(page) {
 
 export async function waitForReconnect(capture, receivedAtStart = 0) {
   return waitForCaptured(() => findProtocolObjects(capture.websocketReceived.slice(receivedAtStart))
-    .find(({ event }) => event === "reconnect_complete"), { timeoutMs: 60_000 });
+    .find(({ event }) => event === "reconnect_complete"), { timeoutMs: 60000 });
 }
 
 export async function cycleOffline(page, capture) {

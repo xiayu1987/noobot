@@ -92,6 +92,26 @@ describe("foreign Turn lifecycle routing", () => {
 });
 
 describe("committed user Turn routing", () => {
+  it("clears a pending interaction when the authoritative Turn terminates", () => {
+    const clearPendingInteractionIfObsolete = vi.fn();
+    const applyTurnLifecycleEnvelope = vi.fn();
+    expect(routeCurrentTurnLifecycleEvent("turn_lifecycle", {
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      eventType: "turn.failed",
+    }, {
+      activeSession: { value: { sessionId: "session-1" } },
+      applyTurnLifecycleEnvelope,
+      clearPendingInteractionIfObsolete,
+      sessionId: "session-1",
+    })).toBe(true);
+    expect(clearPendingInteractionIfObsolete).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+    });
+  });
+
   it("replaces draft attachments with the canonical committed attachment set", () => {
     const draftMessage = {
       id: "frontend-user-1",

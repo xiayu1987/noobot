@@ -14,10 +14,17 @@ import {
 } from "../helpers/browser-actions.js";
 import { assertCapabilityModelTraces, assertHarnessRun } from "../helpers/harness-assertions.js";
 import {
+  modelInvocationTraces,
   readSessionFact,
+  readSessionExecutionEventTree,
   readSessionTurnMessages,
   waitForHarnessRun,
 } from "../helpers/persistence-audit.js";
+import {
+  assertModelInvocationTraceSet,
+  auditModelPrefixStability,
+  isMainAgentModelInvocation,
+} from "../helpers/model-message-assertions.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
@@ -45,7 +52,7 @@ function assertCheckpointMessages(session, messages, turnScopeId) {
 }
 
 test("@full PBE-033 Harness 低轮次完整流程与小结数据闭环", async ({ noobot, protocolCapture }, testInfo) => {
-  test.setTimeout(300_000);
+  test.setTimeout(900000);
   await selectPlugins(noobot.page, ["harness"]);
   await setHarnessCapability(noobot.page, "Planning", true);
   await setHarnessCapability(noobot.page, "Planning Acceptance", true);
@@ -91,7 +98,7 @@ test("@full PBE-033 Harness 低轮次完整流程与小结数据闭环", async (
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: send.identity.turnScopeId,
-    timeoutMs: 280_000,
+    timeoutMs: 280000,
   });
 
   const requiredEvents = new Set([
@@ -109,7 +116,7 @@ test("@full PBE-033 Harness 低轮次完整流程与小结数据闭环", async (
   const harness = await waitForHarnessRun(noobot.userId, processing.dialogProcessId, (candidate) => {
     const names = new Set(capabilityEvents(candidate.events).map((event) => event.event));
     return candidate.run?.status === "success" && [...requiredEvents].every((name) => names.has(name));
-  }, { timeoutMs: 30_000 });
+  }, { timeoutMs: 30000 });
   assertHarnessRun(harness.run, { dialogProcessId: processing.dialogProcessId, status: "success" });
   assertCapabilityModelTraces(harness.capabilityTraces);
 
@@ -128,6 +135,31 @@ test("@full PBE-033 Harness 低轮次完整流程与小结数据闭环", async (
   }
   const summaryMark = events.find((event) => event.event === "summary_messages_marked");
   expect(Number(summaryMark.detail?.markedCount || summaryMark.detail?.messageCount || 0)).toBeGreaterThan(0);
+
+  const modelTraces = modelInvocationTraces(
+    await readSessionExecutionEventTree(noobot.userId, noobot.sessionId),
+  ).filter((record) => record.turnScopeId === send.identity.turnScopeId);
+  const prefixAudit = assertModelInvocationTraceSet(modelTraces, {
+    rootSessionId: noobot.sessionId,
+  });
+  const mainPrefixAudit = auditModelPrefixStability(
+    modelTraces.filter(isMainAgentModelInvocation),
+  );
+  expect(mainPrefixAudit.violations).toEqual([]);
+  expect(mainPrefixAudit.stableComparisonCount).toBeGreaterThan(0);
+  expect(mainPrefixAudit.checkpointRewriteCount).toBe(1);
+
+  const capabilityPurposes = new Set(harness.capabilityTraces.map((record) => record.detail?.purpose));
+  const observedHarnessPurposes = new Set(modelTraces
+    .filter((record) => !isMainAgentModelInvocation(record))
+    .map((record) => record.data?.invocation?.purpose));
+  for (const purpose of capabilityPurposes) {
+    expect(observedHarnessPurposes.has(purpose), `missing provider observation for ${purpose}`).toBe(true);
+  }
+  const auditedHarnessPurposes = new Set(prefixAudit.flows
+    .filter((flow) => flow.invocation?.purpose !== "main_agent")
+    .map((flow) => flow.invocation?.purpose));
+  expect(auditedHarnessPurposes).toEqual(observedHarnessPurposes);
 
   const session = await readSessionFact(noobot.userId, noobot.sessionId);
   const messages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);

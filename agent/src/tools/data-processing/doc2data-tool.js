@@ -24,6 +24,7 @@ import {
 } from "@noobot/runtime-events";
 import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 import { decodeLibreOfficeTextBuffer, parseDocumentToTextViaLibreOffice } from "./doc2data/libreoffice.js";
 import {
   backwriteFirstAttachment,
@@ -261,6 +262,7 @@ export function createDoc2DataTool({ agentContext }) {
               flow: "tool.doc2data",
               purpose: "document_extraction",
               domain: "data_processing",
+              contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
             },
           },
         });

@@ -81,6 +81,30 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
   assert.equal(turns[0].messageId, "message-1");
 });
 
+test("appendAgentMessages forwards the canonical internal control message type", async () => {
+  const turns = [];
+  const persister = new SessionTurnPersister({
+    session: {
+      appendExecutionLog: async () => {},
+      appendTurn: async (payload = {}) => turns.push(payload),
+    },
+  });
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [{
+      messageUid: "sm_control",
+      role: "user",
+      type: "context_control",
+      content: "checkpoint",
+      noobotInternalMessageType: "noobot.phase_summary_prompt",
+    }],
+  });
+
+  assert.equal(turns[0].noobotInternalMessageType, "noobot.phase_summary_prompt");
+});
+
 test("appendAgentMessages forwards presentation identity and checkpoint context", async () => {
   const turns = [];
   const persistenceContext = { locationResolver: { scope: "running-turn" } };

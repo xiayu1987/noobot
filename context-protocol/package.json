@@ -19,6 +19,7 @@
     "./block-strategy": "./src/block-strategy.js",
     "./summary-policy": "./src/summary-policy.js",
     "./injected-message-policy": "./src/injected-message-policy.js",
+    "./injected-message-types": "./src/injected-message-types.js",
     "./snapshot-policy": "./src/snapshot-policy.js",
     "./terminal-history-policy": "./src/terminal-history-policy.js",
     "./agent-context-schema": "./src/agent-context-schema.js",
@@ -28,7 +29,8 @@
     "./agent-context-envelope": "./src/agent-context-envelope.js",
     "./task-summary-protocol": "./src/task-summary-protocol.js",
     "./task-check-protocol": "./src/task-check-protocol.js",
-    "./task-check-receipt": "./src/task-check-receipt.js"
+    "./task-check-receipt": "./src/task-check-receipt.js",
+    "./model-invocation-policy": "./src/model-invocation-policy.js"
   },
   "scripts": {
     "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(error=>{console.error(error);process.exit(1)})\"",

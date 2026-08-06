@@ -6,8 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createObservedChatModel } from "../../src/models/invoke/observed-chat-model.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 
-function createFixture() {
+function createFixture({ summaryCheckpointRevision = 0 } = {}) {
   const events = [];
   const invocations = [];
   const createTarget = (boundTools = []) => ({
@@ -22,6 +23,7 @@ function createFixture() {
   });
   const model = createObservedChatModel(createTarget(), {
     runtime: {
+      summaryCheckpointRevision,
       eventListener: {
         onEvent(event) {
           events.push(event);
@@ -29,7 +31,12 @@ function createFixture() {
       },
     },
     modelSpec: { alias: "primary", model: "gpt-test", format: "openai_compatible" },
-    invocation: { flow: "agent.main", purpose: "main_agent", domain: "primary" },
+    invocation: {
+      flow: "agent.main",
+      purpose: "main_agent",
+      domain: "primary",
+      contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+    },
     streaming: true,
   });
   return { events, invocations, model };
@@ -53,9 +60,15 @@ test("observed model port emits exactly once for the exact provider input", asyn
   assert.equal(events[0].event, "model_context_trace");
   assert.equal(events[0].data.stage, "llm_invoke_messages");
   assert.equal(events[0].data.authority, "model_invoke_port");
+  assert.equal(events[0].data.protocolVersion, 2);
   assert.equal(events[0].data.invocationSequence, 1);
   assert.equal(events[0].data.messages.count, 1);
   assert.equal(events[0].data.messages.missingMessageIdCount, 0);
+  assert.equal(events[0].data.messages.fingerprintProtocolVersion, 1);
+  assert.equal(events[0].data.messages.fingerprints.length, 1);
+  assert.match(events[0].data.messages.fingerprints[0], /^[a-f0-9]{64}$/);
+  assert.match(events[0].data.messages.sequenceHash, /^[a-f0-9]{64}$/);
+  assert.equal(events[0].data.context.summaryCheckpointRevision, 0);
   assert.deepEqual(events[0].data.model, {
     alias: "primary",
     name: "gpt-test",
@@ -67,7 +80,16 @@ test("observed model port emits exactly once for the exact provider input", asyn
     flow: "agent.main",
     purpose: "main_agent",
     domain: "primary",
+    contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
   });
+});
+
+test("observed model records the checkpoint revision at the provider boundary", async () => {
+  const { events, model } = createFixture({ summaryCheckpointRevision: 3 });
+
+  await model.invoke([{ role: "user", content: "hello" }]);
+
+  assert.equal(events[0].data.context.summaryCheckpointRevision, 3);
 });
 
 test("bound model shares the invocation sequence and observes bound tool count", async () => {

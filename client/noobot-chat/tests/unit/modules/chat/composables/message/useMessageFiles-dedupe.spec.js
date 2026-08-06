@@ -98,16 +98,16 @@ describe("useMessageFiles dedupe", () => {
         },
       ],
       toolTimeline: [{
-        key: "call:write-1", toolCallId: "write-1", status: "completed",
+        key: "call:write-1", toolCallId: "write-1", tool: "write_file", status: "completed",
         resultEvent: {
           eventId: "write-result-1", sequence: 1, sequenceScopeId: "message-1",
           sequenceDomain: "message-event", authority: "authoritative",
-          log: { event: "tool_result", type: "tool_result", writtenFiles: [
+          writtenFiles: [
             {
               fileName: "result.md",
               resolvedPath: "/workspace/admin/runtime/different/result.md",
             },
-          ] },
+          ],
         },
       }],
     };
