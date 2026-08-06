@@ -38,6 +38,35 @@ test("appendTurns upserts an ordered message batch with one Session save", async
   assert.deepEqual(session.messages.map((message) => message.content), ["tools", "one", "two"]);
 });
 
+test("appendTurns persists the canonical internal control message type", async () => {
+  const session = { currentTaskId: "", messages: [] };
+  const service = {
+    now: () => "2026-07-25T00:01:00.000Z",
+    _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
+    _resolveParentSessionId: async () => "",
+    sessionRepo: {
+      findById: async () => session,
+      save: async () => {},
+    },
+  };
+
+  await appendTurns.call(service, {
+    userId: "u1",
+    sessionId: "s1",
+    turns: [{
+      messageUid: "sm_control",
+      role: "user",
+      type: "context_control",
+      content: "checkpoint",
+      dialogProcessId: "dp",
+      turnScopeId: "t",
+      noobotInternalMessageType: "noobot.phase_summary_prompt",
+    }],
+  });
+
+  assert.equal(session.messages[0].noobotInternalMessageType, "noobot.phase_summary_prompt");
+});
+
 test("appendTurn updates an existing message with the same authoritative messageId", async () => {
   const session = {
     currentTaskId: "",

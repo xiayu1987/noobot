@@ -92,6 +92,7 @@ export function applyStatusTurnScopeIds({ messages = [], sessionDocs = [], turnS
     const turnStatus = statusByDialogProcessId.get(rootDialogProcessId);
     const statusTurnScopeId = normalizeText(turnStatus?.turnScopeId);
     if (statusTurnScopeId) {
+      if (!getMessageTurnScopeId(messageItem)) messageItem.turnScopeId = statusTurnScopeId;
       messageItem.statusTurnScopeId = statusTurnScopeId;
       messageItem.persistedStatusStepState = normalizeText(turnStatus?.status);
     }

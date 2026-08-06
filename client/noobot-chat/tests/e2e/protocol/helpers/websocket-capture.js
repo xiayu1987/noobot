@@ -59,7 +59,7 @@ export function findLifecycleReceipts(records = []) {
   return findVersionedEnvelopes(records).filter((item) => item.action === "turn.lifecycle.received");
 }
 
-export async function waitForCaptured(predicate, { timeoutMs = 30_000, intervalMs = 100 } = {}) {
+export async function waitForCaptured(predicate, { timeoutMs = 30000, intervalMs = 100 } = {}) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const result = predicate();

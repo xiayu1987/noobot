@@ -30,7 +30,7 @@ test("summary command is acknowledged once only after the unified checkpoint com
   const loopState = { turnMessages: [markedMessage] };
   requestMainFlowSummaryCheckpoint(runtime, {
     source: "plugin.summary",
-    summarizedMessageIds: ["m1"],
+    summarizedMessageIds: ["m1", "runtime-prompt"],
   });
 
   await consumeSummaryCheckpointCommand({ runtime, loopState, turn: 3 });

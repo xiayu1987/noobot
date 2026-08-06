@@ -27,6 +27,20 @@ function formatToolLifecycleText(data = {}, toolEventType = "") {
   return `[tool] ${toolName} ${action}${payloadText ? `: ${payloadText}` : ""}`;
 }
 
+function formatToolLifecycleDetail(data = {}, toolEventType = "") {
+  if (!toolEventType) return "";
+  const payload = toolEventType === "tool_call"
+    ? (data.args ?? data.arguments)
+    : (data.result ?? data.output);
+  if (payload === undefined || payload === null || payload === "") return "";
+  if (typeof payload === "string") return payload;
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return String(payload);
+  }
+}
+
 export function classifyRealtimeLog(data = {}) {
   const nestedData = data?.data && typeof data.data === "object" ? data.data : {};
   const authoritativeEventType = String(data.eventType || "").trim();
@@ -62,6 +76,7 @@ export function classifyRealtimeLog(data = {}) {
     type: authoritativeToolEvent || type ||
       (TOOL_LOG_TYPES.has(eventName) ? eventName : (isTool ? "tool_call" : "system")),
     text: displayText,
+    detailText: formatToolLifecycleDetail(data, authoritativeToolEvent) || displayText,
     dialogProcessId: String(data.dialogProcessId || ""),
     ts: String(data.ts || nowIso()),
     category: isTool ? "tool" : "system",

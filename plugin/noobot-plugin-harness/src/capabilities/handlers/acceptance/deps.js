@@ -22,6 +22,7 @@ export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 export {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
+  deferCapabilityLogs,
   applyTransferPayloadToMessage,
   attachMetasToLatestInjectedMessage,
   markHarnessPluginAttachments,

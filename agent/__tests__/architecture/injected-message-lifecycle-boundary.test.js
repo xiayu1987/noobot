@@ -21,7 +21,7 @@ const loopConstantsSource = readFileSync(
   "utf8",
 );
 
-test("Agent runtime does not own injected-message lifecycle protocol", () => {
+test("checkpoint is the only runtime boundary allowed to remove prior model input", () => {
   for (const source of [loopControlSource, orchestratorSource, loopConstantsSource]) {
     assert.doesNotMatch(source, /removePhaseSummaryPromptMessages/);
     assert.doesNotMatch(source, /removeTaskCheckPromptMessages/);
@@ -29,5 +29,7 @@ test("Agent runtime does not own injected-message lifecycle protocol", () => {
   assert.doesNotMatch(loopConstantsSource, /noobot\.phase_summary_prompt/);
   assert.doesNotMatch(loopConstantsSource, /noobot\.task_check_prompt/);
   assert.doesNotMatch(orchestratorSource, /modelContext\.messages\.(?:pop|splice)\s*\(/);
-  assert.match(orchestratorSource, /consumeInjectedContextMessagesFn/);
+  assert.doesNotMatch(orchestratorSource, /consumeInjectedContextMessages/);
+  assert.doesNotMatch(orchestratorSource, /MODEL_INVOCATION_COMPLETED/);
+  assert.doesNotMatch(orchestratorSource, /TOOL_CALLS_COMPLETED/);
 });

@@ -20,6 +20,7 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
     emit,
     translate,
     getThinkingDetailForMessage: timeline.getThinkingDetailForMessage,
+    getExecutionLogsForMessage: timeline.getExecutionLogs,
     getCompletedToolLogsForMessage: timeline.getCompletedToolLogsForMessage,
     getSummaryThinkingDetailCount: timeline.getSummaryThinkingDetailCount,
   });
@@ -35,6 +36,7 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
     getExecutionLogs: timeline.getExecutionLogs,
     currentExecutionLogs: timeline.currentExecutionLogs,
     latestTaskCheckReceipt: timeline.latestTaskCheckReceipt,
+    taskCheckReceipts: timeline.taskCheckReceipts,
     loadedThinkingDetail: timeline.loadedThinkingDetail,
     getExecutionLogCount: timeline.getExecutionLogCount,
     getThinkingDetailLabel: presentation.getThinkingDetailLabel,
@@ -42,6 +44,7 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
     collapseThinkingPanel: presentation.collapseThinkingPanel,
     isMessageRuntimeRunning: timeline.isMessageRuntimeRunning,
     groupCompletedToolLogs: presentation.groupCompletedToolLogs,
+    groupExecutionLogs: presentation.groupExecutionLogs,
     getThinkingDetailCount: presentation.getThinkingDetailCount,
     getThinkingTreePrefix: presentation.getThinkingTreePrefix,
     getThinkingDetailItemKey: presentation.getThinkingDetailItemKey,

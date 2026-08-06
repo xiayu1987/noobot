@@ -38,7 +38,7 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     expect(refreshSessionsAsync).not.toHaveBeenCalled();
   });
 
-  it("channel_state interaction_pending restores pending interaction payload", async () => {
+  it("interaction_request is the only event that restores a pending interaction", async () => {
     const setPendingInteractionRequest = vi.fn();
     const pendingInteraction = {
       requestId: "req-int",
@@ -50,8 +50,8 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-int", "dp-int", "interaction_pending", {
         seq: 2,
-        pendingInteraction,
       });
+      onEvent({ event: StreamEventEnum.INTERACTION_REQUEST, data: pendingInteraction });
       emitChannelState(onEvent, "local-int", "dp-int", "user_stopped", { seq: 3 });
       onEvent({
         event: StreamEventEnum.USER_STOPPED,
@@ -76,10 +76,14 @@ describe("useChatEngine.interaction-stop: interaction", () => {
     const stream = vi.fn(async (_payload, onEvent) => {
       emitChannelState(onEvent, "local-int-send", "dp-int-send", "interaction_pending", {
         seq: 1,
-        pendingInteraction: {
+      });
+      onEvent({
+        event: StreamEventEnum.INTERACTION_REQUEST,
+        data: {
           requestId: "req-int-send",
           sessionId: "local-int-send",
           dialogProcessId: "dp-int-send",
+          turnScopeId: "turn-int-send",
           interactionType: "confirm",
           content: "confirm?",
         },

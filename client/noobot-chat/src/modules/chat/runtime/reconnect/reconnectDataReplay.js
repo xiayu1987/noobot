@@ -8,7 +8,11 @@ import {
 } from "../../model/reconnectReplayModel.js";
 import { _trimStr } from "./utils.js";
 import { normalizeTurnMeta } from "../../model/messageIdentity.js";
-import { replayEventTail, validateReplayBatch } from "@noobot/event-protocol";
+import {
+  isPendingInteractionReplay,
+  replayEventTail,
+  validateReplayBatch,
+} from "@noobot/event-protocol";
 import { validateTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import {
   logStateMachineDebug,
@@ -124,7 +128,9 @@ export async function applyReconnectDataReplay({
     }
     if (!lifecycleEvents.length) {
       for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
-        await applyPendingInteraction?.(interaction);
+        if (isPendingInteractionReplay(interaction)) {
+          await applyPendingInteraction?.(interaction.data);
+        }
       }
       continue;
     }
@@ -150,7 +156,9 @@ export async function applyReconnectDataReplay({
       reasons: [...new Set(results.map((result) => String(result?.reason || "")).filter(Boolean))],
     }));
     for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
-      await applyPendingInteraction?.(interaction);
+      if (isPendingInteractionReplay(interaction)) {
+        await applyPendingInteraction?.(interaction.data);
+      }
     }
   }
   const recoverableSessionId = findRecoverableReconnectSessionId(reconnectSessions);

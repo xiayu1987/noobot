@@ -35,11 +35,10 @@ function thinkingDetailPayload(messageItem) {
 
 function persistedToolTimeline(text, id = "call-1") {
   return [{
-    key: `call:${id}`, toolCallId: id, status: "completed",
+    key: `call:${id}`, toolCallId: id, tool: text, result: text, status: "completed",
     resultEvent: {
       eventId: `result:${id}`, sequence: 1, sequenceScopeId: "message-1",
       sequenceDomain: "message-event", authority: "authoritative",
-      log: { event: "tool_result", type: "tool_result", toolCallId: id, text },
     },
   }];
 }
@@ -236,17 +235,19 @@ describe("ThinkingPanel thinking-detail recovery", () => {
       {
         key: "call:failed",
         toolCallId: "failed",
+        tool: "missing-file",
+        result: "missing file",
         resultEvent: {
           sequence: 2,
-          log: { event: "tool_call_error", type: "tool_error", text: "missing file" },
         },
       },
       ...Array.from({ length: 10 }, (_, index) => ({
         key: `call:success-${index + 1}`,
         toolCallId: `success-${index + 1}`,
+        tool: `success-${index + 1}`,
+        result: `success-${index + 1}`,
         resultEvent: {
           sequence: index + 3,
-          log: { event: "tool_result", type: "tool_result", text: `success-${index + 1}` },
         },
       })),
     ];
@@ -263,7 +264,7 @@ describe("ThinkingPanel thinking-detail recovery", () => {
 
     expect(wrapper.vm.currentExecutionLogs).toHaveLength(10);
     expect(wrapper.vm.currentExecutionLogs.map((item) => item.text)).toEqual(
-      Array.from({ length: 10 }, (_, index) => `返回：success-${index + 1}`),
+      Array.from({ length: 10 }, (_, index) => `返回：success-${index + 1} · 已完成`),
     );
     expect(wrapper.vm.currentExecutionLogs.some((item) => item.text.includes("missing file"))).toBe(false);
   });

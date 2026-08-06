@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
-import path from "node:path";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { captureTest } from "./protocol-capture.fixture.js";
 import { findAgentCommands, findLifecycleEnvelopes, findLifecycleReceipts } from "../helpers/websocket-capture.js";
 

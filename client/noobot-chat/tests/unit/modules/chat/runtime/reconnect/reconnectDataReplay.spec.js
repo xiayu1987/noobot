@@ -145,6 +145,6 @@ describe("applyReconnectDataReplay", () => {
       reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) }] },
       ...f,
     });
-    expect(f.applyPendingInteraction).toHaveBeenCalledWith(interaction);
+    expect(f.applyPendingInteraction).toHaveBeenCalledWith(interaction.data);
   });
 });

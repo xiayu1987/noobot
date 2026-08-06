@@ -131,15 +131,37 @@ describe("ThinkingPanel canonical details", () => {
     const beforeRefreshKey = wrapper.vm.getThinkingDetailItemKey(group, item, 0);
     const afterRefreshKey = wrapper.vm.getThinkingDetailItemKey(
       group,
-      { ...item, ts: "2026-08-01T12:00:00.000Z" },
+      { ...item, eventId: "replayed-result-id", ts: "2026-08-01T12:00:00.000Z" },
       9,
     );
 
-    expect(beforeRefreshKey).toBe("event:call-1");
+    expect(beforeRefreshKey).toBe("tool:call-1:call");
     expect(afterRefreshKey).toBe(beforeRefreshKey);
   });
 
-  it("does not invent an expandable identity when eventId is missing", () => {
+  it("keeps a running tool detail expandable when replay assigns a new event id", async () => {
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-running-refresh",
+      turnScopeId: "turn-running-refresh",
+      toolTimeline: toolTimeline(),
+    };
+    const wrapper = mountThinkingPanel(messageItem, {
+      variant: "details",
+      runtime: { running: true, terminal: false },
+    });
+    const group = wrapper.vm.groupCompletedToolLogs(messageItem)[0];
+    const item = group.items[0];
+    const beforeRefreshKey = wrapper.vm.getThinkingDetailItemKey(group, item);
+    wrapper.vm.toggleThinkingDetailExpanded(messageItem, beforeRefreshKey);
+    await wrapper.vm.$nextTick();
+    const replayedItem = { ...item, eventId: "replayed-call-id" };
+    const replayedKey = wrapper.vm.getThinkingDetailItemKey(group, replayedItem);
+    expect(replayedKey).toBe(beforeRefreshKey);
+    expect(wrapper.vm.isThinkingDetailExpanded(messageItem, replayedKey)).toBe(true);
+  });
+
+  it("uses the protocol tool identity when eventId is missing", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",
       sessionId: "session-missing-event",
@@ -151,7 +173,7 @@ describe("ThinkingPanel canonical details", () => {
       { key: "tool-timeline" },
       { toolCallId: "call-without-event", event: "tool_call", ts: "now" },
       0,
-    )).toBe("");
+    )).toBe("tool:call-without-event:call");
   });
 
   it("renders canonical thinking activities alongside canonical tool details", () => {

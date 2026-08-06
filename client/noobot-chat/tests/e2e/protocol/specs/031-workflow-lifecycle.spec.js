@@ -22,7 +22,7 @@ import {
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protocolCapture }, testInfo) => {
-  test.setTimeout(420_000);
+  test.setTimeout(420000);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
   const beforeSend = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(noobot.page, uniquePrompt(
@@ -80,7 +80,7 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: continued.identity.turnScopeId,
-    timeoutMs: 300_000,
+    timeoutMs: 300000,
   });
   assertTurnLifecycle(protocolCapture, noobot.sessionId, continued.identity.turnScopeId);
   const continuedTraces = await waitForModelInvocationTraces(noobot.userId, noobot.sessionId, (traces) =>
@@ -99,7 +99,7 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
 });
 
 test("@full PBE-032 Workflow 完成后普通消息再切回 Workflow", async ({ noobot, protocolCapture }, testInfo) => {
-  test.setTimeout(900_000);
+  test.setTimeout(900000);
   const runToCompletion = async (pluginKeys, purpose) => {
     await selectPlugins(noobot.page, pluginKeys);
     const before = commandsForSession(protocolCapture, noobot.sessionId).length;
@@ -113,7 +113,7 @@ test("@full PBE-032 Workflow 完成后普通消息再切回 Workflow", async ({ 
       capture: protocolCapture,
       sessionId: noobot.sessionId,
       turnScopeId: command.identity.turnScopeId,
-      timeoutMs: 300_000,
+      timeoutMs: 300000,
     });
     assertTurnLifecycle(protocolCapture, noobot.sessionId, command.identity.turnScopeId);
     if (pluginKeys.includes("workflow")) {

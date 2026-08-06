@@ -10,6 +10,7 @@ import { createChatModelByName, resolveDefaultModelSpec, resolveModelSpecByAlias
 import { DEFAULT_MIME_TYPE, IMAGE_EXTENSION_TO_MIME, IMAGE_EXTENSIONS } from "../file-extension-constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { tWeb, toModelText, truncateText } from "./utils.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
 const MAX_TEXT_CHARS = LENGTH_THRESHOLDS.dataProcessing.webTextChars;
 async function buildImageBatches(imagePaths = []) {
@@ -79,6 +80,7 @@ export async function summarizeByModel({
       flow: "tool.web2data",
       purpose: "content_extraction",
       domain: "data_processing",
+      contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
     },
   });
   const userPrompt =

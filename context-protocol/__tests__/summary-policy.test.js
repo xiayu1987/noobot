@@ -8,9 +8,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   collectDialogScopedMessagesToSummarize,
+  collectScopedMessagesToSummarize,
   markCurrentTurnArraySummarized,
   markScopedMessagesSummarized,
 } from "../src/summary-policy.js";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "../src/injected-message-types.js";
 
 test("summary retention keeps the latest injection independently in every dialog", () => {
   const injected = (id, dialogProcessId, content) => ({
@@ -51,6 +53,21 @@ test("summary policy preserves latest task summary pair and latest injection", (
   ]);
 
   assert.deepEqual(result.map((message) => message.summarized === true), [true, true, true, false, false, false]);
+});
+
+test("checkpoint control prompts are summarized while normal injections retain their latest type", () => {
+  const messages = [
+    { role: "user", injectedMessage: true, injectedBy: "plugin", injectedMessageType: "guidance", content: "old" },
+    { role: "user", injectedMessage: true, injectedBy: "plugin", injectedMessageType: "guidance", content: "latest" },
+    { role: "user", content: "summary prompt", additional_kwargs: { noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT } },
+    { role: "user", content: "check prompt", additional_kwargs: { noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT } },
+  ];
+
+  const result = markCurrentTurnArraySummarized(messages);
+  const selected = collectScopedMessagesToSummarize(messages).messages;
+
+  assert.deepEqual(result.map((message) => message.summarized === true), [true, false, true, true]);
+  assert.deepEqual(selected, [messages[0], messages[2], messages[3]]);
 });
 
 test("summary checkpoint preserves only the latest task_check call and result pair", () => {

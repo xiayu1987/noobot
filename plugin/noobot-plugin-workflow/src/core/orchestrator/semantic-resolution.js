@@ -22,6 +22,7 @@ import {
   resolveWorkflowSemanticContextMessages,
 } from "../hooks/messages.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 
 export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
@@ -107,6 +108,7 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
     ctx,
     toolAllowlist: availableToolNames,
     signal: resolveWorkflowAbortSignal(ctx),
+    contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
   });
   throwIfWorkflowAborted(ctx);
   const resolvedText = String(result?.content || result?.output || "").trim() || sourceText;

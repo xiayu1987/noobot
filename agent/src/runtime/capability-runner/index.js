@@ -29,6 +29,10 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createHash } from "node:crypto";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/shared/message-event-protocol";
+import {
+  MODEL_CONTEXT_SEQUENCE_POLICY,
+  requireModelContextSequencePolicy,
+} from "@noobot/context-protocol/model-invocation-policy";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS =
   TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
@@ -264,6 +268,7 @@ export function createAgentCapabilityModelInvoker({
     toolAllowlist: toolAllowlistOverride = undefined,
     headerNamespace: headerNamespaceOverride = "",
     flowPrefix: flowPrefixOverride = "",
+    contextSequencePolicy = MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
   } = {}) {
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
@@ -297,6 +302,9 @@ export function createAgentCapabilityModelInvoker({
     });
     const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
     const normalizedDomain = normalizeHeaderValue(domain || "unknown");
+    const normalizedContextSequencePolicy = requireModelContextSequencePolicy(
+      contextSequencePolicy,
+    );
     const normalizedFlowName = normalizeHeaderValue(pluginFlow || purpose || "unknown");
     const resolvedHeaderNamespace = normalizeHeaderValue(
       headerNamespaceOverride || headerNamespace || "plugin",
@@ -340,6 +348,7 @@ export function createAgentCapabilityModelInvoker({
             flow: flowValue,
             purpose: normalizedPurpose,
             domain: normalizedDomain,
+            contextSequencePolicy: normalizedContextSequencePolicy,
           },
         })
       : createChatModelFn({
@@ -356,6 +365,7 @@ export function createAgentCapabilityModelInvoker({
             flow: flowValue,
             purpose: normalizedPurpose,
             domain: normalizedDomain,
+            contextSequencePolicy: normalizedContextSequencePolicy,
           },
         });
     const modelSpec = normalizedModelName

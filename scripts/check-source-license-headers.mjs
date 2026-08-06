@@ -17,6 +17,7 @@ const ignoredDirectories = new Set([
   "dist",
   "generated",
   "node_modules",
+  "test-results",
   "vendor",
   "workspace",
 ]);

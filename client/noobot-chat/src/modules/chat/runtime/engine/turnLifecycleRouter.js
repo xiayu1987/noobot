@@ -101,17 +101,25 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
   const {
     activeSession,
     applyTurnLifecycleEnvelope,
+    clearPendingInteractionIfObsolete,
     findCanonicalMessageById,
     logSessionEvent,
     makeViewMessage,
     sessionId,
   } = context;
   if (normalizeTrimmedString(event).toLowerCase() === StreamEventEnum.TURN_LIFECYCLE) {
+    const lifecycleEventType = normalizeTrimmedString(data?.eventType).toLowerCase();
+    if (["turn.completed", "turn.stop_completed", "turn.failed"].includes(lifecycleEventType)) {
+      clearPendingInteractionIfObsolete?.({
+        sessionId: data?.sessionId || sessionId,
+        dialogProcessId: data?.dialogProcessId || "",
+      });
+    }
     const result = applyTurnLifecycleEnvelope?.(data);
     const logReduction = (reduction = {}) => {
       const rejected = reduction?.applied !== true;
       const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"]
-        .includes(normalizeTrimmedString(data?.eventType).toLowerCase());
+        .includes(lifecycleEventType);
       logSessionEvent?.({
         category: terminalLifecycle || rejected ? "state" : "debug",
         level: rejected ? "warn" : (terminalLifecycle ? "info" : "debug"),

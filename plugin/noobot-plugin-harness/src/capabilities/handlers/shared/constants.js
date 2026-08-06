@@ -115,6 +115,7 @@ export const DEFAULT_HARNESS_FLAGS = Object.freeze({
   planningSeparateModelInFlight: false,
   agentTurnEnded: false,
   acceptanceRequested: false,
+  acceptanceCompleted: false,
   checklistArtifactsAttached: false,
   planningForceToolTemporarilyEnabled: false,
   planningForceToolOriginalSet: false,

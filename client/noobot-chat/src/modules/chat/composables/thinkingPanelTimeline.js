@@ -29,6 +29,7 @@ import {
   selectToolTimelineCount,
   selectToolTimelineLogs,
   selectLatestTaskCheckReceipt,
+  selectTaskCheckReceipts,
 } from "../runtime/engine/toolTimeline.js";
 import {
   selectActivityTimelineLogs,
@@ -49,7 +50,36 @@ export function useThinkingTimeline(
   getRuntimeView,
   { shouldLoadThinkingDetail = () => true } = {},
 ) {
-  const timelineMessage = (messageItem = {}) => messageItem;
+  function projectCanonicalRound(messageItem = {}) {
+    if (messageItem !== props.messageItem) return messageItem;
+    const sessionId = getMessageSessionId(messageItem);
+    const turnScopeId = getMessageTurnScopeId(messageItem);
+    if (!turnScopeId || !Array.isArray(props.allMessages)) return messageItem;
+    const roundMessages = props.allMessages.filter((candidate) =>
+      getMessageSessionId(candidate) === sessionId &&
+      getMessageTurnScopeId(candidate) === turnScopeId,
+    );
+    if (roundMessages.length <= 1) return messageItem;
+    const merge = (field, identity) => {
+      const byIdentity = new Map();
+      for (const candidate of roundMessages) {
+        for (const item of Array.isArray(candidate?.[field]) ? candidate[field] : []) {
+          const key = String(identity(item) || "").trim();
+          if (!key) continue;
+          const previous = byIdentity.get(key);
+          byIdentity.set(key, previous ? { ...previous, ...item } : item);
+        }
+      }
+      return [...byIdentity.values()];
+    };
+    return {
+      ...messageItem,
+      toolTimeline: merge("toolTimeline", (item) => item?.key || item?.toolCallId || item?.tool_call_id),
+      activityTimeline: merge("activityTimeline", (item) => item?.eventId || item?.id),
+    };
+  }
+
+  const timelineMessage = (messageItem = {}) => projectCanonicalRound(messageItem);
   const thinkingDetailLoadingKey = ref("");
   const loadedThinkingDetail = ref(null);
   const thinkingContentItems = computed(() =>
@@ -320,6 +350,11 @@ export function useThinkingTimeline(
       timelineMessage(loadedThinkingDetail.value?.messageItem || {}),
     );
   });
+  const taskCheckReceipts = computed(() => {
+    const liveReceipts = selectTaskCheckReceipts(timelineMessage(props.messageItem));
+    if (liveReceipts.length > 0) return liveReceipts;
+    return selectTaskCheckReceipts(timelineMessage(loadedThinkingDetail.value?.messageItem || {}));
+  });
 
   const {
     getLatestMainModelContentLog,
@@ -573,6 +608,7 @@ export function useThinkingTimeline(
     loadedThinkingDetail,
     currentExecutionLogs,
     latestTaskCheckReceipt,
+    taskCheckReceipts,
     getLatestPluginAnalysisLog,
     getLatestMainModelContentLog,
     getExecutionLogs,

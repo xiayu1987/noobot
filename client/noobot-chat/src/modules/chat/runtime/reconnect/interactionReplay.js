@@ -20,22 +20,6 @@ export function hasPendingInteractionForDialog(pendingInteractionRequest, dialog
   );
 }
 
-export function normalizePendingInteractionPayloads(stateData = {}) {
-  const pendingInteractions = Array.isArray(stateData?.pendingInteractions)
-    ? stateData.pendingInteractions
-    : [];
-  if (pendingInteractions.length) {
-    return pendingInteractions.filter(
-      (item) => item && typeof item === "object" && !Array.isArray(item),
-    );
-  }
-  return stateData?.pendingInteraction &&
-    typeof stateData.pendingInteraction === "object" &&
-    !Array.isArray(stateData.pendingInteraction)
-    ? [stateData.pendingInteraction]
-    : [];
-}
-
 export function applyReconnectInteractionRequest({
   eventData,
   normalizeInteractionRequestPayload,

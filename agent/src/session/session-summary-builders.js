@@ -12,6 +12,7 @@ import {
   compactTransferEnvelopes,
   dedupeAttachmentRefs,
 } from "./transfer-attachment-refs.js";
+import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 17;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
@@ -22,7 +23,6 @@ const SUMMARY_DEFAULT_JSON_STRING_CHARS =
   LENGTH_THRESHOLDS.display.sessionSummaryDefaultJsonStringChars;
 const SUMMARY_SMALL_JSON_STRING_CHARS =
   LENGTH_THRESHOLDS.display.sessionSummarySmallJsonStringChars;
-const SUMMARY_FILE_NAME_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryFileNameChars;
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
@@ -465,19 +465,14 @@ function buildToolArtifactTimelineProjection(session = {}) {
       const resultEvent = item?.resultEvent && typeof item.resultEvent === "object"
         ? item.resultEvent
         : {};
-      const eventLog = resultEvent?.log && typeof resultEvent.log === "object"
-        ? resultEvent.log
-        : {};
       const attachments = pickLightAttachments({
         attachments: Array.isArray(resultEvent?.attachments)
           ? resultEvent.attachments
-          : eventLog.attachments,
+          : [],
       });
       const writtenFiles = (Array.isArray(resultEvent?.writtenFiles)
         ? resultEvent.writtenFiles
-        : Array.isArray(eventLog?.writtenFiles)
-          ? eventLog.writtenFiles
-          : [])
+        : [])
         .map((fileItem = {}) => pickLightObject(fileItem, [
           "toolName", "resolvedPath", "relativePath", "fileName", "isSandbox",
           "size", "mimeType", "sourceType", "recognized",
@@ -486,7 +481,7 @@ function buildToolArtifactTimelineProjection(session = {}) {
       if (attachments.length || writtenFiles.length) {
         artifactByCallId.set(callKey, {
           toolCallId,
-          toolName: String(item?.tool || eventLog?.tool || "").trim(),
+          toolName: String(item?.tool || "").trim(),
           eventId: String(resultEvent?.eventId || "").trim(),
           sequence: Number(resultEvent?.sequence || 0),
           sequenceScopeId: String(resultEvent?.sequenceScopeId || "").trim(),
@@ -544,21 +539,6 @@ function buildToolArtifactTimelineProjection(session = {}) {
   for (const artifact of artifactByCallId.values()) {
     const routeKey = routeKeyOf(artifact);
     if (!routeKey) continue;
-    const log = {
-      event: "tool_result",
-      type: "tool_result",
-      role: "tool",
-      toolName: artifact.toolName,
-      text: artifact.writtenFiles.length
-        ? `${artifact.writtenFiles[0]?.toolName || artifact.toolName} ${artifact.writtenFiles[0]?.fileName || ""}`.trim()
-        : truncateText(`${artifact.toolName}`.trim(), SUMMARY_FILE_NAME_CHARS),
-      ts: artifact.ts,
-      sessionId,
-      toolCallId: artifact.toolCallId,
-      dialogProcessId: artifact.dialogProcessId,
-      parentDialogProcessId: artifact.parentDialogProcessId,
-      turnScopeId: artifact.turnScopeId,
-    };
     const resultEvent = {
       ...(artifact.eventId ? { eventId: artifact.eventId } : {}),
       ...(artifact.sequence > 0 ? { sequence: artifact.sequence } : {}),
@@ -568,7 +548,9 @@ function buildToolArtifactTimelineProjection(session = {}) {
       ...(artifact.ts ? { timestamp: artifact.ts } : {}),
       ...(artifact.attachments.length ? { attachments: artifact.attachments } : {}),
       ...(artifact.writtenFiles.length ? { writtenFiles: artifact.writtenFiles } : {}),
-      log,
+      sessionId,
+      dialogProcessId: artifact.dialogProcessId,
+      turnScopeId: artifact.turnScopeId,
     };
     const timeline = timelineByRoute.get(routeKey) || [];
     timeline.push({
@@ -671,6 +653,21 @@ export function buildSessionDisplaySummary(session = {}) {
     displayMessageByIdentity.set(identity, presentation);
   }
   const displayMessages = [...displayMessageByIdentity.values()];
+  // Every assistant presentation owns the complete canonical thinking round.
+  // This is also the completed-turn path: refresh must project the same
+  // timeline as realtime instead of retaining only the first assistant event.
+  for (const displayMessage of displayMessages) {
+    if (String(displayMessage?.role || "").trim() !== "assistant") continue;
+    const turnScopeId = String(displayMessage?.turnScopeId || "").trim();
+    if (!turnScopeId) continue;
+    const thinkingTimeline = projectThinkingTimeline(messages, displayMessage, { turnScopeId });
+    if (!thinkingTimeline.toolTimeline.length && !thinkingTimeline.activityTimeline.length) continue;
+    displayMessage.toolTimeline = thinkingTimeline.toolTimeline;
+    displayMessage.activityTimeline = thinkingTimeline.activityTimeline;
+    displayMessage.hasThinkingDetails = true;
+    displayMessage.thinkingDetailCount =
+      thinkingTimeline.toolTimeline.length + thinkingTimeline.activityTimeline.length;
+  }
   const injectedCount = messages.filter((message) => message?.injectedMessage === true).length;
   const thinkingCount = displayMessages.filter((message) => message?.hasThinkingDetails === true).length;
   const {
@@ -684,11 +681,9 @@ export function buildSessionDisplaySummary(session = {}) {
       String(message?.role || "").trim() === "assistant" &&
       `${sessionId}::${String(message?.turnScopeId || "").trim()}` === routeKey
     ));
-    const dialogProcessIds = new Set(
-      toolTimeline
-        .map((item) => String(item?.resultEvent?.log?.dialogProcessId || "").trim())
-        .filter(Boolean),
-    );
+    const dialogProcessIds = new Set(toolTimeline
+      .map((item) => String(item?.resultEvent?.dialogProcessId || item?.call?.dialogProcessId || "").trim())
+      .filter(Boolean));
     const matchingCandidates = dialogProcessIds.size === 1
       ? candidates.filter((message) => {
           const dialogProcessId = String(message?.dialogProcessId || "").trim();
@@ -699,7 +694,31 @@ export function buildSessionDisplaySummary(session = {}) {
       unassignedToolArtifactCount += toolTimeline.length;
       continue;
     }
-    matchingCandidates[0].toolTimeline = toolTimeline;
+    const presentation = matchingCandidates[0];
+    const canonicalTimeline = Array.isArray(presentation?.toolTimeline)
+      ? presentation.toolTimeline
+      : [];
+    const canonicalByKey = new Map(canonicalTimeline.map((item, index) => [
+      String(item?.key || item?.toolCallId || item?.tool_call_id || "").trim(),
+      index,
+    ]));
+    for (const artifact of toolTimeline) {
+      const key = String(artifact?.key || artifact?.toolCallId || "").trim();
+      const index = canonicalByKey.get(key);
+      if (index === undefined) {
+        canonicalByKey.set(key, canonicalTimeline.length);
+        canonicalTimeline.push(artifact);
+        continue;
+      }
+      canonicalTimeline[index] = {
+        ...canonicalTimeline[index],
+        resultEvent: {
+          ...(canonicalTimeline[index]?.resultEvent || {}),
+          ...(artifact?.resultEvent || {}),
+        },
+      };
+    }
+    presentation.toolTimeline = canonicalTimeline;
     assignedToolArtifactCount += toolTimeline.length;
   }
   const attachmentCount = displayMessages.reduce(

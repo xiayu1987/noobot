@@ -545,7 +545,7 @@ describe("useChatEngine.resend replace turn", () => {
     expect(activeSession.value.messages[0].attachments).toEqual([]);
   });
 
-  it("resendMonotonicMessage refreshes session version after 409 and retries replace-turn with the newer version", async () => {
+  it("resendMonotonicMessage treats a version conflict as terminal and never rebases a stale replacement", async () => {
     const stream = vi.fn(async () => {});
     const fetchSessionDetail = vi.fn(async () => ({
       sessionId: "local-resend-version-retry",
@@ -558,26 +558,13 @@ describe("useChatEngine.resend replace turn", () => {
         ],
       })],
     }));
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, expectedAggregateVersion, commandId, anchor }) => {
-      if (expectedAggregateVersion === 3) {
-        return {
-          ok: false,
-          status: 409,
-          statusText: "Conflict",
-          error: "session version conflict",
-          errorCode: "SESSION_VERSION_CONFLICT",
-        };
-      }
-      const replacementUser = { id: "msg-user-version-retry", messageId: "msg-user-version-retry", turnScopeId, role: RoleEnum.USER, content: newContent };
-      return makeTurnReplacementResponse({
-        commandId: commandId,
-        sessionId: "local-resend-version-retry",
-        aggregateVersion: 6,
-        replacedTurnScopeIds: [anchor.turnScopeId],
-        replacementUser,
-        session: { revision: 6 },
-      });
-    });
+    const replaceSessionTurnApi = vi.fn(async () => ({
+      ok: false,
+      status: 409,
+      statusText: "Conflict",
+      error: "session version conflict",
+      errorCode: "SESSION_VERSION_CONFLICT",
+    }));
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
@@ -594,78 +581,13 @@ describe("useChatEngine.resend replace turn", () => {
     activeSession.value.aggregateVersion = 3;
     activeSession.value.revision = 3;
   
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited after conflict")).resolves.toBe(true);
-  
-    expect(replaceSessionTurnApi).toHaveBeenCalledTimes(2);
-    expect(replaceSessionTurnApi.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedAggregateVersion: 3 }));
-    expect(replaceSessionTurnApi.mock.calls[1][0]).toEqual(expect.objectContaining({ expectedAggregateVersion: 5 }));
-    expect(replaceSessionTurnApi.mock.calls[1][0].commandId).toBe(
-      replaceSessionTurnApi.mock.calls[0][0].commandId,
-    );
-    expect(fetchSessionDetail).toHaveBeenCalledWith("local-resend-version-retry", expect.objectContaining({
-      force: true,
-      reuseRecentlyLoaded: false,
-      source: "resendVersionConflict",
-    }));
-    expect(stream).toHaveBeenCalledTimes(1);
-    expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
-      input: expect.objectContaining({ message: "edited after conflict" }),
-      identity: expect.objectContaining({ turnScopeId: expect.stringMatching(/^client-turn:/) }),
-    }));
-    expect(appendMessage).toHaveBeenCalledWith(
-      RoleEnum.ASSISTANT,
-      "",
-      [],
-      expect.objectContaining({
-        id: expect.stringMatching(/^msg_/),
-        messageId: expect.stringMatching(/^msg_/),
-        sessionId: "local-resend-version-retry",
-        turnScopeId: expect.stringMatching(/^client-turn:/),
-      }),
-    );
-  });
-
-  it("resendMonotonicMessage does not retry a 409 when refresh does not advance the session version", async () => {
-    const stream = vi.fn(async () => {});
-    const fetchSessionDetail = vi.fn(async () => ({
-      sessionId: "local-resend-version-no-change",
-      sessions: [makeSession("local-resend-version-no-change", {
-        aggregateVersion: 3,
-        revision: 3,
-        messages: [{ turnScopeId: "client-turn:no-change", role: RoleEnum.USER, content: "old" }],
-      })],
-    }));
-    const replaceSessionTurnApi = vi.fn(async () => ({
-      ok: false,
-      status: 409,
-      statusText: "Conflict",
-      error: "session version conflict",
-      errorCode: "SESSION_VERSION_CONFLICT",
-    }));
-    const applySessionDetail = vi.fn((detail) => {
-      const mainSession = detail.sessions?.[0] || {};
-      activeSession.value = { ...activeSession.value, ...mainSession };
-    });
-    const { engine, activeSession, input } = createHarness({
-      sessionId: "local-resend-version-no-change",
-      stream,
-      deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
-    });
-    const stoppedUser = { turnScopeId: "client-turn:no-change", role: RoleEnum.USER, content: "old" };
-    const stoppedAssistant = { turnScopeId: "client-turn:no-change", role: RoleEnum.ASSISTANT, content: "partial", stopState: "user_stopped" };
-    activeSession.value.messages = [stoppedUser, stoppedAssistant];
-    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
-    activeSession.value.aggregateVersion = 3;
-    activeSession.value.revision = 3;
-    input.value = "draft before failed retry";
-  
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited no retry")).resolves.toBe(false);
+    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited after conflict")).resolves.toBe(false);
   
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
-    expect(fetchSessionDetail).toHaveBeenCalledTimes(1);
+    expect(replaceSessionTurnApi.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedAggregateVersion: 3 }));
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
-    expect(activeSession.value.messages).toEqual([stoppedUser]);
-    expect(input.value).toBe("draft before failed retry");
+    expect(appendMessage).not.toHaveBeenCalled();
   });
 
   it("resendMonotonicMessage ignores stopped assistant returned with the fresh replacement turn and continues streaming", async () => {

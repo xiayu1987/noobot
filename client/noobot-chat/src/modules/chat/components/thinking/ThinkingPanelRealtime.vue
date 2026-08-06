@@ -19,6 +19,7 @@ import {
   summarizeToolLogWindow,
 } from "../../../debug/loggers/toolLogWindowDebugLogger.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
+import { toolLogDetailKey } from "../../model/toolLogIdentity.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },
@@ -54,6 +55,8 @@ const executionLogSignature = computed(() => {
   ].join("|");
 });
 function executionLogKey(logItem = {}) {
+  const toolKey = toolLogDetailKey(logItem);
+  if (toolKey) return toolKey;
   const eventId = String(logItem.eventId || "").trim();
   return eventId ? `event:${eventId}` : "";
 }

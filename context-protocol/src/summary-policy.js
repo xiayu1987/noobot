@@ -14,9 +14,16 @@ import {
   resolveMessageId,
   shouldMarkCurrentTurnSummarizedByPolicy,
 } from "./message-policy.js";
+import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "./injected-message-types.js";
 
 export const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
 export const DEFAULT_TASK_CHECK_TOOL_NAME = "task_check";
+
+const summaryCheckpointControlTypes = new Set(SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES);
+
+export function isSummaryCheckpointControlMessage(message = {}) {
+  return summaryCheckpointControlTypes.has(readMessageField(message, "noobotInternalMessageType"));
+}
 
 function collectLatestInjectedMessageIndexes(messages = []) {
   const latest = new Map();
@@ -165,6 +172,7 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
   } = {},
 ) {
   const source = Array.isArray(messages) ? messages : [];
+  if (isSummaryCheckpointControlMessage(message)) return true;
   const injected = isInjectedMessage(message, policyOptions);
   const latestInjected = latestInjectedIndexes instanceof Set
     ? latestInjectedIndexes
@@ -321,6 +329,12 @@ export function collectScopedMessagesToSummarize(
   const selectedMessages = [];
   for (let index = 0; index < limit; index += 1) {
     const message = source[index];
+    if (isSummaryCheckpointControlMessage(message)) {
+      if (message?.summarized !== true && message?.lc_kwargs?.summarized !== true) {
+        selectedMessages.push(message);
+      }
+      continue;
+    }
     const injected = isInjectedMessage(message, policyOptions);
     if (injected) {
       if (isPreservedMessage(message, preservedInjected)) continue;

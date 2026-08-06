@@ -19,6 +19,7 @@ import {
   PLUGIN_MODEL_HEADER_KEY,
 } from "../headers/plugin-headers.js";
 import { createObservedChatModel } from "../invoke/observed-chat-model.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 
 const DEFAULT_MAIN_FLOW = "agent.main";
 const DEFAULT_MAIN_PURPOSE = "main_agent";
@@ -454,6 +455,10 @@ export function createChatModelFromSpec(modelSpec, options = {}) {
       flow: configuration.defaultHeaders[PLUGIN_MODEL_HEADER_KEY.FLOW],
       purpose: configuration.defaultHeaders[PLUGIN_MODEL_HEADER_KEY.PURPOSE],
       domain: configuration.defaultHeaders[PLUGIN_MODEL_HEADER_KEY.DOMAIN],
+      contextSequencePolicy: String(
+        options?.invocation?.contextSequencePolicy ||
+          MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+      ).trim(),
     },
   });
 }

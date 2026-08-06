@@ -68,19 +68,82 @@ function stringifyToolDetail(value) {
   }
 }
 
+function parseStructuredValue(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function compactSummaryValue(value, maxLength = 96) {
+  const normalized = String(value ?? "").replaceAll(/\s+/g, " ").trim();
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
+}
+
+function fileSummary(value = {}) {
+  const candidate = value.filePath || value.path || value.fileName || value.resolvedPath || "";
+  return compactSummaryValue(candidate);
+}
+
+export function buildToolOperationSummary(tool = "", detail, { result = false } = {}) {
+  const toolName = text(tool) || "tool";
+  const value = parseStructuredValue(detail);
+  let subject = "";
+  if (["write_file", "read_file"].includes(toolName)) {
+    subject = fileSummary(value);
+  } else if (toolName === "patch_file") {
+    const changedFiles = Array.isArray(value.changedFiles) ? value.changedFiles : [];
+    subject = compactSummaryValue(changedFiles[0] || value.root || "");
+  } else if (["execute_script", "execute_command"].includes(toolName)) {
+    subject = compactSummaryValue(value.command || value.script || value.stdout || "");
+  } else if (toolName === "search") {
+    const matchCount = Array.isArray(value.matches) ? `${value.matches.length} matches` : "";
+    subject = compactSummaryValue([value.query, value.path || value.source, matchCount].filter(Boolean).join(" · "));
+  } else if (toolName === "list_skills") {
+    const itemCount = Array.isArray(value.items) ? `${value.items.length} items` : "";
+    subject = compactSummaryValue(value.parentSkill || itemCount);
+  } else if (toolName === "user_interaction") {
+    subject = compactSummaryValue(value.content || value.message || "");
+  } else {
+    subject = fileSummary(value) || compactSummaryValue(
+      value.command || value.query || value.content || value.message || value.stdout || "",
+    );
+  }
+  if (!subject && result && typeof detail === "string" && !Object.keys(value).length) {
+    const rawResult = compactSummaryValue(detail);
+    if (rawResult && rawResult !== toolName) subject = rawResult;
+  }
+  return subject ? `${toolName} · ${subject}` : toolName;
+}
+
 function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
-  const log = facet?.log;
-  if (!log) return null;
+  if (!facet || typeof facet !== "object") return null;
   const isCall = kind === "call";
   const canonicalDetail = isCall ? entry?.args : entry?.result;
   return {
-    ...log,
     eventId: text(facet.eventId),
     event: isCall ? "tool_call" : "tool_result",
     type: isCall ? "tool_call" : "tool_result",
+    eventType: isCall ? MESSAGE_EVENT_TYPE.TOOL_CALL_START : MESSAGE_EVENT_TYPE.TOOL_CALL_END,
+    category: "tool",
     toolCallId: text(entry.toolCallId),
     tool: text(entry.tool),
+    text: buildToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall }),
     ...(isCall ? { args: canonicalDetail } : { result: canonicalDetail }),
+    ...(isCall ? {} : {
+      success: entry.success !== false,
+      status: entry.success === false ? "failed" : "completed",
+    }),
+    ...(Array.isArray(facet.attachments) && facet.attachments.length
+      ? { attachments: facet.attachments }
+      : {}),
+    ...(Array.isArray(facet.writtenFiles) && facet.writtenFiles.length
+      ? { writtenFiles: facet.writtenFiles }
+      : {}),
     detailText: stringifyToolDetail(canonicalDetail),
     sequence: sequenceOf(facet),
     sequenceScopeId: text(facet.sequenceScopeId),
@@ -90,7 +153,7 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
   };
 }
 
-export function reduceToolTimeline(timeline = [], envelope = {}, displayLog = null) {
+export function reduceToolTimeline(timeline = [], envelope = {}) {
   if (![MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(envelope?.eventType)) {
     return Array.isArray(timeline) ? timeline : [];
   }
@@ -108,17 +171,15 @@ export function reduceToolTimeline(timeline = [], envelope = {}, displayLog = nu
     authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
     sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
     timestamp: text(envelope.timestamp),
-    log: displayLog || undefined,
+    sessionId: text(envelope.sessionId),
+    dialogProcessId: text(envelope.dialogProcessId),
+    turnScopeId: text(envelope.turnScopeId),
     ...(Array.isArray(envelope?.attachments) && envelope.attachments.length
       ? { attachments: envelope.attachments }
-      : Array.isArray(displayLog?.attachments) && displayLog.attachments.length
-        ? { attachments: displayLog.attachments }
-        : {}),
+      : {}),
     ...(Array.isArray(envelope?.writtenFiles) && envelope.writtenFiles.length
       ? { writtenFiles: envelope.writtenFiles }
-      : Array.isArray(displayLog?.writtenFiles) && displayLog.writtenFiles.length
-        ? { writtenFiles: displayLog.writtenFiles }
-        : {}),
+      : {}),
   };
   const updated = envelope.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START
     ? { ...current, tool: text(envelope.tool || toolCall?.name || current.tool), args: toolCall?.args ?? envelope.args ?? current.args, call: eventFact, status: current.result ? "completed" : "running" }
@@ -135,10 +196,10 @@ export function selectToolTimelineLogs(message = {}, { completedOnly = false } =
   const timeline = selectToolTimeline(message);
   const logs = [];
   for (const item of timeline) {
-    if (!completedOnly && item.call?.log) {
+    if (!completedOnly && item.call) {
       logs.push(projectToolTimelineLog({ entry: item, facet: item.call, kind: "call" }));
     }
-    if (item.resultEvent?.log) {
+    if (item.resultEvent) {
       logs.push(projectToolTimelineLog({ entry: item, facet: item.resultEvent, kind: "result" }));
     }
   }
@@ -148,7 +209,7 @@ export function selectToolTimelineLogs(message = {}, { completedOnly = false } =
 export function selectCompletedToolArtifacts(message = {}) {
   const completedEntries = selectToolTimeline(message).filter((item) => item?.resultEvent);
   const logs = completedEntries
-    .map((item) => item.resultEvent?.log)
+    .map((item) => projectToolTimelineLog({ entry: item, facet: item.resultEvent, kind: "result" }))
     .filter(Boolean);
   return {
     resultCount: completedEntries.length,
@@ -156,14 +217,12 @@ export function selectCompletedToolArtifacts(message = {}) {
     attachments: completedEntries.flatMap((item) => {
       const eventAttachments = item?.resultEvent?.attachments;
       if (Array.isArray(eventAttachments) && eventAttachments.length) return eventAttachments;
-      const logAttachments = item?.resultEvent?.log?.attachments;
-      return Array.isArray(logAttachments) ? logAttachments : [];
+      return [];
     }),
     writtenFiles: completedEntries.flatMap((item) => {
       const eventWrittenFiles = item?.resultEvent?.writtenFiles;
       if (Array.isArray(eventWrittenFiles) && eventWrittenFiles.length) return eventWrittenFiles;
-      const logWrittenFiles = item?.resultEvent?.log?.writtenFiles;
-      return Array.isArray(logWrittenFiles) ? logWrittenFiles : [];
+      return [];
     }),
   };
 }
@@ -185,16 +244,19 @@ export function selectToolTimeline(message = {}) {
 }
 
 export function selectLatestTaskCheckReceipt(message = {}) {
-  const entries = selectToolTimeline(message);
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index];
+  return selectTaskCheckReceipts(message).at(-1) || null;
+}
+
+export function selectTaskCheckReceipts(message = {}) {
+  const receipts = [];
+  for (const entry of selectToolTimeline(message)) {
     if (text(entry?.tool) !== "task_check" || !entry?.resultEvent) continue;
-    if (typeof entry.result !== "string") return null;
+    if (typeof entry.result !== "string") continue;
     let payload;
     try {
       payload = JSON.parse(entry.result);
     } catch {
-      return null;
+      continue;
     }
     if (
       !payload ||
@@ -202,14 +264,14 @@ export function selectLatestTaskCheckReceipt(message = {}) {
       Array.isArray(payload) ||
       payload.toolName !== "task_check" ||
       payload.protocolVersion !== 1
-    ) return null;
+    ) continue;
     try {
-      return parseTaskCheckReceipt(payload.summary);
+      receipts.push(parseTaskCheckReceipt(payload.summary));
     } catch {
-      return null;
+      continue;
     }
   }
-  return null;
+  return receipts;
 }
 
 export function mergeToolTimelines(...timelines) {

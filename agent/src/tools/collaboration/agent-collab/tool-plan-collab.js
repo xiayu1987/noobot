@@ -22,6 +22,7 @@ import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 
 async function recordPlanJsonParseFallback({ runtime, event, error, hasMarkdownBlock }) {
   const userId = String(runtime?.userId || "").trim();
@@ -87,6 +88,7 @@ export function createPlanMultiTaskCollaborationTool({
               flow: "tool.agent_collab",
               purpose: "collaboration_plan",
               domain: "collaboration",
+              contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
             },
           });
         }
@@ -102,6 +104,7 @@ export function createPlanMultiTaskCollaborationTool({
             flow: "tool.agent_collab",
             purpose: "collaboration_plan",
             domain: "collaboration",
+            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
           },
         });
       }

@@ -190,6 +190,10 @@ export async function applyTurnLifecycleEvent({
     session.updatedAt = this.now();
     if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
     await this.sessionRepo.save(userId, session, resolvedParentSessionId, { expectedAggregateVersion: actualVersion, persistenceContext });
+    // The display summary is the refresh read model. Persist it from the same
+    // authoritative session state so lifecycle terminal transitions cannot
+    // leave a stale processing snapshot behind.
+    await this.sessionRepo.writeSessionDisplaySummary(userId, session, { persistenceContext });
     return { ...result, session, turnStatus: result.terminalMaterialization?.turnStatus || null, aggregateVersion: resolveAggregateVersion(session) };
   }, parentSessionId, persistenceContext);
 }

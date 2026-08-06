@@ -81,14 +81,16 @@ export function useThinkingRuntime(props, getRuntimeView) {
 
   watch(
     () => isThinkingRuntimeRunning(props.messageItem),
-    (running) => {
+    (running, wasRunning) => {
       if (running) {
         startTimer();
         setTurnThinkingOpenNames(props.messageItem, ["thinking-panel"]);
       } else {
         stopTimer();
         const runtime = getRuntimeView(props.messageItem);
-        if (runtime.terminal) setTurnThinkingOpenNames(props.messageItem, []);
+        if (wasRunning === true && runtime.terminal) {
+          setTurnThinkingOpenNames(props.messageItem, []);
+        }
       }
     },
     { immediate: true },

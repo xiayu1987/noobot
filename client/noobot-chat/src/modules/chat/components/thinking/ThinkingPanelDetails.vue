@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import {
   BaseEmptyHint,
   BaseMetaLabel,
@@ -21,7 +21,7 @@ const props = defineProps({
   groupedToolLogs: { type: Array, default: () => [] },
   thinkingContentItems: { type: Array, default: () => [] },
   detailCount: { type: Number, default: 0 },
-  taskCheckReceipt: { type: Object, default: null },
+  taskCheckReceipts: { type: Array, default: () => [] },
   getTreePrefix: { type: Function, required: true },
   getDetailKey: { type: Function, required: true },
   isExpanded: { type: Function, required: true },
@@ -42,6 +42,19 @@ const rendererProjectionSignature = computed(() => [
     String(item.content || "").length,
   ].join(":")).join("|"),
 ].join("::"));
+const taskCheckContents = computed(() => props.taskCheckReceipts.map((receipt) => String(receipt.abstract || "").trim()).filter(Boolean));
+const taskCheckSummary = computed(() => taskCheckContents.value.join("\n\n"));
+const expandedDetailKeys = ref(new Set());
+function isDetailExpanded(detailKey = "") {
+  return Boolean(detailKey) && expandedDetailKeys.value.has(detailKey);
+}
+function toggleDetail(detailKey = "") {
+  if (!detailKey) return;
+  const next = new Set(expandedDetailKeys.value);
+  if (next.has(detailKey)) next.delete(detailKey);
+  else next.add(detailKey);
+  expandedDetailKeys.value = next;
+}
 function formatThinkingContentTitle(item = {}, index = 0) {
   const source = String(item?.source || item?.event || item?.activityKind || "thinking").trim();
   const timestamp = String(item?.timestamp || item?.timelineTimestamp || "").trim();
@@ -81,16 +94,7 @@ watch(rendererProjectionSignature, () => {
 </script>
 <template>
   <BaseTabPanelBody class="thinking-details-panel"
-    ><div
-      v-if="taskCheckReceipt"
-      class="thinking-task-check-block"
-      data-thinking-block="task-check"
-    >
-      <BaseMetaLabel
-        class="thinking-task-check-title"
-        :text="translate('message.taskCheck')"
-      /><BaseNoteBlock :content="taskCheckReceipt.abstract" />
-    </div><el-tabs class="thinking-details-tabs"
+    ><el-tabs class="thinking-details-tabs"
         ><el-tab-pane
           :label="translate('message.executionRecords', { count: detailCount })"
           ><BaseTabPanelBody
@@ -118,11 +122,11 @@ watch(rendererProjectionSignature, () => {
                   :tool="true"
                   :expandable="Boolean(getDetailKey(group, item, ii) && item.detailText)"
                   :expanded="
-                    isExpanded(messageItem, getDetailKey(group, item, ii))
+                    isDetailExpanded(getDetailKey(group, item, ii))
                   "
                   :title-text="item.text || ''"
                   @toggle="
-                    toggleExpanded(messageItem, getDetailKey(group, item, ii))
+                    toggleDetail(getDetailKey(group, item, ii))
                   "
                 />
               </div>
@@ -140,7 +144,16 @@ watch(rendererProjectionSignature, () => {
           "
           ><BaseTabPanelBody
             class="thinking-details-scroll-body thinking-details-content-body"
-            ><BaseNoteBlock
+            ><div
+              v-if="taskCheckContents.length"
+              class="thinking-task-check-block"
+              data-thinking-block="task-check"
+            >
+              <BaseNoteBlock
+                :title="translate('message.taskCheck')"
+                :content="taskCheckSummary"
+              />
+            </div><BaseNoteBlock
               v-for="(item, index) in thinkingContentItems"
               :key="`thinking-content-${String(item.eventId || index)}`"
               :title="formatThinkingContentTitle(item, index)"

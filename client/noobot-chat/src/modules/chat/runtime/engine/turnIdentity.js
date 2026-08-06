@@ -20,7 +20,7 @@ export function resolveTurnIdentity(value = {}, fallback = {}) {
   const event = value?.messageEvent || value?.event || {};
   return createTurnIdentity({
     sessionId: value?.sessionId || event?.sessionId || fallback?.sessionId,
-    turnScopeId: value?.turnScopeId || event?.turnScopeId || fallback?.turnScopeId,
+    turnScopeId: value?.turnScopeId || value?.statusTurnScopeId || event?.turnScopeId || fallback?.turnScopeId,
     dialogProcessId: value?.dialogProcessId || event?.dialogProcessId || fallback?.dialogProcessId,
   });
 }

@@ -16,6 +16,9 @@ test("@core PBE-007 带附件停止后继续", async ({ noobot, protocolCapture 
     previous: send, prompt: uniquePrompt(testInfo, "continue using the original attachment") });
   expect(continued.input.attachments).toEqual([]);
   const snapshots = await assertPersistedSnapshots(noobot.userId, noobot.sessionId, 2);
-  expect(snapshots[0]).toMatchObject(send.identity);
+  expect(snapshots).toEqual(expect.arrayContaining([
+    expect.objectContaining(send.identity),
+    expect.objectContaining(continued.identity),
+  ]));
   snapshots.forEach((snapshot) => expect(JSON.stringify(snapshot)).toContain(file.name));
 });

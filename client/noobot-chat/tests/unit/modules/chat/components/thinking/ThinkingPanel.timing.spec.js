@@ -133,6 +133,20 @@ describe("ThinkingPanel runtime timing", () => {
     clearTurnUiState(message);
   });
 
+  it("preserves an explicit expansion when a completed panel is remounted", () => {
+    const message = thinkingMessage({ turnScopeId: "turn-completed-remount" });
+    clearTurnUiState(message);
+    setTurnThinkingOpenNames(message, ["thinking-panel"]);
+
+    const wrapper = mountThinkingPanel(message, {
+      runtime: runtime({ running: false, terminal: "completed", phase: "completed" }),
+    });
+
+    expect(getTurnUiState(message).thinkingOpenNames).toEqual(["thinking-panel"]);
+    wrapper.unmount();
+    clearTurnUiState(message);
+  });
+
   it("shows an unknown duration when Runtime Store has no timestamps", () => {
     const wrapper = mountThinkingPanel(thinkingMessage(), { runtime: runtime({ terminal: true, phase: "completed" }) });
     expect(wrapper.text()).toContain("--:--");

@@ -18,8 +18,9 @@ describe("SessionListPanel", () => {
   it("exposes complete session information through the custom hover popover only", () => {
     expect(sessionListPanelSource).toContain('popper-class="session-hover-popover"');
     expect(sessionListPanelSource).toContain(':disabled="isMobile"');
-    expect(sessionListPanelSource).toContain('translate("common.sessionBackendId")');
-    expect(sessionListPanelSource).toContain('translate("common.sessionLocalId")');
+    expect(sessionListPanelSource).toContain('translate("common.sessionId")');
+    expect(sessionListPanelSource).not.toContain("sessionBackendId");
+    expect(sessionListPanelSource).not.toContain("sessionLocalId");
     expect(sessionListPanelSource).not.toContain("function getSessionHoverTitle(sessionItem = {})");
     expect(sessionListPanelSource).not.toContain(':title="getSessionHoverTitle(sessionItem)"');
   });

@@ -282,9 +282,9 @@ describe("detailMessages", () => {
             resultEvent: {
               eventId: "completed-tool-result", sequence: 1, sequenceScopeId: "message-1",
               sequenceDomain: "message-event", authority: "authoritative",
-              log: { event: "tool_result", type: "tool_result", attachments: [
+              attachments: [
                 { attachmentId: "completed-tool-1", name: "completed-tool.md" },
-              ] },
+              ],
             },
           }],
         },

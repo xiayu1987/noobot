@@ -5,6 +5,7 @@
  */
 import { reactive } from "vue";
 import { createTurnKey, parseTurnKey, resolveTurnIdentity } from "./turnIdentity.js";
+import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 
 const states = reactive(Object.create(null));
 
@@ -30,7 +31,14 @@ export function getTurnUiState(value = {}) {
 
 export function setTurnThinkingOpenNames(value = {}, names = []) {
   const state = getTurnUiState(value);
-  if (state) state.thinkingOpenNames = Array.isArray(names) ? [...names] : [];
+  if (!state) return;
+  const previous = [...state.thinkingOpenNames];
+  state.thinkingOpenNames = Array.isArray(names) ? [...names] : [];
+  logStateMachineDebug("frontend.turnUi.thinkingOpenNamesChanged", () => ({
+    identity: resolveTurnIdentity(value),
+    previous,
+    current: [...state.thinkingOpenNames],
+  }));
 }
 
 export function setTurnAssistantContentExpanded(value = {}, expanded = false) {

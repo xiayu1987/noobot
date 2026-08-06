@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs";
-import path from "node:path";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 
 export const MODEL_CALL_EXPECTATION = Object.freeze({
   REQUIRED: "required",
@@ -12,17 +12,16 @@ export const MODEL_CALL_EXPECTATION = Object.freeze({
 });
 
 const requiredCases = [
-  2, 3, 4,
-  6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+  2, 3,
+  6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
   21, 22, 23, 24, 25,
   27, 28, 29,
   31,
   32,
-  33, 34, 35,
+  33, 34, 35, 36,
 ];
 
 export const MODEL_OBSERVATION_POLICY = Object.freeze(Object.fromEntries([
-  ["PBE-001", MODEL_CALL_EXPECTATION.FORBIDDEN],
   ...requiredCases.map((number) => [
     `PBE-${String(number).padStart(3, "0")}`,
     MODEL_CALL_EXPECTATION.REQUIRED,

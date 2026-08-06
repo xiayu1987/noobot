@@ -86,10 +86,8 @@ client/noobot-chat/tests/e2e/protocol/
 │   ├── workflow-assertions.js
 │   └── log-assertions.js
 ├── specs/
-│   ├── 001-connect-session.spec.js
 │   ├── 002-send-no-attachment.spec.js
 │   ├── 003-send-with-attachment.spec.js
-│   ├── 004-stop-and-snapshot.spec.js
 │   ├── 006-continue-from-snapshot.spec.js
 │   ├── 007-attachment-continue.spec.js
 │   ├── 008-repeated-stop-continue.spec.js
@@ -284,25 +282,11 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 ## 5. 浏览器自动化测试用例
 
-### PBE-001：连接并创建独立 Session
-
-步骤：
-
-1. 生成唯一测试 run ID。
-2. 打开 Noobot UI。
-3. fixture 在运行时读取认证信息并完成连接。
-4. 等待 `Connection established`。
-5. 通过 UI 创建新 Session。
-6. 记录 URL、页面 Session ID、WebSocket 和 HTTP 证据。
-7. 截图。
-
-断言：收到 `transport_ready`；Session ID 非空；Session 目录存在；浏览器、HTTP 和持久化身份一致；控制台无 error；不存在旧 reconnect cursor 字段。
-
 ### PBE-002：无附件普通发送
 
-步骤：选择 Harness，输入唯一消息，点击发送，捕获 `turn.send`，等待 Stop 出现并等待自然完成。
+步骤：生成唯一测试 run ID，打开 Noobot UI，完成连接并通过 UI 创建新 Session；选择 Harness，输入唯一消息，点击发送，捕获 `turn.send`，等待 Stop 出现并等待自然完成。
 
-断言：只有一个 `turn.send`；`input.attachments` 为 `[]`；生命周期自然完成；UI 不再 sending；Session 只有一个对应 user turn；Harness run 为 success；没有停止快照。
+断言：收到 `transport_ready`；Session ID 非空且浏览器、HTTP 和持久化身份一致；只有一个 `turn.send`；`input.attachments` 为 `[]`；生命周期自然完成；UI 不再 sending；Session 只有一个对应 user turn；Harness run 为 success；没有停止快照；控制台无 error；不存在旧 reconnect cursor 字段。
 
 ### PBE-003：带附件普通发送
 
@@ -310,17 +294,11 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：命令、Service、Session 和 Model Context 附件数均为 1；名称、MIME、大小和 SHA256 一致；持久化文件存在；Harness Context Snapshot 包含规范附件元数据；没有第二个 canonical attachment。
 
-### PBE-004：无附件运行中停止并保存快照
-
-步骤：发送持续执行请求，等待 `processing_started`，点击 Stop，等待 `stop_completed`，读取快照。
-
-断言：Stop identity 和 revision 正确；Stop 只发一次；快照身份一致；所有 block 为 plain object；Session 为 `user_stopped`；Harness 为 `abort`；不存在 `socket_close` 或 Context envelope 错误。
-
 ### PBE-006：无附件停止后继续
 
-步骤：执行 PBE-004，在 Continue 输入框输入唯一提示，点击 Continue，等待新 run 启动后再次 Stop。
+步骤：发送持续执行请求，等待 `processing_started`，点击 Stop，等待 `stop_completed` 并读取首个快照；在 Continue 输入框输入唯一提示，点击 Continue，等待新 run 启动后再次 Stop。
 
-断言：Continue 使用新的 command/dialog/turn identity；`continuation` 精确引用旧停止轮次；`input.attachments` 为 `[]`；恢复旧快照内容；第二次 Stop 只停止新 run；不出现 plain-object 错误。
+断言：首次 Stop identity 和 revision 正确且只发一次；首个快照身份一致、所有 block 为 plain object；Continue 使用新的 command/dialog/turn identity；`continuation` 精确引用旧停止轮次；`input.attachments` 为 `[]`；恢复旧快照内容；第二次 Stop 只停止新 run；Session 为 `user_stopped`；不存在 `socket_close` 或 Context envelope 错误。
 
 ### PBE-007：带附件停止后继续
 
@@ -387,12 +365,6 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 步骤：开启 Harness trace、Context Snapshot 和 prompts，发送会触发工具调用的请求，工具开始后 Stop，读取 Harness、Agent Context debug 和模型快照。
 
 断言：非模型 Hook 不携带 Model Context；`before_llm_call` 使用 Model Context v2；bindings 不进入 envelope；Harness mutation 使用规范 Context 命令；所有 block 为 plain object；prompt 只有一个权威存储。
-
-### PBE-018：Harness 辅助模型连接
-
-步骤：配置 `planningGuidanceMode: separate_model`，发送会触发 planning/guidance 的请求，捕获辅助模型和主模型调用。
-
-断言：辅助调用具有明确 purpose；主模型与辅助模型身份可区分；capability trace start/end 成对；Harness 输出通过规范 Context mutation 注入；不得伪装成原始用户消息。
 
 ### PBE-021：自然完成后刷新 Session
 
@@ -468,6 +440,30 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：三轮均使用独立 Turn identity；插件选择严格为 `workflow+harness -> [] -> workflow+harness`；两个 Workflow 根生命周期均携带 executionId 并自然完成；普通消息由根 Session 模型处理，两个 Workflow 分别产生不同子 Session 模型调用；每条模型调用必须来自 `authority=model_invoke_port`，消息的角色计数、dialog 分组、messageId 缺失数、content hash、预览和截断数量闭合。
 
+### PBE-033：Harness 低轮次完整流程
+
+步骤：从 Harness UI 设置 guidance analysis 强度并启用 planning/acceptance；测试通过正式 `update:pluginModelConfig` 参数边界设置仅供 E2E 使用的低轮次阈值，再驱动五步依赖工具链，同时捕获辅助模型和主模型调用。生产界面不展示 summary、plan update 和 phase acceptance 阈值。
+
+断言：transport 中只有 `pluginModelConfig.harness` 的正式字段；planning、guidance analysis、plan revision/refinement、summary、phase acceptance、semantic validation 和 review 都形成 decision/execution 事实；阈值事件记录 `thresholdSource=runtime`；Harness summary 生成后唯一 Session checkpoint、消息 `summarized` 标记和 capability 模型观测闭合；辅助调用具有明确 purpose，主模型与辅助模型身份可区分，capability trace start/end 成对；主业务严格执行五次 `execute_script`，不得在小结后重做计算链。
+
+### PBE-034：主 Agent 低轮次阶段小结
+
+步骤：不选择 Harness，通过核心 Composer 正式参数边界设置仅供 E2E 使用的低轮次主流程小结阈值，发送三步依赖工具链；阈值达到后由主流程注入阶段小结要求，小结后继续完成第三步。生产界面不展示该阈值。
+
+断言：`phase_summary_required`、`summary_checkpoint_committed` 和 `turn.completed` 依次发生；唯一 checkpoint receipt 与 Turn journal 的 `summarized=true` 消息对应且不拆分 tool call/result；checkpoint 后的主模型输入不再含已小结消息，阶段小结 marker 不累积；全程严格产生三次业务工具调用和一次 `task_summary`。
+
+### PBE-035：周期任务检查
+
+步骤：测试通过 Composer 正式参数边界降低 `taskCheckLoopTurns` 和 `phaseSummaryLoopTurns`，执行五步顺序工具链，再发送一条依赖上一轮结果的普通消息。生产界面不显示任何主流程阈值控件。
+
+断言：`task_check_required` 每次只对应一个模型输入 marker 且下一轮不残留；`task_check` 输入遵循 `NOOBOT_TASK_CHECK/1`，结果只含协议回执且不保存附件；最后一次 checkpoint 前的最新检查 call/result 不被标记为已小结，思考面板展示本轮最新检查摘要，下一轮 history 仍包含该工具结果。
+
+### PBE-036：全工具、实时思考明细与交互结果闭环
+
+步骤：启用 Harness 真实 guidance analysis 并关闭 planning/acceptance，顺序调用本场景声明的安全业务工具集合 `write_file/read_file/search/patch_file(dryRun)/execute_script/list_skills/user_interaction`；持续采样实时思考面板，在交互卡片填写固定必填值，完成后打开思考详情。模型/provider 未产生工具调用前文本时不得伪造主模型思考内容。
+
+断言：execution-events 中工具集合严格相等，调用参数、成功结果和 `toolCallId` 一一闭合；实时思考内容至少发生两次变化，分析与执行区域都有内容；实时面板最近 10 条执行日志窗口内的调用/返回均可展开，详情面板完整 7 对调用/返回均可展开且明细非空；思考内容实时展示；交互标题、字段、提交值、工具返回和最终模型回答闭合。
+
 ### 模型调用唯一观测边界
 
 模型输入观测发生在模型 factory 返回的 observed model 端口，并紧邻底层 provider `invoke()`。
@@ -541,9 +537,9 @@ npm run test:e2e:protocol:full
 
 | 级别 | 用例 |
 | --- | --- |
-| Smoke | PBE-001、002、004、006 |
-| Core | PBE-003、007～014、016～018、021、022、027、029、030 |
-| Full-only | PBE-015、023～026、028、031～034 |
+| Smoke | PBE-002、006 |
+| Core | PBE-003、007～014、016、017、021、022、027、029、030 |
+| Full-only | PBE-015、023～026、028、031～036 |
 
 ## 8. CI 失败产物要求
 

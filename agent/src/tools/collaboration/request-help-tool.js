@@ -25,6 +25,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 
 export const REQUEST_HELP_TOOL_NAME = TOOL_NAME.REQUEST_HELP;
 const DEFAULT_HELP_SERVICES = [];
@@ -269,6 +270,7 @@ async function invokeHelpModel({
           flow: "tool.request_help",
           purpose: "collaboration_help",
           domain: "collaboration",
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
         },
       })
     : createChatModel({
@@ -280,6 +282,7 @@ async function invokeHelpModel({
           flow: "tool.request_help",
           purpose: "collaboration_help",
           domain: "collaboration",
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
         },
       });
   const response = await llm.invoke([new HumanMessage(helpContent)], {

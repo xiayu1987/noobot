@@ -227,7 +227,8 @@ test("session save refreshes the display projection with live activity timeline"
     assert.equal(display.messages.length, 1);
     assert.equal(display.messages[0].presentationMessageId, "presentation-live");
     assert.equal(display.messages[0].thinkingDetailCount, 1);
-    assert.equal(display.messages[0].activityTimeline, undefined);
+    assert.equal(display.messages[0].activityTimeline.length, 1);
+    assert.equal(display.messages[0].activityTimeline[0].eventId, "guidance-analysis:live");
   });
 });
 
@@ -605,7 +606,7 @@ test("session display summary does not duplicate an active Turn with persisted a
   assert.equal(summary.messages.length, 1);
   assert.equal(summary.messages[0].messageId, "presentation-active");
   assert.equal(summary.messages[0].thinkingDetailCount, 1);
-  assert.equal(summary.messages[0].activityTimeline, undefined);
+  assert.equal(summary.messages[0].activityTimeline.length, 1);
   assert.notEqual(summary.messages[0].turnPlaceholder, true);
 });
 
@@ -653,8 +654,8 @@ test("session display summary projects one explicit assistant presentation from 
 
   assert.equal(summary.messages.length, 1);
   assert.equal(summary.messages[0].thinkingDetailCount, 2);
-  assert.equal(summary.messages[0].activityTimeline, undefined);
-  assert.equal(summary.messages[0].toolTimeline, undefined);
+  assert.equal(summary.messages[0].activityTimeline.length, 1);
+  assert.equal(summary.messages[0].toolTimeline.length, 1);
   assert.deepEqual(
     (({ id, messageId, messageUid, sourceMessageId, sourceMessageUid, content }) => ({
       id, messageId, messageUid, sourceMessageId, sourceMessageUid, content,
@@ -668,6 +669,63 @@ test("session display summary projects one explicit assistant presentation from 
       content: "final answer",
     },
   );
+});
+
+test("active Turn summary carries its authoritative thinking timelines", () => {
+  const turnScopeId = "client-turn:active-timeline";
+  const presentationMessageId = "presentation-active-timeline";
+  const summary = buildSessionDisplaySummary({
+    sessionId: "active-timeline-session",
+    messages: [{
+      role: "assistant",
+      type: "tool_call",
+      chatPresentation: false,
+      messageId: "source-tool-message",
+      presentationMessageId,
+      turnScopeId,
+      toolTimeline: [{
+        key: "call:active-tool",
+        toolCallId: "active-tool",
+        tool: "read_file",
+        call: { eventId: "tool-start" },
+      }],
+      activityTimeline: [{ eventId: "thinking-active", event: "thinking" }],
+    }, {
+      role: "assistant",
+      type: "tool_call",
+      chatPresentation: false,
+      messageId: "source-tool-message-2",
+      presentationMessageId,
+      turnScopeId,
+      toolTimeline: [{
+        key: "call:active-tool-2",
+        toolCallId: "active-tool-2",
+        tool: "search",
+        call: { eventId: "tool-start-2" },
+      }],
+      activityTimeline: [{ eventId: "thinking-active-2", event: "thinking" }],
+    }],
+    turnLifecycle: {
+      activeTurnScopeId: turnScopeId,
+      sequence: 1,
+      turns: {
+        [turnScopeId]: {
+          sessionId: "active-timeline-session",
+          turnScopeId,
+          dialogProcessId: "dialog-active-timeline",
+          presentationMessageId,
+          state: "processing",
+        },
+      },
+    },
+  });
+  const activePresentation = summary.messages.find((message) =>
+    message.presentationMessageId === presentationMessageId,
+  );
+  assert.equal(activePresentation.toolTimeline.length, 2);
+  assert.equal(activePresentation.activityTimeline.length, 2);
+  assert.equal(activePresentation.hasThinkingDetails, true);
+  assert.equal(activePresentation.thinkingDetailCount, 4);
 });
 
 
@@ -939,8 +997,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const assistantMessage = summary.messages.find((item) => item.id === "a1");
     assert.equal(assistantMessage.toolTimeline.length, 1);
     assert.equal(assistantMessage.toolTimeline[0].status, "completed");
-    assert.equal(assistantMessage.toolTimeline[0].resultEvent.log.type, "tool_result");
-    assert.equal(assistantMessage.toolTimeline[0].resultEvent.log.turnScopeId, "turn-scope-u1");
+    assert.equal("log" in assistantMessage.toolTimeline[0].resultEvent, false);
+    assert.equal(assistantMessage.toolTimeline[0].resultEvent.turnScopeId, "turn-scope-u1");
     assert.deepEqual(assistantMessage.toolTimeline[0].resultEvent.writtenFiles, [{
       toolName: "write_file",
       resolvedPath: "/workspace/u1/project/a.txt",

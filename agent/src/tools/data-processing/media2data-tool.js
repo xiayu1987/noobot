@@ -31,6 +31,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { emitEvent } from "../../events/index.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -633,6 +634,7 @@ export function createMedia2DataTool({ agentContext }) {
             flow: "tool.media2data",
             purpose: "media_extraction",
             domain: "data_processing",
+            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
           },
         },
       });

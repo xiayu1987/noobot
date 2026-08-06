@@ -407,6 +407,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
       else assert.equal(expectedAggregateVersion, Number(persisted?.aggregateVersion ?? 0));
       persisted = structuredClone(normalizeSessionEntity(next, { now: fixedNow }));
     },
+    async writeSessionDisplaySummary() {},
   };
   const messageService = new SessionMessageService({ sessionRepo: repo, now: fixedNow });
   const { deps } = createDeps({

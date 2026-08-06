@@ -172,13 +172,13 @@ test("summary notifications use the existing main-flow command channel", () => {
 
   mainFlowControl.requestMainFlowSummaryCheckpoint(runtime, {
     source: "task_summary",
-    summarizedMessageIds: ["m1", "m2"],
+    summarizedMessageIds: ["m1", "m2", "phase-prompt"],
   });
 
   assert.deepEqual(mainFlowControl.peekMainFlowSummaryCheckpoint(runtime), {
     action: "summary_checkpoint",
     source: "task_summary",
-    summarizedMessageIds: ["m1", "m2"],
+    summarizedMessageIds: ["m1", "m2", "phase-prompt"],
   });
   assert.equal(mainFlowControl.acknowledgeMainFlowSummaryCheckpoint(runtime), true);
   assert.equal(runtime.systemRuntime.mainFlowControlInstructions, undefined);

@@ -13,6 +13,7 @@ import {
   LOCALE,
   TASK_ACCEPTANCE_TOOL_NAME,
   appendCapabilityLog,
+  deferCapabilityLogs,
   ensureHarnessBucket,
   translateI18nText,
 } from "./deps.js";
@@ -35,6 +36,9 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
     }),
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
+      const capabilityLogStartIndex = Array.isArray(toolCtx.harnessCapabilityLogs)
+        ? toolCtx.harnessCapabilityLogs.length
+        : 0;
       const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
       const requestedMode = String(args?.mode || ACCEPTANCE_MODE.ACTIVE).trim().toLowerCase();
       const mode = requestedMode === ACCEPTANCE_MODE.FORCED ? ACCEPTANCE_MODE.FORCED : ACCEPTANCE_MODE.ACTIVE;
@@ -60,6 +64,20 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
       bucket.lastAcceptanceReport = report;
       bucket.acceptanceReports.push(report);
       await runAcceptanceBySeparateModel(toolCtx, toolMeta, report);
+      const summary = report?.summary && typeof report.summary === "object" ? report.summary : {};
+      const semanticValidation = report?.semanticValidation && typeof report.semanticValidation === "object"
+        ? report.semanticValidation
+        : {};
+      state.flags.acceptanceCompleted =
+        Number(summary.pending || 0) === 0 &&
+        Number(summary.inProgress || 0) === 0 &&
+        String(semanticValidation.status || "").trim().toLowerCase() !== "fail" &&
+        semanticValidation.consistent !== false;
+      deferCapabilityLogs(
+        toolCtx,
+        (Array.isArray(toolCtx.harnessCapabilityLogs) ? toolCtx.harnessCapabilityLogs : [])
+          .slice(capabilityLogStartIndex),
+      );
       return {
         ok: true,
         status: "completed",

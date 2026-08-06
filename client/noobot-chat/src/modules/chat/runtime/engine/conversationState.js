@@ -13,7 +13,6 @@ import {
   isBlankCompatibleSameId,
   isInFlightConversationState,
   isTerminalConversationState,
-  normalizePendingInteractionPayloads,
   normalizeTrimmedString,
 } from "./utils.js";
 import {
@@ -346,8 +345,6 @@ export function createChatEngineConversationState({
       ) {
         const responseRequestId = String(
           statePayload?.requestId ||
-            statePayload?.interactionRequestId ||
-            statePayload?.pendingInteraction?.requestId ||
             "",
         ).trim();
         if (responseRequestId) {
@@ -356,39 +353,7 @@ export function createChatEngineConversationState({
       }
       if (state === BackendChannelState.INTERACTION_PENDING) {
         interactionSubmitting.value = false;
-        const pendingInteractionPayloads = normalizePendingInteractionPayloads(statePayload);
-        if (pendingInteractionPayloads.length) {
-          clearMissingInteractionPayloadTimer({ sessionId, dialogProcessId });
-          for (const pendingInteractionPayload of pendingInteractionPayloads) {
-            const normalizedPendingInteractionRequest = normalizeInteractionRequestPayload({
-              ...pendingInteractionPayload,
-              interactionType: String(
-                pendingInteractionPayload?.interactionType || "",
-              ).trim(),
-            });
-            if (!tryAutoResolveInteraction(normalizedPendingInteractionRequest)) {
-              setPendingInteractionRequest(normalizedPendingInteractionRequest);
-            }
-          }
-        } else {
-          const existingPendingRequest =
-            pendingInteractionRequest.value &&
-            typeof pendingInteractionRequest.value === "object"
-              ? pendingInteractionRequest.value
-              : null;
-          if (existingPendingRequest) {
-            if (isBlankCompatibleSameId(existingPendingRequest?.dialogProcessId, dialogProcessId)) {
-              return;
-            }
-          }
-          scheduleMissingInteractionPayloadFailure({
-            sessionId,
-            dialogProcessId,
-            turnScopeId,
-            targetAssistantMessage,
-          });
-          return;
-        }
+        scheduleMissingInteractionPayloadFailure({ sessionId, dialogProcessId });
       }
       return;
     }

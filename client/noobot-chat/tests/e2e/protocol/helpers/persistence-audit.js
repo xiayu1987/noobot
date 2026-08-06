@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
-import path from "node:path";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../..");
@@ -136,7 +136,7 @@ export async function waitForSessionExecutionEventTree(
   userId,
   sessionId,
   predicate,
-  { timeoutMs = 120_000 } = {},
+  { timeoutMs = 120000 } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
   let records = [];
@@ -152,7 +152,7 @@ export async function waitForModelInvocationTraces(
   userId,
   sessionId,
   predicate,
-  { timeoutMs = 120_000 } = {},
+  { timeoutMs = 120000 } = {},
 ) {
   let traces = [];
   await waitForSessionExecutionEventTree(userId, sessionId, (records) => {
@@ -172,7 +172,7 @@ export async function readUserAttachmentIndex(userId, sessionId) {
   ));
 }
 
-export async function waitForPluginRuntimeEvents(userId, sessionId, predicate, { timeoutMs = 15_000 } = {}) {
+export async function waitForPluginRuntimeEvents(userId, sessionId, predicate, { timeoutMs = 15000 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let events = [];
   while (Date.now() < deadline) {
@@ -185,7 +185,7 @@ export async function waitForPluginRuntimeEvents(userId, sessionId, predicate, {
   throw new Error(`plugin runtime events did not converge for session ${sessionId}: ${JSON.stringify(events)}`);
 }
 
-export async function waitForPluginExecutionEvents(userId, sessionId, predicate, { timeoutMs = 15_000 } = {}) {
+export async function waitForPluginExecutionEvents(userId, sessionId, predicate, { timeoutMs = 15000 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let events = [];
   while (Date.now() < deadline) {
@@ -209,7 +209,7 @@ export async function readHarnessRun(userId, dialogProcessId) {
 }
 
 
-export async function waitForHarnessRun(userId, dialogProcessId, predicate, { timeoutMs = 120_000 } = {}) {
+export async function waitForHarnessRun(userId, dialogProcessId, predicate, { timeoutMs = 120000 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let run = null;
   while (Date.now() < deadline) {

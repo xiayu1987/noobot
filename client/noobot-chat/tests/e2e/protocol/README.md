@@ -7,7 +7,7 @@
 
 - `fixtures/`：浏览器、认证、Session、协议捕获及证据输出生命周期。
 - `helpers/`：浏览器操作和各协议域断言，不产生业务状态。
-- `specs/`：31 条去重后的 PBE 浏览器业务场景，包括 Manifest V2 插件激活、runtime-events 身份闭环、Workflow 停止继续、Harness 低轮次工作流和主流程小结 checkpoint。
+- `specs/`：30 条去重后的 PBE 浏览器业务场景，包括 Manifest V2 插件激活、runtime-events 身份闭环、Workflow 停止继续、Harness 低轮次工作流、主流程小结 checkpoint，以及工具/实时思考/交互闭环。
 - `playwright.protocol.config.js`：协议测试唯一 Playwright 配置。
 
 运行前必须提供：
@@ -28,6 +28,8 @@ export NOOBOT_PLUGIN_DEBUG='1'
 否则 runtime-events 数据链不闭合，测试配置应视为无效。三个变量只要显式设置就必须使用绝对路径。
 
 服务应由测试外部启动。测试不使用模拟后端，也不通过文件系统或内部接口创建业务事实。
+协议场景固定使用单 worker 串行执行；PBE-014、PBE-015、PBE-023 和 PBE-024 在场景内部
+构造协议要求的并发。禁止用场景间并行给共享用户连接和真实模型调用引入非业务资源竞争。
 
 ```bash
 npx playwright install chromium
@@ -75,5 +77,6 @@ Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭�
 
 基础配置、证据捕获、认证和 Session fixture、协议断言入口已经建立。新增用例必须从
 `fixtures/noobot.fixture.js` 导入 `test` 和 `expect`，从而保证所有用例使用同一套捕获和审计链。
-PBE-001～004、PBE-006～018、PBE-021～034 已全部落地。所有场景从统一 fixture 运行，禁止用
-`test.skip` 或无业务断言的占位测试伪装覆盖率。
+PBE-002～003、PBE-006～017、PBE-021～036 已全部落地；PBE-001、PBE-004 和 PBE-018
+分别按严格包含关系合并到 PBE-002、PBE-006 和 PBE-033。所有场景从统一 fixture 运行，
+禁止用 `test.skip` 或无业务断言的占位测试伪装覆盖率。

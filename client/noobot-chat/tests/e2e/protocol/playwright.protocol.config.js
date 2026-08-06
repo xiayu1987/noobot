@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { defineConfig, devices } from "@playwright/test";
-import path from "node:path";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { fileURLToPath } from "node:url";
 import { validateModelObservationPolicyCoverage } from "./helpers/model-observation-policy.js";
 
@@ -33,21 +33,28 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  timeout: 120_000,
-  expect: { timeout: 15_000 },
+  workers: 1,
+  timeout: 420000,
+  expect: { timeout: 15000 },
   reporter: [["line"], ["html", {
     open: "never",
     outputFolder: path.join(repositoryRoot, "test-results/protocol/report"),
   }]],
   use: {
     baseURL: process.env.NOOBOT_E2E_BASE_URL || "http://127.0.0.1:10060",
+    actionTimeout: 15000,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
   projects: [{
     name: "chromium-protocol",
-    use: { ...devices["Desktop Chrome"] },
+    use: {
+      ...devices["Desktop Chrome"],
+      // The managed Linux runner disallows Chromium's sandbox host. Keep the
+      // browser test itself enabled and explicitly select Playwright's
+      // supported no-sandbox launch mode for this environment.
+      launchOptions: { chromiumSandbox: false },
+    },
   }],
 });

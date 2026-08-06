@@ -18,9 +18,13 @@ test("@core PBE-030 未 provision 的本地 Session 刷新不污染权威路由"
   await expect(noobot.page.locator(".status-btn.connected")).toBeVisible();
   await expect(noobot.page.getByText("Session not found", { exact: true })).toHaveCount(0);
   await expect(noobot.page.getByText("会话不存在", { exact: true })).toHaveCount(0);
+  await expect.poll(async () => {
+    const sessionIds = await noobot.page.locator(".session-item").evaluateAll((items) =>
+      items.map((item) => String(item.dataset.sessionId || "")).filter(Boolean));
+    return persistedSessionIds.every((sessionId) => sessionIds.includes(sessionId));
+  }).toBe(true);
   const refreshedSessionIds = await noobot.page.locator(".session-item").evaluateAll((items) =>
     items.map((item) => String(item.dataset.sessionId || "")).filter(Boolean));
-  expect(persistedSessionIds.every((sessionId) => refreshedSessionIds.includes(sessionId))).toBe(true);
   const recoveredSessionId = new URL(noobot.page.url()).searchParams.get("session") || "";
   expect(recoveredSessionId).not.toBe(localSessionId);
   if (recoveredSessionId) expect(refreshedSessionIds).toContain(recoveredSessionId);

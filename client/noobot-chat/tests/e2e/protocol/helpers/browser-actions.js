@@ -219,7 +219,7 @@ export async function waitForNaturalCompletion({
   capture,
   sessionId,
   turnScopeId,
-  timeoutMs = 120_000,
+  timeoutMs = 120000,
 }) {
   await expect(page.locator(".stop-float-btn")).toBeVisible();
   const terminal = await waitForTurnTerminal(capture, sessionId, turnScopeId, { timeoutMs });

@@ -60,6 +60,7 @@ import {
   summarizeStateMachineMessage,
 } from "../../debug/loggers/stateMachineLogger.js";
 import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationReplay.js";
+import { applyReconnectInteractionRequest } from "../runtime/reconnect/interactionReplay.js";
 
 export function useReconnectReplay({
   sessions,
@@ -247,7 +248,7 @@ export function useReconnectReplay({
       applyTurnLifecycleEnvelope,
       applyTurnLifecycleSnapshot,
       applyPendingInteraction: (interaction) => applyReconnectInteractionRequest({
-        eventData: interaction?.data || interaction,
+        eventData: interaction,
         normalizeInteractionRequestPayload,
         tryAutoResolveInteraction,
         isInteractionRequestHandled,

@@ -19,12 +19,10 @@ function toolTimeline(count = 1, prefix = "cmd") {
       call: {
         eventId: `call-event-${index + 1}`, sequence, sequenceScopeId: "message-1",
         sequenceDomain: "message-event", authority: "authoritative", timestamp,
-        log: { event: "tool_call", type: "tool_call", toolCallId, text: `${prefix}-${index + 1}`, timestamp },
       },
       resultEvent: {
         eventId: `result-event-${index + 1}`, sequence: sequence + 1, sequenceScopeId: "message-1",
         sequenceDomain: "message-event", authority: "authoritative", timestamp,
-        log: { event: "tool_result", type: "tool_result", toolCallId, text: `${prefix}-${index + 1}`, timestamp },
       },
     };
   });
@@ -55,7 +53,6 @@ function taskCheckTimeline(abstract = "目标未漂移") {
       sequenceScopeId: "message-task-check",
       sequenceDomain: "message-event",
       authority: "authoritative",
-      log: { event: "tool_call", type: "tool_call", toolCallId: "task-check-1", text: "task_check" },
     },
     resultEvent: {
       eventId: "task-check-result-event",
@@ -63,7 +60,6 @@ function taskCheckTimeline(abstract = "目标未漂移") {
       sequenceScopeId: "message-task-check",
       sequenceDomain: "message-event",
       authority: "authoritative",
-      log: { event: "tool_result", type: "tool_result", toolCallId: "task-check-1", text: "task_check" },
     },
   }];
 }
@@ -76,7 +72,7 @@ describe("ThinkingPanel canonical execution timeline", () => {
     const wrapper = mountThinkingPanel({ role: "assistant", pending: false, toolTimeline: toolTimeline(1) });
     const rows = wrapper.findAll(".execution-log-line");
     expect(rows.map((line) => line.text().split("{")[0])).toEqual([
-      "调用：cmd-1", "返回：cmd-1",
+      "调用：execute · cmd-1", "返回：execute · 已完成",
     ]);
     expect(wrapper.findAll(".execution-log-detail")).toHaveLength(0);
   });
@@ -86,7 +82,7 @@ describe("ThinkingPanel canonical execution timeline", () => {
       role: "assistant",
       pending: false,
       toolTimeline: taskCheckTimeline("当前目标清晰且没有偏移"),
-    });
+    }, { variant: "details" });
     const block = wrapper.find('[data-thinking-block="task-check"]');
     expect(block.exists()).toBe(true);
     expect(block.text()).toContain("Task Check");
@@ -107,8 +103,8 @@ describe("ThinkingPanel canonical execution timeline", () => {
     const wrapper = mountThinkingPanel(messageItem, { runtime: { running: true, terminal: false } });
     await wrapper.setProps({ messageItem: { ...messageItem, toolTimeline: toolTimeline(2) } });
     const rows = wrapper.findAll(".execution-log-line").map((line) => line.text());
-    expect(rows.some((row) => row.startsWith("调用：cmd-2"))).toBe(true);
-    expect(rows.some((row) => row.startsWith("返回：cmd-2"))).toBe(true);
+    expect(rows.filter((row) => row.startsWith("调用：execute"))).toHaveLength(2);
+    expect(rows.filter((row) => row.startsWith("返回：execute"))).toHaveLength(2);
   });
 
   it("keeps canonical tool detail expandable after a refreshed projection replaces the message", async () => {
@@ -149,22 +145,34 @@ describe("ThinkingPanel canonical execution timeline", () => {
     expect(refreshedWrapper.findAll(".execution-log-detail")).toHaveLength(0);
   });
 
-  it("uses only canonical timelines even if removed legacy fields are present", () => {
+  it("uses only canonical timelines even if removed legacy fields are present", async () => {
     const wrapper = mountThinkingPanel({
-      role: "assistant", pending: false, toolTimeline: toolTimeline(1, "canonical"),
+      role: "assistant", pending: false,
+      sessionId: "canonical-session", turnScopeId: "canonical-turn",
+      presentationMessageId: "canonical-presentation",
+      toolTimeline: toolTimeline(1, "canonical"),
       realtimeLogs: [{ event: "tool_call", text: "legacy-live" }],
       completedToolLogs: [{ event: "tool_result", text: "legacy-completed" }],
     });
-    expect(wrapper.text()).toContain("canonical-1");
+    await wrapper.findAll(".execution-log-line")[0].trigger("click");
+    expect(wrapper.find(".execution-log-detail").text()).toContain("canonical-1");
     expect(wrapper.text()).not.toContain("legacy-live");
     expect(wrapper.text()).not.toContain("legacy-completed");
   });
 
-  it("renders only the latest ten canonical timeline rows", () => {
-    const wrapper = mountThinkingPanel({ role: "assistant", pending: false, toolTimeline: toolTimeline(6) });
+  it("renders only the latest ten canonical timeline rows", async () => {
+    const wrapper = mountThinkingPanel({
+      role: "assistant", pending: false,
+      sessionId: "window-session", turnScopeId: "window-turn",
+      presentationMessageId: "window-presentation",
+      toolTimeline: toolTimeline(6),
+    });
     const rows = wrapper.findAll(".execution-log-line");
     expect(rows).toHaveLength(10);
-    expect(rows[0].text()).toMatch(/^调用：cmd-2/);
-    expect(rows[9].text()).toMatch(/^返回：cmd-6/);
+    await rows[0].trigger("click");
+    expect(wrapper.find(".execution-log-detail").text()).toContain('"command": "cmd-2"');
+    await rows[0].trigger("click");
+    await rows[9].trigger("click");
+    expect(wrapper.find(".execution-log-detail").text()).toContain('"command": "cmd-6"');
   });
 });

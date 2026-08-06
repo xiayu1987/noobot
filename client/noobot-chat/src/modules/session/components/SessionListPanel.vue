@@ -234,7 +234,7 @@ watch(
                     </span>
                   </li>
                   <li>
-                    <span class="k">{{ translate("common.sessionBackendId") }}</span>
+                    <span class="k">{{ translate("common.sessionId") }}</span>
                     <span class="v">{{ sessionItem.sessionId || translate("common.notStarted") }}</span>
                   </li>
                   <li>

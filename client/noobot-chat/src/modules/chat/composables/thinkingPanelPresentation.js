@@ -12,12 +12,14 @@ import {
   toggleTurnDetailKey,
 } from "../runtime/engine/turnUiStore.js";
 import { selectToolTimelineCount } from "../runtime/engine/toolTimeline.js";
+import { normalizeToolLog, toolLogDetailKey } from "../model/toolLogIdentity.js";
 
 export function createThinkingPanelPresentation({
   props,
   emit,
   translate,
   getThinkingDetailForMessage,
+  getExecutionLogsForMessage,
   getCompletedToolLogsForMessage,
   getSummaryThinkingDetailCount,
 }) {
@@ -44,6 +46,17 @@ export function createThinkingPanelPresentation({
     }];
   }
 
+  function groupExecutionLogs(messageItem = {}) {
+    const completedLogs = getCompletedToolLogsForMessage(messageItem);
+    const logs = completedLogs.length > 0
+      ? completedLogs
+      : typeof getExecutionLogsForMessage === "function"
+        ? getExecutionLogsForMessage(messageItem)
+        : [];
+    if (!Array.isArray(logs) || logs.length <= 0) return [];
+    return [{ key: "tool-timeline", label: "", items: logs.map(normalizeToolLog) }];
+  }
+
   function collapseThinkingPanel(messageItem = {}) {
     setTurnThinkingOpenNames(messageItem, []);
   }
@@ -65,8 +78,7 @@ export function createThinkingPanelPresentation({
     _groupedToolLogs,
     toolLogItem,
   ) {
-    const eventId = String(toolLogItem?.eventId || "").trim();
-    return eventId ? `event:${eventId}` : "";
+    return toolLogDetailKey(toolLogItem);
   }
 
   function isThinkingDetailExpanded(messageItem = {}, detailItemKey = "") {
@@ -113,6 +125,7 @@ export function createThinkingPanelPresentation({
     openThinkingDetailDrawer,
     collapseThinkingPanel,
     groupCompletedToolLogs,
+    groupExecutionLogs,
     getThinkingDetailCount,
     getThinkingTreePrefix,
     getThinkingDetailItemKey,

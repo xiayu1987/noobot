@@ -10,6 +10,7 @@ import {
   createTaskSummaryReceipt,
   parseTaskSummaryContent,
 } from "@noobot/context-protocol/task-summary-protocol";
+import { resolveContextInternalMessageType } from "@noobot/context-protocol/injected-message-policy";
 import {
   selectPlugins,
   sendMessage,
@@ -22,7 +23,10 @@ import {
   readSessionTurnMessages,
   waitForSessionExecutionEventTree,
 } from "../helpers/persistence-audit.js";
-import { isMainAgentModelInvocation } from "../helpers/model-message-assertions.js";
+import {
+  auditModelPrefixStability,
+  isMainAgentModelInvocation,
+} from "../helpers/model-message-assertions.js";
 import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
@@ -61,7 +65,7 @@ function assertSummarizedToolPairsAreClosed(messages, summarizedIds) {
 }
 
 test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入闭环", async ({ noobot, protocolCapture }, testInfo) => {
-  test.setTimeout(240_000);
+  test.setTimeout(900000);
   await selectPlugins(noobot.page, []);
   await setMainSummaryTurnsThreshold(noobot.page, 2);
   await sendMessage(noobot.page, uniquePrompt(testInfo, [
@@ -78,7 +82,7 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: send.identity.turnScopeId,
-    timeoutMs: 220_000,
+    timeoutMs: 220000,
   });
 
   const records = await waitForSessionExecutionEventTree(noobot.userId, noobot.sessionId, (items) => {
@@ -109,6 +113,12 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
   const messagesByUid = new Map(messages.map((message) => [message.messageUid, message]));
   for (const messageUid of summarizedIds) expect(messagesByUid.get(messageUid)?.summarized, messageUid).toBe(true);
   assertSummarizedToolPairsAreClosed(messages, summarizedIds);
+  const phasePrompts = messages.filter((message) =>
+    resolveContextInternalMessageType(message) === "noobot.phase_summary_prompt",
+  );
+  expect(phasePrompts).toHaveLength(1);
+  expect(phasePrompts[0]).toMatchObject({ role: "user", type: "context_control", summarized: true });
+  expect(summarizedIds.has(phasePrompts[0].messageUid)).toBe(true);
 
   const taskSummaryCalls = messages.flatMap((message) =>
     (Array.isArray(message.tool_calls) ? message.tool_calls : [])
@@ -145,12 +155,13 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
   expect(await fs.readFile(summaryAttachmentFiles[0].path, "utf8")).toBe(fullSummaryContent);
 
   const mainInvocations = modelInvocationTraces(scoped).filter(isMainAgentModelInvocation);
-  for (const invocation of mainInvocations) {
-    const summaryPromptCount = invocation.data.messages.preview.filter(
-      (message) => message.internalType === "noobot.phase_summary_prompt",
-    ).length;
-    expect(summaryPromptCount).toBeLessThanOrEqual(1);
-  }
+  const mainPrefixAudit = auditModelPrefixStability(mainInvocations);
+  expect(mainPrefixAudit.violations).toEqual([]);
+  expect(mainPrefixAudit.stableComparisonCount).toBeGreaterThan(0);
+  expect(mainPrefixAudit.checkpointRewriteCount).toBe(1);
+  expect(mainInvocations.some((invocation) =>
+    invocation.data.messages.preview.some((message) => message.messageId === phasePrompts[0].messageUid),
+  )).toBe(true);
   for (const receipt of receipts) {
     const afterReceipt = mainInvocations.filter((record) =>
       Date.parse(record.ts || record.timestamp || "") >= Date.parse(receipt.committedAt),

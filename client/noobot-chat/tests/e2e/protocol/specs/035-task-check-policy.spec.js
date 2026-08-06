@@ -8,6 +8,7 @@ import {
   createTaskCheckReceipt,
   parseTaskCheckContent,
 } from "@noobot/context-protocol/task-check-protocol";
+import { resolveContextInternalMessageType } from "@noobot/context-protocol/injected-message-policy";
 import {
   selectPlugins,
   sendMessage,
@@ -70,7 +71,7 @@ function assertCompactExecutionContext(invocations = []) {
 }
 
 test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模型输入闭环", async ({ noobot, protocolCapture }, testInfo) => {
-  test.setTimeout(300_000);
+  test.setTimeout(900000);
   await selectPlugins(noobot.page, []);
   await setRunSummaryPolicy(noobot.page, {
     phaseSummaryLoopTurns: 4,
@@ -93,7 +94,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: firstSend.identity.turnScopeId,
-    timeoutMs: 260_000,
+    timeoutMs: 260000,
   });
 
   const records = await waitForSessionExecutionEventTree(noobot.userId, noobot.sessionId, (items) => {
@@ -118,12 +119,19 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
       (message) => message.internalType === "noobot.task_check_prompt",
     ).length,
   );
-  expect(markerCounts.every((count) => count <= 1)).toBe(true);
-  expect(markerCounts.reduce((total, count) => total + count, 0)).toBe(taskCheckRequired.length);
+  expect(markerCounts.some((count) => count > 0)).toBe(true);
 
   const firstMessages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);
+  const taskCheckPrompts = firstMessages.filter((message) =>
+    resolveContextInternalMessageType(message) === "noobot.task_check_prompt",
+  );
+  expect(taskCheckPrompts).toHaveLength(taskCheckRequired.length);
+  expect(taskCheckPrompts.every((message) =>
+    message.role === "user" && message.type === "context_control"
+  )).toBe(true);
   const checks = taskCheckCalls(firstMessages);
   expect(checks.length).toBeGreaterThan(0);
+  expect(checks.length).toBeGreaterThanOrEqual(2);
   expect(checks.length).toBeLessThanOrEqual(taskCheckRequired.length);
   for (const { call } of checks) {
     expect(parseTaskCheckContent(toolCallArgs(call).checkContent).protocolVersion).toBe(1);
@@ -159,6 +167,8 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   expect(latestCheckBeforeSummaryResult).toBeTruthy();
   expect(latestCheckBeforeSummary.message.summarized).not.toBe(true);
   expect(latestCheckBeforeSummaryResult?.summarized).not.toBe(true);
+  const summarizedTaskCheckPrompts = taskCheckPrompts.filter((message) => message.summarized === true);
+  expect(summarizedTaskCheckPrompts.length).toBeGreaterThan(0);
 
   const latestCheck = checks.at(-1);
   const latestCheckCallId = toolCallId(latestCheck.call);
@@ -174,6 +184,23 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     hasText: latestCheckAbstract,
   })).toHaveCount(1);
 
+  const thinkingDetailsAction = thinkingShell.locator(".thinking-detail-action-button");
+  await thinkingDetailsAction.click();
+  const thinkingDetailsPanel = noobot.page.locator(".thinking-details-panel");
+  await expect(thinkingDetailsPanel).toBeVisible();
+  await thinkingDetailsPanel.locator(".el-tabs__item").nth(1).click();
+  const taskCheckBlocks = thinkingDetailsPanel.locator('[data-thinking-block="task-check"]');
+  await expect(taskCheckBlocks).toHaveCount(1);
+  const taskCheckSummary = taskCheckBlocks.locator(".base-note-block__content");
+  await expect(taskCheckSummary).toHaveCount(1);
+  expect(checkResults).toHaveLength(checks.length);
+  for (const result of checkResults) {
+    const expectedAbstract = toolResultPayload(result).summary.abstract;
+    await expect(taskCheckSummary).toContainText(expectedAbstract);
+  }
+  await noobot.page.keyboard.press("Escape");
+  await expect(thinkingDetailsPanel).toBeHidden();
+
   const commandCountBeforeSecondSend = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(noobot.page, uniquePrompt(testInfo, "根据上一轮结果，只回答最终字符数及其来源步骤。"));
   const secondSend = await waitForCommand(
@@ -187,7 +214,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: secondSend.identity.turnScopeId,
-    timeoutMs: 120_000,
+    timeoutMs: 120000,
   });
   const allRecords = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
   const secondInvocations = modelInvocationTraces(

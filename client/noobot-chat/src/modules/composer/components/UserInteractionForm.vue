@@ -31,8 +31,7 @@ function resetForm() {
   for (const fieldItem of fields) {
     const key = String(fieldItem?.name || "").trim();
     if (!key) continue;
-    const defaultValue =
-      fieldItem?.defaultValue ?? fieldItem?.default_value ?? "";
+    const defaultValue = fieldItem?.defaultValue ?? "";
     formData[key] = String(defaultValue || "");
   }
 }

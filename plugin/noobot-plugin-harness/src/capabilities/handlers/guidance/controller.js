@@ -359,6 +359,10 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
     let changed = false;
     if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
+      const current = ensureHarnessBucket(ctx);
+      if (current?.state?.flags?.acceptanceCompleted === true) {
+        return { capability, point, status: "active", changed: false };
+      }
       const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.GUIDANCE }) === true;
       const summaryScheduleChanged = maybeScheduleGuidanceSummary(ctx, meta) === true;
       const scheduleChanged = maybeScheduleGuidanceAnalysis(ctx, meta) === true;

@@ -263,6 +263,7 @@ export class SessionTurnPersister {
     turnScopeId = "",
     eventListener,
     injectedMessage = false,
+    noobotInternalMessageType = "",
     injectedBy = "",
     injectedMessageType = "",
     frontendUserMessage = false,
@@ -324,6 +325,7 @@ export class SessionTurnPersister {
           ? modelAdditionalKwargs
           : null,
       injectedMessage: injectedMessage === true,
+      noobotInternalMessageType: String(noobotInternalMessageType || "").trim(),
       injectedBy: String(injectedBy || "").trim(),
       injectedMessageType: String(injectedMessageType || "").trim(),
       frontendUserMessage: frontendUserMessage === true,
@@ -412,6 +414,7 @@ export class SessionTurnPersister {
       activityTimeline: Array.isArray(activityTimeline) ? activityTimeline : [],
       toolTimeline: Array.isArray(toolTimeline) ? toolTimeline : [],
       injectedMessage,
+      noobotInternalMessageType,
       injectedBy,
       injectedMessageType,
       frontendUserMessage,
@@ -487,6 +490,7 @@ export class SessionTurnPersister {
             ? messageItem.modelAdditionalKwargs
             : null,
         injectedMessage: messageItem.injectedMessage === true,
+        noobotInternalMessageType: String(messageItem.noobotInternalMessageType || "").trim(),
         injectedBy: String(messageItem.injectedBy || "").trim(),
         injectedMessageType: String(messageItem.injectedMessageType || "").trim(),
         frontendUserMessage: messageItem.frontendUserMessage === true,
