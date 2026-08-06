@@ -101,5 +101,6 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   await expect(interaction).toBeHidden();
   const completedProjectionAfterRefresh = await readRealtimeToolProjection(noobot.page);
   expect(completedProjectionAfterRefresh).toEqual(completedProjectionBeforeRefresh);
-  await assertThinkingDetailsDrawer(noobot.page, EXPECTED_TOOLS.length);
+  const detailProjection = await assertThinkingDetailsDrawer(noobot.page, EXPECTED_TOOLS.length);
+  expect(detailProjection.slice(-REALTIME_EXECUTION_WINDOW_SIZE)).toEqual(completedProjectionAfterRefresh);
 });

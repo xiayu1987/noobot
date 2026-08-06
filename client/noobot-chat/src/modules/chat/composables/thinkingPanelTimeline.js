@@ -151,8 +151,7 @@ export function useThinkingTimeline(
       .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
       .filter((logItem) => !isMainModelContentLog(logItem))
       .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
-      .filter(Boolean)
-      .slice(-EXECUTION_LOG_DISPLAY_LIMIT);
+      .filter(Boolean);
   }
 
   function getAllRealtimeLogs(messageItem = {}) {
@@ -186,8 +185,7 @@ export function useThinkingTimeline(
       .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
       .filter((logItem) => !isMainModelContentLog(logItem))
       .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
-      .filter(Boolean)
-      .slice(-EXECUTION_LOG_DISPLAY_LIMIT);
+      .filter(Boolean);
     return {
       activityLogs,
       toolLogs,
@@ -220,12 +218,23 @@ export function useThinkingTimeline(
     ),
   );
 
+  // Both the realtime panel and the detail drawer consume this one projection.
+  // Container-specific grouping must never rebuild or normalize log content.
+  function getCanonicalExecutionLogs(messageItem = {}) {
+    const projection = buildExecutionTimelineProjection(messageItem);
+    if (projection.visibleLogs.length > 0) return projection.visibleLogs;
+    if (messageItem === props.messageItem) {
+      const detailMessage = loadedThinkingDetail.value?.messageItem;
+      if (detailMessage) {
+        const detailProjection = buildExecutionTimelineProjection(detailMessage);
+        if (detailProjection.visibleLogs.length > 0) return detailProjection.visibleLogs;
+      }
+    }
+    return [];
+  }
+
   function getExecutionLogs(messageItem = {}) {
-    const realtimeLogs = getRealtimeLogs(messageItem);
-    if (realtimeLogs.length > 0) return realtimeLogs;
-    return getCompletedToolLogsForMessage(messageItem).slice(
-      -EXECUTION_LOG_DISPLAY_LIMIT,
-    );
+    return getCanonicalExecutionLogs(messageItem);
   }
 
   function getAllCompletedLogs(messageItem = {}) {
@@ -337,12 +346,9 @@ export function useThinkingTimeline(
     return getCachedThinkingDetail(identity) || null;
   }
 
-  const currentExecutionLogs = computed(() => {
-    const detail = loadedThinkingDetail.value;
-    const liveLogs = getExecutionLogs(props.messageItem);
-    if (liveLogs.length > 0) return liveLogs;
-    return getExecutionLogs(detail?.messageItem || props.messageItem);
-  });
+  const currentExecutionLogs = computed(() =>
+    getCanonicalExecutionLogs(props.messageItem).slice(-EXECUTION_LOG_DISPLAY_LIMIT),
+  );
   const latestTaskCheckReceipt = computed(() => {
     const liveReceipt = selectLatestTaskCheckReceipt(timelineMessage(props.messageItem));
     if (liveReceipt) return liveReceipt;
@@ -612,6 +618,7 @@ export function useThinkingTimeline(
     getLatestPluginAnalysisLog,
     getLatestMainModelContentLog,
     getExecutionLogs,
+    getCanonicalExecutionLogs,
     getExecutionLogCount,
     getThinkingDetailForMessage,
     getCompletedToolLogsForMessage,

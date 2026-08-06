@@ -64,6 +64,7 @@ export async function assertRealtimeToolDetails(shell, expectedLineCount) {
     await trigger.click();
     const detail = line.locator(".base-thinking-log-line__detail");
     await expect(detail).not.toBeEmpty();
+    const detailText = text(await detail.textContent());
     await trigger.click();
     await expect(detail).toBeHidden();
   }
@@ -112,6 +113,7 @@ export async function assertThinkingDetailsDrawer(page, expectedPairCount) {
   await expect(panel).toBeVisible();
   const toolLines = panel.locator(".thinking-details-log-body .base-thinking-log-line.is-tool");
   await expect(toolLines).toHaveCount(expectedPairCount * 2);
+  const projection = [];
   for (let index = 0; index < expectedPairCount * 2; index += 1) {
     const line = toolLines.nth(index);
     const trigger = line.locator(".base-thinking-log-line__text");
@@ -119,11 +121,19 @@ export async function assertThinkingDetailsDrawer(page, expectedPairCount) {
     await trigger.click();
     const detail = line.locator(".base-thinking-log-line__detail");
     await expect(detail).not.toBeEmpty();
+    const detailText = text(await detail.textContent());
     await trigger.click();
     await expect(detail).toBeHidden();
+    projection.push({
+      event: text(await line.locator(".base-thinking-log-line__event").textContent()),
+      summary: text(await trigger.textContent()),
+      expandable: true,
+      detail: detailText,
+    });
   }
   await panel.locator(".el-tabs__item").nth(1).click();
   await expect(panel.locator(".thinking-details-content-body .base-note-block__content").first()).not.toBeEmpty();
+  return projection;
 }
 
 export async function waitForToolSet(userId, sessionId, turnScopeId, expectedToolNames) {

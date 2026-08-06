@@ -79,7 +79,7 @@ describe("ThinkingPanel canonical details", () => {
     const wrapper = mountThinkingPanel({ role: "assistant", toolTimeline: toolTimeline() }, { variant: "details" });
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(2);
     expect(wrapper.findAll(".execution-log-detail")).toHaveLength(0);
-    expect(wrapper.vm.groupCompletedToolLogs(wrapper.props("messageItem"))[0].items
+    expect(wrapper.vm.groupExecutionLogs(wrapper.props("messageItem"))[0].items
       .map((item) => item.detailText)).toEqual([
       '{\n  "path": "README.md"\n}',
       '{\n  "ok": true\n}',
@@ -108,7 +108,7 @@ describe("ThinkingPanel canonical details", () => {
       toolTimeline: toolTimeline(),
     };
     const wrapper = mountThinkingPanel(messageItem, { variant: "details" });
-    const group = wrapper.vm.groupCompletedToolLogs(messageItem)[0];
+    const group = wrapper.vm.groupExecutionLogs(messageItem)[0];
     const item = group.items[0];
     const key = wrapper.vm.getThinkingDetailItemKey(group, item, 0);
 
@@ -126,7 +126,7 @@ describe("ThinkingPanel canonical details", () => {
       toolTimeline: toolTimeline(),
     };
     const wrapper = mountThinkingPanel(messageItem, { variant: "details" });
-    const group = wrapper.vm.groupCompletedToolLogs(messageItem)[0];
+    const group = wrapper.vm.groupExecutionLogs(messageItem)[0];
     const item = group.items[0];
     const beforeRefreshKey = wrapper.vm.getThinkingDetailItemKey(group, item, 0);
     const afterRefreshKey = wrapper.vm.getThinkingDetailItemKey(
@@ -150,7 +150,7 @@ describe("ThinkingPanel canonical details", () => {
       variant: "details",
       runtime: { running: true, terminal: false },
     });
-    const group = wrapper.vm.groupCompletedToolLogs(messageItem)[0];
+    const group = wrapper.vm.groupExecutionLogs(messageItem)[0];
     const item = group.items[0];
     const beforeRefreshKey = wrapper.vm.getThinkingDetailItemKey(group, item);
     wrapper.vm.toggleThinkingDetailExpanded(messageItem, beforeRefreshKey);
