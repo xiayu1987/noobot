@@ -553,4 +553,5 @@ function toggleAssistantContent() {
     box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 22%, transparent), 0 0 12px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
   }
 }
+
 </style>

@@ -243,7 +243,6 @@ function isHarnessStepModelDisabled(stepKey = "") {
       color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 95%, var(--el-fill-color-light)),
       color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 88%, var(--el-color-primary))
     );
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--noobot-base-white, #ffffff) 42%, transparent) inset;
 }
 
 .plugin-model-title {
@@ -386,21 +385,14 @@ function isHarnessStepModelDisabled(stepKey = "") {
   border-radius: 12px;
   background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%, var(--el-color-primary));
   border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent) inset,
-    0 1px 0 color-mix(in srgb, var(--noobot-base-black, #000000) 5%, transparent);
   transition:
     background-color 0.18s ease,
     border-color 0.18s ease,
-    box-shadow 0.18s ease;
 }
 
 .composer-select :deep(.el-select__wrapper.is-focused),
 .composer-select :deep(.el-select__wrapper:hover) {
   border-color: color-mix(in srgb, var(--el-color-primary) 50%, var(--noobot-panel-border, var(--el-border-color)));
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--el-color-primary) 42%, transparent) inset,
-    0 8px 20px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
 }
 
 .composer-select :deep(.el-select__selected-item),

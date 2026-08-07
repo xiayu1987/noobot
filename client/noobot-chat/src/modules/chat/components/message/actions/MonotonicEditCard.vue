@@ -277,7 +277,6 @@ defineExpose({ focusTextarea });
   color: var(--el-text-color-primary);
   background: var(--el-fill-color-light);
   border: none;
-  box-shadow: inset 0 0 0 1px transparent;
   font-size: var(--noobot-font-size-base);
   line-height: 1.6;
   transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
@@ -289,7 +288,6 @@ defineExpose({ focusTextarea });
 
 .monotonic-edit-textarea :deep(.el-textarea__inner:focus) {
   background: var(--el-bg-color);
-  box-shadow: inset 0 0 0 1px var(--el-color-primary), 0 0 0 2px var(--el-color-primary-light-8);
 }
 
 .monotonic-edit-attachments {
@@ -522,7 +520,6 @@ html.dark .monotonic-edit-textarea :deep(.el-textarea__inner),
 .dark .monotonic-edit-textarea :deep(.el-textarea__inner) {
   color: var(--noobot-text-main);
   background: var(--noobot-control-bg);
-  box-shadow: var(--noobot-input-ring);
 }
 
 :root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner:hover),
@@ -535,7 +532,6 @@ html.dark .monotonic-edit-textarea :deep(.el-textarea__inner:hover),
 html.dark .monotonic-edit-textarea :deep(.el-textarea__inner:focus),
 .dark .monotonic-edit-textarea :deep(.el-textarea__inner:focus) {
   background: var(--noobot-surface-soft-hover);
-  box-shadow: var(--noobot-input-ring-focus), var(--noobot-focus-ring);
 }
 
 :root[data-theme="dark"] .monotonic-attachment-empty,

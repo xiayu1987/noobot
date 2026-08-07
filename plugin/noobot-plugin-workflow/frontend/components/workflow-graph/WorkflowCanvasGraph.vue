@@ -634,9 +634,6 @@ function handleStepClick(stepItem = {}) {
   --workflow-radius-md: 8px;
   --workflow-radius-lg: 10px;
   --workflow-radius-xl: 12px;
-  --workflow-shadow-soft: 0 8px 20px rgba(var(--workflow-accent-rgb), 0.08);
-  --workflow-shadow-card: 0 8px 18px rgba(var(--workflow-accent-rgb), 0.1);
-  --workflow-shadow-hover: 0 5px 12px rgba(var(--workflow-accent-rgb), 0.12);
 }
 
 .workflow-canvas-graph {

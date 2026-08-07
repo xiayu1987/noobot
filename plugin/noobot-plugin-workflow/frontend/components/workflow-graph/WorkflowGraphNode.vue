@@ -165,10 +165,6 @@ function handleClick(nodeItem = {}, clickable = true) {
   --workflow-node-space-md: 10px;
   --workflow-node-radius-sm: 10px;
   --workflow-node-radius-md: 16px;
-  --workflow-node-shadow-hover: 0 6px 14px rgba(var(--workflow-accent-rgb), 0.12);
-  --workflow-node-shadow-selected:
-    0 0 0 2px rgba(var(--workflow-accent-rgb), 0.2),
-    0 8px 20px rgba(var(--workflow-accent-rgb), 0.18);
   position: absolute;
   z-index: 2;
   border: 1px solid var(--noobot-msg-assistant-border);
@@ -183,7 +179,7 @@ function handleClick(nodeItem = {}, clickable = true) {
   align-items: center;
   gap: 6px;
   cursor: default;
-  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+  transition: border-color 0.18s ease;
 }
 
 .workflow-node.is-state-node {
@@ -227,18 +223,15 @@ function handleClick(nodeItem = {}, clickable = true) {
     rgb(var(--workflow-accent-rgb)) 54%,
     var(--noobot-msg-assistant-border) 46%
   );
-  box-shadow: var(--workflow-node-shadow-hover);
 }
 
 .workflow-node.is-selected,
 .workflow-node.is-expanded {
   z-index: 3;
   border-color: rgba(var(--workflow-accent-rgb), 0.95);
-  box-shadow: var(--workflow-node-shadow-selected);
 }
 
 .workflow-node.is-running {
-  animation: workflow-node-pulse 1.25s ease-in-out infinite;
 }
 
 .workflow-node.is-boundary {
@@ -282,7 +275,6 @@ function handleClick(nodeItem = {}, clickable = true) {
 
 .workflow-node-state-icon {
   background: color-mix(in srgb, rgb(var(--workflow-success-rgb)) 74%, #fff 26%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42);
 }
 
 .workflow-node-state-icon.state-icon-branch,
@@ -345,16 +337,6 @@ function handleClick(nodeItem = {}, clickable = true) {
 .workflow-node.state-merge .workflow-node-kind {
   color: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 82%, var(--noobot-text-secondary) 18%);
   background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 82%, rgb(var(--workflow-accent-rgb)) 18%);
-}
-
-@keyframes workflow-node-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 rgba(var(--workflow-accent-strong-rgb), 0.12);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgba(var(--workflow-accent-strong-rgb), 0.08);
-  }
 }
 
 @media (max-width: 480px) {
