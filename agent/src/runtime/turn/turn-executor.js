@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filterForModelContext } from "../../context/session/message-context-policy.js";
-import { resolveMainModelFinalMessages } from "../../session/utils/context-window-normalizer.js";
+import { filterForModelContext } from "@noobot/context-protocol/message-policy";
+import { resolveModelFinalMessages } from "@noobot/context-protocol/window-reducer";
 import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
@@ -51,6 +51,7 @@ import {
 } from "@noobot/context-protocol/context-mutation";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context-schema";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import {
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
@@ -110,10 +111,11 @@ function syncMessagesFromBlocks(loopState = {}) {
   if (!blocks || typeof blocks !== "object" || !Array.isArray(modelContext.messages)) {
     throw new Error("modelContext requires canonical messages and messageBlocks");
   }
-  const resolved = resolveMainModelFinalMessages({
+  const resolved = resolveModelFinalMessages({
     systemMessages: normalizeBlockList(blocks.system),
     historyMessages: normalizeBlockList(blocks.history),
     incrementalMessages: normalizeBlockList(blocks.incremental),
+    historyLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
   });
   const composed = Array.isArray(resolved?.messages) ? resolved.messages : [];
   replaceMessageProjection(modelContext, composed);

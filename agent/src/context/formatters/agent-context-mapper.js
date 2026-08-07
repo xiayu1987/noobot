@@ -8,6 +8,7 @@ import {
   normalizeSelectedConnectors,
 } from "../../shared/utils/shared-utils.js";
 import { createAgentContextEnvelope } from "@noobot/context-protocol/agent-context-envelope";
+import { createContextBuildReceipt } from "@noobot/context-protocol/context-build-receipt";
 
 export function mapToAgentContextSchema({
   staticAgentContext = {},
@@ -25,6 +26,8 @@ export function mapToAgentContextSchema({
   conversationMessages = [],
   incrementalMessages = [],
   globalConfig = {},
+  sourceRevision = "",
+  contextBuildMode = "",
 } = {}) {
   const runtimeRef = runtime && typeof runtime === "object" ? runtime : {};
   const systemRuntime =
@@ -43,6 +46,11 @@ export function mapToAgentContextSchema({
     turnScopeId,
     runId,
   };
+  const contextScopeIsComplete = Boolean(
+    String(identity.sessionId || "").trim() &&
+    String(identity.dialogProcessId || "").trim() &&
+    String(identity.turnScopeId || "").trim(),
+  );
   return createAgentContextEnvelope({
     identity,
     environment: {
@@ -87,6 +95,18 @@ export function mapToAgentContextSchema({
             : {},
       },
       selectedConnectors,
+      ...(contextScopeIsComplete ? { contextBuild: createContextBuildReceipt({
+        scope: {
+          sessionId: String(systemRuntime?.sessionId || sessionId).trim(),
+          dialogProcessId: String(dialogProcessId || "").trim(),
+          turnScopeId: String(turnScopeId || "").trim(),
+        },
+        mode: contextBuildMode,
+        sourceRevision,
+        startedAt: String(systemRuntime?.now || now).trim(),
+        completedAt: String(systemRuntime?.now || now).trim(),
+        messageCount: Array.isArray(conversationMessages) ? conversationMessages.length : 0,
+      }) } : {}),
     },
     modelContext: {
       protocolVersion: 2,

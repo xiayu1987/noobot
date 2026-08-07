@@ -331,7 +331,6 @@ const summaryMutationCallAllowed = new Set([
   SUMMARY_POLICY_PATH,
   "context-protocol/src/message-store.js",
   "context-protocol/src/context-mutation.js",
-  "agent/src/context/session/summarized-message-policy.js",
   "agent/src/runtime/turn/turn-result-aggregator.js",
   "agent/src/bot/session/summary-checkpoint-committer.js",
 ]);
@@ -359,13 +358,6 @@ if (summaryMutationCallHits.length) {
   pass("summary mutation API is restricted to checkpoint commit and completed-turn finalization");
 }
 
-const normalizerText = assertFileContains("agent/src/session/utils/context-window-normalizer.js", [
-  { name: "resolveMainModelSystemMessages", pattern: /export\s+function\s+resolveMainModelSystemMessages\b/ },
-  { name: "resolveMainModelHistoryMessages", pattern: /export\s+function\s+resolveMainModelHistoryMessages\b/ },
-  { name: "resolveMainModelIncrementalMessages", pattern: /export\s+function\s+resolveMainModelIncrementalMessages\b/ },
-  { name: "resolveMainModelFinalMessages", pattern: /export\s+function\s+resolveMainModelFinalMessages\b/ },
-  { name: "delegates to protocol window reducer", pattern: /@noobot\/context-protocol\/window-reducer/ },
-]);
 assertFileContains("context-protocol/src/window-reducer.js", [
   { name: "history excludes system-like roles", pattern: /isSystemLikeMessageRole\(resolveMessageRole\(message\)\)/ },
   { name: "final order system/history/incremental", pattern: /messages:\s*\[\s*\.\.\.system\s*,\s*\.\.\.history\s*,\s*\.\.\.incremental\s*\]/ },
@@ -403,7 +395,7 @@ assertFileContains("context-protocol/src/terminal-history-policy.js", [
   { name: "terminal projection derives a stable explanation identity", pattern: /`\$\{status\.turnScopeId\}::terminal_status`/ },
 ]);
 assertFileContains("agent/src/session/services/session-context-service.js", [
-  { name: "delegates terminal history projection to Context Protocol", pattern: /@noobot\/context-protocol\/terminal-history-policy/ },
+  { name: "delegates source projection to Context Protocol", pattern: /@noobot\/context-protocol[\s\S]*?projectContextSource/ },
   { name: "reads messages and statuses from one authoritative snapshot", pattern: /getSessionContextSource/ },
 ]);
 const summaryCheckpointText = assertFileContains("agent/src/bot/session/summary-checkpoint-committer.js", [
@@ -514,16 +506,15 @@ if (/legacySnapshotPath\b/.test(snapshotStoreText)) {
 } else {
   pass("stopped snapshots use one canonical storage path");
 }
-assertFileContains("agent/src/context/session/summarized-message-policy.js", [
-  { name: "delegates summary strategy to context protocol", pattern: /@noobot\/context-protocol\/summary-policy/ },
-]);
 const turnThresholdsText = readFileSync(
   path.join(ROOT, "shared", "turn-thresholds.mjs"),
   "utf8",
 );
-const historyLimitUsesTurnThreshold =
-  normalizerText &&
-  /MAIN_MODEL_HISTORY_ROUND_LIMIT\s*=\s*[\s\S]*?TURN_THRESHOLDS\.session\.mainModelHistoryRoundLimit\b/.test(normalizerText);
+const contextBlocksText = readRel("agent/src/context/assembly/message-builder/context-blocks.js");
+const sessionContextText = readRel("agent/src/session/services/session-context-service.js");
+const historyLimitUsesTurnThreshold = [contextBlocksText, sessionContextText].every((source) =>
+  /TURN_THRESHOLDS\.session\.mainModelHistoryRoundLimit\b/.test(source),
+);
 const centralHistoryLimitMatch = turnThresholdsText?.match(
   /mainModelHistoryRoundLimit:\s*(\d+)\b/,
 );
@@ -537,7 +528,7 @@ if (historyLimitUsesTurnThreshold && centralizedHistoryLimitIsValid) {
 } else {
   fail(
     "history round limit drifted",
-    "MAIN_MODEL_HISTORY_ROUND_LIMIT must use TURN_THRESHOLDS.session.mainModelHistoryRoundLimit, and that central value must be a positive integer.",
+    "Every Agent history projection must use TURN_THRESHOLDS.session.mainModelHistoryRoundLimit, and that central value must be a positive integer.",
   );
 }
 
@@ -593,7 +584,7 @@ if (!mainIncrementalResolverText) {
 }
 
 const helpersText = assertFileContains("agent/src/bot/session/model-message-runtime-helpers.js", [
-  { name: "uses central final resolver", pattern: /resolveMainModelFinalMessages/ },
+  { name: "uses protocol final resolver", pattern: /@noobot\/context-protocol\/window-reducer[\s\S]*?resolveModelFinalMessages/ },
   { name: "requires authoritative modelContext", pattern: /requireAuthoritativeMessageBlocks\(ctx\)/ },
   { name: "resolves system block", pattern: /resolveBlockMessages\(blocks,\s*["']system["']\)/ },
   { name: "resolves history block", pattern: /resolveBlockMessages\(blocks,\s*["']history["']\)/ },
@@ -609,7 +600,7 @@ if (helpersText && /ctx\?\.agentContext\?\.payload\?\.messages/.test(helpersText
 }
 
 assertFileContains("agent/src/runtime/turn/turn-executor.js", [
-  { name: "main turn uses central final resolver", pattern: /resolveMainModelFinalMessages/ },
+  { name: "main turn uses protocol final resolver", pattern: /@noobot\/context-protocol\/window-reducer[\s\S]*?resolveModelFinalMessages/ },
 ]);
 
 assertFileContains("agent/src/context/index.js", [
@@ -624,8 +615,8 @@ assertFileContains("agent/src/session/index.js", [
 ]);
 
 assertFileContains("agent/src/session/services/session-context-service.js", [
-  { name: "session history excludes current turn before recent dialogs", pattern: /_filterCurrentRunMessages[\s\S]*?_filterCurrentDialogMessages[\s\S]*?_filterCurrentTurnMessages/ },
-  { name: "recent history uses current dialog exclusion", pattern: /async\s+getRecentSessionMessages[\s\S]*?currentDialogProcessId[\s\S]*?_filterCurrentRunMessages[\s\S]*?currentTurnScopeId,\s*currentDialogProcessId/ },
+  { name: "session history delegates scope and projection to protocol", pattern: /createContextScope[\s\S]*?projectContextSource/ },
+  { name: "session history exposes one projection", pattern: /async\s+getContextProjection/ },
 ]);
 
 const messageBuilderText = readFileSync(
@@ -684,7 +675,7 @@ if (messageStoreText) {
 }
 
 assertFileContains("agent/src/runtime/hooks/hook-context-builder.js", [
-  { name: "hook context accepts only supplied versioned modelContext", pattern: /attachModelContext\(context,\s*suppliedModelContext\?\.protocolVersion\s*\?\s*suppliedModelContext\s*:\s*null\)/ },
+  { name: "hook context accepts only supplied versioned modelContext", pattern: /attachModelContext\(context,\s*modelContext\?\.protocolVersion\s*\?\s*modelContext\s*:\s*null\)/ },
 ]);
 
 assertFileContains("agent/src/runtime/turn/turn-executor.js", [

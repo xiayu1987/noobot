@@ -14,6 +14,7 @@ const PREFERENCE_KEYS = new Set([
   "allowUserInteraction",
   "sanitizeOutput",
   "streaming",
+  "frontendThresholdsEnabled",
   "confirmationLevel",
   "locale",
   "scenario",
@@ -69,6 +70,7 @@ export function createRunPreferences(input = {}) {
     ...(Object.prototype.hasOwnProperty.call(input, "streaming")
       ? { streaming: input.streaming === true }
       : {}),
+    frontendThresholdsEnabled: input.frontendThresholdsEnabled === true,
     confirmationLevel: CONFIRMATION_LEVELS.has(confirmationLevel) ? confirmationLevel : "low",
     locale: clean(input.locale),
     scenario: clean(input.scenario),
@@ -94,6 +96,9 @@ export function validateRunPreferences(preferences) {
   }
   if (Object.prototype.hasOwnProperty.call(preferences, "streaming") && typeof preferences.streaming !== "boolean") {
     errors.push("invalid_streaming");
+  }
+  if (typeof preferences.frontendThresholdsEnabled !== "boolean") {
+    errors.push("invalid_frontend_thresholds_enabled");
   }
   if (!CONFIRMATION_LEVELS.has(clean(preferences.confirmationLevel).toLowerCase())) {
     errors.push("invalid_confirmation_level");

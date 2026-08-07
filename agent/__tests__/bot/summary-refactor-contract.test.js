@@ -9,8 +9,8 @@ import assert from "node:assert/strict";
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
 import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
-import { filterForModelContext } from "../../src/context/session/message-context-policy.js";
-import { resolveMainModelFinalMessages } from "../../src/session/utils/context-window-normalizer.js";
+import { filterForModelContext } from "@noobot/context-protocol/message-policy";
+import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol/window-reducer";
 import {
   appendContextMessage as appendMessage,
   pruneContextSummarizedIncremental as pruneSummarizedIncrementalMessages,

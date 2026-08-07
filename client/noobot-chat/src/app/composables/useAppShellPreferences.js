@@ -85,6 +85,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   const pluginModelConfig = ref(
     applyFrontendPluginModelConfigDefaults(uiPreferences.pluginModelConfig),
   );
+  const frontendThresholdsEnabled = ref(false);
   const summaryPolicy = ref({});
   const hasStoredSelectedPlugins = ref(hasStoredSelectedPluginKeys());
   const selectedPlugins = ref(loadSelectedPluginKeys());
@@ -205,6 +206,10 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
       : {};
   }
 
+  function onFrontendThresholdsEnabledUpdate(value = false) {
+    frontendThresholdsEnabled.value = value === true;
+  }
+
   function onSelectedPluginsUpdate(value = []) {
     const selectablePluginKeySet = new Set(
       availablePlugins.value
@@ -256,6 +261,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     selectedModel,
     memoryModel,
     pluginModelConfig,
+    frontendThresholdsEnabled,
     summaryPolicy,
     selectedPlugins,
     availableBotScenarios,
@@ -271,6 +277,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
     onSelectedModelUpdate,
     onMemoryModelUpdate,
     onPluginModelConfigUpdate,
+    onFrontendThresholdsEnabledUpdate,
     onSummaryPolicyUpdate,
     onSelectedPluginsUpdate,
     onUserIdUpdate,

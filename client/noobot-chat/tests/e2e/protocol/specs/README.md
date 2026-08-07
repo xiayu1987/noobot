@@ -8,15 +8,9 @@
 - `016`～`017`：Harness 自然完成、Hook 中断和 Model Context。
 - `021`～`026`：Session 恢复、版本冲突、停止幂等、断网和非法协议拒绝。
 - `027`～`032`：插件协议、Session 协议、本地 Session 刷新和 Workflow 生命周期。
-- `033`～`036`：Harness 各流程低轮次触发、主 Agent `task_summary` checkpoint、周期 `task_check` 切片，以及安全工具/实时思考/交互模型输入闭环。
-- PBE-018、PBE-019、PBE-020 已分别合并到 PBE-033、PBE-032、PBE-028；PBE-099 的重复组合审计已删除。
-- 当前 30 条场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
-
-### PBE-033：Harness 低轮次完整流程
-
-步骤：从 Harness UI 设置 guidance analysis 强度并启用 planning/acceptance；summary、plan update 和 phase acceptance 阈值不在界面展示，测试通过正式 `update:pluginModelConfig` 参数边界把本次运行阈值设为 2、3、1，再驱动五步依赖工具链。Summary 使用 2 以便在任务中段触发一次小结，避免在任务已完成边界制造“完成后继续”的语义冲突；Plan update 使用 3 是为了给初始 planning refinement 和 phase acceptance 保留调度轮次。
-
-断言：transport 中只有 `pluginModelConfig.harness` 的正式字段；planning、guidance analysis、plan revision/refinement、summary、phase acceptance、semantic validation 和 review 都形成 decision/execution 事实；阈值事件记录 `thresholdSource=runtime`；Harness summary 生成后唯一 Session checkpoint、消息 `summarized` 标记和 capability 模型观测闭合，主业务严格执行五次 `execute_script`，不得在小结后重做计算链。
+- `034`～`036`：主 Agent `task_summary` checkpoint、周期 `task_check` 切片，以及安全工具/实时思考/交互模型输入闭环。
+- PBE-018、PBE-019、PBE-020 已分别合并到 PBE-016/017、PBE-032、PBE-028；PBE-033 的重复 Harness/阈值复合链路与 PBE-099 的重复组合审计已删除。
+- 当前 29 条场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
 
 ### PBE-034：主 Agent 低轮次阶段小结
 

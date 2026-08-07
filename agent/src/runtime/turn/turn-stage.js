@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filterForModelContext } from "../../context/session/message-context-policy.js";
+import { filterForModelContext } from "@noobot/context-protocol/message-policy";
 import { mergeConfig, normalizeBooleanLike, resolveRunConfigValue } from "../../config/index.js";
 import { emitEvent } from "../../events/index.js";
 import { createChatModelFromSpec } from "../../models/index.js";

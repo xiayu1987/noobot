@@ -156,7 +156,10 @@ test("run summary and task-check policy has one strict per-run transport shape",
     commandId: "turn-summary",
     identity: { sessionId: "session-1", turnScopeId: "turn-summary" },
     input: { message: "summarize after one loop", attachments: [] },
-    preferences: { summaryPolicy: { phaseSummaryLoopTurns: 1, taskCheckLoopTurns: 2 } },
+    preferences: {
+      frontendThresholdsEnabled: true,
+      summaryPolicy: { phaseSummaryLoopTurns: 1, taskCheckLoopTurns: 2 },
+    },
     presentation: {},
     concurrency: {},
   });
@@ -165,6 +168,7 @@ test("run summary and task-check policy has one strict per-run transport shape",
     phaseSummaryLoopTurns: 1,
     taskCheckLoopTurns: 2,
   });
+  assert.equal(command.preferences.frontendThresholdsEnabled, true);
   assert.equal(parseAgentCommand(command), command);
 
   command.preferences.summaryPolicy.legacyTurns = 1;
@@ -175,6 +179,9 @@ test("run summary and task-check policy has one strict per-run transport shape",
   command.preferences.summaryPolicy.phaseSummaryLoopTurns = 1;
   command.preferences.summaryPolicy.taskCheckLoopTurns = 0;
   assert.throws(() => parseAgentCommand(command), /invalid_task_check_loop_turns/);
+  command.preferences.summaryPolicy.taskCheckLoopTurns = 2;
+  command.preferences.frontendThresholdsEnabled = "true";
+  assert.throws(() => parseAgentCommand(command), /invalid_frontend_thresholds_enabled/);
 });
 
 test("protocol rejects unknown nested fields and irrelevant command sections", () => {

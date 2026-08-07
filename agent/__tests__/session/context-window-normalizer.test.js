@@ -8,13 +8,20 @@ import assert from "node:assert/strict";
 
 import {
   filterSummarizedMessages,
-  MAIN_MODEL_HISTORY_ROUND_LIMIT,
-  resolveMainModelFinalMessages,
-  resolveMainModelHistoryMessages,
-  resolveMainModelIncrementalMessages,
-} from "../../src/session/utils/context-window-normalizer.js";
-import { filterForModelContext } from "../../src/context/session/message-context-policy.js";
-import { markCurrentTurnArraySummarized } from "../../src/context/session/summarized-message-policy.js";
+  markCurrentTurnArraySummarized,
+} from "@noobot/context-protocol/summary-policy";
+import {
+  resolveModelFinalMessages,
+  resolveModelHistoryMessages,
+  resolveModelIncrementalMessages,
+} from "@noobot/context-protocol/window-reducer";
+import { filterForModelContext } from "@noobot/context-protocol/message-policy";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+
+const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
+const resolveMainModelFinalMessages = (options = {}) => resolveModelFinalMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
+const resolveMainModelHistoryMessages = (options = {}) => resolveModelHistoryMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
+const resolveMainModelIncrementalMessages = (options = {}) => resolveModelIncrementalMessages(options);
 
 test("filterSummarizedMessages removes only summarized messages", () => {
   const input = [

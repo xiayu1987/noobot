@@ -124,6 +124,7 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
   if (!facet || typeof facet !== "object") return null;
   const isCall = kind === "call";
   const canonicalDetail = isCall ? entry?.args : entry?.result;
+  const summary = text(facet.summary) || buildToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall });
   return {
     eventId: text(facet.eventId),
     event: isCall ? "tool_call" : "tool_result",
@@ -132,7 +133,7 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
     category: "tool",
     toolCallId: text(entry.toolCallId),
     tool: text(entry.tool),
-    text: buildToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall }),
+    text: summary,
     ...(isCall ? { args: canonicalDetail } : { result: canonicalDetail }),
     ...(isCall ? {} : {
       success: entry.success !== false,

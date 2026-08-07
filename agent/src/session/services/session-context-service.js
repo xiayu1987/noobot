@@ -3,11 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  MAIN_MODEL_HISTORY_ROUND_LIMIT,
-  resolveMainModelHistoryMessages,
-} from "../utils/context-window-normalizer.js";
-import { projectTerminalHistoryMessages } from "@noobot/context-protocol/terminal-history-policy";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { createContextScope, projectContextSource } from "@noobot/context-protocol";
 
 export class SessionContextService {
   constructor({
@@ -21,7 +18,7 @@ export class SessionContextService {
 
   _sessionContextConfig() {
     return {
-      historyRoundLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT,
+      historyRoundLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
     };
   }
 
@@ -36,35 +33,7 @@ export class SessionContextService {
     });
   }
 
-  _filterCurrentTurnMessages(messages = [], { currentTurnScopeId = "" } = {}) {
-    const normalizedTurnScopeId = String(currentTurnScopeId || "").trim();
-    const source = Array.isArray(messages) ? messages : [];
-    if (!normalizedTurnScopeId) return source;
-    return source.filter(
-      (messageItem = {}) => String(messageItem?.turnScopeId || "").trim() !== normalizedTurnScopeId,
-    );
-  }
-
-  _filterCurrentDialogMessages(messages = [], { currentDialogProcessId = "" } = {}) {
-    const normalizedDialogProcessId = String(currentDialogProcessId || "").trim();
-    const source = Array.isArray(messages) ? messages : [];
-    if (!normalizedDialogProcessId) return source;
-    return source.filter(
-      (messageItem = {}) => String(messageItem?.dialogProcessId || messageItem?.dialogId || "").trim() !== normalizedDialogProcessId,
-    );
-  }
-
-  _filterCurrentRunMessages(messages = [], {
-    currentTurnScopeId = "",
-    currentDialogProcessId = "",
-  } = {}) {
-    return this._filterCurrentDialogMessages(
-      this._filterCurrentTurnMessages(messages, { currentTurnScopeId }),
-      { currentDialogProcessId },
-    );
-  }
-
-  async getRecentSessionMessages({
+  async getContextProjection({
     userId,
     sessionId,
     parentSessionId = "",
@@ -77,22 +46,20 @@ export class SessionContextService {
     void limit;
     const config = this._sessionContextConfig(userConfig);
     const source = await this._getSessionContextSource({ userId, sessionId, parentSessionId });
-    const messages = this._filterCurrentRunMessages(
-      source.messages,
-      { currentTurnScopeId, currentDialogProcessId },
-    );
-    const turnStatuses = this._filterCurrentRunMessages(
-      source.turnStatuses,
-      { currentTurnScopeId, currentDialogProcessId },
-    );
-    const terminalHistoryMessages = projectTerminalHistoryMessages({
-      messages,
-      turnStatuses,
-    });
-    return resolveMainModelHistoryMessages({
-      sourceMessages: terminalHistoryMessages,
+    return projectContextSource({
+      source,
+      scope: createContextScope({
+        sessionId,
+        parentSessionId,
+        dialogProcessId: currentDialogProcessId,
+        turnScopeId: currentTurnScopeId,
+      }),
       historyLimit: config.historyRoundLimit,
     });
+  }
+
+  async getRecentSessionMessages(options = {}) {
+    return (await this.getContextProjection(options)).messages;
   }
 
   async getContextRecords({

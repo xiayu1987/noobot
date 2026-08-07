@@ -32,6 +32,7 @@ describe("buildChatPayload model preferences", () => {
 
   it("disables text streaming by default", () => {
     expect(buildChatPayload({ message: "x" }).preferences.streaming).toBe(false);
+    expect(buildChatPayload({ message: "x" }).preferences.frontendThresholdsEnabled).toBe(false);
   });
 
   it("enables output sanitization by default and sends an explicit opt-out", () => {
@@ -103,10 +104,12 @@ describe("buildChatPayload model preferences", () => {
       activeSession: { value: { sessionId: "session-1" } },
       message: "hello",
       turnScopeId: "turn-1",
+      frontendThresholdsEnabled: true,
       summaryPolicy: { phaseSummaryLoopTurns: 1 },
     });
 
     expect(payload.preferences.summaryPolicy).toEqual({ phaseSummaryLoopTurns: 1 });
+    expect(payload.preferences.frontendThresholdsEnabled).toBe(true);
   });
 
   it("accepts selectedPlugins as a plain array", () => {

@@ -285,6 +285,43 @@ test("workflow child terminal state does not own root channel retention", () => 
   assert.equal(channel.conversationStateByDialogProcessId.get("child-dialog"), undefined);
 });
 
+test("authoritative terminal lifecycle closes pending interactions for the same turn", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId: "session-terminal" }), {
+    userId: "user-1", sessionId: "session-terminal",
+  });
+  manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-terminal",
+    sessionId: "session-terminal",
+    dialogProcessId: "dp-terminal",
+    turnScopeId: "turn-terminal",
+    interactionType: "confirm",
+    content: "confirm",
+    seq: 2,
+  });
+  manager.pushChannelEvent(channel, "turn_lifecycle", {
+    protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
+    eventId: "terminal-1",
+    eventType: "turn.completed",
+    sessionId: "session-terminal",
+    turnScopeId: "turn-terminal",
+    dialogProcessId: "dp-terminal",
+    messageId: "message-terminal",
+    presentationMessageId: "message-terminal",
+    revision: 3,
+    sequence: 3,
+    phase: "completion",
+    state: "completed",
+    action: "send",
+    executionState: "completed",
+    summaryVersion: 1,
+    completionCommitId: "terminal-commit",
+    capabilities: { actionLocked: false, canStop: false },
+  });
+  assert.equal(channel.pendingInteractionRequests.has("req-terminal"), false);
+  assert.equal(manager.requestChannelMap.has("req-terminal"), false);
+});
+
 test("invalid interaction_request has no journal, route, pending, or state side effects", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId: "session-invalid" }), {

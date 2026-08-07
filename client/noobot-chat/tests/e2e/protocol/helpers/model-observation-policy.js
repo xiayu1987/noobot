@@ -18,7 +18,7 @@ const requiredCases = [
   27, 28, 29,
   31,
   32,
-  33, 34, 35, 36,
+  34, 35, 36,
 ];
 
 export const MODEL_OBSERVATION_POLICY = Object.freeze(Object.fromEntries([

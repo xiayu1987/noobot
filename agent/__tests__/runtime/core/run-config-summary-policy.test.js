@@ -11,10 +11,19 @@ import {
   resolveTaskCheckLoopTurns,
 } from "../../../src/runtime/run-config/config-resolver.js";
 
-test("phase summary loop threshold comes only from the canonical run summary policy", () => {
+test("phase summary loop threshold requires the explicit frontend threshold mode", () => {
   assert.equal(
     resolvePhaseSummaryLoopTurns({
       runConfig: { summaryPolicy: { phaseSummaryLoopTurns: 1 } },
+    }),
+    BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
+  );
+  assert.equal(
+    resolvePhaseSummaryLoopTurns({
+      runConfig: {
+        frontendThresholdsEnabled: true,
+        summaryPolicy: { phaseSummaryLoopTurns: 1 },
+      },
     }),
     1,
   );
@@ -29,9 +38,15 @@ test("phase summary loop threshold comes only from the canonical run summary pol
   );
 });
 
-test("task check threshold comes only from the canonical run summary policy", () => {
+test("task check threshold requires the explicit frontend threshold mode", () => {
   assert.equal(resolveTaskCheckLoopTurns({
     runConfig: { summaryPolicy: { taskCheckLoopTurns: 2 } },
+  }), BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns);
+  assert.equal(resolveTaskCheckLoopTurns({
+    runConfig: {
+      frontendThresholdsEnabled: true,
+      summaryPolicy: { taskCheckLoopTurns: 2 },
+    },
   }), 2);
   assert.equal(resolveTaskCheckLoopTurns({
     runConfig: { taskCheckLoopTurns: 1, pluginModelConfig: { taskCheckLoopTurns: 3 } },

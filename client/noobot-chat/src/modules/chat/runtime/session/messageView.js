@@ -16,6 +16,16 @@ import { RoleEnum } from "../../model/chatConstants.js";
 import { getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logWorkflowDiagnostics, summarizeWorkflowMessage } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 
+function isInternalControlMessage(messageItem = {}) {
+  const marker = String(
+    messageItem?.noobotInternalMessageType ||
+    messageItem?.additional_kwargs?.noobotInternalMessageType ||
+    messageItem?.metadata?.noobotInternalMessageType ||
+    "",
+  ).trim();
+  return Boolean(marker);
+}
+
 export function createSessionMessageView({
   sessions,
   activeSession,
@@ -81,6 +91,7 @@ export function createSessionMessageView({
     const childWorkflowMessage = messageTurnScopeId.startsWith("workflow-node:");
     const shouldRender = messageRole !== RoleEnum.TOOL &&
       !isPluginInjectedMessage(messageItem) &&
+      !isInternalControlMessage(messageItem) &&
       !childWorkflowMessage;
     const summary = summarizeWorkflowMessage(messageItem);
     if (summary.type === "workflow" || summary.pluginSource === "workflow-plugin" || childWorkflowMessage) {

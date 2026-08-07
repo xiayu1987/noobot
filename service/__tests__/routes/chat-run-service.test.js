@@ -36,6 +36,7 @@ function createCommand(overrides = {}) {
       selectedModel: "gpt-5.5",
       memoryModel: "memory-gpt",
       pluginModelConfig: { web_search: { semanticModel: "gpt-4.1-mini" } },
+      frontendThresholdsEnabled: true,
       summaryPolicy: { phaseSummaryLoopTurns: 1 },
       selectedPlugins: ["planning"],
       selectedConnectors: { terminal: "local" },
@@ -57,6 +58,7 @@ test("chat-run-service maps a validated transport command without a compat confi
   assert.equal(request.sessionId, "session-1");
   assert.equal(request.runConfig.selectedModel, "gpt-5.5");
   assert.equal(request.runConfig.memoryModel, "memory-gpt");
+  assert.equal(request.runConfig.frontendThresholdsEnabled, true);
   assert.deepEqual(request.runConfig.summaryPolicy, { phaseSummaryLoopTurns: 1 });
   assert.equal(request.runConfig.presentationMessageId, "assistant-1");
   assert.equal(request.runConfig.userMessageId, "user-1");

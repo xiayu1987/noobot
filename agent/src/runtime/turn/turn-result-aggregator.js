@@ -6,7 +6,7 @@
 import {
   markCurrentTurnModelMessagesSummarized,
   markCurrentTurnStoreSummarized,
-} from "../../context/session/summarized-message-policy.js";
+} from "@noobot/context-protocol/summary-policy";
 import {
   DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
 } from "@noobot/context-protocol/summary-policy";

@@ -90,7 +90,7 @@ export function resolveModelFinalMessages({
 }
 
 export function materializeModelContext(context = {}) {
-  if (Number(context?.protocolVersion) !== 1) {
+  if (Number(context?.protocolVersion) !== 2) {
     throw new Error("materializeModelContext requires modelContext protocolVersion=2");
   }
   const blocks = context?.messageBlocks && typeof context.messageBlocks === "object"

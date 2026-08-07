@@ -12,7 +12,7 @@ import {
   normalizeToolCalls,
 } from "../../models/index.js";
 import { executeToolCallInTurn } from "../tool-execution/tool-runner.js";
-import { filterForModelContext } from "../../context/session/message-context-policy.js";
+import { filterForModelContext } from "@noobot/context-protocol/message-policy";
 import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,

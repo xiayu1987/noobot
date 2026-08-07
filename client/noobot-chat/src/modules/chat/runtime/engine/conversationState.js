@@ -359,9 +359,6 @@ export function createChatEngineConversationState({
     }
     if (!isTerminalConversationState(state)) return;
     clearRememberedStopRequests({ sessionId, dialogProcessId, turnScopeId });
-    if (typeof clearPendingInteractionIfObsolete === "function") {
-      clearPendingInteractionIfObsolete({ sessionId, dialogProcessId });
-    }
     clearMissingInteractionPayloadTimer({ sessionId, dialogProcessId });
     if (!pendingInteractionRequest.value) {
       interactionSubmitting.value = false;

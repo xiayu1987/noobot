@@ -101,6 +101,7 @@ const {
   selectedModel,
   memoryModel,
   pluginModelConfig,
+  frontendThresholdsEnabled,
   summaryPolicy,
   selectedPlugins,
   availableBotScenarios,
@@ -116,6 +117,7 @@ const {
   onSelectedModelUpdate,
   onMemoryModelUpdate,
   onPluginModelConfigUpdate,
+  onFrontendThresholdsEnabledUpdate,
   onSummaryPolicyUpdate,
   onSelectedPluginsUpdate,
   onUserIdUpdate,
@@ -219,6 +221,7 @@ const {
   selectedModel,
   memoryModel,
   pluginModelConfig,
+  frontendThresholdsEnabled,
   summaryPolicy,
   selectedPlugins,
   connected,
@@ -556,6 +559,7 @@ const drawerPanels = computed(() =>
       @update:selected-model="onSelectedModelUpdate"
       @update:memory-model="onMemoryModelUpdate"
       @update:plugin-model-config="onPluginModelConfigUpdate"
+      @update:frontend-thresholds-enabled="onFrontendThresholdsEnabledUpdate"
       @update:summary-policy="onSummaryPolicyUpdate"
       @update:selected-plugins="onSelectedPluginsUpdate"
       @update:more-panel-visible="handleComposerMorePanelVisibleUpdate"

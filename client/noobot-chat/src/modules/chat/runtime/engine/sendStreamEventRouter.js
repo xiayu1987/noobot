@@ -120,7 +120,7 @@ export function createSendStreamEventHandler(context) {
     })) return;
     if (routeCurrentTurnLifecycleEvent(event, data, {
       activeSession, applyTurnLifecycleEnvelope, findCanonicalMessageById,
-      clearPendingInteractionIfObsolete, logSessionEvent, makeViewMessage, sessionId,
+      logSessionEvent, makeViewMessage, sessionId,
     })) return;
     if (routeRuntimeStreamEvent(event, data, {
       source: "live", logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,

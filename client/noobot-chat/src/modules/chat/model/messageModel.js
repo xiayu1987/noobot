@@ -251,6 +251,12 @@ function createMessageModel(messageItem = {}) {
     hasFirstStreamEvent: canonicalMessage.hasFirstStreamEvent === true,
     ts: messageTimestamp || nowIso(),
     taskId: canonicalMessage.taskId || "",
+    noobotInternalMessageType: String(
+      canonicalMessage?.noobotInternalMessageType ||
+      canonicalMessage?.additional_kwargs?.noobotInternalMessageType ||
+      canonicalMessage?.metadata?.noobotInternalMessageType ||
+      "",
+    ).trim(),
     injectedMessage: canonicalMessage.injectedMessage === true,
     injectedBy: String(canonicalMessage.injectedBy || "").trim(),
     workflowMessage: isWorkflowMessageLike(canonicalMessage),

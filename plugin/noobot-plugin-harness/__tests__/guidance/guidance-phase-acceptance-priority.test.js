@@ -78,6 +78,7 @@ test("planning and phase acceptance use canonical per-run thresholds", async () 
     ctx: { messages: [{ role: "user", content: "继续任务" }], agentContext },
     meta: {
       harness: {
+        frontendThresholdsEnabled: true,
         planning: { planUpdate: { triggerTurnsThreshold: 1 } },
         acceptance: { phase: { triggerTurnsThreshold: 1 } },
       },
@@ -99,6 +100,7 @@ test("planning and phase acceptance use canonical per-run thresholds", async () 
     ctx: { turn: 2, messages: [{ role: "user", content: "继续任务" }], agentContext },
     meta: {
       harness: {
+        frontendThresholdsEnabled: true,
         planning: { planUpdate: { triggerTurnsThreshold: 99 } },
         acceptance: { phase: { triggerTurnsThreshold: 1 } },
       },

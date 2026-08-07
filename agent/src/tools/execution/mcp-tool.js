@@ -111,6 +111,7 @@ export function createMcpTool({ agentContext }) {
             scope: TOOL_NAME.CALL_MCP_TASK,
           },
           runConfigPatch: {
+            pluginPolicy: { mode: "none" },
             allowUserInteraction,
             ...(hasParentStreamingConfig
               ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }

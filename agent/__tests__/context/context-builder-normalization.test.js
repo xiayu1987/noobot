@@ -339,9 +339,9 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
     },
     serviceContainer: {
       sessionManager: {
-        async getContextRecords(payload = {}) {
+        async getContextProjection(payload = {}) {
           calls.push(payload);
-          return [
+          return { messages: [
             {
               role: "user",
               content: "history user",
@@ -354,7 +354,7 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
               dialogProcessId: "history-dp",
               turnScopeId: "client-turn:old",
             },
-          ];
+          ], sourceRevision: "ctxsrc:test" };
         },
         async upsertSessionTree() {},
       },

@@ -43,6 +43,10 @@ export class RunConfigResolver {
 
   resolveAlwaysIncludedToolNames(runConfig = {}) {
     const alwaysIncludedToolNames = new Set();
+    const toolPolicyMode = String(runConfig?.toolPolicy?.mode || "")
+      .trim()
+      .toLowerCase();
+    if (toolPolicyMode === "custom_only") return alwaysIncludedToolNames;
     const scenario = String(runConfig?.scenario || "").trim().toLowerCase();
     const scenarioProfileKey = String(runConfig?.scenarioProfile?.key || "")
       .trim()
@@ -259,7 +263,10 @@ export class RunConfigResolver {
     if (requestedRuntimeModel) {
       resolvedRunConfig.runtimeModel = requestedRuntimeModel;
     }
-    if (scenarioToolNames.length && !hasAllTools) {
+    const toolPolicyMode = String(normalizedRunConfig?.toolPolicy?.mode || "")
+      .trim()
+      .toLowerCase();
+    if (scenarioToolNames.length && !hasAllTools && toolPolicyMode !== "custom_only") {
       const currentToolPolicy = isPlainObject(normalizedRunConfig?.toolPolicy)
         ? normalizedRunConfig.toolPolicy
         : {};

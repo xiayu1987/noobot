@@ -46,7 +46,15 @@ export function findVersionedEnvelopes(records = []) {
 }
 
 export function findAgentCommands(records = []) {
-  return findVersionedEnvelopes(records).filter((item) => typeof item.commandType === "string");
+  const commands = findVersionedEnvelopes(records).filter((item) => typeof item.commandType === "string");
+  const seen = new Set();
+  return commands.filter((command) => {
+    const commandId = String(command?.commandId || "").trim();
+    if (!commandId) return true;
+    if (seen.has(commandId)) return false;
+    seen.add(commandId);
+    return true;
+  });
 }
 
 export function findLifecycleEnvelopes(records = []) {

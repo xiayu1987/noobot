@@ -139,6 +139,7 @@ export function createContentProcessTool({ agentContext }) {
             scope: TOOL_NAME.PROCESS_CONTENT_TASK,
           },
           runConfigPatch: {
+            pluginPolicy: { mode: "none" },
             allowUserInteraction,
             ...(hasParentStreamingConfig
               ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }

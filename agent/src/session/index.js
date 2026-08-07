@@ -425,6 +425,11 @@ export function createSessionFacade(runtime = {}) {
         normalizeContextServicePayload(payload),
       );
     },
+    async getContextProjection(payload = {}) {
+      return sessionContextService.getContextProjection(
+        normalizeContextServicePayload(payload),
+      );
+    },
 
     async startSkillTask(payload = {}) {
       return taskService.startSkillTask(payload);

@@ -17,6 +17,7 @@ import {
 import {
   modelInvocationTraces,
   readSessionExecutionEventTree,
+  waitForModelInvocationTraces,
 } from "../helpers/persistence-audit.js";
 
 async function writeJsonLines(filePath, records) {
@@ -28,13 +29,15 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
   const outputDir = testInfo.outputPath("protocol-evidence");
   await fs.mkdir(outputDir, { recursive: true });
 
-  let traces = [];
-  const deadline = Date.now() + (policy.expectation === MODEL_CALL_EXPECTATION.REQUIRED ? 15000 : 0);
-  do {
-    traces = modelInvocationTraces(await readSessionExecutionEventTree(userId, sessionId));
-    if (traces.length > 0 || Date.now() >= deadline) break;
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  } while (true);
+  let traces = modelInvocationTraces(await readSessionExecutionEventTree(userId, sessionId));
+  if (policy.expectation === MODEL_CALL_EXPECTATION.REQUIRED && traces.length === 0) {
+    traces = await waitForModelInvocationTraces(
+      userId,
+      sessionId,
+      (observed) => observed.length > 0,
+      { timeoutMs: 120000 },
+    );
+  }
 
   let validationError = null;
   let prefixAudit = null;

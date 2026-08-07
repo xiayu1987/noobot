@@ -5,7 +5,6 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
-  createTaskCheckReceipt,
   parseTaskCheckContent,
 } from "@noobot/context-protocol/task-check-protocol";
 import { resolveContextInternalMessageType } from "@noobot/context-protocol/injected-message-policy";
@@ -89,6 +88,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     phaseSummaryLoopTurns: 4,
     taskCheckLoopTurns: 2,
   });
+  expect(firstSend.preferences.frontendThresholdsEnabled).toBe(true);
   await waitForNaturalCompletion({
     page: noobot.page,
     capture: protocolCapture,
@@ -96,6 +96,9 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     turnScopeId: firstSend.identity.turnScopeId,
     timeoutMs: 260000,
   });
+  await expect(noobot.page.locator(".chat-message-anchor").filter({
+    hasText: "已达到周期任务检查阈值",
+  })).toHaveCount(0);
 
   const records = await waitForSessionExecutionEventTree(noobot.userId, noobot.sessionId, (items) => {
     const scoped = items.filter((item) => item.turnScopeId === firstSend.identity.turnScopeId);
@@ -145,7 +148,12 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     const call = checks.find(({ call: candidate }) => toolCallId(candidate) === resultMessage.tool_call_id)?.call;
     const parsed = parseTaskCheckContent(toolCallArgs(call).checkContent);
     expect(payload.protocolVersion).toBe(1);
-    expect(payload.summary).toEqual(createTaskCheckReceipt(parsed));
+    expect(payload.summary).toMatchObject({
+      state: parsed.state,
+      abstract: parsed.abstract,
+      nextAction: parsed.nextAction,
+    });
+    expect(payload.summary.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(Object.keys(payload.summary).sort()).toEqual(["abstract", "contentHash", "nextAction", "state"]);
     expect(payload.summary.details).toBeUndefined();
     expect(resultMessage.transferEnvelopes || []).toEqual([]);

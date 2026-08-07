@@ -147,4 +147,25 @@ describe("applyReconnectDataReplay", () => {
     });
     expect(f.applyPendingInteraction).toHaveBeenCalledWith(interaction.data);
   });
+
+  it("materializes pending interactions after session activation and hydration", async () => {
+    const interaction = {
+      event: "interaction_request",
+      data: {
+        requestId: "request-order", sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1",
+        interactionType: "approval", content: "approve?",
+      },
+    };
+    const order = [];
+    const f = fixture({
+      ensureReconnectSessionActive: vi.fn(async () => { order.push("activate"); }),
+      hydrateActiveSessionBeforeReplay: vi.fn(async () => { order.push("hydrate"); }),
+      applyPendingInteraction: vi.fn(async () => { order.push("interaction"); }),
+    });
+    await applyReconnectDataReplay({
+      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) }] },
+      ...f,
+    });
+    expect(order).toEqual(["activate", "hydrate", "interaction"]);
+  });
 });
