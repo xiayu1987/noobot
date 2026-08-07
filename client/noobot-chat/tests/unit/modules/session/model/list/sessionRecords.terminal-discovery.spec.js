@@ -97,4 +97,32 @@ describe("sessionRecords terminal discovery metadata", () => {
     expect(reconciled.turnStatuses).toHaveLength(1);
     expect(reconciled.turnTimings).toHaveLength(1);
   });
+
+  it("does not let an earlier list snapshot roll back a realtime aggregate version", () => {
+    const existing = mapSummaryToSession(summaryWithTerminalSnapshot({
+      aggregateVersion: 2,
+    }), helpers);
+    const earlierListSnapshot = mapSummaryToSession(summaryWithTerminalSnapshot({
+      aggregateVersion: 1,
+      updatedAt: "2026-07-10T00:00:30.000Z",
+    }), helpers);
+
+    const reconciled = reconcileSessionObject(earlierListSnapshot, existing, helpers);
+
+    expect(reconciled).toBe(existing);
+    expect(reconciled.aggregateVersion).toBe(2);
+  });
+
+  it("advances the aggregate version from a newer list snapshot", () => {
+    const existing = mapSummaryToSession(summaryWithTerminalSnapshot({
+      aggregateVersion: 1,
+    }), helpers);
+    const newerListSnapshot = mapSummaryToSession(summaryWithTerminalSnapshot({
+      aggregateVersion: 2,
+    }), helpers);
+
+    reconcileSessionObject(newerListSnapshot, existing, helpers);
+
+    expect(existing.aggregateVersion).toBe(2);
+  });
 });

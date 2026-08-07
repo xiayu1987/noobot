@@ -15,6 +15,7 @@ import { writeSessionArtifact } from "../../src/session/session-artifact-store.j
 import {
   buildSessionDisplaySummary,
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
+  SESSIONS_SUMMARY_SCHEMA_VERSION,
 } from "../../src/session/session-summary-builders.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 
@@ -88,12 +89,15 @@ test("session summaries should be maintained and rebuilt for list API", async ()
       { role: "assistant", content: "done", attachmentMetas: [{ id: "big" }] },
     ], "list_b");
     sessionB.currentTaskId = "task-b";
+    sessionB.aggregateVersion = 4;
     await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
 
     let summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
+    assert.equal(summary.schemaVersion, SESSIONS_SUMMARY_SCHEMA_VERSION);
     const writtenB = summary.sessions.find((item) => item.sessionId === "B");
     assert.equal(writtenB.title, "12345678901234567890");
     assert.equal(writtenB.messageCount, 3);
+    assert.equal(writtenB.aggregateVersion, 4);
     assert.equal(writtenB.depth, 0);
     assert.equal(Array.isArray(writtenB.messages), false);
     assert.equal(writtenB.lastMessage.role, "assistant");
@@ -102,6 +106,7 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     const list = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
     const listedB = list.find((item) => item.sessionId === "B");
     assert.equal(list.length, 2);
+    assert.equal(listedB.aggregateVersion, 4);
     assert.equal(listedB.depth, 2);
     assert.equal("messages" in listedB, false);
 

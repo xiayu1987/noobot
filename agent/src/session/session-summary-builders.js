@@ -15,6 +15,7 @@ import {
 import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 18;
+export const SESSIONS_SUMMARY_SCHEMA_VERSION = 1;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
@@ -106,6 +107,7 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
     createdAt: String(session?.createdAt || "").trim(),
     updatedAt: String(session?.updatedAt || "").trim(),
     depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
+    aggregateVersion: Math.max(0, Number(session?.aggregateVersion) || 0),
     title: customTitle || (firstUserMessage
       ? String(firstUserMessage.content || "").slice(0, 20)
       : sessionId.slice(0, 8)),
@@ -817,6 +819,7 @@ export function normalizeSessionsSummaryPayload(payload = {}, now = () => new Da
       createdAt: String(item?.createdAt || "").trim(),
       updatedAt: String(item?.updatedAt || "").trim(),
       depth: Number.isFinite(Number(item?.depth)) ? Number(item.depth) : 0,
+      aggregateVersion: Math.max(0, Number(item?.aggregateVersion) || 0),
       title: String(item?.title || "").trim() || String(item?.sessionId || "").trim().slice(0, 8),
       messageCount: Number.isFinite(Number(item?.messageCount)) ? Number(item.messageCount) : 0,
       lastMessage:
@@ -826,6 +829,7 @@ export function normalizeSessionsSummaryPayload(payload = {}, now = () => new Da
     }))
     .filter((item) => item.sessionId);
   return {
+    schemaVersion: SESSIONS_SUMMARY_SCHEMA_VERSION,
     sessions,
     updatedAt: String(payload?.updatedAt || "").trim() || now(),
   };

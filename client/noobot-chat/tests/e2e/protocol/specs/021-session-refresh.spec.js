@@ -9,7 +9,7 @@ import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
 import { sendAndStop, continueAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
 
-test("@core PBE-021 自然完成后刷新 Session", async ({ noobot, protocolCapture }, testInfo) => {
+test("@core PBE-021 自然完成后刷新 Session 并继续发送", async ({ noobot, protocolCapture }, testInfo) => {
   await sendMessage(noobot.page, uniquePrompt(testInfo, "complete naturally"));
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await waitForNaturalCompletion({ page: noobot.page, capture: protocolCapture, sessionId: noobot.sessionId, turnScopeId: send.identity.turnScopeId });
@@ -17,6 +17,17 @@ test("@core PBE-021 自然完成后刷新 Session", async ({ noobot, protocolCap
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
   expect(commandsForSession(protocolCapture, noobot.sessionId).filter((item) => item.commandType === "turn.send")).toHaveLength(count);
   await expect(noobot.page.locator(".stop-float-btn")).toBeHidden();
+
+  await sendMessage(noobot.page, uniquePrompt(testInfo, "send after refresh without an aggregate version conflict"));
+  const secondSend = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send", count);
+  expect(secondSend.concurrency.expectedAggregateVersion)
+    .toBeGreaterThan(send.concurrency.expectedAggregateVersion);
+  await waitForNaturalCompletion({
+    page: noobot.page,
+    capture: protocolCapture,
+    sessionId: noobot.sessionId,
+    turnScopeId: secondSend.identity.turnScopeId,
+  });
 });
 
 test("@core PBE-022 停止后关闭浏览器再打开并继续", async ({ noobot, protocolCapture }, testInfo) => {
