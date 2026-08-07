@@ -14,6 +14,7 @@ import {
   stripInternalEventPlaceholderLines,
 } from "./utils.js";
 import {
+  isTerminalInteraction,
   normalizeInteractionRequestPayload,
   resolveConnectorStatusPayload,
 } from "../interactionPayload.js";
@@ -147,6 +148,7 @@ export function handleInteractionRequestStreamEvent({
   scrollOnFirstResponseOnce,
   tryAutoResolveInteraction,
   setPendingInteractionRequest,
+  clearPendingInteraction,
 }) {
   const notifyFirstResponse = resolveFirstResponseNavigator({
     navigateOnFirstResponseOnce,
@@ -162,6 +164,10 @@ export function handleInteractionRequestStreamEvent({
   });
   notifyFirstResponse();
   if (tryAutoResolveInteraction(normalizedInteractionRequest)) {
+    return true;
+  }
+  if (isTerminalInteraction(normalizedInteractionRequest)) {
+    clearPendingInteraction?.(normalizedInteractionRequest);
     return true;
   }
   setPendingInteractionRequest(normalizedInteractionRequest);

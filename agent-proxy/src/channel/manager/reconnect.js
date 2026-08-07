@@ -8,7 +8,7 @@ import {
   EVENT_TYPE,
   CHANNEL_STATUS,
 } from "../../shared/constants.js";
-import { nowMs } from "../../shared/utils.js";
+import { createChannelKey, nowMs } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 import {
   createReplayBatch,
@@ -26,7 +26,30 @@ async handleReconnect(socket, payload = {}) {
   const currentSessionId = String(payload?.currentSessionId || "").trim();
   const requestId = String(payload?.requestId || "").trim();
   const knownLifecycleSequenceMap = payload?.knownLifecycleSequenceMap || {};
-  const reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId, payload);
+  let reconnectChannelKeys = this._resolveReconnectChannelKeys(socket, currentSessionId, payload);
+  const hasAnySessionChannel = currentSessionId && Array.from(this.channelStore.keys())
+    .some((channelKey) => this._extractSessionIdFromChannelKey(channelKey) === currentSessionId);
+  if (!reconnectChannelKeys.length && currentSessionId && !hasAnySessionChannel) {
+    const requesterUserId = String(socket?.__agentProxyUserId || payload?.userId || "").trim();
+    const channelKey = createChannelKey({ userId: requesterUserId, sessionId: currentSessionId });
+    const channel = this.ensureChannel(channelKey, {
+      sessionId: currentSessionId,
+      userId: requesterUserId,
+    });
+    if (channel && this.hasChannelPermission(channel, String(socket?.__agentProxyApiKey || "").trim(), requesterUserId)) {
+      reconnectChannelKeys = [channelKey];
+      this.connectUpstreamChannel(
+        channel,
+        String(socket?.__agentProxyApiKey || "").trim(),
+        String(socket?.__agentProxyLocale || "").trim(),
+        { initialPayload: null, purpose: "reconnect_session" },
+      );
+      const deadline = nowMs() + config.reconnectSnapshotTimeoutMs;
+      while (channel.upstreamSocket?.readyState !== this.WebSocket.OPEN && nowMs() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    }
+  }
   void writeAgentProxyRouteLifecycleEvent({
     event: "agentProxy.route.reconnect.started",
     socket,

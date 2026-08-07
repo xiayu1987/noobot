@@ -33,6 +33,7 @@ AGENT_PROXY_UPSTREAM_WS_URL="${AGENT_PROXY_UPSTREAM_WS_URL:-ws://127.0.0.1:10061
 AGENT_PROXY_UPSTREAM_HTTP_BASE="${AGENT_PROXY_UPSTREAM_HTTP_BASE:-http://127.0.0.1:10061}"
 CLIENT_CADDY_BIN="$CLIENT_DIR/deploy/bin/caddy"
 CLIENT_CADDY_CONFIG="$CLIENT_DIR/deploy/Caddyfile"
+PM2_ECOSYSTEM_FILE="$ROOT_DIR/ecosystem.noobot.config.cjs"
 CLIENT_DIST_DIR="$CLIENT_DIR/dist"
 PROJECT_LAUNCHER_SCRIPT="$ROOT_DIR/scripts/project-launcher.mjs"
 FRONTEND_URL_ADDR="$CADDY_ADDR"
@@ -477,26 +478,9 @@ start_or_restart_pm2_apps() {
 
   export CADDY_ADDR AGENT_PROXY_UPSTREAM
   export AGENT_PROXY_PORT AGENT_PROXY_HOST AGENT_PROXY_UPSTREAM_WS_URL AGENT_PROXY_UPSTREAM_HTTP_BASE
-  if [[ "$has_service_app" -eq 1 ]]; then
-    run_pm2 restart "$SERVICE_APP_NAME" --update-env
-  else
-    start_pm2 "$SERVICE_APP_NAME" npm --name "$SERVICE_APP_NAME" --cwd "$SERVICE_DIR" -- start
-  fi
-  if [[ "$has_agent_proxy_app" -eq 1 ]]; then
-    run_pm2 restart "$AGENT_PROXY_APP_NAME" --update-env
-  else
-    start_pm2 "$AGENT_PROXY_APP_NAME" npm --name "$AGENT_PROXY_APP_NAME" --cwd "$AGENT_PROXY_DIR" -- start
-  fi
-  if [[ "$has_model_proxy_app" -eq 1 ]]; then
-    run_pm2 restart "$MODEL_PROXY_APP_NAME" --update-env
-  else
-    start_pm2 "$MODEL_PROXY_APP_NAME" npm --name "$MODEL_PROXY_APP_NAME" --cwd "$MODEL_PROXY_DIR" -- start
-  fi
-  if [[ "$has_client_app" -eq 1 ]]; then
-    run_pm2 restart "$CLIENT_APP_NAME" --update-env
-  else
-    start_pm2 "$CLIENT_APP_NAME" npm --name "$CLIENT_APP_NAME" --cwd "$CLIENT_DIR" -- run serve:caddy
-  fi
+  [[ -f "$PM2_ECOSYSTEM_FILE" ]] || { echo "PM2 ecosystem 配置不存在: $PM2_ECOSYSTEM_FILE" >&2; return 1; }
+  run_pm2 delete "$SERVICE_APP_NAME" "$AGENT_PROXY_APP_NAME" "$MODEL_PROXY_APP_NAME" "$CLIENT_APP_NAME" >/dev/null 2>&1 || true
+  run_pm2 start "$PM2_ECOSYSTEM_FILE" --update-env
 }
 
 pm2_recent_logs_have_runtime_error() {
@@ -526,6 +510,9 @@ if (bad.length) {
   while [[ "$elapsed" -lt "$max_wait_seconds" ]]; do
     if apps_json="$(run_pm2 jlist 2>/dev/null)"; then
       if echo "$apps_json" | "${check_cmd[@]}" >/dev/null 2>&1; then
+        if ! echo "$apps_json" | node "$ROOT_DIR/scripts/validate-pm2-processes.mjs" "$ROOT_DIR" >/dev/null 2>&1; then
+          continue
+        fi
         if command -v ss >/dev/null 2>&1; then
           if ss -lnt | egrep ':10060|:10061|:10062' >/dev/null 2>&1; then
             log "Health check passed: apps online and ports 10060/10061/10062 listening."

@@ -25,6 +25,7 @@ import {
 } from "@noobot/session-protocol";
 import {
   validateInteractionRequestPayload,
+  isTerminalInteractionLifecycle,
 } from "@noobot/event-protocol";
 
 const TERMINAL_TURN_EVENTS = new Set([
@@ -199,7 +200,9 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   if (normalizedEventName === EVENT_TYPE.INTERACTION_REQUEST) {
     const validation = validateInteractionRequestPayload(data);
     const requestId = String(data?.requestId || "").trim();
-    if (!validation.valid || channel.pendingInteractionRequests.has(requestId) || this.requestChannelMap.has(requestId)) {
+    const lifecycle = String(data?.lifecycle || data?.interactionData?.lifecycle || "pending").trim().toLowerCase();
+    const isTerminal = validation.valid && isTerminalInteractionLifecycle(lifecycle);
+    if (!validation.valid || (!isTerminal && (channel.pendingInteractionRequests.has(requestId) || this.requestChannelMap.has(requestId)))) {
       this.logSessionEvent(channel, {
         category: "interaction",
         level: "warn",
@@ -209,7 +212,7 @@ pushChannelEvent(channel, eventName = "", data = {}) {
         turnScopeId: data?.turnScopeId,
         data: {
           requestId,
-          reason: validation.valid ? "duplicate_request_id" : validation.reason,
+          reason: validation.valid ? (isTerminal ? "terminal_without_pending_request" : "duplicate_request_id") : validation.reason,
           missing: validation.missing,
         },
       });
@@ -245,17 +248,32 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   this.recordSuccessfulDataPlaneOperation("channelEvents");
   if (String(envelope.event || "") === EVENT_TYPE.INTERACTION_REQUEST) {
     const requestId = String(envelope?.data?.requestId || "").trim();
-    this.commandRegistry.registerRoute(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
-    channel.pendingInteractionRequests.set(requestId, envelope);
-    this.updateConversationState(channel, {
-      dialogProcessId: envelope.data.dialogProcessId,
-      turnScopeId: envelope.data.turnScopeId,
-      state: CONVERSATION_STATE.INTERACTION_PENDING,
-      sourceEvent: EVENT_TYPE.INTERACTION_REQUEST,
-      seq: Number(envelope.data.seq || envelope.sequence || 0),
-      sessionId: envelope.data.sessionId,
-      requestId,
-    });
+    const lifecycle = String(envelope?.data?.lifecycle || envelope?.data?.interactionData?.lifecycle || "pending").trim().toLowerCase();
+    if (isTerminalInteractionLifecycle(lifecycle)) {
+      channel.pendingInteractionRequests.delete(requestId);
+      this.requestChannelMap.delete(requestId);
+      this.updateConversationState(channel, {
+        dialogProcessId: envelope.data.dialogProcessId,
+        turnScopeId: envelope.data.turnScopeId,
+        state: CONVERSATION_STATE.SENDING,
+        sourceEvent: EVENT_TYPE.INTERACTION_REQUEST,
+        seq: Number(envelope.data.seq || envelope.sequence || 0),
+        sessionId: envelope.data.sessionId,
+        requestId,
+      });
+    } else {
+      this.commandRegistry.registerRoute(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
+      channel.pendingInteractionRequests.set(requestId, envelope);
+      this.updateConversationState(channel, {
+        dialogProcessId: envelope.data.dialogProcessId,
+        turnScopeId: envelope.data.turnScopeId,
+        state: CONVERSATION_STATE.INTERACTION_PENDING,
+        sourceEvent: EVENT_TYPE.INTERACTION_REQUEST,
+        seq: Number(envelope.data.seq || envelope.sequence || 0),
+        sessionId: envelope.data.sessionId,
+        requestId,
+      });
+    }
   }
   if (envelope.event === EVENT_TYPE.TURN_LIFECYCLE) {
     this._applyAuthoritativeConversationState(channel, envelope.data);

@@ -4,27 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+  isTerminalInteractionLifecycle,
+  normalizeInteractionLifecycle,
+  normalizeInteractionResolvedBy,
+} from "@noobot/event-protocol";
+
 function normalizeInteractionData(input = {}) {
   return input && typeof input === "object" ? input : {};
-}
-
-function normalizeInteractionLifecycle(value = "") {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (!normalized) return "pending";
-  if (["pending", "resolved", "failed"].includes(normalized)) return normalized;
-  return "pending";
 }
 
 function normalizeInteractionAckMode(value = "") {
   const normalized = String(value || "").trim().toLowerCase();
   if (["manual", "auto"].includes(normalized)) return normalized;
   return "manual";
-}
-
-function normalizeInteractionResolvedBy(value = "") {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (["user", "system", "auto"].includes(normalized)) return normalized;
-  return "";
 }
 
 function normalizeInteractionNotification(input = {}) {
@@ -112,4 +105,9 @@ export function normalizeInteractionRequestPayload(payload = {}) {
 export function isAutoResolvedInteraction(payload = {}) {
   const request = normalizeInteractionRequestPayload(payload);
   return request.lifecycle === "resolved" && request.ackMode === "auto";
+}
+
+export function isTerminalInteraction(payload = {}) {
+  const request = normalizeInteractionRequestPayload(payload);
+  return isTerminalInteractionLifecycle(request.lifecycle);
 }

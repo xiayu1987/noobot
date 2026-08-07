@@ -176,6 +176,7 @@ export function createSendStreamEventHandler(context) {
         navigateOnFirstResponseOnce,
         tryAutoResolveInteraction,
         setPendingInteractionRequest,
+        clearPendingInteraction,
       });
     } else routeTerminalStreamEvent(event, data, terminalContext);
   };

@@ -189,3 +189,9 @@ export const TIME_THRESHOLDS = deepFreeze({
     sessionLogMinIntervalMs: TIME_TIERS.startupMs,
   },
 });
+
+export function resolveUserInteractionTimeoutMs(env = process.env) {
+  const configured = Number(env?.NOOBOT_USER_INTERACTION_TIMEOUT_MS);
+  if (Number.isFinite(configured) && configured >= 1000) return Math.floor(configured);
+  return TIME_THRESHOLDS.service.userInteractionTimeoutMs;
+}

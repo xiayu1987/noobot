@@ -22,6 +22,7 @@ test("same canonical interaction identity reuses one request before and after re
     interactionId: "call_oJrviXV4EN69KefLLl2406DH",
     sessionId: "session-1",
     dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
     toolName: "user_interaction",
     content: "confirm?",
   };
@@ -44,4 +45,31 @@ test("same canonical interaction identity reuses one request before and after re
   assert.equal(sentEvents.length, 1);
   assert.equal(sentEvents[0]?.data?.interactionId, payload.interactionId);
   assert.equal(sentEvents[0]?.data?.requestId, requestId);
+});
+
+test("timeout publishes the canonical failed interaction lifecycle and rejects the request", async () => {
+  const sentEvents = [];
+  const pendingInteractionRequests = new Map();
+  const { userInteractionBridge } = createUserInteractionBridge({
+    sendEvent(event, data) { sentEvents.push({ event, data }); },
+    translateText: () => "interaction timed out",
+    pendingInteractionRequests,
+    interactionTimeoutMs: 1,
+  });
+
+  const request = userInteractionBridge.requestUserInteraction({
+    interactionId: "timeout-call",
+    sessionId: "session-timeout",
+    dialogProcessId: "dialog-timeout",
+    turnScopeId: "turn-timeout",
+    toolName: "user_interaction",
+  });
+  await assert.rejects(request, /interaction timed out/);
+  assert.equal(pendingInteractionRequests.size, 0);
+  assert.equal(sentEvents.length, 2);
+  assert.equal(sentEvents[0].event, "interaction_request");
+  assert.equal(sentEvents[1].event, "interaction_request");
+  assert.equal(sentEvents[1].data.lifecycle, "failed");
+  assert.equal(sentEvents[1].data.resolvedBy, "system");
+  assert.equal(sentEvents[1].data.interactionData.reason, "timeout");
 });
