@@ -34,9 +34,6 @@
   --startup-text-muted: var(--startup-color-slate-400);
   --startup-text-accent: var(--startup-color-sky-300);
   --startup-status-running: var(--startup-color-sky-400);
-  --startup-shadow-card: 0 34px 120px rgba(0, 0, 0, .52), inset 0 1px 0 rgba(255, 255, 255, .05);
-  --startup-shadow-accent: 0 18px 50px rgba(56, 189, 248, .14), inset 0 1px 0 rgba(255, 255, 255, .18);
-  --startup-ring-control: 0 0 0 1px var(--startup-border-control) inset;
   color-scheme: dark;
   font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   background: var(--startup-bg-root);
@@ -68,7 +65,6 @@ button, input { font: inherit; }
   border: 1px solid var(--startup-border-card);
   border-radius: var(--noobot-radius-shell);
   background: var(--startup-surface-card);
-  box-shadow: var(--startup-shadow-card);
   backdrop-filter: blur(20px);
 }
 .hero { position: relative; padding: 36px 38px 22px; border-bottom: 1px solid var(--startup-border-soft); }
@@ -81,7 +77,6 @@ button, input { font: inherit; }
   height: 58px;
   border-radius: var(--noobot-radius-xl);
   background: linear-gradient(135deg, rgba(56, 189, 248, .28), rgba(129, 140, 248, .22));
-  box-shadow: var(--startup-shadow-accent);
 }
 .brand-badge { border-color: rgba(125, 211, 252, .18); background: rgba(14, 165, 233, .12); color: var(--startup-text-accent); font-weight: 800; }
 h1 { margin: 18px 0 10px; font-size: clamp(30px, 5vw, 42px); letter-spacing: -.04em; color: var(--startup-text-strong); }
@@ -95,7 +90,7 @@ p { margin: 8px 0; color: var(--startup-text-secondary); line-height: 1.58; }
 .field-full { grid-column: 1 / -1; }
 .el-form-item { margin-bottom: 0; }
 .el-form-item__label { color: var(--startup-text-strong); font-weight: 800; }
-.el-input__wrapper, .el-select__wrapper { border-radius: var(--noobot-radius-lg); background: var(--startup-surface-control); box-shadow: var(--startup-ring-control); }
+.el-input__wrapper, .el-select__wrapper { border-radius: var(--noobot-radius-lg); background: var(--startup-surface-control); }
 .el-input__inner, .el-select__placeholder, .el-select__selected-item { color: var(--startup-text-main); }
 small { display: block; margin-top: 6px; color: var(--startup-text-muted); line-height: 1.45; }
 .dependency-panel { margin-top: 4px; }

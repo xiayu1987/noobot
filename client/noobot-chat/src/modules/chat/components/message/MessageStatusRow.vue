@@ -143,7 +143,6 @@ const stepView = computed(() => {
 
 .message-status-steps.is-error :deep(.el-step__head.is-error .el-step__icon) {
   background-color: var(--noobot-status-error);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--noobot-status-error) 45%, transparent);
 }
 .message-status-steps.is-error :deep(.el-step__title.is-error) {
   color: var(--noobot-status-error);
@@ -151,7 +150,6 @@ const stepView = computed(() => {
 
 .message-status-steps.is-warning :deep(.el-step__head.is-warning .el-step__icon) {
   background-color: var(--noobot-status-warning);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--noobot-status-warning) 45%, transparent);
 }
 .message-status-steps.is-warning :deep(.el-step__title.is-warning) {
   color: var(--noobot-status-warning);

@@ -403,7 +403,6 @@ const composerExtensionBaseProps = computed(() => ({
   width: 14px;
   height: 14px;
   border-width: 2px;
-  box-shadow: 0 2px 7px color-mix(in srgb, var(--el-color-primary) 24%, transparent);
 }
 
 .safe-confirm-level-slider :deep(.el-slider__marks-text) {
@@ -467,17 +466,14 @@ const composerExtensionBaseProps = computed(() => ({
   border-radius: var(--noobot-radius-md);
   background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%, var(--el-color-primary));
   border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
-  box-shadow: var(--noobot-control-shadow);
   transition:
     background-color 0.18s ease,
     border-color 0.18s ease,
-    box-shadow 0.18s ease;
 }
 
 .composer-select :deep(.el-select__wrapper.is-focused),
 .composer-select :deep(.el-select__wrapper:hover) {
   border-color: color-mix(in srgb, var(--el-color-primary) 50%, var(--noobot-panel-border, var(--el-border-color)));
-  box-shadow: var(--noobot-control-shadow-focus);
 }
 
 .composer-select :deep(.el-select__selected-item),

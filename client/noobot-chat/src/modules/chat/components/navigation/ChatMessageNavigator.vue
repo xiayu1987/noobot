@@ -210,7 +210,6 @@ watch(
   background: var(--noobot-surface-primary-soft, var(--el-color-primary-light-9));
   border-color: color-mix(in srgb, var(--el-color-primary) 42%, var(--noobot-panel-border, var(--el-border-color)));
   font-weight: 700;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
 }
 
 :deep(.el-anchor__item.is-current .el-anchor__link::before),

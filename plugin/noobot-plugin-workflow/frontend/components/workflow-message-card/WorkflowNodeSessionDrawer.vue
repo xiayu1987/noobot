@@ -463,7 +463,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   padding: 12px;
   margin-bottom: 14px;
   background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, rgb(var(--workflow-accent-rgb)) 6%);
-  box-shadow: 0 8px 20px rgba(var(--workflow-accent-rgb), 0.08);
 }
 
 .workflow-runtime-panel-header {
@@ -534,18 +533,16 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   color: var(--noobot-text-primary);
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  transition: border-color 0.16s ease, background 0.16s ease;
 }
 
 .workflow-runtime-step-box:hover:not(:disabled) {
   border-color: rgba(var(--workflow-accent-rgb), 0.58);
   background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 90%, rgb(var(--workflow-accent-rgb)) 10%);
-  box-shadow: 0 5px 12px rgba(var(--workflow-accent-rgb), 0.12);
 }
 
 .workflow-runtime-step-box.is-selected {
   border-color: rgba(var(--workflow-accent-rgb), 0.9);
-  box-shadow: 0 0 0 2px rgba(var(--workflow-accent-rgb), 0.14);
 }
 
 .workflow-runtime-step-box.is-disabled {
