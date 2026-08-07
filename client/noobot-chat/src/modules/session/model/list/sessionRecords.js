@@ -5,6 +5,7 @@
  */
 import { nowIso } from "../../../chat/model/timeFields.js";
 import { findVisibleLastMessage, isPluginInjectedMessage } from "../../../chat/model/messageModel.js";
+import { isNewerSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
 
 export function createLocalSessionItem({ id, title, createConnectorPanelState }) {
   return {
@@ -70,8 +71,15 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
   const existingSessionDocs = Array.isArray(existingSession?.sessionDocs)
     ? existingSession.sessionDocs
     : [];
+  const aggregateVersion = isNewerSessionAggregateVersion(
+    mappedSession.aggregateVersion,
+    existingSession.aggregateVersion,
+  )
+    ? mappedSession.aggregateVersion
+    : existingSession.aggregateVersion;
   return {
     ...mappedSession,
+    aggregateVersion,
     turnLifecycleSnapshot: mappedSession.turnLifecycleSnapshot || existingSession.turnLifecycleSnapshot || null,
     turnStatuses: mappedSession.turnStatuses?.length
       ? mappedSession.turnStatuses

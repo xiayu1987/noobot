@@ -14,6 +14,7 @@ import { normalizeSessionEntity } from "../entities/session-entity.js";
 import {
   buildSessionSummary,
   normalizeSessionsSummaryPayload,
+  SESSIONS_SUMMARY_SCHEMA_VERSION,
 } from "../session-summary-builders.js";
 import {
   buildSessionArtifactFileMap,
@@ -252,6 +253,9 @@ export class FileSystemSessionRepository {
       this._sessionsSummaryFile(normalizedUserId),
       { sessions: [], updatedAt: this.now() },
     );
+    if (Number(payload?.schemaVersion || 0) !== SESSIONS_SUMMARY_SCHEMA_VERSION) {
+      return this.rebuildSessionsSummary(normalizedUserId);
+    }
     return normalizeSessionsSummaryPayload(payload, this.now);
   }
 
