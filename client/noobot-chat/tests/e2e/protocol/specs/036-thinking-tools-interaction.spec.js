@@ -15,6 +15,17 @@ import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import {
+  persistedWriteFilesForTurn,
+  readRenderedFileNames,
+  writeFileResultsForTurn,
+  writtenFileKeys,
+} from "../helpers/attachment-assertions.js";
+import {
+  readAttachmentIndex,
+  readSessionExecutionEvents,
+  readSessionTurnMessages,
+} from "../helpers/persistence-audit.js";
+import {
   assertCanonicalToolPairs,
   assertRealtimeToolDetails,
   assertThinkingDetailsDrawer,
@@ -34,6 +45,40 @@ const EXPECTED_TOOLS = Object.freeze([
   "user_interaction",
 ]);
 const REALTIME_EXECUTION_WINDOW_SIZE = 10;
+const GENERATED_FILE_NAME = "case036.txt";
+
+async function assertGeneratedFilesConverged({ page, userId, sessionId, turnScopeId }) {
+  let executionResults = [];
+  let persistedFiles = [];
+  await expect.poll(async () => {
+    const [events, messages] = await Promise.all([
+      readSessionExecutionEvents(userId, sessionId),
+      readSessionTurnMessages(userId, sessionId),
+    ]);
+    executionResults = writeFileResultsForTurn(events, turnScopeId);
+    persistedFiles = persistedWriteFilesForTurn(messages, turnScopeId);
+    return {
+      executionCount: executionResults.length,
+      executionFileCount: executionResults.flatMap((event) => event.data.writtenFiles || []).length,
+      persistedCount: persistedFiles.length,
+    };
+  }, { timeout: 30000 }).toEqual({
+    executionCount: 1,
+    executionFileCount: 1,
+    persistedCount: 1,
+  });
+
+  const executionFiles = executionResults.flatMap((event) => event.data.writtenFiles || []);
+  expect(writtenFileKeys(persistedFiles)).toEqual(writtenFileKeys(executionFiles));
+  await expect.poll(
+    () => readRenderedFileNames(page, { badgeClass: "is-agent", role: "assistant" }),
+    { timeout: 30000 },
+  ).toEqual([GENERATED_FILE_NAME]);
+  expect(executionResults).toHaveLength((await readRenderedFileNames(
+    page,
+    { badgeClass: "is-agent", role: "assistant" },
+  )).length);
+}
 
 test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async ({ noobot, protocolCapture }, testInfo) => {
   test.setTimeout(900000);
@@ -58,6 +103,12 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   const interaction = noobot.page.locator(".interaction-card");
   await expect(interaction).toBeVisible({ timeout: 180000 });
   await expect(interaction.locator(".interaction-title")).toContainText("CASE036-INTERACTION");
+  await assertGeneratedFilesConverged({
+    page: noobot.page,
+    userId: noobot.userId,
+    sessionId: noobot.sessionId,
+    turnScopeId: command.identity.turnScopeId,
+  });
   const shell = await realtimeObservation;
   await assertRealtimeToolDetails(shell, REALTIME_EXECUTION_WINDOW_SIZE);
   const pendingProjectionBeforeRefresh = await readRealtimeToolProjection(noobot.page);
@@ -67,6 +118,12 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   await expect(interaction).toBeVisible({ timeout: 60000 });
   await expect(interaction.locator(".interaction-title")).toContainText("CASE036-INTERACTION");
   await expect(interaction.locator(".el-form-item__label")).toContainText("Verification Code");
+  await assertGeneratedFilesConverged({
+    page: noobot.page,
+    userId: noobot.userId,
+    sessionId: noobot.sessionId,
+    turnScopeId: command.identity.turnScopeId,
+  });
   const pendingProjectionAfterRefresh = await readRealtimeToolProjection(noobot.page);
   expect(pendingProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary })))
     .toEqual(pendingProjectionBeforeRefresh.map(({ event, summary }) => ({ event, summary })));
@@ -100,13 +157,26 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   expect(String(results.find((event) => event.data?.tool === "search")?.data?.result)).toContain("SEARCH-TARGET");
 
   const completedProjectionBeforeRefresh = await readRealtimeToolProjection(noobot.page);
+  await assertGeneratedFilesConverged({
+    page: noobot.page,
+    userId: noobot.userId,
+    sessionId: noobot.sessionId,
+    turnScopeId: command.identity.turnScopeId,
+  });
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
   await expect(interaction).toBeHidden();
   const completedProjectionAfterRefresh = await readRealtimeToolProjection(noobot.page);
+  await assertGeneratedFilesConverged({
+    page: noobot.page,
+    userId: noobot.userId,
+    sessionId: noobot.sessionId,
+    turnScopeId: command.identity.turnScopeId,
+  });
   expect(completedProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary })))
     .toEqual(completedProjectionBeforeRefresh.map(({ event, summary }) => ({ event, summary })));
   expect(completedProjectionAfterRefresh.every(({ detail }) => detail === "")).toBe(true);
   const detailProjection = await assertThinkingDetailsDrawer(noobot.page, EXPECTED_TOOLS.length);
   expect(detailProjection.slice(-REALTIME_EXECUTION_WINDOW_SIZE).map(({ event, summary }) => ({ event, summary })))
     .toEqual(completedProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary })));
+
 });

@@ -6,6 +6,10 @@
 
 import { DEFAULT_ATTACHMENT_SESSION_ID, DEFAULT_ATTACHMENT_SOURCE, DEFAULT_MIME_TYPE } from "./constants.js";
 import { safeStr, safeNum } from "../shared/utils/shared-utils.js";
+import {
+  attachmentIdentityKey,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 
 const SEMANTIC_TRANSFER_GENERATION_SOURCE_PREFIXES = [
   "semantic_transfer_",
@@ -78,27 +82,16 @@ function firstValue(...values) {
 }
 
 export function projectCanonicalAttachmentIdentity(attachmentItem = {}, expectedSessionId = "") {
-  if (!isPlainObject(attachmentItem)) {
-    const error = new Error("attachment must be a canonical plain object");
-    error.statusCode = 400;
-    error.errorCode = "INVALID_CANONICAL_ATTACHMENT";
+  let identity;
+  try {
+    identity = projectAttachmentIdentity(attachmentItem);
+  } catch (error) {
+    error.statusCode ??= 400;
+    error.errorCode ??= "INVALID_CANONICAL_ATTACHMENT";
     throw error;
   }
-  const identity = {
-    attachmentId: safeStr(attachmentItem.attachmentId),
-    sessionId: safeStr(attachmentItem.sessionId),
-    attachmentSource: safeStr(attachmentItem.attachmentSource),
-    path: safeStr(attachmentItem.path),
-    contentSha256: safeStr(attachmentItem.contentSha256),
-  };
   const normalizedExpectedSessionId = safeStr(expectedSessionId);
-  if (
-    !identity.attachmentId ||
-    !identity.sessionId ||
-    !identity.attachmentSource ||
-    !identity.path ||
-    (normalizedExpectedSessionId && identity.sessionId !== normalizedExpectedSessionId)
-  ) {
+  if (normalizedExpectedSessionId && identity.sessionId !== normalizedExpectedSessionId) {
     const error = new Error("attachment must be canonical and belong to the current session");
     error.statusCode = 400;
     error.errorCode = "INVALID_CANONICAL_ATTACHMENT";
@@ -116,6 +109,16 @@ export function projectCanonicalAttachmentIdentities(attachments = [], expectedS
   }
   return attachments.map((attachmentItem) =>
     projectCanonicalAttachmentIdentity(attachmentItem, expectedSessionId));
+}
+
+export function canonicalAttachmentIdentityKey(attachmentItem = {}) {
+  try {
+    return attachmentIdentityKey(attachmentItem);
+  } catch (error) {
+    error.statusCode ??= 400;
+    error.errorCode ??= "INVALID_CANONICAL_ATTACHMENT";
+    throw error;
+  }
 }
 
 export function assertCanonicalAttachments(attachments = [], expectedSessionId = "") {
@@ -219,19 +222,17 @@ export function mergeAttachmentMetas(existing = [], incoming = []) {
 
 export function attachmentMatchKeys(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-  const name = safeStr(item?.name || item?.fileName || item?.filename);
-  const mimeType = safeStr(item?.mimeType || item?.type || item?.mime);
-  const size = Number(item?.size || 0);
-  const finiteSize = Number.isFinite(size) && size > 0 ? String(size) : "";
-  return [
-    safeStr(item?.attachmentId || item?.id) ? `id:${safeStr(item?.attachmentId || item?.id)}` : "",
-    safeStr(item?.path || item?.filePath) ? `path:${safeStr(item?.path || item?.filePath)}` : "",
-    safeStr(item?.relativePath) ? `rel:${safeStr(item?.relativePath)}` : "",
-    safeStr(item?.sandboxPath || item?.sandboxViewPath) ? `sandbox:${safeStr(item?.sandboxPath || item?.sandboxViewPath)}` : "",
-    name && mimeType && finiteSize ? `name-mime-size:${name}|${mimeType}|${finiteSize}` : "",
-    name && finiteSize ? `name-size:${name}|${finiteSize}` : "",
-    name && mimeType ? `name-mime:${name}|${mimeType}` : "",
-  ].filter(Boolean);
+  try {
+    return [canonicalAttachmentIdentityKey({
+      attachmentId: item.attachmentId,
+      sessionId: item.sessionId,
+      attachmentSource: item.attachmentSource,
+    })];
+  } catch {
+    // Legacy records must be normalized by the single legacy adapter before
+    // they enter a matching path. Access/content fields are never identity.
+    return [];
+  }
 }
 
 export function findMatchingAttachmentMeta(source = {}, candidates = []) {

@@ -15,6 +15,8 @@ describe("useMessageFiles plugin attachments", () => {
       attachments: [
         {
           attachmentId: "att-harness-1",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-acceptance-report.txt",
           mimeType: "text/plain",
           generationSource: "harness_checklist",
@@ -22,6 +24,8 @@ describe("useMessageFiles plugin attachments", () => {
         },
         {
           attachmentId: "att-agent-1",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "main-result.txt",
           mimeType: "text/plain",
         },
@@ -53,12 +57,16 @@ describe("useMessageFiles plugin attachments", () => {
       attachments: [
         {
           attachmentId: "plan-1",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-plan-text.txt",
           size: 1400,
           owner: { type: "plugin", id: "harness-plugin" },
         },
         {
           attachmentId: "report-1",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-acceptance-report.txt",
           size: 5600,
           owner: { type: "plugin", id: "harness-plugin" },
@@ -75,8 +83,8 @@ describe("useMessageFiles plugin attachments", () => {
           dialogProcessId: "dp-1",
           content: "done",
           attachments: [
-            { attachmentId: "plan-1", name: "harness-plan-text.txt", size: 1400 },
-            { attachmentId: "report-1", name: "harness-acceptance-report.txt", size: 5600 },
+            { attachmentId: "plan-1", sessionId: "session-1", attachmentSource: "test", name: "harness-plan-text.txt", size: 1400 },
+            { attachmentId: "report-1", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
           ],
         },
       ],
@@ -114,9 +122,11 @@ describe("useMessageFiles plugin attachments", () => {
       dialogProcessId: "dp-1",
       content: "done",
       attachments: [
-        { attachmentId: "report-1", name: "harness-acceptance-report.txt", size: 5600 },
+        { attachmentId: "report-1", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
         {
           attachmentId: "report-1",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-acceptance-report.txt",
           size: 5600,
           owner: { type: "plugin", id: "harness-plugin" },
@@ -148,12 +158,16 @@ describe("useMessageFiles plugin attachments", () => {
       attachments: [
         {
           attachmentId: "plan-plugin-live",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-plan-text.txt",
           size: 1400,
           owner: { type: "plugin", id: "harness-plugin" },
         },
         {
           attachmentId: "report-plugin-live",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-acceptance-report.txt",
           size: 5600,
           owner: { type: "plugin", id: "harness-plugin" },
@@ -170,8 +184,8 @@ describe("useMessageFiles plugin attachments", () => {
           dialogProcessId: "dp-1",
           content: "done",
           attachments: [
-            { attachmentId: "plan-agent-refresh", name: "harness-plan-text.txt", size: 1400 },
-            { attachmentId: "report-agent-refresh", name: "harness-acceptance-report.txt", size: 5600 },
+            { attachmentId: "plan-agent-refresh", sessionId: "session-1", attachmentSource: "test", name: "harness-plan-text.txt", size: 1400 },
+            { attachmentId: "report-agent-refresh", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
           ],
         },
       ],
@@ -205,12 +219,16 @@ describe("useMessageFiles plugin attachments", () => {
       attachments: [
         {
           attachmentId: "plan-nested-owner",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-plan-text.txt",
           size: 1400,
           owner: { type: "plugin", id: "harness-plugin" },
         },
         {
           attachmentId: "report-nested-owner",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-acceptance-report.txt",
           size: 5600,
           owner: { type: "plugin", id: "harness-plugin" },
@@ -246,8 +264,8 @@ describe("useMessageFiles plugin attachments", () => {
       dialogProcessId: "dp-1",
       content: "done",
       attachments: [
-        { attachmentId: "plan-current", name: "harness-plan-text.txt", size: 1400 },
-        { attachmentId: "report-current", name: "harness-acceptance-report.txt", size: 5600 },
+        { attachmentId: "plan-current", sessionId: "session-1", attachmentSource: "test", name: "harness-plan-text.txt", size: 1400 },
+        { attachmentId: "report-current", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
       ],
     };
     const refreshedSessionDoc = {
@@ -260,8 +278,8 @@ describe("useMessageFiles plugin attachments", () => {
           dialogProcessId: "dp-1",
           content: "done",
           attachments: [
-            { attachmentId: "plan-refreshed", name: "harness-plan-text.txt", size: 1400 },
-            { attachmentId: "report-refreshed", name: "harness-acceptance-report.txt", size: 5600 },
+            { attachmentId: "plan-refreshed", sessionId: "session-1", attachmentSource: "test", name: "harness-plan-text.txt", size: 1400 },
+            { attachmentId: "report-refreshed", sessionId: "session-1", attachmentSource: "test", name: "harness-acceptance-report.txt", size: 5600 },
           ],
         },
       ],
@@ -291,12 +309,16 @@ describe("useMessageFiles plugin attachments", () => {
       attachments: [
         {
           attachmentId: "plan-current",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-plan-text.txt",
           size: 1400,
           owner: { type: "plugin", id: "harness-plugin" },
         },
         {
           attachmentId: "report-current",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-acceptance-report.txt",
           size: 5600,
           owner: { type: "plugin", id: "harness-plugin" },
@@ -315,12 +337,16 @@ describe("useMessageFiles plugin attachments", () => {
           attachments: [
             {
               attachmentId: "plan-refreshed",
+              sessionId: "session-1",
+              attachmentSource: "test",
               name: "harness-plan-text.txt",
               size: 1400,
               owner: { type: "plugin", id: "harness-plugin" },
             },
             {
               attachmentId: "report-refreshed",
+              sessionId: "session-1",
+              attachmentSource: "test",
               name: "harness-acceptance-report.txt",
               size: 5600,
               owner: { type: "plugin", id: "harness-plugin" },
@@ -358,6 +384,8 @@ describe("useMessageFiles plugin attachments", () => {
       attachments: [
         {
           attachmentId: "att-legacy-harness-name",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "harness-named-file.txt",
           mimeType: "text/plain",
           generationSource: "harness_checklist",

@@ -5,17 +5,21 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { PLUGIN_PROTOCOL_VERSION } from "@noobot/plugin-protocol";
+import { assertUniqueAttachmentIds, readRenderedFileNames } from "../helpers/attachment-assertions.js";
 import {
   addAttachment, fixedAttachment, selectPlugins, sendMessage, waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import {
-  readUserAttachmentIndex,
+  readAttachmentIndex,
+  waitForSessionExecutionEventTree,
   waitForModelInvocationTraces,
   waitForPluginExecutionEvents,
   waitForPluginRuntimeEvents,
 } from "../helpers/persistence-audit.js";
 import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
+import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
+import { isMainAgentModelInvocation } from "../helpers/model-message-assertions.js";
 
 function assertActivationIdentity(record, command, sessionId) {
   expect(record.data.protocolVersion).toBe(PLUGIN_PROTOCOL_VERSION);
@@ -68,10 +72,11 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   test.setTimeout(420000);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
   const file = fixedAttachment("pbe-028.txt");
+  const childFilePath = `runtime/ops_workdir/pbe-028-child-${Date.now()}.txt`;
   await addAttachment(noobot.page, file);
   await sendMessage(noobot.page, uniquePrompt(
     testInfo,
-    "execute one workflow child that reads the attached file with read_file riskLevel=low and reports its exact content",
+    `execute one workflow child that first calls write_file exactly once for ${childFilePath} with content PBE028-CHILD-FILE and overwrite=true, riskLevel=low, then reads the attached file with read_file riskLevel=low and reports both exact contents`,
   ));
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await waitForNaturalCompletion({
@@ -93,24 +98,48 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   }
   await assertExecutionProjection(noobot.userId, noobot.sessionId, send, ["harness", "workflow"]);
 
-  const attachmentIndex = await readUserAttachmentIndex(noobot.userId, noobot.sessionId);
+  const attachmentIndex = await readAttachmentIndex(noobot.userId, noobot.sessionId, "user");
   expect(attachmentIndex.sessionId).toBe(noobot.sessionId);
   expect(attachmentIndex.attachmentSource).toBe("user");
   const attachments = Object.values(attachmentIndex.attachments || {});
   expect(attachments).toHaveLength(1);
   expect(attachments[0]).toMatchObject({
-    name: file.name,
-    sessionId: noobot.sessionId,
-    attachmentSource: "user",
-    generatedByModel: false,
+    identity: {
+      sessionId: noobot.sessionId,
+      attachmentSource: "user",
+    },
+    descriptor: {
+      name: file.name,
+    },
   });
+  expect(attachments[0].descriptor.generatedByModel).not.toBe(true);
 
   const traces = await waitForModelInvocationTraces(noobot.userId, noobot.sessionId, (records) =>
-    records.some((record) => record.parentSessionId === noobot.sessionId),
+    records.some((record) =>
+      record.parentSessionId === noobot.sessionId && isMainAgentModelInvocation(record)),
   );
-  const childSessionId = traces.find((record) => record.parentSessionId === noobot.sessionId)?.sessionId;
+  const childSessionId = traces.find((record) =>
+    record.parentSessionId === noobot.sessionId && isMainAgentModelInvocation(record))?.sessionId;
   expect(childSessionId).toBeTruthy();
-  const childAttachmentIndex = await readUserAttachmentIndex(noobot.userId, childSessionId);
+  const childExecution = await waitForSessionExecutionEventTree(
+    noobot.userId,
+    noobot.sessionId,
+    (records) => records.some((record) =>
+      record.sessionId === childSessionId &&
+      record.event === "tool_call_end" &&
+      record.data?.tool === "write_file" &&
+      record.data?.success === true,
+    ),
+  );
+  const childWriteResults = childExecution.filter((record) =>
+    record.sessionId === childSessionId &&
+    record.event === "tool_call_end" &&
+    record.data?.tool === "write_file" &&
+    record.data?.success === true,
+  );
+  expect(childWriteResults).toHaveLength(1);
+  expect(childWriteResults[0].data.writtenFiles).toHaveLength(1);
+  const childAttachmentIndex = await readAttachmentIndex(noobot.userId, childSessionId, "user");
   expect(childAttachmentIndex).toMatchObject({
     sessionId: childSessionId,
     attachmentSource: "user",
@@ -118,10 +147,39 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   const childAttachments = Object.values(childAttachmentIndex.attachments || {});
   expect(childAttachments).toHaveLength(1);
   expect(childAttachments[0]).toMatchObject({
-    name: file.name,
-    sessionId: childSessionId,
-    attachmentSource: "user",
-    generatedByModel: false,
+    identity: {
+      sessionId: childSessionId,
+      attachmentSource: "user",
+    },
+    descriptor: {
+      name: file.name,
+    },
   });
-  expect(childAttachments[0].attachmentId).not.toBe(attachments[0].attachmentId);
+  expect(childAttachments[0].descriptor.generatedByModel).not.toBe(true);
+  expect(childAttachments[0].identity.attachmentId).not.toBe(attachments[0].identity.attachmentId);
+
+  await expect.poll(
+    () => readAttachmentIndex(noobot.userId, noobot.sessionId, "model"),
+    { timeout: 30000 },
+  ).toMatchObject({ sessionId: noobot.sessionId, attachmentSource: "model" });
+  const modelIndex = await readAttachmentIndex(noobot.userId, noobot.sessionId, "model");
+  const generatedAttachments = Object.values(modelIndex.attachments || {});
+  expect(generatedAttachments.length).toBeGreaterThanOrEqual(2);
+  assertUniqueAttachmentIds(generatedAttachments);
+  expect(generatedAttachments.every((item) =>
+    item.identity?.attachmentSource === "model" && item.descriptor?.generatedByModel === true,
+  )).toBe(true);
+  expect(generatedAttachments.some((item) => item.descriptor?.generationSource === "workflow_node_agent_result")).toBe(true);
+  expect(generatedAttachments.some((item) => item.descriptor?.generationSource === "workflow_completed_attachment_summary")).toBe(true);
+
+  const generatedNames = generatedAttachments.map((item) => item.descriptor?.name).sort();
+  await expect.poll(
+    () => readRenderedFileNames(noobot.page, { role: "assistant", attachmentSource: "model" }),
+    { timeout: 30000 },
+  ).toEqual(generatedNames);
+  await reloadAndWaitForReconnect(noobot.page, protocolCapture);
+  await expect.poll(
+    () => readRenderedFileNames(noobot.page, { role: "assistant", attachmentSource: "model" }),
+    { timeout: 30000 },
+  ).toEqual(generatedNames);
 });

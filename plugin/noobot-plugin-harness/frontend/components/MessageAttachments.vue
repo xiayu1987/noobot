@@ -10,6 +10,10 @@ import {
   resolveBaseName,
   resolveParsedResultAccessMeta,
 } from "noobot-chat/plugin-api/attachment-domain";
+import {
+  attachmentIdentityKey,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 import { BaseAttachmentFileCard, BaseFileCardList } from "noobot-chat/plugin-api/ui";
 
 const props = defineProps({
@@ -56,12 +60,6 @@ function resolveAttachmentOwnerType(attachmentItem = {}) {
   ).trim();
 }
 
-function resolveAttachmentContentKey(attachmentItem = {}) {
-  const name = String(attachmentItem?.name || "").trim();
-  if (!name) return "";
-  return `${name}|${Number(attachmentItem?.size) || 0}|${String(attachmentItem?.mimeType || "").trim()}`;
-}
-
 function mergeAttachmentDisplayMeta(existingItem = {}, incomingItem = {}) {
   const merged = { ...existingItem, ...incomingItem };
   for (const field of [
@@ -98,22 +96,22 @@ function mergeAttachmentDisplayMeta(existingItem = {}, incomingItem = {}) {
 function dedupeAttachments(list = []) {
   const out = [];
   const indexByIdentity = new Map();
-  const indexByContent = new Map();
   for (const attachmentItem of Array.isArray(list) ? list : []) {
-    const identityKey = String(attachmentItem?.attachmentId || "").trim();
-    const contentKey = resolveAttachmentContentKey(attachmentItem);
-    let existingIndex = identityKey ? indexByIdentity.get(identityKey) : undefined;
-    if (existingIndex === undefined && contentKey) existingIndex = indexByContent.get(contentKey);
+    let identityKey = "";
+    try {
+      identityKey = attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
+    } catch {
+      continue;
+    }
+    const existingIndex = indexByIdentity.get(identityKey);
     if (existingIndex === undefined) {
       out.push(attachmentItem);
       const nextIndex = out.length - 1;
-      if (identityKey) indexByIdentity.set(identityKey, nextIndex);
-      if (contentKey) indexByContent.set(contentKey, nextIndex);
+      indexByIdentity.set(identityKey, nextIndex);
       continue;
     }
     out[existingIndex] = mergeAttachmentDisplayMeta(out[existingIndex] || {}, attachmentItem);
-    if (identityKey) indexByIdentity.set(identityKey, existingIndex);
-    if (contentKey) indexByContent.set(contentKey, existingIndex);
+    indexByIdentity.set(identityKey, existingIndex);
   }
   return out;
 }
@@ -122,6 +120,12 @@ function resolveParsedResultUrl(attachmentItem = {}) {
   return resolveParsedResultAccessMeta(attachmentItem, {
     userId: String(props.userId || "").trim(),
   }).url;
+}
+
+function hasParsedResultIdentity(attachmentItem = {}) {
+  return resolveParsedResultAccessMeta(attachmentItem, {
+    userId: String(props.userId || "").trim(),
+  }).hasIdentity;
 }
 
 function normalizeAttachmentParsedResultForDisplay(attachmentItem = {}) {
@@ -143,10 +147,12 @@ function normalizeAttachmentParsedResultForDisplay(attachmentItem = {}) {
 }
 
 function makeAttachmentKey(attachmentItem = {}, attachmentIndex = 0) {
-  return String(
-    attachmentItem?.attachmentId ||
-      `${attachmentItem?.sessionId || ""}|${attachmentItem?.attachmentSource || ""}|${attachmentItem?.name || ""}|${attachmentItem?.size || 0}|${attachmentIndex}`,
-  ).trim();
+  void attachmentIndex;
+  try {
+    return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
+  } catch {
+    return "invalid-attachment-identity";
+  }
 }
 
 watch(
@@ -197,7 +203,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   <BaseFileCardList v-if="attachments.length">
     <BaseAttachmentFileCard
       v-for="(attachmentItem, attachmentIndex) in normalAttachments"
-      :key="attachmentIndex"
+      :key="makeAttachmentKey(attachmentItem, attachmentIndex)"
       :attachment-item="attachmentItem"
       :is-image-mime="isImageMime"
       :can-preview-attachment="canPreviewAttachment"
@@ -205,7 +211,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
       :format-file-size="formatFileSize"
       :translate="translate"
       badge-mode="auto"
-      :show-parsed-result="true"
+      :show-parsed-result="hasParsedResultIdentity(attachmentItem)"
       @preview="emit('preview', $event)"
       @download="emit('download', $event)"
       @preview-parsed-result="emitPreviewParsedResult"
@@ -228,7 +234,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
       <div v-if="!pluginAttachmentsCollapsed" class="plugin-attachments-list">
         <BaseAttachmentFileCard
           v-for="(attachmentItem, attachmentIndex) in pluginAttachments"
-          :key="`plugin-${attachmentIndex}`"
+          :key="`plugin-${makeAttachmentKey(attachmentItem, attachmentIndex)}`"
           :attachment-item="attachmentItem"
           :is-image-mime="isImageMime"
           :can-preview-attachment="canPreviewAttachment"

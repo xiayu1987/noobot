@@ -18,6 +18,7 @@ import {
   normalizeDslLocale,
 } from "./error-messages.js";
 import { getWorkflowDslDefaultNodeNames } from "../core/i18n.js";
+import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 
 function stripCodeFence(text = "") {
   const trimmed = String(text || "").trim();
@@ -144,12 +145,19 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
       }
       const attachment = {
         id,
-        attachmentId: String(attrs.attachmentId || id).trim(),
+        attachmentId: String(attrs.attachmentId || "").trim(),
+        sessionId: String(attrs.sessionId || "").trim(),
+        attachmentSource: String(attrs.attachmentSource || "").trim(),
         name: String(attrs.name || attrs.fileName || id).trim(),
         path: String(attrs.path || "").trim(),
         relativePath: String(attrs.relativePath || attrs.relative || "").trim(),
         mimeType: String(attrs.mimeType || attrs.type || "").trim(),
       };
+      try {
+        projectAttachmentIdentity(attachment);
+      } catch (error) {
+        failWithLocale(lineNo, error?.message || String(error));
+      }
       attachmentDeclarations.push(attachment);
       attachmentMap[id] = attachment;
       continue;

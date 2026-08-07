@@ -32,7 +32,7 @@ describe("detailMessages", () => {
             files: [
               {
                 filePath: "/workspace/root.md",
-                attachmentMeta: { attachmentId: "root-attachment", name: "root.md" },
+                attachmentMeta: { attachmentId: "root-attachment", sessionId: "root-session", attachmentSource: "test", name: "root.md" },
               },
             ],
           },
@@ -55,7 +55,7 @@ describe("detailMessages", () => {
                 files: [
                   {
                     filePath: "/workspace/child.md",
-                    attachmentMeta: { attachmentId: "child-attachment", name: "child.md" },
+                    attachmentMeta: { attachmentId: "child-attachment", sessionId: "child-session", attachmentSource: "test", name: "child.md" },
                   },
                 ],
               },
@@ -140,6 +140,8 @@ describe("detailMessages", () => {
                       filePath: "/workspace/result.md",
                       attachmentMeta: {
                         attachmentId: "child-transfer-1",
+                        sessionId: "child-session",
+                        attachmentSource: "test",
                         name: "result.md",
                       },
                     },
@@ -196,6 +198,8 @@ describe("detailMessages", () => {
                       filePath: "/workspace/result.md",
                       attachmentMeta: {
                         attachmentId: "child-transfer-1",
+                        sessionId: "child-session",
+                        attachmentSource: "test",
                         name: "result.md",
                         mimeType: "text/markdown",
                       },
@@ -237,6 +241,8 @@ describe("detailMessages", () => {
                       filePath: "/workspace/plugin.md",
                       attachmentMeta: {
                         attachmentId: "plugin-transfer-1",
+                        sessionId: "root-session",
+                        attachmentSource: "test",
                         name: "plugin.md",
                       },
                     },
@@ -251,6 +257,8 @@ describe("detailMessages", () => {
                       filePath: "/workspace/node-result.md",
                       attachmentMeta: {
                         attachmentId: "node-result-1",
+                        sessionId: "root-session",
+                        attachmentSource: "test",
                         name: "node-result.md",
                       },
                     },
@@ -267,6 +275,8 @@ describe("detailMessages", () => {
                           filePath: "/workspace/node-session.md",
                           attachmentMeta: {
                             attachmentId: "node-session-1",
+                            sessionId: "root-session",
+                            attachmentSource: "test",
                             name: "node-session.md",
                           },
                         },
@@ -283,7 +293,7 @@ describe("detailMessages", () => {
               eventId: "completed-tool-result", sequence: 1, sequenceScopeId: "message-1",
               sequenceDomain: "message-event", authority: "authoritative",
               attachments: [
-                { attachmentId: "completed-tool-1", name: "completed-tool.md" },
+                { attachmentId: "completed-tool-1", sessionId: "root-session", attachmentSource: "test", name: "completed-tool.md" },
               ],
             },
           }],
@@ -302,7 +312,7 @@ describe("detailMessages", () => {
       "node-session-1",
     ]);
     expect(selectToolTimelineLogs(normalizedMessages[0])[0].attachments).toEqual([
-      { attachmentId: "completed-tool-1", name: "completed-tool.md" },
+      { attachmentId: "completed-tool-1", sessionId: "root-session", attachmentSource: "test", name: "completed-tool.md" },
     ]);
   });
   it("keeps same-turn assistant thinking timing out of reloaded messages", () => {

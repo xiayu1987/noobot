@@ -14,6 +14,10 @@ import {
   stripInternalEventPlaceholderLines,
 } from "./utils.js";
 import {
+  attachmentIdentityKey,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
+import {
   isTerminalInteraction,
   normalizeInteractionRequestPayload,
   resolveConnectorStatusPayload,
@@ -108,25 +112,21 @@ export function handleAttachmentParsedStreamEvent({
   const normalized = typeof makeViewMessage === "function"
     ? makeViewMessage({ attachments: incoming })?.attachments || incoming
     : incoming;
+  const normalizedByIdentity = new Map(
+    normalized.map((attachment) => [
+      attachmentIdentityKey(projectAttachmentIdentity(attachment)),
+      attachment,
+    ]),
+  );
   const messages = Array.isArray(activeSession.value.messages)
     ? activeSession.value.messages
     : [];
   for (const message of messages) {
     if (message?.role !== "user" || !Array.isArray(message?.attachments)) continue;
     message.attachments = message.attachments.map((existing) => {
-      const matching = normalized.find((attachment) => {
-        const attachmentId = normalizeTrimmedString(attachment?.attachmentId || attachment?.id);
-        const existingAttachmentId = normalizeTrimmedString(existing?.attachmentId || existing?.id);
-        const clientAttachmentId = normalizeTrimmedString(attachment?.clientAttachmentId);
-        const existingClientAttachmentId = normalizeTrimmedString(existing?.clientAttachmentId);
-        const contentSha256 = normalizeTrimmedString(attachment?.contentSha256);
-        const existingContentSha256 = normalizeTrimmedString(existing?.contentSha256);
-        return Boolean(
-          (attachmentId && attachmentId === existingAttachmentId) ||
-          (clientAttachmentId && clientAttachmentId === existingClientAttachmentId) ||
-          (contentSha256 && contentSha256 === existingContentSha256)
-        );
-      });
+      const matching = normalizedByIdentity.get(
+        attachmentIdentityKey(projectAttachmentIdentity(existing)),
+      );
       if (!matching) return existing;
       return {
         ...existing,

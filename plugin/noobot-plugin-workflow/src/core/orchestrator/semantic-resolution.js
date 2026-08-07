@@ -23,12 +23,14 @@ import {
 } from "../hooks/messages.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 
 export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const lines = (Array.isArray(attachments) ? attachments : [])
     .map((item = {}, index) => {
-      const attachmentId = String(item?.attachmentId || item?.id || "").trim();
+      const identity = projectAttachmentIdentity(item);
+      const attachmentId = identity.attachmentId;
       const name = String(
           item?.name ||
           item?.fileName ||
@@ -38,6 +40,8 @@ export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx 
       const path = resolveAttachmentDisplayPath(item, ctx);
       const parts = [
         attachmentId ? `attachmentId=${attachmentId}` : "",
+        `sessionId=${identity.sessionId}`,
+        `attachmentSource=${identity.attachmentSource}`,
         name ? `name=${name}` : "",
         mimeType ? `mimeType=${mimeType}` : "",
         path ? `path=${path}` : "",

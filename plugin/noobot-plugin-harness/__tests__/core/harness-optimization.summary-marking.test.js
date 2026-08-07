@@ -118,8 +118,8 @@ test("summary checkpoint requests restored incremental messages missing from the
   const ids = captureGuidanceSummaryCheckpoint(ctx, state);
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
 
-  assert.deepEqual(ids, ["restored-call", "restored-result", "resumed-call"]);
-  assert.ok(markedCount >= 3);
+  assert.deepEqual(ids, ["restored-call", "restored-result"]);
+  assert.ok(markedCount >= 2);
   assert.equal(ctx.modelContext.messageBlocks.incremental[0].summarized, undefined);
   assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, undefined);
   assert.equal(ctx.modelContext.messageBlocks.incremental[2].summarized, undefined);

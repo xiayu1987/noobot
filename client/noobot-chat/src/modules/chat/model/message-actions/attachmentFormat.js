@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-
+import {
+  attachmentIdentityKey,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 
 export function isImageMime(mimeType = "") {
   return String(mimeType || "").toLowerCase().startsWith("image/");
@@ -44,13 +47,7 @@ export function attachmentIcon(attachment = {}) {
 }
 
 export function attachmentKey(item = {}) {
-  return String(item?.attachmentId || item?.id || "").trim() || [
-    String(item?.path || "").trim(),
-    String(item?.relativePath || "").trim(),
-    attachmentName(item),
-    String(item?.size || 0),
-    attachmentMime(item),
-  ].join("|");
+  return attachmentIdentityKey(projectAttachmentIdentity(item));
 }
 
 export function cloneHistoryAttachment(item = {}) {

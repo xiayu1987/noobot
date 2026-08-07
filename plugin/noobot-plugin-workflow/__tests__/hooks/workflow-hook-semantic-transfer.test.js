@@ -76,6 +76,8 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
         return [
           {
             attachmentId: "wf-node-result-1",
+            sessionId: "s1",
+            attachmentSource: "model",
             name: String(payload?.artifacts?.[0]?.name || "workflow-node-1-result.md"),
             mimeType: "text/markdown",
             path: "/attachments/s1/workflow-node-1-result.md",
@@ -241,6 +243,8 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.deepEqual(workflowTurnMessage?.attachments, [
     {
       attachmentId: "wf-node-result-1",
+      sessionId: "s1",
+      attachmentSource: "model",
       name: "workflow-node-1-节点A-result.md",
       mimeType: "text/markdown",
       path: "/attachments/s1/workflow-node-1-result.md",
@@ -294,6 +298,8 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
     filePath: "/workspace/s1/workflow-node-result.md",
     attachmentMeta: {
       attachmentId: "wf-semantic-result-1",
+      sessionId: "s1",
+      attachmentSource: "model",
       name: "workflow-node-result.md",
       mimeType: "text/markdown",
       path: "/attachments/s1/workflow-node-result.md",
@@ -303,6 +309,8 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
         filePath: "/workspace/s1/workflow-node-result.md",
         attachmentMeta: {
           attachmentId: "wf-semantic-result-1",
+          sessionId: "s1",
+          attachmentSource: "model",
           name: "workflow-node-result.md",
           mimeType: "text/markdown",
           path: "/attachments/s1/workflow-node-result.md",
@@ -457,6 +465,8 @@ test("workflow hook routes final attachment summary composition through semantic
                         filePath: `/workspace/${suffix}-summary.md`,
                         attachmentMeta: {
                           attachmentId: `wf-semantic-${suffix}-1`,
+                          sessionId: "s1",
+                          attachmentSource: "model",
                           name: `${suffix}-summary.md`,
                           mimeType: "text/markdown",
                           relativePath: `runtime/attach/${suffix}-summary.md`,

@@ -28,7 +28,10 @@ import {
 } from "./connector-runtime.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { MIME_TYPE } from "../../../shared/constants/index.js";
-import { mapAttachmentRecordsToMetas } from "../../../artifacts/meta-ops.js";
+import {
+  canonicalAttachmentIdentityKey,
+  mapAttachmentRecordsToMetas,
+} from "../../../artifacts/meta-ops.js";
 import { isSuperUserRuntime } from "../../../shared/utils/super-user.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
@@ -88,9 +91,16 @@ function dedupeAttachments(attachments = []) {
   const seen = new Set();
   return source.filter((item = {}) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    const key = String(item?.attachmentId || "").trim() ||
-      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
-    if (!key) return true;
+    let key;
+    try {
+      key = canonicalAttachmentIdentityKey({
+        attachmentId: item?.attachmentId,
+        sessionId: item?.sessionId,
+        attachmentSource: item?.attachmentSource,
+      });
+    } catch {
+      return false;
+    }
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

@@ -183,6 +183,26 @@ describe("reduceMessageEvent", () => {
     ]);
   });
 
+  it("only exposes tool result attachments with the canonical identity triple", () => {
+    const artifacts = selectCompletedToolArtifacts({
+      toolTimeline: [{
+        resultEvent: {
+          attachments: [
+            { name: "stdout.txt", path: "/tmp/stdout.txt" },
+            {
+              attachmentId: "attachment-1",
+              sessionId: "session-1",
+              attachmentSource: "model",
+              name: "result.json",
+            },
+          ],
+        },
+      }],
+    });
+
+    expect(artifacts.attachments).toEqual([expect.objectContaining({ attachmentId: "attachment-1" })]);
+  });
+
   it("keeps authoritative final content immutable against later deltas", () => {
     const target = message();
     expect(reduce(target, event({

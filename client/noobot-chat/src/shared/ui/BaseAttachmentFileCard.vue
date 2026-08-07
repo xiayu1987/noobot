@@ -79,6 +79,8 @@ function emitPreview() {
 <template>
   <div
     class="base-file-card noobot-flat-card"
+    :data-attachment-id="attachmentItem?.attachmentId || attachmentItem?.identity?.attachmentId || undefined"
+    :data-attachment-source="attachmentItem?.attachmentSource || attachmentItem?.identity?.attachmentSource || undefined"
     :class="{ 'is-previewable': previewEnabled }"
     :role="previewEnabled ? 'button' : undefined"
     :tabindex="previewEnabled ? 0 : undefined"

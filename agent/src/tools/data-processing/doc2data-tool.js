@@ -134,7 +134,7 @@ export function createDoc2DataTool({ agentContext }) {
       const resolvedDpi = Number.isFinite(normalizedDpi) && normalizedDpi > 0 ? Math.floor(normalizedDpi) : 180;
       let effectiveParseEngine = resolvedParseEngine;
       const inputFile = await assertAndResolveUserWorkspaceFilePath({ filePath, agentContext, fieldName: "filePath", mustExist: true });
-      const sourceAttachmentMeta = await resolveDocInputAttachmentMeta(inputFile, agentContext, attachmentId);
+      const sourceAttachmentMeta = await resolveDocInputAttachmentMeta(agentContext, attachmentId);
       const generatedArtifactMeta = resolveGeneratedDataProcessingArtifactMeta(inputFile, runtime);
       if (isImageInputFile(inputFile)) {
         throw recoverableToolError(tTool(runtime, "tools.doc2data.imageFileUseMedia2Data"), {

@@ -7,7 +7,10 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import OpenAI from "openai";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
-import { mapAttachmentRecordsToMetas } from "../../artifacts/meta-ops.js";
+import {
+  canonicalAttachmentIdentityKey,
+  mapAttachmentRecordsToMetas,
+} from "../../artifacts/meta-ops.js";
 import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
@@ -271,9 +274,16 @@ function dedupeAttachments(attachments = []) {
   const seen = new Set();
   return source.filter((item = {}) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    const key = String(item?.attachmentId || "").trim() ||
-      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
-    if (!key) return true;
+    let key;
+    try {
+      key = canonicalAttachmentIdentityKey({
+        attachmentId: item?.attachmentId,
+        sessionId: item?.sessionId,
+        attachmentSource: item?.attachmentSource,
+      });
+    } catch {
+      return false;
+    }
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

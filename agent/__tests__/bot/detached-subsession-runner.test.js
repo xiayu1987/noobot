@@ -301,7 +301,13 @@ test("detached sub-session transfers canonical parent attachments into child own
         mimeType: "text/plain",
       };
     },
-    async readAttachmentContent() {
+    async readAttachmentContent(payload) {
+      assert.deepEqual(payload, {
+        userId: "u1",
+        attachmentId: "parent-attachment",
+        sessionId: "parent1",
+        attachmentSource: "user",
+      });
       return { content: Buffer.from("attachment body", "utf8") };
     },
     async ingest(payload) {

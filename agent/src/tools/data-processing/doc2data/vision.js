@@ -140,9 +140,8 @@ export function isLegacyDocInputFile(filePath = "") {
   return path.extname(String(filePath || "")).toLowerCase() === ".doc";
 }
 
-export async function resolveDocInputAttachmentMeta(filePath = "", agentContext = {}, attachmentId = "") {
+export async function resolveDocInputAttachmentMeta(agentContext = {}, attachmentId = "") {
   return resolveCanonicalUserSourceAttachment({
-    filePath,
     attachmentId,
     agentContext,
   });

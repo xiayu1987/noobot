@@ -113,6 +113,48 @@ test("run-event-listener forwards workflow planning frames verbatim", () => {
   });
 });
 
+test("run-event-listener forwards attachment events only with canonical identity", () => {
+  const frames = [];
+  const listener = createRunEventListener({
+    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sessionId: "root-session",
+    textStreamingEnabled: true,
+    registerActiveRun: () => {},
+    getCurrentRunMeta: () => ({ turnScopeId: "turn-1" }),
+  });
+  const attachment = {
+    attachmentId: "att-1",
+    sessionId: "root-session",
+    attachmentSource: "user",
+    name: "a.txt",
+  };
+
+  listener.onEvent({ event: "attachment_parsed", data: { attachments: [attachment] } });
+  listener.onEvent({ event: "attachments_saved", data: { attachments: [attachment] } });
+
+  assert.deepEqual(frames.map(({ event }) => event), ["attachment_parsed", "attachments"]);
+  assert.deepEqual(frames.map(({ data }) => data.attachments), [[attachment], [attachment]]);
+});
+
+test("run-event-listener rejects attachment events with incomplete identity", () => {
+  const frames = [];
+  const listener = createRunEventListener({
+    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sessionId: "root-session",
+    textStreamingEnabled: true,
+    registerActiveRun: () => {},
+  });
+
+  assert.throws(
+    () => listener.onEvent({
+      event: "attachments_saved",
+      data: { attachments: [{ attachmentId: "att-1", sessionId: "root-session" }] },
+    }),
+    /invalid_attachment_source/,
+  );
+  assert.deepEqual(frames, []);
+});
+
 test("run-event-listener preserves the safe Agent transport consumption proof", () => {
   const received = [];
   const listener = createRunEventListener({

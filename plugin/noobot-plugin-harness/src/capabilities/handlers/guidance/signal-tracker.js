@@ -8,7 +8,7 @@ import {
   TOOL_NAME_SET,
   ensureHarnessBucket,
 } from "./deps.js";
-import { collectDialogScopedMessagesToSummarize } from "@noobot/context-protocol/summary-policy";
+import { collectClosedToolCallBatchMessages, collectDialogScopedMessagesToSummarize } from "@noobot/context-protocol/summary-policy";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
@@ -52,8 +52,9 @@ export function captureGuidanceSummaryCheckpoint(ctx = {}, state = {}) {
   const blocks = resolveSummaryMarkBlocks(ctx);
   assertSummaryHistoryClosed(blocks.history);
   const sourceMessages = blocks.incremental;
+  const checkpointMessages = collectClosedToolCallBatchMessages(sourceMessages);
   const messageIds = [...new Set(
-    sourceMessages.map((message) => getMessageId(message)).filter(Boolean),
+    checkpointMessages.map((message) => getMessageId(message)).filter(Boolean),
   )];
   state.pending = state.pending && typeof state.pending === "object"
     ? state.pending

@@ -44,7 +44,13 @@ describe("messageReplay", () => {
           dialogProcessId: "dp-1",
           turnScopeId: "turn-1",
           content: "final answer",
-          attachments: [{ fileName: "answer.txt", url: "/answer.txt" }],
+          attachments: [{
+            attachmentId: "answer-attachment",
+            sessionId: "s-1",
+            attachmentSource: "test",
+            fileName: "answer.txt",
+            url: "/answer.txt",
+          }],
         },
       ],
       "dp-1",
@@ -58,7 +64,13 @@ describe("messageReplay", () => {
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
       content: "final answer",
-      attachments: [{ fileName: "answer.txt", url: "/answer.txt" }],
+      attachments: [{
+        attachmentId: "answer-attachment",
+        sessionId: "s-1",
+        attachmentSource: "test",
+        fileName: "answer.txt",
+        url: "/answer.txt",
+      }],
     });
   });
 

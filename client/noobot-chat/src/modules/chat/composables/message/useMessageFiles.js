@@ -23,6 +23,10 @@ import {
   selectCompletedToolArtifacts,
 } from "../../runtime/engine/toolTimeline.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
+import {
+  attachmentIdentityKey,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 
 function resolveBaseName(filePath = "") {
   const normalized = String(filePath || "").trim().replaceAll("\\", "/");
@@ -194,17 +198,7 @@ function getAttachmentOwnerType(attachmentItem = {}) {
 }
 
 function toAttachmentKey(attachmentItem = {}) {
-  return String(
-    attachmentItem?.attachmentId ||
-      `${attachmentItem?.name || ""}|${attachmentItem?.size || 0}`,
-  ).trim();
-}
-
-function toAttachmentContentKey(attachmentItem = {}) {
-  const name = String(attachmentItem?.name || "").trim();
-  const size = Number(attachmentItem?.size);
-  if (!name || !Number.isFinite(size) || size <= 0) return "";
-  return `${name}|${size}`;
+  return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
 }
 
 function normalizeComparablePath(pathValue = "") {
@@ -614,41 +608,19 @@ export function useMessageFiles({
     const mergedWithOwnerType = withAttachmentOwners(mergedBaseAttachments);
     const dedupedWithOwnerType = [];
     const seenAttachmentKeySet = new Map();
-    const seenAttachmentContentKeySet = new Map();
     for (const attachmentItem of mergedWithOwnerType) {
       const attachmentKey = toAttachmentKey(attachmentItem);
-      const attachmentContentKey = toAttachmentContentKey(attachmentItem);
       const attachmentKeys = [attachmentKey]
         .map((key) => String(key || "").trim())
         .filter(Boolean);
-      if (!attachmentKey) {
-        dedupedWithOwnerType.push(attachmentItem);
-        if (attachmentContentKey) {
-          seenAttachmentContentKeySet.set(attachmentContentKey, dedupedWithOwnerType.length - 1);
-        }
-        continue;
-      }
       let existingIndex = attachmentKeys
         .map((key) => seenAttachmentKeySet.get(key))
         .find((index) => index !== undefined);
-      if (existingIndex === undefined && attachmentContentKey) {
-        const sameContentIndex = seenAttachmentContentKeySet.get(attachmentContentKey);
-        const existingSameContentItem = dedupedWithOwnerType[sameContentIndex] || {};
-        if (
-          getAttachmentOwnerType(attachmentItem) === "plugin" ||
-          getAttachmentOwnerType(existingSameContentItem) === "plugin"
-        ) {
-          existingIndex = sameContentIndex;
-        }
-      }
       if (existingIndex === undefined) {
         for (const key of attachmentKeys) {
           if (!seenAttachmentKeySet.has(key)) {
             seenAttachmentKeySet.set(key, dedupedWithOwnerType.length);
           }
-        }
-        if (attachmentContentKey && !seenAttachmentContentKeySet.has(attachmentContentKey)) {
-          seenAttachmentContentKeySet.set(attachmentContentKey, dedupedWithOwnerType.length);
         }
         dedupedWithOwnerType.push(attachmentItem);
         continue;
@@ -665,9 +637,6 @@ export function useMessageFiles({
         for (const key of attachmentKeys) {
           seenAttachmentKeySet.set(key, existingIndex);
         }
-        if (attachmentContentKey) {
-          seenAttachmentContentKeySet.set(attachmentContentKey, existingIndex);
-        }
         continue;
       }
       if (
@@ -681,9 +650,6 @@ export function useMessageFiles({
         dedupedWithOwnerType[existingIndex] = preservedPluginItem;
         for (const key of attachmentKeys) {
           seenAttachmentKeySet.set(key, existingIndex);
-        }
-        if (attachmentContentKey) {
-          seenAttachmentContentKeySet.set(attachmentContentKey, existingIndex);
         }
       }
     }

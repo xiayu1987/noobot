@@ -12,10 +12,12 @@ import {
   normalizeAttachmentMetas,
   normalizeAttachmentParsedResultMeta,
   normalizeAttachmentTurnScopeMeta,
+  attachmentMatchKeys,
+  findMatchingAttachmentMeta,
   projectCanonicalAttachmentIdentity,
 } from "../../src/artifacts/meta-ops.js";
 
-test("projectCanonicalAttachmentIdentity emits only immutable authority fields", () => {
+test("projectCanonicalAttachmentIdentity delegates identity to the shared protocol", () => {
   assert.deepEqual(projectCanonicalAttachmentIdentity({
     attachmentId: "att_1",
     sessionId: "s1",
@@ -30,24 +32,51 @@ test("projectCanonicalAttachmentIdentity emits only immutable authority fields",
     attachmentId: "att_1",
     sessionId: "s1",
     attachmentSource: "user",
-    path: "/runtime/att_1.txt",
-    contentSha256: "sha_1",
   });
 });
 
-test("projectCanonicalAttachmentIdentity rejects aliases and incomplete ownership", () => {
+test("projectCanonicalAttachmentIdentity ignores access fields but rejects incomplete ownership", () => {
+  assert.deepEqual(projectCanonicalAttachmentIdentity({
+    attachmentId: "att_1",
+    sessionId: "s1",
+    attachmentSource: "user",
+    path: "/runtime/att_1.txt",
+    relativePath: "runtime/att_1.txt",
+  }, "s1"), {
+    attachmentId: "att_1",
+    sessionId: "s1",
+    attachmentSource: "user",
+  });
+
   for (const attachment of [
     { id: "att_1", sessionId: "s1", attachmentSource: "user", path: "/runtime/att_1.txt" },
     { attachmentId: "att_1", attachmentSource: "user", path: "/runtime/att_1.txt" },
     { attachmentId: "att_1", sessionId: "s2", attachmentSource: "user", path: "/runtime/att_1.txt" },
     { attachmentId: "att_1", sessionId: "s1", path: "/runtime/att_1.txt" },
-    { attachmentId: "att_1", sessionId: "s1", attachmentSource: "user", relativePath: "runtime/att_1.txt" },
   ]) {
     assert.throws(
       () => projectCanonicalAttachmentIdentity(attachment, "s1"),
       (error) => error?.errorCode === "INVALID_CANONICAL_ATTACHMENT",
     );
   }
+});
+
+test("attachment matching uses only the shared three-field identity", () => {
+  const canonical = {
+    attachmentId: "att_1",
+    sessionId: "s1",
+    attachmentSource: "user",
+    name: "same.txt",
+    mimeType: "text/plain",
+    path: "/one/same.txt",
+  };
+  const sameIdentity = { ...canonical, name: "renamed.txt", path: "/two/renamed.txt" };
+  const differentIdentity = { ...canonical, attachmentId: "att_2" };
+
+  assert.deepEqual(attachmentMatchKeys(canonical), [JSON.stringify(["s1", "user", "att_1"])]);
+  assert.equal(findMatchingAttachmentMeta(canonical, [differentIdentity, sameIdentity]), sameIdentity);
+  assert.equal(findMatchingAttachmentMeta({ ...canonical, path: "/other/same.txt" }, [sameIdentity]), sameIdentity);
+  assert.equal(findMatchingAttachmentMeta({ attachmentId: "att_1", name: "same.txt" }, [canonical]), null);
 });
 
 test("normalizeAttachmentMetas accepts legacy aliases but emits canonical attachment fields", () => {

@@ -190,7 +190,7 @@ test("doc_to_data: resolves a historical session attachment only after the model
       assert.equal(payload.userId, "primary-user");
       assert.equal(payload.sessionId, "s1");
       assert.equal(payload.attachmentSource, "user");
-      assert.equal(payload.filePath, textPath);
+      assert.equal(payload.attachmentId, "source-att");
       return {
         attachmentId: "source-att",
         sessionId: "s1",
@@ -231,7 +231,7 @@ test("doc_to_data: resolves a historical session attachment only after the model
         attachmentId: payload.sourceAttachmentId,
         sessionId: payload.sourceSessionId,
         attachmentSource: payload.sourceAttachmentSource,
-        path: payload.sourceAttachmentPath,
+        path: "",
         parsedResult: {
           attachmentId: payload.parsedAttachmentMeta?.attachmentId,
           path: payload.parsedAttachmentMeta?.path,
@@ -277,16 +277,19 @@ test("doc_to_data: resolves a historical session attachment only after the model
   const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
   assert.ok(tool);
 
-  const payload = JSON.parse(await tool.invoke({ filePath: "runtime/ops_workdir/source.md" }));
+  const payload = JSON.parse(await tool.invoke({
+    filePath: "runtime/ops_workdir/source.md",
+    attachmentId: "source-att",
+  }));
   assert.equal(payload.ok, true);
   assert.equal(payload.summary.source_attachment_backwritten, true);
   assert.equal(linkCalls.length, 1);
   assert.equal(linkCalls[0]?.sourceAttachmentId, "source-att");
   assert.equal(linkCalls[0]?.sourceAttachmentSource, "user");
-  assert.equal(linkCalls[0]?.sourceAttachmentPath, textPath);
+  assert.equal(linkCalls[0]?.sourceSessionId, "s1");
   assert.equal(linkCalls[0]?.parsedAttachmentMeta?.attachmentId, "parsed-1");
-  assert.equal(linkCalls[0]?.sourceTurnScopeId, "stopped-turn");
-  assert.equal(linkCalls[0]?.requestedInTurnScopeId, "continue-turn");
+  assert.equal("sourceTurnScopeId" in linkCalls[0], false);
+  assert.equal("requestedInTurnScopeId" in linkCalls[0], false);
   assert.equal(runtime.userMessageAttachments.length, 0);
   assert.equal(runtime.attachments[0]?.parsedResult, undefined);
   const parsedEvent = emittedEvents.find((event) => event?.event === "attachment_parsed");
@@ -296,7 +299,7 @@ test("doc_to_data: resolves a historical session attachment only after the model
   assert.equal(parsedEvent?.data?.attachments?.[0]?.parsedResult?.attachmentId, "parsed-1");
 });
 
-test("doc_to_data: child run resolves source identity from the root session and exact path", async () => {
+test("doc_to_data: child run resolves source identity from the root session by attachment ID", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-child-source-"));
   const relativePath = path.join("runtime", "attach", "scoped", "root-session", "user", "source.md");
   const textPath = path.join(basePath, relativePath);
@@ -346,14 +349,14 @@ test("doc_to_data: child run resolves source identity from the root session and 
   const tool = createDoc2DataTool({ agentContext })[0];
   const payload = JSON.parse(await tool.invoke({
     filePath: relativePath,
-    attachmentId: "source-att.md",
+    attachmentId: "source-att",
   }));
 
   assert.equal(payload.summary.source_attachment_backwritten, true);
   assert.equal(resolveCalls.length, 1);
   assert.equal(resolveCalls[0]?.sessionId, "root-session");
-  assert.equal(resolveCalls[0]?.attachmentId, "source-att.md");
-  assert.equal(resolveCalls[0]?.filePath, textPath);
+  assert.equal(resolveCalls[0]?.attachmentId, "source-att");
+  assert.equal("filePath" in resolveCalls[0], false);
   assert.equal(linkCalls[0]?.sourceAttachmentId, "source-att");
 });
 

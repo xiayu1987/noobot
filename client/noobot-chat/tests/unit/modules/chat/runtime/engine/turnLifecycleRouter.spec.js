@@ -182,6 +182,7 @@ describe("committed user Turn routing", () => {
       sessionId: "session-1",
     })).toBe(true);
 
+    expect(activeSession.value.aggregateVersion).toBe(1);
     expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
       event: "frontend.turnCommit.userMessageRejected",
       data: expect.objectContaining({ reason: "committed_user_target_missing" }),

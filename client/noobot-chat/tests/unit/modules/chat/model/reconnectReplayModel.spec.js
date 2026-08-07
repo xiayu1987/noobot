@@ -193,14 +193,28 @@ describe("reconnectReplayModel", () => {
       version: 1,
       direction: "output",
       transport: "file",
-      files: [{ filePath: "/workspace/old.txt" }],
+      files: [{
+        filePath: "/workspace/old.txt",
+        attachmentMeta: {
+          attachmentId: "old-transfer",
+          sessionId: "session-transfer",
+          attachmentSource: "test",
+        },
+      }],
     };
     const incomingTransferEnvelope = {
       protocol: "noobot.semantic-transfer",
       version: 1,
       direction: "output",
       transport: "file",
-      files: [{ filePath: "/workspace/new.txt" }],
+      files: [{
+        filePath: "/workspace/new.txt",
+        attachmentMeta: {
+          attachmentId: "new-transfer",
+          sessionId: "session-transfer",
+          attachmentSource: "test",
+        },
+      }],
     };
     const target = {
       role: RoleEnum.ASSISTANT,

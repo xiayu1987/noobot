@@ -58,6 +58,7 @@ describe("attachmentAccess", () => {
         attachmentSource: "upload",
         parsedResult: {
           attachmentId: "parsed-1",
+          sessionId: "session-1",
           attachmentSource: "model",
           relativePath: "parsed/report.md",
           mimeType: "text/markdown",

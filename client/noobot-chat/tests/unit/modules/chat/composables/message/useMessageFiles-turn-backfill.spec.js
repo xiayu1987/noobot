@@ -122,7 +122,7 @@ describe("useMessageFiles turn backfill", () => {
       pending: false,
       dialogProcessId: "dp-1",
       attachments: [
-        { attachmentId: "prev-1", name: "previous-result.md" },
+        { attachmentId: "prev-1", sessionId: "session-1", attachmentSource: "test", name: "previous-result.md" },
       ],
     };
     const { displayedAttachments } = createMessageFiles({
@@ -149,7 +149,7 @@ describe("useMessageFiles turn backfill", () => {
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
       attachments: [
-        { attachmentId: "prev-1", name: "previous-result.md" },
+        { attachmentId: "prev-1", sessionId: "session-1", attachmentSource: "test", name: "previous-result.md" },
       ],
     };
     const { displayedAttachments } = createMessageFiles({
@@ -176,7 +176,7 @@ describe("useMessageFiles turn backfill", () => {
       dialogProcessId: "dp-1",
       turnScopeId: "turn-previous",
       attachments: [
-        { attachmentId: "prev-1", name: "previous-result.md" },
+        { attachmentId: "prev-1", sessionId: "session-1", attachmentSource: "test", name: "previous-result.md" },
       ],
     };
     const { displayedAttachments } = createMessageFiles({
@@ -201,7 +201,7 @@ describe("useMessageFiles turn backfill", () => {
       pending: false,
       dialogProcessId: "dp-1",
       attachments: [
-        { attachmentId: "prev-1", name: "previous-result.md" },
+        { attachmentId: "prev-1", sessionId: "session-1", attachmentSource: "test", name: "previous-result.md" },
       ],
     };
     const { displayedAttachments } = createMessageFiles({
@@ -227,7 +227,7 @@ describe("useMessageFiles turn backfill", () => {
       pending: false,
       dialogProcessId: "dp-1",
       attachments: [
-        { attachmentId: "prev-1", name: "previous-result.md" },
+        { attachmentId: "prev-1", sessionId: "session-1", attachmentSource: "test", name: "previous-result.md" },
       ],
     };
     const { displayedAttachments } = createMessageFiles({
@@ -246,7 +246,7 @@ describe("useMessageFiles turn backfill", () => {
       role: "tool",
       dialogProcessId: "dp-first",
       attachments: [
-        { attachmentId: "bird-1", name: "generated_image_1.png" },
+        { attachmentId: "bird-1", sessionId: "session-1", attachmentSource: "test", name: "generated_image_1.png" },
       ],
     };
     const firstAssistant = {
@@ -295,6 +295,8 @@ describe("useMessageFiles turn backfill", () => {
           attachments: [
             {
               attachmentId: "bird-1",
+              sessionId: "session-1",
+              attachmentSource: "test",
               name: "generated_image_1.png",
               turnScope: { turnScopeId: "turn-first", dialogProcessId: "dp-first" },
             },
@@ -355,6 +357,7 @@ describe("useMessageFiles turn backfill", () => {
           attachments: [
             {
               attachmentId: "other-session-file",
+              attachmentSource: "test",
               name: "other.png",
               turnScope: { sessionId: "session-other", turnScopeId: "turn-same" },
             },
@@ -387,7 +390,7 @@ describe("useMessageFiles turn backfill", () => {
       sessionId: "session-1",
       turnScopeId: "turn-first",
       attachments: [
-        { attachmentId: "bird-1", name: "generated_image_1.png" },
+        { attachmentId: "bird-1", sessionId: "session-1", attachmentSource: "test", name: "generated_image_1.png" },
       ],
     };
     const firstAssistant = {
@@ -438,6 +441,8 @@ describe("useMessageFiles turn backfill", () => {
       attachments: [
         {
           attachmentId: "prev-explicit",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "previous.png",
           turnScope: { turnScopeId: "turn-previous", dialogProcessId: "dp-reused" },
         },
@@ -468,6 +473,8 @@ describe("useMessageFiles turn backfill", () => {
       attachments: [
         {
           attachmentId: "current-explicit",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "current.png",
           turnScope: { turnScopeId: "turn-current", dialogProcessId: "dp-current" },
         },
@@ -490,7 +497,7 @@ describe("useMessageFiles turn backfill", () => {
       dialogProcessId: "dp-current",
       turnScopeId: "turn-current",
       attachments: [
-        { attachmentId: "normalized", name: "normalized.png" },
+        { attachmentId: "normalized", sessionId: "session-1", attachmentSource: "test", name: "normalized.png" },
       ],
     };
     const fallbackTool = {
@@ -498,7 +505,7 @@ describe("useMessageFiles turn backfill", () => {
       dialogProcessId: "dp-current",
       turnScopeId: "turn-current",
       attachments: [
-        { attachmentId: "fallback", name: "fallback.png" },
+        { attachmentId: "fallback", sessionId: "session-1", attachmentSource: "test", name: "fallback.png" },
       ],
     };
 
@@ -510,7 +517,7 @@ describe("useMessageFiles turn backfill", () => {
     });
 
     expect(displayedAttachments.value).toEqual([
-      { attachmentId: "normalized", owner: { type: "agent" }, name: "normalized.png" },
+      { attachmentId: "normalized", sessionId: "session-1", attachmentSource: "test", owner: { type: "agent" }, name: "normalized.png" },
     ]);
   });
 });

@@ -14,10 +14,10 @@ describe("chatEngine streamHandlers transport boundary", () => {
   it("merges parsed attachment metadata into the canonical user attachment", () => {
     const userMessage = {
       role: "user",
-      attachments: [{ attachmentId: "source-att", name: "source.docx" }],
+      attachments: [{ attachmentId: "source-att", sessionId: "session-1", attachmentSource: "user", name: "source.docx" }],
     };
     handleAttachmentParsedStreamEvent({
-      data: { attachments: [{ attachmentId: "source-att", parsedResult: { text: "parsed" } }] },
+      data: { attachments: [{ attachmentId: "source-att", sessionId: "session-1", attachmentSource: "user", parsedResult: { text: "parsed" } }] },
       activeSession: { value: { messages: [userMessage] } },
       botMessage: { role: "assistant", attachments: [] },
     });

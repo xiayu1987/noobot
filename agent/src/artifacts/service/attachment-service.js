@@ -11,9 +11,7 @@ import {
   saveAttachmentRecord,
 } from "./attachment-service-ingest.js";
 import {
-  buildLinkParsedScopeCandidates,
   collectSessionJsonFiles,
-  isAttachmentPathMatch,
   linkParsedResultInScopes,
   linkParsedResultToAttachment,
   syncParsedResultToSessionSnapshots,
@@ -55,24 +53,12 @@ export class AttachmentService {
     return linkParsedResultToAttachment(this, payload);
   }
 
-  async _buildLinkParsedScopeCandidates(payload = {}) {
-    return buildLinkParsedScopeCandidates(payload);
-  }
-
   async _linkParsedResultInScopes(payload = {}) {
     return linkParsedResultInScopes(payload);
   }
 
-  _isAttachmentPathMatch(payload = {}) {
-    return isAttachmentPathMatch(payload);
-  }
-
   async _syncParsedResultToSessionSnapshots(payload = {}) {
     return syncParsedResultToSessionSnapshots(payload);
-  }
-
-  async _collectSessionJsonFiles(payload = {}) {
-    return collectSessionJsonFiles(payload);
   }
 
   async _walkSessionJsonFilesFromRoot(payload = {}) {
@@ -91,8 +77,18 @@ export class AttachmentService {
     return resolveSourceAttachment(this, payload);
   }
 
-  async readAttachmentContent({ userId, attachmentId }) {
-    return readAttachmentContent(this, { userId, attachmentId });
+  async readAttachmentContent({
+    userId,
+    attachmentId,
+    sessionId = "",
+    attachmentSource = "",
+  }) {
+    return readAttachmentContent(this, {
+      userId,
+      attachmentId,
+      sessionId,
+      attachmentSource,
+    });
   }
 
   async deleteScopedAttachmentsBySessionIds({ userId, sessionIds = [] } = {}) {

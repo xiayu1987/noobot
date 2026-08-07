@@ -7,6 +7,14 @@ import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
 } from "./messageIdentity.js";
+import {
+  attachmentIdentityKey,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
+
+function canonicalAttachmentKey(attachmentItem = {}) {
+  return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
+}
 
 export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) {
   const existing = existingItem && typeof existingItem === "object" ? existingItem : {};
@@ -59,58 +67,24 @@ export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) 
 export function mergeAttachments(existing = [], incoming = []) {
   const existingList = Array.isArray(existing) ? existing : [];
   const incomingList = Array.isArray(incoming) ? incoming : [];
+  existingList.forEach(canonicalAttachmentKey);
   if (!incomingList.length) return existingList;
   const merged = [...existingList];
-  const normalizeKeyPart = (value = "") => String(value || "").trim().toLowerCase();
-  const toKeys = (attachmentItem = {}) => {
-    const keys = [];
-    const pushKey = (key = "") => {
-      const normalized = String(key || "").trim();
-      if (normalized && !keys.includes(normalized)) keys.push(normalized);
-    };
-    const attachmentId = normalizeKeyPart(attachmentItem?.attachmentId);
-    const parsedResultAttachmentId = normalizeKeyPart(attachmentItem?.parsedResultAttachmentId);
-    const name = normalizeKeyPart(attachmentItem?.name || attachmentItem?.parsedResultName);
-    const mimeType = normalizeKeyPart(attachmentItem?.mimeType || attachmentItem?.type);
-    const size = Number(attachmentItem?.size || 0) || 0;
-    const path = normalizeKeyPart(
-      attachmentItem?.path ||
-        attachmentItem?.relativePath ||
-        attachmentItem?.transferFilePath ||
-        attachmentItem?.downloadUrl ||
-        attachmentItem?.parsedResultUrl,
-    );
-    pushKey(attachmentId ? `id:${attachmentId}` : "");
-    pushKey(parsedResultAttachmentId ? `parsed-id:${parsedResultAttachmentId}` : "");
-    pushKey(path ? `path:${path}` : "");
-    if (name) {
-      pushKey(`name:${name}|mime:${mimeType}`);
-      pushKey(`name:${name}|size:${size}`);
-    }
-    return keys;
-  };
   const indexByKey = new Map();
   existingList.forEach((attachmentItem, index) => {
-    for (const attachmentKey of toKeys(attachmentItem)) {
-      if (attachmentKey && !indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, index);
-    }
+    const attachmentKey = canonicalAttachmentKey(attachmentItem);
+    if (!indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, index);
   });
   for (const attachmentItem of incomingList) {
-    const attachmentKeys = toKeys(attachmentItem);
-    const matchedKey = attachmentKeys.find((attachmentKey) => indexByKey.has(attachmentKey));
-    if (matchedKey) {
-      const existingIndex = indexByKey.get(matchedKey);
+    const attachmentKey = canonicalAttachmentKey(attachmentItem);
+    if (indexByKey.has(attachmentKey)) {
+      const existingIndex = indexByKey.get(attachmentKey);
       const existingItem = merged[existingIndex] || {};
       merged[existingIndex] = mergeAttachmentMetaFields(existingItem, attachmentItem);
-      for (const attachmentKey of toKeys(merged[existingIndex])) {
-        if (attachmentKey && !indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, existingIndex);
-      }
       continue;
     }
     merged.push(attachmentItem);
-    for (const attachmentKey of attachmentKeys) {
-      if (attachmentKey && !indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, merged.length - 1);
-    }
+    indexByKey.set(attachmentKey, merged.length - 1);
   }
   return merged;
 }
@@ -118,29 +92,13 @@ export function mergeAttachments(existing = [], incoming = []) {
 export function mergeAttachmentSnapshot(existing = [], snapshot = []) {
   const existingList = Array.isArray(existing) ? existing : [];
   const snapshotList = Array.isArray(snapshot) ? snapshot : [];
-  const normalize = (value = "") => String(value || "").trim().toLowerCase();
-  const identityKeys = (attachmentItem = {}) => {
-    const attachmentId = normalize(attachmentItem?.attachmentId || attachmentItem?.id);
-    const clientAttachmentId = normalize(attachmentItem?.clientAttachmentId);
-    const name = normalize(attachmentItem?.name);
-    const mimeType = normalize(attachmentItem?.mimeType || attachmentItem?.type);
-    const size = Number(attachmentItem?.size || 0) || 0;
-    return [
-      attachmentId ? `id:${attachmentId}` : "",
-      clientAttachmentId ? `client-id:${clientAttachmentId}` : "",
-      name ? `name:${name}|mime:${mimeType}|size:${size}` : "",
-    ].filter(Boolean);
-  };
   const existingByKey = new Map();
   for (const attachmentItem of existingList) {
-    for (const key of identityKeys(attachmentItem)) {
-      if (!existingByKey.has(key)) existingByKey.set(key, attachmentItem);
-    }
+    const key = canonicalAttachmentKey(attachmentItem);
+    if (!existingByKey.has(key)) existingByKey.set(key, attachmentItem);
   }
   return snapshotList.map((snapshotItem) => {
-    const existingItem = identityKeys(snapshotItem)
-      .map((key) => existingByKey.get(key))
-      .find(Boolean);
+    const existingItem = existingByKey.get(canonicalAttachmentKey(snapshotItem));
     return existingItem
       ? mergeAttachmentMetaFields(existingItem, snapshotItem)
       : snapshotItem;

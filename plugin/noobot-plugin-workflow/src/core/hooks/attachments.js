@@ -6,20 +6,34 @@
 
 import { WORKFLOW_ATTACHMENT_SCOPE } from "../constants.js";
 import { resolveWorkflowAgentContext, resolveWorkflowRuntimeFromContext } from "./runtime.js";
+import {
+  attachmentIdentityKey,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
+
+function canonicalAttachmentKey(attachment = {}) {
+  return attachmentIdentityKey(projectAttachmentIdentity(attachment));
+}
+
+function assertTransferAttachmentMeta(meta = {}) {
+  projectAttachmentIdentity(meta);
+  return meta;
+}
 
 export function mergeAttachments(existing = [], incoming = []) {
   const merged = Array.isArray(existing) ? existing.slice() : [];
-  const seen = new Set(
-    merged
-      .map((item = {}) => String(item?.attachmentId || item?.path || item?.relativePath || "").trim())
-      .filter(Boolean),
-  );
+  const indexByKey = new Map();
+  merged.forEach((item, index) => indexByKey.set(canonicalAttachmentKey(item), index));
   for (const item of Array.isArray(incoming) ? incoming : []) {
     if (!item || typeof item !== "object") continue;
-    const key = String(item?.attachmentId || item?.path || item?.relativePath || "").trim();
-    if (key && seen.has(key)) continue;
+    const key = canonicalAttachmentKey(item);
+    if (indexByKey.has(key)) {
+      const index = indexByKey.get(key);
+      merged[index] = { ...merged[index], ...item };
+      continue;
+    }
     merged.push(item);
-    if (key) seen.add(key);
+    indexByKey.set(key, merged.length - 1);
   }
   return merged;
 }
@@ -63,45 +77,27 @@ export function resolveSemanticAttachmentDeclarationMap(semantic = {}) {
 export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {}, semantic = {} } = {}) {
   const userAttachments = resolveWorkflowInputAttachments(ctx);
   if (!userAttachments.length) return [];
+  const canonicalUserAttachments = userAttachments.map((attachment) => ({
+    attachment,
+    key: canonicalAttachmentKey(attachment),
+  }));
   const refs = normalizeAttachmentRefs(
     semanticNode?.attachments || semanticNode?.inputAttachments || semanticNode?.attachmentIds || [],
   );
   if (!refs.length) return [];
-  if (refs.some(isAllUserAttachmentRef)) return userAttachments;
+  if (refs.some(isAllUserAttachmentRef)) return canonicalUserAttachments.map(({ attachment }) => attachment);
   const semanticAttachmentMap = resolveSemanticAttachmentDeclarationMap(semantic);
-  const expandedRefs = refs.flatMap((ref) => {
+  const declaredIdentityKeys = refs.map((ref) => {
     const normalizedRef = String(ref || "").trim();
     const declared = semanticAttachmentMap[normalizedRef] || null;
-    if (!declared || typeof declared !== "object") return [normalizedRef];
-    return [
-      normalizedRef,
-      declared?.id,
-      declared?.attachmentId,
-      declared?.name,
-      declared?.fileName,
-      declared?.path,
-      declared?.relativePath,
-    ];
-  });
-  const refSet = new Set(expandedRefs.map((item) => String(item || "").trim()).filter(Boolean));
-  if (!refSet.size) return [];
-  return userAttachments.filter((meta = {}) => {
-    const keys = [
-      meta?.attachmentId,
-      meta?.id,
-      meta?.name,
-      meta?.fileName,
-      meta?.path,
-      meta?.relativePath,
-      resolveAttachmentDisplayPath(meta, ctx),
-      meta?.parsedResultAttachmentId,
-      meta?.parsedResultPath,
-      meta?.parsedResultRelativePath,
-    ]
-      .map((item) => String(item || "").trim())
-      .filter(Boolean);
-    return keys.some((key) => refSet.has(key));
-  });
+    if (!declared || typeof declared !== "object") return "";
+    return canonicalAttachmentKey(declared);
+  }).filter(Boolean);
+  const identityKeySet = new Set(declaredIdentityKeys);
+  if (!identityKeySet.size) return [];
+  return canonicalUserAttachments
+    .filter(({ key }) => identityKeySet.has(key))
+    .map(({ attachment }) => attachment);
 }
 
 export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
@@ -207,7 +203,7 @@ export function buildWorkflowTransferPayloadFromAttachments(attachments = []) {
         meta?.name ||
         "",
     ).trim(),
-    attachmentMeta: meta,
+    attachmentMeta: assertTransferAttachmentMeta(meta),
     role: index === 0 ? "primary" : "secondary",
   }));
   const primaryEnvelope = {
@@ -230,9 +226,17 @@ export function resolveWorkflowTransferFilesFromPayload(payload = {}, ctx = {}) 
   return source.flatMap((envelope = {}) => {
     if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return [];
     if (Array.isArray(envelope.files) && envelope.files.length) {
-      return envelope.files.filter((item) => item && typeof item === "object" && !Array.isArray(item));
+      return envelope.files
+        .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+        .map((item) => ({
+          ...item,
+          ...(item.attachmentMeta
+            ? { attachmentMeta: assertTransferAttachmentMeta(item.attachmentMeta) }
+            : {}),
+        }));
     }
     if (envelope.filePath || envelope.attachmentMeta || envelope.pathView) {
+      if (envelope.attachmentMeta) assertTransferAttachmentMeta(envelope.attachmentMeta);
       return [
         {
           filePath: String(envelope.filePath || "").trim(),

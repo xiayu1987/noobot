@@ -673,6 +673,9 @@ export function registerSessionRoutes(
       const { userId, attachmentId } = req.params;
       const sessionId = String(req.query?.sessionId || "").trim();
       const attachmentSource = String(req.query?.attachmentSource || "").trim();
+      if (!sessionId || !attachmentSource || !String(attachmentId || "").trim()) {
+        throw new Error(translateText("common.attachmentNotFound", req.locale));
+      }
       const attachment = await bot.getAttachmentById({
         userId,
         attachmentId,

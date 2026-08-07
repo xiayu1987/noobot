@@ -33,6 +33,43 @@ test("session-routes: 附件不存在返回 404 + 标准错误体", async () => 
     assert.equal(payload.error, "attachment-not-found");
   });
 });
+
+for (const [label, query] of [
+  ["缺失 sessionId", { attachmentSource: "user" }],
+  ["缺失 attachmentSource", { sessionId: "s1" }],
+]) {
+  test(`session-routes: ${label} 的附件访问拒绝跨作用域查询`, async () => {
+    let called = false;
+    const app = express();
+    registerSessionRoutes(app, {
+      bot: {
+        session: {
+          getSessionData: async () => ({}),
+          getRootSessionId: async () => "",
+          deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+          getAllSessionsData: async () => [],
+        },
+        getAttachmentById: async () => {
+          called = true;
+          return { absolutePath: "/tmp/should-not-be-read" };
+        },
+      },
+      handleChat: (_req, res) => res.json({ ok: true }),
+      getConnectorChannelStore: () => ({}),
+      getConnectorHistoryStore: () => ({}),
+      translateText: (key) => (key === "common.attachmentNotFound" ? "attachment-not-found" : key),
+    });
+
+    await withTestServer(app, async (baseUrl) => {
+      const params = new URLSearchParams(query);
+      const response = await fetch(`${baseUrl}/internal/attachment/u1/a1?${params}`);
+      const payload = await response.json();
+      assert.equal(response.status, 404);
+      assert.equal(payload.error, "attachment-not-found");
+    });
+    assert.equal(called, false);
+  });
+}
 test("session-routes: 会话查询异常返回 400 + 标准错误体", async () => {
   const app = express();
   registerSessionRoutes(app, {

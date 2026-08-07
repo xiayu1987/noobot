@@ -166,6 +166,31 @@ export function createSessionDetailApplicator({
       sessionDocs,
       makeViewMessage,
     });
+    logWorkflowDiagnostics("frontend.sessionDetailProjection.terminalPresentation", () => ({
+      sessionId: detailSessionId,
+      applyMode,
+      rawTurnStatuses: (Array.isArray(mainSessionDoc?.turnStatuses)
+        ? mainSessionDoc.turnStatuses
+        : Array.isArray(detail?.turnStatuses) ? detail.turnStatuses : [])
+        .map((status = {}) => ({
+          turnScopeId: String(status?.turnScopeId || "").trim(),
+          dialogProcessId: String(status?.dialogProcessId || "").trim(),
+          status: String(status?.status || "").trim(),
+        })),
+      retainedTurnStatuses: turnStatuses.map((status = {}) => ({
+        turnScopeId: String(status?.turnScopeId || "").trim(),
+        dialogProcessId: String(status?.dialogProcessId || "").trim(),
+        status: String(status?.status || "").trim(),
+      })),
+      projectedTerminalPresentations: detailProjection.messages
+        .filter((messageItem) => messageItem?.turnStatusPlaceholder === true)
+        .map((messageItem) => ({
+          messageId: String(messageItem?.messageId || messageItem?.id || "").trim(),
+          turnScopeId: String(messageItem?.turnScopeId || "").trim(),
+          status: String(messageItem?.status || messageItem?.turnStatus?.status || "").trim(),
+          contentLength: typeof messageItem?.content === "string" ? messageItem.content.length : 0,
+        })),
+    }));
     chatStore?.applyTurnTimingSnapshot?.({
       sessionId: detailSessionId,
       turnTimings,

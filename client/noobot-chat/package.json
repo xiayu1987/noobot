@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@noobot/agent-transport-protocol": "file:../../agent-transport-protocol",
+    "@noobot/attachment-protocol": "file:../../attachment-protocol",
     "@noobot/client-shared": "file:../shared",
     "@noobot/context-protocol": "file:../../context-protocol",
     "@noobot/plugin-runtime": "file:../../plugin-runtime",

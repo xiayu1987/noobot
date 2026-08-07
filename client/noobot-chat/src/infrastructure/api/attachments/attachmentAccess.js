@@ -59,7 +59,7 @@ export function resolveAttachmentAccessMeta(attachmentItem = {}, { userId = "" }
 
 export function resolveParsedResultAccessMeta(
   attachmentItem = {},
-  { userId = "", defaultAttachmentSource = "model" } = {},
+  { userId = "", defaultAttachmentSource = "" } = {},
 ) {
   const parsedResult = isPlainObject(attachmentItem?.parsedResult)
     ? attachmentItem.parsedResult
@@ -73,7 +73,6 @@ export function resolveParsedResultAccessMeta(
     parsedResult?.sessionId,
     parsedResult?.session_id,
     attachmentItem?.parsedResultSessionId,
-    resolveAttachmentSessionId(attachmentItem),
   );
   const attachmentSource = firstString(
     parsedResult?.attachmentSource,
@@ -88,7 +87,7 @@ export function resolveParsedResultAccessMeta(
     parsedResult?.relative_path,
     attachmentItem?.parsedResultRelativePath,
   );
-  const url = attachmentId
+  const url = attachmentId && sessionId && attachmentSource
       ? buildAttachmentUrl({
           userId,
           attachmentId,

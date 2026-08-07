@@ -34,7 +34,14 @@ describe("dialogProcessChain attachment rich-first merge", () => {
     };
 
     const merged = mergeAttachments([richAttachment], [
-      { name: "report.docx", mimeType: richAttachment.mimeType, size: 123 },
+      {
+        attachmentId: "att-rich",
+        sessionId: "session-a",
+        attachmentSource: "user",
+        name: "report.docx",
+        mimeType: richAttachment.mimeType,
+        size: 123,
+      },
     ]);
 
     expect(merged).toHaveLength(1);
@@ -87,8 +94,8 @@ describe("dialogProcessChain attachment rich-first merge", () => {
   });
 
   it("keeps same-name attachments separate when stable metadata differs", () => {
-    const existing = [{ attachmentId: "att-docx", name: "report", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: 123 }];
-    const incoming = [{ name: "report", mimeType: "application/pdf", size: 456 }];
+    const existing = [{ attachmentId: "att-docx", sessionId: "session-a", attachmentSource: "user", name: "report", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: 123 }];
+    const incoming = [{ attachmentId: "att-pdf", sessionId: "session-a", attachmentSource: "user", name: "report", mimeType: "application/pdf", size: 456 }];
 
     const merged = mergeAttachments(existing, incoming);
 
@@ -101,16 +108,20 @@ describe("dialogProcessChain attachment rich-first merge", () => {
     const existing = [
       {
         attachmentId: "image-1",
+        sessionId: "session-a",
+        attachmentSource: "user",
         clientAttachmentId: "draft-1",
         name: "diagram.png",
         mimeType: "image/png",
         size: 123,
         previewUrl: "blob:http://localhost/image-1",
       },
-      { attachmentId: "removed", name: "removed.png", mimeType: "image/png", size: 12 },
+      { attachmentId: "removed", sessionId: "session-a", attachmentSource: "user", name: "removed.png", mimeType: "image/png", size: 12 },
     ];
     const snapshot = [{
       attachmentId: "image-1",
+      sessionId: "session-a",
+      attachmentSource: "user",
       clientAttachmentId: "draft-1",
       name: "diagram.png",
       mimeType: "image/png",
@@ -126,5 +137,22 @@ describe("dialogProcessChain attachment rich-first merge", () => {
       previewUrl: "blob:http://localhost/image-1",
       parsedResult: { attachmentId: "parsed-1", mimeType: "text/markdown" },
     });
+  });
+
+  it("isolates identical attachment ids across session and source", () => {
+    const existing = [{ attachmentId: "shared", sessionId: "session-a", attachmentSource: "user", name: "a.txt" }];
+    const incoming = [
+      { attachmentId: "shared", sessionId: "session-b", attachmentSource: "user", name: "b.txt" },
+      { attachmentId: "shared", sessionId: "session-a", attachmentSource: "model", name: "model.txt" },
+    ];
+
+    expect(mergeAttachments(existing, incoming)).toHaveLength(3);
+  });
+
+  it("rejects attachments without the complete canonical identity", () => {
+    expect(() => mergeAttachments([], [{ attachmentId: "att-1", sessionId: "session-a" }]))
+      .toThrow(/invalid_attachment_source/);
+    expect(() => mergeAttachmentSnapshot([], [{ attachmentId: "att-1", attachmentSource: "user" }]))
+      .toThrow(/invalid_attachment_session_id/);
   });
 });

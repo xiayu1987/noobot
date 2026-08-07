@@ -9,6 +9,7 @@ import {
   readAttachIndex,
 } from "../../artifacts/index.js";
 import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { safeStr } from "../../shared/utils/shared-utils.js";
 
 
 export async function resolveExistingUserMessageAttachments(engine, {
