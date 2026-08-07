@@ -16,6 +16,15 @@ import {
   parentOwnsChildRunEventData,
 } from "./child-run-events.js";
 import { assertTurnCommittedEventData } from "@noobot/shared/turn-commit-protocol";
+import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
+
+function assertCanonicalAttachments(attachments = []) {
+  const source = Array.isArray(attachments) ? attachments : [];
+  return source.map((attachment) => {
+    projectAttachmentIdentity(attachment);
+    return attachment;
+  });
+}
 
 export function createRunEventListener({
   sendEvent,
@@ -301,7 +310,7 @@ export function createRunEventListener({
           ...parentOwnedData,
           sessionId: String(sessionId || ""),
           turnScopeId: resolveTurnScopeId(),
-          attachments: Array.isArray(eventData?.attachments) ? eventData.attachments : [],
+          attachments: assertCanonicalAttachments(eventData?.attachments),
         });
       }
       if (
@@ -314,9 +323,7 @@ export function createRunEventListener({
               parentDialogProcessId,
             })
           : eventData;
-        const attachments = Array.isArray(eventData?.attachments)
-          ? eventData.attachments
-          : [];
+        const attachments = assertCanonicalAttachments(eventData?.attachments);
         return sendEvent("attachments", {
           ...parentOwnedData,
           dialogProcessId: String(parentOwnedData?.dialogProcessId || ""),

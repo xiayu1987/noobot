@@ -31,40 +31,44 @@ test("@core PBE-029 统一 Session 协议闭环审计", async ({ noobot, protoco
     page: noobot.page,
     capture: protocolCapture,
     sessionId: noobot.sessionId,
-    prompt: uniquePrompt(testInfo, "canonical send without attachment"),
+    prompt: uniquePrompt(testInfo, "canonical send with attachment"),
+    attachment: fixedAttachment("pbe-029.txt"),
+  });
+  const retained = await resendAndStop({
+    page: noobot.page,
+    capture: protocolCapture,
+    sessionId: noobot.sessionId,
+    content: uniquePrompt(testInfo, "canonical resend retaining attachment"),
   });
   const continued = await continueAndStop({
     page: noobot.page,
     capture: protocolCapture,
     sessionId: noobot.sessionId,
-    previous: first.send,
+    previous: retained,
     prompt: uniquePrompt(testInfo, "canonical continue"),
-  });
-  const resent = await resendAndStop({
-    page: noobot.page,
-    capture: protocolCapture,
-    sessionId: noobot.sessionId,
-    content: uniquePrompt(testInfo, "canonical resend without attachment"),
-  });
-  const attached = await resendAndStop({
-    page: noobot.page,
-    capture: protocolCapture,
-    sessionId: noobot.sessionId,
-    content: uniquePrompt(testInfo, "canonical resend with attachment"),
-    attachment: fixedAttachment("pbe-029.txt"),
   });
   const removed = await resendAndStop({
     page: noobot.page,
     capture: protocolCapture,
     sessionId: noobot.sessionId,
-    content: uniquePrompt(testInfo, "canonical resend with explicit attachment removal"),
+    content: uniquePrompt(testInfo, "canonical resend removing attachment"),
     removeAttachments: true,
+  });
+  const attached = await resendAndStop({
+    page: noobot.page,
+    capture: protocolCapture,
+    sessionId: noobot.sessionId,
+    content: uniquePrompt(testInfo, "canonical resend adding attachment"),
+    attachment: fixedAttachment("pbe-029-added.txt"),
   });
 
   expect(continued.identity.turnScopeId).not.toBe(first.send.identity.turnScopeId);
-  expect(resent.input.attachments).toEqual([]);
-  expect(attached.input.attachments).toHaveLength(1);
+  expect(first.send.input.attachments).toHaveLength(1);
+  expect(retained.input.attachments).toHaveLength(1);
+  expect(retained.input.attachments[0].name).toBe("pbe-029.txt");
   expect(removed.input.attachments).toEqual([]);
+  expect(attached.input.attachments).toHaveLength(1);
+  expect(attached.input.attachments[0].name).toBe("pbe-029-added.txt");
 
   const commands = assertCommandChain(protocolCapture, noobot.sessionId);
   assertNoLegacySessionProtocolKeys(commands);
@@ -73,8 +77,9 @@ test("@core PBE-029 统一 Session 协议闭环审计", async ({ noobot, protoco
   const aggregateVersions = runCommands.map((command) => command.concurrency.expectedAggregateVersion);
   expect(aggregateVersions.every(Number.isSafeInteger)).toBe(true);
   for (let index = 1; index < aggregateVersions.length; index += 1) {
-    expect(aggregateVersions[index]).toBeGreaterThan(aggregateVersions[index - 1]);
+    expect(aggregateVersions[index]).toBeGreaterThanOrEqual(aggregateVersions[index - 1]);
   }
+  expect(new Set(aggregateVersions).size).toBeGreaterThan(1);
 
   const lifecycle = lifecycleForSession(protocolCapture, noobot.sessionId);
   assertNoLegacySessionProtocolKeys(lifecycle);

@@ -324,16 +324,21 @@ export async function assertReusedUserTurnIdentity({
       throw new TypeError("reused Turn dialogProcessId does not match Session authority");
     }
     if (Array.isArray(attachments)) {
-      const committedAttachmentIdentities = projectCanonicalAttachmentIdentities(
-        dedupeAttachments(targetMessage.attachments),
-        sessionId,
-      );
-      const preparedAttachmentIdentities = projectCanonicalAttachmentIdentities(
-        dedupeAttachments(attachments),
-        sessionId,
-      );
+      const committedAttachments = dedupeAttachments(targetMessage.attachments);
+      const preparedAttachments = dedupeAttachments(attachments);
+      const immutableFields = ["attachmentId", "sessionId", "attachmentSource", "path", "relativePath", "contentSha256"];
+      const committedAttachmentIdentities = projectCanonicalAttachmentIdentities(committedAttachments, sessionId);
+      const preparedAttachmentIdentities = projectCanonicalAttachmentIdentities(preparedAttachments, sessionId);
       if (JSON.stringify(committedAttachmentIdentities) !== JSON.stringify(preparedAttachmentIdentities)) {
         throw new TypeError("reused Turn attachments do not match Session authority");
+      }
+      for (const [index, committed] of committedAttachments.entries()) {
+        const prepared = preparedAttachments[index];
+        for (const field of immutableFields) {
+          if (String(committed?.[field] ?? "") !== String(prepared?.[field] ?? "")) {
+            throw new TypeError("reused Turn attachments do not match Session authority");
+          }
+        }
       }
     }
     return {

@@ -78,6 +78,20 @@ describe("ThinkingPanel runtime timing", () => {
     expect(wrapper.text()).not.toContain("--:--");
   });
 
+  it("shows the thinking panel for a completed turn with timing but no tool or activity logs", () => {
+    const wrapper = mountThinkingPanel(thinkingMessage({ activityTimeline: [] }), {
+      runtime: runtime({
+        terminal: true,
+        phase: "completed",
+        startedAt: "2026-07-24T10:00:00.000Z",
+        finishedAt: "2026-07-24T10:00:12.000Z",
+      }),
+    });
+
+    expect(wrapper.find(".thinking-realtime-shell").exists()).toBe(true);
+    expect(wrapper.text()).toContain("00:12");
+  });
+
   it("reacts when the selected Runtime Store view completes", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-22T10:00:12.000Z"));

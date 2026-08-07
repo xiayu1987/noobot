@@ -203,16 +203,22 @@ describe("useChatEngine.resend replace turn", () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitAuthorityProcessing(onEvent, payload);
     });
-    const keptAttachment = { attachmentId: "kept", name: "kept.txt" };
-    const removedAttachment = { attachmentId: "removed", name: "removed.txt" };
+    const keptAttachment = { attachmentId: "kept", sessionId: "local-resend-attachments", attachmentSource: "test", name: "kept.txt" };
+    const removedAttachment = { attachmentId: "removed", sessionId: "local-resend-attachments", attachmentSource: "test", name: "removed.txt" };
     const newAttachment = { name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" };
-    const localFile = new File(["new"], "new.txt", { type: "text/plain" });
+    const localFile = {
+      raw: new File(["new"], "new.txt", { type: "text/plain" }),
+      clientAttachmentId: "draft-new",
+      name: "new.txt",
+      mimeType: "text/plain",
+    };
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
       const canonicalAttachments = attachments.map((attachment, index) => (
         attachment.contentBase64
           ? {
               ...attachment,
               attachmentId: `canonical-${index}`,
+              attachmentSource: "test",
               sessionId: "local-resend-attachments",
               path: `/attachments/canonical-${index}`,
             }
@@ -262,10 +268,13 @@ describe("useChatEngine.resend replace turn", () => {
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited with attachments", {
       attachments: [keptAttachment],
       attachmentFiles: [localFile],
-      removedAttachmentKeys: ["removed"],
+      removedAttachmentKeys: ['["local-resend-attachments","test","removed"]'],
     })).resolves.toBe(true);
 
-    const expectedAttachments = [keptAttachment, newAttachment];
+    const expectedAttachments = [
+      keptAttachment,
+      { ...newAttachment, clientAttachmentId: "draft-new" },
+    ];
     expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
       newContent: "edited with attachments",
       attachments: expectedAttachments,
@@ -297,8 +306,13 @@ describe("useChatEngine.resend replace turn", () => {
   });
 
   it("preserves target attachments when the editor did not explicitly remove them", async () => {
-    const originalAttachment = { attachmentId: "original", name: "original.docx" };
-    const localFile = new File(["new"], "new.txt", { type: "text/plain" });
+    const originalAttachment = { attachmentId: "original", sessionId: "local-resend-preserve-baseline", attachmentSource: "test", name: "original.docx" };
+    const localFile = {
+      raw: new File(["new"], "new.txt", { type: "text/plain" }),
+      clientAttachmentId: "draft-new",
+      name: "new.txt",
+      mimeType: "text/plain",
+    };
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
       const replacementUser = { id: "msg-user-preserve-baseline", messageId: "msg-user-preserve-baseline", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
       return makeTurnReplacementResponse({
@@ -342,7 +356,7 @@ describe("useChatEngine.resend replace turn", () => {
     expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
       attachments: [
         originalAttachment,
-        { name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" },
+        { clientAttachmentId: "draft-new", name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" },
       ],
     }), expect.any(Object));
   });
@@ -351,6 +365,8 @@ describe("useChatEngine.resend replace turn", () => {
     const stream = vi.fn(async () => {});
     const originalAttachment = {
       attachmentId: "attachment-a",
+      sessionId: "local-resend-unchanged-attachment",
+      attachmentSource: "test",
       name: "a.txt",
       mimeType: "text/plain",
       contentBase64: "YQ==",
@@ -409,6 +425,7 @@ describe("useChatEngine.resend replace turn", () => {
   it("resendMonotonicMessage keeps rich parsed attachment fields when serialized payload is raw", async () => {
     const richAttachment = {
       attachmentId: "attachment-rich",
+      attachmentSource: "test",
       name: "AI 体系现状概览.docx",
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       size: 1407731,
@@ -420,6 +437,8 @@ describe("useChatEngine.resend replace turn", () => {
       downloadUrl: "/download/attachment-rich",
       parsedResult: {
         attachmentId: "parsed-rich",
+        sessionId: "session-rich",
+        attachmentSource: "test",
         name: "AI 体系现状概览.md",
         path: "/workspace/admin/runtime/attach/scoped/session-rich/model/parsed-rich.md",
         relativePath: "runtime/attach/scoped/session-rich/model/parsed-rich.md",
@@ -496,7 +515,7 @@ describe("useChatEngine.resend replace turn", () => {
 
   it("resendMonotonicMessage preserves explicit empty attachment deletion", async () => {
     const stream = vi.fn(async () => {});
-    const oldAttachment = { attachmentId: "old", name: "old.txt", parsedResultAttachmentId: "parsed-old" };
+    const oldAttachment = { attachmentId: "old", sessionId: "local-resend-delete-attachments", attachmentSource: "test", name: "old.txt", parsedResultAttachmentId: "parsed-old" };
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
       const replacementUser = { id: "msg-user-delete-attachments", messageId: "msg-user-delete-attachments", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
       return makeTurnReplacementResponse({
@@ -535,7 +554,7 @@ describe("useChatEngine.resend replace turn", () => {
     await expect(engine.resendMonotonicMessage(stoppedAssistant, "old", {
       attachments: [],
       attachmentFiles: [],
-      removedAttachmentKeys: ["old"],
+      removedAttachmentKeys: ['["local-resend-delete-attachments","test","old"]'],
     })).resolves.toBe(true);
 
     expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({ attachments: [] }), expect.any(Object));

@@ -17,6 +17,8 @@ describe("useMessageFiles dedupe", () => {
       attachments: [
         {
           attachmentId: "att-result",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "result.md",
           transferFilePath: "/workspace/admin/runtime/result.md",
         },
@@ -56,6 +58,8 @@ describe("useMessageFiles dedupe", () => {
       attachments: [
         {
           attachmentId: "att-result",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "result.md",
           size: 1234,
         },
@@ -94,6 +98,8 @@ describe("useMessageFiles dedupe", () => {
       attachments: [
         {
           attachmentId: "att-result",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "result.md",
         },
       ],

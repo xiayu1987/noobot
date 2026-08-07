@@ -15,7 +15,6 @@ import {
 } from "../../../debug/loggers/resendDebugLogger.js";
 import { createSessionAggregateVersionManager } from "./sessionAggregateVersionManager.js";
 import { serializeAttachments } from "./attachmentSerialization.js";
-import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import { nowMs } from "../../model/timeFields.js";
 import {
   logStateMachineDebug,
@@ -23,6 +22,10 @@ import {
 } from "../../../debug/loggers/stateMachineLogger.js";
 import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
 import { assertTurnReplacementMaterialization } from "@noobot/session-protocol";
+import {
+  attachmentIdentityKey as canonicalAttachmentIdentityKey,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 
 
 function normalizeAttachmentMeta(attachment = {}) {
@@ -46,35 +49,63 @@ function dedupeAttachmentMetas(attachments = []) {
   for (const attachment of Array.isArray(attachments) ? attachments : []) {
     const meta = normalizeAttachmentMeta(attachment);
     if (!meta) continue;
-    const key = String(meta.attachmentId || meta.id || "").trim() || [
-      String(meta.path || "").trim(),
-      String(meta.relativePath || "").trim(),
-      String(meta.name || meta.filename || meta.fileName || "").trim(),
-      String(meta.size || 0),
-      String(meta.mimeType || meta.type || "").trim(),
-    ].join("|");
-    if (key && seen.has(key)) continue;
-    if (key) seen.add(key);
+    const key = canonicalAttachmentIdentityKey(projectAttachmentIdentity(meta));
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(meta);
+  }
+  return out;
+}
+
+function draftAttachmentIdentityKey(attachment = {}) {
+  const clientAttachmentId = normalizeTrimmedString(
+    attachment?.clientAttachmentId || attachment?.draftAttachmentId,
+  );
+  if (!clientAttachmentId) {
+    throw new TypeError("draft attachment missing clientAttachmentId");
+  }
+  return `draft:${clientAttachmentId}`;
+}
+
+function dedupeDraftAttachmentMetas(attachments = []) {
+  const seen = new Set();
+  const out = [];
+  for (const attachment of Array.isArray(attachments) ? attachments : []) {
+    const meta = normalizeAttachmentMeta(attachment);
+    if (!meta) continue;
+    const key = draftAttachmentIdentityKey(meta);
+    if (seen.has(key)) continue;
+    seen.add(key);
     out.push(meta);
   }
   return out;
 }
 
 function attachmentIdentityKey(attachment = {}) {
-  return String(attachment?.attachmentId || attachment?.id || "").trim() || [
-    String(attachment?.path || "").trim(),
-    String(attachment?.relativePath || "").trim(),
-    String(attachment?.name || attachment?.filename || attachment?.fileName || "").trim(),
-    String(attachment?.size || 0),
-    String(attachment?.mimeType || attachment?.type || "").trim(),
-  ].join("|");
+  return canonicalAttachmentIdentityKey(projectAttachmentIdentity(attachment));
 }
 
-function mergeAttachmentMetas(historyAttachments = [], transportAttachments = []) {
-  return mergeAttachments(
-    dedupeAttachmentMetas(historyAttachments),
-    dedupeAttachmentMetas(transportAttachments),
-  );
+function enrichPersistedAttachmentsWithDraftMetadata(
+  persistedAttachments = [],
+  pendingDisplayAttachments = [],
+) {
+  const pendingByClientAttachmentId = new Map();
+  for (const attachment of Array.isArray(pendingDisplayAttachments) ? pendingDisplayAttachments : []) {
+    const clientAttachmentId = normalizeTrimmedString(
+      attachment?.clientAttachmentId || attachment?.draftAttachmentId,
+    );
+    if (!clientAttachmentId || pendingByClientAttachmentId.has(clientAttachmentId)) continue;
+    pendingByClientAttachmentId.set(clientAttachmentId, attachment);
+  }
+  return dedupeAttachmentMetas(persistedAttachments).map((attachment) => {
+    const clientAttachmentId = normalizeTrimmedString(
+      attachment?.clientAttachmentId || attachment?.draftAttachmentId,
+    );
+    const pending = clientAttachmentId
+      ? pendingByClientAttachmentId.get(clientAttachmentId)
+      : null;
+    return pending ? { ...pending, ...attachment } : attachment;
+  });
 }
 
 function resolveSessionId(activeSession, activeSessionId) {
@@ -232,7 +263,10 @@ export function createResendMessageTransaction({
     const pendingDisplayAttachments = serializedNewAttachments
       .map((attachment) => toPendingDisplayAttachment(attachment))
       .filter(Boolean);
-    const finalAttachments = mergeAttachmentMetas(keptAttachments, serializedNewAttachments);
+    const finalAttachments = [
+      ...keptAttachments,
+      ...dedupeDraftAttachmentMetas(serializedNewAttachments),
+    ];
     logResendDebug("resend.attachments.resolved", () => ({
       sessionId,
       oldTurnScopeId: getMessageTurnScopeId(userTargetMessage),
@@ -394,14 +428,9 @@ export function createResendMessageTransaction({
         turnScopeId: resendTurnScopeId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       }));
-      const persistedAttachments = dedupeAttachmentMetas(replacementUserMessage.attachments || []);
-      const attachmentsForDisplay = mergeAttachmentMetas(
-        persistedAttachments,
+      replacementUserMessage.attachments = enrichPersistedAttachmentsWithDraftMetadata(
+        replacementUserMessage.attachments || [],
         pendingDisplayAttachments,
-      );
-      replacementUserMessage.attachments = mergeAttachmentMetas(
-        attachmentsForDisplay,
-        persistedAttachments,
       );
       delete replacementUserMessage.statusLabel;
       if (operation) messageOperationStore?.updateOperation(operation.opId, { status: "sending" });

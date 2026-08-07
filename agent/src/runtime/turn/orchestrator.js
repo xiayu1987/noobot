@@ -13,6 +13,7 @@ import {
 } from "../constants/index.js";
 import {
   DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
+  DEFAULT_TASK_CHECK_TOOL_NAME as TASK_CHECK_TOOL_NAME,
 } from "@noobot/context-protocol/summary-policy";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/injected-message-policy";
 import { handleEngineError } from "../errors/index.js";
@@ -60,6 +61,12 @@ export function createTurnOrchestrator({
   function resolveTaskSummaryCall(calls = []) {
     return (Array.isArray(calls) ? calls : []).find(
       (call = {}) => String(call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+    ) || null;
+  }
+
+  function resolveTaskCheckCall(calls = []) {
+    return (Array.isArray(calls) ? calls : []).find(
+      (call = {}) => String(call?.name || "").trim() === TASK_CHECK_TOOL_NAME,
     ) || null;
   }
 
@@ -250,19 +257,34 @@ export function createTurnOrchestrator({
       loopState.toolChoiceRetryPrompted = false;
 
       const taskSummaryCall = resolveTaskSummaryCall(calls);
-      if (calls.length > 1 && taskSummaryCall) {
+      const taskCheckCall = resolveTaskCheckCall(calls);
+      const controlToolCall = taskSummaryCall || taskCheckCall;
+      if (calls.length > 1 && controlToolCall) {
         removeLastAssistantToolCallMessage({ loopState, turnMessageStore });
         appendTurnContextControlMessage({
           runtime,
           loopState,
-          content: tEngine(runtime, "taskSummarySingleToolPrompt"),
-          internalType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_SUMMARY_SINGLE_TOOL_RETRY_PROMPT,
+          content: tEngine(
+            runtime,
+            taskSummaryCall ? "taskSummarySingleToolPrompt" : "taskCheckSingleToolPrompt",
+          ),
+          internalType: taskSummaryCall
+            ? CONTEXT_INJECTED_MESSAGE_TYPE.TASK_SUMMARY_SINGLE_TOOL_RETRY_PROMPT
+            : CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_SINGLE_TOOL_RETRY_PROMPT,
         });
-        emitEvent(eventListener, "task_summary_multi_tool_call_rejected", {
-          turn,
-          toolCallCount: calls.length,
-          taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
-        });
+        emitEvent(
+          eventListener,
+          taskSummaryCall
+            ? "task_summary_multi_tool_call_rejected"
+            : "task_check_multi_tool_call_rejected",
+          {
+            turn,
+            toolCallCount: calls.length,
+            controlToolName: String(controlToolCall?.name || "").trim(),
+            ...(taskSummaryCall ? { taskSummaryToolName: TASK_SUMMARY_TOOL_NAME } : {}),
+            ...(taskCheckCall ? { taskCheckToolName: TASK_CHECK_TOOL_NAME } : {}),
+          },
+        );
         return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
       }
 

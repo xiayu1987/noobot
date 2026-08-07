@@ -5,6 +5,7 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import fs from "node:fs/promises";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import crypto from "node:crypto";
 import {
   createTaskSummaryReceipt,
@@ -19,14 +20,18 @@ import {
 } from "../helpers/browser-actions.js";
 import {
   modelInvocationTraces,
+  readAttachmentIndex,
   readSessionFact,
   readSessionTurnMessages,
   waitForSessionExecutionEventTree,
+  workspaceRoot,
 } from "../helpers/persistence-audit.js";
 import {
   auditModelPrefixStability,
   isMainAgentModelInvocation,
 } from "../helpers/model-message-assertions.js";
+import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
+import { readRenderedFileNames } from "../helpers/attachment-assertions.js";
 import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
@@ -153,6 +158,39 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
   expect(summaryAttachmentFiles.length).toBeGreaterThan(0);
   expect(new Set(summaryAttachmentFiles.map((file) => file.attachmentId)).size).toBe(1);
   expect(await fs.readFile(summaryAttachmentFiles[0].path, "utf8")).toBe(fullSummaryContent);
+
+  const summaryAttachmentId = summaryAttachmentFiles[0].attachmentId;
+  await expect.poll(
+    () => readAttachmentIndex(noobot.userId, noobot.sessionId, "model"),
+    { timeout: 30000 },
+  ).toMatchObject({ sessionId: noobot.sessionId, attachmentSource: "model" });
+  const modelAttachmentIndex = await readAttachmentIndex(noobot.userId, noobot.sessionId, "model");
+  const modelAttachments = Object.values(modelAttachmentIndex.attachments || {});
+  const persistedSummaryAttachments = modelAttachments.filter((item) =>
+    item.identity?.attachmentId === summaryAttachmentId
+      && item.identity?.attachmentSource === "model"
+      && item.descriptor?.name === "task-summary-content.tool-input.md"
+      && item.descriptor?.generatedByModel === true
+      && item.descriptor?.generationSource === "semantic_transfer_tool_input",
+  );
+  expect(persistedSummaryAttachments).toHaveLength(1);
+  expect(await fs.readFile(path.join(
+    workspaceRoot(),
+    noobot.userId,
+    persistedSummaryAttachments[0].storageRef.ref,
+  ), "utf8")).toBe(fullSummaryContent);
+
+  const renderedSummaryCards = noobot.page.locator(
+    `.base-message-shell.assistant .base-file-card[data-attachment-source="model"][data-attachment-id="${summaryAttachmentId}"]`,
+  );
+  await expect(renderedSummaryCards).toHaveCount(1);
+  await expect(renderedSummaryCards.locator(".file-name")).toHaveText("task-summary-content.tool-input.md");
+  await reloadAndWaitForReconnect(noobot.page, protocolCapture);
+  await expect(renderedSummaryCards).toHaveCount(1);
+  expect(await readRenderedFileNames(noobot.page, {
+    role: "assistant",
+    attachmentSource: "model",
+  })).toContain("task-summary-content.tool-input.md");
 
   const mainInvocations = modelInvocationTraces(scoped).filter(isMainAgentModelInvocation);
   const mainPrefixAudit = auditModelPrefixStability(mainInvocations);

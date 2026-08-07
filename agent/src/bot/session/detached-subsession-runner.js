@@ -56,7 +56,12 @@ async function transferCanonicalAttachmentsToSubSession({
     if (!parentRecord) {
       throw new Error("detached sub-session source attachment does not exist in its parent session");
     }
-    const sourceContent = await attachmentService.readAttachmentContent({ userId, attachmentId });
+    const sourceContent = await attachmentService.readAttachmentContent({
+      userId,
+      attachmentId,
+      sessionId: parentSessionId,
+      attachmentSource,
+    });
     if (!sourceContent?.content) {
       throw new Error("detached sub-session source attachment content is unavailable");
     }

@@ -7,10 +7,10 @@
 import { filePath as path } from "../../shared/utils/path-resolver.js";
 import { readdir } from "node:fs/promises";
 
-import { fsReadFile, fsWriteFile } from "../../shared/storage/fs-adapter.js";
+import { fsWriteFile } from "../../shared/storage/fs-adapter.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 import { readAttachIndex, writeAttachIndex } from "../index-manager.js";
-import { attachScopedRoot, resolveBasePath } from "./attachment-scope-resolver.js";
+import { resolveBasePath } from "./attachment-scope-resolver.js";
 import { buildPublicRecord } from "./record-builder.js";
 import { buildSessionDisplaySummary } from "../../session/session-summary-builders.js";
 import {
@@ -25,20 +25,17 @@ export async function linkParsedResultToAttachment(service, {
   toolName = "",
   sourceSessionId = "",
   sourceAttachmentSource = "",
-  sourceAttachmentPath = "",
 } = {}) {
   const sourceId = safeStr(sourceAttachmentId);
   const parsedId = safeStr(parsedAttachmentMeta?.attachmentId);
   if (!userId || !sourceId || !parsedId) return null;
 
   const basePath = resolveBasePath(service.globalConfig, userId);
-  const scopedRoot = attachScopedRoot(basePath);
   const normalizedSessionId = safeStr(sourceSessionId);
   const normalizedAttachmentSource = safeStr(sourceAttachmentSource).toLowerCase();
-  const normalizedSourcePath = safeStr(sourceAttachmentPath);
+  if (!normalizedSessionId || !normalizedAttachmentSource) return null;
 
-  const scopedCandidates = await buildLinkParsedScopeCandidates({
-    scopedRoot,
+  const scopedCandidates = buildLinkParsedScopeCandidates({
     sessionId: normalizedSessionId,
     attachmentSource: normalizedAttachmentSource,
   });
@@ -49,43 +46,26 @@ export async function linkParsedResultToAttachment(service, {
     sourceAttachmentId: sourceId,
     parsedAttachmentMeta,
     toolName,
-    sourceAttachmentPath: normalizedSourcePath,
+    sourceSessionId: normalizedSessionId,
+    sourceAttachmentSource: normalizedAttachmentSource,
   });
 
-  if (!updatedRecord) {
-    const fallbackScopes = await buildLinkParsedScopeCandidates({
-      scopedRoot,
-      sessionId: "",
-      attachmentSource: "",
-    });
-    updatedRecord = await linkParsedResultInScopes({
-      basePath,
-      scopes: fallbackScopes,
-      sourceAttachmentId: sourceId,
-      parsedAttachmentMeta,
-      toolName,
-      sourceAttachmentPath: normalizedSourcePath,
-    });
-  }
-
   if (updatedRecord) {
-    const resolvedSessionIdHint = normalizedSessionId || safeStr(updatedRecord?.sessionId);
-    const resolvedSourcePath = safeStr(updatedRecord?.path) || normalizedSourcePath;
     await Promise.all([
       syncParsedResultToSessionSnapshots({
         basePath,
         sourceAttachmentId: sourceId,
-        sourceAttachmentPath: resolvedSourcePath,
+        sourceSessionId: normalizedSessionId,
+        sourceAttachmentSource: normalizedAttachmentSource,
         updatedSourceAttachment: updatedRecord,
-        sessionIdHint: resolvedSessionIdHint,
         sessionRoot: path.join(basePath, "runtime/session"),
       }),
       syncParsedResultToSessionSnapshots({
         basePath,
         sourceAttachmentId: sourceId,
-        sourceAttachmentPath: resolvedSourcePath,
+        sourceSessionId: normalizedSessionId,
+        sourceAttachmentSource: normalizedAttachmentSource,
         updatedSourceAttachment: updatedRecord,
-        sessionIdHint: resolvedSessionIdHint,
         sessionRoot: path.join(basePath, "runtime/plugin/session"),
       }),
     ]);
@@ -94,85 +74,32 @@ export async function linkParsedResultToAttachment(service, {
   return updatedRecord || null;
 }
 
-export async function buildLinkParsedScopeCandidates({ scopedRoot = "", sessionId = "", attachmentSource = "" } = {}) {
+export function buildLinkParsedScopeCandidates({ sessionId = "", attachmentSource = "" } = {}) {
   const normalizedSessionId = safeStr(sessionId);
   const normalizedAttachmentSource = safeStr(attachmentSource).toLowerCase();
-  const scopes = [];
-  const dedupe = new Set();
-  const pushScope = (scopeSessionId = "", scopeAttachmentSource = "") => {
-    const normalizedScopeSessionId = safeStr(scopeSessionId);
-    const normalizedScopeAttachmentSource = safeStr(scopeAttachmentSource).toLowerCase();
-    if (!normalizedScopeSessionId || !normalizedScopeAttachmentSource) return;
-    const dedupeKey = `${normalizedScopeSessionId}::${normalizedScopeAttachmentSource}`;
-    if (dedupe.has(dedupeKey)) return;
-    dedupe.add(dedupeKey);
-    scopes.push({ sessionId: normalizedScopeSessionId, attachmentSource: normalizedScopeAttachmentSource });
-  };
-
-  if (normalizedSessionId && normalizedAttachmentSource) {
-    pushScope(normalizedSessionId, normalizedAttachmentSource);
-    return scopes;
-  }
-
-  if (normalizedSessionId) {
-    const sessionRoot = path.join(scopedRoot, normalizedSessionId);
-    let sourceEntries = [];
-    try {
-      sourceEntries = await readdir(sessionRoot, { withFileTypes: true });
-    } catch {
-      sourceEntries = [];
-    }
-    for (const sourceEntry of sourceEntries) {
-      if (!sourceEntry?.isDirectory?.()) continue;
-      if (normalizedAttachmentSource && sourceEntry.name !== normalizedAttachmentSource) continue;
-      pushScope(normalizedSessionId, sourceEntry.name);
-    }
-    return scopes;
-  }
-
-  let sessionEntries = [];
-  try {
-    sessionEntries = await readdir(scopedRoot, { withFileTypes: true });
-  } catch {
-    return scopes;
-  }
-  for (const sessionEntry of sessionEntries) {
-    if (!sessionEntry?.isDirectory?.()) continue;
-    const sessionRoot = path.join(scopedRoot, sessionEntry.name);
-    let sourceEntries = [];
-    try {
-      sourceEntries = await readdir(sessionRoot, { withFileTypes: true });
-    } catch {
-      sourceEntries = [];
-    }
-    for (const sourceEntry of sourceEntries) {
-      if (!sourceEntry?.isDirectory?.()) continue;
-      if (normalizedAttachmentSource && sourceEntry.name !== normalizedAttachmentSource) continue;
-      pushScope(sessionEntry.name, sourceEntry.name);
-    }
-  }
-  return scopes;
+  if (!normalizedSessionId || !normalizedAttachmentSource) return [];
+  return [{ sessionId: normalizedSessionId, attachmentSource: normalizedAttachmentSource }];
 }
 
 export async function linkParsedResultInScopes({
   basePath = "",
   scopes = [],
   sourceAttachmentId = "",
+  sourceSessionId = "",
+  sourceAttachmentSource = "",
   parsedAttachmentMeta = {},
   toolName = "",
-  sourceAttachmentPath = "",
 } = {}) {
   const normalizedSourceId = safeStr(sourceAttachmentId);
-  const normalizedSourcePath = safeStr(sourceAttachmentPath);
-  if (!normalizedSourceId || !Array.isArray(scopes) || !scopes.length) return null;
+  const normalizedSessionId = safeStr(sourceSessionId);
+  const normalizedAttachmentSource = safeStr(sourceAttachmentSource).toLowerCase();
+  if (!normalizedSourceId || !normalizedSessionId || !normalizedAttachmentSource || !Array.isArray(scopes) || !scopes.length) return null;
 
   for (const scope of scopes) {
+    if (scope?.sessionId !== normalizedSessionId || scope?.attachmentSource !== normalizedAttachmentSource) continue;
     const index = await readAttachIndex(basePath, scope);
     const sourceRecord = index?.attachments?.[normalizedSourceId];
     if (!sourceRecord) continue;
-    if (!isAttachmentPathMatch({ expectedPath: normalizedSourcePath, actualPath: safeStr(sourceRecord?.path) })) {
-      continue;
-    }
     const nextRecord = {
       ...sourceRecord,
       parsedResult: {
@@ -186,43 +113,31 @@ export async function linkParsedResultInScopes({
         updatedAt: new Date().toISOString(),
       },
     };
-    const sourceContentSha256 = safeStr(sourceRecord?.contentSha256);
-    for (const [attachmentId, record] of Object.entries(index.attachments || {})) {
-      const sameAttachment = attachmentId === normalizedSourceId;
-      const sameContent = sourceContentSha256 && safeStr(record?.contentSha256) === sourceContentSha256;
-      if (!sameAttachment && !sameContent) continue;
-      index.attachments[attachmentId] = {
-        ...record,
-        parsedResult: nextRecord.parsedResult,
-      };
-    }
+    index.attachments[normalizedSourceId] = {
+      ...sourceRecord,
+      parsedResult: nextRecord.parsedResult,
+    };
     await writeAttachIndex(basePath, index, scope);
     return buildPublicRecord(basePath, nextRecord);
   }
   return null;
 }
 
-export function isAttachmentPathMatch({ expectedPath = "", actualPath = "" } = {}) {
-  const normalizedExpectedPath = safeStr(expectedPath);
-  if (!normalizedExpectedPath) return true;
-  const normalizedActualPath = safeStr(actualPath);
-  if (!normalizedActualPath) return false;
-  return path.normalize(normalizedExpectedPath) === path.normalize(normalizedActualPath);
-}
-
 export async function syncParsedResultToSessionSnapshots({
   basePath = "",
   sourceAttachmentId = "",
-  sourceAttachmentPath = "",
+  sourceSessionId = "",
+  sourceAttachmentSource = "",
   updatedSourceAttachment = {},
-  sessionIdHint = "",
   sessionRoot = "",
 } = {}) {
   const normalizedAttachmentId = safeStr(sourceAttachmentId);
-  if (!normalizedAttachmentId) return;
+  const normalizedSessionId = safeStr(sourceSessionId);
+  const normalizedAttachmentSource = safeStr(sourceAttachmentSource).toLowerCase();
+  if (!normalizedAttachmentId || !normalizedSessionId || !normalizedAttachmentSource) return;
 
   const resolvedSessionRoot = safeStr(sessionRoot) || path.join(basePath, "runtime/session");
-  const sessionJsonFiles = await collectSessionJsonFiles({ sessionRoot: resolvedSessionRoot, sessionIdHint });
+  const sessionJsonFiles = await collectSessionJsonFiles({ sessionRoot: resolvedSessionRoot, sessionId: normalizedSessionId });
   if (!sessionJsonFiles.length) return;
 
   const nextParsedResult = updatedSourceAttachment?.parsedResult &&
@@ -230,8 +145,6 @@ export async function syncParsedResultToSessionSnapshots({
     !Array.isArray(updatedSourceAttachment.parsedResult)
     ? updatedSourceAttachment.parsedResult
     : {};
-  const normalizedSourcePath = safeStr(sourceAttachmentPath);
-  const normalizedContentSha256 = safeStr(updatedSourceAttachment?.contentSha256);
 
   for (const sessionJsonFile of sessionJsonFiles) {
     const sessionDir = path.dirname(sessionJsonFile);
@@ -246,12 +159,10 @@ export async function syncParsedResultToSessionSnapshots({
       let bucketChanged = false;
       const nextItems = attachmentItems.map((attachmentItem) => {
         const attachmentId = safeStr(attachmentItem?.attachmentId);
-        const attachmentPath = safeStr(attachmentItem?.path);
         const sameAttachmentId = attachmentId === normalizedAttachmentId &&
-          isAttachmentPathMatch({ expectedPath: normalizedSourcePath, actualPath: attachmentPath });
-        const sameContent = normalizedContentSha256 &&
-          safeStr(attachmentItem?.contentSha256) === normalizedContentSha256;
-        const isMatchedAttachment = sameAttachmentId || sameContent;
+          safeStr(attachmentItem?.sessionId) === normalizedSessionId &&
+          safeStr(attachmentItem?.attachmentSource).toLowerCase() === normalizedAttachmentSource;
+        const isMatchedAttachment = sameAttachmentId;
         if (!isMatchedAttachment) return attachmentItem;
         bucketChanged = true;
         return {
@@ -289,13 +200,12 @@ async function syncSessionSummaryForSessionFile(sessionJsonFile = "", sessionPay
   await fsWriteFile(summaryFile, `${JSON.stringify(summaryPayload, null, 2)}\n`, "utf8");
 }
 
-export async function collectSessionJsonFiles({ sessionRoot = "", sessionIdHint = "" } = {}) {
+export async function collectSessionJsonFiles({ sessionRoot = "", sessionId = "" } = {}) {
   const normalizedSessionRoot = safeStr(sessionRoot);
   if (!normalizedSessionRoot) return [];
-  const normalizedHint = safeStr(sessionIdHint);
-  const candidateRoots = normalizedHint
-    ? [path.join(normalizedSessionRoot, normalizedHint), normalizedSessionRoot]
-    : [normalizedSessionRoot];
+  const normalizedSessionId = safeStr(sessionId);
+  if (!normalizedSessionId) return [];
+  const candidateRoots = [path.join(normalizedSessionRoot, normalizedSessionId)];
   const discovered = [];
   const visited = new Set();
 

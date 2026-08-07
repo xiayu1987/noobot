@@ -1,12 +1,22 @@
 # Attachment fact-source architecture
 
-This document defines the attachment data ownership rules used by Noobot chat and agent runtime.
+This document defines the attachment data ownership rules used by Noobot chat and agent runtime. The
+cross-layer contract is implemented by `@noobot/attachment-protocol`; this document describes ownership,
+not an alternative schema.
+
+## Canonical identity
+
+The only business identity is the complete tuple `attachmentId + sessionId + attachmentSource`.
+All three fields are required and must be carried together. Paths, file names, MIME types, sizes,
+content hashes, and client-generated ids are metadata or access/ingest aids only; they must never
+identify, merge, replace, or resurrect an attachment in the new protocol path.
 
 ## Layers
 
 1. `runtime/attach/scoped/<sessionId>/<source>/attachments.json`
-   - Upload and parse-result enrichment source.
-   - Owns durable file identity: `attachmentId`, `sessionId`, `attachmentSource`, `path`, `relativePath`, `sandboxPath`, `parsedResult`.
+   - Upload and parse-result enrichment persistence adapter.
+   - Owns a protocol persisted record keyed by the canonical identity. Storage paths and parsed-result
+     locations are storage references, not identity fields.
 
 2. Session user-message `attachments`
    - Display and edit/resend carrier.
@@ -20,20 +30,30 @@ This document defines the attachment data ownership rules used by Noobot chat an
    - UI view only. It may derive `parsedResultUrl`, `parsedResultAttachmentId`, names, and actions, but must not become a competing persistence source.
 
 5. Payload/raw/serialized attachments
-   - Transport only. Raw refs such as `{ name, mimeType, size }` may help match an attachment, but must not overwrite rich session or runtime attachment metadata.
+   - Transport only. They carry canonical identity or an explicit ingest reference and must not overwrite
+     rich session or runtime attachment metadata.
 
 ## Merge rules
 
 - Rich fields win over raw fields.
 - Non-empty values win over empty values.
 - `parsedResult`, path fields, session/source fields, preview/download fields must not be removed by raw payloads.
-- Stable matching keys are, in order: `attachmentId`, `path`, `relativePath`, `sandboxPath`, then `name + mimeType + size`, `name + size`, `name + mimeType`.
-- Do not match by file name alone; same-name files are common and can be distinct.
+- New protocol code matches only the complete canonical identity tuple.
+- The former path/file-feature matching rules are legacy compatibility behavior and must be isolated in
+  one adapter with an explicit removal plan; they are not valid protocol identity.
 
 ## Delete and unchanged semantics
 
 - `attachments === undefined`: attachment set was not changed; preserve the existing message attachment set.
 - `attachments = []`: user explicitly deleted all attachments; do not restore old items from session history or scoped indexes.
+
+## Protocol and lifecycle
+
+- Persistence, runtime, access and UI objects are separate protocol shapes; no layer may spread one into
+  another or add host/sandbox paths to the canonical identity.
+- Lifecycle events are versioned and carry `messageId`, the canonical identity, status and timestamp.
+  They are the only authoritative attachment lifecycle mutations.
+- `@noobot/attachment-protocol` owns validation and `undefined`/empty-array set-update semantics.
 
 ## Required code paths
 

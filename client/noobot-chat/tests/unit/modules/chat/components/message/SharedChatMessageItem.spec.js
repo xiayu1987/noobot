@@ -173,6 +173,8 @@ function mountItem(props = {}) {
         attachments: [
           {
             attachmentId: "att-1",
+            sessionId: "test-session",
+            attachmentSource: "test",
             name: "a.txt",
             size: 12,
           },
@@ -324,7 +326,7 @@ describe("SharedChatMessageItem", () => {
         content: "collapsed body",
         sessionId: "session-content",
         turnScopeId: "turn-assets-history",
-        attachments: [{ attachmentId: "asset-1", name: "report.pdf", size: 42 }],
+        attachments: [{ attachmentId: "asset-1", sessionId: "session-content", attachmentSource: "test", name: "report.pdf", size: 42 }],
       },
     });
 
@@ -482,6 +484,8 @@ describe("SharedChatMessageItem", () => {
                 filePath: "runtime/attach/report.pdf",
                 attachmentMeta: {
                   attachmentId: "att-transfer-1",
+                  sessionId: "session-1",
+                  attachmentSource: "test",
                   name: "report.pdf",
                   mimeType: "application/pdf",
                   size: 42,
@@ -649,8 +653,8 @@ describe("SharedChatMessageItem", () => {
         role: "assistant",
         content: "done",
         attachments: [
-          { attachmentId: "att-1", name: "a.txt", size: 12 },
-          { attachmentId: "att-2", name: "b.txt", size: 34 },
+          { attachmentId: "att-1", sessionId: "runtime-panels-session", attachmentSource: "test", name: "a.txt", size: 12 },
+          { attachmentId: "att-2", sessionId: "runtime-panels-session", attachmentSource: "test", name: "b.txt", size: 34 },
         ],
       },
     });

@@ -8,6 +8,7 @@ import {
   buildTurnStatusesByTurnScopeId,
 } from "./detailMessages.js";
 import { foldConversationMessages } from "../../../chat/model/messageModel.js";
+import { selectTurnPresentations } from "../../../chat/runtime/engine/turnPresentation.js";
 
 export function buildSessionDetailProjection({
   sessionDetail = {},
@@ -38,7 +39,14 @@ export function buildSessionDetailProjection({
   // A detail snapshot contains canonical model-history entities. Chat display
   // entities are always projected by the same presentation-identity contract
   // used by the live stream; callers cannot bypass this projection.
-  const projectedMessages = foldConversationMessages(normalizedMessages, makeViewMessage);
+  const foldedMessages = foldConversationMessages(normalizedMessages, makeViewMessage);
+  const projectedMessages = selectTurnPresentations({
+    activeSession: {
+      sessionId,
+      messages: foldedMessages,
+      turnStatuses,
+    },
+  });
   return {
     sessionId,
     messages: projectedMessages,

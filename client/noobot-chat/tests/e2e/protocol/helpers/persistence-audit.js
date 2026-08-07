@@ -162,13 +162,14 @@ export async function waitForModelInvocationTraces(
   return traces;
 }
 
-export async function readUserAttachmentIndex(userId, sessionId) {
+export async function readAttachmentIndex(userId, sessionId, attachmentSource) {
   return readJson(path.join(
     workspaceRoot(),
     userId,
     "runtime/attach/scoped",
     sessionId,
-    "user/attachments.json",
+    attachmentSource,
+    "attachments.json",
   ));
 }
 

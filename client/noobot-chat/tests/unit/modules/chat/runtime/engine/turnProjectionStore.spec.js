@@ -307,6 +307,8 @@ describe("turnProjectionStore convergence", () => {
       ...message(),
       attachments: [{
         attachmentId: "image-1",
+        sessionId: "test-session",
+        attachmentSource: "test",
         name: "diagram.png",
         mimeType: "image/png",
         size: 123,
@@ -318,10 +320,12 @@ describe("turnProjectionStore convergence", () => {
       throughSequence: 1,
       attachments: [{
         attachmentId: "image-1",
+        sessionId: "test-session",
+        attachmentSource: "test",
         name: "diagram.png",
         mimeType: "image/png",
         size: 123,
-        parsedResult: { attachmentId: "parsed-1", mimeType: "text/markdown" },
+        parsedResult: { attachmentId: "parsed-1", sessionId: "test-session", attachmentSource: "test", mimeType: "text/markdown" },
       }],
     };
 

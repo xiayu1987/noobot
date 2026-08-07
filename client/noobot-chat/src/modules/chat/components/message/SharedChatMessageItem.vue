@@ -37,6 +37,10 @@ import {
   BasePreviewContent,
 } from "../../../../shared/public-api/ui.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import {
+  attachmentIdentityKey,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
 import { resolveExtensionPoint } from "../../../../extensions/extension-registry.js";
 import {
@@ -45,6 +49,10 @@ import {
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 
 const emit = defineEmits(["open-thinking-details"]);
+
+function getAttachmentRenderKey(attachmentItem = {}) {
+  return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
+}
 
 const props = defineProps({
   messageItem: { type: Object, required: true },
@@ -442,7 +450,7 @@ function toggleAssistantContent() {
     <BaseFileCardList v-if="!suppressDefaultAssets && (displayedAttachments.length || writtenFiles.length)">
       <BaseAttachmentFileCard
         v-for="attachmentItem in displayedAttachments"
-        :key="`attachment:${attachmentItem.attachmentId || attachmentItem.name || ''}:${attachmentItem.size || 0}`"
+        :key="`attachment:${getAttachmentRenderKey(attachmentItem)}`"
         :attachment-item="attachmentItem"
         :user-id="userId"
         :thumbnail-url="attachmentItem.thumbnailUrl || attachmentItem.previewUrl || ''"

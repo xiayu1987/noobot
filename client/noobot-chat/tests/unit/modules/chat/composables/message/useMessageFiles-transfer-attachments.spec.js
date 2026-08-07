@@ -19,6 +19,8 @@ describe("useMessageFiles transfer attachments", () => {
           filePath: "/workspace/admin/runtime/result.md",
           attachmentMeta: {
             attachmentId: "att-transfer-1",
+            sessionId: "session-1",
+            attachmentSource: "test",
             name: "result.md",
             mimeType: "text/markdown",
             path: "/legacy/result.md",
@@ -35,6 +37,8 @@ describe("useMessageFiles transfer attachments", () => {
       attachments: [
         {
           attachmentId: "att-transfer-1",
+          sessionId: "session-1",
+          attachmentSource: "test",
           name: "legacy-result.md",
           mimeType: "text/plain",
           path: "/legacy-only/result.md",
@@ -79,6 +83,7 @@ describe("useMessageFiles transfer attachments", () => {
             attachments: [
               {
                 attachmentId: "attachment-1",
+                attachmentSource: "test",
                 name: "search.tool-result.json",
                 mimeType: "application/json",
                 sessionId: "session-1",

@@ -66,10 +66,15 @@ function mountMessageAttachments(overrides = {}) {
       attachments: [
         {
           attachmentId: "src-1",
+          sessionId: "session-1",
+          attachmentSource: "user",
           name: "source.pdf",
           mimeType: "application/pdf",
-          parsedResult: { attachmentId: "parsed-1" },
-          parsedResultUrl: "/api/attachments/parsed-1",
+          parsedResult: {
+            attachmentId: "parsed-1",
+            sessionId: "session-1",
+            attachmentSource: "model",
+          },
           parsedResultName: "source.md",
         },
       ],
@@ -112,59 +117,66 @@ describe("MessageAttachments parsed result", () => {
       attachmentId: "parsed-1",
       name: "source.md",
       mimeType: "text/markdown",
-      previewUrl: "/api/internal/attachment/admin/parsed-1?attachmentSource=model",
+      previewUrl: "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
     });
     expect(wrapper.emitted("preview-resolved")?.[0]?.[1]).toBeUndefined();
     expect(wrapper.emitted("download")?.[0]?.[0]).toMatchObject({
       attachmentId: "parsed-1",
       name: "source.md",
       mimeType: "text/markdown",
-      previewUrl: "/api/internal/attachment/admin/parsed-1?attachmentSource=model",
+      previewUrl: "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
     });
   });
 
-  it("dedupes transient duplicated attachments by file content", () => {
+  it("keeps same-content attachments distinct when their canonical identities differ", () => {
     const wrapper = mountMessageAttachments({
       attachments: [
         {
           attachmentId: "client-temp-1",
+          sessionId: "session-1",
+          attachmentSource: "user",
           name: "source.pdf",
           size: 10,
           mimeType: "application/pdf",
         },
         {
           attachmentId: "server-1",
+          sessionId: "session-1",
+          attachmentSource: "user",
           name: "source.pdf",
           size: 10,
           mimeType: "application/pdf",
-          parsedResultUrl: "/api/attachments/parsed-1",
+          parsedResult: {
+            attachmentId: "parsed-1",
+            sessionId: "session-1",
+            attachmentSource: "model",
+          },
           parsedResultName: "source.md",
         },
       ],
     });
 
-    expect(wrapper.findAll(".base-attachment-file-card-stub")).toHaveLength(1);
-    expect(wrapper.text()).toContain("预览");
-    expect(wrapper.text()).toContain("下载");
+    expect(wrapper.findAll(".base-attachment-file-card-stub")).toHaveLength(2);
   });
 
-  it("shows parsed result actions when parsed result url exists without nested id", () => {
+  it("rejects parsed result access when the nested result has no canonical id", () => {
     const wrapper = mountMessageAttachments({
       attachments: [
         {
           attachmentId: "src-1",
+          sessionId: "session-1",
+          attachmentSource: "user",
           name: "source.pdf",
           mimeType: "application/pdf",
           parsedResult: { url: "/api/attachments/parsed-1" },
-          parsedResultUrl: "/api/attachments/parsed-1",
           parsedResultName: "source.md",
         },
       ],
     });
 
-    expect(wrapper.text()).toContain("解析结果");
-    expect(wrapper.text()).toContain("预览");
-    expect(wrapper.text()).toContain("下载");
+    expect(wrapper.text()).not.toContain("解析结果");
+    expect(wrapper.text()).not.toContain("预览");
+    expect(wrapper.text()).not.toContain("下载");
   });
 
   it("derives parsed result actions from session summary parsedResult metadata", async () => {
@@ -178,6 +190,8 @@ describe("MessageAttachments parsed result", () => {
           mimeType: "application/pdf",
           parsedResult: {
             attachmentId: "parsed-1",
+            sessionId: "session-1",
+            attachmentSource: "model",
             relativePath: "runtime/attach/model/source.doc2data.md",
             tool: "doc_to_data",
           },

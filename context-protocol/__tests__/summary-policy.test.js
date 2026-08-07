@@ -88,6 +88,42 @@ test("summary checkpoint preserves only the latest task_check call and result pa
   );
 });
 
+test("summary selection keeps a parallel tool-call batch atomic when task_check is preserved", () => {
+  const assistant = {
+    role: "assistant",
+    tool_calls: [
+      { id: "read-a", name: "read_file" },
+      { id: "read-b", name: "read_file" },
+      { id: "check", name: "task_check" },
+    ],
+  };
+  const messages = [
+    assistant,
+    { role: "tool", tool_call_id: "read-a", toolName: "read_file", content: "a" },
+    { role: "tool", tool_call_id: "read-b", toolName: "read_file", content: "b" },
+    { role: "tool", tool_call_id: "check", toolName: "task_check", content: "check" },
+  ];
+
+  const selected = collectScopedMessagesToSummarize(messages).messages;
+
+  assert.deepEqual(selected, []);
+});
+
+test("summary selection does not select an incomplete parallel tool-call batch", () => {
+  const messages = [
+    {
+      role: "assistant",
+      tool_calls: [
+        { id: "read-a", name: "read_file" },
+        { id: "read-b", name: "read_file" },
+      ],
+    },
+    { role: "tool", tool_call_id: "read-a", toolName: "read_file", content: "a" },
+  ];
+
+  assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, []);
+});
+
 test("checkpoint targets use the completed authoritative scope to select one injection per type", () => {
   const oldGuidance = {
     role: "user",

@@ -56,6 +56,8 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
     const loaded = await service.getAttachmentById({
       userId: "u1",
       attachmentId: saved[0].attachmentId,
+      sessionId: "s1",
+      attachmentSource: "user",
     });
 
     assert.ok(loaded);
@@ -65,7 +67,7 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
   });
 });
 
-test("AttachmentService.resolveSourceAttachment uses session-scoped identity or exact path", async () => {
+test("AttachmentService.resolveSourceAttachment requires the complete scoped identity", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
     const [source] = await service.ingest({
@@ -103,41 +105,36 @@ test("AttachmentService.resolveSourceAttachment uses session-scoped identity or 
     const byId = await service.resolveSourceAttachment({
       userId: "u1",
       sessionId: "s1",
+      attachmentSource: "user",
       attachmentId: source.attachmentId,
     });
-    const byPath = await service.resolveSourceAttachment({
+    const wrongSession = await service.resolveSourceAttachment({
       userId: "u1",
-      sessionId: "s1",
-      filePath: source.path,
+      sessionId: "s2",
+      attachmentSource: "user",
+      attachmentId: source.attachmentId,
     });
-    const filenameOnly = await service.resolveSourceAttachment({
+    const wrongSource = await service.resolveSourceAttachment({
       userId: "u1",
       sessionId: "s1",
-      filePath: source.name,
+      attachmentSource: "model",
+      attachmentId: source.attachmentId,
     });
-    const malformedIdWithExactPath = await service.resolveSourceAttachment({
+    const missingId = await service.resolveSourceAttachment({
       userId: "u1",
       sessionId: "s1",
-      attachmentId: `${source.attachmentId}.txt`,
-      filePath: source.relativePath,
-    });
-    const conflictingIdentity = await service.resolveSourceAttachment({
-      userId: "u1",
-      sessionId: "s1",
-      attachmentId: sameSessionOtherSource.attachmentId,
-      filePath: source.relativePath,
+      attachmentId: "",
     });
 
     assert.equal(byId?.attachmentId, source.attachmentId);
-    assert.equal(byPath?.attachmentId, source.attachmentId);
-    assert.equal(malformedIdWithExactPath?.attachmentId, source.attachmentId);
-    assert.equal(conflictingIdentity, null);
-    assert.equal(filenameOnly, null);
+    assert.equal(wrongSession, null);
+    assert.equal(wrongSource, null);
+    assert.equal(missingId, null);
     assert.notEqual(otherSource.attachmentId, source.attachmentId);
   });
 });
 
-test("resolveCanonicalUserSourceAttachment keeps source path matching before display path conversion", async () => {
+test("resolveCanonicalUserSourceAttachment resolves by attachment identity", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
     const [source] = await service.ingest({
@@ -177,7 +174,7 @@ test("resolveCanonicalUserSourceAttachment keeps source path matching before dis
     });
 
     const resolved = await resolveCanonicalUserSourceAttachment({
-      filePath: source.path,
+      attachmentId: source.attachmentId,
       agentContext,
     });
 
@@ -218,7 +215,7 @@ test("AttachmentService.ingest is idempotent by clientAttachmentId", async () =>
   });
 });
 
-test("AttachmentService shares parsed results across identical canonical content", async () => {
+test("AttachmentService links parsed results to one attachment identity only", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
     const contentBase64 = Buffer.from("same document", "utf8").toString("base64");
@@ -246,18 +243,24 @@ test("AttachmentService shares parsed results across identical canonical content
       sourceAttachmentId: saved[0].attachmentId,
       sourceSessionId: "s1",
       sourceAttachmentSource: "user",
-      sourceAttachmentPath: saved[0].path,
       parsedAttachmentMeta: parsed,
       toolName: "doc_to_data",
     });
 
-    const equivalent = await service.getAttachmentById({
+    const otherAttachment = await service.getAttachmentById({
       userId: "u1",
       sessionId: "s1",
       attachmentSource: "user",
       attachmentId: saved[1].attachmentId,
     });
-    assert.equal(equivalent.parsedResult?.attachmentId, parsed.attachmentId);
+    const linkedAttachment = await service.getAttachmentById({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      attachmentId: saved[0].attachmentId,
+    });
+    assert.equal(linkedAttachment.parsedResult?.attachmentId, parsed.attachmentId);
+    assert.equal(otherAttachment.parsedResult, undefined);
   });
 });
 
@@ -282,6 +285,8 @@ test("AttachmentService.ingestGeneratedArtifacts preserves attachment owner meta
     const loaded = await service.getAttachmentById({
       userId: "u1",
       attachmentId: saved[0].attachmentId,
+      sessionId: "s1",
+      attachmentSource: "model",
     });
     assert.equal(loaded.owner?.type, "plugin");
     assert.equal(loaded.owner?.id, "harness-plugin");
@@ -339,8 +344,6 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
           attachmentMetas: [
             {
               attachmentId: sourceAttachment.attachmentId,
-              path: sourceAttachment.path,
-              relativePath: sourceAttachment.relativePath,
               sessionId: sourceAttachment.sessionId,
               attachmentSource: sourceAttachment.attachmentSource,
             },
@@ -348,8 +351,6 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
           attachments: [
             {
               attachmentId: sourceAttachment.attachmentId,
-              path: sourceAttachment.path,
-              relativePath: sourceAttachment.relativePath,
               sessionId: sourceAttachment.sessionId,
               attachmentSource: sourceAttachment.attachmentSource,
             },
@@ -369,7 +370,6 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
       toolName: "doc_to_data",
       sourceSessionId: rootSessionId,
       sourceAttachmentSource: "user",
-      sourceAttachmentPath: sourceAttachment.path,
     });
 
     assert.ok(linked);
@@ -397,7 +397,7 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
   });
 });
 
-test("index-manager read/write persists attachments", async () => {
+test("index-manager migrates protocol records and isolates every attachment scope", async () => {
   await withTempDir(async (workspaceRoot) => {
     const basePath = path.join(workspaceRoot, "u1");
     const scope = { sessionId: "s1", attachmentSource: "user" };
@@ -416,7 +416,54 @@ test("index-manager read/write persists attachments", async () => {
     );
 
     const loaded = await readAttachIndex(basePath, scope);
-    assert.equal(loaded.attachments.a1?.name, "x.txt");
+    assert.deepEqual(loaded.attachments, {});
+
+    await writeAttachIndex(
+      basePath,
+      {
+        attachments: {
+          a2: {
+            attachmentId: "a2",
+            sessionId: "s1",
+            attachmentSource: "user",
+            name: "x.txt",
+            mimeType: "text/plain",
+            relativePath: "runtime/attach/scoped/s1/user/a2/x.txt",
+            sandboxPath: "/workspace/sandbox/runtime/attach/scoped/s1/user/a2/x.txt",
+            previewUrl: "/preview/a2",
+          },
+        },
+      },
+      scope,
+    );
+    const canonicalLoaded = await readAttachIndex(basePath, scope);
+    assert.equal(canonicalLoaded.attachments.a2?.name, "x.txt");
+    assert.equal(canonicalLoaded.attachments.a2?.sandboxPath, "/workspace/sandbox/runtime/attach/scoped/s1/user/a2/x.txt");
+    assert.equal(canonicalLoaded.attachments.a2?.previewUrl, "/preview/a2");
+
+    const otherScope = { sessionId: "s2", attachmentSource: "user" };
+    await writeAttachIndex(basePath, {
+      attachments: {
+        a2: {
+          attachmentId: "a2",
+          sessionId: "s2",
+          attachmentSource: "user",
+          name: "other.txt",
+          mimeType: "text/plain",
+          relativePath: "runtime/attach/scoped/s2/user/a2/other.txt",
+        },
+      },
+    }, otherScope);
+    const isolated = await readAttachIndex(basePath, otherScope);
+    assert.equal(isolated.attachments.a2?.sessionId, "s2");
+    assert.equal(isolated.attachments.a2?.attachmentSource, "user");
+    assert.equal(isolated.attachments.a2?.name, "other.txt");
+
+    const migratedIndexFile = path.join(basePath, "runtime/attach/scoped/s1/user/attachments.json");
+    const migratedPayload = JSON.parse(await readFile(migratedIndexFile, "utf8"));
+    assert.equal(migratedPayload.attachments.a2?.identity?.attachmentId, "a2");
+    assert.equal(migratedPayload.attachments.a2?.identity?.sessionId, "s1");
+    assert.equal(migratedPayload.attachments.a2?.identity?.attachmentSource, "user");
   });
 });
 

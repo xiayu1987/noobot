@@ -19,6 +19,7 @@ export {
   mergeAttachmentListsPreferRich,
   projectCanonicalAttachmentIdentity,
   projectCanonicalAttachmentIdentities,
+  canonicalAttachmentIdentityKey,
   assertCanonicalAttachments,
 } from "./meta-ops.js";
 export { appendAttachmentMetasToRuntimeAndTurn } from "./runtime-attachment.js";

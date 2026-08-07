@@ -13,6 +13,7 @@
     "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(e=>{console.error(e);process.exit(1);})\""
   },
   "dependencies": {
+    "@noobot/attachment-protocol": "file:../../attachment-protocol",
     "@noobot/context-protocol": "file:../../context-protocol",
     "@noobot/hook-protocol": "file:../../hook-protocol",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",

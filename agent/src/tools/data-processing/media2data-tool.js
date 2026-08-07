@@ -505,9 +505,6 @@ async function backwriteParsedResultToSourceAttachment({
       toolName: TOOL_NAME.MEDIA_TO_DATA,
       sourceSessionId: String(sourceAttachmentMeta?.sessionId || "").trim(),
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
-      sourceAttachmentPath: String(sourceAttachmentMeta?.path || "").trim(),
-      sourceTurnScopeId: String(sourceAttachmentMeta?.turnScope?.turnScopeId || "").trim(),
-      requestedInTurnScopeId: String(runtime?.systemRuntime?.turnScopeId || "").trim(),
     });
     updateRuntimeUserMessageAttachment(runtime, sourceAttachmentId, updatedSourceAttachment || {});
     if (updatedSourceAttachment) {

@@ -11,6 +11,7 @@ export const CONTEXT_INJECTED_MESSAGE_TYPE = Object.freeze({
   HELP_TOOL_FAILURE_PROMPT: "noobot.help_tool_failure_prompt",
   TOOL_LOOP_LIMIT_FINALIZE_PROMPT: "tool_loop_limit_finalize_prompt",
   TASK_SUMMARY_SINGLE_TOOL_RETRY_PROMPT: "task_summary_single_tool_retry_prompt",
+  TASK_CHECK_SINGLE_TOOL_RETRY_PROMPT: "task_check_single_tool_retry_prompt",
 });
 
 export const SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES = Object.freeze([

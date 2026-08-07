@@ -5,7 +5,7 @@
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
-import { applyLatestSessionAggregateVersion, getCurrentSessionAggregateVersion, isNewerSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
+import { applyLatestSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
 import { validateTurnCommittedEventData } from "@noobot/shared/turn-commit-protocol";
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
@@ -161,6 +161,13 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
   } else if (eventSessionId !== targetSessionId) {
     reason = "committed_session_mismatch";
   } else {
+    // The committed aggregate version is authoritative independently of the
+    // local presentation tree. A reconnect or optimistic replacement may
+    // legitimately make the committed user node unavailable while the
+    // version must still advance for the next command.
+    applyLatestSessionAggregateVersion(activeSession.value, {
+      aggregateVersion: data.aggregateVersion,
+    });
     const targetMessage = findCanonicalMessageById?.(targetSessionId, committedMessageId);
     if (!targetMessage) {
       reason = "committed_user_target_missing";
@@ -172,11 +179,6 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
       targetMessage.attachments = Array.isArray(projectedMessage?.attachments)
         ? projectedMessage.attachments.map((attachment) => ({ ...attachment }))
         : [];
-      if (isNewerSessionAggregateVersion(data?.aggregateVersion, getCurrentSessionAggregateVersion(activeSession))) {
-        applyLatestSessionAggregateVersion(activeSession.value, {
-          aggregateVersion: data.aggregateVersion,
-        });
-      }
       applied = true;
       reason = "applied";
     }

@@ -98,6 +98,8 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
         parsedResultUrl: "/download/parsed-rich",
         parsedResultName: "AI 体系现状概览.txt",
         parsedResultAttachmentId: "parsed-rich",
+        parsedResultSessionId: sessionId,
+        parsedResultAttachmentSource: "model",
       },
     },
   }), "utf8");
@@ -158,7 +160,12 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
     downloadUrl: "/download/att-session-rich",
     parsedResultUrl: "/download/parsed-session-rich",
     parsedResultAttachmentId: "parsed-session-rich",
-    parsedResult: { attachmentId: "parsed-session-rich", path: "/tmp/需求说明.txt" },
+    parsedResult: {
+      attachmentId: "parsed-session-rich",
+      sessionId: "session-existing-a",
+      attachmentSource: "model",
+      path: "/tmp/需求说明.txt",
+    },
   };
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine._buildContextBuilder = () => ({ kind: "context-builder" });

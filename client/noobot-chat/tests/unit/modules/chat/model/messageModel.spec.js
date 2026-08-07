@@ -22,6 +22,8 @@ const envelope = {
       filePath: "/workspace/u1/report.md",
       attachmentMeta: {
         attachmentId: "att-1",
+        sessionId: "test-session",
+        attachmentSource: "test",
         name: "report.md",
         mimeType: "text/markdown",
         path: "/legacy/report.md",
@@ -146,6 +148,8 @@ describe("messageModel semantic transfer", () => {
       attachments: [
         {
           attachmentId: "att-1",
+          sessionId: "s1",
+          attachmentSource: "test",
           name: "legacy-report.md",
           mimeType: "text/plain",
           path: "/legacy-only/report.md",
@@ -157,13 +161,23 @@ describe("messageModel semantic transfer", () => {
     expect(message.transferResult).toBeUndefined();
     expect(message.transferEnvelopes).toHaveLength(1);
     expect(message.transferEnvelopes[0]?.protocol).toBe("noobot.semantic-transfer");
-    expect(message.attachments).toHaveLength(1);
-    expect(message.attachments[0]).toMatchObject({
-      attachmentId: "att-1",
-      name: "legacy-report.md",
-      mimeType: "text/plain",
-      path: "/legacy-only/report.md",
-    });
+    expect(message.attachments).toHaveLength(2);
+    expect(message.attachments).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        attachmentId: "att-1",
+        sessionId: "s1",
+        attachmentSource: "test",
+        name: "legacy-report.md",
+        mimeType: "text/plain",
+        path: "/legacy-only/report.md",
+      }),
+      expect.objectContaining({
+        attachmentId: "att-1",
+        sessionId: "test-session",
+        attachmentSource: "test",
+        name: "report.md",
+      }),
+    ]));
   });
 
   it("restores attachment metadata from refreshed session summary transfer envelopes", () => {
@@ -226,6 +240,8 @@ describe("messageModel semantic transfer", () => {
           files: [
             {
               attachmentId: "att-compact-1",
+              sessionId: "session-compact-1",
+              attachmentSource: "test",
               name: "compact.md",
               mimeType: "text/markdown",
               relativePath: "runtime/compact.md",
@@ -272,6 +288,8 @@ describe("messageModel semantic transfer", () => {
               filePath: "runtime/attach/scope.txt",
               attachmentMeta: {
                 attachmentId: "att-scope-1",
+                sessionId: "session-scope-1",
+                attachmentSource: "test",
                 name: "scope.txt",
                 size: 10,
               },
@@ -318,6 +336,8 @@ describe("messageModel semantic transfer", () => {
                         filePath: "runtime/workflow/report.md",
                         attachmentMeta: {
                           attachmentId: "att-plugin-payload-1",
+                          sessionId: "session-plugin-1",
+                          attachmentSource: "test",
                           name: "report.md",
                           mimeType: "text/markdown",
                         },
@@ -349,10 +369,14 @@ describe("messageModel semantic transfer", () => {
         attachments: [
           {
             attachmentId: "src-1",
+            sessionId: "s1",
+            attachmentSource: "test",
             name: "source.pdf",
             mimeType: "application/pdf",
             parsedResult: {
               attachmentId: "parsed-1",
+              sessionId: "s1",
+              attachmentSource: "test",
               relativePath: "runtime/attach/parsed/source.md",
             },
           },
@@ -407,6 +431,8 @@ describe("messageModel semantic transfer", () => {
       attachments: [
         {
           attachmentId: "legacy-1",
+          sessionId: "s1",
+          attachmentSource: "test",
           name: "legacy.pdf",
         },
       ],
@@ -426,6 +452,8 @@ describe("messageModel semantic transfer", () => {
       attachment_metas: [
         {
           attachmentId: "snake-1",
+          sessionId: "s1",
+          attachmentSource: "test",
           name: "snake.pdf",
         },
       ],
@@ -496,7 +524,7 @@ describe("messageModel execution logs", () => {
         role: "assistant",
         content: "previous answer",
         dialogProcessId: "dp-same-until-stream-arrives",
-        attachments: [{ attachmentId: "att-prev", name: "previous.md" }],
+        attachments: [{ attachmentId: "att-prev", sessionId: "child-session", attachmentSource: "test", name: "previous.md" }],
         realtimeLogs: [{ text: "previous tool log" }],
         completedToolLogs: [{ text: "previous completed tool" }],
         tool_calls: [{ id: "tool-prev" }],
@@ -532,7 +560,7 @@ describe("messageModel execution logs", () => {
         content: "new partial answer",
         turnScopeId: "client-turn:new-stream",
         dialogProcessId: "dp-new-stream",
-        attachments: [{ attachmentId: "att-new", name: "new.md" }],
+        attachments: [{ attachmentId: "att-new", sessionId: "child-session", attachmentSource: "test", name: "new.md" }],
         activityTimeline: [{
           activityId: "event:new-log-1", eventId: "new-log-1", event: "thinking", type: "thinking",
           text: "new tool log", sequence: 1, sequenceScopeId: "message-new",

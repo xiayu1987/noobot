@@ -173,9 +173,9 @@ test("parseWorkflowDslText keeps action node attachment refs", () => {
   const semantic = parseWorkflowDslText(
     [
       "WORKFLOW_DSL/1",
-      'ATTACHMENT id="att-1" name="合同.pdf" path="/workspace/attachments/contract.pdf" mimeType="application/pdf"',
+      'ATTACHMENT id="local-contract" attachmentId="att-1" sessionId="session-1" attachmentSource="user" name="合同.pdf" path="/workspace/attachments/contract.pdf" mimeType="application/pdf"',
       'NODE id=start type=state stateType=start name="开始"',
-      'NODE id=act type=action name="节点A" task="请分析附件" attachments="att-1"',
+      'NODE id=act type=action name="节点A" task="请分析附件" attachments="local-contract"',
       'NODE id=end type=state stateType=end name="结束"',
       "EDGE from=start to=act",
       "EDGE from=act to=end",
@@ -183,10 +183,27 @@ test("parseWorkflowDslText keeps action node attachment refs", () => {
     ].join("\n"),
   );
   const actionNode = (semantic?.nodes || []).find((item) => String(item?.id || "") === "act");
-  assert.deepEqual(actionNode?.attachments, ["att-1"]);
-  assert.equal(semantic?.attachments?.[0]?.id, "att-1");
+  assert.deepEqual(actionNode?.attachments, ["local-contract"]);
+  assert.equal(semantic?.attachments?.[0]?.id, "local-contract");
+  assert.equal(semantic?.attachments?.[0]?.attachmentId, "att-1");
+  assert.equal(semantic?.attachments?.[0]?.sessionId, "session-1");
+  assert.equal(semantic?.attachments?.[0]?.attachmentSource, "user");
   assert.equal(semantic?.attachments?.[0]?.path, "/workspace/attachments/contract.pdf");
-  assert.equal(semantic?.attachmentMap?.["att-1"]?.name, "合同.pdf");
+  assert.equal(semantic?.attachmentMap?.["local-contract"]?.name, "合同.pdf");
+});
+
+test("parseWorkflowDslText rejects attachment declarations without canonical identity", () => {
+  assert.throws(
+    () => parseWorkflowDslText([
+      "WORKFLOW_DSL/1",
+      'ATTACHMENT id="local-contract" attachmentId="att-1" sessionId="session-1"',
+      'NODE id=start type=state stateType=start name="开始"',
+      'NODE id=end type=state stateType=end name="结束"',
+      "EDGE from=start to=end",
+      "END",
+    ].join("\n")),
+    /invalid_attachment_source/,
+  );
 });
 
 test("parseWorkflowDslText rejects composite nodes", () => {

@@ -166,7 +166,12 @@ test("chat-websocket-server: parsed attachment updates and delta events keep req
         data: {
           dialogProcessId: "dp-attachments",
           sessionId: "sub-session-from-parser",
-          attachments: [{ id: "att-1", name: "a.txt" }],
+          attachments: [{
+            attachmentId: "att-1",
+            sessionId: "s1",
+            attachmentSource: "user",
+            name: "a.txt",
+          }],
         },
       });
       eventListener?.onEvent?.({
@@ -209,7 +214,12 @@ test("chat-websocket-server: parsed attachment updates and delta events keep req
     const attachmentsEvent = events.find((item) => item?.event === "attachment_parsed");
     assert.equal(attachmentsEvent?.data?.sessionId, "s1");
     assert.equal(attachmentsEvent?.data?.turnScopeId, "turn-parent");
-    assert.deepEqual(attachmentsEvent?.data?.attachments, [{ id: "att-1", name: "a.txt" }]);
+    assert.deepEqual(attachmentsEvent?.data?.attachments, [{
+      attachmentId: "att-1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      name: "a.txt",
+    }]);
 
     const deltaEvent = events.find((item) => item?.event === "delta");
     assert.equal(deltaEvent?.data?.turnScopeId, "turn-parent");

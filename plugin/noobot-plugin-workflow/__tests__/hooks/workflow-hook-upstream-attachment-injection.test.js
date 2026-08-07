@@ -89,6 +89,8 @@ test("workflow hook injects upstream node result attachments into downstream sub
         return [
           {
             attachmentId: `att-${artifactCounter}`,
+            sessionId: "s-upstream",
+            attachmentSource: "model",
             name: artifactName,
             mimeType: "text/markdown",
             path: `/attachments/${artifactName}`,
@@ -134,6 +136,8 @@ test("workflow hook injects upstream node result attachments into downstream sub
                         filePath: `/workspace/${fileName}`,
                         attachmentMeta: {
                           attachmentId: `att-${artifactCounter}`,
+                          sessionId: "s-upstream",
+                          attachmentSource: "model",
                           name: fileName,
                           mimeType: "text/markdown",
                           relativePath: `runtime/attach/${fileName}`,
@@ -236,6 +240,8 @@ test("workflow hook injects one upstream action attachments into multiple direct
         return [
           {
             attachmentId: `fanout-att-${artifactCounter}`,
+            sessionId: "s-fanout",
+            attachmentSource: "model",
             name: artifactName,
             mimeType: "text/markdown",
             path: `/attachments/${artifactName}`,
@@ -279,6 +285,8 @@ test("workflow hook injects one upstream action attachments into multiple direct
                         filePath: `/workspace/${fileName}`,
                         attachmentMeta: {
                           attachmentId: `fanout-att-${artifactCounter}`,
+                          sessionId: "s-fanout",
+                          attachmentSource: "model",
                           name: fileName,
                           mimeType: "text/markdown",
                           relativePath: `runtime/attach/${fileName}`,

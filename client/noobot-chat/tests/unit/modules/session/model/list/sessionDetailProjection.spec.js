@@ -45,6 +45,34 @@ describe("buildSessionDetailProjection", () => {
     expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
   });
 
+  it("projects a persisted stopped turn assistant presentation without assistant content", () => {
+    const projection = buildSessionDetailProjection({
+      sessionDetail: {
+        sessionId: "session-stopped",
+        messages: [{
+          role: "user",
+          content: "stop this",
+          turnScopeId: "turn-stopped",
+          dialogProcessId: "dialog-stopped",
+        }],
+        turnStatuses: [{
+          status: "user_stopped",
+          turnScopeId: "turn-stopped",
+          dialogProcessId: "dialog-stopped",
+        }],
+      },
+      makeViewMessage: identity,
+    });
+
+    expect(projection.messages).toHaveLength(2);
+    expect(projection.messages[1]).toMatchObject({
+      role: "assistant",
+      turnStatusPlaceholder: true,
+      status: "user_stopped",
+    });
+    expect(projection.messages[1].content).toContain("本轮已由用户停止");
+  });
+
   it("indexes workflow node timings by normalized turn scope key", () => {
     const projection = buildSessionDetailProjection({
       sessionDetail: {
@@ -117,7 +145,7 @@ describe("buildSessionDetailProjection", () => {
             type: "message",
             content: "final answer",
             turnScopeId: "client-turn:resend",
-            attachments: [{ attachmentId: "result-1", name: "result.md" }],
+            attachments: [{ attachmentId: "result-1", sessionId: "session-resend", attachmentSource: "test", name: "result.md" }],
           },
         ],
       },
@@ -158,7 +186,7 @@ describe("buildSessionDetailProjection", () => {
             status: "completed",
             resultEvent: {
               eventId: "event-artifacts",
-              attachments: [{ attachmentId: "attachment-artifacts", name: "stdout.txt" }],
+              attachments: [{ attachmentId: "attachment-artifacts", sessionId: "session-artifacts", attachmentSource: "test", name: "stdout.txt" }],
               writtenFiles: [{
                 toolName: "write_file",
                 resolvedPath: "/workspace/result.txt",

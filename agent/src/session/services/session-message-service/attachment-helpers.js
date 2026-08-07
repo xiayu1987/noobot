@@ -5,6 +5,7 @@
  */
 import {
   assertCanonicalAttachments,
+  canonicalAttachmentIdentityKey,
   findMatchingAttachmentMeta,
   mergeAttachmentMetaPreferRich,
 } from "../../../artifacts/index.js";
@@ -16,9 +17,16 @@ export function dedupeAttachments(attachments = []) {
   const seen = new Set();
   return source.filter((item = {}) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    const key = String(item?.attachmentId || "").trim() ||
-      `${String(item?.path || "").trim()}|${String(item?.relativePath || "").trim()}|${String(item?.name || "").trim()}`;
-    if (!key) return true;
+    let key;
+    try {
+      key = canonicalAttachmentIdentityKey({
+        attachmentId: item.attachmentId,
+        sessionId: item.sessionId,
+        attachmentSource: item.attachmentSource,
+      });
+    } catch {
+      return false;
+    }
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -28,8 +36,25 @@ export function dedupeAttachments(attachments = []) {
 export function normalizeIncomingAttachmentsForSessionMessage(existingAttachments = [], incomingAttachments = []) {
   if (!Array.isArray(incomingAttachments)) return undefined;
   if (incomingAttachments.length === 0) return [];
-  return dedupeAttachments(incomingAttachments.map((incoming) => {
+  const merged = incomingAttachments.map((incoming) => {
     const existing = findMatchingAttachmentMeta(incoming, existingAttachments);
     return existing ? mergeAttachmentMetaPreferRich(existing, incoming) : incoming;
-  }));
+  });
+  const seen = new Set();
+  return merged.filter((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    let key;
+    try {
+      key = canonicalAttachmentIdentityKey({
+        attachmentId: item.attachmentId,
+        sessionId: item.sessionId,
+        attachmentSource: item.attachmentSource,
+      });
+    } catch {
+      key = `raw:${JSON.stringify(item)}`;
+    }
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

@@ -15,9 +15,21 @@ import {
   TIMELINE_AUTHORITY,
 } from "./timelineFact.js";
 import { parseTaskCheckReceipt } from "@noobot/context-protocol/task-check-receipt";
+import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
+
+function canonicalAttachments(attachments = []) {
+  return (Array.isArray(attachments) ? attachments : []).filter((attachment) => {
+    try {
+      projectAttachmentIdentity(attachment);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
 
 export const TOOL_TIMELINE_AUTHORITY = TIMELINE_AUTHORITY;
 export const TOOL_SEQUENCE_DOMAIN = SEQUENCE_DOMAIN;
@@ -217,8 +229,7 @@ export function selectCompletedToolArtifacts(message = {}) {
     logs,
     attachments: completedEntries.flatMap((item) => {
       const eventAttachments = item?.resultEvent?.attachments;
-      if (Array.isArray(eventAttachments) && eventAttachments.length) return eventAttachments;
-      return [];
+      return canonicalAttachments(eventAttachments);
     }),
     writtenFiles: completedEntries.flatMap((item) => {
       const eventWrittenFiles = item?.resultEvent?.writtenFiles;

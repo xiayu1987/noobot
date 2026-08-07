@@ -87,12 +87,9 @@ client/noobot-chat/tests/e2e/protocol/
 │   └── log-assertions.js
 ├── specs/
 │   ├── 002-send-no-attachment.spec.js
-│   ├── 003-send-with-attachment.spec.js
 │   ├── 006-continue-from-snapshot.spec.js
 │   ├── 007-attachment-continue.spec.js
 │   ├── 008-repeated-stop-continue.spec.js
-│   ├── 009-resend-no-attachment.spec.js
-│   ├── 010-resend-attachments.spec.js
 │   ├── 013-reconnect.spec.js
 │   ├── 015-multi-page.spec.js
 │   ├── 016-harness.spec.js
@@ -288,12 +285,6 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：收到 `transport_ready`；Session ID 非空且浏览器、HTTP 和持久化身份一致；只有一个 `turn.send`；`input.attachments` 为 `[]`；生命周期自然完成；UI 不再 sending；Session 只有一个对应 user turn；Harness run 为 success；没有停止快照；控制台无 error；不存在旧 reconnect cursor 字段。
 
-### PBE-003：带附件普通发送
-
-步骤：创建固定测试文件并计算 SHA256，通过 UI 添加附件并发送，等待模型调用后自然完成。
-
-断言：命令、Service、Session 和 Model Context 附件数均为 1；名称、MIME、大小和 SHA256 一致；持久化文件存在；Harness Context Snapshot 包含规范附件元数据；没有第二个 canonical attachment。
-
 ### PBE-006：无附件停止后继续
 
 步骤：发送持续执行请求，等待 `processing_started`，点击 Stop，等待 `stop_completed` 并读取首个快照；在 Continue 输入框输入唯一提示，点击 Continue，等待新 run 启动后再次 Stop。
@@ -312,29 +303,9 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：四轮 identity 均唯一；每次 Continue 只引用前一停止轮次；每轮事件单调且不串线；四份停止快照一一匹配；旧轮 Stop 不得停止新轮；snapshot query cleanup 不得关闭 run 连接。
 
-### PBE-009：无附件编辑重发
+### PBE-009～012：编辑重发附件状态链（并入 PBE-029）
 
-步骤：创建一轮无附件消息，打开编辑重发，修改内容并发送，捕获 replace-turn HTTP 和 `turn.resend`，随后 Stop。
-
-断言：HTTP anchor 只使用旧 `turnScopeId`；`expectedAggregateVersion` 正确；Session replacement transaction 生成唯一 `replacementDialogProcessId`；replacement user message、commit、lifecycle tombstone、后续 `turn.resend.identity` 与 Turn journal 使用同一 `dialogProcessId + turnScopeId`；附件为 `[]`；旧 Turn 明确 replaced；`aggregateVersion` 权威增长；UI 不残留旧 pending 状态。
-
-### PBE-010：保留原附件编辑重发
-
-步骤：创建带附件停止轮次，打开该 user message 的编辑重发，不增加或删除附件，修改内容并发送，然后 Stop。
-
-断言：编辑卡显示一个原附件；replace-turn 和 resend 附件数均为 1；attachmentId/SHA256 与原附件一致；没有重复附件记录；Model Context 只有一个逻辑附件。
-
-### PBE-011：删除原附件后重发
-
-步骤：打开带附件消息的编辑重发，删除附件，确认附件数为 0，发送并 Stop。
-
-断言：replace-turn、resend、新 user turn、新 Model Context 和新停止快照均不含旧附件。原文件即使按存储策略保留，也不得继续属于新 Turn。
-
-### PBE-012：新增附件后重发
-
-步骤：选择无附件历史消息，编辑重发时添加新文件，发送、等待模型读取并 Stop。
-
-断言：上传阶段有 clientAttachmentId；持久化后只有一个 canonical attachmentId；HTTP/WS 附件数均为 1；Model Context 使用 canonical ID 和 scoped path；SHA256 一致。
+保留、移除和新增附件的编辑重发均在同一个 PBE-029 Session 中按 `attached -> retained -> removed -> added` 顺序验证；独立 Session 用例已删除。
 
 ### PBE-013：活动轮次刷新页面 reconnect
 
@@ -414,11 +385,11 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 步骤：选择 Workflow + Harness，上传固定附件，要求一个 Workflow 子 Session 读取其精确内容并自然完成；读取插件事件、根 Session 附件索引、子 Session 模型调用和子 Session 附件索引。
 
-断言：根 Session 只有一个 canonical 用户附件；Workflow 子 Session 通过规范 Session transfer 获得独立 child attachmentId，名称和来源保持一致且所有权切换为子 Session；Workflow 与 Harness 的 runtime/execution 插件身份闭合；根生命周期自然完成。
+断言：根 Session 只有一个 canonical 用户附件；Workflow 子 Session 通过规范 Session transfer 获得独立 child attachmentId，名称和来源保持一致且所有权切换为子 Session；子 agent 产生文件，根 model 附件索引同时包含 `workflow_node_agent_result` 和 `workflow_completed_attachment_summary`，前端 assistant 文件卡名称集合与索引完全一致，刷新后保持一致；Workflow 与 Harness 的 runtime/execution 插件身份闭合；根生命周期自然完成。
 
 ### PBE-029：统一 Session 协议闭环审计
 
-步骤：使用浏览器在同一预分配 `sessionId` 下依次执行无附件 Send、Stop、Continue、Stop、无附件 Resend、带附件 Resend、显式删除附件 Resend，并读取 WebSocket 命令、lifecycle、Session manifest、Turn journals、runtime-events、execution-events 和模型停止快照。
+步骤：使用浏览器在同一预分配 `sessionId` 下依次执行带附件 Send、Stop、保留附件 Resend、Stop、Continue、Stop、移除附件 Resend、新增附件 Resend，并读取 WebSocket 命令、lifecycle、Session manifest、Turn journals、runtime-events、execution-events 和模型停止快照。
 
 断言：所有业务命令只使用 `commandId`；聚合并发只使用 `expectedAggregateVersion`；Turn 并发只使用 `revision/expectedTurnRevision`；事件顺序只使用 `sequence`；Session 身份只使用 `sessionId`。Session manifest 只含 `aggregateVersion`，每条消息有唯一 `messageUid`，每个 Turn 由 `(sessionId, turnScopeId)` 唯一定位。禁止出现 `backendSessionId`、`expectedVersion`、`expectedSessionVersion`、`sessionVersion`、`snapshotVersion`、`committedVersion`、`idempotencyKey` 或 Session-only/Dialog-only 缓存身份。每个停止轮次只有一个权威终态和一个 plain-object 模型快照，runtime-events 与 execution-events 的身份链闭合。
 
@@ -462,7 +433,7 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 步骤：启用 Harness 真实 guidance analysis 并关闭 planning/acceptance，顺序调用本场景声明的安全业务工具集合 `write_file/read_file/search/patch_file(dryRun)/execute_script/list_skills/user_interaction`；持续采样实时思考面板，在交互卡片填写固定必填值，完成后打开思考详情。模型/provider 未产生工具调用前文本时不得伪造主模型思考内容。
 
-断言：execution-events 中工具集合严格相等，调用参数、成功结果和 `toolCallId` 一一闭合；实时思考内容至少发生两次变化，分析与执行区域都有内容；实时面板最近 10 条执行日志窗口内的调用/返回均可展开，详情面板完整 7 对调用/返回均可展开且明细非空；思考内容实时展示；交互标题、字段、提交值、工具返回和最终模型回答闭合。
+断言：execution-events 中工具集合严格相等，调用参数、成功结果和 `toolCallId` 一一闭合；`write_file` 的权威 `writtenFiles` 与 Turn journal、运行中/运行中刷新/完成前刷新/完成后刷新四个时点的前端生成文件卡数量和文件键集合一致；实时思考内容至少发生两次变化，分析与执行区域都有内容；实时面板最近 10 条执行日志窗口内的调用/返回均可展开，详情面板完整 7 对调用/返回均可展开且明细非空；思考内容实时展示；交互标题、字段、提交值、工具返回和最终模型回答闭合。
 
 ### 模型调用唯一观测边界
 
@@ -538,7 +509,7 @@ npm run test:e2e:protocol:full
 | 级别 | 用例 |
 | --- | --- |
 | Smoke | PBE-002、006 |
-| Core | PBE-003、007～014、016、017、021、022、027、029、030 |
+| Core | PBE-007～014、016、017、021、022、027、029、030 |
 | Full-only | PBE-015、023～026、028、031～036 |
 
 ## 8. CI 失败产物要求

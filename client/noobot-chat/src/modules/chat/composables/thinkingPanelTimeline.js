@@ -561,6 +561,9 @@ export function useThinkingTimeline(
     } else if (hasSummaryThinkingDetails(messageItem)) {
       result = true;
       reason = "summary";
+    } else if (runtime.startedAt || runtime.finishedAt) {
+      result = true;
+      reason = "runtime-timing";
     }
     const thinkingDetail = result ? null : getThinkingDetailForMessage(messageItem);
     if (!result && thinkingDetail) {
