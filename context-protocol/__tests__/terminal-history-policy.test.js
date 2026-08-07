@@ -146,14 +146,16 @@ test("terminal status requires its authoritative explanation", () => {
   );
 });
 
-test("terminal status cannot outlive all canonical messages in its round", () => {
-  assert.throws(
-    () => projectTerminalHistoryMessages({ messages: [], turnStatuses: [status()] }),
-    /has no canonical round messages/,
-  );
+test("unmaterialized terminal status remains lifecycle audit data and is excluded from model history", () => {
+  const source = [message({ messageUid: "prior", turnScopeId: "prior-turn", dialogProcessId: "prior-dialog" })];
+  const result = projectTerminalHistoryMessages({
+    messages: source,
+    turnStatuses: [status()],
+  });
+  assert.deepEqual(result, source);
 });
 
-test("terminal history requires its canonical frontend user message", () => {
+test("terminal history still fails closed when a materialized round lacks its canonical frontend user message", () => {
   assert.throws(
     () => projectTerminalHistoryMessages({
       messages: [message({ messageUid: "tool-1", role: "tool" })],

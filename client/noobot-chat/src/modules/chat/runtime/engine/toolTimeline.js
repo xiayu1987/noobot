@@ -267,7 +267,11 @@ export function selectTaskCheckReceipts(message = {}) {
       payload.protocolVersion !== 1
     ) continue;
     try {
-      receipts.push(parseTaskCheckReceipt(payload.summary));
+      const receipt = parseTaskCheckReceipt(payload.summary);
+      receipts.push({
+        ...receipt,
+        timestamp: text(entry.resultEvent?.timestamp || entry.call?.timestamp),
+      });
     } catch {
       continue;
     }

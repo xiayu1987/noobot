@@ -129,10 +129,17 @@ export function projectTerminalHistoryMessages({ messages = [], turnStatuses = [
     scoped.push(message);
     messagesByIdentity.set(identity, scoped);
   }
-  for (const [identity, status] of statusByIdentity) {
-    if (messagesByIdentity.has(identity)) continue;
-    throw new Error(`terminal history status has no canonical round messages: ${status.turnScopeId}`);
+  // A terminal lifecycle record can be durably written before commitTurn has
+  // materialized the canonical round messages (for example, when the commit
+  // itself loses an aggregate-version race). Such a record is authoritative
+  // lifecycle audit data, but it is not a model-history item yet. Keep the
+  // projection sourced exclusively from canonical messages and omit the
+  // unmaterialized status instead of inventing a message or blocking the next
+  // turn.
+  for (const identity of [...statusByIdentity.keys()]) {
+    if (!messagesByIdentity.has(identity)) statusByIdentity.delete(identity);
   }
+  if (!statusByIdentity.size) return source;
 
   const emittedTerminalIdentities = new Set();
   const projected = [];

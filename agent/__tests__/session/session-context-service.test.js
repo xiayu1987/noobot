@@ -246,6 +246,30 @@ test("getRecentSessionMessages projects error and timeout explanations as assist
   ]);
 });
 
+test("getRecentSessionMessages excludes an unmaterialized failed turn without blocking later history", async () => {
+  const messages = [{
+    messageUid: "completed-user",
+    role: "user",
+    content: "previous question",
+    frontendUserMessage: true,
+    dialogProcessId: "completed-dialog",
+    turnScopeId: "completed-turn",
+  }];
+  const service = createSessionContextService(messages, {
+    turnStatuses: [{
+      status: "error",
+      reason: "run_error",
+      description: "session aggregate version conflict",
+      dialogProcessId: "unmaterialized-dialog",
+      turnScopeId: "unmaterialized-turn",
+    }],
+  });
+
+  const result = await service.getRecentSessionMessages({ userId: "u1", sessionId: "s1" });
+
+  assert.deepEqual(result, messages);
+});
+
 test("getRecentSessionMessages keeps latest fixed dialog rounds and all unsummarized injected messages", async () => {
   const messages = [
     { role: "user", content: "first real question", dialogProcessId: "dlg_1" },

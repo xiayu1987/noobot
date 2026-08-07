@@ -42,8 +42,13 @@ const rendererProjectionSignature = computed(() => [
     String(item.content || "").length,
   ].join(":")).join("|"),
 ].join("::"));
-const taskCheckContents = computed(() => props.taskCheckReceipts.map((receipt) => String(receipt.abstract || "").trim()).filter(Boolean));
-const taskCheckSummary = computed(() => taskCheckContents.value.join("\n\n"));
+const taskCheckItems = computed(() => props.taskCheckReceipts
+  .map((receipt = {}, index) => ({
+    key: `${String(receipt.contentHash || "task-check")}-${index}`,
+    title: `${index + 1}. ${props.translate("message.taskCheck")}${receipt.timestamp ? ` · ${receipt.timestamp}` : ""}`,
+    content: String(receipt.abstract || "").trim(),
+  }))
+  .filter((item) => item.content));
 const expandedDetailKeys = ref(new Set());
 function isDetailExpanded(detailKey = "") {
   return Boolean(detailKey) && expandedDetailKeys.value.has(detailKey);
@@ -145,13 +150,20 @@ watch(rendererProjectionSignature, () => {
           ><BaseTabPanelBody
             class="thinking-details-scroll-body thinking-details-content-body"
             ><div
-              v-if="taskCheckContents.length"
+              v-if="taskCheckItems.length"
               class="thinking-task-check-block"
               data-thinking-block="task-check"
             >
+              <BaseMetaLabel
+                class="thinking-task-check-title"
+                :text="translate('message.taskCheck')"
+              />
               <BaseNoteBlock
-                :title="translate('message.taskCheck')"
-                :content="taskCheckSummary"
+                v-for="item in taskCheckItems"
+                :key="item.key"
+                class="thinking-task-check-item"
+                :title="item.title"
+                :content="item.content"
               />
             </div><BaseNoteBlock
               v-for="(item, index) in thinkingContentItems"
@@ -180,6 +192,9 @@ watch(rendererProjectionSignature, () => {
 }
 .thinking-task-check-title {
   margin-bottom: 8px;
+}
+.thinking-task-check-item:last-child {
+  margin-bottom: 0;
 }
 .thinking-details-panel {
   height: 100%;
