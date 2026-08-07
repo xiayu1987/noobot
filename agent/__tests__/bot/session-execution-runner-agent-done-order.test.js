@@ -161,6 +161,61 @@ test("runSession restores only the checkpoint-persisted agent prefix at finaliza
   );
 });
 
+test("runSession compares the complete durable turn without treating it as a checkpoint prefix", async () => {
+  const callOrder = [];
+  let capturedFinalizePayload = null;
+  const durableMessages = [
+    {
+      messageUid: "sm_assistant",
+      messageId: "message-assistant",
+      role: "assistant",
+      content: "already persisted",
+      summarized: false,
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-1",
+    },
+    {
+      messageUid: "sm_tool",
+      messageId: "message-tool",
+      role: "tool",
+      content: "tool result",
+      summarized: false,
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-1",
+    },
+  ];
+  const runner = createRunner({
+    callOrder,
+    runtime: { attachmentMetas: [] },
+    agentRunner: async () => ({
+      output: "done",
+      assistantMessageId: "message-assistant",
+      traces: [],
+      turnMessages: durableMessages.map((message) => ({ ...message, summarized: true })),
+      turnTasks: [],
+    }),
+    getSessionTurns: async () => durableMessages,
+    finalizeRunSession: async (payload = {}) => {
+      capturedFinalizePayload = payload;
+      return { ok: true };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    turnScopeId: "turn-a",
+  });
+
+  assert.deepEqual(capturedFinalizePayload.persistedTurnMessages, []);
+  assert.deepEqual(capturedFinalizePayload.durableTurnMessages, durableMessages);
+  assert.deepEqual(
+    capturedFinalizePayload.persistedTurnMessageUids.sort(),
+    ["sm_assistant", "sm_tool"],
+  );
+});
+
 test("runSession restores checkpoint messages by exact persistent UID when available", async () => {
   const callOrder = [];
   const runtime = {

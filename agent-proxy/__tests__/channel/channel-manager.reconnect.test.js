@@ -30,11 +30,11 @@ function getReconnectCompleteEvent(socket) {
   return socket.sentEvents.find((eventItem) => eventItem?.event === "reconnect_complete");
 }
 
-test("reconnect echoes requestId on data and completion envelopes", () => {
+test("reconnect echoes requestId on data and completion envelopes", async () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const socket = createMockSocket();
 
-  manager.handleReconnect(socket, {
+  await manager.handleReconnect(socket, {
     currentSessionId: "session-missing",
     requestId: "reconnect-request-1",
   });

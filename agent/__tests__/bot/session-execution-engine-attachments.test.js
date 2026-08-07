@@ -124,6 +124,9 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
       sessionId,
       userMessageAttachments: [
         {
+          attachmentId: "att-rich",
+          sessionId,
+          attachmentSource: "user",
           name: "AI 体系现状概览.docx",
           mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           size: 1407731,
@@ -190,7 +193,14 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
       sessionId: "session-existing-a",
       turnScopeId: "turn-existing",
       dialogProcessId: "dp-existing",
-      userMessageAttachments: [{ name: "需求说明.docx", mimeType: richAttachment.mimeType, size: 2048 }],
+      userMessageAttachments: [{
+        attachmentId: richAttachment.attachmentId,
+        sessionId: richAttachment.sessionId,
+        attachmentSource: richAttachment.attachmentSource,
+        name: "需求说明.docx",
+        mimeType: richAttachment.mimeType,
+        size: 2048,
+      }],
     },
   });
 

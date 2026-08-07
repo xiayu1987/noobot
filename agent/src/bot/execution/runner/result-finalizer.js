@@ -52,14 +52,19 @@ const checkpointPersistedMessageUids = new Set(
     .map((uid) => String(uid || "").trim())
     .filter(Boolean),
 );
-const persistedSessionMessages = (checkpointPersistedTotal > 0 || checkpointPersistedMessageUids.size > 0) &&
-  typeof getSessionTurns === "function"
+// Finalization must compare the complete durable turn even when no summary
+// checkpoint exists. Summary policy mutates already-persisted messages in
+// memory, so suffix-only persistence would lose those canonical state changes.
+const persistedSessionMessagesResult = typeof getSessionTurns === "function"
   ? await getSessionTurns({
       userId,
       sessionId: usedSessionId,
       parentSessionId,
       persistenceContext,
     })
+  : [];
+const persistedSessionMessages = Array.isArray(persistedSessionMessagesResult)
+  ? persistedSessionMessagesResult
   : [];
 const scopedPersistedTurnMessages = persistedSessionMessages.filter((message) =>
   String(message?.turnScopeId || "").trim() === resolvedTurnScopeId &&
@@ -68,7 +73,14 @@ const scopedPersistedTurnMessages = persistedSessionMessages.filter((message) =>
 const persistedTurnMessages = checkpointPersistedMessageUids.size > 0
   ? scopedPersistedTurnMessages.filter((message) =>
       checkpointPersistedMessageUids.has(String(message?.messageUid || "").trim()))
-  : scopedPersistedTurnMessages.slice(-checkpointPersistedTotal);
+  : checkpointPersistedTotal > 0
+    ? scopedPersistedTurnMessages.slice(-checkpointPersistedTotal)
+    : [];
+const durableTurnMessageUids = new Set(
+  scopedPersistedTurnMessages
+    .map((message) => String(message?.messageUid || "").trim())
+    .filter(Boolean),
+);
 let recoveredActivePrefixCount = 0;
 for (const message of Array.isArray(agentResult?.turnMessages) ? agentResult.turnMessages : []) {
   const messageUid = String(message?.messageUid || "").trim();
@@ -90,8 +102,12 @@ const finalizedResult = await finalizeRunSession({
     0,
     Number(dispatchRuntime?.summaryCheckpointPersistedCount) || 0,
   ),
-  persistedTurnMessageUids: [...checkpointPersistedMessageUids],
+  persistedTurnMessageUids: [...new Set([
+    ...checkpointPersistedMessageUids,
+    ...durableTurnMessageUids,
+  ])],
   persistedTurnMessages,
+  durableTurnMessages: scopedPersistedTurnMessages,
   summaryCheckpointPromotionSources: Array.isArray(
     dispatchRuntime?.summaryCheckpointPromotionSources,
   )

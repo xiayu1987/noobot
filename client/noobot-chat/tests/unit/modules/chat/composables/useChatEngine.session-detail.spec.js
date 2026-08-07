@@ -321,12 +321,13 @@ describe("useChatEngine.session-detail", () => {
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-stale-stopped",
     );
     expect(assistant).toEqual(expect.objectContaining({
-      content: "已停止",
       turnScopeId: freshTurnScopeId,
       dialogProcessId: "dp-stale-stopped",
       pending: false,
       statusLabel: "chat.stopped",
     }));
+    expect(assistant.content).toContain("已停止");
+    expect(assistant.content).toContain("本轮已由用户停止");
     expect(assistant.channelState).toBeUndefined();
     expect(activeSession.turnStatuses).toEqual([
       expect.objectContaining({ status: "user_stopped", turnScopeId: freshTurnScopeId }),
