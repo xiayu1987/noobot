@@ -13,6 +13,8 @@ import {
   validateEventType,
   validateInteractionRequestPayload,
   isPendingInteractionReplay,
+  INTERACTION_LIFECYCLE,
+  isTerminalInteractionLifecycle,
 } from "../src/index.mjs";
 
 test("event registry classifies interaction, data and transport events", () => {
@@ -21,6 +23,18 @@ test("event registry classifies interaction, data and transport events", () => {
   assert.equal(getEventDefinition(EVENT_TYPE.DELTA).category, EVENT_CATEGORY.DATA);
   assert.equal(getEventDefinition(EVENT_TYPE.RECONNECT_DATA).category, EVENT_CATEGORY.TRANSPORT);
   assert.equal(validateEventType("unknown").valid, false);
+});
+
+test("interaction lifecycle is canonical and terminal states require resolvedBy", () => {
+  assert.equal(INTERACTION_LIFECYCLE.FAILED, "failed");
+  assert.equal(isTerminalInteractionLifecycle("failed"), true);
+  assert.equal(isTerminalInteractionLifecycle("pending"), false);
+  const base = {
+    requestId: "request-1", sessionId: "session-1", dialogProcessId: "process-1",
+    turnScopeId: "turn-1", interactionType: "approval",
+  };
+  assert.equal(validateInteractionRequestPayload({ ...base, lifecycle: "failed" }).valid, false);
+  assert.equal(validateInteractionRequestPayload({ ...base, lifecycle: "failed", resolvedBy: "system" }).valid, true);
 });
 
 test("replay interaction records are atomic and complete", () => {
@@ -40,6 +54,10 @@ test("replay interaction records are atomic and complete", () => {
     data: { ...valid.data, requestId: "" },
   }), false);
   assert.equal(isPendingInteractionReplay({ event: "delta", data: valid.data }), false);
+  assert.equal(isPendingInteractionReplay({
+    ...valid,
+    data: { ...valid.data, lifecycle: "failed", resolvedBy: "system" },
+  }), false);
 });
 
 test("interaction request requires stable identity and a complete payload", () => {

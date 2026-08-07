@@ -5,6 +5,35 @@
  */
 const clean = (value) => String(value || "").trim();
 
+export const INTERACTION_LIFECYCLE = Object.freeze({
+  PENDING: "pending",
+  RESOLVED: "resolved",
+  FAILED: "failed",
+});
+
+export const INTERACTION_RESOLVED_BY = Object.freeze({
+  USER: "user",
+  SYSTEM: "system",
+  AUTO: "auto",
+});
+
+export function normalizeInteractionLifecycle(value = "") {
+  const normalized = clean(value).toLowerCase();
+  return Object.values(INTERACTION_LIFECYCLE).includes(normalized)
+    ? normalized
+    : INTERACTION_LIFECYCLE.PENDING;
+}
+
+export function normalizeInteractionResolvedBy(value = "") {
+  const normalized = clean(value).toLowerCase();
+  return Object.values(INTERACTION_RESOLVED_BY).includes(normalized) ? normalized : "";
+}
+
+export function isTerminalInteractionLifecycle(value = "") {
+  const lifecycle = normalizeInteractionLifecycle(value);
+  return lifecycle === INTERACTION_LIFECYCLE.RESOLVED || lifecycle === INTERACTION_LIFECYCLE.FAILED;
+}
+
 export const INTERACTION_EVENT_TYPE = Object.freeze({
   REQUEST: "interaction_request",
   RESPONSE: "interaction_response",
@@ -22,6 +51,16 @@ export function validateInteractionRequestPayload(data = {}) {
     || (data.interactionData && typeof data.interactionData === "object" && !Array.isArray(data.interactionData));
   if (missing.length) return { valid: false, reason: "missing_identity", missing };
   if (!hasPayload) return { valid: false, reason: "missing_payload", missing: [] };
+  const lifecycle = normalizeInteractionLifecycle(data.lifecycle || data.interactionData?.lifecycle);
+  if (String(data.lifecycle || data.interactionData?.lifecycle || "").trim() &&
+      lifecycle === INTERACTION_LIFECYCLE.PENDING &&
+      clean(data.lifecycle || data.interactionData?.lifecycle).toLowerCase() !== lifecycle) {
+    return { valid: false, reason: "invalid_lifecycle", missing: [] };
+  }
+  const resolvedBy = normalizeInteractionResolvedBy(data.resolvedBy || data.interactionData?.resolvedBy);
+  if (isTerminalInteractionLifecycle(lifecycle) && !resolvedBy) {
+    return { valid: false, reason: "missing_terminal_resolved_by", missing: ["resolvedBy"] };
+  }
   return { valid: true, reason: "", missing: [] };
 }
 
@@ -49,7 +88,10 @@ export function isPendingInteractionReplay(record = {}) {
     : record?.data && typeof record.data === "object"
       ? record.data
       : record;
-  return validateInteractionRequestPayload(payload).valid;
+  const validation = validateInteractionRequestPayload(payload);
+  return validation.valid &&
+    normalizeInteractionLifecycle(payload.lifecycle || payload.interactionData?.lifecycle) ===
+      INTERACTION_LIFECYCLE.PENDING;
 }
 
 export function validateInteractionResponsePayload(data = {}) {

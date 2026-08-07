@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { _trimStr } from "./utils.js";
+import { isTerminalInteraction } from "../interactionPayload.js";
 
 export function hasPendingInteractionForDialog(pendingInteractionRequest, dialogProcessId = "") {
   const pendingRequest =
@@ -26,9 +27,14 @@ export function applyReconnectInteractionRequest({
   tryAutoResolveInteraction,
   isInteractionRequestHandled,
   setPendingInteractionRequest,
+  clearPendingInteraction,
 } = {}) {
   const interactionRequest = normalizeInteractionRequestPayload?.(eventData) || eventData || {};
   if (tryAutoResolveInteraction?.(interactionRequest)) return interactionRequest;
+  if (isTerminalInteraction(interactionRequest)) {
+    clearPendingInteraction?.(interactionRequest);
+    return interactionRequest;
+  }
   if (!isInteractionRequestHandled?.(interactionRequest)) {
     setPendingInteractionRequest?.(interactionRequest);
   }

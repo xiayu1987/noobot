@@ -128,6 +128,43 @@ test("interaction_pending channel_state carries state only; interaction events o
   assert.deepEqual([...channel.pendingInteractionRequests.keys()], ["req-a", "req-b"]);
 });
 
+test("failed interaction lifecycle closes the pending request across proxy and reconnect", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-timeout" });
+  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-timeout" });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-timeout",
+    sessionId: "session-timeout",
+    dialogProcessId: "dp-timeout",
+    turnScopeId: "turn-timeout",
+    content: "confirm",
+  });
+  assert.equal(channel.pendingInteractionRequests.has("req-timeout"), true);
+
+  const terminal = manager.pushChannelEvent(channel, "interaction_request", {
+    requestId: "req-timeout",
+    sessionId: "session-timeout",
+    dialogProcessId: "dp-timeout",
+    turnScopeId: "turn-timeout",
+    content: "confirm",
+    lifecycle: "failed",
+    resolvedBy: "system",
+    interactionData: { reason: "timeout" },
+  });
+  assert.ok(terminal);
+  assert.equal(channel.pendingInteractionRequests.has("req-timeout"), false);
+  assert.equal(channel.conversationStateByDialogProcessId.get("dp-timeout")?.state, "sending");
+
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.handleReconnect(client, { currentSessionId: "session-timeout" });
+  const replay = getEvent(client, "reconnect_data")?.data?.sessions?.[0]?.replayBatch;
+  assert.equal(replay?.pendingInteractions?.some((item) =>
+    String(item?.data?.requestId || item?.requestId || "") === "req-timeout"), false);
+});
+
 test("resolving one concurrent interaction atomically publishes the remaining pending snapshot", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-concurrent" });

@@ -10,7 +10,7 @@
     "test": "node --test __tests__/*.test.js",
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "pm2:start": "PM2_HOME=../.pm2 npx pm2 start src/index.js --name noobot-model-proxy",
+    "pm2:start": "PM2_HOME=../.pm2 npx pm2 start ../ecosystem.noobot.config.cjs --only noobot-model-proxy",
     "pm2:restart": "PM2_HOME=../.pm2 npx pm2 restart noobot-model-proxy",
     "pm2:stop": "PM2_HOME=../.pm2 npx pm2 stop noobot-model-proxy",
     "pm2:delete": "PM2_HOME=../.pm2 npx pm2 delete noobot-model-proxy",

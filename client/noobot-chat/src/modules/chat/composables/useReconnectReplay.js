@@ -175,6 +175,7 @@ export function useReconnectReplay({
       tryAutoResolveInteraction,
       isInteractionRequestHandled,
       setPendingInteractionRequest,
+      clearPendingInteraction,
       activeSession,
       connectorTypeSet,
       resolveConnectorStatusPayload,

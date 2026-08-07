@@ -221,4 +221,34 @@ describe("useChatEngine.interaction-stop: interaction", () => {
       response: "post_action_notice_ack",
     });
   });
+
+  it("failed interaction lifecycle clears the pending modal after timeout", async () => {
+    const clearPendingInteraction = vi.fn();
+    const setPendingInteractionRequest = vi.fn();
+    const failedRequest = {
+      sessionId: "local-timeout",
+      dialogProcessId: "dp-timeout",
+      requestId: "req-timeout",
+      interactionType: "user_interaction",
+      lifecycle: "failed",
+      resolvedBy: "system",
+      interactionData: { reason: "timeout" },
+    };
+    const stream = vi.fn(async (_payload, onEvent) => {
+      onEvent({ event: StreamEventEnum.INTERACTION_REQUEST, data: failedRequest });
+    });
+    const { engine } = createHarness({
+      sessionId: "local-timeout",
+      stream,
+      deps: { clearPendingInteraction, setPendingInteractionRequest },
+    });
+
+    await engine.send();
+
+    expect(clearPendingInteraction).toHaveBeenCalledWith(expect.objectContaining({
+      requestId: "req-timeout",
+      lifecycle: "failed",
+    }));
+    expect(setPendingInteractionRequest).not.toHaveBeenCalled();
+  });
 });

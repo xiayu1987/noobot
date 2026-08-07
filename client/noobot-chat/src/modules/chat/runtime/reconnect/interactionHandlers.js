@@ -51,6 +51,7 @@ export function createReconnectInteractionEnvelopeCallbacks({
   tryAutoResolveInteraction,
   isInteractionRequestHandled,
   setPendingInteractionRequest,
+  clearPendingInteraction,
   activeSession,
   connectorTypeSet,
   resolveConnectorStatusPayload,
@@ -66,6 +67,7 @@ export function createReconnectInteractionEnvelopeCallbacks({
         tryAutoResolveInteraction,
         isInteractionRequestHandled,
         setPendingInteractionRequest,
+        clearPendingInteraction,
       });
     },
     onConnectorStatus: (eventData) => {
