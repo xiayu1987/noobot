@@ -216,6 +216,7 @@ export class SessionExecutionFinalizer {
     alreadyPersistedTurnMessageCount = 0,
     persistedTurnMessageUids = [],
     persistedTurnMessages = null,
+    durableTurnMessages = null,
     summaryCheckpointPromotionSources = [],
     executionStartIndex = 0,
     runtimeEventListener = null,
@@ -271,8 +272,11 @@ export class SessionExecutionFinalizer {
       ? persistedTurnMessages.length
       : persistedActivePrefixCount;
     const promotedTurnMessages = promotedMessages.slice(promotionSourceCount);
+    const durableMessages = Array.isArray(durableTurnMessages)
+      ? durableTurnMessages
+      : persistedTurnMessages;
     const persistedMessagesByUid = new Map(
-      (Array.isArray(persistedTurnMessages) ? persistedTurnMessages : [])
+      (Array.isArray(durableMessages) ? durableMessages : [])
         .map((message = {}) => [String(message.messageUid || "").trim(), message])
         .filter(([messageUid]) => messageUid),
     );
@@ -307,7 +311,7 @@ export class SessionExecutionFinalizer {
         persistedUidCount: persistedUidSet.size,
         messageToPersistCount: messagesToPersist.length,
         activeSummarizedMessageIds: summarizedMessageIds(activeTurnMessages),
-        durableSummarizedMessageIds: summarizedMessageIds(persistedTurnMessages),
+        durableSummarizedMessageIds: summarizedMessageIds(durableMessages),
         persistedSummarizedMessageIds: summarizedMessageIds(messagesToPersist),
       },
     );

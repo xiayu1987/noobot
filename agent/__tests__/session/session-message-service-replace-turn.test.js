@@ -163,6 +163,7 @@ test("SessionMessageService.replaceTurn preserves rich attachment fields when pa
     mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     size: 123,
     sessionId: "s1",
+    attachmentSource: "user",
     path: "/workspace/att-rich.docx",
     relativePath: "runtime/attach/s1/user/att-rich.docx",
     sandboxPath: "/workspace/att-rich.docx",
@@ -184,7 +185,14 @@ test("SessionMessageService.replaceTurn preserves rich attachment fields when pa
     newContent: "edited",
     turnScopeId: "scope-new",
     commandId: "replace-rich-attachment",
-    attachments: [{ name: "report.docx", mimeType: richAttachment.mimeType, size: 123 }],
+    attachments: [{
+      attachmentId: richAttachment.attachmentId,
+      sessionId: richAttachment.sessionId,
+      attachmentSource: richAttachment.attachmentSource,
+      name: "report.docx",
+      mimeType: richAttachment.mimeType,
+      size: 123,
+    }],
   });
 
   assert.equal(saved.length, 1);

@@ -7,6 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
+import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
+import { buildLoopResult } from "../../src/runtime/turn/turn-result-aggregator.js";
 
 test("SessionExecutionFinalizer waits for execution event durability before reading the bundle", async () => {
   const order = [];
@@ -361,6 +363,119 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
   assert.deepEqual(persistencePlan.data.activeSummarizedMessageIds, ["sm_guidance"]);
   assert.deepEqual(persistencePlan.data.durableSummarizedMessageIds, []);
   assert.deepEqual(persistencePlan.data.persistedSummarizedMessageIds, ["sm_guidance"]);
+});
+
+test("SessionExecutionFinalizer upserts summary marks for an already durable turn without checkpoint", async () => {
+  const appendedMessages = [];
+  const durableMessage = {
+    messageUid: "turn-message-1",
+    role: "assistant",
+    type: "message",
+    content: "tool result",
+    summarized: false,
+  };
+  const finalizer = new SessionExecutionFinalizer({
+    session: {
+      async saveCurrentTurnTasks() {},
+      async getExecutionBundle() { return { logs: [] }; },
+    },
+    turnPersister: {
+      buildDefaultAssistantTurn: () => durableMessage,
+      async appendAgentMessages({ messages = [] } = {}) { appendedMessages.push(...messages); },
+    },
+    resolveMemoryPostProcessAsyncEnabled: () => true,
+    runMemoryPostProcessFlow: async () => {},
+    upsertParentAsyncTask: () => {},
+  });
+  await finalizer.finalizeRunSession({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn-1",
+    agentResult: { turnMessages: [{ ...durableMessage, summarized: true }], turnTasks: [] },
+    persistedTurnMessages: [],
+    durableTurnMessages: [durableMessage],
+    persistedTurnMessageUids: [durableMessage.messageUid],
+  });
+  assert.equal(appendedMessages.length, 1);
+  assert.equal(appendedMessages[0].messageUid, durableMessage.messageUid);
+  assert.equal(appendedMessages[0].summarized, true);
+});
+
+test("completed turn summary policy marks are durably upserted before the next dialog", async () => {
+  const durableMessages = [
+    {
+      messageUid: "turn-tool-call",
+      role: "assistant",
+      type: "tool_call",
+      content: "",
+      tool_calls: [{ id: "call-1", name: "read_file", args: {} }],
+      summarized: false,
+    },
+    {
+      messageUid: "turn-tool-result",
+      role: "tool",
+      type: "tool_result",
+      content: "file content",
+      tool_call_id: "call-1",
+      toolName: "read_file",
+      summarized: false,
+    },
+  ];
+  const turnMessageStore = createCurrentTurnMessagesStore([
+    ...durableMessages,
+    {
+      messageUid: "turn-final-answer",
+      role: "assistant",
+      type: "message",
+      content: "done",
+      summarized: false,
+    },
+  ]);
+  const agentResult = buildLoopResult({
+    output: "done",
+    traces: [],
+    turnMessageStore,
+    modelMessages: [],
+  });
+  assert.deepEqual(
+    agentResult.turnMessages.map((message) => message.summarized),
+    [true, true, false],
+  );
+
+  const appendedMessages = [];
+  const finalizer = new SessionExecutionFinalizer({
+    session: {
+      async saveCurrentTurnTasks() {},
+      async getExecutionBundle() { return { logs: [] }; },
+    },
+    turnPersister: {
+      buildDefaultAssistantTurn: () => agentResult.turnMessages.at(-1),
+      async appendAgentMessages({ messages = [] } = {}) { appendedMessages.push(...messages); },
+    },
+    resolveMemoryPostProcessAsyncEnabled: () => true,
+    runMemoryPostProcessFlow: async () => {},
+    upsertParentAsyncTask: () => {},
+  });
+  await finalizer.finalizeRunSession({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp1",
+    turnScopeId: "turn-1",
+    agentResult,
+    persistedTurnMessages: [],
+    durableTurnMessages: durableMessages,
+    persistedTurnMessageUids: durableMessages.map((message) => message.messageUid),
+  });
+
+  assert.deepEqual(
+    appendedMessages.map((message) => [message.messageUid, message.summarized]),
+    [
+      ["turn-tool-call", true],
+      ["turn-tool-result", true],
+      ["turn-final-answer", false],
+    ],
+  );
 });
 
 test("SessionExecutionFinalizer rejects a persisted UID without a durable journal entity", async () => {

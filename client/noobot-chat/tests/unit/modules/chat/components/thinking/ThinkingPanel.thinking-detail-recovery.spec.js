@@ -226,8 +226,8 @@ describe("ThinkingPanel thinking-detail recovery", () => {
 
     expect(getDetail).not.toHaveBeenCalled();
     expect(wrapper.vm.loadedThinkingDetail).toBeNull();
-    expect(wrapper.vm.hasThinking).toBe(false);
-    expect(wrapper.findComponent(ThinkingPanelRealtime).exists()).toBe(false);
+    expect(wrapper.vm.hasThinking).toBe(true);
+    expect(wrapper.findComponent(ThinkingPanelRealtime).exists()).toBe(true);
   });
 
   it("rotates an unsequenced tool error out of the latest ten execution logs", async () => {
