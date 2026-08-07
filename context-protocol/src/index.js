@@ -26,3 +26,6 @@ export * from "./agent-context-envelope.js";
 export * from "./task-summary-protocol.js";
 export * from "./task-check-protocol.js";
 export * from "./model-invocation-policy.js";
+export * from "./context-scope.js";
+export * from "./context-source.js";
+export * from "./context-build-receipt.js";

@@ -6,7 +6,7 @@
 import { persistSessionArtifactSnapshot } from "../../session/session-artifact-store.js";
 import {
   resolveMessageRole,
-} from "../../context/session/message-context-policy.js";
+} from "@noobot/context-protocol/message-policy";
 import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
 import {
   resolveMessageDialogProcessId,

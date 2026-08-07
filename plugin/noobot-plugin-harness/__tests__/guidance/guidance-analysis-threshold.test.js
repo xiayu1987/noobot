@@ -234,7 +234,7 @@ test("guidance schedules analysis by scenario-specific turn threshold", async ()
   assert.equal(atProgrammingThreshold.payload.harness.state.counters.analysisTurns, 0);
 });
 
-test("guidance analysis runtime threshold overrides scenario workflow params", async () => {
+test("guidance analysis runtime threshold overrides scenario workflow params without E2E threshold mode", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const beforeRuntimeThreshold = createAgentContext({
     counters: {
@@ -309,7 +309,6 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 10 to
     },
     meta: {
       harness: {
-
         guidance: { analysis: { turnsThreshold: 1 } },
       },
     },
@@ -344,7 +343,6 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
     },
     meta: {
       harness: {
-
         guidance: { analysis: { turnsThreshold: 2 } },
       },
     },
@@ -371,7 +369,6 @@ test("guidance analysis runtime threshold uses persisted intensity mapping 9 to 
     },
     meta: {
       harness: {
-
         guidance: { analysis: { turnsThreshold: 2 } },
       },
     },

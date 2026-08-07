@@ -101,7 +101,12 @@ test("guidance summary uses the canonical per-run threshold and records its sour
     capability: "guidance",
     point: "agent.before_llm_call",
     ctx,
-    meta: { harness: { guidance: { summary: { turnsThreshold: 1 } } } },
+    meta: {
+      harness: {
+        frontendThresholdsEnabled: true,
+        guidance: { summary: { turnsThreshold: 1 } },
+      },
+    },
   });
 
   const event = agentContext.payload.harness.logs.guidance.find(

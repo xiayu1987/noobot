@@ -5,7 +5,7 @@
  */
 import {
   collectScopedMessagesToSummarize,
-} from "../../context/session/summarized-message-policy.js";
+} from "@noobot/context-protocol/summary-policy";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
 import {

@@ -119,8 +119,13 @@ export async function setHarnessRuntimeThresholds(page, thresholds = {}) {
     };
     visit(rootVNode);
     const updatePluginModelConfig = layoutComponent?.vnode?.props?.["onUpdate:pluginModelConfig"];
+    const updateFrontendThresholdsEnabled =
+      layoutComponent?.vnode?.props?.["onUpdate:frontendThresholdsEnabled"];
     if (typeof updatePluginModelConfig !== "function") {
       throw new Error("AppShellLayout plugin-model-config event boundary is unavailable");
+    }
+    if (typeof updateFrontendThresholdsEnabled !== "function") {
+      throw new Error("AppShellLayout frontend-threshold mode boundary is unavailable");
     }
     const currentConfig = layoutComponent.props?.pluginModelConfig || {};
     const currentHarness = currentConfig.harness || {};
@@ -160,6 +165,7 @@ export async function setHarnessRuntimeThresholds(page, thresholds = {}) {
           }
         : {}),
     };
+    updateFrontendThresholdsEnabled(true);
     updatePluginModelConfig({ ...currentConfig, harness: nextHarness });
   }, normalized);
   await page.locator(".more-collapse-btn").click();
@@ -180,6 +186,7 @@ export async function setRunSummaryPolicy(page, policy = {}) {
     const rootVNode = document.querySelector("#app")?._vnode;
     const visited = new Set();
     let updateSummaryPolicy = null;
+    let updateFrontendThresholdsEnabled = null;
     const visit = (vnode, depth = 0) => {
       if (!vnode || typeof vnode !== "object" || visited.has(vnode) || depth > 40) return;
       visited.add(vnode);
@@ -192,6 +199,8 @@ export async function setRunSummaryPolicy(page, policy = {}) {
         const name = String(component.type?.__name || component.type?.name || "");
         if (name === "AppShellLayout") {
           updateSummaryPolicy = component.vnode?.props?.["onUpdate:summaryPolicy"] || null;
+          updateFrontendThresholdsEnabled =
+            component.vnode?.props?.["onUpdate:frontendThresholdsEnabled"] || null;
           return;
         }
         visit(component.subTree, depth + 1);
@@ -204,6 +213,10 @@ export async function setRunSummaryPolicy(page, policy = {}) {
     if (typeof updateSummaryPolicy !== "function") {
       throw new Error("AppShellLayout summary-policy event boundary is unavailable");
     }
+    if (typeof updateFrontendThresholdsEnabled !== "function") {
+      throw new Error("AppShellLayout frontend-threshold mode boundary is unavailable");
+    }
+    updateFrontendThresholdsEnabled(true);
     updateSummaryPolicy(nextPolicy);
   }, normalizedPolicy);
   await page.locator(".more-collapse-btn").click();

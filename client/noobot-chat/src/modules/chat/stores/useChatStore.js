@@ -12,6 +12,7 @@ import { createSubSessionMessageRegistry, createSubSessionStore } from "./chatSt
 import { createWorkflowStore } from "./chatStoreWorkflows.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import { projectTurnRuntimeToMessages } from "../runtime/engine/turnProjectionStore.js";
+import { isFinalTurnState } from "../runtime/run-state-machine/turnReducer.js";
 
 export const useChatStore = defineStore("chat", () => {
   const input=ref(""); const uploadFiles=ref([]);
@@ -26,6 +27,27 @@ export const useChatStore = defineStore("chat", () => {
   const pendingInteractionRequest=ref(null); const pendingInteractionRequests=ref([]); const interactionSubmitting=ref(false);
   const activeSession=computed(()=>sessions.value.find(item=>item.sessionId===activeSessionId.value));
   let subSessions=null;
+  function closePendingInteractionsForTerminalTurn(turn={}){
+    if(!isFinalTurnState(turn?.state,turn)) return 0;
+    const sessionId=String(turn?.sessionId||"").trim();
+    const dialogProcessId=String(turn?.dialogProcessId||"").trim();
+    const turnScopeId=String(turn?.turnScopeId||"").trim();
+    if(!sessionId||!turnScopeId) return 0;
+    const before=pendingInteractionRequests.value.length;
+    pendingInteractionRequests.value=pendingInteractionRequests.value.filter((request={})=>{
+      if(String(request?.sessionId||"").trim()!==sessionId) return true;
+      const requestDialogProcessId=String(request?.dialogProcessId||"").trim();
+      if(dialogProcessId&&requestDialogProcessId!==dialogProcessId) return true;
+      const requestTurnScopeId=String(request?.turnScopeId||"").trim();
+      return requestTurnScopeId!==turnScopeId;
+    });
+    const activeId=String(activeSessionId.value||"").trim();
+    pendingInteractionRequest.value=pendingInteractionRequests.value.find(
+      (request={})=>String(request?.sessionId||"").trim()===activeId,
+    )||null;
+    if(!pendingInteractionRequest.value) interactionSubmitting.value=false;
+    return before-pendingInteractionRequests.value.length;
+  }
   const turnActions=createTurnRuntimeStoreActions(turnRuntimeRegistry, {
     onTurnEvaluated:({reducer,input,result,applied})=>{
       const turn=result?.turn;
@@ -45,6 +67,7 @@ export const useChatStore = defineStore("chat", () => {
     },
     onTurnCommitted:(result)=>{
       const turn=result?.turn;
+      closePendingInteractionsForTerminalTurn(turn);
       const sessionId=String(turn?.sessionId||"").trim();
       const parentSessionId=String(turn?.parentSessionId||"").trim();
       const existingSubSession=Boolean(sessionId&&subSessions?.selectSubSessionMessages(sessionId));

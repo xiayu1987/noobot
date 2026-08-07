@@ -265,6 +265,8 @@ export class ContextBuilder {
       rootSessionId = "",
       attachments = [],
       incrementalMessages = [],
+      sourceRevision = "",
+      contextBuildMode = "",
     } = {},
   ) {
     const effectiveSystemMessages = [
@@ -320,6 +322,8 @@ export class ContextBuilder {
       userId: this.userId,
       basePath: resolvedRuntimeBasePath,
       globalConfig: this.globalConfig,
+      sourceRevision,
+      contextBuildMode,
       userConfig: this.userConfig,
       eventListener: this.eventListener,
       sessionManager: this.sessionManager,
@@ -357,6 +361,8 @@ export class ContextBuilder {
       conversationMessages,
       incrementalMessages,
       globalConfig: this.globalConfig,
+      sourceRevision,
+      contextBuildMode,
     });
     const executionScope = createAgentExecutionScope({
       context: agentContext,
@@ -376,8 +382,8 @@ export class ContextBuilder {
     const resolvedSessionId = sessionId || this.sessionId || "";
     const runtimeBasePath = this._resolveRuntimeBasePath();
     if (!this.sessionManager || !runtimeBasePath || !resolvedSessionId)
-      return [];
-    return this.sessionManager.getContextRecords({
+      return { messages: [], sourceRevision: "" };
+    return this.sessionManager.getContextProjection({
       userId: this.userId,
       sessionId: resolvedSessionId,
       parentSessionId: normalizeParentSessionId(this.parentSessionId),
@@ -523,10 +529,11 @@ export class ContextBuilder {
   }
 
   async buildNewSessionContext({ dialogProcessId = "" } = {}) {
-    const sessionRecords = await this._resolveSessionRecords({
+    const sessionProjection = await this._resolveSessionRecords({
       sessionId: this.sessionId || "",
       dialogProcessId,
     });
+    const sessionRecords = sessionProjection?.messages || [];
     emitModelContextTrace({ ...(this.runConfig || {}), eventListener: this.eventListener }, "context_records_resolved", {
       mode: "new_session",
       sessionId: this.sessionId || "",
@@ -547,14 +554,17 @@ export class ContextBuilder {
       sessionTree,
       rootSessionId,
       attachments,
+      sourceRevision: sessionProjection?.sourceRevision || "",
+      contextBuildMode: "new_session",
     });
   }
 
   async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
-    const sessionRecords = await this._resolveSessionRecords({
+    const sessionProjection = await this._resolveSessionRecords({
       sessionId: this.sessionId || "",
       dialogProcessId,
     });
+    const sessionRecords = sessionProjection?.messages || [];
     emitModelContextTrace({ ...(this.runConfig || {}), eventListener: this.eventListener }, "context_records_resolved", {
       mode: "existing_session",
       sessionId: this.sessionId || "",
@@ -583,6 +593,8 @@ export class ContextBuilder {
         sessionTree,
         rootSessionId,
         attachments,
+        sourceRevision: sessionProjection?.sourceRevision || "",
+        contextBuildMode: "existing_session",
       },
     );
   }

@@ -5,8 +5,7 @@
  */
 import { SystemMessage } from "@langchain/core/messages";
 import { buildCanonicalMessageBlocks } from "@noobot/context-protocol/block-strategy";
-import { AGENT_MODEL_CONTEXT_POLICY_OPTIONS } from "../../session/message-context-policy.js";
-import { MAIN_MODEL_HISTORY_ROUND_LIMIT } from "../../../session/utils/context-window-normalizer.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { resolveDialogProcessId } from "../../session/dialog-process-id-resolver.js";
 import { resolveParentSessionId } from "../../parent-session-id-resolver.js";
 import { resolveRuntimeUserMessageAttachments } from "../../../artifacts/index.js";
@@ -80,8 +79,7 @@ export function buildContextMessageBlocks(
     historyMessages,
     incrementalMessages: restoredIncrementalMessages,
     currentUserMessage,
-    historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT,
-    policyOptions: AGENT_MODEL_CONTEXT_POLICY_OPTIONS,
+    historyLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
   });
   emitContextIdentityDebug(runtime?.eventListener, "canonicalBlocksResolved", identity, {
     currentCanonicalId,

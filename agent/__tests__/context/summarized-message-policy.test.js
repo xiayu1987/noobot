@@ -12,7 +12,7 @@ import {
   markCurrentTurnStoreSummarized,
   shouldMarkCurrentTurnSummarizedMessage,
   shouldMarkCurrentTurnSummarizedModelMessage,
-} from "../../src/context/session/summarized-message-policy.js";
+} from "@noobot/context-protocol/summary-policy";
 import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
 
 test("markCurrentTurnArraySummarized preserves only latest task_summary call and result", () => {

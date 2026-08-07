@@ -100,6 +100,16 @@ async handleReconnect(socket, payload = {}) {
         pendingInteractions,
       }),
     });
+    this.logSessionEvent?.(sessionChannels[0], {
+      category: "transport",
+      event: "agentProxy.reconnect.pendingInteractionProjection",
+      sessionId: channelSessionId,
+      data: {
+        pendingInteractionCount: pendingInteractions.length,
+        lifecycleReplayCount: lifecycleReplay.events.length,
+        snapshotRequired: requiresAuthoritySnapshot,
+      },
+    });
     if (requiresAuthoritySnapshot) {
       const snapshotChannel = sessionChannels
         .filter(Boolean)

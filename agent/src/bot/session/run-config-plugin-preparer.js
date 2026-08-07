@@ -94,6 +94,9 @@ export class RunConfigPluginPreparer {
   }
 
   selectedEntries({ runConfig = {}, userConfig = {} } = {}) {
+    if (String(runConfig?.pluginPolicy?.mode || "").trim().toLowerCase() === "none") {
+      return [];
+    }
     const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
     return listLoadedNoobotPluginEntries(this.loadedDynamicPlugins).filter((entry) =>
       pluginIsSelected({ pluginId: entry.pluginId, runConfig, effectiveConfig }),
@@ -135,6 +138,7 @@ export class RunConfigPluginPreparer {
       this.workspaceService && userId ? this.workspaceService.getWorkspacePath(userId) : ""
     );
     const next = { ...options, enabled: true, mode: "on", basePath };
+    next.frontendThresholdsEnabled = runConfig?.frontendThresholdsEnabled === true;
     const registeredHooks = entry.manifest.contributes.agent?.hooks?.registers || [];
     const hasAgentLifecycle = registeredHooks.some((point) => point.startsWith("agent."));
     const hasExecutionIntent = Boolean(entry.manifest.contributes.agent?.executionIntent);
@@ -175,6 +179,13 @@ export class RunConfigPluginPreparer {
   }
 
   prepareRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
+    if (String(runConfig?.pluginPolicy?.mode || "").trim().toLowerCase() === "none") {
+      return {
+        ...runConfig,
+        selectedPlugins: [],
+        plugins: {},
+      };
+    }
     const entries = this.selectedEntries({ runConfig, userConfig });
     const agentHooks = selectHookManager({ runConfig, managerKey: "hookManager", createManager: createHookManager });
     const orchestrationHooks = selectHookManager({ runConfig, managerKey: "botHookManager", createManager: createHookManager });

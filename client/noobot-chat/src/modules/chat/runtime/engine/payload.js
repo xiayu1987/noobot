@@ -33,6 +33,7 @@ export function buildChatPayload({
   selectedModel,
   memoryModel,
   pluginModelConfig,
+  frontendThresholdsEnabled = false,
   summaryPolicy,
   locale,
   selectedPlugins,
@@ -81,6 +82,7 @@ export function buildChatPayload({
         ? String(safeConfirmLevel?.value ?? safeConfirmLevel).trim().toLowerCase()
         : "low",
       streaming: requestedTextStreaming,
+      frontendThresholdsEnabled: (frontendThresholdsEnabled?.value ?? frontendThresholdsEnabled) === true,
       ...(normalizedScenario ? { scenario: normalizedScenario } : {}),
       ...(normalizedSelectedModel ? { selectedModel: normalizedSelectedModel } : {}),
       ...(normalizedMemoryModel ? { memoryModel: normalizedMemoryModel } : {}),

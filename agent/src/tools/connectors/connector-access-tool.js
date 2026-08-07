@@ -105,6 +105,7 @@ export function createConnectorAccessTool({ agentContext }) {
             scope: TOOL_NAME.PROCESS_CONNECTOR_TOOL,
           },
           runConfigPatch: {
+            pluginPolicy: { mode: "none" },
             allowUserInteraction,
             ...(hasParentStreamingConfig
               ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }

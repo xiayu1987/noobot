@@ -43,6 +43,19 @@ function preparer(entries) {
   });
 }
 
+test("pluginPolicy none disables plugin selection for tool sub-sessions", () => {
+  const demo = entry({ id: "demo", activate: activation("demo") });
+  const prepared = preparer([demo]).prepareRunConfig({
+    runConfig: {
+      selectedPlugins: ["demo"],
+      pluginPolicy: { mode: "none" },
+    },
+  });
+  assert.deepEqual(prepared.selectedPlugins, []);
+  assert.equal(prepared.hookManager, undefined);
+  assert.equal(prepared.botHookManager, undefined);
+});
+
 test("activates selected Manifest ids and scopes declared hook registrations", () => {
   const demo = entry({
     id: "demo",

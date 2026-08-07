@@ -111,10 +111,9 @@ function resolveGuidanceSummaryThresholds(ctx = {}, meta = {}) {
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full || {};
   const scoped = scopedMode?.guidance?.summary || {};
-  const runtimeThreshold = normalizePositiveInteger(
-    meta?.harness?.guidance?.summary?.turnsThreshold,
-    0,
-  );
+  const runtimeThreshold = meta?.harness?.frontendThresholdsEnabled === true
+    ? normalizePositiveInteger(meta?.harness?.guidance?.summary?.turnsThreshold, 0)
+    : 0;
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
     turnsThreshold: runtimeThreshold || normalizePositiveInteger(

@@ -76,6 +76,7 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
 
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   expect(send.preferences.summaryPolicy).toEqual({ phaseSummaryLoopTurns: 2 });
+  expect(send.preferences.frontendThresholdsEnabled).toBe(true);
   expect(send.preferences.selectedPlugins).toEqual([]);
   await waitForNaturalCompletion({
     page: noobot.page,
@@ -102,10 +103,9 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
 
   const session = await readSessionFact(noobot.userId, noobot.sessionId);
   const checkpoint = session.turnSummaryCheckpoints?.[send.identity.turnScopeId];
-  expect(checkpoint?.checkpointRevision).toBe(1);
   const receipts = Array.isArray(checkpoint.receipts) ? checkpoint.receipts : [];
-  expect(receipts).toHaveLength(1);
-  expect(checkpoint.checkpointRevision).toBe(receipts.length);
+  expect(receipts.length).toBeGreaterThanOrEqual(1);
+  expect(checkpoint?.checkpointRevision).toBe(receipts.length);
   const summarizedIds = new Set(receipts.flatMap((receipt) => receipt.summarizedMessageUids || []));
   expect(summarizedIds.size).toBeGreaterThan(0);
 

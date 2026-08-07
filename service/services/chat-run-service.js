@@ -99,6 +99,7 @@ export function createChatRunService({
       ...(Object.prototype.hasOwnProperty.call(preferences, "streaming")
         ? { streaming: preferences.streaming }
         : {}),
+      frontendThresholdsEnabled: preferences.frontendThresholdsEnabled === true,
       locale: normalizeLocale(preferences.locale || defaultLocale),
       ...(preferences.scenario ? { scenario: preferences.scenario } : {}),
       ...(preferences.selectedModel ? { selectedModel: preferences.selectedModel } : {}),

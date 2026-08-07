@@ -49,14 +49,13 @@ function resolvePlanningTurnThresholds(ctx = {}, meta = {}) {
   const thresholdMode = resolveWorkflowThresholdModeFromContext(ctx);
   const scopedMode = modeThresholds[thresholdMode] || modeThresholds.full;
   const scoped = scopedMode?.planning || {};
-  const runtimePlanUpdateThreshold = normalizePositiveInteger(
-    meta?.harness?.planning?.planUpdate?.triggerTurnsThreshold,
-    0,
-  );
-  const runtimePhaseAcceptanceThreshold = normalizePositiveInteger(
-    meta?.harness?.acceptance?.phase?.triggerTurnsThreshold,
-    0,
-  );
+  const frontendThresholdsEnabled = meta?.harness?.frontendThresholdsEnabled === true;
+  const runtimePlanUpdateThreshold = frontendThresholdsEnabled
+    ? normalizePositiveInteger(meta?.harness?.planning?.planUpdate?.triggerTurnsThreshold, 0)
+    : 0;
+  const runtimePhaseAcceptanceThreshold = frontendThresholdsEnabled
+    ? normalizePositiveInteger(meta?.harness?.acceptance?.phase?.triggerTurnsThreshold, 0)
+    : 0;
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
     planUpdateTriggerTurnsThreshold: runtimePlanUpdateThreshold || normalizePositiveInteger(

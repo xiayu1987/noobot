@@ -101,7 +101,6 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
   const {
     activeSession,
     applyTurnLifecycleEnvelope,
-    clearPendingInteractionIfObsolete,
     findCanonicalMessageById,
     logSessionEvent,
     makeViewMessage,
@@ -109,12 +108,6 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
   } = context;
   if (normalizeTrimmedString(event).toLowerCase() === StreamEventEnum.TURN_LIFECYCLE) {
     const lifecycleEventType = normalizeTrimmedString(data?.eventType).toLowerCase();
-    if (["turn.completed", "turn.stop_completed", "turn.failed"].includes(lifecycleEventType)) {
-      clearPendingInteractionIfObsolete?.({
-        sessionId: data?.sessionId || sessionId,
-        dialogProcessId: data?.dialogProcessId || "",
-      });
-    }
     const result = applyTurnLifecycleEnvelope?.(data);
     const logReduction = (reduction = {}) => {
       const rejected = reduction?.applied !== true;

@@ -10,7 +10,9 @@ import {
   buildContextMessages,
   buildContextMessageBlocks,
 } from "../../../src/context/assembly/message-builder.js";
-import { MAIN_MODEL_HISTORY_ROUND_LIMIT } from "../../../src/session/utils/context-window-normalizer.js";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+
+const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 import { createModelContext } from "@noobot/context-protocol/hook-context";
 import { toConversationMessages } from "../../../src/context/session/message-converter.js";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";

@@ -60,6 +60,9 @@ export function useThinkingTimeline(
       getMessageTurnScopeId(candidate) === turnScopeId,
     );
     if (roundMessages.length <= 1) return messageItem;
+    const canonicalDialogProcessId = roundMessages
+      .map((candidate) => getMessageDialogProcessId(candidate))
+      .find((candidate) => String(candidate || "").trim()) || "";
     const merge = (field, identity) => {
       const byIdentity = new Map();
       for (const candidate of roundMessages) {
@@ -74,6 +77,7 @@ export function useThinkingTimeline(
     };
     return {
       ...messageItem,
+      ...(canonicalDialogProcessId ? { dialogProcessId: canonicalDialogProcessId } : {}),
       toolTimeline: merge("toolTimeline", (item) => item?.key || item?.toolCallId || item?.tool_call_id),
       activityTimeline: merge("activityTimeline", (item) => item?.eventId || item?.id),
     };
@@ -506,6 +510,21 @@ export function useThinkingTimeline(
           }));
           return;
         }
+        logThinkingReplayDebug("frontend.thinkingReplay.detailPayloadReceived", () => ({
+          ...thinkingReplayScope(messageItem),
+          key,
+          exists: detail?.exists === true,
+          messageItemPresent: Boolean(detail?.messageItem),
+          messageRole: String(detail?.messageItem?.role || ""),
+          toolTimelineCount: Array.isArray(detail?.messageItem?.toolTimeline)
+            ? detail.messageItem.toolTimeline.length
+            : 0,
+          activityTimelineCount: Array.isArray(detail?.messageItem?.activityTimeline)
+            ? detail.messageItem.activityTimeline.length
+            : 0,
+          allMessagesCount: Array.isArray(detail?.allMessages) ? detail.allMessages.length : 0,
+          counts: detail?.counts || {},
+        }));
         loadedThinkingDetail.value = { ...detail, __thinkingDetailIdentity: identity };
         logThinkingReplayDebug("frontend.thinkingReplay.detailCommitted", () => ({
           ...thinkingReplayScope(messageItem),

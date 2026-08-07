@@ -116,7 +116,7 @@ test("session summary references canonical thinking detail without copying its t
 
   assert.equal(summaryMessage.thinkingDetailCount, 2);
   assert.equal(summaryMessage.hasThinkingDetails, true);
-  assert.equal(summaryMessage.toolTimeline, undefined);
+  assert.equal(summaryMessage.toolTimeline.length, 2);
   assert.equal(summaryMessage.activityTimeline, undefined);
   assert.equal(detail.messageItem.thinkingDetailCount, summaryMessage.thinkingDetailCount);
   assert.equal(detail.messageItem.toolTimeline.length, 2);

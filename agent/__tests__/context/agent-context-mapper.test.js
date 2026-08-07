@@ -37,6 +37,8 @@ function buildEnvelope() {
     runId: "run1",
     systemMessages: ["sys"],
     conversationMessages: [{ role: "user", content: "hi" }],
+    sourceRevision: "ctxsrc:test",
+    contextBuildMode: "existing_session",
   });
 }
 
@@ -56,6 +58,10 @@ test("mapToAgentContextSchema creates a serializable versioned envelope", () => 
   assert.equal(context.environment.permissions.isSuperUser, true);
   assert.equal(context.execution.flags.allowUserInteraction, false);
   assert.equal(context.modelContext.messageBlocks.history.length, 1);
+  assert.equal(context.execution.contextBuild.status, "ready");
+  assert.equal(context.execution.contextBuild.mode, "existing_session");
+  assert.equal(context.execution.contextBuild.sourceRevision, "ctxsrc:test");
+  assert.equal(context.execution.contextBuild.messageCount, 1);
   assert.doesNotThrow(() => JSON.stringify(context));
 });
 

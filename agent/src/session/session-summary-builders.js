@@ -14,7 +14,7 @@ import {
 } from "./transfer-attachment-refs.js";
 import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 17;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 18;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
@@ -23,6 +23,53 @@ const SUMMARY_DEFAULT_JSON_STRING_CHARS =
   LENGTH_THRESHOLDS.display.sessionSummaryDefaultJsonStringChars;
 const SUMMARY_SMALL_JSON_STRING_CHARS =
   LENGTH_THRESHOLDS.display.sessionSummarySmallJsonStringChars;
+
+function compactToolSummary(tool = "", detail) {
+  const name = String(tool || "").trim() || "tool";
+  let value = detail;
+  if (typeof value === "string") {
+    try { value = JSON.parse(value); } catch { value = {}; }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) value = {};
+  const text = (input) => String(input ?? "").replaceAll(/\s+/g, " ").trim();
+  const compact = (input) => {
+    const normalized = text(input);
+    return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+  };
+  let subject = "";
+  if (["write_file", "read_file"].includes(name)) subject = compact(value.filePath || value.path || value.fileName || value.resolvedPath);
+  else if (name === "patch_file") subject = compact((Array.isArray(value.changedFiles) ? value.changedFiles[0] : "") || value.root);
+  else if (["execute_script", "execute_command"].includes(name)) subject = compact(value.command || value.script || value.stdout);
+  else if (name === "search") subject = compact([value.query, value.path || value.source, Array.isArray(value.matches) ? `${value.matches.length} matches` : ""].filter(Boolean).join(" · "));
+  else if (name === "list_skills") subject = compact(value.parentSkill || (Array.isArray(value.items) ? `${value.items.length} items` : ""));
+  else if (name === "user_interaction") subject = compact(value.content || value.message);
+  else subject = compact(value.command || value.query || value.content || value.message || value.stdout);
+  return subject ? `${name} · ${subject}` : name;
+}
+
+function compactThinkingTimeline(items = []) {
+  const compactFact = (fact = {}, summary = "") => ({
+    eventId: String(fact.eventId || "").trim(),
+    sequence: fact.sequence,
+    ...(String(fact.sequenceScopeId || "").trim() ? { sequenceScopeId: String(fact.sequenceScopeId).trim() } : {}),
+    ...(String(fact.authority || "").trim() ? { authority: String(fact.authority).trim() } : {}),
+    ...(String(fact.sequenceDomain || "").trim() ? { sequenceDomain: String(fact.sequenceDomain).trim() } : {}),
+    ...(String(fact.sessionId || "").trim() ? { sessionId: String(fact.sessionId).trim() } : {}),
+    ...(String(fact.dialogProcessId || "").trim() ? { dialogProcessId: String(fact.dialogProcessId).trim() } : {}),
+    ...(String(fact.turnScopeId || "").trim() ? { turnScopeId: String(fact.turnScopeId).trim() } : {}),
+    ...(Array.isArray(fact.attachments) && fact.attachments.length ? { attachments: fact.attachments } : {}),
+    ...(Array.isArray(fact.writtenFiles) && fact.writtenFiles.length ? { writtenFiles: fact.writtenFiles } : {}),
+    ...(summary ? { summary } : {}),
+  });
+  return (Array.isArray(items) ? items : []).map((item = {}) => ({
+    key: String(item.key || item.toolCallId || item.tool_call_id || "").trim(),
+    toolCallId: String(item.toolCallId || item.tool_call_id || "").trim(),
+    tool: String(item.tool || "").trim(),
+    status: String(item.status || "").trim(),
+    ...(item.call ? { call: compactFact(item.call, compactToolSummary(item.tool, item.args)) } : {}),
+    ...(item.resultEvent ? { resultEvent: compactFact(item.resultEvent, compactToolSummary(item.tool, item.result)) } : {}),
+  }));
+}
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
@@ -97,6 +144,7 @@ function buildMessageSummary(message = {}) {
     "turnScopeId",
     "thinkingStartedAt",
     "thinkingFinishedAt",
+    "noobotInternalMessageType",
   ]) {
     if (message?.[key] !== undefined) summary[key] = message[key];
   }
@@ -653,20 +701,20 @@ export function buildSessionDisplaySummary(session = {}) {
     displayMessageByIdentity.set(identity, presentation);
   }
   const displayMessages = [...displayMessageByIdentity.values()];
-  // Every assistant presentation owns the complete canonical thinking round.
-  // This is also the completed-turn path: refresh must project the same
-  // timeline as realtime instead of retaining only the first assistant event.
   for (const displayMessage of displayMessages) {
     if (String(displayMessage?.role || "").trim() !== "assistant") continue;
     const turnScopeId = String(displayMessage?.turnScopeId || "").trim();
     if (!turnScopeId) continue;
     const thinkingTimeline = projectThinkingTimeline(messages, displayMessage, { turnScopeId });
     if (!thinkingTimeline.toolTimeline.length && !thinkingTimeline.activityTimeline.length) continue;
-    displayMessage.toolTimeline = thinkingTimeline.toolTimeline;
-    displayMessage.activityTimeline = thinkingTimeline.activityTimeline;
+    displayMessage.toolTimeline = compactThinkingTimeline(thinkingTimeline.toolTimeline);
+    if (thinkingTimeline.activityTimeline.length) {
+      displayMessage.activityTimeline = thinkingTimeline.activityTimeline;
+    } else {
+      delete displayMessage.activityTimeline;
+    }
     displayMessage.hasThinkingDetails = true;
-    displayMessage.thinkingDetailCount =
-      thinkingTimeline.toolTimeline.length + thinkingTimeline.activityTimeline.length;
+    displayMessage.thinkingDetailCount = thinkingTimeline.toolTimeline.length + thinkingTimeline.activityTimeline.length;
   }
   const injectedCount = messages.filter((message) => message?.injectedMessage === true).length;
   const thinkingCount = displayMessages.filter((message) => message?.hasThinkingDetails === true).length;
@@ -695,28 +743,17 @@ export function buildSessionDisplaySummary(session = {}) {
       continue;
     }
     const presentation = matchingCandidates[0];
-    const canonicalTimeline = Array.isArray(presentation?.toolTimeline)
-      ? presentation.toolTimeline
-      : [];
-    const canonicalByKey = new Map(canonicalTimeline.map((item, index) => [
-      String(item?.key || item?.toolCallId || item?.tool_call_id || "").trim(),
-      index,
-    ]));
+    const canonicalTimeline = Array.isArray(presentation?.toolTimeline) ? presentation.toolTimeline : [];
+    const canonicalByKey = new Map(canonicalTimeline.map((item, index) => [String(item?.key || item?.toolCallId || "").trim(), index]));
     for (const artifact of toolTimeline) {
       const key = String(artifact?.key || artifact?.toolCallId || "").trim();
       const index = canonicalByKey.get(key);
       if (index === undefined) {
         canonicalByKey.set(key, canonicalTimeline.length);
-        canonicalTimeline.push(artifact);
-        continue;
+        canonicalTimeline.push(compactThinkingTimeline([artifact])[0]);
+      } else {
+        canonicalTimeline[index] = { ...canonicalTimeline[index], resultEvent: { ...(canonicalTimeline[index]?.resultEvent || {}), ...compactThinkingTimeline([artifact])[0]?.resultEvent } };
       }
-      canonicalTimeline[index] = {
-        ...canonicalTimeline[index],
-        resultEvent: {
-          ...(canonicalTimeline[index]?.resultEvent || {}),
-          ...(artifact?.resultEvent || {}),
-        },
-      };
     }
     presentation.toolTimeline = canonicalTimeline;
     assignedToolArtifactCount += toolTimeline.length;
@@ -724,11 +761,7 @@ export function buildSessionDisplaySummary(session = {}) {
   const attachmentCount = displayMessages.reduce(
     (count, message) => count + dedupeAttachmentRefs([
       ...(Array.isArray(message?.attachments) ? message.attachments : []),
-      ...(Array.isArray(message?.toolTimeline) ? message.toolTimeline.flatMap(
-        (item) => Array.isArray(item?.resultEvent?.attachments)
-          ? item.resultEvent.attachments
-          : [],
-      ) : []),
+      ...(Array.isArray(message?.toolTimeline) ? message.toolTimeline.flatMap((item) => Array.isArray(item?.resultEvent?.attachments) ? item.resultEvent.attachments : []) : []),
     ]).length,
     0,
   );

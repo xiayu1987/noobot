@@ -388,6 +388,27 @@ test("session display summary projects persisted messageUid as canonical message
   );
 });
 
+test("session display summary preserves the canonical internal control message type", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "internal-control-session",
+    messages: [{
+      role: "user",
+      type: "context_control",
+      content: "task check prompt",
+      messageUid: "sm-task-check-prompt",
+      turnScopeId: "turn-task-check",
+      dialogProcessId: "dialog-task-check",
+      noobotInternalMessageType: "noobot.task_check_prompt",
+    }],
+  });
+
+  assert.equal(summary.messages.length, 1);
+  assert.equal(
+    summary.messages[0]?.noobotInternalMessageType,
+    "noobot.task_check_prompt",
+  );
+});
+
 test("session display summary retains a workflow final assistant with stable presentation identity", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "workflow-final-session",

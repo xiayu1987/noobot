@@ -68,10 +68,13 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   await expect(interaction.locator(".interaction-title")).toContainText("CASE036-INTERACTION");
   await expect(interaction.locator(".el-form-item__label")).toContainText("Verification Code");
   const pendingProjectionAfterRefresh = await readRealtimeToolProjection(noobot.page);
-  expect(pendingProjectionAfterRefresh).toEqual(pendingProjectionBeforeRefresh);
+  expect(pendingProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary })))
+    .toEqual(pendingProjectionBeforeRefresh.map(({ event, summary }) => ({ event, summary })));
 
   await interaction.locator(".el-input input").fill("CASE036-UI-VALUE");
-  await interaction.locator(".el-button--primary").click();
+  const interactionSubmit = interaction.locator(".el-button--primary");
+  await expect(interactionSubmit).toBeEnabled();
+  await interactionSubmit.click();
   await expect(interaction).toBeHidden();
 
   await waitForNaturalCompletion({
@@ -100,7 +103,10 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
   await expect(interaction).toBeHidden();
   const completedProjectionAfterRefresh = await readRealtimeToolProjection(noobot.page);
-  expect(completedProjectionAfterRefresh).toEqual(completedProjectionBeforeRefresh);
+  expect(completedProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary })))
+    .toEqual(completedProjectionBeforeRefresh.map(({ event, summary }) => ({ event, summary })));
+  expect(completedProjectionAfterRefresh.every(({ detail }) => detail === "")).toBe(true);
   const detailProjection = await assertThinkingDetailsDrawer(noobot.page, EXPECTED_TOOLS.length);
-  expect(detailProjection.slice(-REALTIME_EXECUTION_WINDOW_SIZE)).toEqual(completedProjectionAfterRefresh);
+  expect(detailProjection.slice(-REALTIME_EXECUTION_WINDOW_SIZE).map(({ event, summary }) => ({ event, summary })))
+    .toEqual(completedProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary })));
 });

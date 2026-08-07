@@ -105,6 +105,16 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
   assert.equal(payload.ok, true);
   assert.equal(runCalls.length, 1);
   assert.equal(runCalls[0]?.runConfigPatch?.streaming, false);
+  assert.deepEqual(runCalls[0]?.runConfigPatch?.pluginPolicy, { mode: "none" });
+  assert.deepEqual(
+    runCalls[0]?.runConfigPatch?.toolPolicy?.customTools?.map((item) => item?.name),
+    ["fake_mcp_tool"],
+  );
+  assert.equal(
+    runCalls[0]?.runConfigPatch?.toolPolicy?.customTools
+      ?.some((item) => item?.name === "call_mcp_task"),
+    false,
+  );
   assert.match(runCalls[0]?.strategy?.sessionId, /^[0-9a-f-]{36}$/);
   assert.match(runCalls[0]?.strategy?.dialogProcessId, /^[0-9a-f-]{36}$/);
   assert.match(runCalls[0]?.strategy?.turnScopeId, /^internal-turn:[0-9a-f-]{36}$/);

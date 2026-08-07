@@ -83,7 +83,7 @@ test("applyRunConfigToolPolicy denyToolNames should override allowToolNames", ()
   assert.deepEqual(toolNames, ["read_file"]);
 });
 
-test("applyRunConfigToolPolicy should keep coding-required tools in coding scenario", () => {
+test("applyRunConfigToolPolicy should keep custom_only as the complete tool boundary", () => {
   const resolver = new RunConfigResolver();
   const agentContext = {
     bindings: { tools: [
@@ -116,14 +116,7 @@ test("applyRunConfigToolPolicy should keep coding-required tools in coding scena
     .map((tool) => tool.name)
     .sort();
 
-  assert.deepEqual(toolNames, [
-    "execute_script",
-    "patch_file",
-    "read_file",
-    "request_help",
-    "search",
-    "write_file",
-  ]);
+  assert.deepEqual(toolNames, ["request_help"]);
 });
 
 test("resolveScenarioRunConfig should use builtin programming shape and only accept model override", () => {
@@ -206,6 +199,47 @@ test("resolveScenarioRunConfig should keep selectedModel separate from runtimeMo
   assert.equal(resolved.config?.selectedModel, "config-selected-model");
   assert.equal(resolved.scenarioProfile?.model, "code-model");
   assert.equal(resolved.runtimeModel, undefined);
+});
+
+test("custom_only should not inherit tools from any scenario", () => {
+  const resolver = new RunConfigResolver({
+    globalConfig: {
+      scenarios: {
+        definitions: {
+          full: { tools: ["read_file", "process_content_task"] },
+          programming: {
+            tools: ["read_file", "process_content_task"],
+          },
+          text: { tools: ["write_file", "call_mcp_task"] },
+          custom: { tools: ["execute_script", "process_connector_tool"] },
+        },
+      },
+    },
+  });
+  for (const scenario of ["full", "programming", "text", "custom", "missing"]) {
+    const customTool = { name: `${scenario}_tool`, invoke: async () => "ok" };
+    const resolved = resolver.resolveScenarioRunConfig(
+      {
+        ...(scenario === "missing" ? {} : { scenario }),
+        toolPolicy: { mode: "custom_only", customTools: [customTool] },
+      },
+      {},
+    );
+    const context = {
+      bindings: {
+        tools: [
+          customTool,
+          { name: "read_file" },
+          { name: "write_file" },
+          { name: "process_content_task" },
+          { name: "call_mcp_task" },
+          { name: "process_connector_tool" },
+        ],
+      },
+    };
+    const scoped = resolver.applyRunConfigToolPolicy(context, resolved);
+    assert.deepEqual(scoped.bindings.tools.map((tool) => tool.name), [`${scenario}_tool`]);
+  }
 });
 
 test("resolveScenarioRunConfig should preserve explicit runtimeModel", () => {

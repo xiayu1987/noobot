@@ -126,14 +126,7 @@ export async function applyReconnectDataReplay({
       });
       continue;
     }
-    if (!lifecycleEvents.length) {
-      for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
-        if (isPendingInteractionReplay(interaction)) {
-          await applyPendingInteraction?.(interaction.data);
-        }
-      }
-      continue;
-    }
+    if (!lifecycleEvents.length) continue;
     const sessionId = _trimStr(sessionEntry?.sessionId);
     logStateMachineDebug("stateMachine.reconnect.lifecycleReplay.before", () => ({
       sessionId,
@@ -155,13 +148,11 @@ export async function applyReconnectDataReplay({
       rejectedCount: results.filter((result) => result?.applied === false).length,
       reasons: [...new Set(results.map((result) => String(result?.reason || "")).filter(Boolean))],
     }));
-    for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
-      if (isPendingInteractionReplay(interaction)) {
-        await applyPendingInteraction?.(interaction.data);
-      }
-    }
   }
-  const recoverableSessionId = findRecoverableReconnectSessionId(reconnectSessions);
+  const recoverableSessionId = findRecoverableReconnectSessionId(
+    reconnectSessions,
+    reconnectData?.currentSessionId,
+  );
   const recoverableSessionEntry = reconnectSessions.find(
     (sessionEntry) => _trimStr(sessionEntry?.sessionId) === recoverableSessionId,
   );
@@ -194,6 +185,17 @@ export async function applyReconnectDataReplay({
         turnScopeId: authoritativeActiveTurnMeta.turnScopeId,
         hydrated: hydrated === true,
       }));
+    }
+  }
+
+  // Pending interactions are materialized only after the authoritative
+  // session has been activated and hydrated. This keeps the queue projection
+  // scoped to the same active session as the replay batch.
+  for (const sessionEntry of reconnectSessions) {
+    for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
+      if (isPendingInteractionReplay(interaction)) {
+        await applyPendingInteraction?.(interaction.data);
+      }
     }
   }
 

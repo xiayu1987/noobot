@@ -89,6 +89,18 @@ test("process_content_task: detached runtime uses durable parent session", async
   assert.equal(calls.length, 1);
   assertAgentDetachedStrategy(calls[0]?.strategy, "root-plugin-session");
   assert.equal(calls[0]?.parentExecutionScope?.bindings?.runtime?.botManager, botManager);
+  assert.deepEqual(calls[0]?.runConfigPatch?.pluginPolicy, { mode: "none" });
+  assert.deepEqual(
+    calls[0]?.runConfigPatch?.toolPolicy?.customTools
+      ?.map((item) => item?.name)
+      .sort(),
+    ["doc_to_data", "media_to_data", "web_to_data"],
+  );
+  assert.equal(
+    calls[0]?.runConfigPatch?.toolPolicy?.customTools
+      ?.some((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK),
+    false,
+  );
   assert.equal(result.sessionId, "child-session");
   assert.equal(result.parentSessionId, "root-plugin-session");
 });
@@ -228,6 +240,18 @@ test("process_connector_tool: detached runtime uses durable parent session", asy
   assert.equal(
     String(calls[0]?.systemMessages?.[0] || ""),
     "可处理连接器相关任务（数据库/终端/邮箱）。连接信息由系统连接器自动处理，无需提供或询问连接信息",
+  );
+  assert.ok(Array.isArray(calls[0]?.runConfigPatch?.toolPolicy?.customTools));
+  assert.equal(
+    calls[0]?.runConfigPatch?.toolPolicy?.customTools
+      ?.some((item) => item?.name === TOOL_NAME.PROCESS_CONNECTOR_TOOL),
+    false,
+  );
+  assert.deepEqual(calls[0]?.runConfigPatch?.pluginPolicy, { mode: "none" });
+  assert.equal(
+    calls[0]?.runConfigPatch?.toolPolicy?.customTools
+      ?.some((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK),
+    false,
   );
   assert.equal(result.parentSessionId, "root-plugin-session");
 });

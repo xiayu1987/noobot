@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  resolveMainModelFinalMessages,
-} from "../../session/utils/context-window-normalizer.js";
+  resolveModelFinalMessages,
+} from "@noobot/context-protocol/window-reducer";
 import { normalizeMessageForModelRuntime } from "./session-execution-engine-utils.js";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
 import { summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context-schema";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "stepModels",
@@ -76,10 +77,11 @@ export class ModelMessageRuntimeHelpers {
     void pluginOptions;
     return ({ ctx = {}, purpose = "" } = {}) => {
       const blocks = requireAuthoritativeMessageBlocks(ctx);
-      const resolved = resolveMainModelFinalMessages({
+      const resolved = resolveModelFinalMessages({
         systemMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(blocks, "system")),
         historyMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(blocks, "history")),
         incrementalMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(blocks, "incremental")),
+        historyLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
       });
       emitModelContextTrace(ctx?.agentContext?.bindings?.runtime || null, "resolve_model_messages", {
         purpose: String(purpose || "").trim(),

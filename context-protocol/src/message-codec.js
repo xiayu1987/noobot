@@ -66,8 +66,7 @@ export function deriveContextMessageProjectionId(sourceMessageId = "", projectio
 }
 
 export function resolveContextMessageDialogProcessId(message = {}) {
-  return readContextMessageField(message, "dialogProcessId") ||
-    readContextMessageField(message, "dialogId");
+  return readContextMessageField(message, "dialogProcessId");
 }
 
 export function resolveContextMessageTurnScopeId(message = {}) {

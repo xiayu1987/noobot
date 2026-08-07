@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { storeToRefs } from "pinia";
+import { watch } from "vue";
 import { useChatStore } from "../stores/useChatStore.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createInteractionResponseCommand } from "@noobot/agent-transport-protocol";
+import { logThinkingReplayDebug } from "../../debug/loggers/thinkingReplayDebugLogger.js";
 
 export function useAgentInteraction({
   encryptPayloadBySessionId,
@@ -18,6 +20,7 @@ export function useAgentInteraction({
     pendingInteractionRequest,
     pendingInteractionRequests,
     interactionSubmitting,
+    activeSessionId,
   } = storeToRefs(chatStore);
   const handledInteractionRequestIds = new Set();
   const handledInteractionRequestSignatures = new Set();
@@ -81,7 +84,10 @@ export function useAgentInteraction({
     if (queue.length !== pendingInteractionRequests.value.length) {
       pendingInteractionRequests.value = queue;
     }
-    pendingInteractionRequest.value = queue[0] || null;
+    const currentSessionId = String(activeSessionId.value || "").trim();
+    pendingInteractionRequest.value = currentSessionId
+      ? queue.find((requestItem) => String(requestItem?.sessionId || "").trim() === currentSessionId) || null
+      : null;
     if (!pendingInteractionRequest.value) {
       interactionSubmitting.value = false;
     }
@@ -93,6 +99,11 @@ export function useAgentInteraction({
       (requestItem) => !predicate(requestItem),
     );
     syncCurrentPendingInteraction();
+    logThinkingReplayDebug("frontend.interaction.queueChanged", {
+      sessionId: String(activeSessionId.value || "").trim(),
+      removed: beforeLength - pendingInteractionRequests.value.length,
+      pendingCount: pendingInteractionRequests.value.length,
+    });
     return pendingInteractionRequests.value.length !== beforeLength;
   }
 
@@ -144,10 +155,12 @@ export function useAgentInteraction({
   function clearPendingInteractionIfObsolete({
     sessionId = "",
     dialogProcessId = "",
+    turnScopeId = "",
     requestId = "",
   } = {}) {
     const normalizedSessionId = String(sessionId || "").trim();
     const normalizedDialogProcessId = String(dialogProcessId || "").trim();
+    const normalizedTurnScopeId = String(turnScopeId || "").trim();
     const normalizedRequestId = normalizeRequestId(requestId || "");
     const removed = removePendingInteraction((requestItem) => {
       if (!requestItem || typeof requestItem !== "object") return false;
@@ -155,6 +168,7 @@ export function useAgentInteraction({
       if (normalizedRequestId) return pendingRequestId === normalizedRequestId;
       const pendingSessionId = String(requestItem?.sessionId || "").trim();
       const pendingDialogProcessId = String(requestItem?.dialogProcessId || "").trim();
+      const pendingTurnScopeId = String(requestItem?.turnScopeId || "").trim();
       if (pendingSessionId && normalizedSessionId && pendingSessionId !== normalizedSessionId) {
         return false;
       }
@@ -163,6 +177,9 @@ export function useAgentInteraction({
         normalizedDialogProcessId &&
         pendingDialogProcessId !== normalizedDialogProcessId
       ) {
+        return false;
+      }
+      if (pendingTurnScopeId && normalizedTurnScopeId && pendingTurnScopeId !== normalizedTurnScopeId) {
         return false;
       }
       return true;
@@ -177,6 +194,13 @@ export function useAgentInteraction({
       return;
     }
     if (isInteractionRequestHandled(request)) return;
+    logThinkingReplayDebug("frontend.interaction.requestMaterialization", {
+      sessionId: String(request?.sessionId || "").trim(),
+      dialogProcessId: String(request?.dialogProcessId || "").trim(),
+      turnScopeId: String(request?.turnScopeId || "").trim(),
+      requestId: normalizeRequestId(request?.requestId),
+      source: "authoritative-replay-or-stream",
+    });
     const existingIndex = findPendingInteractionIndex(request);
     if (existingIndex >= 0) {
       const nextQueue = [...pendingInteractionRequests.value];
@@ -225,6 +249,8 @@ export function useAgentInteraction({
     clearPendingInteraction(request);
     interactionSubmitting.value = false;
   }
+
+  watch(activeSessionId, syncCurrentPendingInteraction);
 
   return {
     pendingInteractionRequest,

@@ -449,6 +449,31 @@ _applyAuthoritativeConversationState(channel, eventData = {}) {
     const channelSessionId = this._extractSessionIdFromChannelKey(channel.key);
     const eventOwnsChannel = !sessionId || sessionId === channelSessionId;
     if (eventOwnsChannel) {
+      let clearedPendingInteractionCount = 0;
+      for (const [requestId, envelope] of channel.pendingInteractionRequests.entries()) {
+        const interaction = envelope?.data || {};
+        const sameSession = !sessionId || String(interaction.sessionId || '').trim() === sessionId;
+        const sameDialog = !dialogProcessId || String(interaction.dialogProcessId || '').trim() === dialogProcessId;
+        const sameTurn = !turnScopeId || String(interaction.turnScopeId || '').trim() === turnScopeId;
+        if (sameSession && sameDialog && sameTurn) {
+          channel.pendingInteractionRequests.delete(requestId);
+          this.requestChannelMap.delete(requestId);
+          clearedPendingInteractionCount += 1;
+        }
+      }
+      this.logSessionEvent(channel, {
+        category: "interaction",
+        event: "agentProxy.interaction.terminalCleanup",
+        sessionId,
+        dialogProcessId,
+        turnScopeId,
+        data: {
+          lifecycleEventType: eventName,
+          terminalState: nextState,
+          clearedPendingInteractionCount,
+          remainingPendingInteractionCount: channel.pendingInteractionRequests.size,
+        },
+      });
       this.markChannelTerminal(
         channel,
         nextState === CONVERSATION_STATE.COMPLETED ? CHANNEL_STATUS.DONE : nextState,

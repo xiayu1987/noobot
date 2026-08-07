@@ -7,13 +7,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  MAIN_MODEL_HISTORY_ROUND_LIMIT,
-  resolveMainModelFinalMessages,
-  resolveMainModelHistoryMessages,
-  resolveMainModelIncrementalMessages,
-  resolveMainModelSystemMessages,
-} from "../../src/session/utils/context-window-normalizer.js";
-import { markCurrentTurnArraySummarized } from "../../src/context/session/summarized-message-policy.js";
+  resolveModelFinalMessages,
+  resolveModelHistoryMessages,
+  resolveModelIncrementalMessages,
+  resolveModelSystemMessages,
+} from "@noobot/context-protocol/window-reducer";
+import { markCurrentTurnArraySummarized } from "@noobot/context-protocol/summary-policy";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+
+const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
+const resolveMainModelFinalMessages = (options = {}) => resolveModelFinalMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
+const resolveMainModelHistoryMessages = (options = {}) => resolveModelHistoryMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
+const resolveMainModelIncrementalMessages = (options = {}) => resolveModelIncrementalMessages(options);
+const resolveMainModelSystemMessages = (options = {}) => resolveModelSystemMessages(options);
 
 function contents(messages = []) {
   return messages.map((item = {}) => String(item.content || item.tool_call_id || item.tool_calls?.[0]?.id || ""));
@@ -65,9 +71,7 @@ test("model-context rules 1.2: historyMessages keeps non-system unsummarized mes
   const totalRounds = MAIN_MODEL_HISTORY_ROUND_LIMIT + 1;
   const dialogs = Array.from({ length: totalRounds }, (_, index) => {
     const number = index + 1;
-    const dialogFields = number % 2 === 0
-      ? { dialogId: `dlg-${number}` }
-      : { dialogProcessId: `dlg-${number}` };
+    const dialogFields = { dialogProcessId: `dlg-${number}` };
     return [
       { role: "user", content: `aux-injected-${number}`, injectedBy: "agent-plugin", ...dialogFields },
       { role: "user", content: `aux-user-meta-${number}`, additional_kwargs: { noobotInternalMessageType: "user_meta" }, ...dialogFields },

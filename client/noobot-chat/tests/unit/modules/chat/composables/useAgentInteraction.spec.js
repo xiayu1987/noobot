@@ -5,6 +5,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { useAgentInteraction } from "../../../../../src/modules/chat/composables/useAgentInteraction.js";
 
 vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
@@ -16,6 +17,7 @@ vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
 describe("useAgentInteraction", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    useChatStore().activeSessionId = "s-1";
   });
 
   it("deduplicates replayed interaction by requestId after handled", () => {
@@ -143,7 +145,32 @@ describe("useAgentInteraction", () => {
     ]);
   });
 
+  it("projects only the active session interaction without dropping other session requests", async () => {
+    const store = useChatStore();
+    const interaction = useAgentInteraction({
+      encryptPayloadBySessionId: (payload) => payload,
+      sendJson: vi.fn(),
+    });
+
+    interaction.setPendingInteractionRequest({ requestId: "req-old", sessionId: "old-session" });
+    interaction.setPendingInteractionRequest({ requestId: "req-current", sessionId: "s-1" });
+    expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-current");
+    expect(interaction.pendingInteractionRequests.value.map((request) => request.requestId)).toEqual([
+      "req-old",
+      "req-current",
+    ]);
+
+    store.activeSessionId = "old-session";
+    await Promise.resolve();
+    expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-old");
+
+    store.activeSessionId = "s-1";
+    await Promise.resolve();
+    expect(interaction.pendingInteractionRequest.value?.requestId).toBe("req-current");
+  });
+
   it("submitInteractionResponse sends encrypted payload and toggles state", () => {
+    useChatStore().activeSessionId = "session-2";
     const sendJson = vi.fn();
     const encryptPayloadBySessionId = vi.fn(() => "encrypted-payload");
     const interaction = useAgentInteraction({
@@ -177,6 +204,7 @@ describe("useAgentInteraction", () => {
   });
 
   it("keeps an interaction pending and retryable when websocket send fails", () => {
+    useChatStore().activeSessionId = "session-retry";
     const sendError = new Error("socket closed");
     const interaction = useAgentInteraction({
       encryptPayloadBySessionId: (payload) => payload,
