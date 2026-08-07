@@ -199,12 +199,17 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   await thinkingDetailsPanel.locator(".el-tabs__item").nth(1).click();
   const taskCheckBlocks = thinkingDetailsPanel.locator('[data-thinking-block="task-check"]');
   await expect(taskCheckBlocks).toHaveCount(1);
-  const taskCheckSummary = taskCheckBlocks.locator(".base-note-block__content");
-  await expect(taskCheckSummary).toHaveCount(1);
+  const taskCheckItems = taskCheckBlocks.locator(".thinking-task-check-item");
+  await expect(taskCheckItems).toHaveCount(checkResults.length);
   expect(checkResults).toHaveLength(checks.length);
-  for (const result of checkResults) {
+  for (let index = 0; index < checkResults.length; index += 1) {
+    const result = checkResults[index];
     const expectedAbstract = toolResultPayload(result).summary.abstract;
-    await expect(taskCheckSummary).toContainText(expectedAbstract);
+    const item = taskCheckItems.nth(index);
+    await expect(item.locator(".base-note-block__title")).toContainText(`${index + 1}.`);
+    await expect(item.locator(".base-note-block__title")).toContainText(/ · \d{4}-\d{2}-\d{2}T/);
+    await expect(item.locator(".base-note-block__content")).toHaveText(expectedAbstract);
+    await expect(item).not.toContainText("guidance_analysis_response");
   }
   await noobot.page.keyboard.press("Escape");
   await expect(thinkingDetailsPanel).toBeHidden();

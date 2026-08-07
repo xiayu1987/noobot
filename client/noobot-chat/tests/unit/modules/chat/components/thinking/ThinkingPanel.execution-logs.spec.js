@@ -60,6 +60,7 @@ function taskCheckTimeline(abstract = "目标未漂移") {
       sequenceScopeId: "message-task-check",
       sequenceDomain: "message-event",
       authority: "authoritative",
+      timestamp: "2026-08-07T06:16:13.004Z",
     },
   }];
 }
@@ -86,7 +87,9 @@ describe("ThinkingPanel canonical execution timeline", () => {
     const block = wrapper.find('[data-thinking-block="task-check"]');
     expect(block.exists()).toBe(true);
     expect(block.text()).toContain("Task Check");
+    expect(block.text()).toContain("1. Task Check · 2026-08-07T06:16:13.004Z");
     expect(block.text()).toContain("当前目标清晰且没有偏移");
+    expect(block.text()).not.toContain("guidance_analysis_response");
   });
 
   it("does not render task_check data that violates the canonical receipt", () => {
