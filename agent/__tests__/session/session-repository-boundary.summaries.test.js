@@ -1003,7 +1003,10 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.displayToolLogCount, 0);
     assert.equal(summary.stats.hasToolDetails, true);
     assert.equal("toolLogSummaries" in summary, false);
-    const assistantMessage = summary.messages.find((item) => item.id === "a1");
+    assert.equal(summary.messages.find((item) => item.id === "a1").toolTimeline, undefined);
+    assert.equal(typeof summary.messages.find((item) => item.id === "a1").thinkingDetailRef?.file, "string");
+    const hydratedSummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(userId, "B", "A");
+    const assistantMessage = hydratedSummary.messages.find((item) => item.id === "a1");
     assert.equal(assistantMessage.toolTimeline.length, 1);
     assert.equal(assistantMessage.toolTimeline[0].status, "completed");
     assert.equal("log" in assistantMessage.toolTimeline[0].resultEvent, false);

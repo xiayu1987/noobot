@@ -252,6 +252,56 @@ test("v5 turn journals append only changed messages and hide uncommitted tails",
   assert.deepEqual(visible.messages.map((message) => message.messageUid), ["m1", "m2"]);
 }));
 
+test("summary checkpoints write immutable snapshots and journal indexes", async () => withTemp(async (root) => {
+  const messages = [
+    { role: "user", content: "question", turnScopeId: "active", messageUid: "m1" },
+    { role: "assistant", content: "answer", turnScopeId: "active", messageUid: "m2" },
+  ];
+  const receipt = {
+    checkpointId: "checkpoint-1",
+    checkpointRevision: 1,
+    requestHash: "sha256:fixture",
+    persistedMessageUids: ["m1", "m2"],
+    summarizedMessageUids: ["m1"],
+    committedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const sessionPayload = {
+    sessionId: "summary-journal",
+    messages,
+    turnSummaryCheckpoints: { active: { dialogProcessId: "dialog-active", receipts: [receipt] } },
+  };
+  await writeSessionArtifact({ sessionDir: root, sessionPayload });
+  const files = buildSessionArtifactFileMap(root);
+  const manifest = JSON.parse(await readFile(files.session, "utf8"));
+  const journalFile = path.join(root, manifest.turnOrder[0].file);
+  const journalRecords = (await readFile(journalFile, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  const index = journalRecords.find((record) => record.op === "summary_snapshot");
+  assert.equal(index.checkpointId, "checkpoint-1");
+  assert.equal(index.file, "turn-snapshots/turn-000001/checkpoint-000001.json");
+  const snapshot = JSON.parse(await readFile(path.join(root, index.file), "utf8"));
+  assert.deepEqual(snapshot.messages.map((message) => message.messageUid), ["m1", "m2"]);
+  const restored = await readSessionArtifact({ sessionDir: root });
+  assert.deepEqual(restored.messages.map((message) => message.messageUid), ["m1", "m2"]);
+  const turn = await (await import("../../src/session/session-artifact-session.js")).readSessionTurn({ sessionDir: root, turnScopeId: "active" });
+  assert.equal(turn.summarySnapshots.length, 1);
+  assert.equal(turn.summarySnapshots[0].payload.checkpointId, "checkpoint-1");
+
+  await writeSessionArtifact({ sessionDir: root, sessionPayload });
+  const repeated = await readFile(journalFile, "utf8");
+  const repeatedRecords = repeated.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(repeatedRecords.filter((record) => record.op === "summary_snapshot").length, 1);
+
+  await writeSessionArtifact({
+    sessionDir: root,
+    sessionPayload: {
+      ...sessionPayload,
+      turnStatuses: [{ turnScopeId: "active", dialogProcessId: "dialog-active", status: "completed" }],
+    },
+  });
+  const compactedRecords = (await readFile(journalFile, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(compactedRecords.filter((record) => record.op === "summary_snapshot").length, 1);
+}));
+
 test("replacement turns receive a new stable journal identity instead of reusing the removed turn position", async () => withTemp(async (root) => {
   const first = { messageUid: "m1", role: "user", content: "keep", dialogProcessId: "d1", turnScopeId: "t1" };
   const replaced = { messageUid: "m2", role: "user", content: "old", dialogProcessId: "d2", turnScopeId: "t2" };
