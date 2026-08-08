@@ -6,7 +6,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { normalizeLocale } from "noobot-i18n/shared";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 
 const systemPromptCachePromises = new Map();
 

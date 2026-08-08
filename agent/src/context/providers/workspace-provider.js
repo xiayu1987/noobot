@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { access, readdir } from "node:fs/promises";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 
 export async function resolveWorkspaceDirectories(runtimeBasePath = "") {
   const basePath = String(runtimeBasePath || "").trim();

@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import {
   filePath as path,
   resolveRuntimePathContext,
-} from "../../../shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import {
   getTransferAttachments,

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "../../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { buildYearlySummaryPrompt } from "../../prompts/builders.js";
 import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
 

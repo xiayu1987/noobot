@@ -7,7 +7,7 @@ import { mkdir } from "node:fs/promises";
 import {
   filePath as path,
   resolveRuntimePathContext,
-} from "../../shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";

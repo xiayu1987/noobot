@@ -1,0 +1,14 @@
+{
+  "name": "@noobot/path-resolver",
+  "version": "4.1.5",
+  "private": true,
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.mjs"
+  }
+}

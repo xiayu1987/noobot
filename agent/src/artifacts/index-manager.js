@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { filePath as path } from "../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { fsMkdir, fsReadFile, fsWriteFile } from "../shared/storage/fs-adapter.js";
 import {
   applyAttachmentDisplayProjection,

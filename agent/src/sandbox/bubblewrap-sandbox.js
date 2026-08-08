@@ -6,7 +6,7 @@
 import { exec } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import { access, mkdir, unlink, writeFile } from "node:fs/promises";
-import { filePath as path } from "../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 
 export async function bwrapSupportsOption(optionName = "") {
   return new Promise((resolve) => {

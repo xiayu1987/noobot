@@ -11,7 +11,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import {
   MEMORY_FILE_SPLIT_MAX_CHARS,
   getMemoryFileSplitMaxChars,

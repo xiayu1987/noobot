@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { filePath as path } from "../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { fsMkdir, fsReadFile, fsRm, fsStat, fsWriteFile } from "../shared/storage/fs-adapter.js";
 
 export class SessionMutationCoordinator {

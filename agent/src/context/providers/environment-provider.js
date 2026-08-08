@@ -6,7 +6,7 @@
 import {
   filePath as path,
   resolveRuntimePathContext,
-} from "../../shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../parent-session-id-resolver.js";
 import {

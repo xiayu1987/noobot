@@ -618,11 +618,11 @@ export function registerSessionRoutes(
       if (
         typeof bot.pruneOrphanScopedAttachments === "function" &&
         bot?.session &&
-        typeof bot.session.getAllSessionsData === "function"
+        typeof bot.session.listSessionIds === "function"
       ) {
-        const remainingSessions = await bot.session.getAllSessionsData({ userId });
-        const keepSessionIds = (Array.isArray(remainingSessions) ? remainingSessions : [])
-          .map((item) => String(item?.sessionId || "").trim())
+        const remainingSessionIds = await bot.session.listSessionIds({ userId });
+        const keepSessionIds = (Array.isArray(remainingSessionIds) ? remainingSessionIds : [])
+          .map((item) => String(item || "").trim())
           .filter(Boolean);
         deletedOrphanAttachments = await bot.pruneOrphanScopedAttachments({
           userId,

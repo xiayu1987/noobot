@@ -7,7 +7,7 @@
 import {
   parsePersistedAttachmentRecord,
 } from "@noobot/attachment-protocol";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { safeNum, safeStr } from "../../shared/utils/shared-utils.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { access } from "node:fs/promises";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 

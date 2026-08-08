@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
@@ -45,7 +45,8 @@ export function createWeb2DataTool({ agentContext }) {
         .optional()
         .describe(tTool(runtime, "tools.web2data.fieldUseTrafilatura")),
     }),
-    func: async ({ input = "", urls = [], prompt, useTrafilatura }) => {
+    func: async ({ input = "", urls = [], prompt, useTrafilatura }, _runManager, toolConfig = {}) => {
+      const transferIdentity = toolConfig?.configurable?.transferIdentity;
       const payload = await runWebToDataPipeline({
         agentContext,
         input,
@@ -91,6 +92,7 @@ export function createWeb2DataTool({ agentContext }) {
         reason: ARTIFACT_GENERATION_SOURCE.WEB_TO_DATA_TOOL,
         alwaysPersist: true,
         producer: { type: "tool", name: TOOL_NAME.WEB_TO_DATA },
+        identity: transferIdentity,
         meta: { mode: payload?.mode || processMode, input: payload?.input || input || "" },
       });
       const savedAttachments = getTransferAttachments(materialized.transferEnvelopes);
