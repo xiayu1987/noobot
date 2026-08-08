@@ -9,6 +9,7 @@ import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
 import { assertArtifactSessionWritable, buildSessionArtifactFileMap, readJsonArtifactFile, resolveArtifactMutationLockDir, SESSION_ARTIFACT_FILE_NAMES } from "./session-artifact-files.js";
 import { writeArtifactIndex } from "./session-artifact-execution-logs.js";
 import { resolveTurnArtifactPath, readRecentSessionTurns } from "./session-artifact-session.js";
+import { reconcileExecutionSegmentIndex } from "@noobot/session-repair";
 
 function diagnostic(code, message, extra = {}) {
   return { code, message, ...extra };
@@ -118,8 +119,9 @@ export async function repairSessionArtifacts({
     const before = await inspectSessionArtifacts({ sessionDir });
     const files = buildSessionArtifactFileMap(sessionDir);
     const index = await readJsonArtifactFile(path.join(files.executionEventsDir, "index.json"), null);
-    const repaired = [];
+    let repaired = [];
     if (index?.segments) {
+      const segmentMetadata = [];
       for (const segment of index.segments) {
         const segmentPath = path.join(files.executionEventsDir, segment.file);
         const raw = await readFile(segmentPath, "utf8");
@@ -131,12 +133,11 @@ export async function repairSessionArtifacts({
         const records = raw ? raw.split("\n").filter(Boolean) : [];
         for (const record of records) JSON.parse(record);
         const bytes = Buffer.byteLength(raw, "utf8");
-        if (Number(segment.bytes) !== bytes || Number(segment.records) !== records.length) {
-          segment.bytes = bytes;
-          segment.records = records.length;
-          repaired.push(segment.file);
-        }
+        segmentMetadata.push({ file: segment.file, bytes, records: records.length });
       }
+      const reconciled = reconcileExecutionSegmentIndex(index, segmentMetadata);
+      repaired = reconciled.repaired;
+      Object.assign(index, reconciled.index);
       if (repaired.length) await writeArtifactIndex(files.executionEventsDir, index);
     }
     return { before, repaired, after: await inspectSessionArtifacts({ sessionDir }) };

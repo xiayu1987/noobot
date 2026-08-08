@@ -117,7 +117,48 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
-test("display maintenance rejects artifacts that require offline protocol migration", async () => {
+test("session summary rebuild isolates an unreadable session as an unavailable projection", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-unavailable";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices(
+      { workspaceRoot },
+      { now: () => "2026-08-08T00:00:00.000Z" },
+    );
+    await runtime.sessionCrudService.ensureSession(userId, "available", "");
+    await runtime.sessionCrudService.ensureSession(userId, "legacy", "");
+
+    const repository = runtime.repositories.sessionRepository;
+    const findById = repository.findById.bind(repository);
+    repository.findById = async (...args) => {
+      if (args[1] === "legacy") {
+        const error = new Error("invalid_transfer_envelope:forbidden_path_field");
+        error.code = "INVALID_TRANSFER_ENVELOPE";
+        throw error;
+      }
+      return findById(...args);
+    };
+
+    const payload = await repository.rebuildSessionsSummary(userId);
+    const available = payload.sessions.find((item) => item.sessionId === "available");
+    const unavailable = payload.sessions.find((item) => item.sessionId === "legacy");
+    assert.equal(available.availability, "available");
+    assert.equal(unavailable.availability, "unavailable");
+    assert.deepEqual(unavailable.messages, []);
+    assert.equal(unavailable.messageCount, 0);
+    assert.equal(unavailable.lastMessage, null);
+    assert.equal(unavailable.unavailableReason.code, "INVALID_TRANSFER_ENVELOPE");
+    assert.equal(unavailable.unavailableReason.message, "invalid_transfer_envelope:forbidden_path_field");
+
+    const persisted = await repository.readSessionsSummary(userId);
+    assert.equal(
+      persisted.sessions.find((item) => item.sessionId === "legacy").availability,
+      "unavailable",
+    );
+  });
+});
+
+test("display maintenance migrates repairable artifacts through the Session repair project", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "legacy";
@@ -149,17 +190,13 @@ test("display maintenance rejects artifacts that require offline protocol migrat
     );
 
     const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
-    assert.deepEqual(maintenance.failures, [{
-      sessionId,
-      code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
-      message: "Session artifact requires offline protocol migration",
-    }]);
-    assert.deepEqual(maintenance.migratedSessionIds, []);
+    assert.deepEqual(maintenance.failures, []);
+    assert.deepEqual(maintenance.migratedSessionIds, [sessionId]);
     assert.deepEqual(maintenance.rebuiltSessionIds, []);
 
     const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
-    assert.equal(manifest.schemaVersion, 4);
-    assert.equal("messages" in manifest, true);
+    assert.equal(manifest.schemaVersion, 5);
+    assert.equal("messages" in manifest, false);
   });
 });
 

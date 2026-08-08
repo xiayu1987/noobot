@@ -68,6 +68,7 @@ export const enUSMessages = {
     "statusRunning": "Running",
     "statusDone": "Done",
     "statusError": "Error",
+    "sessionUnavailableLegacyProtocol": "Legacy protocol, cannot open",
     "navRole": "Role",
     "navContent": "Content"
   },

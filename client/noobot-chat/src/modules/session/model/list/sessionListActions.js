@@ -53,6 +53,13 @@ export function createSessionListActions({
     if (!target) return;
     const targetPrimaryId = String(target.sessionId || sessionId || "").trim();
     if (!force && targetPrimaryId === activeSessionId.value) return;
+    if (target.isUnavailable === true) {
+      notify({
+        type: "warning",
+        message: target.unavailableReason?.message || translate("common.sessionUnavailableLegacyProtocol"),
+      });
+      return;
+    }
     activeSessionId.value = targetPrimaryId;
     if (target.isLocal) {
       refreshSessionConnectorsAsync(targetPrimaryId);
@@ -216,6 +223,10 @@ export function createSessionListActions({
     }
     const targetSession = findSessionByAnyIdInList(sessions.value, targetSessionId);
     if (!targetSession) return false;
+    if (targetSession.isUnavailable === true) {
+      notify({ type: "warning", message: translate("common.sessionUnavailableLegacyProtocol") });
+      return false;
+    }
     if (String(targetSession.title || "").trim() === normalizedTitle) {
       notify({ type: "info", message: translate("common.sessionTitleUnchanged") });
       return false;

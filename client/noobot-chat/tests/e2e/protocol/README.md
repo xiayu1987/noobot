@@ -73,6 +73,8 @@ Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭�
 `session-summary-details/` 内，并与详情文件的展示消息身份、SHA-256 和 timeline 计数一致；目录中
 不得存在未被主 summary 引用的详情 JSON。该审计与模型调用审计独立收尾，任一失败都会使场景失败，
 同时保留各自的证据文件。
+同一审计还验证 `sessions.json` 的唯一列表协议：正常 Session 必须为 `availability: available`；
+不可用 Session 必须为零消息投影并包含结构化失败原因；未 provision 的 Session 不得留下列表索引。
 对 PBE-026、PBE-030 这类明确禁止模型调用且不 provision 的场景，收尾审计反向要求不能产生
 任何 Session summary artifact，确保非法协议或纯本地 Session 不污染持久化事实。
 
