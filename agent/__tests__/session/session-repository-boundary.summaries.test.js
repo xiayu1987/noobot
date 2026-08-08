@@ -888,7 +888,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           size: 321,
         }],
       },
-      intent: { source: "plugin", reason: "workflow_result", scenario: "agent_plugin", strategy: "agent_plugin_final_message" },
+      intent: { source: "plugin", reason: "workflow_result", scenario: "harness", strategy: "harness_summary" },
       meta: { persisted: true },
     };
 

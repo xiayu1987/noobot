@@ -219,10 +219,10 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
   if (typeof transferSemanticContent !== "function") return message;
   try {
     const strategy = failureLines.length
-      ? "bot_plugin_failure_propagation"
-      : "bot_plugin_upstream_injection";
+      ? "workflow_subagent"
+      : "workflow_subagent";
     const transferred = await transferSemanticContent({
-      scenario: "bot_plugin",
+      scenario: "workflow",
       strategy,
       content: message,
       meta: {

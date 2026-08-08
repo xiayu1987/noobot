@@ -3,8 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
-import { directTransfer, validateTransferEnvelope } from "@noobot/semantic-transfer-protocol";
+import {
+  DEFAULT_TRANSFER_MIME_TYPE,
+  TRANSFER_REASON,
+  TRANSFER_SOURCE,
+} from "../core/constants.js";
+import {
+  directTransfer,
+  validateTransferEnvelope,
+} from "@noobot/semantic-transfer-protocol";
 import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
@@ -57,9 +64,9 @@ export async function transferBotPluginSubagentResult({
   nextSteps = [],
   forceAttachment = true,
   attachmentSource = "model",
-  generationSource = "bot_plugin_subagent_result",
+  generationSource = "workflow_subagent",
   source = "plugin",
-  reason = "bot_plugin_subagent_result",
+  reason = "workflow_subagent",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
   identity = null,
   userId = "",
@@ -73,8 +80,8 @@ export async function transferBotPluginSubagentResult({
     reason,
     generationSource,
     fallbackSource: TRANSFER_SOURCE.PLUGIN,
-    fallbackReason: TRANSFER_REASON.BOT_PLUGIN_SUBAGENT_RESULT,
-    defaultGenerationSource: TRANSFER_REASON.BOT_PLUGIN_SUBAGENT_RESULT,
+    fallbackReason: TRANSFER_REASON.WORKFLOW_SUBAGENT,
+    defaultGenerationSource: TRANSFER_REASON.WORKFLOW_SUBAGENT,
     allowCustom: true,
   });
   normalizeNextSteps(nextSteps);
@@ -83,7 +90,8 @@ export async function transferBotPluginSubagentResult({
   for (const [index, item] of normalizedMessages.entries()) {
     const text = String(item?.content || "");
     if (!text) continue;
-    if (!item.id) throw new Error("semantic_transfer_subagent_message_identity_required");
+    if (!item.id)
+      throw new Error("semantic_transfer_subagent_message_identity_required");
     const itemIdentity = {
       ...identity,
       transferId: `${identity.transferId}:subagent:${item.id}`,
@@ -96,8 +104,15 @@ export async function transferBotPluginSubagentResult({
         identity: itemIdentity,
         direction: "output",
         content: text,
-        intent: { source: intent.source, reason: intent.reason, scenario: "bot_plugin", strategy: "bot_plugin_subagent_result" },
-        meta: { attributes: { nodeId: item?.nodeId, nodeName: item?.nodeName } },
+        intent: {
+          source: intent.source,
+          reason: intent.reason,
+          scenario: "workflow",
+          strategy: "workflow_subagent",
+        },
+        meta: {
+          attributes: { nodeId: item?.nodeId, nodeName: item?.nodeName },
+        },
       });
       persistedItems.push({ ...item, transferEnvelopes: [envelope] });
       continue;
@@ -105,7 +120,12 @@ export async function transferBotPluginSubagentResult({
 
     const name = [
       "bot-plugin-node",
-      firstNormalizedString(item?.nodeName, item?.nodeId, item?.id, String(index + 1))
+      firstNormalizedString(
+        item?.nodeName,
+        item?.nodeId,
+        item?.id,
+        String(index + 1),
+      )
         .replace(/\s+/g, "-")
         .toLowerCase(),
       "result.md",
@@ -124,6 +144,12 @@ export async function transferBotPluginSubagentResult({
       generationSource: intent.generationSource,
       source: intent.source,
       reason: intent.reason,
+      intent: {
+        source: intent.source,
+        reason: intent.reason,
+        scenario: "workflow",
+        strategy: "workflow_subagent",
+      },
       meta: {
         attributes: {
           ...(isPlainObject(item?.meta) ? item.meta : {}),
@@ -132,18 +158,28 @@ export async function transferBotPluginSubagentResult({
         },
       },
     });
-    const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes) ? persisted.transferEnvelopes : [];
-    transferEnvelopes.forEach((envelope) => validateTransferEnvelope(envelope, { strict: true }));
+    const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
+      ? persisted.transferEnvelopes
+      : [];
+    transferEnvelopes.forEach((envelope) =>
+      validateTransferEnvelope(envelope, { strict: true }),
+    );
     persistedItems.push({ ...item, transferEnvelopes });
   }
 
   const transferEnvelopes = persistedItems
-    .flatMap((item = {}) => (Array.isArray(item.transferEnvelopes) ? item.transferEnvelopes : []))
+    .flatMap((item = {}) =>
+      Array.isArray(item.transferEnvelopes) ? item.transferEnvelopes : [],
+    )
     .filter(isPlainObject);
   await emitSemanticTransferValidation({
     runtime,
-    scenario: "bot_plugin_subagent_result",
-    stats: { inputCount: transferEnvelopes.length, outputCount: transferEnvelopes.length, enforceProtocol: true },
+    scenario: "workflow",
+    stats: {
+      inputCount: transferEnvelopes.length,
+      outputCount: transferEnvelopes.length,
+      enforceProtocol: true,
+    },
   });
 
   return { transferEnvelopes };

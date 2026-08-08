@@ -454,6 +454,14 @@ export function createDetachedSubSessionRunner({
     });
 
     const dialogProcessId = String(result?.dialogProcessId || subDialogProcessId || subSessionId).trim();
+    const transferEnvelopes = Array.from(
+      new Map(
+        (Array.isArray(result?.turnMessages) ? result.turnMessages : [])
+          .flatMap((message = {}) => Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : [])
+          .map((envelope) => [String(envelope?.transferId || ""), envelope])
+          .filter(([transferId]) => transferId),
+      ).values(),
+    );
     return {
       userId,
       sessionId: subSessionId,
@@ -472,6 +480,7 @@ export function createDetachedSubSessionRunner({
         answer: String(result?.output || result?.answer || "").trim(),
         traces: Array.isArray(result?.traces) ? result.traces : [],
         messages: Array.isArray(result?.turnMessages) ? result.turnMessages : [],
+        ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
         turnTasks: Array.isArray(result?.turnTasks) ? result.turnTasks : [],
         executionLogs: [],
         dialogProcessId,

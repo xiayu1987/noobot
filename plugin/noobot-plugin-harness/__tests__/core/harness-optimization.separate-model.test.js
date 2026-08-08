@@ -130,8 +130,8 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
         intent: {
           source: "plugin",
           reason: "planning_refinement",
-          scenario: "agent_plugin",
-          strategy: "agent_plugin_stage_message",
+          scenario: "harness",
+          strategy: "harness_summary",
         },
         attachments: [{
           identity: {

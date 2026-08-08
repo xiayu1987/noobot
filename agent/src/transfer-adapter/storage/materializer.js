@@ -56,7 +56,7 @@ export async function materializeOutputResult({
     const envelope = createDirectTransferEnvelope({
       identity,
       content: text,
-      intent: { source: intent.source, reason: intent.reason, scenario: "service", strategy: "semantic_transfer_output" },
+      intent: { source: intent.source, reason: intent.reason, scenario: "tool", strategy: "tool_output" },
       meta: outputMeta,
     });
     return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.DIRECT, envelope });
@@ -70,6 +70,7 @@ export async function materializeOutputResult({
     mimeType,
     source: intent.source,
     reason: intent.reason,
+    intent: { source: intent.source, reason: intent.reason, scenario: "tool", strategy: "tool_output" },
     attachmentSource,
     generationSource: intent.generationSource,
     storage,

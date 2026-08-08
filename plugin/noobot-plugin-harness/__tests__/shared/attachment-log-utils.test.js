@@ -36,7 +36,7 @@ test("transfer payload binds and deduplicates complete V2 envelopes by stable tr
       mimeType: "text/plain",
       size: 12,
     }],
-    intent: { source: "plugin", reason: "acceptance_report", scenario: "agent_plugin", strategy: "agent_plugin_stage_message" },
+    intent: { source: "plugin", reason: "acceptance_report", scenario: "harness", strategy: "harness_summary" },
   });
   const message = applyTransferPayloadToMessage(
     { role: "assistant", transferEnvelopes: [envelope] },

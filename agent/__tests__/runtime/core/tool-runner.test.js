@@ -183,6 +183,101 @@ test("executeToolCall preserves strict V2 transfer envelopes from structured too
   );
 });
 
+test("executeToolCall extracts strict V2 transfer envelopes from JSON tool results", async () => {
+  const call = {
+    id: "call_transfer_json_result",
+    name: "process_content_task",
+    args: {},
+  };
+  const envelope = attachmentEnvelope({
+    callId: call.id,
+    attachmentId: "att_json_result",
+  });
+  const result = await executeToolCall({
+    call,
+    tool: {
+      invoke: async () => JSON.stringify({
+        toolName: call.name,
+        ok: true,
+        transferEnvelopes: [envelope],
+      }),
+    },
+    turn: 1,
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.transferEnvelopes, [envelope]);
+});
+
+test("executeToolCall materializes outputArtifacts through the single transfer outlet", async () => {
+  const call = { id: "call_output_artifact", name: "write_file", args: {} };
+  const runtime = {
+    userId: "test-user",
+    attachmentService: {
+      async ingestGeneratedArtifacts(payload = {}) {
+        return payload.artifacts.map((artifact, index) => ({
+          attachmentId: `att-output-${index + 1}`,
+          sessionId: payload.sessionId,
+          attachmentSource: payload.attachmentSource,
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  };
+  const result = await executeToolCall({
+    call,
+    runtime,
+    tool: {
+      invoke: async () => JSON.stringify({
+        toolName: call.name,
+        ok: true,
+        outputArtifacts: [{ type: "text", name: "result.md", mimeType: "text/markdown", content: "# result" }],
+      }),
+    },
+  });
+  const publicResult = JSON.parse(result.toolResultText);
+
+  assert.equal("outputArtifacts" in publicResult, false);
+  assert.equal("attachments" in publicResult, false);
+  assert.equal(result.transferEnvelopes.length, 1);
+  assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "result.md");
+  assert.equal(result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att-output-1");
+});
+
+test("executeToolCall rejects output artifact types that differ from the registered tool policy", async () => {
+  let persisted = false;
+  const result = await executeToolCall({
+    call: { id: "call_output_type_mismatch", name: "write_file", args: {} },
+    runtime: {
+      userId: "test-user",
+      attachmentService: {
+        async ingestGeneratedArtifacts() {
+          persisted = true;
+          return [];
+        },
+      },
+    },
+    tool: {
+      invoke: async () => ({
+        toolName: "write_file",
+        ok: true,
+        outputArtifacts: [{
+          type: "attachment_bytes",
+          name: "result.bin",
+          mimeType: "application/octet-stream",
+          contentBase64: "AQID",
+        }],
+      }),
+    },
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(persisted, false);
+  assert.match(result.toolResultText, /semantic_transfer_tool_output_type_mismatch/);
+});
+
 test("executeToolCall does not publish writtenFiles outside semantic transfer", async () => {
   const events = [];
   const runtime = {

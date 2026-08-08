@@ -17,6 +17,7 @@ test("materializeOutputResult creates direct V2 envelope below the threshold", a
     content: "abcdef",
     policy: { prefer: "auto", maxDirectChars: 10 },
     identity: identity(),
+    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
   });
   assert.equal(result.ok, true);
   assert.equal(result.status, "direct");
@@ -56,6 +57,7 @@ test("persistTransferFile returns only V2 transfer envelopes", async () => {
     mimeType: "application/octet-stream",
     contentBase64: "AQID",
     identity: identity(),
+    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
   });
   assertTransferProtocolOnly(assert, result);
   const envelope = result.transferEnvelopes[0];

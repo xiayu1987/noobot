@@ -166,8 +166,8 @@ export async function persistWorkflowNodeResultAttachment({
     throw new Error("Semantic transfer service is required for workflow node results");
   }
   const transferred = await semanticTransferContent({
-        scenario: "bot_plugin",
-        strategy: "bot_plugin_subagent_result",
+        scenario: "workflow",
+        strategy: "workflow_subagent",
         messages: [
           {
             nodeId,
@@ -244,8 +244,8 @@ async function upsertWorkflowMessage({
     }
     finalTransferAttempted = true;
     const transferred = await semanticTransferContent({
-          scenario: "bot_plugin",
-          strategy: "bot_plugin_final_return",
+          scenario: "workflow",
+          strategy: "workflow_final_plan",
           messages: [
             {
               id: "workflow-final-attachment-summary",

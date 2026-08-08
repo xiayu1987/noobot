@@ -46,11 +46,11 @@ function initializeTestSemanticTransfer(agentContext = {}) {
         intent: {
           source: String(payload.source || producer.type || "plugin").trim(),
           reason: String(payload.reason || payload.strategy || "harness_test_transfer").trim(),
-          scenario: String(payload.scenario || "agent_plugin").trim(),
-          strategy: String(payload.strategy || "agent_plugin_stage_message").trim(),
+          scenario: String(payload.scenario || "harness").trim(),
+          strategy: String(payload.strategy || "harness_summary").trim(),
         },
       };
-      if (payload.strategy === "agent_plugin_summary_injection") {
+      if (payload.strategy === "harness_summary") {
         const injectMode = String(payload.injectMode || "full").trim();
         const content = injectMode === "summary"
           ? String(payload.summaryText || "")

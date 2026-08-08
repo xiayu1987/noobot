@@ -130,8 +130,8 @@ export function createV2AttachmentTransferEnvelope({
   messageId = `message-${attachmentId}`,
   name = "workflow-result.md",
   mimeType = "text/markdown",
-  strategy = "bot_plugin_subagent_result",
-  scenario = "bot_plugin",
+  strategy = "workflow_subagent",
+  scenario = "workflow",
   reason = "workflow_node_result",
 } = {}) {
   return createTransferEnvelope({
@@ -163,7 +163,8 @@ export function createSemanticTransferTool({ prefix = "att", counterRef = { valu
     async transferSemanticContent(payload = {}) {
       const { scenario = "", strategy = "", messages = [] } = payload;
       if (Array.isArray(calls)) calls.push(payload);
-      if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
+      const expectedScenario = "workflow";
+      if (String(scenario || "") !== expectedScenario || !["workflow_subagent", "workflow_final_plan"].includes(String(strategy || ""))) {
         return { transferEnvelopes: [] };
       }
       const strategyKey = String(strategy || "").trim();
@@ -207,14 +208,14 @@ export function createSemanticTransferTool({ prefix = "att", counterRef = { valu
         intent: {
           source: "subagent",
           reason: "workflow_node_result",
-          scenario: "bot_plugin",
+          scenario: expectedScenario,
           strategy,
         },
         meta: { originalLength: 0, persisted: true },
       });
       return {
         transferEnvelopes: [envelope],
-        ...(strategyKey === "bot_plugin_upstream_injection" && String(payload?.content || "").trim()
+        ...(String(payload?.strategy || "") === "workflow_subagent" && String(payload?.content || "").trim()
           ? { injectionMessage: String(payload.content).trim() }
           : {}),
       };

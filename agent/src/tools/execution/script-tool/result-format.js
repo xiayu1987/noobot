@@ -7,7 +7,6 @@ import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { formatLinesWithNumbers, splitLines } from "../file-utils.js";
 import { EXECUTE_SCRIPT_TOOL_NAME } from "./constants.js";
 import {
-  getTransferAttachments,
   persistTransferArtifacts,
 } from "../../../transfer-adapter/index.js";
 import { readFile } from "node:fs/promises";
@@ -71,7 +70,7 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
         source: "tool",
         reason: "execute_script_output_overflow",
         scenario: "tool",
-        strategy: "execute_script_output_overflow",
+        strategy: "tool_output",
       },
       meta: { contentOmitted: true },
     });
@@ -86,7 +85,6 @@ export async function toolExecResult(mode, r = {}, extra = {}, options = {}) {
       message: "Command output exceeded the inline limit; full stdout/stderr remain available through the returned file references.",
       outputOverflow: true,
       transferEnvelopes,
-      attachments: getTransferAttachments(transferEnvelopes),
     } : {}),
     includeLineNumbers,
   });

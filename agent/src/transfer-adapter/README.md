@@ -7,7 +7,7 @@
 - 对外统一入口：
   - `transferSemanticContent(...)`
 - 调用模型已收敛为：
-  - `scenario: "tool" | "bot_plugin" | "agent_plugin"`
+  - `scenario: "tool" | "workflow" | "harness"`
   - `strategy: "..."`
 - 统一入口标准调用必须显式传入 `strategy`；不再从 `direction` / `transferMode` / 旧 `scenario` 推断策略。
 - 以下旧场景 wrapper 已从公共 re-export 与 `sharedTools.semanticTransfer` 暴露面移除，且不再作为源码实现函数名使用：
@@ -21,8 +21,8 @@
 ## 已接入场景
 
 - 工具超限输入/输出：`tool_input`、`tool_output`、`tool_result_text`
-- bot plugin 子agent 结果与最终附件摘要：`bot_plugin_subagent_result`、`bot_plugin_final_return`
-- agent plugin 阶段消息、小结注入、最终消息：`agent_plugin_stage_message`、`agent_plugin_summary_injection`、`agent_plugin_final_message`
+- workflow 子agent 与最终计划：`workflow_subagent`、`workflow_final_plan`
+- harness 小结流程：`harness_summary`
 
 ## 目录语义分层（2026-06）
 

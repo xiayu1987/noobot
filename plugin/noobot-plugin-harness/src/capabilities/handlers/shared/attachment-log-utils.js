@@ -183,8 +183,8 @@ export async function saveCapabilityOutputAsTransferArtifacts(
   try {
     if (typeof transferSemanticContent === "function") {
       const staged = await transferSemanticContent({
-        scenario: "agent_plugin",
-        strategy: "agent_plugin_stage_message",
+        scenario: "harness",
+        strategy: "harness_summary",
         summary: "",
         detail: text,
         name: normalizeString(name) || buildCapabilityArtifactName({ purpose }),

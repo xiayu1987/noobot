@@ -32,6 +32,7 @@ test("persistTransferArtifacts maps storage records to canonical attachment refe
     sessionId: "session-test-1",
     attachmentSource: "model",
     identity: identity(),
+    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
     artifacts: [{ name: "a.txt", mimeType: "text/plain", contentBase64: "YWJj" }],
   });
   assertTransferProtocolOnly(assert, result);
@@ -45,7 +46,7 @@ test("persistTransferArtifacts maps storage records to canonical attachment refe
 
 test("persistence requires an attachment service instead of returning a direct fallback", async () => {
   await assert.rejects(
-    () => persistTransferArtifacts({ userId: "u1", sessionId: "session-test-1", identity: identity(), artifacts: [{ name: "a.txt", contentBase64: "YQ==" }] }),
+    () => persistTransferArtifacts({ userId: "u1", sessionId: "session-test-1", identity: identity(), intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" }, artifacts: [{ name: "a.txt", contentBase64: "YQ==" }] }),
     /semantic_transfer_attachment_service_required/,
   );
 });
