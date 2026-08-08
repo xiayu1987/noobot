@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
+import {
+  DEFAULT_TRANSFER_MIME_TYPE,
+  TRANSFER_REASON,
+  TRANSFER_SOURCE,
+} from "../core/constants.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 import { validateTransferEnvelope } from "@noobot/semantic-transfer-protocol";
 import { resolveTransferIntent } from "../core/intent.js";
@@ -26,9 +30,9 @@ export async function transferAgentPluginStageMessage({
   name = "agent-plugin-stage-detail.md",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
   attachmentSource = "model",
-  generationSource = "agent_plugin_stage_message",
+  generationSource = "harness_summary",
   source = "plugin",
-  reason = "agent_plugin_stage_message",
+  reason = "harness_summary",
   meta = {},
   identity = null,
   userId = "",
@@ -40,15 +44,15 @@ export async function transferAgentPluginStageMessage({
     reason,
     generationSource,
     fallbackSource: TRANSFER_SOURCE.PLUGIN,
-    fallbackReason: TRANSFER_REASON.AGENT_PLUGIN_STAGE_MESSAGE,
-    defaultGenerationSource: TRANSFER_REASON.AGENT_PLUGIN_STAGE_MESSAGE,
+    fallbackReason: TRANSFER_REASON.HARNESS_SUMMARY,
+    defaultGenerationSource: TRANSFER_REASON.HARNESS_SUMMARY,
     allowCustom: true,
   });
 
   if (!normalizedDetail) {
     await emitSemanticTransferValidation({
       runtime,
-      scenario: "agent_plugin_stage_message",
+      scenario: "harness",
       stats: {
         inputCount: 0,
         outputCount: 0,
@@ -56,7 +60,7 @@ export async function transferAgentPluginStageMessage({
         invalidCount: 0,
         strict: Boolean(
           runtime?.userConfig?.semanticTransfer?.strictEnvelopeValidation ??
-            runtime?.globalConfig?.semanticTransfer?.strictEnvelopeValidation,
+          runtime?.globalConfig?.semanticTransfer?.strictEnvelopeValidation,
         ),
         enforceProtocol: true,
       },
@@ -76,6 +80,12 @@ export async function transferAgentPluginStageMessage({
     generationSource: intent.generationSource,
     source: intent.source,
     reason: intent.reason,
+    intent: {
+      source: intent.source,
+      reason: intent.reason,
+      scenario: "harness",
+      strategy: "harness_summary",
+    },
     meta: {
       ...(isPlainObject(meta) ? meta : {}),
       summary: normalizedSummary,
@@ -83,12 +93,20 @@ export async function transferAgentPluginStageMessage({
     },
   });
 
-  const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes) ? persisted.transferEnvelopes : [];
-  transferEnvelopes.forEach((envelope) => validateTransferEnvelope(envelope, { strict: true }));
+  const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
+    ? persisted.transferEnvelopes
+    : [];
+  transferEnvelopes.forEach((envelope) =>
+    validateTransferEnvelope(envelope, { strict: true }),
+  );
   await emitSemanticTransferValidation({
     runtime,
-    scenario: "agent_plugin_stage_message",
-    stats: { inputCount: transferEnvelopes.length, outputCount: transferEnvelopes.length, enforceProtocol: true },
+    scenario: "harness",
+    stats: {
+      inputCount: transferEnvelopes.length,
+      outputCount: transferEnvelopes.length,
+      enforceProtocol: true,
+    },
   });
   return { transferEnvelopes };
 }
@@ -102,8 +120,15 @@ export function composeAgentPluginFinalMessage({
   const resultText = String(resultInfo || "").trim();
   const validationText = String(validationInfo || "").trim();
   const detailLines = (Array.isArray(detailEnvelopes) ? detailEnvelopes : [])
-    .flatMap((envelope = {}) => Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments : [])
-    .map((item = {}) => `- ${firstNormalizedString(item.name, item.identity?.attachmentId)}`);
+    .flatMap((envelope = {}) =>
+      Array.isArray(envelope?.payload?.attachments)
+        ? envelope.payload.attachments
+        : [],
+    )
+    .map(
+      (item = {}) =>
+        `- ${firstNormalizedString(item.name, item.identity?.attachmentId)}`,
+    );
 
   return [
     normalizeString(header),

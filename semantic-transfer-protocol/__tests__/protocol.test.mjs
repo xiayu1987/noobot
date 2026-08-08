@@ -10,6 +10,10 @@ import {
   directTransfer,
   validateTransferEnvelope,
   createTransferIdentity,
+  assertSemanticTransferRegistration,
+  getToolInputPolicy,
+  getToolOutputPolicy,
+  hasToolInputPolicy,
 } from "../src/index.mjs";
 import { decideTransfer } from "../src/policy.mjs";
 
@@ -100,4 +104,32 @@ test("decides attachment without fallback when content exceeds limit", () => {
       capabilities: { attachmentPersistence: false },
     }),
   );
+});
+
+test("rejects unregistered scenarios and strategies", () => {
+  assert.throws(
+    () => assertSemanticTransferRegistration({ scenario: "unknown", strategy: "tool_output" }),
+    /semantic_transfer_scenario_not_registered/,
+  );
+  assert.throws(
+    () => assertSemanticTransferRegistration({ scenario: "tool", strategy: "unknown" }),
+    /semantic_transfer_strategy_not_registered/,
+  );
+  assert.throws(() => directTransfer({
+    transferId: "tr-unregistered",
+    messageId: "m-unregistered",
+    identity,
+    direction: "output",
+    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "unknown" },
+    content: "blocked",
+  }), /semantic_transfer_strategy_not_registered/);
+});
+
+test("tool input and output policies come from the protocol registry", () => {
+  assert.equal(hasToolInputPolicy("write_file"), true);
+  assert.equal(getToolInputPolicy("write_file").field, "content");
+  assert.equal(getToolOutputPolicy("write_file").type, "text");
+  assert.equal(getToolOutputPolicy("multimodal_generate").type, "attachment_bytes");
+  assert.throws(() => getToolInputPolicy("unknown"), /tool_input_policy_not_registered/);
+  assert.throws(() => getToolOutputPolicy("unknown"), /tool_output_policy_not_registered/);
 });

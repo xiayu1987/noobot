@@ -4,9 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  parseAttachmentDescriptor,
   parseAttachmentIdentity,
   attachmentIdentityKey,
 } from "@noobot/attachment-protocol";
+import { assertSemanticTransferRegistration } from "./registry.mjs";
+export * from "./registry.mjs";
 
 export const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
 export const TRANSFER_VERSION = 2;
@@ -152,17 +155,19 @@ export function createAttachmentReference({
   size,
   preview,
 } = {}) {
+  const descriptor = parseAttachmentDescriptor({
+    identity,
+    name,
+    mimeType,
+    ...(size === undefined ? {} : { size }),
+  });
   const reference = {
-    identity: parseAttachmentIdentity(identity),
+    identity: descriptor.identity,
     role: required(role, "invalid_transfer_attachment_role"),
-    name: required(name, "invalid_transfer_attachment_name"),
-    mimeType: required(mimeType, "invalid_transfer_attachment_mime_type"),
+    name: descriptor.name,
+    mimeType: descriptor.mimeType,
   };
-  if (size !== undefined) {
-    if (!Number.isSafeInteger(size) || size < 0)
-      throw new Error("invalid_transfer_attachment_size");
-    reference.size = size;
-  }
+  if (descriptor.size !== undefined) reference.size = descriptor.size;
   if (preview !== undefined) reference.preview = String(preview);
   known(reference, REF_KEYS, "unknown_transfer_attachment_field");
   return Object.freeze(reference);
@@ -177,6 +182,10 @@ export function createTransferEnvelope({
   intent,
   meta = {},
 } = {}) {
+  assertSemanticTransferRegistration({
+    scenario: intent?.scenario,
+    strategy: intent?.strategy,
+  });
   const envelope = Object.freeze({
     protocol: TRANSFER_PROTOCOL,
     version: TRANSFER_VERSION,

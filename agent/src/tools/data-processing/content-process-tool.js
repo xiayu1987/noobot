@@ -165,6 +165,9 @@ export function createContentProcessTool({ agentContext }) {
         const answer = String(subResult?.answer || "").trim();
         const traces = Array.isArray(subResult?.traces) ? subResult.traces : [];
         const messages = Array.isArray(subResult?.messages) ? subResult.messages : [];
+        const transferEnvelopes = Array.isArray(subResult?.transferEnvelopes)
+          ? subResult.transferEnvelopes
+          : [];
         const usedTools = Array.from(
           new Set(
             traces
@@ -183,6 +186,7 @@ export function createContentProcessTool({ agentContext }) {
             tools: contentProcessToolNames,
             maxToolLoopTurns: resolvedMaxToolLoopTurns,
             answer,
+            ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
             summary: {
               answer_length: answer.length,
               trace_count: traces.length,

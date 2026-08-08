@@ -31,8 +31,8 @@ function attachmentRuntime() {
 
 test("subagent results are separate V2 envelopes with producer identity", async () => {
   const result = await transferSemanticContent({
-    scenario: "bot_plugin",
-    strategy: "bot_plugin_subagent_result",
+    scenario: "workflow",
+    strategy: "workflow_subagent",
     identity: identity(),
     runtime: attachmentRuntime(),
     messages: [
@@ -47,8 +47,8 @@ test("subagent results are separate V2 envelopes with producer identity", async 
 
 test("agent plugin stage stores detail as an attachment reference and final message stays direct", async () => {
   const staged = await transferSemanticContent({
-    scenario: "agent_plugin",
-    strategy: "agent_plugin_stage_message",
+    scenario: "harness",
+    strategy: "harness_summary",
     identity: identity(),
     runtime: attachmentRuntime(),
     summary: "done",

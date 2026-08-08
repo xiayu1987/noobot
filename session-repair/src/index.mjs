@@ -66,8 +66,12 @@ function migrateTransferEnvelopeV1(envelope, message, envelopeIdentity) {
     intent: {
       source: "service",
       reason: "session_protocol_migration",
-      scenario: "session_repair",
-      strategy: "semantic_transfer_v1_to_v2",
+      scenario: envelopeIdentity.includes("nodeResultTransferEnvelopes")
+        ? "workflow_plugin_subagent"
+        : "tool",
+      strategy: envelopeIdentity.includes("nodeResultTransferEnvelopes")
+        ? "bot_plugin_subagent_result"
+        : "tool_output",
     },
     meta: {},
   });

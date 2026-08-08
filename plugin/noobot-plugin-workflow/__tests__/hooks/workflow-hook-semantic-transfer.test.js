@@ -155,7 +155,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.ok(agentResult);
 
   assert.equal(subSessionCalls.length, 1);
-  assert.equal(semanticTransferCalls.some((item) => item?.strategy === "bot_plugin_subagent_result"), true);
+  assert.equal(semanticTransferCalls.some((item) => item?.strategy === "workflow_subagent"), true);
   assert.equal(planningPersistCalls.length, 1);
   assert.equal(eventLogCalls.length > 0, true);
   const planningRuntimeEvent = eventLogCalls.find(
@@ -321,10 +321,10 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
             sharedTools: {
               semanticTransfer: {
                 async transferSemanticContent({ scenario = "", strategy = "" } = {}) {
-                  if (String(scenario || "") !== "bot_plugin" || String(strategy || "") !== "bot_plugin_subagent_result") {
-                    if (String(strategy || "") !== "bot_plugin_final_return") return { transferEnvelopes: [] };
+                  if (String(scenario || "") !== "workflow") {
+                    return { transferEnvelopes: [] };
                   }
-                  const isFinal = String(strategy || "") === "bot_plugin_final_return";
+                  const isFinal = String(strategy || "") === "workflow_final_plan";
                   return {
                     transferEnvelopes: [isFinal ? createV2AttachmentTransferEnvelope({
                       attachmentId: "wf-semantic-final-1",
@@ -334,7 +334,8 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
                       transferId: "transfer-wf-semantic-final-1",
                       messageId: "message-wf-semantic-final-1",
                       name: "final-summary.md",
-                      strategy: "bot_plugin_final_return",
+                      scenario: "workflow",
+                      strategy: "workflow_final_plan",
                       reason: "workflow_completed_attachment_summary",
                     }) : envelope],
                   };
@@ -426,7 +427,8 @@ test("workflow hook routes final attachment summary composition through semantic
                     transferId: `transfer-wf-semantic-${suffix}-1`,
                     messageId: `message-wf-semantic-${suffix}-1`,
                     name: `${suffix}-summary.md`,
-                    strategy: "bot_plugin_final_return",
+                    scenario: String(payload?.scenario || "").trim(),
+                    strategy: String(payload?.strategy || "").trim(),
                     reason: "workflow_completed_attachment_summary",
                   });
                   return {
@@ -444,8 +446,8 @@ test("workflow hook routes final attachment summary composition through semantic
 
   const hasFinalSummaryCall = semanticTransferCalls.some(
     (item = {}) =>
-      String(item?.scenario || "").trim() === "bot_plugin" &&
-      String(item?.strategy || "").trim() === "bot_plugin_final_return" &&
+      String(item?.scenario || "").trim() === "workflow" &&
+      String(item?.strategy || "").trim() === "workflow_final_plan" &&
       String(item?.generationSource || "").trim() === "workflow_completed_attachment_summary",
   );
   assert.equal(hasFinalSummaryCall, true);

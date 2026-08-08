@@ -135,6 +135,9 @@ export function createConnectorAccessTool({ agentContext }) {
         const subResult = detachedRun?.result || {};
         const answer = String(subResult?.answer || "").trim();
         const traces = Array.isArray(subResult?.traces) ? subResult.traces : [];
+        const transferEnvelopes = Array.isArray(subResult?.transferEnvelopes)
+          ? subResult.transferEnvelopes
+          : [];
         const usedTools = Array.from(
           new Set(
             traces
@@ -150,6 +153,7 @@ export function createConnectorAccessTool({ agentContext }) {
             sessionId: subSessionId,
             parentSessionId,
             answer,
+            ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
             tools: subTools.map((item) => item?.name).filter(Boolean),
             summary: {
               answer_length: answer.length,

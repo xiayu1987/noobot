@@ -85,7 +85,7 @@ test("workflow transfer preserves canonical identity isolation without flattenin
     transferId: "transfer-shared",
     messageId: "message-shared",
     identity: { sessionId: "session-a", turnScopeId: "turn-shared", runId: "run-shared", producer: { type: "workflow", id: "workflow-1" } },
-    intent: { source: "plugin", reason: "test", scenario: "workflow", strategy: "attachment_test" },
+    intent: { source: "plugin", reason: "test", scenario: "workflow", strategy: "workflow_subagent" },
   });
   assert.equal(payload.transferEnvelopes[0].payload.attachments.length, 3);
   assert.equal(payload.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "shared");

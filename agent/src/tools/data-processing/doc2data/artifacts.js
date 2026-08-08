@@ -53,7 +53,7 @@ export function buildExistingArtifactPersistedOutput({
     source: TRANSFER_SOURCE.TOOL,
     reason: TRANSFER_REASON.REUSE_DATA_PROCESSING_ARTIFACT,
     scenario: "tool",
-    strategy: "doc2data_reuse_artifact",
+    strategy: "tool_output",
   });
   const transferEnvelopes = [envelope];
   return {

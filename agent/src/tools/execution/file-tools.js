@@ -303,6 +303,12 @@ export function createFileTool({ agentContext }) {
         resolvedPath: toFileToolDisplayPath({ resolvedPath, agentContext }),
         fileName: path.basename(resolvedPath),
         isSandbox,
+        outputArtifacts: [{
+          type: "text",
+          name: path.basename(resolvedPath),
+          mimeType: "text/plain",
+          content,
+        }],
       });
     },
   });

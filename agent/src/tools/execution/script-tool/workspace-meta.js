@@ -10,7 +10,6 @@ import {
 } from "@noobot/path-resolver";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import {
-  getTransferAttachments,
   persistTransferArtifacts,
 } from "../../../transfer-adapter/index.js";
 import {
@@ -224,7 +223,7 @@ async function persistBackgroundScriptOutput({
       source: "tool",
       reason: "execute_script_background",
       scenario: "tool",
-      strategy: "execute_script_background",
+      strategy: "tool_output",
     },
     meta: { contentOmitted: true },
   });
@@ -248,6 +247,5 @@ export async function toolFileBackedExecResult(mode, r = {}, extra = {}, options
     code: Number(r?.code || 0),
     ...(r?.signal ? { signal: r.signal } : {}),
     transferEnvelopes,
-    attachments: getTransferAttachments(transferEnvelopes),
   });
 }

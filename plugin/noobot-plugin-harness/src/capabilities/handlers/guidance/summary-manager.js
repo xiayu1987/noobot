@@ -52,8 +52,8 @@ export async function transferSummaryInjectionMessage(
     throw new Error("harness_semantic_transfer_runtime_required");
   }
   const transferred = await transferSemanticContent({
-    scenario: "agent_plugin",
-    strategy: "agent_plugin_summary_injection",
+    scenario: "harness",
+    strategy: "harness_summary",
     producer: { type: "plugin", id: "harness-summary" },
     direction: "output",
     injectMode,

@@ -111,6 +111,7 @@ export async function materializeTextForToolResult({
       generationSource: intent.generationSource,
       source: intent.source,
       reason: intent.reason,
+      intent: { source: intent.source, reason: intent.reason, scenario, strategy },
       storage,
       identity,
       producer,
