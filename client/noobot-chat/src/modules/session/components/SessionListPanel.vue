@@ -54,7 +54,7 @@ const groupedSessions = computed(() => {
   }
   return [...groupsByDate].map(([key, items]) => ({
     key,
-    label: key === "unknown" ? translate("common.unknown") : key,
+    label: key === "unknown" ? translate("common.sessionDateUnknown") : key,
     items,
   }));
 });

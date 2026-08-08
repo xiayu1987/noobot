@@ -289,6 +289,10 @@ export function createChatWebSocketClient({
               dispatchEligible,
               owner,
             }));
+            // Receipt is a transport acknowledgement. Send it immediately after
+            // validating the envelope so a business reducer failure cannot stall
+            // the authoritative lifecycle delivery queue.
+            acknowledgeTurnLifecycleReceipt(ws, event, data);
           }
           if (owner === "reconnect_handler") {
             activeReconnectContext.handleProtocolEvent({ event, data });
@@ -297,7 +301,6 @@ export function createChatWebSocketClient({
           } else if (owner === "transport_live_subscriber") {
             liveEventSubscriber({ event, data });
           }
-          if (dispatchEligible) acknowledgeTurnLifecycleReceipt(ws, event, data);
           logWorkflowDiagnostics("frontend.websocket.protocolEventDispatched", () => ({
             sessionId: normalizeTrimmedString(data?.sessionId),
             dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
