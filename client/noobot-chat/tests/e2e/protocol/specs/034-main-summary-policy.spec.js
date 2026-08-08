@@ -32,7 +32,7 @@ import {
 } from "../helpers/model-message-assertions.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { readRenderedFileNames } from "../helpers/attachment-assertions.js";
-import { waitForCommand } from "../helpers/scenario-assertions.js";
+import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 function toolCallId(call = {}) {
@@ -67,6 +67,14 @@ function assertSummarizedToolPairsAreClosed(messages, summarizedIds) {
     .map((message) => String(message.tool_call_id || "").trim())
     .filter(Boolean));
   expect(toolResultIds).toEqual(assistantCallIds);
+}
+
+function isSummaryPolicyMessage(message = {}) {
+  if (message.role === "tool" && toolResultName(message) === "task_summary") return false;
+  if (message.role === "assistant" && Array.isArray(message.tool_calls) &&
+      message.tool_calls.some((call) => toolCallName(call) === "task_summary")) return false;
+  return message.role === "tool" ||
+    (message.role === "assistant" && Array.isArray(message.tool_calls) && message.tool_calls.length > 0);
 }
 
 test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入闭环", async ({ noobot, protocolCapture }, testInfo) => {
@@ -118,6 +126,13 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
   const messagesByUid = new Map(messages.map((message) => [message.messageUid, message]));
   for (const messageUid of summarizedIds) expect(messagesByUid.get(messageUid)?.summarized, messageUid).toBe(true);
   assertSummarizedToolPairsAreClosed(messages, summarizedIds);
+  const firstTurnPolicyMessages = messages
+    .filter((message) => message.turnScopeId === send.identity.turnScopeId)
+    .filter(isSummaryPolicyMessage);
+  expect(firstTurnPolicyMessages.length).toBeGreaterThan(0);
+  for (const message of firstTurnPolicyMessages) {
+    expect(message.summarized, `first-turn:${message.messageUid}`).toBe(true);
+  }
   const phasePrompts = messages.filter((message) =>
     resolveContextInternalMessageType(message) === "noobot.phase_summary_prompt",
   );
@@ -223,4 +238,38 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
   const toolResultNames = messages.map(toolResultName).filter(Boolean);
   expect(toolResultNames.filter((name) => name === "execute_script")).toHaveLength(3);
   expect(toolResultNames.filter((name) => name === "task_summary")).toHaveLength(1);
+
+  // The next user turn must receive the durable post-finalization projection,
+  // not the in-memory pre-finalizer tool-message prefix.
+  const commandCountBeforeSecondTurn = commandsForSession(protocolCapture, noobot.sessionId).length;
+  await sendMessage(noobot.page, uniquePrompt(testInfo, "第二轮只回复已完成，不调用工具。"));
+  const secondSend = await waitForCommand(
+    protocolCapture,
+    noobot.sessionId,
+    "turn.send",
+    commandCountBeforeSecondTurn,
+  );
+  await waitForNaturalCompletion({
+    page: noobot.page,
+    capture: protocolCapture,
+    sessionId: noobot.sessionId,
+    turnScopeId: secondSend.identity.turnScopeId,
+    timeoutMs: 220000,
+  });
+  const secondTurnRecords = await waitForSessionExecutionEventTree(noobot.userId, noobot.sessionId, (items) => {
+    const scopedSecondTurn = items.filter((item) => item.turnScopeId === secondSend.identity.turnScopeId);
+    return modelInvocationTraces(scopedSecondTurn).some(isMainAgentModelInvocation);
+  });
+  const secondInvocations = modelInvocationTraces(
+    secondTurnRecords.filter((item) => item.turnScopeId === secondSend.identity.turnScopeId),
+  ).filter(isMainAgentModelInvocation);
+  expect(secondInvocations.length).toBeGreaterThan(0);
+  const firstTurnPolicyIds = new Set(firstTurnPolicyMessages.map((message) => message.messageUid));
+  for (const invocation of secondInvocations) {
+    expect(invocation.data.messages.summarizedCount).toBe(0);
+    const visibleIds = new Set(invocation.data.messages.preview.map((message) => message.messageId).filter(Boolean));
+    for (const messageUid of firstTurnPolicyIds) {
+      expect(visibleIds.has(messageUid), `second-turn:${messageUid}`).toBe(false);
+    }
+  }
 });

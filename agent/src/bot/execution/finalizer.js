@@ -239,9 +239,20 @@ export class SessionExecutionFinalizer {
       Math.max(0, Number(alreadyPersistedTurnMessageCount) || 0),
     );
     const hasRecoveredPersistedPrefix = Array.isArray(persistedTurnMessages);
-    const persistedUidSet = new Set((Array.isArray(persistedTurnMessageUids)
-      ? persistedTurnMessageUids
-      : [])
+    const durableMessages = Array.isArray(durableTurnMessages)
+      ? durableTurnMessages
+      : Array.isArray(persistedTurnMessages)
+        ? persistedTurnMessages
+        : [];
+    const durableMessageUids = new Set(
+      durableMessages
+        .map((message = {}) => String(message.messageUid || "").trim())
+        .filter(Boolean),
+    );
+    const persistedUidSet = new Set([
+      ...(Array.isArray(persistedTurnMessageUids) ? persistedTurnMessageUids : []),
+      ...durableMessageUids,
+    ]
       .map((uid) => String(uid || "").trim())
       .filter(Boolean));
     const activeMessageUids = new Set(activeTurnMessages
@@ -272,9 +283,6 @@ export class SessionExecutionFinalizer {
       ? persistedTurnMessages.length
       : persistedActivePrefixCount;
     const promotedTurnMessages = promotedMessages.slice(promotionSourceCount);
-    const durableMessages = Array.isArray(durableTurnMessages)
-      ? durableTurnMessages
-      : persistedTurnMessages;
     const persistedMessagesByUid = new Map(
       (Array.isArray(durableMessages) ? durableMessages : [])
         .map((message = {}) => [String(message.messageUid || "").trim(), message])

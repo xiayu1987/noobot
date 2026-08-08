@@ -216,6 +216,77 @@ test("runSession compares the complete durable turn without treating it as a che
   );
 });
 
+test("runSession upserts summarized messages created after a checkpoint", async () => {
+  const callOrder = [];
+  let capturedFinalizePayload = null;
+  const durableMessages = [
+    {
+      messageUid: "sm_checkpoint-tool",
+      messageId: "msg_checkpoint-tool",
+      role: "tool",
+      content: "checkpoint result",
+      summarized: true,
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-1",
+    },
+    {
+      messageUid: "sm_tail-tool",
+      messageId: "msg_tail-tool",
+      role: "tool",
+      content: "tail result",
+      summarized: false,
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-1",
+    },
+    {
+      messageUid: "sm_final-assistant",
+      messageId: "message-final",
+      role: "assistant",
+      content: "done",
+      summarized: false,
+      turnScopeId: "turn-a",
+      dialogProcessId: "dialog-1",
+    },
+  ];
+  const runner = createRunner({
+    callOrder,
+    runtime: {
+      attachmentMetas: [],
+      summaryCheckpointPersistedMessageUids: ["sm_checkpoint-tool"],
+      summaryCheckpointPersistedCount: 1,
+      summaryCheckpointPersistedTotal: 1,
+    },
+    agentRunner: async () => ({
+      output: "done",
+      assistantMessageId: "message-final",
+      traces: [],
+      turnMessages: durableMessages.map((message) => ({ ...message, summarized: true })),
+      turnTasks: [],
+    }),
+    getSessionTurns: async () => durableMessages,
+    finalizeRunSession: async (payload = {}) => {
+      capturedFinalizePayload = payload;
+      return { ok: true };
+    },
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    turnScopeId: "turn-a",
+  });
+
+  assert.deepEqual(
+    capturedFinalizePayload.persistedTurnMessageUids.sort(),
+    ["sm_checkpoint-tool", "sm_tail-tool", "sm_final-assistant"].sort(),
+  );
+  assert.deepEqual(
+    capturedFinalizePayload.durableTurnMessages.map((message) => [message.messageUid, message.summarized]),
+    [["sm_checkpoint-tool", true], ["sm_tail-tool", false], ["sm_final-assistant", false]],
+  );
+});
+
 test("runSession restores checkpoint messages by exact persistent UID when available", async () => {
   const callOrder = [];
   const runtime = {
