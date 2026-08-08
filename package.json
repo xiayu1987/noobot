@@ -9,6 +9,7 @@
     "attachment-protocol",
     "semantic-transfer-protocol",
     "session-protocol",
+    "session-repair",
     "authoritative-state",
     "service",
     "agent",

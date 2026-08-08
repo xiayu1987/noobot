@@ -17,7 +17,7 @@ import {
 import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 
 export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 19;
-export const SESSIONS_SUMMARY_SCHEMA_VERSION = 1;
+export const SESSIONS_SUMMARY_SCHEMA_VERSION = 2;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
@@ -114,6 +114,40 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
       : sessionId.slice(0, 8)),
     messageCount: messages.length,
     lastMessage,
+    availability: "available",
+  };
+}
+
+export function buildUnavailableSessionSummary({
+  sessionId = "",
+  parentSessionId = "",
+  title = "",
+  caller = "user",
+  createdAt = "",
+  updatedAt = "",
+  errorCode = "SESSION_PROTOCOL_INVALID",
+  reason = "",
+  depth = 0,
+} = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  return {
+    sessionId: normalizedSessionId,
+    parentSessionId: String(parentSessionId || "").trim(),
+    caller: String(caller || "user").trim() || "user",
+    currentTaskId: "",
+    createdAt: String(createdAt || "").trim(),
+    updatedAt: String(updatedAt || "").trim(),
+    depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
+    aggregateVersion: 0,
+    title: String(title || "").trim() || normalizedSessionId.slice(0, 8),
+    messages: [],
+    messageCount: 0,
+    lastMessage: null,
+    availability: "unavailable",
+    unavailableReason: {
+      code: String(errorCode || "SESSION_PROTOCOL_INVALID").trim() || "SESSION_PROTOCOL_INVALID",
+      message: String(reason || "Session uses an unsupported protocol").trim(),
+    },
   };
 }
 
@@ -815,6 +849,16 @@ export function normalizeSessionsSummaryPayload(payload = {}, now = () => new Da
         item?.lastMessage && typeof item.lastMessage === "object" && !Array.isArray(item.lastMessage)
           ? item.lastMessage
           : null,
+      ...(item?.availability === "unavailable" ? { messages: [] } : {}),
+      availability: item?.availability === "unavailable" ? "unavailable" : "available",
+      ...(item?.availability === "unavailable"
+        ? {
+            unavailableReason: {
+              code: String(item?.unavailableReason?.code || "SESSION_PROTOCOL_INVALID").trim(),
+              message: String(item?.unavailableReason?.message || "Session uses an unsupported protocol").trim(),
+            },
+          }
+        : {}),
     }))
     .filter((item) => item.sessionId);
   return {

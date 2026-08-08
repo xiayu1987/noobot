@@ -53,6 +53,15 @@ function failSummaryAudit(message, report) {
 export async function auditSessionSummaryArtifacts(userId, sessionId, { expectation = "required" } = {}) {
   const root = sessionRoot(userId, sessionId);
   const summaryFiles = (await findFilesNamed(root, "session-summary.json")).sort();
+  const sessionsIndexFile = path.join(workspaceRoot(), userId, "runtime/session/sessions.json");
+  let sessionsIndex = null;
+  try {
+    sessionsIndex = await readJson(sessionsIndexFile);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const indexedSession = (Array.isArray(sessionsIndex?.sessions) ? sessionsIndex.sessions : [])
+    .find((item) => String(item?.sessionId || "").trim() === sessionId) || null;
   const report = {
     protocolVersion: 1,
     authority: "session_summary_artifact",
@@ -63,13 +72,28 @@ export async function auditSessionSummaryArtifacts(userId, sessionId, { expectat
     referencedDetailCount: 0,
     summaryBytes: 0,
     detailBytes: 0,
+    listAvailability: String(indexedSession?.availability || ""),
     sessions: [],
   };
   if (expectation === "forbidden") {
     if (summaryFiles.length) failSummaryAudit(`unprovisioned session created summary artifacts: ${sessionId}`, report);
+    if (indexedSession) failSummaryAudit(`unprovisioned session created a sessions index entry: ${sessionId}`, report);
+    return report;
+  }
+  if (expectation === "unavailable") {
+    const reason = indexedSession?.unavailableReason;
+    if (indexedSession?.availability !== "unavailable"
+      || !Array.isArray(indexedSession?.messages) || indexedSession.messages.length
+      || Number(indexedSession?.messageCount) !== 0 || indexedSession?.lastMessage !== null
+      || !String(reason?.code || "").trim() || !String(reason?.message || "").trim()) {
+      failSummaryAudit(`invalid unavailable sessions index projection: ${sessionId}`, report);
+    }
     return report;
   }
   if (expectation !== "required") failSummaryAudit(`invalid summary audit expectation: ${expectation}`, report);
+  if (indexedSession?.availability !== "available") {
+    failSummaryAudit(`available session is missing its canonical sessions index projection: ${sessionId}`, report);
+  }
   if (!summaryFiles.length) failSummaryAudit(`session summary artifact is missing: ${sessionId}`, report);
 
   for (const summaryFile of summaryFiles) {

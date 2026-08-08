@@ -188,7 +188,8 @@ watch(
                   class="session-item noobot-subtle-row"
                   :data-session-id="sessionItem.sessionId"
                   :data-session-local="sessionItem.isLocal === true ? 'true' : 'false'"
-                  :class="{ active: sessionItem.sessionId === activeSessionId }"
+                  :class="{ active: sessionItem.sessionId === activeSessionId, unavailable: sessionItem.isUnavailable === true }"
+                  :aria-disabled="sessionItem.isUnavailable === true ? 'true' : undefined"
                   @click="emit('select-session', sessionItem.sessionId)"
                 >
                   <div class="session-icon-wrapper">
@@ -197,8 +198,13 @@ watch(
                   <div class="session-info">
                     <div class="title">{{ sessionItem.title }}</div>
                     <div class="sid">
-                      <span class="status-dot" :class="sessionRuntimeStatus(sessionItem)"></span>
-                      #{{ sessionItem.sessionId ? sessionItem.sessionId.slice(0, 8) : translate("common.notStarted") }}
+                      <span v-if="sessionItem.isUnavailable" class="session-unavailable-label">
+                        {{ translate("common.sessionUnavailableLegacyProtocol") }}
+                      </span>
+                      <template v-else>
+                        <span class="status-dot" :class="sessionRuntimeStatus(sessionItem)"></span>
+                        #{{ sessionItem.sessionId ? sessionItem.sessionId.slice(0, 8) : translate("common.notStarted") }}
+                      </template>
                     </div>
                   </div>
                   <div class="session-actions">
@@ -207,6 +213,7 @@ watch(
                       class="session-rename-btn noobot-action-btn noobot-flat-icon-btn"
                       :title="translate('common.renameSession')"
                       :aria-label="translate('common.renameSession')"
+                      :disabled="sessionItem.isUnavailable === true"
                       @click.stop="promptRenameSession(sessionItem)"
                     >
                       <el-icon><EditPen /></el-icon>
@@ -224,7 +231,11 @@ watch(
                 </div>
               </template>
               <div class="session-popover">
-                <div class="session-popover__title">{{ sessionItem.title }}</div>
+                  <div class="session-popover__title">{{ sessionItem.title }}</div>
+                <div v-if="sessionItem.isUnavailable" class="session-popover__reason">
+                  {{ translate("common.sessionUnavailableLegacyProtocol") }}<br>
+                  {{ sessionItem.unavailableReason?.message }}
+                </div>
                 <ul class="session-popover__meta">
                   <li>
                     <span class="k">{{ translate("common.sessionStatus") }}</span>
@@ -306,6 +317,20 @@ watch(
   gap: 8px;
   padding: 8px 10px;
   cursor: pointer;
+}
+
+.session-item.unavailable {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.session-item.unavailable .session-icon-wrapper {
+  color: var(--noobot-status-error);
+}
+
+.session-unavailable-label {
+  color: var(--noobot-status-error);
+  font-family: inherit;
 }
 
 .session-item:hover {

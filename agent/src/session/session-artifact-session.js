@@ -482,6 +482,47 @@ export async function readSessionArtifact({
   return { ...session, messages: restoredMessages };
 }
 
+export async function readSessionArtifactForRepair({
+  storageService = null,
+  sessionDir = "",
+  fallback = null,
+} = {}) {
+  const files = buildSessionArtifactFileMap(sessionDir);
+  const session = await readJsonWithStorage({ storageService, artifactPath: files.session, fallback });
+  if (!session || typeof session !== "object") return fallback;
+  if (Number(session.schemaVersion) === TURN_JOURNAL_SCHEMA_VERSION) {
+    return readSessionArtifact({ storageService, sessionDir, fallback });
+  }
+  if (Array.isArray(session.messages)) return session;
+  const messages = [];
+  const messagesByTurnId = new Map();
+  for (const item of Array.isArray(session.turnOrder) ? session.turnOrder : []) {
+    const file = typeof item === "string" ? item : item?.file;
+    if (!file) continue;
+    const turn = await readJsonWithStorage({
+      storageService,
+      artifactPath: resolveTurnArtifactPath(sessionDir, file),
+      fallback: null,
+    });
+    if (!turn || !Array.isArray(turn.messages)) {
+      const error = new Error(`session turn artifact is missing or invalid: ${file}`);
+      error.code = "SESSION_TURN_ARTIFACT_MISSING";
+      throw error;
+    }
+    const turnId = String(item?.turnId || turn?.turnId || "").trim();
+    if (turnId) messagesByTurnId.set(turnId, turn.messages);
+    messages.push(...turn.messages);
+  }
+  const order = Array.isArray(session.messageOrder) ? session.messageOrder : [];
+  return {
+    ...session,
+    messages: order.length
+      ? order.map((reference) => messagesByTurnId
+        .get(String(reference?.turnId || "").trim())?.[Number(reference?.messageIndex)]).filter(Boolean)
+      : messages,
+  };
+}
+
 async function writeJsonWithStorage({
   storageService = null,
   artifactPath = "",
