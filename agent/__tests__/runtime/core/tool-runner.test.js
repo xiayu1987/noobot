@@ -13,48 +13,111 @@ import {
   executeToolCall as executeToolCallWithoutTurn,
   executeToolCallInTurn,
 } from "../../../src/runtime/tool-execution/tool-runner.js";
+import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 
 function executeToolCall(options = {}) {
-  if (!options.eventListener) return executeToolCallWithoutTurn(options);
   const runtime = options.runtime && typeof options.runtime === "object"
     ? options.runtime
     : {};
+  runtime.userId = String(runtime.userId || options.userId || "test-user");
+  runtime.globalConfig = runtime.globalConfig && typeof runtime.globalConfig === "object"
+    ? runtime.globalConfig
+    : {};
+  runtime.globalConfig.workspaceRoot = String(
+    runtime.globalConfig.workspaceRoot || runtime.basePath || os.tmpdir(),
+  );
   const systemRuntime = runtime.systemRuntime && typeof runtime.systemRuntime === "object"
     ? runtime.systemRuntime
     : (runtime.systemRuntime = {});
+  const identity = String(options.identity || options.call?.id || "test-tool-call");
   systemRuntime.sessionId = String(systemRuntime.sessionId || "test-session");
   systemRuntime.dialogProcessId = String(systemRuntime.dialogProcessId || "test-dialog");
   systemRuntime.turnScopeId = String(systemRuntime.turnScopeId || "test-turn");
+  systemRuntime.executionId = String(systemRuntime.executionId || `agent:${systemRuntime.turnScopeId}`);
+  runtime.runConfig = runtime.runConfig && typeof runtime.runConfig === "object"
+    ? runtime.runConfig
+    : {};
+  runtime.runConfig.turnScopeId = String(runtime.runConfig.turnScopeId || systemRuntime.turnScopeId);
+  runtime.runConfig.executionId = String(runtime.runConfig.executionId || systemRuntime.executionId);
+  runtime.runConfig.sessionId = String(runtime.runConfig.sessionId || systemRuntime.sessionId);
   systemRuntime.messageEventStream = systemRuntime.messageEventStream && typeof systemRuntime.messageEventStream === "object"
     ? systemRuntime.messageEventStream
     : {
-        activeMessageId: "test-turn-message",
-        activePresentationMessageId: "test-turn-presentation",
         sequence: 0,
       };
-  return executeToolCallInTurn({ ...options, runtime });
+  if (!systemRuntime.messageEventStream.activeMessageId) {
+    bindAssistantMessageEventStream(runtime, {
+      messageId: String(options.messageId || `message-${identity}`),
+      presentationMessageId: String(options.presentationMessageId || `presentation-${identity}`),
+    });
+  }
+  return options.eventListener
+    ? executeToolCallInTurn({ ...options, runtime })
+    : executeToolCallWithoutTurn({ ...options, runtime });
 }
 
-function getPrimaryTransferFile(envelope = {}) {
-  return Array.isArray(envelope?.files) ? envelope.files[0] || {} : {};
+function getPrimaryTransferAttachment(envelope = {}) {
+  return Array.isArray(envelope?.payload?.attachments)
+    ? envelope.payload.attachments[0] || {}
+    : {};
 }
 
-function findTransferEnvelopeByFilePath(envelopes = [], pattern = "") {
+function findTransferEnvelopeByReason(envelopes = [], reason = "") {
   return (Array.isArray(envelopes) ? envelopes : []).find((item = {}) =>
-    String(getPrimaryTransferFile(item)?.filePath || "").includes(pattern),
+    item?.intent?.reason === reason,
   );
 }
 
-test("executeToolCall extracts attachments from multimodal tool result", async () => {
+function attachmentEnvelope({
+  callId,
+  attachmentId,
+  sessionId = "test-session",
+  messageId = `message-${callId}`,
+  name = "result.txt",
+  mimeType = "text/plain",
+  size = 0,
+} = {}) {
+  return {
+    protocol: "noobot.semantic-transfer",
+    version: 2,
+    transferId: `transfer:${messageId}:tool:${callId}:output:tool_result_text:structured`,
+    messageId,
+    identity: {
+      sessionId,
+      turnScopeId: "test-turn",
+      runId: "agent:test-turn",
+      producer: { type: "tool", id: callId },
+    },
+    direction: "output",
+    payload: {
+      mode: "attachment",
+      attachments: [{
+        identity: { attachmentId, sessionId, attachmentSource: "model" },
+        role: "primary",
+        name,
+        mimeType,
+        size,
+      }],
+    },
+    intent: {
+      source: "tool",
+      reason: "semantic_transfer_tool_result",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
+    meta: { persisted: true },
+  };
+}
+
+test("executeToolCall does not promote ordinary tool attachments into semantic transfer", async () => {
   const call = {
     id: "call_1",
     name: "multimodal_generate",
     args: {},
   };
   const tool = {
-    invoke: async () =>
-      JSON.stringify({
+    invoke: async () => ({
         toolName: "multimodal_generate",
         ok: true,
         attachments: [
@@ -81,15 +144,11 @@ test("executeToolCall extracts attachments from multimodal tool result", async (
   });
 
   assert.equal(result.success, true);
-  assert.equal(Array.isArray(result.extractedAttachments), true);
-  assert.equal(result.extractedAttachments.length, 1);
-  assert.equal(
-    result.extractedAttachments[0]?.relativePath,
-    "runtime/attach/scoped/s1/model/a.png",
-  );
+  assert.equal("extractedAttachments" in result, false);
+  assert.deepEqual(result.transferEnvelopes, []);
 });
 
-test("executeToolCall extracts attachmentMetas from transferEnvelopes", async () => {
+test("executeToolCall preserves strict V2 transfer envelopes from structured tool results", async () => {
   const call = {
     id: "call_transfer_result",
     name: "multimodal_generate",
@@ -97,34 +156,16 @@ test("executeToolCall extracts attachmentMetas from transferEnvelopes", async ()
   };
   const tool = {
     invoke: async () =>
-      JSON.stringify({
+      ({
         toolName: "multimodal_generate",
         ok: true,
-        transferEnvelopes: [
-          {
-            protocol: "noobot.semantic-transfer",
-            version: 1,
-            direction: "output",
-            transport: "file",
-            files: [
-              {
-                filePath: "/workspace/generated_image_1.png",
-                attachmentMeta: {
-                  attachmentId: "att_t1",
-                  name: "generated_image_1.png",
-                  mimeType: "image/png",
-                  size: 256,
-                  sessionId: "s1",
-                  attachmentSource: "model",
-                  path: "/tmp/generated_image_1.png",
-                  relativePath: "runtime/attach/scoped/s1/model/generated_image_1.png",
-                  generatedByModel: true,
-                  generationSource: "multimodal_generate_tool",
-                },
-              },
-            ],
-          },
-        ],
+        transferEnvelopes: [attachmentEnvelope({
+          callId: call.id,
+          attachmentId: "att_t1",
+          name: "generated_image_1.png",
+          mimeType: "image/png",
+          size: 256,
+        })],
       }),
   };
 
@@ -135,14 +176,17 @@ test("executeToolCall extracts attachmentMetas from transferEnvelopes", async ()
   });
 
   assert.equal(result.success, true);
-  assert.equal(Array.isArray(result.extractedAttachments), true);
-  assert.equal(result.extractedAttachments.length, 1);
-  assert.equal(result.extractedAttachments[0]?.attachmentId, "att_t1");
+  assert.equal(result.transferEnvelopes.length, 1);
+  assert.equal(
+    getPrimaryTransferAttachment(result.transferEnvelopes[0])?.identity?.attachmentId,
+    "att_t1",
+  );
 });
 
-test("executeToolCall publishes write_file artifacts on the canonical tool_call_end event", async () => {
+test("executeToolCall does not publish writtenFiles outside semantic transfer", async () => {
   const events = [];
   const runtime = {
+    userId: "test-user",
     systemRuntime: {
       sessionId: "child-session",
       dialogProcessId: "child-dialog",
@@ -172,14 +216,7 @@ test("executeToolCall publishes write_file artifacts on the canonical tool_call_
   });
 
   const completed = events.find((event = {}) => event.event === "tool_call_end")?.data;
-  assert.deepEqual(completed?.writtenFiles, [{
-    toolName: "write_file",
-    resolvedPath: "/workspace/result.txt",
-    fileName: "result.txt",
-    isSandbox: true,
-    sourceType: "tool",
-    recognized: false,
-  }]);
+  assert.equal("writtenFiles" in completed, false);
   assert.equal(completed?.presentationMessageId, "child-assistant-1");
 });
 
@@ -366,7 +403,7 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
   assert.equal(Number.isFinite(ends[0].durationMs), true);
 });
 
-test("executeToolCall: tool result too long should be persisted and return overflow file path", async () => {
+test("executeToolCall: tool result too long should be persisted as a V2 attachment reference", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-"));
   const tool = {
     invoke: async () =>
@@ -410,49 +447,28 @@ test("executeToolCall: tool result too long should be persisted and return overf
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.ok, true);
   assert.equal(payload.overflowed, true);
-  const overflowEnvelope = findTransferEnvelopeByFilePath(payload.transferEnvelopes, ".tool-result-overflow/");
-  const overflowFile = getPrimaryTransferFile(overflowEnvelope);
-  assert.equal("filePath" in overflowEnvelope, false);
-  assert.equal(typeof overflowFile?.filePath, "string");
-  assert.equal(overflowFile.filePath.includes(".tool-result-overflow"), true);
-  assert.equal(overflowFile.filePath.includes(".tool-result-overflow/session-overflow-1/"), true);
-
-  const overflowHostPath = String(
-    overflowFile?.pathView?.hostPath ||
-      overflowFile?.filePath ||
-      "",
+  const overflowEnvelope = findTransferEnvelopeByReason(
+    payload.transferEnvelopes,
+    "tool_result_overflow",
   );
-  const overflowFileContent = await fs.readFile(overflowHostPath, "utf8");
-  const overflowPayload = JSON.parse(overflowFileContent);
-  assert.equal(overflowPayload.toolName, "demo_tool");
-  assert.equal(overflowPayload.overflowFormat, "compact-v1");
-  assert.equal(typeof overflowPayload.result, "object");
-  assert.equal(typeof overflowPayload.result.text, "string");
+  const overflowAttachment = getPrimaryTransferAttachment(overflowEnvelope);
+  assert.equal(overflowEnvelope.version, 2);
+  assert.equal(overflowEnvelope.payload.mode, "attachment");
+  assert.equal(overflowAttachment.identity.sessionId, "session-overflow-1");
+  assert.equal(overflowAttachment.identity.attachmentSource, "model");
+  assert.equal(overflowAttachment.name, "demo_tool.result.txt");
+  assert.equal(JSON.stringify(overflowEnvelope).includes("filePath"), false);
 });
 
 test("executeToolCall: overflow length is measured after compacting transfer wrappers", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-compact-"));
-  const attachmentMeta = {
+  const envelope = attachmentEnvelope({
+    callId: "call_compact_not_overflow",
     attachmentId: "att_compact_1",
     name: "result.md",
     mimeType: "text/markdown",
     size: 12,
-    sessionId: "s1",
-    attachmentSource: "model",
-    path: "/host/result.md",
-    relativePath: "runtime/attach/scoped/s1/model/result.md",
-    generatedByModel: true,
-    generationSource: "unit_test",
-  };
-  const envelope = {
-    protocol: "noobot.semantic-transfer",
-    version: 1,
-    direction: "output",
-    transport: "file",
-    filePath: "/workspace/result.md",
-    attachmentMeta,
-    files: [{ filePath: "/workspace/result.md", attachmentMeta }],
-  };
+  });
   const tool = {
     invoke: async () =>
       JSON.stringify({
@@ -460,7 +476,6 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
         ok: true,
         status: "completed",
         text: "短结果",
-        attachmentMetas: [attachmentMeta],
         transferEnvelopes: [envelope],
       }),
   };
@@ -483,37 +498,26 @@ test("executeToolCall: overflow length is measured after compacting transfer wra
 
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.overflowed, undefined);
-  assert.equal(payload.transferEnvelopes, undefined);
+  assert.equal(Array.isArray(payload.transferEnvelopes), true);
   assert.equal("transferResult" in payload, false);
-  assert.equal("transferEnvelopes" in payload, false);
+  assert.equal("transferEnvelopes" in payload, true);
   assert.equal("attachmentMetas" in payload, false);
-  assert.equal(Array.isArray(payload.transferFiles), true);
-  assert.equal(payload.transferFiles[0].attachmentId, "att_compact_1");
+  assert.equal("transferFiles" in payload, false);
+  assert.equal(
+    getPrimaryTransferAttachment(payload.transferEnvelopes[0]).identity.attachmentId,
+    "att_compact_1",
+  );
 });
 
 test("executeToolCall: overflow keeps original semantic-transfer artifact and compacts duplicates", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-transfer-"));
-  const attachmentMeta = {
+  const envelope = attachmentEnvelope({
+    callId: "call_overflow_transfer",
     attachmentId: "att_real_1",
     name: "generated.png",
     mimeType: "image/png",
     size: 128,
-    sessionId: "s1",
-    attachmentSource: "model",
-    path: "/tmp/generated.png",
-    relativePath: "runtime/attach/scoped/s1/model/generated.png",
-    generatedByModel: true,
-    generationSource: "multimodal_generate_tool",
-  };
-  const envelope = {
-    protocol: "noobot.semantic-transfer",
-    version: 1,
-    direction: "output",
-    transport: "file",
-    filePath: "/workspace/generated.png",
-    attachmentMeta,
-    files: [{ filePath: "/workspace/generated.png", attachmentMeta }],
-  };
+  });
   const tool = {
     invoke: async () =>
       JSON.stringify({
@@ -521,7 +525,6 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
         ok: true,
         status: "completed",
         text: "x".repeat(500),
-        attachmentMetas: [attachmentMeta],
         transferEnvelopes: [envelope],
       }),
   };
@@ -546,31 +549,15 @@ test("executeToolCall: overflow keeps original semantic-transfer artifact and co
   assert.equal(payload.overflowed, true);
   assert.equal(Array.isArray(payload.transferEnvelopes), true);
   assert.equal(payload.transferEnvelopes.length >= 1, true);
-  assert.equal(
-    result.extractedAttachments.some((item) => item?.attachmentId === "att_real_1"),
-    true,
+  assert.equal("extractedAttachments" in result, false);
+  assert.equal(result.transferEnvelopes.length >= 1, true);
+  const overflowEnvelope = findTransferEnvelopeByReason(
+    payload.transferEnvelopes,
+    "tool_result_overflow",
   );
-
-  const overflowEnvelope = findTransferEnvelopeByFilePath(payload.transferEnvelopes, ".tool-result-overflow/");
-  const overflowFile = getPrimaryTransferFile(overflowEnvelope);
-  assert.equal("filePath" in overflowEnvelope, false);
-  const overflowHostPath = String(overflowFile?.pathView?.hostPath || overflowFile?.filePath || "");
-  const overflowPayload = JSON.parse(await fs.readFile(overflowHostPath, "utf8"));
-  assert.equal(Array.isArray(overflowPayload.result.transferEnvelopes), true);
-  assert.equal(overflowPayload.result.transferEnvelopes.length >= 1, true);
-  assert.equal("transferResult" in overflowPayload.result, false);
-  assert.equal("transferEnvelopes" in overflowPayload.result, true);
-  assert.equal("attachmentMetas" in overflowPayload.result, false);
-  const compactEnvelope = overflowPayload.result.transferEnvelopes.find(
-    (item = {}) => Array.isArray(item?.files) && item.files.some((f = {}) => f?.attachmentMeta?.attachmentId === "att_real_1"),
-  ) || overflowPayload.result.transferEnvelopes[0];
-  assert.equal("filePath" in compactEnvelope, false);
-  assert.equal("attachmentMeta" in compactEnvelope, false);
-  assert.equal("pathView" in compactEnvelope, false);
-  assert.equal(compactEnvelope.files[0].attachmentMeta.attachmentId, "att_real_1");
-  assert.equal("name" in compactEnvelope.files[0], false);
-  assert.equal("mimeType" in compactEnvelope.files[0], false);
-  assert.equal("size" in compactEnvelope.files[0], false);
+  assert.equal(overflowEnvelope.version, 2);
+  assert.equal(overflowEnvelope.payload.mode, "attachment");
+  assert.equal(JSON.stringify(overflowEnvelope).includes("filePath"), false);
 });
 
 test("executeToolCall task_summary returns transfer metadata without phase summary content", async () => {
@@ -643,10 +630,13 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
   assert.equal(payload.extraField, undefined);
   assert.equal(payload.toolInputOverflow, undefined);
   assert.equal(payload.transferFiles, undefined);
-  assert.equal(payload.transferEnvelopes?.[0]?.files?.[0]?.name, "task-summary-content.tool-input.md");
+  assert.equal(
+    payload.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.name,
+    "task-summary-content.tool-input.md",
+  );
 });
 
-test("executeToolCall: overflow result should include sandbox path when resolver is provided", async () => {
+test("executeToolCall: overflow result never exposes sandbox or host paths", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-tool-overflow-sandbox-"));
   const tool = {
     invoke: async () =>
@@ -690,19 +680,13 @@ test("executeToolCall: overflow result should include sandbox path when resolver
 
   const payload = JSON.parse(result.toolResultText);
   assert.equal(payload.overflowed, true);
-  const overflowEnvelope = findTransferEnvelopeByFilePath(payload.transferEnvelopes, ".tool-result-overflow/");
-  const overflowFile = getPrimaryTransferFile(overflowEnvelope);
-  assert.equal("filePath" in overflowEnvelope, false);
-  assert.equal("pathView" in overflowEnvelope, false);
-  assert.equal(typeof overflowFile?.pathView?.sandboxPath, "string");
-  assert.equal(
-    overflowFile.pathView.sandboxPath.startsWith("/workspace/"),
-    true,
+  const overflowEnvelope = findTransferEnvelopeByReason(
+    payload.transferEnvelopes,
+    "tool_result_overflow",
   );
-  assert.equal(
-    overflowFile.pathView.sandboxPath.includes(
-      "/runtime/ops_workdir/.tool-result-overflow/",
-    ),
-    true,
-  );
+  assert.equal(overflowEnvelope.version, 2);
+  assert.equal(overflowEnvelope.payload.mode, "attachment");
+  assert.equal(JSON.stringify(overflowEnvelope).includes("filePath"), false);
+  assert.equal(JSON.stringify(overflowEnvelope).includes("sandboxPath"), false);
+  assert.equal(JSON.stringify(overflowEnvelope).includes("hostPath"), false);
 });

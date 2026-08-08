@@ -37,9 +37,6 @@ export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
     ...(Array.isArray(envelope.attachments) && envelope.attachments.length
       ? { attachments: envelope.attachments }
       : {}),
-    ...(Array.isArray(envelope.writtenFiles) && envelope.writtenFiles.length
-      ? { writtenFiles: envelope.writtenFiles }
-      : {}),
   };
   const updated = isCall
     ? { ...current, tool: String(envelope.tool || "").trim(), args: envelope.args || {}, call: fact, status: current.resultEvent ? "completed" : "running" }

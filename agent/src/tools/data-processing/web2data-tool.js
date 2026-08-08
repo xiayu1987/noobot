@@ -11,7 +11,7 @@ import { recoverableToolError } from "../../shared/errors/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
-import { getTransferAttachmentMetas, materializeTextForToolResult, TRANSFER_SOURCE } from "../../transfer/index.js";
+import { getTransferAttachments, materializeTextForToolResult, TRANSFER_SOURCE } from "../../transfer-adapter/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import { runWebToDataPipeline } from "./web2data/pipeline.js";
@@ -93,7 +93,7 @@ export function createWeb2DataTool({ agentContext }) {
         producer: { type: "tool", name: TOOL_NAME.WEB_TO_DATA },
         meta: { mode: payload?.mode || processMode, input: payload?.input || input || "" },
       });
-      const savedAttachmentMetas = getTransferAttachmentMetas(materialized.transferEnvelopes);
+      const savedAttachments = getTransferAttachments(materialized.transferEnvelopes);
       return toToolJsonResult(
         TOOL_NAME.WEB_TO_DATA,
         {
@@ -111,7 +111,7 @@ export function createWeb2DataTool({ agentContext }) {
           model: payload?.model || {},
           summary: {
             text_length: text.length,
-            saved_attachment_count: savedAttachmentMetas.length,
+            saved_attachment_count: savedAttachments.length,
           },
         },
         true,

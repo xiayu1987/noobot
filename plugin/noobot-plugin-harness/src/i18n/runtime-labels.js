@@ -29,7 +29,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceRawSummaryField: "汇总",
     acceptanceRawSemanticField: "语义验收",
     acceptanceRawModelField: "模型验收",
-    acceptanceRawSummaryDetailPathsField: "小结明细路径",
     acceptanceModeLabel: "模式",
     acceptanceForcedReasonLabel: "强制原因",
     acceptanceAcceptedAtLabel: "验收时间",
@@ -38,7 +37,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceSummaryLabel: "汇总",
     acceptanceSemanticValidationLabel: "语义验收",
     acceptanceModelAcceptanceLabel: "模型验收结果",
-    acceptanceSummaryDetailPathsLabel: "小结明细路径",
     acceptanceEmptyLine: "- （空）",
     acceptanceDigestTitle: "### [Harness-验收]",
     acceptanceDigestModeLabel: "模式",
@@ -46,8 +44,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceDigestPlanTextLabel: "计划文本",
     acceptanceDigestSummaryLabel: "汇总",
     acceptanceDigestSemanticValidationLabel: "语义验收",
-    acceptanceDigestSummaryDetailPathsLabel: "小结明细路径",
-    acceptanceDigestNoDetailPaths: "（无）",
     acceptanceChecklistArtifactsGeneratedNotice:
       "已生成 harness 清单附件，详见 transferEnvelopes(s)。",
     acceptanceForcedReasonRebuiltArtifacts:
@@ -272,8 +268,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     messageFactoryToolCallUnknownScript: "未知脚本",
     messageFactoryToolCallNoArguments: "无参数",
     messageFactoryToolCallSemanticLine: "工具调用记录：{name}脚本被调用,参数{args}",
-    summaryDetailPathsHeader: "【SUMMARY_DETAIL_PATHS】",
-    summaryDetailPathsFooter: "【SUMMARY_DETAIL_PATHS_END】",
   }),
   [LOCALE.EN_US]: Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
@@ -296,7 +290,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceRawSummaryField: "summary",
     acceptanceRawSemanticField: "semanticValidation",
     acceptanceRawModelField: "modelAcceptance",
-    acceptanceRawSummaryDetailPathsField: "summaryDetailPaths",
     acceptanceModeLabel: "Mode",
     acceptanceForcedReasonLabel: "Forced reason",
     acceptanceAcceptedAtLabel: "Accepted at",
@@ -305,7 +298,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceSummaryLabel: "Summary",
     acceptanceSemanticValidationLabel: "Semantic validation",
     acceptanceModelAcceptanceLabel: "Model acceptance",
-    acceptanceSummaryDetailPathsLabel: "Summary detail paths",
     acceptanceEmptyLine: "- (empty)",
     acceptanceDigestTitle: "### [Harness-Acceptance]",
     acceptanceDigestModeLabel: "Mode",
@@ -313,8 +305,6 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceDigestPlanTextLabel: "Plan Text",
     acceptanceDigestSummaryLabel: "Summary",
     acceptanceDigestSemanticValidationLabel: "Semantic Validation",
-    acceptanceDigestSummaryDetailPathsLabel: "Summary Detail Paths",
-    acceptanceDigestNoDetailPaths: "-",
     acceptanceChecklistArtifactsGeneratedNotice:
       "Harness checklist artifacts generated. See transferEnvelopes(s) for details.",
     acceptanceForcedReasonRebuiltArtifacts:
@@ -538,7 +528,5 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     messageFactoryToolCallNoArguments: "none",
     messageFactoryToolCallSemanticLine:
       "Observed tool call: {name} script was called with arguments {args}",
-    summaryDetailPathsHeader: "[SUMMARY_DETAIL_PATHS]",
-    summaryDetailPathsFooter: "[SUMMARY_DETAIL_PATHS_END]",
   }),
 });

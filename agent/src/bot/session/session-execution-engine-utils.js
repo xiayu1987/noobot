@@ -11,8 +11,8 @@ import { extractMessageTextContent } from "../../context/session/message-content
 import {
   resolveMessageDialogProcessId,
 } from "../../context/session/dialog-process-id-resolver.js";
-import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
-import { getTransferAttachmentMetas } from "../../transfer/storage/consumer.js";
+import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
+import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
 import {
   getMessageId,
   isInjectedMessage,
@@ -107,8 +107,8 @@ export function resolveTransferEnvelopeListFromMessage(message = {}) {
 }
 
 export function resolvePreferredAttachments(message = {}) {
-  const transferAttachmentMetas = getTransferAttachmentMetas(resolveTransferEnvelopesFromMessage(message));
-  if (transferAttachmentMetas.length) return transferAttachmentMetas;
+  const transferAttachments = getTransferAttachments(resolveTransferEnvelopesFromMessage(message));
+  if (transferAttachments.length) return transferAttachments;
   if (Array.isArray(message?.attachments)) return message.attachments;
   if (Array.isArray(message?.lc_kwargs?.attachments)) return message.lc_kwargs.attachments;
   return [];

@@ -130,7 +130,7 @@ resolveTransferFilePath
 
 - 文件：
   - `agent/src/runtime/tool-execution/tool-runner.js`
-  - `agent/src/transfer/tool-result-text.js`
+  - `agent/src/transfer-adapter/tool-result-text.js`
 - 判断：**对齐**。
 
 ### 3.3 data-processing 工具文本结果处理

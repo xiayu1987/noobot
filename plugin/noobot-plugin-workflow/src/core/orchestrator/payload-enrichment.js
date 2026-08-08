@@ -5,9 +5,7 @@
  */
 
 import {
-  mergeAttachments,
   normalizeWorkflowTransferPayload,
-  resolveWorkflowAttachmentsFromTransferPayload,
 } from "../hooks/attachments.js";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
 import { resolveWorkflowNodeDialogProcessId } from "../dialog-process-compat.js";
@@ -65,26 +63,6 @@ export function buildWorkflowNodeSessions({
     );
 }
 
-export function resolveWorkflowAttachmentsFromNodeRuns({
-  ctx = {},
-  nodeAgentRuns = [],
-} = {}) {
-  return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : []).reduce((acc, item = {}) => {
-    const transferPayload = normalizeWorkflowTransferPayload({
-      transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes) ? item.nodeResultTransferEnvelopes : [],
-    });
-    const attachments = resolveWorkflowAttachmentsFromTransferPayload(transferPayload, ctx);
-    return mergeAttachments(
-      acc,
-      attachments.length
-        ? attachments
-        : Array.isArray(item?.nodeResultAttachments)
-          ? item.nodeResultAttachments
-          : [],
-    );
-  }, []);
-}
-
 export function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns = []) {
   return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : []).flatMap((item = {}) => {
     if (Array.isArray(item?.nodeResultTransferEnvelopes) && item.nodeResultTransferEnvelopes.length) {
@@ -108,13 +86,8 @@ export function enrichWorkflowPayload({
     storageFile: String(planningPersistResult?.outputFile || "").trim(),
   };
   workflowPayload.nodeSessions = buildWorkflowNodeSessions({ ctx, semantic, nodeAgentRuns });
-  const workflowAttachments = resolveWorkflowAttachmentsFromNodeRuns({
-    ctx,
-    nodeAgentRuns,
-  });
   workflowPayload.transferEnvelopes = resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns);
   return {
     workflowPayload,
-    workflowAttachments,
   };
 }

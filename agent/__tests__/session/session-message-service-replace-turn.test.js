@@ -199,7 +199,7 @@ test("SessionMessageService.replaceTurn preserves rich attachment fields when pa
   assert.deepEqual(saved[0].messages[0].attachments[0], richAttachment);
 });
 
-test("SessionMessageService.replaceTurn does not merge same-name attachments without stable identity", async () => {
+test("SessionMessageService.replaceTurn rejects attachments without stable identity", async () => {
   const richAttachment = {
     attachmentId: "att-rich",
     name: "report.docx",
@@ -233,7 +233,7 @@ test("SessionMessageService.replaceTurn does not merge same-name attachments wit
   });
 
   assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].messages[0].attachments, [incomingAttachment]);
+  assert.equal(saved[0].messages[0].attachments, undefined);
 });
 
 test("SessionMessageService.assertReusedUserTurnIdentity rejects attachment divergence", async () => {

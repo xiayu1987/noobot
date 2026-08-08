@@ -5,7 +5,7 @@
  */
 
 export const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
-export const TRANSFER_VERSION = 1;
+export const TRANSFER_VERSION = 2;
 
 export const TRANSFER_DIRECTION = Object.freeze({
   INPUT: "input",
@@ -14,26 +14,19 @@ export const TRANSFER_DIRECTION = Object.freeze({
 
 export const TRANSFER_TRANSPORT = Object.freeze({
   DIRECT: "direct",
-  FILE: "file",
+  ATTACHMENT: "attachment",
 });
 
 export const TRANSFER_SOURCE = Object.freeze({
   USER: "user",
   SYSTEM: "system",
   AGENT: "agent",
-  CHILD_AGENT: "subagent",
+  SUBAGENT: "subagent",
   MODEL: "model",
   TOOL: "tool",
   CONNECTOR: "connector",
   PLUGIN: "plugin",
   SERVICE: "service",
-});
-
-export const TRANSFER_STORAGE_KIND = Object.freeze({
-  ATTACHMENT: "attachment",
-  WORKSPACE: "workspace",
-  TEMP: "temp",
-  EXTERNAL: "external",
 });
 
 export const TRANSFER_REASON = Object.freeze({
@@ -44,9 +37,6 @@ export const TRANSFER_REASON = Object.freeze({
   BOT_PLUGIN_SUBAGENT_RESULT: "bot_plugin_subagent_result",
   AGENT_PLUGIN_STAGE_MESSAGE: "agent_plugin_stage_message",
   TOOL_RESULT_OVERFLOW: "tool_result_overflow",
-  CONSUME_TRANSFER_FILES: "consume_transfer_files",
-  NORMALIZE_TRANSFER_FILE_PATH: "normalize_transfer_file_path",
-  SEMANTIC_TRANSFER_FILE_PATH: "semantic_transfer_file_path",
   REUSE_DATA_PROCESSING_ARTIFACT: "reuse_data_processing_artifact",
   EXECUTE_SCRIPT_INPUT_TOO_LONG: "execute_script_input_too_long",
   WRITE_FILE_INPUT_TOO_LONG: "write_file_input_too_long",

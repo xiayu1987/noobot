@@ -9,14 +9,12 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import {
   getWorkflowTransferPayloadFromResult,
+  mergeAttachmentReferences,
   mergeAttachments,
   normalizeAttachmentRefs,
   normalizeWorkflowTransferPayload,
-  resolveAttachmentDisplayPath,
   resolveNodeInputAttachments,
-  resolveWorkflowAttachmentsFromTransferPayload,
-  resolveWorkflowTransferFileDisplayPath,
-  resolveWorkflowTransferFilesFromPayload,
+  resolveWorkflowTransferAttachmentReferences,
 } from "./attachments.js";
 import {
   buildWorkflowDialogRelativeDir,
@@ -46,12 +44,11 @@ export function buildWorkflowInputAttachmentSystemMessage({
       const label = String(
           item?.name ||
           item?.fileName ||
-          tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.DEFAULT_LABEL, { index: index + 1 }),
+          tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
       const attachmentId = String(item?.attachmentId || item?.id || "").trim();
-      const path = resolveAttachmentDisplayPath(item, ctx);
-      if (!path && !attachmentId) return "";
-      return `- ${label}${attachmentId ? ` (${attachmentId})` : ""}: ${path || attachmentId}`;
+      if (!attachmentId) return "";
+      return `- ${label} (${attachmentId})`;
     })
     .filter(Boolean);
   if (!lines.length) return "";
@@ -59,11 +56,11 @@ export function buildWorkflowInputAttachmentSystemMessage({
     semanticNode?.name || semanticNode?.id || tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
   ).trim();
   return [
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.USER_RAW_ATTACHMENTS_TITLE),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.USER_RAW_TITLE),
     "",
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_LINE, { name: nodeName }),
     "",
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_SYSTEM_HINT),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.SYSTEM_HINT),
     "",
     ...lines,
   ].join("\n");
@@ -88,7 +85,7 @@ export function buildWorkflowUpstreamAttachmentResults({
           : upstreamStep?.stepFailure && typeof upstreamStep.stepFailure === "object"
             ? upstreamStep.stepFailure
             : null;
-      const transferFiles = resolveWorkflowTransferFilesFromPayload(
+      const transferFiles = resolveWorkflowTransferAttachmentReferences(
         { transferEnvelopes },
         {},
       );
@@ -128,7 +125,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
     return status === "failed" || (item?.stepFailure && typeof item.stepFailure === "object");
   });
   const hasTransferFiles = normalizedResults.some((item = {}) =>
-    resolveWorkflowTransferFilesFromPayload(
+    resolveWorkflowTransferAttachmentReferences(
       {
         transferEnvelopes: Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
       },
@@ -182,22 +179,20 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
             }),
       );
     }
-    const transferFiles = resolveWorkflowTransferFilesFromPayload(
+    const transferFiles = resolveWorkflowTransferAttachmentReferences(
       {
         transferEnvelopes: Array.isArray(result?.transferEnvelopes) ? result.transferEnvelopes : [],
       },
       ctx,
     );
     for (const [index, file] of transferFiles.entries()) {
-      const meta = file?.attachmentMeta || file || {};
       const attachmentLabel = String(
         file?.name ||
-          meta?.name ||
-          tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.DEFAULT_LABEL, { index: index + 1 }),
+          tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
-      const path = resolveWorkflowTransferFileDisplayPath(file, ctx);
-      if (!path) continue;
-      lines.push(`- ${nodeLabel} / ${attachmentLabel}: ${path}`);
+      const attachmentId = String(file?.identity?.attachmentId || "").trim();
+      if (!attachmentId) continue;
+      lines.push(`- ${nodeLabel} / ${attachmentLabel}: ${attachmentId}`);
     }
   }
   if (!lines.length && !failureLines.length) return "";
@@ -414,8 +409,8 @@ export async function runNodeAgent({
     const transferPayload = normalizeWorkflowTransferPayload({
       transferEnvelopes: Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
     });
-    const attachments = resolveWorkflowAttachmentsFromTransferPayload(transferPayload, ctx);
-    return mergeAttachments(acc, attachments.length ? attachments : item?.attachments || []);
+    const attachments = resolveWorkflowTransferAttachmentReferences(transferPayload, ctx);
+    return mergeAttachmentReferences(acc, attachments);
   }, []);
   hookPayload.workflow.inputAttachments = nodeInputAttachments;
   hookPayload.workflow.inputAttachmentSystemMessage = inputAttachmentSystemMessage;
@@ -521,10 +516,6 @@ export async function runNodeAgent({
             turnScopeId: nodeTurnScopeId,
             workflowSessionId: String(ctx?.sessionId || "").trim(),
             workflowDialogProcessId: nodeDialogProcessId,
-            inputAttachmentRefs: normalizeAttachmentRefs(
-              semanticNode?.attachments || semanticNode?.inputAttachments || semanticNode?.attachmentIds || [],
-            ),
-            inputAttachments: nodeInputAttachments,
             upstreamWorkflowNodeResults: upstreamNodeResults,
           },
         }));

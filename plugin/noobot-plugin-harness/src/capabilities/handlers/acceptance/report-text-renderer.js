@@ -10,7 +10,6 @@ const ALLOWED_STATUS = new Set(["completed", "in_progress", "pending"]);
 function hasRecognitionFailure(report = {}) {
   if (!report || typeof report !== "object") return true;
   if ("finalPlanChecklist" in report && !Array.isArray(report.finalPlanChecklist)) return true;
-  if ("summaryDetailPaths" in report && !Array.isArray(report.summaryDetailPaths)) return true;
   if ("summary" in report && (report.summary === null || typeof report.summary !== "object" || Array.isArray(report.summary))) return true;
   if ("semanticValidation" in report && report.semanticValidation && typeof report.semanticValidation !== "object") return true;
   if ("modelAcceptance" in report && report.modelAcceptance && typeof report.modelAcceptance !== "object") return true;
@@ -21,11 +20,6 @@ function hasRecognitionFailure(report = {}) {
     const task = String(item?.task || "").trim();
     const status = String(item?.status || "").trim() || "pending";
     if (!index || !task || !ALLOWED_STATUS.has(status)) return true;
-  }
-
-  const summaryDetailPaths = Array.isArray(report.summaryDetailPaths) ? report.summaryDetailPaths : [];
-  for (const p of summaryDetailPaths) {
-    if (!String(p || "").trim()) return true;
   }
 
   if (report?.semanticValidation?.content !== undefined && typeof report.semanticValidation.content !== "string") {
@@ -52,14 +46,13 @@ function extractAcceptanceReportFields(report = {}) {
     modelAcceptance: data?.modelAcceptance && typeof data.modelAcceptance === "object"
       ? data.modelAcceptance
       : null,
-    summaryDetailPaths: Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [],
   };
 }
 
 function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   const {
     mode, forcedReason, acceptedAt, planText, checklist, summary,
-    semanticValidation, modelAcceptance, summaryDetailPaths,
+    semanticValidation, modelAcceptance,
   } = extractAcceptanceReportFields(report);
   const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_TITLE);
   const forcedReasonField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_FORCED_REASON_FIELD);
@@ -68,10 +61,6 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   const summaryField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SUMMARY_FIELD);
   const semanticField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SEMANTIC_FIELD);
   const modelField = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_MODEL_FIELD);
-  const summaryDetailPathsField = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_SUMMARY_DETAIL_PATHS_FIELD,
-  );
   const lines = [
     title,
     `mode: ${mode}`,
@@ -98,11 +87,6 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
     modelAcceptance?.rawContent
       ? `${modelField}:\n${String(modelAcceptance.rawContent)}`
       : "",
-    summaryDetailPaths.length
-      ? `${summaryDetailPathsField}:\n${summaryDetailPaths
-        .map((item) => `- ${String(item || "").trim()}`)
-        .join("\n")}`
-      : "",
   ].filter(Boolean);
   return lines.join("\n").trim();
 }
@@ -110,7 +94,7 @@ function renderRawAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
 function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN) {
   const {
     mode, forcedReason, acceptedAt, planText, checklist, summary,
-    semanticValidation, modelAcceptance, summaryDetailPaths,
+    semanticValidation, modelAcceptance,
   } = extractAcceptanceReportFields(report);
   const title = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.RAW_TITLE);
   const modeLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.MODE_LABEL);
@@ -126,10 +110,6 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
   const modelAcceptanceLabel = translateI18nText(
     locale,
     HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.MODEL_ACCEPTANCE_LABEL,
-  );
-  const detailPathLabel = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.SUMMARY_DETAIL_PATHS_LABEL,
   );
   const emptyLine = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.EMPTY_LINE);
 
@@ -168,9 +148,6 @@ function renderBeautifiedAcceptanceReportText(report = {}, locale = LOCALE.ZH_CN
     modelAcceptance?.rawContent
       ? ["", `## ${modelAcceptanceLabel}`, String(modelAcceptance.rawContent)].join("\n")
       : "",
-    summaryDetailPaths.length
-      ? ["", `## ${detailPathLabel}`, ...summaryDetailPaths.map((item) => `- ${String(item || "").trim()}`)].join("\n")
-      : "",
   ].filter(Boolean);
   return lines.join("\n").trim();
 }
@@ -187,7 +164,6 @@ function renderAcceptanceDigestReportText(report = {}, locale = LOCALE.ZH_CN) {
   const semanticValidationRaw = semanticValidation
     ? String(semanticValidation?.content || "").trim() || JSON.stringify(semanticValidation, null, 2)
     : "";
-  const summaryDetailPaths = Array.isArray(data?.summaryDetailPaths) ? data.summaryDetailPaths : [];
   const digestTitle = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_TITLE);
   const digestModeLabel = translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_MODE_LABEL);
   const digestAcceptedAtLabel = translateI18nText(
@@ -202,14 +178,6 @@ function renderAcceptanceDigestReportText(report = {}, locale = LOCALE.ZH_CN) {
   const digestSemanticLabel = translateI18nText(
     locale,
     HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_SEMANTIC_VALIDATION_LABEL,
-  );
-  const digestDetailPathsLabel = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_SUMMARY_DETAIL_PATHS_LABEL,
-  );
-  const digestNoDetailPaths = translateI18nText(
-    locale,
-    HARNESS_I18N_KEYSET.ACCEPTANCE_REPORT.DIGEST_NO_DETAIL_PATHS,
   );
   const safeCodeBlock = (value = "") => String(value || "").replaceAll("```", "'''");
 
@@ -232,11 +200,6 @@ function renderAcceptanceDigestReportText(report = {}, locale = LOCALE.ZH_CN) {
     "```text",
     safeCodeBlock(semanticValidationRaw || "-"),
     "```",
-    "",
-    `#### ${digestDetailPathsLabel}`,
-    ...(summaryDetailPaths.length
-      ? summaryDetailPaths.map((item) => `- ${String(item || "").trim()}`)
-      : [digestNoDetailPaths]),
   ];
   return lines.join("\n").trim();
 }

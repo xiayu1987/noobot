@@ -138,7 +138,26 @@ describe("reduceMessageEvent", () => {
     const attachments = [{ attachmentId: "att-final", name: "final.md" }];
     const transferEnvelopes = [{
       protocol: "noobot.semantic-transfer",
-      files: [{ attachmentId: "att-final", name: "final.md" }],
+      version: 2,
+      transferId: "transfer-final",
+      messageId: "message-final",
+      identity: {
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+        runId: "run-1",
+        producer: { type: "agent", id: "agent-1" },
+      },
+      direction: "output",
+      payload: {
+        mode: "attachment",
+        attachments: [{
+          identity: { attachmentId: "att-final", sessionId: "session-1", attachmentSource: "test" },
+          role: "primary",
+          name: "final.md",
+        }],
+      },
+      intent: { source: "agent", reason: "test", scenario: "agent", strategy: "test" },
+      meta: {},
     }];
 
     expect(reduce(target, event({
@@ -153,7 +172,7 @@ describe("reduceMessageEvent", () => {
     expect(target).toMatchObject({ content: "complete final", attachments, transferEnvelopes });
   });
 
-  it("keeps child-agent written files available after final content resolves the placeholder", () => {
+  it("does not project tool implementation paths as completed artifacts", () => {
     const target = message({ pending: true });
     reduce(target, event());
     reduce(target, event({
@@ -178,9 +197,11 @@ describe("reduceMessageEvent", () => {
 
     expect(target.pending).toBe(true);
     expect(target.hasFirstStreamEvent).toBe(true);
-    expect(selectCompletedToolArtifacts(target).writtenFiles).toEqual([
-      expect.objectContaining({ fileName: "write_test.txt" }),
-    ]);
+    expect(selectCompletedToolArtifacts(target)).toEqual(expect.objectContaining({
+      resultCount: 1,
+      attachments: [],
+    }));
+    expect(selectCompletedToolArtifacts(target)).not.toHaveProperty("writtenFiles");
   });
 
   it("only exposes tool result attachments with the canonical identity triple", () => {

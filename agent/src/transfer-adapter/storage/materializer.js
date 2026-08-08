@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
-import { directOutput } from "../envelope/envelope.js";
+import { createDirectTransferEnvelope } from "./attachment-adapter.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import { persistTransferFile } from "./attachment-adapter.js";
-import { normalizeTransferPolicy } from "../core/policy.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
@@ -30,6 +29,7 @@ export async function materializeOutputResult({
   generationSource = "",
   storage = null,
   producer = null,
+  identity = null,
 } = {}) {
   const text = String(content || "");
   const intent = resolveTransferIntent({
@@ -41,28 +41,25 @@ export async function materializeOutputResult({
     defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
     allowCustom: true,
   });
-  const transferPolicy = normalizeTransferPolicy({ policy, prefer, maxDirectChars });
+  const transferPolicy = policy && typeof policy === "object" ? policy : {};
+  const selectedPrefer = String(transferPolicy.prefer ?? prefer ?? "auto").trim().toLowerCase();
+  const selectedMaxDirectChars = Number.isSafeInteger(transferPolicy.maxDirectChars)
+    ? transferPolicy.maxDirectChars
+    : maxDirectChars;
   const outputMeta = {
-    ...meta,
-    source: intent.source,
-    reason: intent.reason,
-    name,
     mimeType,
-    size: text.length,
+    originalLength: text.length,
+    ...(Object.keys(meta || {}).length ? { attributes: meta } : {}),
   };
 
-  if (transferPolicy.prefer === "direct" || (transferPolicy.prefer === "auto" && text.length <= transferPolicy.maxDirectChars)) {
-    const envelope = directOutput(text, outputMeta);
-    return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.DIRECT, envelope });
-  }
-
-  if (transferPolicy.allowAttachmentPersist === false) {
-    const envelope = directOutput(text, {
-      ...outputMeta,
-      materializeFallback: "direct",
-      materializeFallbackReason: "attachment_persist_disabled",
+  if (selectedPrefer === "direct" || (selectedPrefer === "auto" && text.length <= selectedMaxDirectChars)) {
+    const envelope = createDirectTransferEnvelope({
+      identity,
+      content: text,
+      intent: { source: intent.source, reason: intent.reason, scenario: "service", strategy: "semantic_transfer_output" },
+      meta: outputMeta,
     });
-    return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FALLBACK_DIRECT, envelope });
+    return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.DIRECT, envelope });
   }
 
   const persisted = await persistTransferFile({
@@ -77,6 +74,7 @@ export async function materializeOutputResult({
     generationSource: intent.generationSource,
     storage,
     producer,
+    identity,
     meta: outputMeta,
   });
 
@@ -85,14 +83,6 @@ export async function materializeOutputResult({
     : null;
   if (persistedEnvelope) {
     return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FILE, envelope: persistedEnvelope });
-  }
-
-  if (transferPolicy.allowFallbackDirect !== false) {
-    const envelope = directOutput(text, {
-      ...outputMeta,
-      materializeFallback: "direct",
-    });
-    return createTransferResult({ ok: true, status: TRANSFER_RESULT_STATUS.FALLBACK_DIRECT, envelope });
   }
 
   return createTransferResult({
@@ -104,5 +94,8 @@ export async function materializeOutputResult({
 
 export async function materializeOutput(options = {}) {
   const result = await materializeOutputResult(options);
-  return result?.envelope || directOutput(String(options?.content || ""), { materializeFallback: "direct" });
+  if (!result?.ok || !result.envelope) {
+    throw new Error(result?.error?.message || "semantic_transfer_materialization_failed");
+  }
+  return result.envelope;
 }

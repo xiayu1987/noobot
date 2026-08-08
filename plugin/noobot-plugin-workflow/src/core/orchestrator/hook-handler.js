@@ -134,7 +134,7 @@ export async function handleBeforeAgentDispatch({
       phaseTracker,
     });
     markWorkflowRetrySucceeded(retryMeta);
-    const { workflowPayload, workflowAttachments } = await buildFinalWorkflowPayload({
+    const { workflowPayload } = await buildFinalWorkflowPayload({
       workflowRunId,
       options,
       ctx,
@@ -157,7 +157,6 @@ export async function handleBeforeAgentDispatch({
       semanticText,
       semanticResolution,
       workflowPayload,
-      workflowAttachments,
       nodeAgentRuns,
       execution,
       beforeDispatchMode,

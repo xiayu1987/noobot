@@ -187,11 +187,6 @@ describe("buildSessionDetailProjection", () => {
             resultEvent: {
               eventId: "event-artifacts",
               attachments: [{ attachmentId: "attachment-artifacts", sessionId: "session-artifacts", attachmentSource: "test", name: "stdout.txt" }],
-              writtenFiles: [{
-                toolName: "write_file",
-                resolvedPath: "/workspace/result.txt",
-                fileName: "result.txt",
-              }],
               log: {
                 event: "tool_result",
                 type: "tool_result",
@@ -209,7 +204,7 @@ describe("buildSessionDetailProjection", () => {
     expect(selectCompletedToolArtifacts(projection.messages[0])).toMatchObject({
       resultCount: 1,
       attachments: [{ attachmentId: "attachment-artifacts", name: "stdout.txt" }],
-      writtenFiles: [{ fileName: "result.txt" }],
     });
+    expect(selectCompletedToolArtifacts(projection.messages[0])).not.toHaveProperty("writtenFiles");
   });
 });

@@ -12,10 +12,10 @@ import { fileURLToPath } from "node:url";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
-  getTransferAttachmentMetas,
+  getTransferAttachments,
   materializeTextForToolResult,
   TRANSFER_SOURCE,
-} from "../../transfer/index.js";
+} from "../../transfer-adapter/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import {
   invokeModelWithTextAndAttachments,
@@ -479,7 +479,7 @@ async function persistMedia2DataTextAttachment({
     producer: { type: "tool", name: TOOL_NAME.MEDIA_TO_DATA },
     meta: { mediaType, inputFile },
   });
-  const attachments = getTransferAttachmentMetas(materialized.transferEnvelopes);
+  const attachments = getTransferAttachments(materialized.transferEnvelopes);
   return {
     attachments,
     transferEnvelopes: materialized.transferEnvelopes,

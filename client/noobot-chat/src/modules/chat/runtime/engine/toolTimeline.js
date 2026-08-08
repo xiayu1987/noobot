@@ -154,9 +154,6 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
     ...(Array.isArray(facet.attachments) && facet.attachments.length
       ? { attachments: facet.attachments }
       : {}),
-    ...(Array.isArray(facet.writtenFiles) && facet.writtenFiles.length
-      ? { writtenFiles: facet.writtenFiles }
-      : {}),
     detailText: stringifyToolDetail(canonicalDetail),
     sequence: sequenceOf(facet),
     sequenceScopeId: text(facet.sequenceScopeId),
@@ -189,9 +186,6 @@ export function reduceToolTimeline(timeline = [], envelope = {}) {
     turnScopeId: text(envelope.turnScopeId),
     ...(Array.isArray(envelope?.attachments) && envelope.attachments.length
       ? { attachments: envelope.attachments }
-      : {}),
-    ...(Array.isArray(envelope?.writtenFiles) && envelope.writtenFiles.length
-      ? { writtenFiles: envelope.writtenFiles }
       : {}),
   };
   const updated = envelope.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START
@@ -230,11 +224,6 @@ export function selectCompletedToolArtifacts(message = {}) {
     attachments: completedEntries.flatMap((item) => {
       const eventAttachments = item?.resultEvent?.attachments;
       return canonicalAttachments(eventAttachments);
-    }),
-    writtenFiles: completedEntries.flatMap((item) => {
-      const eventWrittenFiles = item?.resultEvent?.writtenFiles;
-      if (Array.isArray(eventWrittenFiles) && eventWrittenFiles.length) return eventWrittenFiles;
-      return [];
     }),
   };
 }

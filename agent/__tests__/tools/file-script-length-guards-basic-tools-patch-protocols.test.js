@@ -207,7 +207,7 @@ test("patch_file: unified_diff 兼容 /project 虚拟路径前缀", async () => 
 
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["client/a.txt"]);
+  assert.deepEqual(result.changedFiles, ["/workspace/u-test/client/a.txt"]);
   assert.equal(await fs.readFile(path.join(basePath, "client/a.txt"), "utf8"), "one\nTWO\n");
 });
 
@@ -240,7 +240,7 @@ test("patch_file: 超级管理员可将虚拟 project 路径解析到 workspace 
 
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/a.txt"]);
+  assert.deepEqual(result.changedFiles, ["/workspace/admin/noobot/client/noobot-chat/src/a.txt"]);
   assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\nTWO\n");
 });
 
@@ -268,7 +268,7 @@ test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", a
   );
   assert.equal(dryRunResult.ok, true);
   assert.equal(dryRunResult.dryRun, true);
-  assert.deepEqual(dryRunResult.changedFiles, ["noobot/service/ws/chat-websocket-server.js"]);
+  assert.deepEqual(dryRunResult.changedFiles, ["/workspace/u-test/noobot/service/ws/chat-websocket-server.js"]);
   assert.equal(dryRunResult.resolvedFiles[0]?.path, "noobot/service/ws/chat-websocket-server.js");
   assert.equal(
     await fs.readFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "utf8"),
@@ -305,7 +305,7 @@ test("patch_file: root 参数兼容 Windows 风格反斜杠 diff 路径", async 
     await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1, root: "app\\" }),
   );
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["app/service/ws/chat-websocket-server.js"]);
+  assert.deepEqual(result.changedFiles, ["/workspace/u-test/app/service/ws/chat-websocket-server.js"]);
   assert.equal(await fs.readFile(path.join(appPath, "service/ws/chat-websocket-server.js"), "utf8"), "one\nTWO\n");
 });
 

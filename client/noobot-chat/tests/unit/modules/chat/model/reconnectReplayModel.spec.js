@@ -187,45 +187,17 @@ describe("reconnectReplayModel", () => {
     expect(target.statusLabel).toBe("pending");
   });
 
-  it("patchMessageObjectPreservingUiState merges incoming transfer envelopes", () => {
-    const existingTransferEnvelope = {
-      protocol: "noobot.semantic-transfer",
-      version: 1,
-      direction: "output",
-      transport: "file",
-      files: [{
-        filePath: "/workspace/old.txt",
-        attachmentMeta: {
-          attachmentId: "old-transfer",
-          sessionId: "session-transfer",
-          attachmentSource: "test",
-        },
-      }],
-    };
-    const incomingTransferEnvelope = {
-      protocol: "noobot.semantic-transfer",
-      version: 1,
-      direction: "output",
-      transport: "file",
-      files: [{
-        filePath: "/workspace/new.txt",
-        attachmentMeta: {
-          attachmentId: "new-transfer",
-          sessionId: "session-transfer",
-          attachmentSource: "test",
-        },
-      }],
-    };
-    const target = {
-      role: RoleEnum.ASSISTANT,
-      transferEnvelopes: [existingTransferEnvelope],
-    };
-
-    patchMessageObjectPreservingUiState(target, {
-      role: RoleEnum.ASSISTANT,
-      transferEnvelopes: [incomingTransferEnvelope],
+  it("patchMessageObjectPreservingUiState merges distinct V2 transfer envelopes", () => {
+    const makeEnvelope = (id) => ({
+      protocol: "noobot.semantic-transfer", version: 2, transferId: `transfer-${id}`, messageId: "message-1",
+      identity: { sessionId: "session-transfer", turnScopeId: "turn-1", runId: "run-1", producer: { type: "tool", id: `call-${id}` } },
+      direction: "output", payload: { mode: "direct", content: id },
+      intent: { source: "tool", reason: "test", scenario: "tool", strategy: "test" }, meta: {},
     });
-
+    const existingTransferEnvelope = makeEnvelope("old");
+    const incomingTransferEnvelope = makeEnvelope("new");
+    const target = { role: RoleEnum.ASSISTANT, transferEnvelopes: [existingTransferEnvelope] };
+    patchMessageObjectPreservingUiState(target, { role: RoleEnum.ASSISTANT, transferEnvelopes: [incomingTransferEnvelope] });
     expect(target.transferEnvelopes).toEqual([existingTransferEnvelope, incomingTransferEnvelope]);
   });
 

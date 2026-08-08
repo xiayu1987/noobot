@@ -39,7 +39,7 @@ test("read_file: 具体工具不判断大文件，原始内容交由 semantic-tr
   assert.equal(result.transferEnvelopes, undefined);
 });
 
-test("read_file: 大文件原始结果由 semantic-transfer 转为沙箱视角 original-file envelope", async () => {
+test("read_file: 大文件原始结果由 semantic-transfer 物化为规范 V2 附件引用", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const basePath = path.join(workspaceRoot, "primary-user");
   const hostFilePath = path.join(basePath, "runtime/ops_workdir/large_test_file.txt");
@@ -53,6 +53,7 @@ test("read_file: 大文件原始结果由 semantic-transfer 转为沙箱视角 o
           maxToolResultChars: 512,
         },
       },
+      attachmentService: buildAttachmentService(),
     },
   });
   const runtime = agentContext.bindings.runtime;
@@ -71,16 +72,26 @@ test("read_file: 大文件原始结果由 semantic-transfer 转为沙箱视角 o
   assert.equal(rawResult.ok, true);
   assert.equal(rawResult.content.length > 8000, true);
   assert.equal(rawResult.contentOmitted, undefined);
-  assert.equal(rawResult.resolvedPath, hostFilePath);
+  assert.equal(rawResult.resolvedPath, "/workspace/primary-user/runtime/ops_workdir/large_test_file.txt");
+  assert.equal(String(rawResult.resolvedPath || "").includes(workspaceRoot), false);
   assert.equal(rawResult.transferEnvelopes, undefined);
 
   const transferred = await transferSemanticContent({
     scenario: "tool",
     strategy: "tool_result_text",
-    call: { name: "read_file" },
+    call: { id: "tool-call-read-file-overflow", name: "read_file" },
     toolResultText: rawToolResultText,
     runtime,
     agentContext,
+    sessionId: "s-1",
+    identity: {
+      transferId: "transfer:m-1:tool:tool-call-read-file-overflow:output:tool_result_text",
+      messageId: "m-1",
+      sessionId: "s-1",
+      turnScopeId: "t-1",
+      runId: "r-1",
+      producer: { type: "tool", id: "tool-call-read-file-overflow" },
+    },
   });
   const result = parseToolResult(transferred.toolResultText);
 
@@ -89,11 +100,18 @@ test("read_file: 大文件原始结果由 semantic-transfer 转为沙箱视角 o
   assert.equal(result.resolvedPath, undefined);
   assert.equal(result.content, undefined);
   assert.equal(JSON.stringify(result).includes(workspaceRoot), false);
-  assert.equal(result.overflow_strategy, "original_file_reference");
-  assert.equal(result.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
-  assert.equal("filePath" in result.transferEnvelopes?.[0], false);
-  assert.equal(result.transferEnvelopes?.[0]?.files?.[0]?.filePath, "/workspace/primary-user/runtime/ops_workdir/large_test_file.txt");
-  assert.equal(result.transferEnvelopes?.[0]?.files?.[0]?.pathView?.sandboxPath, "/workspace/primary-user/runtime/ops_workdir/large_test_file.txt");
-  assert.equal(result.transferEnvelopes?.[0]?.storage?.originalFile, true);
-  assert.equal(result.transferEnvelopes?.[0]?.storage?.persisted, false);
+  const envelope = result.transferEnvelopes?.[0] || {};
+  assert.equal(result.overflowed, true);
+  assert.equal(envelope.protocol, "noobot.semantic-transfer");
+  assert.equal(envelope.version, 2);
+  assert.equal(envelope.payload?.mode, "attachment");
+  assert.deepEqual(envelope.payload?.attachments?.[0]?.identity, {
+    attachmentId: "att-tool-input-1",
+    sessionId: "s-1",
+    attachmentSource: "model",
+  });
+  assert.equal(JSON.stringify(envelope).includes(workspaceRoot), false);
+  assert.equal(JSON.stringify(envelope).includes("/workspace/primary-user"), false);
+  assert.equal("files" in envelope, false);
+  assert.equal("storage" in envelope, false);
 });

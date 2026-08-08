@@ -13,4 +13,4 @@ export * as session from "../session/index.js";
 export * as attach from "../artifacts/index.js";
 export * as context from "../context/index.js";
 export * as config from "../config/index.js";
-export * as semanticTransfer from "../transfer/index.js";
+export * as semanticTransfer from "../transfer-adapter/index.js";

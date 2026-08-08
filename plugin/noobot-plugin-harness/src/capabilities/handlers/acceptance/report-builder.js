@@ -16,7 +16,6 @@ import { resolveFirstMatchedRuleResult } from "../shared/rule-table-utils.js";
 import { buildStatusSummary, nowIsoTimestamp } from "../shared/report-utils.js";
 import { parsePlanDocumentFromText } from "../shared/plan/text-protocol.js";
 import { renderAcceptanceReportText } from "./report-text-renderer.js";
-import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
 import {
   getPlanAcceptanceStatusMap,
   mapPlanAcceptanceStatusToTaskStatus,
@@ -188,23 +187,6 @@ function buildChecklistFromParsedPlan(parsedPlan = null) {
   return checklist;
 }
 
-function buildSummaryDetailPaths(bucket = {}, ctx = {}) {
-  const directPaths = Array.isArray(bucket?.summaryDetailPaths) ? bucket.summaryDetailPaths : [];
-  const metas = Array.isArray(bucket?.summaryDetailAttachments) ? bucket.summaryDetailAttachments : [];
-  const metaPaths = metas
-    .map((item = {}) => resolveAttachmentDisplayPath(item, ctx))
-    .filter(Boolean);
-  const merged = [...directPaths, ...metaPaths].map((item) => String(item || "").trim()).filter(Boolean);
-  const out = [];
-  const seen = new Set();
-  for (const item of merged) {
-    if (seen.has(item)) continue;
-    seen.add(item);
-    out.push(item);
-  }
-  return out;
-}
-
 export function buildAcceptanceReport({
   bucket = {},
   state = {},
@@ -281,7 +263,6 @@ export function buildAcceptanceReport({
     taskChecklist: items,
     finalPlanChecklist: items,
     plan,
-    summaryDetailPaths: buildSummaryDetailPaths(bucket, ctx),
     modelAcceptance: latestModelAcceptance.items.length
       ? {
         source: latestModelAcceptance.source,

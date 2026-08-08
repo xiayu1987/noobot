@@ -6,7 +6,7 @@
 
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
-import { compactAttachmentRef, compactTransferEnvelopes, dedupeAttachmentRefs } from "../transfer-attachment-refs.js";
+import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol";
@@ -26,6 +26,27 @@ function normalizeTransferEnvelopesFromMessage(message = {}) {
 
 function normalizeMessageUid(value = "") {
   return String(value || "").trim();
+}
+
+function normalizeSessionAttachment(item = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  const attachmentId = String(item.attachmentId || "").trim();
+  const name = String(item.name || item.fileName || item.filename || "").trim();
+  const mimeType = String(item.mimeType || item.type || item.mime || "").trim();
+  if (!attachmentId || !name || !mimeType) return null;
+  const normalized = { attachmentId, name, mimeType };
+  for (const key of [
+    "size", "attachmentSource", "sessionId", "relativePath", "sandboxPath", "path",
+    "previewUrl", "downloadUrl", "isSandbox", "generationSource", "parsedResult",
+  ]) {
+    if (item[key] !== undefined && item[key] !== null && item[key] !== "") normalized[key] = item[key];
+  }
+  if (item.owner && typeof item.owner === "object" && !Array.isArray(item.owner)) {
+    const type = String(item.owner.type || "").trim();
+    const id = String(item.owner.id || "").trim();
+    if (type || id) normalized.owner = { ...(type ? { type } : {}), ...(id ? { id } : {}) };
+  }
+  return normalized;
 }
 
 export { createSessionMessageUid };
@@ -49,8 +70,15 @@ export function normalizeMessageEntity(
   message = {},
   now = () => new Date().toISOString(),
 ) {
+  const attachmentKeys = new Set();
   const normalizedAttachments = Array.isArray(message?.attachments)
-    ? dedupeAttachmentRefs(message.attachments.map((item) => compactAttachmentRef(item)).filter(Boolean))
+    ? message.attachments.map(normalizeSessionAttachment).filter((item) => {
+      if (!item) return false;
+      const key = `${item.sessionId || ""}:${item.attachmentSource || ""}:${item.attachmentId}`;
+      if (attachmentKeys.has(key)) return false;
+      attachmentKeys.add(key);
+      return true;
+    })
     : [];
   // Provider/runtime IDs may be scoped to one model run. They are retained for
   // streaming correlation, while messageUid is the persistence identity.

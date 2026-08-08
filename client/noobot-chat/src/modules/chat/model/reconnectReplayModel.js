@@ -178,29 +178,11 @@ function hasArrayItems(value = null) {
 }
 
 function buildTransferEnvelopeKey(envelope = {}) {
-  const fileKeys = getArrayItems(envelope?.files)
-    .map((file) =>
-      [
-        file?.filePath,
-        file?.pathView?.displayPath,
-        file?.pathView?.sandboxPath,
-        file?.pathView?.relativePath,
-        file?.attachmentMeta?.attachmentId,
-        file?.attachmentMeta?.relativePath,
-        file?.attachmentMeta?.name,
-      ]
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-        .join("|"),
-    )
-    .filter(Boolean)
-    .join(",");
   return [
     envelope?.protocol,
     envelope?.version,
-    envelope?.direction,
-    envelope?.transport,
-    fileKeys,
+    envelope?.transferId,
+    envelope?.messageId,
   ]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
@@ -233,7 +215,6 @@ function messageCompareKey(messageItem = {}) {
           attachmentItem?.name,
           attachmentItem?.attachmentId,
           attachmentItem?.size,
-          attachmentItem?.transferFilePath,
         ]
           .map((item) => String(item || "").trim())
           .join(":"),

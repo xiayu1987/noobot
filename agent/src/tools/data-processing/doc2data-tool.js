@@ -29,9 +29,7 @@ import { decodeLibreOfficeTextBuffer, parseDocumentToTextViaLibreOffice } from "
 import {
   backwriteFirstAttachment,
   buildExistingArtifactPersistedOutput,
-  buildFallbackArtifactMeta,
   isGeneratedDataProcessingArtifact,
-  looksLikeDataProcessingArtifactPath,
   normalizePersistedAttachments,
   persistDoc2DataTextAttachment,
 } from "./doc2data/artifacts.js";
@@ -51,28 +49,6 @@ import {
 const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
 
 export { decodeLibreOfficeTextBuffer };
-
-function resolveGeneratedDataProcessingArtifactMeta(inputFile = "", runtime = {}) {
-  const normalizedInputPath = String(inputFile || "").trim();
-  if (!normalizedInputPath) return null;
-  const generatedAttachmentMetas = Array.isArray(runtime?.attachments) ? runtime.attachments : [];
-  if (!generatedAttachmentMetas.length) return null;
-  const inputBaseName = path.basename(normalizedInputPath);
-  const inputAttachmentId = String(inputBaseName || "").split(".")[0];
-  return generatedAttachmentMetas.find((attachmentItem) => {
-    if (!isGeneratedDataProcessingArtifact(attachmentItem)) return false;
-    const metaPath = String(attachmentItem?.path || "").trim();
-    const metaRelativePath = String(attachmentItem?.relativePath || "").trim();
-    const metaBaseName = path.basename(metaPath || metaRelativePath);
-    const metaAttachmentId = String(attachmentItem?.attachmentId || "").trim();
-    return (
-      (metaPath && metaPath === normalizedInputPath) ||
-      (metaRelativePath && metaRelativePath === normalizedInputPath) ||
-      (inputBaseName && metaBaseName === inputBaseName) ||
-      (inputAttachmentId && metaAttachmentId && inputAttachmentId === metaAttachmentId)
-    );
-  }) || null;
-}
 
 async function recordDoc2DataLibreOfficeFallback({
   runtime = {},
@@ -128,14 +104,17 @@ export function createDoc2DataTool({ agentContext }) {
       dpi: z.number().optional().describe(tTool(runtime, "tools.doc2data.fieldDpi")),
       parseEngine: z.string().optional().describe(tTool(runtime, "tools.doc2data.fieldParseEngine")),
     }),
-    func: async ({ filePath, attachmentId, prompt, dpi, parseEngine }) => {
+    func: async ({ filePath, attachmentId, prompt, dpi, parseEngine }, _runManager, toolConfig = {}) => {
+      const transferIdentity = toolConfig?.configurable?.transferIdentity;
       const resolvedParseEngine = resolveDoc2DataParseEngine(runtime, parseEngine, userConfig, globalConfig);
       const normalizedDpi = Number(dpi);
       const resolvedDpi = Number.isFinite(normalizedDpi) && normalizedDpi > 0 ? Math.floor(normalizedDpi) : 180;
       let effectiveParseEngine = resolvedParseEngine;
       const inputFile = await assertAndResolveUserWorkspaceFilePath({ filePath, agentContext, fieldName: "filePath", mustExist: true });
       const sourceAttachmentMeta = await resolveDocInputAttachmentMeta(agentContext, attachmentId);
-      const generatedArtifactMeta = resolveGeneratedDataProcessingArtifactMeta(inputFile, runtime);
+      const generatedArtifactMeta = isGeneratedDataProcessingArtifact(sourceAttachmentMeta)
+        ? sourceAttachmentMeta
+        : null;
       if (isImageInputFile(inputFile)) {
         throw recoverableToolError(tTool(runtime, "tools.doc2data.imageFileUseMedia2Data"), {
           code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
@@ -151,9 +130,8 @@ export function createDoc2DataTool({ agentContext }) {
 
       const directTextDocument = await readDirectTextDocumentIfAvailable(inputFile);
       if (directTextDocument) {
-        if (generatedArtifactMeta || looksLikeDataProcessingArtifactPath(inputFile)) {
-          const reusableAttachmentMeta = generatedArtifactMeta || buildFallbackArtifactMeta({ runtime, basePath, inputFile, bytes: directTextDocument.bytes });
-          const persistedOutput = buildExistingArtifactPersistedOutput({ runtime, agentContext, attachmentMeta: reusableAttachmentMeta, text: directTextDocument.text });
+        if (generatedArtifactMeta) {
+          const persistedOutput = buildExistingArtifactPersistedOutput({ runtime, agentContext, attachmentMeta: generatedArtifactMeta, text: directTextDocument.text, identity: transferIdentity });
           const attachments = normalizePersistedAttachments(persistedOutput);
           return toToolJsonResult(TOOL_NAME.DOC_TO_DATA, {
             ok: true,
@@ -166,15 +144,14 @@ export function createDoc2DataTool({ agentContext }) {
             summary: {
               bytes: Number(directTextDocument.bytes || 0),
               parse_engine: resolvedParseEngine,
-              parsed_from_attachment_id: String(reusableAttachmentMeta?.attachmentId || ""),
-              parsed_result_path: String(reusableAttachmentMeta?.path || inputFile || ""),
+              parsed_from_attachment_id: String(generatedArtifactMeta?.attachmentId || ""),
               source_attachment_backwritten: false,
               saved_attachment_count: attachments.length,
               text_length: directTextDocument.text.length,
             },
           }, true);
         }
-        const persistedOutput = await persistDoc2DataTextAttachment({ runtime, agentContext, inputFile, text: directTextDocument.text, mode: TOOL_DATA_MODE.DIRECT_TEXT });
+        const persistedOutput = await persistDoc2DataTextAttachment({ runtime, agentContext, inputFile, text: directTextDocument.text, mode: TOOL_DATA_MODE.DIRECT_TEXT, identity: transferIdentity });
         const attachments = normalizePersistedAttachments(persistedOutput);
         const updatedSourceAttachment = await backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments });
         return toToolJsonResult(TOOL_NAME.DOC_TO_DATA, {
@@ -188,7 +165,6 @@ export function createDoc2DataTool({ agentContext }) {
             bytes: Number(directTextDocument.bytes || 0),
             parse_engine: resolvedParseEngine,
             parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-            parsed_result_path: String(attachments?.[0]?.path || ""),
             source_attachment_backwritten: Boolean(updatedSourceAttachment),
             saved_attachment_count: attachments.length,
             text_length: directTextDocument.text.length,
@@ -199,7 +175,7 @@ export function createDoc2DataTool({ agentContext }) {
       if (resolvedParseEngine === DOC2DATA_PARSE_ENGINE.LIBREOFFICE) {
         try {
           const libreOfficeResult = await parseDocumentToTextViaLibreOffice({ runtime, inputFile, sourceAttachmentMeta });
-          const persistedOutput = await persistDoc2DataTextAttachment({ runtime, agentContext, inputFile, text: libreOfficeResult.text, mode: libreOfficeResult.mode || "libreoffice_text" });
+          const persistedOutput = await persistDoc2DataTextAttachment({ runtime, agentContext, inputFile, text: libreOfficeResult.text, mode: libreOfficeResult.mode || "libreoffice_text", identity: transferIdentity });
           const attachments = normalizePersistedAttachments(persistedOutput);
           const updatedSourceAttachment = await backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments });
           return toToolJsonResult(TOOL_NAME.DOC_TO_DATA, {
@@ -214,7 +190,6 @@ export function createDoc2DataTool({ agentContext }) {
               parse_engine: resolvedParseEngine,
               libreoffice_output_format: String(libreOfficeResult.outputFormat || ""),
               parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-              parsed_result_path: String(attachments?.[0]?.path || ""),
               source_attachment_backwritten: Boolean(updatedSourceAttachment),
               saved_attachment_count: attachments.length,
               text_length: libreOfficeResult.text.length,
@@ -271,7 +246,7 @@ export function createDoc2DataTool({ agentContext }) {
       }
       const mergedText = batchResults.map((batchResult) => batchResult.text).join("\n\n");
       const totalImageBytes = imageBatches.flatMap((batch) => batch).reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);
-      const persistedOutput = await persistDoc2DataTextAttachment({ runtime, agentContext, inputFile, text: mergedText, mode: TOOL_DATA_MODE.IMAGE_MODEL });
+      const persistedOutput = await persistDoc2DataTextAttachment({ runtime, agentContext, inputFile, text: mergedText, mode: TOOL_DATA_MODE.IMAGE_MODEL, identity: transferIdentity });
       const attachments = normalizePersistedAttachments(persistedOutput);
       const updatedSourceAttachment = await backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments });
 

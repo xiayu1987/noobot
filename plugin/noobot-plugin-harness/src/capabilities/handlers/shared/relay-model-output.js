@@ -13,8 +13,8 @@ const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 
 import {
   appendCapabilityLog,
-  attachMetasToLatestInjectedMessage,
-  getTransferPayloadFromAttachments,
+  attachTransferPayloadToLatestInjectedMessage,
+  normalizeTransferPayload,
 } from "./attachment-log-utils.js";
 
 export function relaySeparateModelOutputAsUserMessage(
@@ -26,7 +26,6 @@ export function relaySeparateModelOutputAsUserMessage(
     chain = undefined,
     content = "",
     dedupe = false,
-    attachments = [],
     transferPayload = null,
   } = {},
 ) {
@@ -41,11 +40,7 @@ export function relaySeparateModelOutputAsUserMessage(
     : "";
   const normalizedPluginFlow = String(pluginFlow || "").trim() || undefined;
   const normalizedChain = String(chain || "").trim() || undefined;
-  const relayAttachments = Array.isArray(attachments) ? attachments : [];
-  const resolvedTransferPayload = getTransferPayloadFromAttachments(
-    relayAttachments,
-    transferPayload,
-  );
+  const resolvedTransferPayload = normalizeTransferPayload(transferPayload || {});
   if (!messages) return false;
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
@@ -61,9 +56,7 @@ export function relaySeparateModelOutputAsUserMessage(
     persistToCurrentTurn: true,
   });
   if (!injection.injected && injection.deduped === true) {
-    if (relayAttachments.length) {
-      attachMetasToLatestInjectedMessage(ctx, relayAttachments, resolvedTransferPayload);
-    }
+    attachTransferPayloadToLatestInjectedMessage(ctx, resolvedTransferPayload);
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: SHARED_EVENTS.separateModelRelaySkippedDuplicate,

@@ -19,6 +19,7 @@ function createEnvelope(overrides = {}) {
       dialogProcessId: "d1",
       turnScopeId: "t1",
       runId: "r1",
+      messageId: "m1",
     },
     environment: { workspace: { cwd: "/workspace" } },
     execution: { caller: "user", flags: {} },

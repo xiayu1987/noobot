@@ -9,3 +9,4 @@ export * from "./intent.js";
 export * from "./result.js";
 export * from "./compact.js";
 export * from "./validation-events.js";
+export * from "./execution-identity.js";
