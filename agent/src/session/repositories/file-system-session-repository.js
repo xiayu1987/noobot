@@ -300,8 +300,9 @@ export class FileSystemSessionRepository {
 
   async rebuildSessionsSummary(userId = "", { sessionTree = null } = {}) {
     const tree = sessionTree || null;
-    const treeSessionIds = Object.keys(tree?.nodes || {});
-    const sessionIds = treeSessionIds.length ? treeSessionIds : await this.listSessionIds(userId);
+    // Only materialized Session directories belong in the list. The tree may
+    // contain historical nodes whose artifacts were deleted or never created.
+    const sessionIds = await this.listSessionIds(userId);
     const summaries = [];
     for (const sessionId of sessionIds) {
       const parentSessionId = String(tree?.nodes?.[sessionId]?.parentSessionId || "").trim();
@@ -741,12 +742,25 @@ export class FileSystemSessionRepository {
     }
     const deletedSessions = await this._readDeletedSessions(userId);
     const deletedSet = new Set(Object.keys(deletedSessions?.sessions || {}));
-    return entries
-      .filter((dirEntry) => dirEntry.isDirectory())
-      .map((dirEntry) => dirEntry.name)
-      .filter((sessionId) => !String(sessionId || "").startsWith("."))
-      .filter((sessionId) => !String(sessionId || "").endsWith(".mutation-lock"))
-      .filter((sessionId) => !deletedSet.has(String(sessionId || "").trim()));
+    const sessionIds = [];
+    const visit = async (directory, relativeSegments = []) => {
+      const directoryEntries = directory === this._sessionRoot(userId)
+        ? entries
+        : await fsReaddir(directory, { withFileTypes: true });
+      for (const entry of directoryEntries) {
+        if (!entry.isDirectory() || String(entry.name || "").startsWith(".")) continue;
+        if (String(entry.name || "").includes(".repair-") || String(entry.name || "").endsWith(".mutation-lock")) continue;
+        const childDir = path.join(directory, entry.name);
+        const childSegments = [...relativeSegments, entry.name];
+        if (await this.storageService.exists(path.join(childDir, "session.json"))) {
+          const sessionId = String(entry.name || "").trim();
+          if (sessionId && !deletedSet.has(sessionId)) sessionIds.push(sessionId);
+        }
+        await visit(childDir, childSegments);
+      }
+    };
+    await visit(this._sessionRoot(userId));
+    return [...new Set(sessionIds)];
   }
 
   async ensureSession({ userId, sessionId, parentSessionId = "", meta = {}, persistenceContext = null }) {

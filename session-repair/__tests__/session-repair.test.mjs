@@ -12,6 +12,7 @@ import { validateTransferEnvelope } from "@noobot/semantic-transfer-protocol";
 import {
   migrateSessionDocument,
   reconcileExecutionSegmentIndex,
+  reconcileSessionSummaryIndex,
   runAtomicSessionRepair,
 } from "../src/index.mjs";
 
@@ -101,6 +102,19 @@ test("reconciles execution index metadata through one repair function", () => {
   );
   assert.deepEqual(result.repaired, ["segment-1.jsonl"]);
   assert.deepEqual(result.index.segments[0], { file: "segment-1.jsonl", bytes: 20, records: 2 });
+});
+
+test("reconciles session summary membership from materialized artifact ids", () => {
+  const result = reconcileSessionSummaryIndex({
+    sessionIds: ["a", "b"],
+    sessions: [
+      { sessionId: "a" },
+      { sessionId: "a" },
+      { sessionId: "orphan" },
+    ],
+  });
+  assert.deepEqual(result.sessions.map((item) => item.sessionId), ["a"]);
+  assert.equal(result.changed, true);
 });
 
 test("atomic repair leaves the authoritative directory unchanged when validation fails", async () => {

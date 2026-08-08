@@ -117,6 +117,19 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
+test("session list excludes orphan session-tree nodes without Session artifacts", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-tree-orphans";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionCrudService.ensureSession(userId, "materialized", "");
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "orphan" });
+
+    const summaries = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    assert.deepEqual(summaries.map((item) => item.sessionId), ["materialized"]);
+  });
+});
+
 test("session summary rebuild isolates an unreadable session as an unavailable projection", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-unavailable";
