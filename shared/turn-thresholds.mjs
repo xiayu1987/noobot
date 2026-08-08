@@ -15,7 +15,7 @@ function deepFreeze(value) {
 
 export const TURN_THRESHOLDS = deepFreeze({
   agent: {
-    maxToolLoopTurns: 1000,
+    maxToolLoopTurns: 2000,
 
     toolLoopLimitBufferTurns: 5,
 
@@ -71,7 +71,7 @@ export const TURN_THRESHOLDS = deepFreeze({
         phaseAcceptanceTriggerTurns: 9,
       },
       programming: {
-        summaryTurns: 40,
+        summaryTurns: 50,
         analysisTurns: 1,
         planUpdateTriggerTurns: 20,
         phaseAcceptanceTriggerTurns: 30,

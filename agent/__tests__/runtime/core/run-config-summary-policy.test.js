@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { BUILTIN_THRESHOLDS } from "../../../src/config/index.js";
 import {
   resolvePhaseSummaryLoopTurns,
@@ -51,11 +52,14 @@ test("task check threshold requires the explicit frontend threshold mode", () =>
   assert.equal(resolveTaskCheckLoopTurns({
     runConfig: { taskCheckLoopTurns: 1, pluginModelConfig: { taskCheckLoopTurns: 3 } },
   }), BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns);
-  assert.equal(resolveTaskCheckLoopTurns(), 10);
+  assert.equal(resolveTaskCheckLoopTurns(), TURN_THRESHOLDS.agent.taskCheckLoopTurns);
 });
 
 test("main phase summary builtin threshold is twenty turns", () => {
-  assert.equal(BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns, 20);
+  assert.equal(
+    BUILTIN_THRESHOLDS.taskSummary.phaseSummaryLoopTurns,
+    TURN_THRESHOLDS.agent.phaseSummaryLoopTurns,
+  );
 });
 
 test("phase summary loop threshold preserves the builtin default when absent", () => {
