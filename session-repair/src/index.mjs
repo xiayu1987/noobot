@@ -225,6 +225,25 @@ export function reconcileExecutionSegmentIndex(index = {}, segments = []) {
   return { index: next, repaired };
 }
 
+export function reconcileSessionSummaryIndex({ sessions = [], sessionIds = [] } = {}) {
+  const allowedIds = new Set((Array.isArray(sessionIds) ? sessionIds : [])
+    .map((id) => text(id)).filter(Boolean));
+  const next = [];
+  const seen = new Set();
+  let changed = false;
+  for (const item of Array.isArray(sessions) ? sessions : []) {
+    const sessionId = text(item?.sessionId);
+    if (!sessionId || !allowedIds.has(sessionId) || seen.has(sessionId)) {
+      changed = true;
+      continue;
+    }
+    seen.add(sessionId);
+    next.push(item);
+  }
+  if (next.length !== allowedIds.size) changed = true;
+  return { sessions: next, changed };
+}
+
 export async function runAtomicSessionRepair({ sessionDir = "", repair, validate } = {}) {
   if (!text(sessionDir) || typeof repair !== "function" || typeof validate !== "function") {
     throw Object.assign(new TypeError("Atomic Session repair requires sessionDir, repair and validate"), {
