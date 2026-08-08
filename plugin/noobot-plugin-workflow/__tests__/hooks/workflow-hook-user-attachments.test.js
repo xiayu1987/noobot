@@ -45,9 +45,8 @@ test("workflow hook passes planned user attachments to node sub-session", async 
         return {
           output: [
             "WORKFLOW_DSL/1",
-            'ATTACHMENT id="node-file" attachmentId="att-user-1" sessionId="s-input-att" attachmentSource="user" name="合同.pdf" path="/workspace/attachments/s-input-att/contract.pdf" mimeType="application/pdf"',
             'NODE id=start type=state stateType=start name="开始"',
-            'NODE id=read type=action name="读取附件" task="请读取并总结用户附件" attachments="node-file"',
+            'NODE id=read type=action name="读取附件" task="请读取并总结用户附件" attachments="att-user-1"',
             'NODE id=end type=state stateType=end name="结束"',
             "EDGE from=start to=read",
             "EDGE from=read to=end",
@@ -84,7 +83,6 @@ test("workflow hook passes planned user attachments to node sub-session", async 
         attachmentSource: "user",
         name: "合同.pdf",
         mimeType: "application/pdf",
-        path: "/attachments/s-input-att/contract.pdf",
       },
     ],
     runConfig: { locale: "zh-CN" },
@@ -104,18 +102,18 @@ test("workflow hook passes planned user attachments to node sub-session", async 
   });
 
   assert.equal(subSessionCalls.length, 1);
-  assert.equal(subSessionCalls[0]?.metadata?.inputAttachmentRefs?.[0], "node-file");
+  assert.equal(subSessionCalls[0]?.metadata?.inputAttachmentRefs, undefined);
   const nodeSystemMessages = String((subSessionCalls[0]?.systemMessages || []).join("\n\n"));
   assert.match(nodeSystemMessages, /用户原始附件/);
   assert.match(nodeSystemMessages, /合同\.pdf/);
-  assert.match(nodeSystemMessages, /\/workspace\/attachments\/s-input-att\/contract\.pdf/);
+  assert.doesNotMatch(nodeSystemMessages, /workspace|attachments\/s-input-att/);
 
   const semanticPrompt = String(semanticRequestMessages[0]?.content || "");
   assert.match(semanticPrompt, /用户附件/);
   assert.match(semanticPrompt, /attachmentId=att-user-1/);
   assert.match(semanticPrompt, /sessionId=s-input-att/);
   assert.match(semanticPrompt, /attachmentSource=user/);
-  assert.match(semanticPrompt, /ATTACHMENT id=/);
-  assert.match(semanticPrompt, /attachments="user:\*"/);
+  assert.doesNotMatch(semanticPrompt, /ATTACHMENT id=/);
+  assert.match(semanticPrompt, /attachments="user:\*"|attachmentId=att-user-1/);
 });
 

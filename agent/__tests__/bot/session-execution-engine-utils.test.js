@@ -126,41 +126,28 @@ test("session-execution-engine-utils applies normalized message flags", () => {
 });
 
 test("session-execution-engine-utils resolves transfer envelopes and preferred attachments", () => {
+  const makeEnvelope = (id) => ({
+    protocol: "noobot.semantic-transfer",
+    version: 2,
+    transferId: `transfer-${id}`,
+    messageId: `message-${id}`,
+    identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "tool", id: `call-${id}` } },
+    direction: "output",
+    payload: { mode: "attachment", attachments: [{ identity: { attachmentId: `att-${id}`, sessionId: "s1", attachmentSource: "model" }, role: "primary", name: `${id}.txt`, mimeType: "text/plain" }] },
+    intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" },
+    meta: {},
+  });
   const message = {
-    attachments: [{ attachmentId: "fallback" }],
-    transferEnvelopes: [
-      {
-        protocol: "noobot.semantic-transfer",
-        version: 1,
-        direction: "output",
-        transport: "file",
-        envelopeId: "e1",
-        files: [{ attachmentId: "att-1" }],
-      },
-    ],
-    lc_kwargs: {
-      transferEnvelopes: [
-        {
-          protocol: "noobot.semantic-transfer",
-          version: 1,
-          direction: "output",
-          transport: "file",
-          envelopeId: "e3",
-          files: [{ attachmentId: "att-3" }],
-        },
-      ],
-    },
+    transferEnvelopes: [makeEnvelope("1")],
+    lc_kwargs: { transferEnvelopes: [makeEnvelope("3")] },
   };
 
   assert.equal(isPlainObject({}), true);
   assert.equal(isPlainObject([]), false);
-  assert.deepEqual(resolveTransferEnvelopeListFromMessage(message).map((item) => item.envelopeId), ["e1", "e3"]);
-  assert.deepEqual(resolveTransferEnvelopesFromMessage(message).map((item) => item.envelopeId), [
-    "e1",
-    "e3",
-  ]);
+  assert.deepEqual(resolveTransferEnvelopeListFromMessage(message).map((item) => item.transferId), ["transfer-1", "transfer-3"]);
+  assert.deepEqual(resolveTransferEnvelopesFromMessage(message).map((item) => item.transferId), ["transfer-1", "transfer-3"]);
   assert.deepEqual(
-    resolvePreferredAttachments(message).map((item) => item.attachmentId),
+    resolvePreferredAttachments(message).map((item) => item.identity.attachmentId),
     ["att-1", "att-3"],
   );
   assert.deepEqual(resolvePreferredAttachments({ attachments: [{ attachmentId: "fallback" }] }), [
@@ -214,8 +201,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
           content: "canonical attachment",
           dialogProcessId: "dialog-snapshot",
           turnScopeId: "turn-snapshot",
-          attachments: [{ attachmentId: "att-1", name: "a.txt" }],
-          attachmentMetas: [{ attachmentId: "legacy" }],
+          attachments: [{ attachmentId: "att-1", sessionId: "s1", attachmentSource: "user", name: "a.txt", mimeType: "text/plain" }],
         },
       ],
     },

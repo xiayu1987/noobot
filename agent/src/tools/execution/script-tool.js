@@ -103,6 +103,10 @@ export function createScriptTool({ agentContext }) {
       const shouldIncludeLineNumbers = includeLineNumbers === true;
       const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
       const abortSignal = toolConfig?.signal || null;
+      const identity = toolConfig?.configurable?.transferIdentity;
+      if (!identity || typeof identity !== "object") {
+        throw new Error("semantic_transfer_script_identity_required");
+      }
 
       await confirmCriticalToolOperation({
         runtime,
@@ -127,7 +131,7 @@ export function createScriptTool({ agentContext }) {
               agentContext,
               pathContext,
             }),
-            { runtime, agentContext, basePath },
+            { runtime, agentContext, basePath, identity },
           );
         }
         return toolExecResult(
@@ -140,7 +144,7 @@ export function createScriptTool({ agentContext }) {
             agentContext,
             pathContext,
           }),
-          { includeLineNumbers: shouldIncludeLineNumbers, runtime, agentContext, basePath },
+          { includeLineNumbers: shouldIncludeLineNumbers, runtime, agentContext, basePath, identity },
         );
       }
 
@@ -183,6 +187,7 @@ export function createScriptTool({ agentContext }) {
             warning: tScript(runtime, "fallbackOverlaySrc"),
             executionMode: requestedExecutionMode,
             abortSignal,
+            identity,
           });
           if (fallbackResult) return fallbackResult;
           throw scriptRuntimeError(tScript(runtime, "overlaySrcUnsupported"), {
@@ -321,6 +326,7 @@ export function createScriptTool({ agentContext }) {
           includeLineNumbers: shouldIncludeLineNumbers,
           executionMode: requestedExecutionMode,
           abortSignal,
+          identity,
         });
         if (fallbackResult) return fallbackResult;
         runResult = {
@@ -335,6 +341,7 @@ export function createScriptTool({ agentContext }) {
           runtime,
           agentContext,
           basePath,
+          identity,
         });
       }
       return toolExecResult(mode, runResult, extra, {
@@ -342,6 +349,7 @@ export function createScriptTool({ agentContext }) {
         runtime,
         agentContext,
         basePath,
+        identity,
       });
     },
   });

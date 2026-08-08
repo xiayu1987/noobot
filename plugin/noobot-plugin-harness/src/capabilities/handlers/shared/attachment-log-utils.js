@@ -16,6 +16,10 @@ import {
   resolveCurrentTurnMessagesStore,
 } from "./message/injected-message-utils.js";
 import { resolveModelMessages } from "../../../core/message-store.js";
+import {
+  assertTransferEnvelope,
+  transferIdentityKey,
+} from "@noobot/semantic-transfer-protocol";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 function isPlainObject(value) {
@@ -26,204 +30,32 @@ function normalizeString(value = "") {
   return String(value || "").trim();
 }
 
-function normalizeAttachmentOwnerMeta(attachmentItem = {}) {
-  const explicitOwner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : {};
-  const type = normalizeString(explicitOwner?.type);
-  const id = normalizeString(explicitOwner?.id);
-  const owner = {
-    ...explicitOwner,
-    ...(type ? { type } : {}),
-    ...(id ? { id } : {}),
-  };
-  return Object.keys(owner).length ? owner : null;
-}
-
-function resolveAttachmentOwnerType(attachmentItem = {}) {
-  return normalizeString(
-    normalizeAttachmentOwnerMeta(attachmentItem)?.type,
-  );
-}
-
-function withCanonicalAttachmentOwner(attachmentItem = {}) {
-  const source = isPlainObject(attachmentItem) ? { ...attachmentItem } : {};
-  const owner = normalizeAttachmentOwnerMeta(source);
-  return {
-    ...source,
-    ...(owner ? { owner } : {}),
-  };
-}
-
-function buildTransferPayloadFromAttachments(attachments = []) {
-  const items = (Array.isArray(attachments) ? attachments : []).filter(isPlainObject);
-  if (!items.length) return normalizeTransferPayload();
-  const files = items.map((attachment = {}, index) => ({
-    filePath: normalizeString(attachment?.sandboxPath || attachment?.relativePath || attachment?.path || attachment?.name || ""),
-    attachmentMeta: attachment,
-    role: index === 0 ? "primary" : "secondary",
-  }));
-  const primaryEnvelope = {
-    protocol: "noobot.semantic-transfer",
-    version: 1,
-    direction: "output",
-    transport: "file",
-    filePath: files[0]?.filePath || "",
-    files,
-  };
-  return normalizeTransferPayload({
-    transferEnvelopes: [primaryEnvelope],
-  });
-}
-
-function extractAttachmentsFromTransferPayload(payload = {}) {
-  const source = normalizeTransferPayload(payload || {});
-  const envelopes = source.transferEnvelopes;
-  const metas = [];
-  for (const envelope of envelopes) {
-    if (!envelope || typeof envelope !== "object") continue;
-    const files = Array.isArray(envelope.files) ? envelope.files : [];
-    if (files.length) {
-      for (const file of files) {
-        if (isPlainObject(file?.attachmentMeta)) metas.push(file.attachmentMeta);
-      }
-    }
-  }
-  return metas;
-}
-
-function normalizeTransferPayload(payload = {}) {
+export function normalizeTransferPayload(payload = {}) {
   const source = isPlainObject(payload) ? payload : {};
   const transferEnvelopes = Array.isArray(source.transferEnvelopes)
-    ? source.transferEnvelopes.filter(isPlainObject)
+    ? source.transferEnvelopes.map((envelope) => assertTransferEnvelope(envelope))
     : [];
   return {
     transferEnvelopes,
   };
 }
 
-export function getTransferPayloadFromAttachments(attachments = [], payload = null) {
-  const payloadTransfer = normalizeTransferPayload(payload || {});
-  if (payloadTransfer.transferEnvelopes.length) {
-    return payloadTransfer;
-  }
-  return buildTransferPayloadFromAttachments(attachments);
-}
-
 export function applyTransferPayloadToMessage(message = {}, payload = {}) {
   if (!message || typeof message !== "object") return message;
   const transferPayload = normalizeTransferPayload(payload);
-  if (transferPayload.transferEnvelopes) {
-    message.transferEnvelopes = transferPayload.transferEnvelopes;
-  }
   if (transferPayload.transferEnvelopes.length) {
     const existing = Array.isArray(message.transferEnvelopes) ? message.transferEnvelopes : [];
-    const merged = [...existing];
+    const merged = existing.map((envelope) => assertTransferEnvelope(envelope));
+    const seen = new Set(merged.map((envelope) => transferIdentityKey(envelope)));
     for (const envelope of transferPayload.transferEnvelopes) {
-      if (!merged.includes(envelope)) merged.push(envelope);
+      const key = transferIdentityKey(envelope);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(envelope);
     }
     message.transferEnvelopes = merged;
   }
   return message;
-}
-
-export function mergeAttachments(existing = [], incoming = []) {
-  const current = Array.isArray(existing) ? existing : [];
-  const next = Array.isArray(incoming) ? incoming : [];
-  if (!next.length) return current;
-  const keyOf = (item = {}) =>
-    String(item?.attachmentId || "").trim() ||
-    `${String(item?.name || "").trim()}|${String(item?.path || "").trim()}`;
-  const merged = [...current];
-  const indexByKey = new Map();
-  current.forEach((item, index) => {
-    const key = keyOf(item);
-    if (key && !indexByKey.has(key)) indexByKey.set(key, index);
-  });
-  for (const item of next) {
-    const key = keyOf(item);
-    if (key && indexByKey.has(key)) {
-      const existingIndex = indexByKey.get(key);
-      const existingItem = merged[existingIndex] || {};
-      const incomingOwnerType = resolveAttachmentOwnerType(item);
-      const existingOwnerType = resolveAttachmentOwnerType(existingItem);
-      if (incomingOwnerType === "plugin" && existingOwnerType !== "plugin") {
-        merged[existingIndex] = withCanonicalAttachmentOwner({
-          ...existingItem,
-          ...item,
-        });
-      }
-      continue;
-    }
-    merged.push(item);
-    if (key) indexByKey.set(key, merged.length - 1);
-  }
-  return merged;
-}
-
-export function mapAttachmentRecordsToMetas(records = []) {
-  const list = Array.isArray(records) ? records : [];
-  return list.map((record = {}) => {
-    const owner = normalizeAttachmentOwnerMeta(record);
-    return markHarnessPluginAttachmentMeta({
-      attachmentId: normalizeString(record?.attachmentId),
-      sessionId: normalizeString(record?.sessionId),
-      attachmentSource: normalizeString(record?.attachmentSource || "model"),
-      name: normalizeString(record?.name),
-      mimeType: normalizeString(record?.mimeType || "application/octet-stream"),
-      size: Number(record?.size) || 0,
-      path: normalizeString(record?.path),
-      relativePath: normalizeString(record?.relativePath),
-      ...(owner ? { owner } : {}),
-      generatedByModel: record?.generatedByModel === true,
-      generationSource: normalizeString(record?.generationSource),
-    });
-  });
-}
-
-export function markHarnessPluginAttachmentMeta(meta = {}) {
-  const source = meta && typeof meta === "object" ? meta : {};
-  const owner = {
-    ...(normalizeAttachmentOwnerMeta(source) || {}),
-    type: "plugin",
-    id: "harness-plugin",
-  };
-  return {
-    ...source,
-    owner,
-  };
-}
-
-export function markHarnessPluginAttachments(metas = []) {
-  return (Array.isArray(metas) ? metas : []).map((item = {}) =>
-    markHarnessPluginAttachmentMeta(item),
-  );
-}
-
-function markHarnessPluginTransferEnvelope(envelope = null) {
-  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return envelope;
-  const next = { ...envelope };
-  if (Array.isArray(next.files)) {
-    next.files = next.files.map((file = {}) => {
-      if (!file || typeof file !== "object" || Array.isArray(file)) return file;
-      return {
-        ...file,
-        attachmentMeta: markHarnessPluginAttachmentMeta(file?.attachmentMeta || {}),
-      };
-    });
-  }
-  if (next.attachmentMeta && typeof next.attachmentMeta === "object" && !Array.isArray(next.attachmentMeta)) {
-    next.attachmentMeta = markHarnessPluginAttachmentMeta(next.attachmentMeta);
-  }
-  return next;
-}
-
-export function markHarnessPluginTransferPayload(payload = {}) {
-  const source = normalizeTransferPayload(payload || {});
-  const transferEnvelopes = source.transferEnvelopes
-    .map((item) => markHarnessPluginTransferEnvelope(item))
-    .filter(Boolean);
-  return {
-    transferEnvelopes,
-  };
 }
 
 import { isHarnessInjectedMessage as isHarnessInjectedMessageBase } from "./message/utils.js";
@@ -232,8 +64,9 @@ function isHarnessInjectedMessage(message = {}) {
   return isHarnessInjectedMessageBase(message, { role: "user" });
 }
 
-export function attachMetasToLatestInjectedMessage(ctx = {}, metas = [], transferPayload = null) {
-  const normalizedTransferPayload = getTransferPayloadFromAttachments(metas, transferPayload);
+export function attachTransferPayloadToLatestInjectedMessage(ctx = {}, transferPayload = {}) {
+  const normalizedTransferPayload = normalizeTransferPayload(transferPayload);
+  if (!normalizedTransferPayload.transferEnvelopes.length) return false;
   const messages = resolveModelMessages(ctx);
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const item = messages[index] || {};
@@ -335,63 +168,40 @@ export async function saveCapabilityOutputAsTransferArtifacts(
   {
     purpose = "",
     content = "",
+    name = "",
+    mimeType = "text/markdown",
     generationSource = "",
     domain = CAPABILITY_DOMAIN.PLANNING,
   } = {},
 ) {
   const runtime = ctx?.agentContext?.bindings?.runtime || null;
-  const attachmentService = runtime?.attachmentService || null;
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
   const text = String(content || "").trim();
   if (!text) return [];
-  const userId = String(
-    runtime?.systemRuntime?.userId || runtime?.userId || "",
-  ).trim();
-  const sessionId = String(
-    runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
-  ).trim();
-  if (!userId || !sessionId) return [];
+  const producerId = String(purpose || "").trim();
+  if (!producerId) throw new Error("harness_semantic_transfer_producer_required");
   try {
     if (typeof transferSemanticContent === "function") {
       const staged = await transferSemanticContent({
-        scenario: "harness",
-        strategy: "harness_stage_message",
+        scenario: "agent_plugin",
+        strategy: "agent_plugin_stage_message",
         summary: "",
         detail: text,
-        name: buildCapabilityArtifactName({ purpose }),
-        mimeType: "text/markdown",
+        name: normalizeString(name) || buildCapabilityArtifactName({ purpose }),
+        mimeType: normalizeString(mimeType) || "text/markdown",
         attachmentSource: "model",
         generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
         source: "plugin",
         reason: String(purpose || "harness_capability_output").trim(),
+        producer: { type: "plugin", id: `harness:${producerId}` },
+        direction: "output",
         meta: {
           purpose: String(purpose || "").trim(),
-          userId,
-          sessionId,
         },
       });
-      return markHarnessPluginAttachments(extractAttachmentsFromTransferPayload(staged));
+      return normalizeTransferPayload(staged);
     }
-    const artifact = {
-      name: buildCapabilityArtifactName({ purpose }),
-      mimeType: "text/markdown",
-      contentBase64: Buffer.from(text, "utf8").toString("base64"),
-    };
-    if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
-      return [];
-    }
-    const records = await attachmentService.ingestGeneratedArtifacts({
-      userId,
-      sessionId,
-      attachmentSource: "model",
-      generationSource: String(generationSource || purpose || "harness_capability_output").trim(),
-      owner: {
-        type: "plugin",
-        id: "harness-plugin",
-      },
-      artifacts: [artifact],
-    });
-    return mapAttachmentRecordsToMetas(records);
+    throw new Error("semantic transfer runtime is required for harness output");
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain,
@@ -401,7 +211,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         error: String(error?.message || error || ""),
       },
     });
-    return [];
+    throw error;
   }
 }
 

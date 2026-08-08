@@ -11,7 +11,7 @@ import path from "node:path";
 
 import { createFileTool } from "../../../src/tools/execution/file-tool.js";
 import { executeToolCall } from "../../../src/runtime/tool-execution/tool-runner.js";
-import { transferSemanticContent } from "../../../src/transfer/index.js";
+import { transferSemanticContent } from "../../../src/transfer-adapter/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   buildExecutionWorkspaceMeta,

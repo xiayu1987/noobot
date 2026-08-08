@@ -7,14 +7,14 @@ import { HumanMessage } from "@langchain/core/messages";
 import { deriveContextMessageProjectionId as deriveMessageProjectionId } from "@noobot/context-protocol/message-codec";
 import { tEngine } from "../../../runtime/i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
-import { getTransferAttachmentMetas } from "../../../transfer/storage/consumer.js";
+import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { resolveMessageDialogProcessId, resolveDialogProcessIdFromContext } from "../../session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId, resolveParentSessionId } from "../../parent-session-id-resolver.js";
 import { normalizeAttachmentParsedResultMeta } from "../../../artifacts/index.js";
 import { resolveMessageRole, buildModelMessageIdentityKwargs } from "./message-utils.js";
 
 export function resolveAttachments(msg = {}, fallbackAttachments = []) {
-  const transferAttachments = getTransferAttachmentMetas(
+  const transferAttachments = getTransferAttachments(
     [
       ...(Array.isArray(msg?.transferEnvelopes) ? msg.transferEnvelopes : []),
       ...(Array.isArray(msg?.lc_kwargs?.transferEnvelopes) ? msg.lc_kwargs.transferEnvelopes : []),

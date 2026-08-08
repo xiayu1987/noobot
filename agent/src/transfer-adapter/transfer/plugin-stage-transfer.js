@@ -5,9 +5,7 @@
  */
 import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import {
-  normalizeTransferEnvelopesWithPolicy,
-} from "../envelope/envelope-utils.js";
+import { validateTransferEnvelope } from "@noobot/semantic-transfer-protocol";
 import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { firstNormalizedString } from "../core/compact.js";
@@ -18,22 +16,6 @@ function normalizeString(value = "") {
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function normalizeDetailRefs(detailRefs = []) {
-  return (Array.isArray(detailRefs) ? detailRefs : [])
-    .map((item = {}, index) => {
-      const source = isPlainObject(item) ? item : {};
-      const name = firstNormalizedString(source?.name, `detail-${index + 1}`);
-      const path = firstNormalizedString(
-        source?.transferFilePath,
-        source?.filePath,
-        source?.relativePath,
-        source?.sandboxPath,
-      );
-      return path ? { name, path } : null;
-    })
-    .filter(Boolean);
 }
 
 export async function transferAgentPluginStageMessage({
@@ -48,6 +30,8 @@ export async function transferAgentPluginStageMessage({
   source = "plugin",
   reason = "agent_plugin_stage_message",
   meta = {},
+  identity = null,
+  userId = "",
 } = {}) {
   const normalizedSummary = String(summary || "").trim();
   const normalizedDetail = String(detail || "").trim();
@@ -87,6 +71,8 @@ export async function transferAgentPluginStageMessage({
     name: firstNormalizedString(name, "agent-plugin-stage-detail.md"),
     mimeType: firstNormalizedString(mimeType, DEFAULT_TRANSFER_MIME_TYPE),
     attachmentSource,
+    userId,
+    identity,
     generationSource: intent.generationSource,
     source: intent.source,
     reason: intent.reason,
@@ -97,29 +83,27 @@ export async function transferAgentPluginStageMessage({
     },
   });
 
-  const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
-    Array.isArray(persisted?.transferEnvelopes) ? persisted.transferEnvelopes : [],
-    { runtime, enforceProtocol: true, withStats: true },
-  );
-  const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
+  const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes) ? persisted.transferEnvelopes : [];
+  transferEnvelopes.forEach((envelope) => validateTransferEnvelope(envelope, { strict: true }));
   await emitSemanticTransferValidation({
     runtime,
     scenario: "agent_plugin_stage_message",
-    stats: transferEnvelopesResult?.stats || {},
+    stats: { inputCount: transferEnvelopes.length, outputCount: transferEnvelopes.length, enforceProtocol: true },
   });
   return { transferEnvelopes };
 }
 
 export function composeAgentPluginFinalMessage({
   resultInfo = "",
-  detailRefs = [],
+  detailEnvelopes = [],
   validationInfo = "",
   header = "",
 } = {}) {
   const resultText = String(resultInfo || "").trim();
   const validationText = String(validationInfo || "").trim();
-  const detailLines = normalizeDetailRefs(detailRefs)
-    .map((item = {}) => `- ${item.name}: ${item.path}`);
+  const detailLines = (Array.isArray(detailEnvelopes) ? detailEnvelopes : [])
+    .flatMap((envelope = {}) => Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments : [])
+    .map((item = {}) => `- ${firstNormalizedString(item.name, item.identity?.attachmentId)}`);
 
   return [
     normalizeString(header),

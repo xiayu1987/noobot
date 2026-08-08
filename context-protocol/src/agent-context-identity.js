@@ -19,6 +19,7 @@ export function normalizeAgentContextIdentity(identity = {}) {
     dialogProcessId: text(identity?.dialogProcessId),
     turnScopeId: text(identity?.turnScopeId),
     runId: text(identity?.runId),
+    messageId: text(identity?.messageId),
   };
 }
 

@@ -7,7 +7,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  buildTransferPayloadFromAttachmentMetas,
   mapAttachmentRecordsToMetas,
   normalizeAttachmentMetas,
   normalizeAttachmentParsedResultMeta,
@@ -203,25 +202,3 @@ test("mapAttachmentRecordsToMetas canonicalizes aliases before exposing attachme
   assert.equal(JSON.stringify(meta).includes("dialog_process_id"), false);
 });
 
-test("buildTransferPayloadFromAttachmentMetas emits canonical attachmentMeta in transfer files", () => {
-  const payload = buildTransferPayloadFromAttachmentMetas([
-    {
-      id: "att_transfer",
-      name: "transfer.txt",
-      type: "text/plain",
-      sandboxViewPath: "/workspace/transfer.txt",
-      sandboxEnabled: true,
-      generationSource: "semantic_transfer_tool_output",
-    },
-  ]);
-  const file = payload.transferEnvelopes?.[0]?.files?.[0] || {};
-
-  assert.equal(file.filePath, "/workspace/transfer.txt");
-  assert.equal(file.attachmentMeta?.attachmentId, "att_transfer");
-  assert.equal(file.attachmentMeta?.mimeType, "text/plain");
-  assert.equal(file.attachmentMeta?.sandboxPath, "/workspace/transfer.txt");
-  assert.equal(file.attachmentMeta?.isSandbox, true);
-  assert.equal("type" in file.attachmentMeta, false);
-  assert.equal("sandboxViewPath" in file.attachmentMeta, false);
-  assert.equal("sandboxEnabled" in file.attachmentMeta, false);
-});

@@ -341,18 +341,9 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
           content: "test",
           dialogProcessId: "dialog-attachment-source",
           turnScopeId: "turn-attachment-source",
-          attachmentMetas: [
-            {
-              attachmentId: sourceAttachment.attachmentId,
-              sessionId: sourceAttachment.sessionId,
-              attachmentSource: sourceAttachment.attachmentSource,
-            },
-          ],
           attachments: [
             {
-              attachmentId: sourceAttachment.attachmentId,
-              sessionId: sourceAttachment.sessionId,
-              attachmentSource: sourceAttachment.attachmentSource,
+              ...sourceAttachment,
             },
           ],
         },

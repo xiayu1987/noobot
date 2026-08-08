@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
-import { createTransferEnvelope } from "../envelope/envelope.js";
-import {
-  extractTransferEnvelopeFromPersisted,
-  normalizeTransferEnvelopesWithPolicy,
-} from "../envelope/envelope-utils.js";
+import { directTransfer, validateTransferEnvelope } from "@noobot/semantic-transfer-protocol";
 import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
@@ -34,17 +30,17 @@ function normalizeNextSteps(nextSteps = []) {
 function normalizeSubAgentMessages(messages = []) {
   const list = Array.isArray(messages) ? messages : [messages];
   return list
-    .map((item = {}, index) => {
+    .map((item = {}) => {
       if (typeof item === "string") {
         return {
-          id: `subagent-${index + 1}`,
+          id: "",
           nodeId: "",
           nodeName: "",
           content: item,
         };
       }
       return {
-        id: firstNormalizedString(item?.id, item?.stepId, item?.nodeId, `subagent-${index + 1}`),
+        id: firstNormalizedString(item?.id, item?.stepId, item?.nodeId),
         nodeId: firstNormalizedString(item?.nodeId),
         nodeName: firstNormalizedString(item?.nodeName, item?.name),
         content: String(item?.content || item?.output || item?.text || ""),
@@ -65,7 +61,12 @@ export async function transferBotPluginSubagentResult({
   source = "plugin",
   reason = "bot_plugin_subagent_result",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
+  identity = null,
+  userId = "",
 } = {}) {
+  if (!identity || typeof identity !== "object") {
+    throw new Error("semantic_transfer_subagent_identity_required");
+  }
   const normalizedMessages = normalizeSubAgentMessages(messages);
   const intent = resolveTransferIntent({
     source,
@@ -82,17 +83,21 @@ export async function transferBotPluginSubagentResult({
   for (const [index, item] of normalizedMessages.entries()) {
     const text = String(item?.content || "");
     if (!text) continue;
+    if (!item.id) throw new Error("semantic_transfer_subagent_message_identity_required");
+    const itemIdentity = {
+      ...identity,
+      transferId: `${identity.transferId}:subagent:${item.id}`,
+      producer: { type: "subagent", id: item.id },
+    };
     if (forceAttachment !== true) {
-      const envelope = createTransferEnvelope({
+      const envelope = directTransfer({
+        transferId: itemIdentity.transferId,
+        messageId: itemIdentity.messageId,
+        identity: itemIdentity,
         direction: "output",
-        transport: "direct",
         content: text,
-        meta: {
-          source: intent.source,
-          reason: intent.reason,
-          nodeId: item?.nodeId,
-          nodeName: item?.nodeName,
-        },
+        intent: { source: intent.source, reason: intent.reason, scenario: "bot_plugin", strategy: "bot_plugin_subagent_result" },
+        meta: { attributes: { nodeId: item?.nodeId, nodeName: item?.nodeName } },
       });
       persistedItems.push({ ...item, transferEnvelopes: [envelope] });
       continue;
@@ -114,34 +119,31 @@ export async function transferBotPluginSubagentResult({
       name,
       mimeType,
       attachmentSource,
+      userId,
+      identity: itemIdentity,
       generationSource: intent.generationSource,
       source: intent.source,
       reason: intent.reason,
       meta: {
-        ...(isPlainObject(item?.meta) ? item.meta : {}),
-        nodeId: item?.nodeId,
-        nodeName: item?.nodeName,
+        attributes: {
+          ...(isPlainObject(item?.meta) ? item.meta : {}),
+          nodeId: item?.nodeId,
+          nodeName: item?.nodeName,
+        },
       },
     });
-    const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
-      Array.isArray(persisted?.transferEnvelopes) ? persisted.transferEnvelopes : [],
-      { runtime, enforceProtocol: true, withStats: true },
-    );
-    const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
+    const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes) ? persisted.transferEnvelopes : [];
+    transferEnvelopes.forEach((envelope) => validateTransferEnvelope(envelope, { strict: true }));
     persistedItems.push({ ...item, transferEnvelopes });
   }
 
-  const transferEnvelopesResult = normalizeTransferEnvelopesWithPolicy(
-    persistedItems
+  const transferEnvelopes = persistedItems
     .flatMap((item = {}) => (Array.isArray(item.transferEnvelopes) ? item.transferEnvelopes : []))
-    .filter(isPlainObject),
-    { runtime, enforceProtocol: true, withStats: true },
-  );
-  const transferEnvelopes = transferEnvelopesResult?.envelopes || [];
+    .filter(isPlainObject);
   await emitSemanticTransferValidation({
     runtime,
     scenario: "bot_plugin_subagent_result",
-    stats: transferEnvelopesResult?.stats || {},
+    stats: { inputCount: transferEnvelopes.length, outputCount: transferEnvelopes.length, enforceProtocol: true },
   });
 
   return { transferEnvelopes };

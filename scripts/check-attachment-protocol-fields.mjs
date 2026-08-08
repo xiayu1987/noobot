@@ -69,11 +69,9 @@ const LEGACY_ATTACHMENT_FIELD_ALLOWED_FILES = new Map(Object.entries({
     "session message compatibility strips/reads legacy snake_case fields from stored messages",
   "agent/src/session/session-summary-builders.js":
     "session summary compatibility reads historical parsed attachment refs",
-  "agent/src/transfer/core/compact.js":
+  "agent/src/transfer-adapter/core/compact.js":
     "semantic-transfer model compact view accepts legacy attachment refs from envelope files",
-  "agent/src/transfer/storage/transfer-path-view.js":
-    "semantic-transfer path bridge consumes legacy attachment meta sandbox aliases",
-  "agent/src/transfer/storage/attachment-adapter.js":
+  "agent/src/transfer-adapter/storage/attachment-adapter.js":
     "semantic-transfer attachment persistence bridge consumes legacy sandbox flag aliases",
   "client/noobot-chat/src/infrastructure/api/chat/chatApi.js":
     "frontend upload API accepts backend/client legacy attachment field aliases",

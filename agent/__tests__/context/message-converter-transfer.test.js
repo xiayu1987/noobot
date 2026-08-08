@@ -11,16 +11,19 @@ import { toConversationMessages } from "../../src/context/session/message-conver
 test("toConversationMessages keeps transferEnvelopes", () => {
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 1,
+    version: 2,
+    transferId: "transfer-1",
+    messageId: "message-1",
+    identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "model", id: "model-1" } },
     direction: "output",
-    transport: "file",
-    filePath: "/workspace/a.md",
+    payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" }, role: "primary", name: "a.md", mimeType: "text/markdown" }] },
+    intent: { source: "model", reason: "result", scenario: "model", strategy: "model_output" },
+    meta: {},
   };
   const messages = toConversationMessages([
     {
       role: "assistant",
       content: "ok",
-      attachments: [{ attachmentId: "att_1" }],
       transferEnvelopes: [envelope],
     },
   ]);
@@ -28,7 +31,7 @@ test("toConversationMessages keeps transferEnvelopes", () => {
   assert.equal(messages.length, 1);
   assert.equal("transferEnvelopes" in messages[0], true);
   assert.deepEqual(messages[0].transferEnvelopes, [envelope]);
-  assert.deepEqual(messages[0].attachments, [{ attachmentId: "att_1" }]);
+  assert.equal("attachments" in messages[0], false);
 });
 
 test("toConversationMessages omits empty legacy attachment/transfer mirrors", () => {

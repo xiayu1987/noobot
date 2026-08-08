@@ -32,26 +32,38 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
   });
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 1,
+    version: 2,
+    transferId: "transfer:message-att-1:tool:call-att-1:output:tool_result_text:structured",
+    messageId: "message-att-1",
+    identity: {
+      sessionId: "s1",
+      turnScopeId: "turn-att-1",
+      runId: "run-att-1",
+      producer: { type: "plugin", id: "harness-plugin" },
+    },
     direction: "output",
-    transport: "file",
-    files: [
-      {
-        filePath: "/workspace/a.md",
-        attachmentMeta: {
-          attachmentId: "att_1",
-          name: "a.md",
-          owner: { type: "plugin", id: "harness-plugin" },
-        },
-      },
-    ],
+    payload: {
+      mode: "attachment",
+      attachments: [{
+        identity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
+        role: "primary",
+        name: "a.md",
+        mimeType: "text/markdown",
+      }],
+    },
+    intent: {
+      source: "plugin",
+      reason: "semantic_transfer_tool_result",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
+    meta: { persisted: true },
   };
   await service.appendTurn({
     userId: "u1",
     sessionId: "s1",
     role: "assistant",
     content: "done",
-    attachmentMetas: [{ attachmentId: "att_1", name: "a.md" }],
     transferEnvelopes: [envelope],
   });
 
@@ -59,27 +71,8 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
   const lastMessage = saved[0]?.messages?.[0];
   assert.equal("attachmentMetas" in lastMessage, false);
   assert.equal("transferEnvelopes" in lastMessage, true);
-  assert.deepEqual(lastMessage?.transferEnvelopes, [
-    {
-      protocol: "noobot.semantic-transfer",
-      version: 1,
-      direction: "output",
-      transport: "file",
-      files: [
-        {
-          attachmentId: "att_1",
-          name: "a.md",
-          path: "/workspace/a.md",
-          owner: { type: "plugin", id: "harness-plugin" },
-        },
-      ],
-    },
-  ]);
-  assert.equal("attachmentMeta" in lastMessage.transferEnvelopes[0], false);
-  assert.equal("attachmentMeta" in lastMessage.transferEnvelopes[0].files[0], false);
-  assert.equal("id" in lastMessage.transferEnvelopes[0].files[0], false);
-  assert.equal("type" in lastMessage.transferEnvelopes[0].files[0], false);
-  assert.equal("source" in lastMessage.transferEnvelopes[0].files[0], false);
+  assert.deepEqual(lastMessage?.transferEnvelopes, [envelope]);
+  assert.equal(lastMessage.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att_1");
 });
 
 test("SessionMessageService.appendTurn stores thinking timing in turnTimings without message timing", async () => {

@@ -5,7 +5,7 @@
  */
 import { TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
 import { firstNormalizedString } from "../core/compact.js";
-import { directOutput } from "../envelope/envelope.js";
+import { createDirectTransferEnvelope } from "../storage/attachment-adapter.js";
 import { transferToolInput, transferToolOutput } from "./tool-transfer.js";
 import { normalizeToolResultOverflow } from "./tool-result-overflow.js";
 import { transferBotPluginSubagentResult } from "./subagent-transfer.js";
@@ -72,14 +72,18 @@ function normalizePayloadAndOptions(options = {}) {
   };
 }
 
-function createDirectTextTransfer({ text = "", scenario = "", strategy = "", meta = {} } = {}) {
+function createDirectTextTransfer({ text = "", scenario = "", strategy = "", identity, meta = {} } = {}) {
   const normalizedText = String(text || "");
-  const envelope = directOutput(normalizedText, {
-    ...meta,
-    source: meta?.source || TRANSFER_SOURCE.SERVICE,
-    reason: meta?.reason || TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
-    scenario,
-    strategy,
+  const envelope = createDirectTransferEnvelope({
+    identity,
+    content: normalizedText,
+    intent: {
+      source: meta?.source || TRANSFER_SOURCE.SERVICE,
+      reason: meta?.reason || TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
+      scenario,
+      strategy,
+    },
+    meta,
   });
   const transferEnvelopes = [envelope];
   return {
@@ -93,6 +97,7 @@ async function transferToolStrategy({ strategy = "", runtime = {}, agentContext 
       ...options,
       runtime,
       agentContext,
+      identity: options.identity,
       toolResultText: options.toolResultText ?? options.text ?? options.content ?? "",
     });
   }
@@ -130,6 +135,7 @@ async function transferBotPluginStrategy({ strategy = "", runtime = {}, agentCon
         text: content,
         scenario: "bot_plugin",
         strategy,
+        identity: options.identity,
         meta: { ...(options?.meta || {}), injectionMessage: content },
       }),
     };
@@ -174,6 +180,7 @@ async function transferAgentPluginSummaryInjection({ strategy = "", runtime = {}
     text: injectionMessage,
     scenario: "agent_plugin",
     strategy,
+    identity: options.identity,
     meta: { ...(options?.meta || {}), injectMode, summary: summaryText, detail: detailText },
   });
   const detailEnvelopes = Array.isArray(detailTransfer?.transferEnvelopes) ? detailTransfer.transferEnvelopes : [];
@@ -195,6 +202,7 @@ async function transferAgentPluginStrategy({ strategy = "", runtime = {}, agentC
         text: finalMessage,
         scenario: "agent_plugin",
         strategy,
+        identity: options.identity,
         meta: { source: TRANSFER_SOURCE.PLUGIN, reason: "agent_plugin_final_message" },
       }),
     };

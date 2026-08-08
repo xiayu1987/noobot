@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { createMessageFiles } from "./helpers/useMessageFiles-helper.js";
 
 describe("useMessageFiles plugin attachments", () => {
-  it("classifies explicitly marked harness assistant attachments as plugin attachments", () => {
+  it("preserves explicit attachment ownership without inventing ownership for other attachments", () => {
     const messageItem = {
       role: "assistant",
       dialogProcessId: "dp-1",
@@ -43,8 +43,10 @@ describe("useMessageFiles plugin attachments", () => {
       owner: { type: "plugin" },
     });
     expect(displayedAttachments.value.find((item) => item.attachmentId === "att-agent-1")).toMatchObject({
-      owner: { type: "agent" },
+      attachmentId: "att-agent-1",
     });
+    expect(displayedAttachments.value.find((item) => item.attachmentId === "att-agent-1"))
+      .not.toHaveProperty("owner");
   });
 
   it("keeps refreshed harness attachments as plugin-owned without duplicating agent copies", () => {
@@ -114,7 +116,7 @@ describe("useMessageFiles plugin attachments", () => {
     ]);
   });
 
-  it("promotes same-key attachment metadata to plugin ownership when harness metadata arrives later", () => {
+  it("does not merge conflicting duplicate records inside one ordinary attachment fact list", () => {
     const messageItem = {
       role: "assistant",
       sessionId: "session-1",
@@ -141,8 +143,9 @@ describe("useMessageFiles plugin attachments", () => {
       getUserId: () => "admin",
     });
 
-    expect(displayedAttachments.value).toHaveLength(1);
-    expect(displayedAttachments.value[0]).toMatchObject({
+    expect(displayedAttachments.value).toHaveLength(2);
+    expect(displayedAttachments.value[0]).not.toHaveProperty("owner");
+    expect(displayedAttachments.value[1]).toMatchObject({
       attachmentId: "report-1",
       owner: { type: "plugin", id: "harness-plugin" },
     });
@@ -294,9 +297,10 @@ describe("useMessageFiles plugin attachments", () => {
 
     expect(displayedAttachments.value).toHaveLength(2);
     expect(displayedAttachments.value).toEqual([
-      expect.objectContaining({ attachmentId: "plan-current", owner: { type: "agent" } }),
-      expect.objectContaining({ attachmentId: "report-current", owner: { type: "agent" } }),
+      expect.objectContaining({ attachmentId: "plan-current" }),
+      expect.objectContaining({ attachmentId: "report-current" }),
     ]);
+    expect(displayedAttachments.value.every((item) => !Object.hasOwn(item, "owner"))).toBe(true);
   });
 
   it("restores persisted harness checklist attachments from owner metadata and dedupes refreshed copies", () => {
@@ -402,7 +406,7 @@ describe("useMessageFiles plugin attachments", () => {
     expect(displayedAttachments.value).toHaveLength(1);
     expect(displayedAttachments.value[0]).toMatchObject({
       attachmentId: "att-legacy-harness-name",
-      owner: { type: "agent" },
     });
+    expect(displayedAttachments.value[0]).not.toHaveProperty("owner");
   });
 });

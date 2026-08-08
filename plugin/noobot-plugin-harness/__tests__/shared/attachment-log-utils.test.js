@@ -6,10 +6,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyTransferPayloadToMessage,
   consumeDeferredCapabilityLogs,
   deferCapabilityLogs,
-  mergeAttachments,
 } from "../../src/capabilities/handlers/shared/attachment-log-utils.js";
+import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
 import { containsExecutableScriptText } from "../../src/capabilities/handlers/shared/script-content-risk.js";
 
 test("containsExecutableScriptText recognizes executable script signals only", () => {
@@ -17,31 +18,33 @@ test("containsExecutableScriptText recognizes executable script signals only", (
   assert.equal(containsExecutableScriptText("说明代码函数 foo() 的用途"), false);
 });
 
-test("mergeAttachments promotes duplicate attachment metadata to plugin ownership", () => {
-  const merged = mergeAttachments(
-    [
-      {
-        attachmentId: "report-1",
-        name: "harness-acceptance-report.txt",
-        path: "/runtime/report.txt",
-      },
-    ],
-    [
-      {
-        attachmentId: "report-1",
-        name: "harness-acceptance-report.txt",
-        path: "/runtime/report.txt",
-        owner: {
-          type: "plugin",
-          id: "harness-plugin",
-        },
-      },
-    ],
+test("transfer payload binds and deduplicates complete V2 envelopes by stable transfer identity", () => {
+  const envelope = attachmentTransfer({
+    transferId: "transfer-1",
+    messageId: "message-1",
+    identity: {
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      runId: "run-1",
+      producer: { type: "plugin", id: "harness" },
+    },
+    direction: "output",
+    attachments: [{
+      identity: { attachmentId: "attachment-1", sessionId: "session-1", attachmentSource: "model" },
+      role: "primary",
+      name: "report.txt",
+      mimeType: "text/plain",
+      size: 12,
+    }],
+    intent: { source: "plugin", reason: "acceptance_report", scenario: "agent_plugin", strategy: "agent_plugin_stage_message" },
+  });
+  const message = applyTransferPayloadToMessage(
+    { role: "assistant", transferEnvelopes: [envelope] },
+    { transferEnvelopes: [{ ...envelope }] },
   );
-
-  assert.equal(merged.length, 1);
-  assert.equal(merged[0].owner?.type, "plugin");
-  assert.equal(merged[0].owner?.id, "harness-plugin");
+  assert.equal(message.transferEnvelopes.length, 1);
+  assert.equal(message.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "attachment-1");
+  assert.equal(message.attachments, undefined);
 });
 
 test("deferred capability log outbox is consumed exactly once by the next hook context", () => {

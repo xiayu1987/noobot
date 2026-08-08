@@ -19,7 +19,7 @@ import {
   getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
-import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
+import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import {
   PLUGIN_MODEL_HEADER_KEY,
 } from "../../models/headers/plugin-headers.js";

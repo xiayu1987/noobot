@@ -6,6 +6,12 @@
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import {
+  createTransferEnvelope,
+  createTransferIdentity,
+  createAttachmentReference,
+  TRANSFER_DIRECTION,
+} from "@noobot/semantic-transfer-protocol";
 
 import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
 import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
@@ -104,42 +110,114 @@ export function createAttachmentPersister({ prefix = "att", counterRef = { value
     return [
       {
         attachmentId: `${prefix}-${counterRef.value}`,
+        sessionId: String(payload?.sessionId || "s1"),
+        attachmentSource: "model",
         name: artifactName,
         mimeType: "text/markdown",
-        path: `/attachments/${artifactName}`,
       },
     ];
   };
 }
 
-export function createSemanticTransferTool({ prefix = "att", counterRef = { value: 0 } } = {}) {
+export function createV2AttachmentTransferEnvelope({
+  attachmentId,
+  sessionId = "s1",
+  turnScopeId = "turn-workflow-test",
+  runId = "run-workflow-test",
+  producerType = "subagent",
+  producerId = "workflow-test-producer",
+  transferId = `transfer-${attachmentId}`,
+  messageId = `message-${attachmentId}`,
+  name = "workflow-result.md",
+  mimeType = "text/markdown",
+  strategy = "bot_plugin_subagent_result",
+  scenario = "bot_plugin",
+  reason = "workflow_node_result",
+} = {}) {
+  return createTransferEnvelope({
+    transferId,
+    messageId,
+    identity: createTransferIdentity({
+      sessionId,
+      turnScopeId,
+      runId,
+      producer: { type: producerType, id: producerId },
+    }),
+    direction: TRANSFER_DIRECTION.OUTPUT,
+    payload: {
+      mode: "attachment",
+      attachments: [createAttachmentReference({
+        identity: { attachmentId, sessionId, attachmentSource: "model" },
+        role: "primary",
+        name,
+        mimeType,
+      })],
+    },
+    intent: { source: producerType, reason, scenario, strategy },
+    meta: { originalLength: 0, persisted: true },
+  });
+}
+
+export function createSemanticTransferTool({ prefix = "att", counterRef = { value: 0 }, calls = null, sessionId = "" } = {}) {
   return {
-    async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
+    async transferSemanticContent(payload = {}) {
+      const { scenario = "", strategy = "", messages = [] } = payload;
+      if (Array.isArray(calls)) calls.push(payload);
       if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
         return { transferEnvelopes: [] };
       }
+      const strategyKey = String(strategy || "").trim();
+      const counters = counterRef.byStrategy instanceof Map
+        ? counterRef.byStrategy
+        : (counterRef.byStrategy = new Map());
+      const scopedCount = Number(counters.get(strategyKey) || 0) + 1;
+      counters.set(strategyKey, scopedCount);
       counterRef.value += 1;
       const nodeName = String(messages?.[0]?.nodeName || `节点${counterRef.value}`).trim();
-      const fileName = `workflow-node-${counterRef.value}-${nodeName}-result.md`;
-      const envelope = {
-        protocol: "noobot.semantic-transfer",
-        version: 1,
-        direction: "output",
-        transport: "file",
-        filePath: `/workspace/${fileName}`,
-        files: [{
-          role: "primary",
-          filePath: `/workspace/${fileName}`,
-          attachmentMeta: {
-            attachmentId: `${prefix}-${counterRef.value}`,
+      const fileName = `workflow-node-${scopedCount}-${nodeName}-result.md`;
+      const attachmentId = `${prefix}-${scopedCount}`;
+      const effectiveSessionId = String(
+        sessionId || messages?.[0]?.meta?.sessionId || payload?.sessionId || "s1",
+      ).trim();
+      const effectiveTurnScopeId = String(
+        messages?.[0]?.meta?.turnScopeId || payload?.turnScopeId || `turn-${prefix}-${scopedCount}`,
+      ).trim();
+      const effectiveRunId = String(
+        messages?.[0]?.meta?.workflowRunId || payload?.runId || `run-${prefix}-${scopedCount}`,
+      ).trim();
+      const envelope = createTransferEnvelope({
+        transferId: `transfer-${prefix}-${strategyKey}-${scopedCount}`,
+        messageId: `message-${prefix}-${strategyKey}-${scopedCount}`,
+        identity: createTransferIdentity({
+          sessionId: effectiveSessionId,
+          turnScopeId: effectiveTurnScopeId,
+          runId: effectiveRunId,
+          producer: { type: "subagent", id: nodeName },
+        }),
+        direction: TRANSFER_DIRECTION.OUTPUT,
+        payload: {
+          mode: "attachment",
+          attachments: [createAttachmentReference({
+            identity: { attachmentId, sessionId: effectiveSessionId, attachmentSource: "model" },
+            role: "primary",
             name: fileName,
             mimeType: "text/markdown",
-            relativePath: `runtime/attach/${fileName}`,
-          },
-          pathView: { displayPath: `/workspace/${fileName}` },
-        }],
+          })],
+        },
+        intent: {
+          source: "subagent",
+          reason: "workflow_node_result",
+          scenario: "bot_plugin",
+          strategy,
+        },
+        meta: { originalLength: 0, persisted: true },
+      });
+      return {
+        transferEnvelopes: [envelope],
+        ...(strategyKey === "bot_plugin_upstream_injection" && String(payload?.content || "").trim()
+          ? { injectionMessage: String(payload.content).trim() }
+          : {}),
       };
-      return { transferEnvelopes: [envelope] };
     },
   };
 }
@@ -201,6 +279,13 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   const runtime = bindings.runtime && typeof bindings.runtime === "object"
     ? bindings.runtime
     : (bindings.runtime = legacyRuntime && typeof legacyRuntime === "object" ? legacyRuntime : {});
+  const runtimeSharedTools = runtime.sharedTools && typeof runtime.sharedTools === "object"
+    ? runtime.sharedTools
+    : {};
+  if (!runtimeSharedTools.semanticTransfer) {
+    runtimeSharedTools.semanticTransfer = createSemanticTransferTool();
+  }
+  runtime.sharedTools = runtimeSharedTools;
   if (!runtime.runConfig || typeof runtime.runConfig !== "object") runtime.runConfig = runConfig;
   if (!Array.isArray(bindings.tools)) {
     bindings.tools = Array.isArray(agentContext?.payload?.tools?.registry)

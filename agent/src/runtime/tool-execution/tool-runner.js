@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { emitEvent } from "../../events/index.js";
-import { emitMessageEvent } from "../../events/message-event-stream.js";
+import {
+  currentAssistantMessageId,
+  emitMessageEvent,
+} from "../../events/message-event-stream.js";
 import { isFatalError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../../tools/core/tool-json-result.js";
-import { extractAttachmentsFromToolResult } from "../../artifacts/runtime/artifact-service.js";
-import { projectToolResultArtifacts } from "../../artifacts/runtime/tool-result-artifact-projection.js";
 import { isAbortError } from "../utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../errors/index.js";
@@ -17,8 +18,11 @@ import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
-import { transferSemanticContent } from "../../transfer/transfer/semantic-transfer.js";
-import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
+import {
+  resolveRuntimeTransferIdentity,
+  transferSemanticContent,
+} from "../../transfer-adapter/index.js";
+import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { sanitizeToolResultText } from "@noobot/sanitize";
 
 const TOOL_INPUT_TRANSFER_TOOL_NAMES = new Set([
@@ -31,6 +35,12 @@ const TOOL_INPUT_TRANSFER_TOOL_NAMES = new Set([
 
 function shouldTransferToolInput(call = {}) {
   return TOOL_INPUT_TRANSFER_TOOL_NAMES.has(String(call?.name || "").trim());
+}
+
+function toolProducer(call = {}) {
+  const id = String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim();
+  if (!id) throw new Error("semantic_transfer_tool_call_id_required");
+  return { type: "tool", id };
 }
 
 function mergeToolInputTransferPayload(toolResultText = "", transferPayload = {}) {
@@ -84,12 +94,20 @@ function compactSemanticTransferProtocolPayload(inputTransfer = {}) {
   };
 }
 
+function transferEnvelopesFromStructuredResult(rawResult = null) {
+  if (!rawResult || typeof rawResult !== "object" || Array.isArray(rawResult)) return [];
+  return Array.isArray(rawResult.transferEnvelopes) ? rawResult.transferEnvelopes : [];
+}
+
 function deriveToolInputTransferMeta(inputTransfer = {}) {
   const transferEnvelopes = Array.isArray(inputTransfer?.transferEnvelopes)
     ? inputTransfer.transferEnvelopes
     : [];
   const metas = transferEnvelopes
-    .map((envelope = {}) => envelope?.meta)
+    .flatMap((envelope = {}) => [
+      envelope?.meta,
+      envelope?.meta?.attributes,
+    ])
     .filter((meta = null) => meta && typeof meta === "object" && !Array.isArray(meta));
   const overflowMeta = metas.find((meta = {}) => meta?.toolInputOverflow);
   const exceededMeta = metas.find((meta = {}) => meta?.exceeded === true);
@@ -177,13 +195,14 @@ export async function executeToolCall({
     return {
       call,
       toolResultText,
-      extractedAttachments: [],
+      transferEnvelopes: [],
       success: false,
       failureReason: "tool_not_found",
     };
   }
   let rawResult = null;
   let rawToolResultText = "";
+  let inputTransfer = null;
   await runAgentRuntimeHook({
     runtime,
     point: HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
@@ -202,13 +221,22 @@ export async function executeToolCall({
   let toolInputTransferPayload = {};
   if (shouldTransferToolInput(call)) {
     try {
-      const inputTransfer = await transferSemanticContent({
+      inputTransfer = await transferSemanticContent({
         scenario: "tool",
         strategy: "tool_input",
         call,
         runtime,
         agentContext,
         sessionId,
+        producer: toolProducer(call),
+        identity: resolveRuntimeTransferIdentity({
+          runtime,
+          agentContext,
+          sessionId,
+          producer: toolProducer(call),
+          direction: "input",
+          strategy: "tool_input",
+        }),
       });
       const inputTransferMeta = deriveToolInputTransferMeta(inputTransfer);
       toolInputTransferPayload = compactSemanticTransferProtocolPayload(inputTransfer);
@@ -248,19 +276,27 @@ export async function executeToolCall({
         return {
           call,
           toolResultText,
-          extractedAttachments: [],
+          transferEnvelopes: inputTransfer.transferEnvelopes || [],
           success: true,
           failureReason: "",
         };
       }
-    } catch {
-      toolInputTransferPayload = {};
+    } catch (error) {
+      throw error;
     }
   }
   try {
     rawResult = await tool.invoke(call?.args || {}, {
       signal: abortSignal,
       configurable: {
+        transferIdentity: resolveRuntimeTransferIdentity({
+          runtime,
+          agentContext,
+          sessionId,
+          producer: toolProducer(call),
+          direction: "output",
+          strategy: "execute_script",
+        }),
         noobotHookContext: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, runtime, {
           phase: "tool_call",
           executionScope,
@@ -359,15 +395,7 @@ export async function executeToolCall({
     toolResultText: rawToolResultText || toolResultText,
     invokeError,
   });
-  const rawExtractedAttachments = extractAttachmentsFromToolResult(
-    call?.name,
-    rawToolResultText || toolResultText,
-  );
-  const resultArtifacts = projectToolResultArtifacts({
-    toolName: call?.name,
-    result: rawToolResultText || toolResultText,
-    attachments: rawExtractedAttachments,
-  });
+  const structuredTransferEnvelopes = transferEnvelopesFromStructuredResult(rawResult);
   const overflowNormalized = await transferSemanticContent({
     scenario: "tool",
     strategy: "tool_result_text",
@@ -376,6 +404,15 @@ export async function executeToolCall({
     runtime,
     agentContext,
     sessionId,
+    producer: toolProducer(call),
+    identity: resolveRuntimeTransferIdentity({
+      runtime,
+      agentContext,
+      sessionId,
+      producer: toolProducer(call),
+      direction: "output",
+      strategy: "tool_result_text",
+    }),
   });
   toolResultText = overflowNormalized.toolResultText;
   if (String(call?.name || "").trim() === "task_summary") {
@@ -401,19 +438,20 @@ export async function executeToolCall({
       agentContext,
     }),
   });
-  const normalizedExtractedAttachments = extractAttachmentsFromToolResult(
-    call?.name,
-    toolResultText,
+  const transferEnvelopes = [
+    ...toolInputTransferPayload.transferEnvelopes || [],
+    ...structuredTransferEnvelopes,
+    ...overflowNormalized.transferEnvelopes || [],
+  ];
+  const uniqueTransferEnvelopes = Array.from(
+    new Map(transferEnvelopes.map((envelope) => [envelope.transferId, envelope])).values(),
   );
   return {
     call,
     toolResultText,
-    extractedAttachments: normalizedExtractedAttachments.length
-      ? normalizedExtractedAttachments
-      : rawExtractedAttachments,
+    transferEnvelopes: uniqueTransferEnvelopes,
     success: failureState.success,
     failureReason: failureState.reason,
-    writtenFiles: resultArtifacts.writtenFiles,
   };
 }
 
@@ -436,11 +474,8 @@ export async function executeToolCallInTurn(options = {}) {
     result: String(result?.toolResultText || ""),
     success: result?.success === true,
     toolCallId,
-    ...(Array.isArray(result?.extractedAttachments) && result.extractedAttachments.length
-      ? { attachments: result.extractedAttachments }
-      : {}),
-    ...(Array.isArray(result?.writtenFiles) && result.writtenFiles.length
-      ? { writtenFiles: result.writtenFiles }
+    ...(Array.isArray(result?.transferEnvelopes) && result.transferEnvelopes.length
+      ? { transferEnvelopes: result.transferEnvelopes }
       : {}),
   });
   return result;

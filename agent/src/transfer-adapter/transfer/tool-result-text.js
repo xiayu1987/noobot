@@ -8,6 +8,7 @@ import { firstNormalizedString } from "../core/compact.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { createDirectTransferEnvelope } from "../storage/attachment-adapter.js";
 
 export const DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS =
   LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
@@ -36,6 +37,9 @@ export function buildTextResultFields({
   previewChars = DEFAULT_PREVIEW_CHARS,
   forcePreview = false,
   sessionId = "",
+  identity = null,
+  scenario = "tool",
+  strategy = "tool_result_text",
 } = {}) {
   const normalizedText = String(text || "");
   const normalizedTransferEnvelopes = Array.isArray(transferEnvelopes)
@@ -77,6 +81,9 @@ export async function materializeTextForToolResult({
   previewChars = DEFAULT_PREVIEW_CHARS,
   forcePreview = false,
   sessionId = "",
+  identity = null,
+  scenario = "tool",
+  strategy = "tool_result_text",
 } = {}) {
   const normalizedText = String(text || "");
   const intent = resolveTransferIntent({
@@ -105,20 +112,38 @@ export async function materializeTextForToolResult({
       source: intent.source,
       reason: intent.reason,
       storage,
-      sessionId,
+      identity,
       producer,
       meta: {
-        ...meta,
-        source: intent.source,
-        reason: intent.reason,
+        ...(Object.keys(meta || {}).length ? { attributes: meta } : {}),
         originalLength: normalizedText.length,
       },
     });
   }
 
-  const transferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
+  const persistedTransferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
     ? persisted.transferEnvelopes.filter((item) => item && typeof item === "object" && !Array.isArray(item))
     : [];
+  if (shouldPersist && !persistedTransferEnvelopes.length) {
+    throw new Error("semantic_transfer_attachment_persistence_required");
+  }
+  const transferEnvelopes = shouldPersist
+    ? persistedTransferEnvelopes
+    : [createDirectTransferEnvelope({
+        identity,
+        content: normalizedText,
+        intent: {
+          source: intent.source,
+          reason: intent.reason,
+          scenario,
+          strategy,
+        },
+        meta: {
+          mimeType,
+          originalLength: normalizedText.length,
+          previewLength: normalizedText.length,
+        },
+      })];
   const resultFields = buildTextResultFields({
     text: normalizedText,
     transferEnvelopes,

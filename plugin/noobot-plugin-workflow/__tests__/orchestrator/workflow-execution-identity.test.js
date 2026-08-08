@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 import { runWorkflowExecution } from "../../src/core/orchestrator/execution-runner.js";
 import { buildWorkflowPlanningNodeSessions } from "../../src/core/workflow-run-identity.js";
+import { createSemanticTransferTool } from "../helpers/workflow-hook-session-strategy-helper.js";
 
 function buildSemantic() {
   return parseWorkflowDslText([
@@ -33,6 +34,15 @@ function buildCtx() {
       eventListener: {
         onEvent(event) {
           events.push(event);
+        },
+      },
+      agentContext: {
+        bindings: {
+          runtime: {
+            sharedTools: {
+              semanticTransfer: createSemanticTransferTool(),
+            },
+          },
         },
       },
     },

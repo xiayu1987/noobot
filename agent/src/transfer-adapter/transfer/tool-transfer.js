@@ -3,21 +3,15 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath } from "../../shared/utils/path-resolver/platform.js";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   TRANSFER_DIRECTION,
   TRANSFER_REASON,
   TRANSFER_SOURCE,
 } from "../core/constants.js";
-import { createTransferEnvelope, directInput, directOutput } from "../envelope/envelope.js";
-import {
-  extractTransferEnvelopeFromPersisted,
-  normalizeTransferEnvelopes,
-  normalizeTransferEnvelopesWithPolicy,
-} from "../envelope/envelope-utils.js";
+import { createTransferEnvelope, directTransfer, TRANSFER_MODE } from "@noobot/semantic-transfer-protocol";
 import { resolveTransferIntent } from "../core/intent.js";
-import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
 import { firstNormalizedString } from "../core/compact.js";
 import {
@@ -57,7 +51,7 @@ function toSafePositiveInt(value, fallback = 0, min = 0) {
 
 function basenameOrFallback(value = "", fallback = "tool-input.txt") {
   const normalized = normalizeString(value);
-  const base = normalized ? path.basename(normalized) : "";
+  const base = normalized ? filePath.basename(normalized) : "";
   return base || fallback;
 }
 
@@ -146,15 +140,6 @@ function resolveToolInputOverflowFromCall(call = {}) {
   };
 }
 
-function remapEnvelopeDirection(envelope = {}, direction = TRANSFER_DIRECTION.OUTPUT) {
-  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return null;
-  if (normalizeString(envelope.direction) === direction) return envelope;
-  return createTransferEnvelope({
-    ...envelope,
-    direction,
-  });
-}
-
 function buildToolInputTransferMeta({
   baseMeta = {},
   normalizedText = "",
@@ -190,27 +175,8 @@ function buildToolInputTransferMeta({
 
 async function buildTransferResponse({
   transferEnvelopes = [],
-  runtime = {},
-  scenario = "tool",
 } = {}) {
-  const normalizedResult = normalizeTransferEnvelopesWithPolicy(
-    Array.isArray(transferEnvelopes) ? transferEnvelopes : [],
-    {
-      runtime,
-      enforceProtocol: true,
-      withStats: true,
-    },
-  );
-  const normalizedEnvelopes = Array.isArray(normalizedResult?.envelopes)
-    ? normalizedResult.envelopes
-    : [];
-  const validationStats = normalizedResult?.stats || {};
-  await emitSemanticTransferValidation({
-    runtime,
-    scenario,
-    stats: validationStats,
-  });
-  return { transferEnvelopes: normalizedEnvelopes };
+  return { transferEnvelopes: Array.isArray(transferEnvelopes) ? transferEnvelopes : [] };
 }
 
 export async function transferToolOutput({
@@ -231,6 +197,7 @@ export async function transferToolOutput({
   inlineMaxChars = null,
   previewChars = LENGTH_THRESHOLDS.semanticTransfer.previewChars,
   forcePreview = false,
+  identity = null,
 } = {}) {
   const normalizedText = String(text || content || "");
   const intent = resolveTransferIntent({
@@ -252,35 +219,28 @@ export async function transferToolOutput({
     name,
     mimeType,
     attachmentSource,
-    generationSource,
     generationSource: intent.generationSource,
     source: intent.source,
     reason: intent.reason,
     storage,
     producer,
+    identity,
     meta,
+    scenario: "tool",
+    strategy: "tool_output",
     alwaysPersist: forceAttachment === true,
     inlineMaxChars: maxInline,
     previewChars,
     forcePreview,
   });
 
-  const persistedTransferEnvelopes = normalizeTransferEnvelopes(
-    Array.isArray(materialized?.transferEnvelopes) ? materialized.transferEnvelopes : [],
-  );
-  const directEnvelope = directOutput(normalizedText, {
-    ...meta,
-    source: intent.source,
-    reason: intent.reason,
-    textLength: normalizedText.length,
-    exceeded: normalizedText.length > maxInline || forceAttachment === true,
-  });
-  const transferEnvelopes = persistedTransferEnvelopes[0] ? persistedTransferEnvelopes : [directEnvelope];
+  const persistedTransferEnvelopes = Array.isArray(materialized?.transferEnvelopes)
+    ? materialized.transferEnvelopes
+    : [];
+  const transferEnvelopes = persistedTransferEnvelopes;
 
   return await buildTransferResponse({
     transferEnvelopes,
-    runtime,
-    scenario: "tool_output",
   });
 }
 
@@ -301,6 +261,7 @@ export async function transferToolInput({
   meta = {},
   forceAttachment = false,
   inlineMaxChars = null,
+  identity = null,
 } = {}) {
   const hasExplicitText = text !== "" || content !== "";
   const callOverflow = !hasExplicitText && call ? resolveToolInputOverflowFromCall(call) : null;
@@ -344,14 +305,17 @@ export async function transferToolInput({
       callOverflow,
       exceeded: inputExceeded,
     });
-    const envelope = directInput(normalizedText, {
-      ...envelopeMeta,
-      inlineContent: normalizedText,
+    const envelope = directTransfer({
+      transferId: identity.transferId,
+      messageId: identity.messageId,
+      identity,
+      direction: TRANSFER_DIRECTION.INPUT,
+      content: normalizedText,
+      intent: { source: intent.source, reason: intent.reason, scenario: "tool", strategy: "tool_input" },
+      meta: { mimeType: resolvedMimeType, originalLength: normalizedText.length, previewLength: normalizedText.length },
     });
     return await buildTransferResponse({
       transferEnvelopes: [envelope],
-      runtime,
-      scenario: "tool_input",
     });
   }
 
@@ -367,8 +331,12 @@ export async function transferToolInput({
     reason: intent.reason,
     storage,
     producer,
+    identity,
+    direction: TRANSFER_DIRECTION.INPUT,
     meta: {
-      ...buildToolInputTransferMeta({
+      mimeType: resolvedMimeType,
+      originalLength: normalizedText.length,
+      attributes: buildToolInputTransferMeta({
         baseMeta: resolvedMeta,
         normalizedText,
         resolvedMimeType,
@@ -379,14 +347,9 @@ export async function transferToolInput({
     },
   });
 
-  const outputEnvelope = extractTransferEnvelopeFromPersisted(persisted);
-  const transferEnvelopes = normalizeTransferEnvelopes(
-    outputEnvelope ? [remapEnvelopeDirection(outputEnvelope, TRANSFER_DIRECTION.INPUT)] : [],
-  );
+  const transferEnvelopes = persisted?.transferEnvelopes || [];
 
   return await buildTransferResponse({
     transferEnvelopes,
-    runtime,
-    scenario: "tool_input",
   });
 }

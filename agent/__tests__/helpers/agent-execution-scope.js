@@ -21,6 +21,7 @@ export function createTestAgentExecutionScope(runtime = {}, {
     dialogProcessId: String(identity.dialogProcessId || systemRuntime?.dialogProcessId || "d-1").trim(),
     turnScopeId: String(identity.turnScopeId || systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "t-1").trim(),
     runId: String(identity.runId || "r-1").trim(),
+    messageId: String(identity.messageId || systemRuntime?.messageId || "m-1").trim(),
   };
   return {
     context: {

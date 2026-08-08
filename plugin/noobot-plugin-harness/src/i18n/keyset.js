@@ -16,7 +16,6 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     RAW_SUMMARY_FIELD: "acceptanceRawSummaryField",
     RAW_SEMANTIC_FIELD: "acceptanceRawSemanticField",
     RAW_MODEL_FIELD: "acceptanceRawModelField",
-    RAW_SUMMARY_DETAIL_PATHS_FIELD: "acceptanceRawSummaryDetailPathsField",
     MODE_LABEL: "acceptanceModeLabel",
     FORCED_REASON_LABEL: "acceptanceForcedReasonLabel",
     ACCEPTED_AT_LABEL: "acceptanceAcceptedAtLabel",
@@ -25,7 +24,6 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     SUMMARY_LABEL: "acceptanceSummaryLabel",
     SEMANTIC_VALIDATION_LABEL: "acceptanceSemanticValidationLabel",
     MODEL_ACCEPTANCE_LABEL: "acceptanceModelAcceptanceLabel",
-    SUMMARY_DETAIL_PATHS_LABEL: "acceptanceSummaryDetailPathsLabel",
     EMPTY_LINE: "acceptanceEmptyLine",
     DIGEST_TITLE: "acceptanceDigestTitle",
     DIGEST_MODE_LABEL: "acceptanceDigestModeLabel",
@@ -33,8 +31,6 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     DIGEST_PLAN_TEXT_LABEL: "acceptanceDigestPlanTextLabel",
     DIGEST_SUMMARY_LABEL: "acceptanceDigestSummaryLabel",
     DIGEST_SEMANTIC_VALIDATION_LABEL: "acceptanceDigestSemanticValidationLabel",
-    DIGEST_SUMMARY_DETAIL_PATHS_LABEL: "acceptanceDigestSummaryDetailPathsLabel",
-    DIGEST_NO_DETAIL_PATHS: "acceptanceDigestNoDetailPaths",
   }),
   ACCEPTANCE_FINAL_OUTPUT: Object.freeze({
     FORCED_HEADER: "forcedAcceptanceHeader",
@@ -203,8 +199,6 @@ export const HARNESS_I18N_KEYSET = Object.freeze({
     PROTOCOL_ACCEPTANCE_STATUS_HEADER: "protocolAcceptanceStatusHeader",
     PROTOCOL_ACCEPTANCE_STATUS_RULE: "protocolAcceptanceStatusRule",
     PROTOCOL_ACCEPTANCE_EVIDENCE_RULE: "protocolAcceptanceEvidenceRule",
-    SUMMARY_DETAIL_PATHS_HEADER: "summaryDetailPathsHeader",
-    SUMMARY_DETAIL_PATHS_FOOTER: "summaryDetailPathsFooter",
   }),
   PLAN_REFINEMENT_TOOL: Object.freeze({
     DESCRIPTION: "planRefinementToolDescription",

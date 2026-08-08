@@ -16,6 +16,7 @@ import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtur
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
+import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
 
 function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
@@ -142,10 +143,6 @@ test("acceptance checklist attachments are bound to final assistant turn output"
       name: "harness-plan-text.txt",
       mimeType: "text/plain",
       size: 10,
-      path: "/tmp/att_plan.txt",
-      relativePath: "runtime/attach/att_plan.txt",
-      generatedByModel: true,
-      generationSource: "harness_checklist",
     },
     {
       attachmentId: "att_report",
@@ -154,10 +151,6 @@ test("acceptance checklist attachments are bound to final assistant turn output"
       name: "harness-acceptance-report.txt",
       mimeType: "text/plain",
       size: 10,
-      path: "/tmp/att_report.txt",
-      relativePath: "runtime/attach/att_report.txt",
-      generatedByModel: true,
-      generationSource: "harness_checklist",
     },
   ];
   const ctx = {
@@ -200,6 +193,49 @@ test("acceptance checklist attachments are bound to final assistant turn output"
           },
         },
       },
+      bindings: {
+        runtime: {
+          sharedTools: {
+            semanticTransfer: {
+              async transferSemanticContent(payload = {}) {
+                const record = records.shift();
+                assert.ok(record);
+                return {
+                  transferEnvelopes: [attachmentTransfer({
+                    transferId: `transfer-${record.attachmentId}`,
+                    messageId: `message-${record.attachmentId}`,
+                    identity: {
+                      sessionId: "s-attach",
+                      turnScopeId: "turn-attach",
+                      runId: "run-attach",
+                      producer: payload.producer,
+                    },
+                    direction: "output",
+                    attachments: [{
+                      identity: {
+                        attachmentId: record.attachmentId,
+                        sessionId: record.sessionId,
+                        attachmentSource: record.attachmentSource,
+                      },
+                      role: "primary",
+                      name: record.name,
+                      mimeType: record.mimeType,
+                      size: record.size,
+                    }],
+                    intent: {
+                      source: "plugin",
+                      reason: payload.reason,
+                      scenario: payload.scenario,
+                      strategy: payload.strategy,
+                    },
+                    meta: { persisted: true },
+                  })],
+                };
+              },
+            },
+          },
+        },
+      },
     },
   };
 
@@ -210,20 +246,18 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     ? finalAssistant.transferEnvelopes
     : []
   )
-    .flatMap((envelope = {}) => (Array.isArray(envelope.files) ? envelope.files : []))
-    .map((file = {}) => String(file?.attachmentMeta?.attachmentId || "").trim())
+    .flatMap((envelope = {}) => (Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments : []))
+    .map((reference = {}) => String(reference?.identity?.attachmentId || "").trim())
     .filter(Boolean);
   assert.deepEqual(
     transferAttachmentIds.slice().sort(),
     ["att_plan", "att_report"],
   );
-  const transferAttachmentOwners = (Array.isArray(finalAssistant.transferEnvelopes)
+  const transferProducers = (Array.isArray(finalAssistant.transferEnvelopes)
     ? finalAssistant.transferEnvelopes
     : []
-  )
-    .flatMap((envelope = {}) => (Array.isArray(envelope.files) ? envelope.files : []))
-    .map((file = {}) => file?.attachmentMeta?.owner?.type);
-  assert.deepEqual(transferAttachmentOwners, ["plugin", "plugin"]);
+  ).map((envelope = {}) => envelope?.identity?.producer?.type);
+  assert.deepEqual(transferProducers, ["plugin", "plugin"]);
   assert.equal(finalAssistant.attachments, undefined);
   const acceptanceLogs = ctx.agentContext.payload.harness.logs.acceptance;
   assert.equal(

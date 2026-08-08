@@ -426,20 +426,13 @@ test("session display summary retains a workflow final assistant with stable pre
       presentationMessageId: "assistant-presentation-workflow",
       chatPresentation: true,
       turnScopeId: "turn-workflow",
-      transferEnvelopes: [{
-        protocol: "noobot.semantic-transfer",
-        version: 1,
-        direction: "output",
-        transport: "file",
-        files: [{ filePath: "/workspace/result.md" }],
-      }],
     }],
   });
 
   assert.equal(summary.messages.length, 1);
   assert.equal(summary.messages[0]?.messageId, "assistant-presentation-workflow");
   assert.equal(summary.messages[0]?.content.includes("/workspace/result.md"), true);
-  assert.equal(summary.messages[0]?.transferEnvelopes?.length, 1);
+  assert.equal(summary.messages[0]?.transferEnvelopes, undefined);
 });
 
 test("session display summary does not synthesize a missing workflow presentation identity", () => {
@@ -785,32 +778,28 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const longWorkflowContent = `workflow final ${"workflow-long-content-".repeat(400)}${workflowContentTail}`;
     const workflowTransferEnvelope = {
       protocol: "noobot.semantic-transfer",
-      version: 1,
+      version: 2,
+      transferId: "transfer:sm-workflow-final:plugin:workflow-node:output:workflow:result",
+      messageId: "sm-workflow-final",
+      identity: {
+        sessionId: "B",
+        turnScopeId: "turn-workflow",
+        runId: "run-workflow",
+        producer: { type: "plugin", id: "workflow-node" },
+      },
       direction: "output",
-      transport: "file",
-      payload: { huge: true },
-      files: [
-        {
+      payload: {
+        mode: "attachment",
+        attachments: [{
+          identity: { attachmentId: "att-workflow-1", sessionId: "B", attachmentSource: "model" },
           role: "primary",
-          filePath: "/workspace/u1/runtime/workflow-result.md",
-          attachmentMeta: {
-            attachmentId: "att-workflow-1",
-            sessionId: "B",
-            attachmentSource: "model",
-            name: "workflow-result.md",
-            mimeType: "text/markdown",
-            size: 321,
-            path: "/host/workflow-result.md",
-            relativePath: "runtime/workflow-result.md",
-          },
-          pathView: {
-            displayPath: "/workspace/u1/runtime/workflow-result.md",
-            sandboxPath: "/sandbox/u1/runtime/workflow-result.md",
-            relativePath: "runtime/workflow-result.md",
-            hostPath: "/host/workflow-result.md",
-          },
-        },
-      ],
+          name: "workflow-result.md",
+          mimeType: "text/markdown",
+          size: 321,
+        }],
+      },
+      intent: { source: "plugin", reason: "workflow_result", scenario: "agent_plugin", strategy: "agent_plugin_final_message" },
+      meta: { persisted: true },
     };
 
     const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
@@ -823,7 +812,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         turnScopeId: "turn-scope-u1",
         dialogProcessId: "dp-u1",
         content: longUserContent,
-        attachments: [{ id: "att-1", name: "a.txt", type: "text/plain", size: 12, raw: "large" }],
+        attachments: [{ attachmentId: "att-1", name: "a.txt", mimeType: "text/plain", size: 12 }],
       },
       {
         id: "i1",
@@ -847,13 +836,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           call: { eventId: "tool-call-1" },
           resultEvent: {
             eventId: "tool-result-1",
-            writtenFiles: [{
-              toolName: "write_file",
-              resolvedPath: "/workspace/u1/project/a.txt",
-              fileName: "a.txt",
-              sourceType: "tool",
-              recognized: false,
-            }],
+            transferEnvelopes: [],
           },
         }],
         tool_calls: [{ id: "call-1", function: { name: "write_file", arguments: { path: "/tmp/a" } } }],
@@ -1017,21 +1000,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.thinkingMessageCount, 3);
     assert.equal(summary.stats.attachmentCount, 3);
     assert.equal(summary.stats.toolLogCount, 5);
-    assert.equal(summary.stats.displayToolLogCount, 1);
+    assert.equal(summary.stats.displayToolLogCount, 0);
     assert.equal(summary.stats.hasToolDetails, true);
     assert.equal("toolLogSummaries" in summary, false);
     const assistantMessage = summary.messages.find((item) => item.id === "a1");
     assert.equal(assistantMessage.toolTimeline.length, 1);
     assert.equal(assistantMessage.toolTimeline[0].status, "completed");
     assert.equal("log" in assistantMessage.toolTimeline[0].resultEvent, false);
-    assert.equal(assistantMessage.toolTimeline[0].resultEvent.turnScopeId, "turn-scope-u1");
-    assert.deepEqual(assistantMessage.toolTimeline[0].resultEvent.writtenFiles, [{
-      toolName: "write_file",
-      resolvedPath: "/workspace/u1/project/a.txt",
-      fileName: "a.txt",
-      sourceType: "tool",
-      recognized: false,
-    }]);
+    assert.equal(assistantMessage.toolTimeline[0].resultEvent.turnScopeId, undefined);
+    assert.equal("writtenFiles" in assistantMessage.toolTimeline[0].resultEvent, false);
     assert.equal(JSON.stringify(assistantMessage.toolTimeline).includes("ordinary tool result"), false);
 
     const userMessage = summary.messages.find((item) => item.id === "u1");
@@ -1106,19 +1083,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(Array.isArray(workflowMessage.transferEnvelopes), true);
     assert.equal(workflowMessage.transferEnvelopes[0].protocol, "noobot.semantic-transfer");
     assert.equal("filePath" in workflowMessage.transferEnvelopes[0], false);
-    assert.equal(workflowMessage.transferEnvelopes[0].files[0].attachmentId, "att-workflow-1");
-    assert.equal(workflowMessage.transferEnvelopes[0].files[0].sandboxPath, "/sandbox/u1/runtime/workflow-result.md");
-    assert.equal(workflowMessage.attachments[0].attachmentId, "att-workflow-1");
-    assert.equal(workflowMessage.attachments[0].relativePath, "runtime/workflow-result.md");
-    assert.equal("payload" in workflowMessage.transferEnvelopes[0], false);
-    assert.equal("attachmentMeta" in workflowMessage.transferEnvelopes[0].files[0], false);
-    assert.equal("pathView" in workflowMessage.transferEnvelopes[0].files[0], false);
+    assert.equal(workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att-workflow-1");
+    assert.equal(workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.sessionId, "B");
+    assert.equal("files" in workflowMessage.transferEnvelopes[0], false);
     assert.equal(
-      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0].files[0].attachmentId,
+      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0].payload.attachments[0].identity.attachmentId,
       "att-workflow-1",
     );
     assert.equal(
-      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].files[0].attachmentId,
+      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
       "att-workflow-1",
     );
     assert.equal(JSON.stringify(summary).includes("injected secret"), false);

@@ -16,6 +16,7 @@ import {
   createRecordingSubSessionRunner,
   createAttachmentPersister,
   createSemanticTransferTool,
+  createV2AttachmentTransferEnvelope,
   createBaseContext,
   createContextWithSharedTools,
   getBeforeDispatch,
@@ -83,20 +84,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
           },
         };
       },
-      generatedArtifactPersister: async (payload = {}) => {
-        artifactCounter += 1;
-        const artifactName = String(payload?.artifacts?.[0]?.name || `result-${artifactCounter}.md`);
-        return [
-          {
-            attachmentId: `att-${artifactCounter}`,
-            sessionId: "s-upstream",
-            attachmentSource: "model",
-            name: artifactName,
-            mimeType: "text/markdown",
-            path: `/attachments/${artifactName}`,
-          },
-        ];
-      },
+      generatedArtifactPersister: undefined,
     },
   });
 
@@ -112,48 +100,11 @@ test("workflow hook injects upstream node result attachments into downstream sub
         controllers: {
           runtime: {
             sharedTools: {
-              semanticTransfer: {
-                async transferSemanticContent(payload = {}) {
-                  semanticTransferCalls.push(payload);
-                  const { scenario = "", strategy = "", messages = [] } = payload;
-                  if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
-                    return {
-                      transferEnvelopes: [],
-                    };
-                  }
-                  artifactCounter += 1;
-                  const nodeName = String(messages?.[0]?.nodeName || `节点${artifactCounter}`).trim();
-                  const fileName = `workflow-node-${artifactCounter}-${nodeName}-result.md`;
-                  const envelope = {
-                    protocol: "noobot.semantic-transfer",
-                    version: 1,
-                    direction: "output",
-                    transport: "file",
-                    filePath: `/workspace/${fileName}`,
-                    files: [
-                      {
-                        role: "primary",
-                        filePath: `/workspace/${fileName}`,
-                        attachmentMeta: {
-                          attachmentId: `att-${artifactCounter}`,
-                          sessionId: "s-upstream",
-                          attachmentSource: "model",
-                          name: fileName,
-                          mimeType: "text/markdown",
-                          relativePath: `runtime/attach/${fileName}`,
-                        },
-                        pathView: {
-                          displayPath: `/workspace/${fileName}`,
-                        },
-                      },
-                    ],
-                  };
-                  return {
-                    transferEnvelopes: [envelope],
-                    injectionMessage: String(payload?.content || ""),
-                  };
-                },
-              },
+              semanticTransfer: createSemanticTransferTool({
+                prefix: "att",
+                sessionId: "s-upstream",
+                calls: semanticTransferCalls,
+              }),
             },
           },
         },
@@ -234,20 +185,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
           },
         };
       },
-      generatedArtifactPersister: async (payload = {}) => {
-        artifactCounter += 1;
-        const artifactName = String(payload?.artifacts?.[0]?.name || `result-${artifactCounter}.md`);
-        return [
-          {
-            attachmentId: `fanout-att-${artifactCounter}`,
-            sessionId: "s-fanout",
-            attachmentSource: "model",
-            name: artifactName,
-            mimeType: "text/markdown",
-            path: `/attachments/${artifactName}`,
-          },
-        ];
-      },
+      generatedArtifactPersister: undefined,
     },
   });
 
@@ -263,45 +201,10 @@ test("workflow hook injects one upstream action attachments into multiple direct
         controllers: {
           runtime: {
             sharedTools: {
-              semanticTransfer: {
-                async transferSemanticContent({ scenario = "", strategy = "", messages = [] } = {}) {
-                  if (String(scenario || "") !== "bot_plugin" || !String(strategy || "").startsWith("bot_plugin_")) {
-                    return {
-                      transferEnvelopes: [],
-                    };
-                  }
-                  artifactCounter += 1;
-                  const nodeName = String(messages?.[0]?.nodeName || `节点${artifactCounter}`).trim();
-                  const fileName = `workflow-node-${artifactCounter}-${nodeName}-result.md`;
-                  const envelope = {
-                    protocol: "noobot.semantic-transfer",
-                    version: 1,
-                    direction: "output",
-                    transport: "file",
-                    filePath: `/workspace/${fileName}`,
-                    files: [
-                      {
-                        role: "primary",
-                        filePath: `/workspace/${fileName}`,
-                        attachmentMeta: {
-                          attachmentId: `fanout-att-${artifactCounter}`,
-                          sessionId: "s-fanout",
-                          attachmentSource: "model",
-                          name: fileName,
-                          mimeType: "text/markdown",
-                          relativePath: `runtime/attach/${fileName}`,
-                        },
-                        pathView: {
-                          displayPath: `/workspace/${fileName}`,
-                        },
-                      },
-                    ],
-                  };
-                  return {
-                    transferEnvelopes: [envelope],
-                  };
-                },
-              },
+              semanticTransfer: createSemanticTransferTool({
+                prefix: "fanout-att",
+                sessionId: "s-fanout",
+              }),
             },
           },
         },
