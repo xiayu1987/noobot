@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { appendFile, mkdir } from "node:fs/promises";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 
 function resolveWorkspaceRoot({ runtime = {}, modelState = {} } = {}) {

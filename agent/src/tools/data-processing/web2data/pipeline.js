@@ -5,7 +5,7 @@
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { filePath as path } from "../../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { getRuntimeFromAgentContext } from "../../../context/agent-context-accessor.js";
 import { runWeb2Img } from "../../../shared/utils/web/web2img.js";
 import { TOOL_DATA_MODE, TOOL_RESULT_STATUS } from "../../constants/index.js";

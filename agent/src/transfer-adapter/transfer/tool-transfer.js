@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath } from "../../shared/utils/path-resolver/platform.js";
+import { filePath } from "@noobot/path-resolver";
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   TRANSFER_DIRECTION,

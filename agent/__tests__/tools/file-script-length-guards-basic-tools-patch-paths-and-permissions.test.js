@@ -269,6 +269,8 @@ test("patch_file: 支持 /project 沙箱绝对路径视角", async () => {
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }));
   assert.equal(result.ok, true);
   assert.deepEqual(result.changedFiles, ["/workspace/u-test/i18n/src/client/locales/en-US.js"]);
+  assert.equal(result.resolvedFiles[0].resolvedPath, "/workspace/u-test/i18n/src/client/locales/en-US.js");
+  assert.equal(String(result.resolvedFiles[0].resolvedPath).includes(basePath), false);
   assert.equal(
     await fs.readFile(localeFile, "utf8"),
     "export default {\n  \"hideChatNavigator\": \"Hide conversation navigation\",\n  \"sessionStatus\": \"Status\"\n};\n",
@@ -322,7 +324,8 @@ test("patch_file: 沙箱 /project 挂载到 workspace 外项目时仍按沙箱�
 
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }));
   assert.equal(result.ok, true);
-  assert.equal(result.resolvedFiles[0].resolvedPath, targetFile);
+  assert.equal(result.resolvedFiles[0].resolvedPath, "/project/client/noobot-chat/src/composables/chat/useChatSession.js");
+  assert.equal(String(result.resolvedFiles[0].resolvedPath).includes(rootPath), false);
   assert.equal(
     await fs.readFile(targetFile, "utf8"),
     "function existing() {\n  return \"sandbox-project\";\n}\n",

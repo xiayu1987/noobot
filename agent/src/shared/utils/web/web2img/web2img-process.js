@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs";
-import { filePath as path } from "../../path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { logger } from "../../../../observability/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { HAS_SHARP, getSharp } from "./web2img-config.js";

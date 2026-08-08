@@ -113,3 +113,38 @@ test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除
     sessionIds: ["s-fallback-delete"],
   });
 });
+
+test("session-routes: orphan attachment cleanup reads ids without loading Session attachment data", async () => {
+  const pruneCalls = [];
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }),
+        listSessionIds: async () => ["s-keep"],
+        getAllSessionsData: async () => { throw new Error("invalid_attachment_id"); },
+      },
+      deleteScopedAttachmentsBySessionIds: async () => ({ deletedCount: 0, deletedSessionIds: [] }),
+      pruneOrphanScopedAttachments: async (payload) => {
+        pruneCalls.push(payload);
+        return { deletedCount: 0, deletedSessionIds: [] };
+      },
+      getAttachmentById: async () => null,
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: (key) => key,
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s-delete`, { method: "DELETE" });
+    assert.equal(response.status, 200);
+  });
+  assert.deepEqual(pruneCalls, [{
+    userId: "u1",
+    keepSessionIds: ["s-keep"],
+    attachmentSources: ["subtask"],
+  }]);
+});

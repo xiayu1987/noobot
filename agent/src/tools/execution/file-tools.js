@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { filePath as path, isAbsolutePathAnyPlatform } from "../../shared/utils/path-resolver.js";
+import { filePath as path, isAbsolutePathAnyPlatform } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
@@ -17,7 +17,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
 import { isSuperUserAgentContext } from "../../shared/utils/super-user.js";
-import { resolveSandboxPath } from "../../shared/utils/path-resolver.js";
+import { resolveSandboxPath } from "@noobot/path-resolver";
 import {
   DEFAULT_MAX_SEARCH_FILES,
   DEFAULT_READ_MAX_LINES,
@@ -475,7 +475,10 @@ export function createFileTool({ agentContext }) {
               error,
               original,
               displayPath: item.oldPath,
-              resolvedPath: item.resolvedOldPath,
+              resolvedPath: toFileToolDisplayPath({
+                resolvedPath: item.resolvedOldPath,
+                agentContext,
+              }),
             }),
           );
         }
@@ -507,12 +510,12 @@ export function createFileTool({ agentContext }) {
         resolvedFiles: [
           ...writePlans.map((item) => ({
             path: item.displayPath,
-            resolvedPath: item.filePath,
+            resolvedPath: toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext }),
             action: "write",
           })),
           ...deletePlans.map((item) => ({
             path: item.displayPath,
-            resolvedPath: item.filePath,
+            resolvedPath: toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext }),
             action: "delete",
           })),
         ],

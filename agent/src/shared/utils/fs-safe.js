@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "./path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { recoverableToolError } from "../errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../errors/constants.js";

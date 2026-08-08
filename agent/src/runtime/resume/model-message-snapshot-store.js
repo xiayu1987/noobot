@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { isWorkspaceSessionDeleted } from "@noobot/runtime-events";
 import {
   createModelContextSnapshot,

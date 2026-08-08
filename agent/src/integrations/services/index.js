@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { access, stat } from "node:fs/promises";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { pathToFileURL } from "node:url";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";

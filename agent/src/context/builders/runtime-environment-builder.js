@@ -26,7 +26,7 @@ import {
   resolveAttachmentDisplayPath,
   resolveHostPath,
   resolveSandboxPath,
-} from "../../shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 import {
   resolveRuntimeTransferIdentity,
   transferSemanticContent,

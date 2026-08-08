@@ -25,7 +25,7 @@ import {
   resolveRuntimePathContext,
   resolveToolPathPolicy,
   resolveToolInputPath,
-} from "../../../src/shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 
 test("detects foreign platform paths without using process.platform", () => {
   assert.equal(detectPathPlatform("C:\\Users\\张三\\file.txt"), PATH_PLATFORMS.WINDOWS);

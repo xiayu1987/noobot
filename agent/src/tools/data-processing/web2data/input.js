@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile, readdir, stat } from "node:fs/promises";
-import { filePath as path } from "../../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { assertAndResolveUserWorkspaceFilePath } from "../../core/check-tool-input.js";
 import { TEXT_EXTENSIONS } from "../file-extension-constants.js";
 import { isUrl, uniqueUrls } from "./utils.js";

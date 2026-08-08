@@ -5,7 +5,7 @@
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -459,6 +459,7 @@ async function persistMedia2DataTextAttachment({
   inputFile = "",
   mediaType = "",
   text = "",
+  identity = null,
 }) {
   const inputBaseName = sanitizeArtifactBaseName(
     path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
@@ -477,6 +478,7 @@ async function persistMedia2DataTextAttachment({
     reason: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
     alwaysPersist: true,
     producer: { type: "tool", name: TOOL_NAME.MEDIA_TO_DATA },
+    identity,
     meta: { mediaType, inputFile },
   });
   const attachments = getTransferAttachments(materialized.transferEnvelopes);
@@ -538,7 +540,8 @@ export function createMedia2DataTool({ agentContext }) {
         .optional()
         .describe(tTool(runtime, "tools.media2data.fieldPrompt")),
     }),
-    func: async ({ filePath, attachmentId, prompt }) => {
+    func: async ({ filePath, attachmentId, prompt }, _runManager, toolConfig = {}) => {
+      const transferIdentity = toolConfig?.configurable?.transferIdentity;
       const { resolvedInputPath: resolvedInputHintPath, sourceAttachmentMeta } =
         await resolveMediaInputPathFromAttachmentMetas(
           filePath,
@@ -642,6 +645,7 @@ export function createMedia2DataTool({ agentContext }) {
         inputFile,
         mediaType,
         text: extractedText,
+        identity: transferIdentity,
       });
       const attachments = Array.isArray(persistedOutput?.attachments)
         ? persistedOutput.attachments

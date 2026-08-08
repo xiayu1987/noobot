@@ -5,7 +5,7 @@
  */
 import { lstat, readFile, readdir } from "node:fs/promises";
 import { execFile as execFileCallback } from "node:child_process";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { promisify } from "node:util";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
