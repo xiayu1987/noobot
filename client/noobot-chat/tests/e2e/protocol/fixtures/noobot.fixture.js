@@ -15,6 +15,7 @@ import {
   modelObservationPolicyForTitle,
 } from "../helpers/model-observation-policy.js";
 import {
+  auditSessionSummaryArtifacts,
   modelInvocationTraces,
   readSessionExecutionEventTree,
   waitForModelInvocationTraces,
@@ -107,6 +108,37 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
   if (validationError) throw validationError;
 }
 
+async function auditSessionSummaryPersistence({ userId, sessionId, expectation, testInfo }) {
+  const outputDir = testInfo.outputPath("protocol-evidence");
+  await fs.mkdir(outputDir, { recursive: true });
+  let audit;
+  try {
+    audit = await auditSessionSummaryArtifacts(userId, sessionId, { expectation });
+  } catch (error) {
+    audit = {
+      ...(error?.audit || {}),
+      protocolVersion: Number(error?.audit?.protocolVersion || 1),
+      authority: "session_summary_artifact",
+      rootSessionId: sessionId,
+      status: "failed",
+      failure: String(error?.message || error),
+    };
+    const auditPath = path.join(outputDir, "session-summary-artifact-audit.json");
+    await fs.writeFile(auditPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
+    await testInfo.attach("session-summary-artifact-audit.json", {
+      path: auditPath,
+      contentType: "application/json",
+    });
+    throw error;
+  }
+  const auditPath = path.join(outputDir, "session-summary-artifact-audit.json");
+  await fs.writeFile(auditPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
+  await testInfo.attach("session-summary-artifact-audit.json", {
+    path: auditPath,
+    contentType: "application/json",
+  });
+}
+
 export const test = artifactTest.extend({
   noobot: async ({ page }, use, testInfo) => {
     const credentials = readE2eCredentials();
@@ -167,12 +199,24 @@ export const test = artifactTest.extend({
     try {
       await use(Object.freeze({ page, sessionId, userId: credentials.userId }));
     } finally {
-      await auditModelObservation({
-        userId: credentials.userId,
-        sessionId,
-        policy,
-        testInfo,
-      });
+      const failures = [];
+      try {
+        await auditModelObservation({ userId: credentials.userId, sessionId, policy, testInfo });
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await auditSessionSummaryPersistence({
+          userId: credentials.userId,
+          sessionId,
+          expectation: policy.expectation,
+          testInfo,
+        });
+      } catch (error) {
+        failures.push(error);
+      }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1) throw new AggregateError(failures, "protocol final audits failed");
     }
   },
 });

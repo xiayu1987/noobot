@@ -16,7 +16,7 @@ import {
 } from "./transfer-attachment-refs.js";
 import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 18;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 19;
 export const SESSIONS_SUMMARY_SCHEMA_VERSION = 1;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
