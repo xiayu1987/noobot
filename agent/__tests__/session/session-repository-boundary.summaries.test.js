@@ -158,6 +158,46 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
   });
 });
 
+test("failed Session repair is marked and skipped on subsequent reads", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-repair-failed";
+    const sessionId = "broken";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
+    await writeFile(path.join(sessionDir, "session.json"), "{invalid-json", "utf8");
+
+    const repository = runtime.repositories.sessionRepository;
+    let firstErrorCode = "";
+    await assert.rejects(
+      repository.findById(userId, sessionId, ""),
+      (error) => {
+        firstErrorCode = error.code;
+        return Boolean(firstErrorCode);
+      },
+    );
+    const lifecycleFile = path.join(
+      workspaceRoot,
+      userId,
+      "runtime",
+      "session",
+      ".lifecycle",
+      "records",
+      `${encodeURIComponent(sessionId)}.json`,
+    );
+    const lifecycle = JSON.parse(await readFile(lifecycleFile, "utf8"));
+    assert.equal(lifecycle.repair.status, "failed");
+
+    await assert.rejects(
+      repository.findById(userId, sessionId, ""),
+      (error) => error.code === firstErrorCode,
+    );
+    const unchanged = JSON.parse(await readFile(lifecycleFile, "utf8"));
+    assert.equal(unchanged.repair.failedAt, lifecycle.repair.failedAt);
+  });
+});
+
 test("display maintenance migrates repairable artifacts through the Session repair project", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";

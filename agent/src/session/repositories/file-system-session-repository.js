@@ -619,6 +619,13 @@ export class FileSystemSessionRepository {
   ) {
     return this.withSessionMutation(userId, sessionId, parentSessionId, async () => {
       const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
+      const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
+      if (lifecycle?.repair?.status === "failed") {
+        const error = new Error(String(lifecycle.repair.message || "Session repair previously failed"));
+        error.code = String(lifecycle.repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
+        error.repairSkipped = true;
+        throw error;
+      }
       let requiresRepair = false;
       try {
         await this._readNormalizedSession(scope, sessionId, parentSessionId);
@@ -626,9 +633,10 @@ export class FileSystemSessionRepository {
         requiresRepair = true;
       }
       if (!requiresRepair) return { migrated: false, migrations: [], repaired: [] };
-      return runAtomicSessionRepair({
-        sessionDir: scope.sessionDir,
-        repair: async (stagingDir) => {
+      try {
+        return await runAtomicSessionRepair({
+          sessionDir: scope.sessionDir,
+          repair: async (stagingDir) => {
           const source = await readSessionArtifactForRepair({ sessionDir: stagingDir, fallback: null });
           if (!source) {
             const error = new Error("Canonical session artifact is missing");
@@ -652,12 +660,31 @@ export class FileSystemSessionRepository {
             migrations: migration.migrations,
             repaired: artifactRepair.repaired,
           };
-        },
-        validate: async (stagingDir) => {
-          const repairedScope = { ...scope, sessionDir: stagingDir, sessionFile: path.join(stagingDir, "session.json") };
-          await this._readNormalizedSession(repairedScope, sessionId, parentSessionId);
-        },
-      });
+          },
+          validate: async (stagingDir) => {
+            const repairedScope = { ...scope, sessionDir: stagingDir, sessionFile: path.join(stagingDir, "session.json") };
+            await this._readNormalizedSession(repairedScope, sessionId, parentSessionId);
+          },
+        });
+      } catch (error) {
+        await this._writeSessionLifecycleRecord(userId, sessionId, {
+          ...(lifecycle || {
+            schemaVersion: 1,
+            sessionId,
+            state: "active",
+            generation: 1,
+            createdAt: this.now(),
+          }),
+          repair: {
+            status: "failed",
+            errorCode: String(error?.code || error?.errorCode || "SESSION_REPAIR_FAILED"),
+            message: String(error?.message || "Session repair failed"),
+            failedAt: this.now(),
+          },
+          updatedAt: this.now(),
+        });
+        throw error;
+      }
     }, persistenceContext);
   }
 
@@ -782,6 +809,14 @@ export class FileSystemSessionRepository {
       persistenceContext,
     );
     if (!(await this.storageService.exists(sessionFile))) return null;
+
+    const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
+    if (lifecycle?.repair?.status === "failed") {
+      const error = new Error(String(lifecycle.repair.message || "Session repair previously failed"));
+      error.code = String(lifecycle.repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
+      error.repairSkipped = true;
+      throw error;
+    }
 
     const scope = { resolvedParentSessionId, sessionFile, sessionDir };
     try {
