@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import {
   assertTurnCommittedEventData,
   validateTurnCommittedEventData,
-} from "../turn-commit-protocol.mjs";
+} from "@noobot/session-protocol/turn-commit";
 
 function createCommit(overrides = {}) {
   return {

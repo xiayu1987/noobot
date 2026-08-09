@@ -7,7 +7,7 @@ import {
   areCanonicalTurnScopeIdsEqual,
   canonicalizeTurnScopeId,
   turnScopeIdentityKey,
-} from "@noobot/shared/turn-scope-identity";
+} from "@noobot/session-protocol/turn-scope-identity";
 
 function trim(value = "") {
   return String(value || "").trim();

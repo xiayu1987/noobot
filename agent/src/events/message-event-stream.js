@@ -11,7 +11,7 @@ import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   assertMessageEventEnvelope,
   isMessageEventEnvelope,
-} from "@noobot/shared/message-event-protocol";
+} from "@noobot/event-protocol/message-event";
 
 export {
   MESSAGE_EVENT_ENVELOPE_KIND,

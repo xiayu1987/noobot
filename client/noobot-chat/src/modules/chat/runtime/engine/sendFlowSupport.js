@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { isMessageEventEnvelope } from "@noobot/shared/message-event-protocol";
+import { isMessageEventEnvelope } from "@noobot/event-protocol/message-event";
 import { getMessageDialogProcessId, getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { nowMs } from "../../model/timeFields.js";
 import {

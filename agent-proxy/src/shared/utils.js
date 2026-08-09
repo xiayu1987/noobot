@@ -6,7 +6,7 @@
 
 import { randomUUID } from "node:crypto";
 import { CHANNEL_TERMINAL_STATUSES, CLIENT_ROLE } from "./constants.js";
-import { isMessageEventEnvelope } from "../../../shared/message-event-protocol.mjs";
+import { isMessageEventEnvelope } from "@noobot/event-protocol/message-event";
 
 export function ensureConnectionId(socket = null) {
   if (!socket) return "";

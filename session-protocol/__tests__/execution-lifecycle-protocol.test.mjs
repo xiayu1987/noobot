@@ -11,7 +11,7 @@ import {
   createExecutionLifecycleEnvelope,
   deriveAgentExecutionId,
   validateExecutionIdentity,
-} from "../execution-lifecycle-protocol.mjs";
+} from "@noobot/session-protocol/execution-lifecycle";
 
 test("agent execution identity is a stable compatibility projection of turn scope", () => {
   assert.equal(deriveAgentExecutionId({ turnScopeId: "turn-1" }), "agent:turn-1");

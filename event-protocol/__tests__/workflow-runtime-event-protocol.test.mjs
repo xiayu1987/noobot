@@ -11,7 +11,7 @@ import {
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
   workflowRuntimeEventComparable,
-} from "../workflow-runtime-event-protocol.mjs";
+} from "@noobot/event-protocol/workflow-runtime-event";
 
 test("canonicalizes every turn-scoped workflow snapshot fact", () => {
   const normalized = normalizeWorkflowRuntimeEvent({

@@ -173,8 +173,14 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
       && String(message.tool_call_id || "").trim() === latestCheckBeforeSummaryCallId,
   );
   expect(latestCheckBeforeSummaryResult).toBeTruthy();
-  expect(latestCheckBeforeSummary.message.summarized).not.toBe(true);
-  expect(latestCheckBeforeSummaryResult?.summarized).not.toBe(true);
+  const checkpointEvent = firstScoped.find((item) => item.event === "summary_checkpoint_committed");
+  expect(checkpointEvent).toBeTruthy();
+  expect(checkpointEvent.data?.preservedTaskCheckMessageUids).toEqual(expect.arrayContaining([
+    latestCheckBeforeSummary.message.messageUid,
+    latestCheckBeforeSummaryResult.messageUid,
+  ]));
+  expect(latestCheckBeforeSummary.message.summarized).toBe(true);
+  expect(latestCheckBeforeSummaryResult?.summarized).toBe(true);
   const summarizedTaskCheckPrompts = taskCheckPrompts.filter((message) => message.summarized === true);
   expect(summarizedTaskCheckPrompts.length).toBeGreaterThan(0);
 

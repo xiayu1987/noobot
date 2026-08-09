@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { compareWorkflowRuntimeFacts, normalizeWorkflowRuntimeEvent, WORKFLOW_RUNTIME_EVENT, WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
+import { compareWorkflowRuntimeFacts, normalizeWorkflowRuntimeEvent, WORKFLOW_RUNTIME_EVENT, WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 
 const text = (value) => String(value || "").trim();

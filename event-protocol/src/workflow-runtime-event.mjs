@@ -6,8 +6,8 @@
 import {
   isMessageEventEnvelope,
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
-} from "./message-event-protocol.mjs";
-import { canonicalizeTurnScopeId } from "./turn-scope-identity.mjs";
+} from "./message-event.mjs";
+import { canonicalizeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 
 export const WORKFLOW_RUNTIME_EVENT = Object.freeze({
   PLANNING: "workflow_planning_message_prepared",

@@ -202,6 +202,7 @@ export async function commitSummaryCheckpoint({
     summarizedMessageCount: summarizedMessageUids.length,
     persistedMessageCount: pendingMessages.length,
     markedMessageCount: Number(markedCount) || 0,
+    preservedTaskCheckMessageUids: [...latestTaskCheckIds].sort(),
     exactCheckpoint: true,
   });
   if (!committed) {

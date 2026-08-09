@@ -15,7 +15,7 @@ import {
   isChildRunEventData,
   parentOwnsChildRunEventData,
 } from "./child-run-events.js";
-import { assertTurnCommittedEventData } from "@noobot/shared/turn-commit-protocol";
+import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
 import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 
 function assertCanonicalAttachments(attachments = []) {

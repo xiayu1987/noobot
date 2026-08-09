@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "@noobot/shared/turn-scope-identity";
+import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 
 const clean = (value) => String(value || "").trim();
 

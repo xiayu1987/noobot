@@ -35,7 +35,7 @@ import {
   registerActiveRun,
   unregisterActiveRun,
 } from "../../ws/chat-websocket/run-registry.js";
-import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
+import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
 import { startServerWithWs, closeServer, callChatWs, stopChatWs, createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
 
 const TEST_EVENT_FACTS = Object.freeze({

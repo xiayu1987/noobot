@@ -294,22 +294,35 @@ export function markCurrentTurnStoreSummarized(
     taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
     taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
     policyOptions = {},
+    onMarked = null,
   } = {},
 ) {
   if (!store || typeof store.updateWhere !== "function") return 0;
   const scoped = typeof store.toArray === "function" ? store.toArray() : [];
   const dimensions = summaryScope(scoped, { taskSummaryToolName, taskCheckToolName, policyOptions });
-  return store.updateWhere(
-    { summarized: true },
-    (message, index) => shouldMarkCurrentTurnSummarizedMessageInScope(message, {
+  return store.updateWhere({ summarized: true }, (message, index) => {
+    const marked = shouldMarkCurrentTurnSummarizedMessageInScope(message, {
       ...dimensions,
       messages: scoped,
       index,
       taskSummaryToolName,
       taskCheckToolName,
       policyOptions,
-    }),
-  );
+    });
+    if (marked && typeof onMarked === "function") onMarked(message);
+    return marked;
+  });
+}
+
+export function mirrorSummarizedMessagesById(messages = [], messageIds = new Set()) {
+  const ids = messageIds instanceof Set ? messageIds : new Set(messageIds);
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (!ids.has(resolveMessageId(message))) continue;
+    message.summarized = true;
+    if (message?.lc_kwargs && typeof message.lc_kwargs === "object") {
+      message.lc_kwargs.summarized = true;
+    }
+  }
 }
 
 export function markCurrentTurnArraySummarized(

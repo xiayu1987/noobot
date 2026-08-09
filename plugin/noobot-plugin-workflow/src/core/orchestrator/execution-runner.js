@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
+import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import {
   WORKFLOW_ACTION,
   WORKFLOW_PLUGIN_DEFAULTS,

@@ -7,10 +7,11 @@
 import {
   DEFAULT_TASK_CHECK_TOOL_NAME,
   DEFAULT_TASK_SUMMARY_TOOL_NAME,
-  markCurrentTurnModelMessagesSummarized,
   markCurrentTurnArraySummarized,
   markCurrentTurnStoreSummarized,
+  mirrorSummarizedMessagesById,
 } from "./summary-policy.js";
+import { resolveMessageId } from "./message-policy.js";
 
 /**
  * Applies the terminal policy for a complete dialog turn.
@@ -27,19 +28,22 @@ export function applyTurnCompletionPolicy({
   taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
   policyOptions = {},
 } = {}) {
-  markCurrentTurnModelMessagesSummarized(modelMessages, {
-    taskSummaryToolName,
-    taskCheckToolName,
-    policyOptions,
-  });
   if (!turnMessageStore || typeof turnMessageStore.updateWhere !== "function") {
     throw new Error("turn completion policy requires the canonical turn message store");
   }
+  // The canonical turn store is the sole decision source. Mirror its exact
+  // UID decisions to provider objects instead of classifying a second snapshot.
+  const markedMessageIds = new Set();
   const markedCount = markCurrentTurnStoreSummarized(turnMessageStore, {
     taskSummaryToolName,
     taskCheckToolName,
     policyOptions,
+    onMarked: (message) => {
+      const id = resolveMessageId(message);
+      if (id) markedMessageIds.add(id);
+    },
   });
+  mirrorSummarizedMessagesById(modelMessages, markedMessageIds);
   return {
     markedCount,
     messages: typeof turnMessageStore.toArray === "function"
