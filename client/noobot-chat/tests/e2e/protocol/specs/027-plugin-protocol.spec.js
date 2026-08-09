@@ -5,18 +5,20 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { PLUGIN_PROTOCOL_VERSION } from "@noobot/plugin-protocol";
-import { assertUniqueAttachmentIds, readRenderedFileNames, transferAttachmentsForTurn } from "../helpers/attachment-assertions.js";
+import { assertAttachmentHttpAccess, assertUniqueAttachmentIds, readRenderedFileNames, transferAttachmentsForTurn } from "../helpers/attachment-assertions.js";
 import {
   addAttachment, fixedAttachment, selectPlugins, sendMessage, waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import {
   readAttachmentIndex,
+  readSessionExecutionEventTree,
   waitForSessionExecutionEventTree,
   waitForModelInvocationTraces,
   waitForPluginExecutionEvents,
   waitForPluginRuntimeEvents,
 } from "../helpers/persistence-audit.js";
 import { waitForCommand } from "../helpers/scenario-assertions.js";
+import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { isMainAgentModelInvocation } from "../helpers/model-message-assertions.js";
@@ -176,6 +178,28 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   expect(generatedAttachments.some((item) => item.descriptor?.generationSource === "workflow_node_agent_result")).toBe(true);
   expect(generatedAttachments.some((item) => item.descriptor?.generationSource === "workflow_completed_attachment_summary")).toBe(true);
 
+  // The same session also proves that ordinary harness guidance is not an attachment flow.
+  const executionEvents = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
+  const envelopes = executionEvents.flatMap((record) =>
+    Array.isArray(record?.data?.transferEnvelopes) ? record.data.transferEnvelopes : []);
+  expect(Object.values(modelIndex.attachments || {}).some((item) =>
+    String(item?.descriptor?.name || item?.name || "").startsWith("harness-guidance-"),
+  )).toBe(false);
+  expect(envelopes.some((envelope) =>
+    envelope?.intent?.scenario === "harness" && envelope?.intent?.strategy === "harness_summary"
+    && envelope?.intent?.reason === "guidance",
+  )).toBe(false);
+
+  for (const attachment of generatedAttachments) {
+    await assertAttachmentHttpAccess(noobot.page, {
+      userId: noobot.userId,
+      sessionId: noobot.sessionId,
+      attachmentSource: "model",
+      attachmentId: attachment.identity.attachmentId,
+      expectedName: attachment.descriptor.name,
+    });
+  }
+
   const generatedNames = generatedAttachments.map((item) => item.descriptor?.name).sort();
   await expect.poll(
     () => readRenderedFileNames(noobot.page, { role: "assistant", attachmentSource: "model" }),
@@ -186,4 +210,5 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     () => readRenderedFileNames(noobot.page, { role: "assistant", attachmentSource: "model" }),
     { timeout: 30000 },
   ).toEqual(generatedNames);
+  assertNoForbiddenErrors(protocolCapture.console);
 });

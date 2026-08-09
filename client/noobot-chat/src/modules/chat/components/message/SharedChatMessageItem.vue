@@ -51,6 +51,13 @@ import {
 const emit = defineEmits(["open-thinking-details"]);
 
 function getAttachmentRenderKey(attachmentItem = {}) {
+  const attachmentId = String(attachmentItem?.attachmentId || "").trim();
+  const clientAttachmentId = String(
+    attachmentItem?.clientAttachmentId || attachmentItem?.draftAttachmentId || "",
+  ).trim();
+  // A newly selected file is rendered before the turn commit returns its
+  // canonical identity. Persisted attachments always use the protocol key.
+  if (!attachmentId && clientAttachmentId) return `draft:${clientAttachmentId}`;
   return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
 }
 

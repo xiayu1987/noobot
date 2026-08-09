@@ -60,6 +60,22 @@ export function attachmentKeys(attachments = []) {
   ])).sort();
 }
 
+export async function assertAttachmentHttpAccess(page, {
+  userId = "",
+  sessionId = "",
+  attachmentSource = "model",
+  attachmentId = "",
+  expectedName = "",
+} = {}) {
+  const url = `/api/internal/attachment/${encodeURIComponent(userId)}/${encodeURIComponent(attachmentId)}`
+    + `?sessionId=${encodeURIComponent(sessionId)}&attachmentSource=${encodeURIComponent(attachmentSource)}`;
+  const response = await page.request.get(url);
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-disposition"] || "").toContain(encodeURIComponent(expectedName));
+  const body = await response.body();
+  expect(body.length).toBeGreaterThan(0);
+}
+
 export async function readRenderedFileNames(page, { badgeClass = "", role = "", attachmentSource = "" } = {}) {
   const cardSelector = role ? `.base-message-shell.${role} .base-file-card` : ".base-file-card";
   const sourceSelector = attachmentSource ? `[data-attachment-source="${attachmentSource}"]` : "";

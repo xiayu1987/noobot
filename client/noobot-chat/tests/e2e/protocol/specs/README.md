@@ -9,7 +9,7 @@
 - `021`～`026`：Session 恢复、版本冲突、停止幂等、断网和非法协议拒绝。
 - `027`～`032`：插件协议、Session 协议、本地 Session 刷新和 Workflow 生命周期。
 - `034`～`036`：主 Agent `task_summary` checkpoint、周期 `task_check` 切片，以及安全工具/实时思考/交互模型输入闭环。
-- PBE-018、PBE-019、PBE-020 已分别合并到 PBE-016/017、PBE-032、PBE-028；PBE-033 的重复 Harness/阈值复合链路与 PBE-099 的重复组合审计已删除。
+- PBE-018、PBE-019、PBE-020 已分别合并到 PBE-016/017、PBE-032、PBE-028；PBE-028 同一 Session 同时核对 Workflow/Harness model 附件、真实 HTTP 读取、刷新后投影，以及普通 Harness guidance 不进入 transfer；PBE-033 的重复 Harness/阈值复合链路与 PBE-099 的重复组合审计已删除。
 - 当前场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
 
 ### PBE-034：主 Agent 低轮次阶段小结
