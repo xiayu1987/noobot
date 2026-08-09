@@ -10,7 +10,7 @@ import {
   finalizeTurnMessagesBeforeReturn,
 } from "../../../src/runtime/turn/turn-result-aggregator.js";
 
-test("turn result preserves checkpoint summary state without recomputing it", () => {
+test("turn result applies the summary policy to the completed canonical turn", () => {
   const messages = [
     { messageUid: "task-check-before-summary", summarized: false },
     { messageUid: "message-summarized-by-checkpoint", summarized: true },
@@ -19,8 +19,14 @@ test("turn result preserves checkpoint summary state without recomputing it", ()
     modelMessages: messages,
     turnMessageStore: {
       toArray: () => messages,
-      updateWhere: () => {
-        throw new Error("turn completion must not rewrite checkpoint summary state");
+      updateWhere: (patch = {}, matcher = null) => {
+        let count = 0;
+        messages.forEach((message, index) => {
+          if (typeof matcher === "function" && !matcher(message, index)) return;
+          Object.assign(message, patch);
+          count += 1;
+        });
+        return count;
       },
     },
   });
