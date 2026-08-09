@@ -13,17 +13,11 @@ import {
 } from "../../model/messageModel.js";
 import { nowIso } from "../../model/timeFields.js";
 import { RoleEnum } from "../../model/chatConstants.js";
-import { getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
+import { getMessageInternalType, getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logWorkflowDiagnostics, summarizeWorkflowMessage } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 
 function isInternalControlMessage(messageItem = {}) {
-  const marker = String(
-    messageItem?.noobotInternalMessageType ||
-    messageItem?.additional_kwargs?.noobotInternalMessageType ||
-    messageItem?.metadata?.noobotInternalMessageType ||
-    "",
-  ).trim();
-  return Boolean(marker);
+  return Boolean(getMessageInternalType(messageItem));
 }
 
 export function createSessionMessageView({
