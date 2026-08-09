@@ -190,6 +190,7 @@ export async function persistWorkflowNodeResultAttachment({
         generationSource: "workflow_node_agent_result",
         source: "plugin",
         reason: "workflow_node_agent_result",
+        producer: { type: "plugin", id: `workflow-node:${nodeId}` },
         mimeType: artifact.mimeType,
   });
   const transferPayload = normalizeWorkflowTransferPayload(transferred);
@@ -265,6 +266,7 @@ async function upsertWorkflowMessage({
           generationSource: `workflow_${normalizedPhase}_attachment_summary`,
           source: "plugin",
           reason: `workflow_${normalizedPhase}_attachment_summary`,
+          producer: { type: "plugin", id: "workflow-final-attachment-summary" },
           mimeType: "text/markdown",
     });
     composedTransferPayload = normalizeWorkflowTransferPayload(transferred);

@@ -31,6 +31,8 @@ import {
   summarizeToolLogWindow,
   summarizeToolLogWindowItem,
 } from "../../../debug/loggers/toolLogWindowDebugLogger.js";
+import { getMessageTransferEnvelopes } from "../../model/transferEnvelopes.js";
+import { getMessageAttachments } from "../../model/messageModel.js";
 
 export { initializeMessageEventState } from "../../model/messageEventState.js";
 
@@ -94,6 +96,7 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   } else if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.REPLACE) {
     if (isAuthoritativeFinalContentEvent(event)) {
       Object.assign(targetMessage, projectAuthoritativeFinalMessage(event));
+      targetMessage.attachments = getMessageAttachments(targetMessage);
       state.finalContentSequence = sequence;
     } else {
       targetMessage.content = contentProjection.content;
@@ -111,6 +114,24 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       }));
     }
     targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event);
+    if (
+      event.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END &&
+      Array.isArray(event.transferEnvelopes) &&
+      event.transferEnvelopes.length
+    ) {
+      const existingEnvelopes = getMessageTransferEnvelopes(targetMessage);
+      const seen = new Set(existingEnvelopes.map((item) => `${item.transferId}:${item.messageId}`));
+      targetMessage.transferEnvelopes = [
+        ...existingEnvelopes,
+        ...event.transferEnvelopes.filter((item) => {
+          const key = `${item?.transferId || ""}:${item?.messageId || ""}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }),
+      ];
+      targetMessage.attachments = getMessageAttachments(targetMessage);
+    }
     targetMessage.activityTimeline = reduceActivityTimeline(
       targetMessage.activityTimeline,
       log

@@ -9,155 +9,19 @@ import {
   CALLER_ROLE,
   SESSION_ASYNC_STATUS,
 } from "../config/constants.js";
-import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
-import { transferIdentityKey } from "@noobot/semantic-transfer-protocol";
-import {
-  compactSessionAttachmentRef,
-  compactTransferEnvelopes,
-  dedupeSessionAttachmentRefs,
-} from "../../session/transfer-attachment-refs.js";
 import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
 import {
   canonicalMessageId,
   emitContextIdentityDebug,
 } from "../../observability/context-identity-debug.js";
-const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
-  "doc_to_data_tool",
-  "media_to_data_tool",
-  "tool_result_overflow",
-]);
-
-function shouldPromoteAttachmentToAssistant(attachmentItem = {}) {
-  if (!attachmentItem || typeof attachmentItem !== "object" || Array.isArray(attachmentItem)) {
-    return false;
-  }
-  const generationSource = String(attachmentItem?.generationSource || "").trim();
-  if (HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource)) return false;
-  const attachmentSource = String(attachmentItem?.attachmentSource || "").trim();
-  return (
-    attachmentItem?.generatedByModel === true ||
-    attachmentSource === "model" ||
-    attachmentSource === "model_generated" ||
-    Boolean(generationSource)
-  );
-}
-
-function isPlainObject(value) {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
+import { projectGeneratedArtifactsToFinalAssistant } from "../../runtime/turn/final-assistant-artifact-projection.js";
 
 function summarizedMessageIds(messages = []) {
   return (Array.isArray(messages) ? messages : [])
     .filter((message = {}) => message?.summarized === true)
     .map((message = {}) => canonicalMessageId(message))
     .filter(Boolean);
-}
-
-function resolveTransferEnvelopesFromMessage(messageItem = {}) {
-  return Array.isArray(messageItem?.transferEnvelopes)
-    ? messageItem.transferEnvelopes.filter(isPlainObject)
-    : [];
-}
-
-function resolveAttachmentsFromMessage(messageItem = {}) {
-  if (Array.isArray(messageItem?.attachments)) return messageItem.attachments;
-  return [];
-}
-
-function dedupeTransferEnvelopes(envelopes = []) {
-  const list = compactTransferEnvelopes(envelopes);
-  if (!list.length) return [];
-  const seen = new Set();
-  const output = [];
-  for (const envelope of list) {
-    if (!isPlainObject(envelope)) continue;
-    const key = transferIdentityKey(envelope);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    output.push(envelope);
-  }
-  return output;
-}
-
-function dedupeAttachments(attachments = []) {
-  const list = dedupeSessionAttachmentRefs(
-    (Array.isArray(attachments) ? attachments : [])
-      .map((attachment) => compactSessionAttachmentRef(attachment))
-      .filter(Boolean),
-  );
-  if (!list.length) return [];
-  return list;
-}
-
-function shouldPromoteTransferEnvelope(envelope = {}) {
-  if (!isPlainObject(envelope)) return false;
-  const attachments = getTransferAttachments(envelope);
-  if (!attachments.length) return true;
-  return attachments.some((item = {}) => {
-    const attributes = isPlainObject(envelope?.meta?.attributes)
-      ? envelope.meta.attributes
-      : {};
-    return shouldPromoteAttachmentToAssistant({
-      ...attributes,
-      ...item,
-      attachmentSource: item?.identity?.attachmentSource,
-    });
-  });
-}
-
-function promoteGeneratedTransfersToFinalAssistant(messages = []) {
-  const sourceMessages = Array.isArray(messages) ? messages : [];
-  if (!sourceMessages.length) return sourceMessages;
-  const generatedTransferEnvelopes = dedupeTransferEnvelopes(
-    sourceMessages.flatMap((messageItem = {}) =>
-      resolveTransferEnvelopesFromMessage(messageItem).filter(shouldPromoteTransferEnvelope),
-    ),
-  );
-  const generatedOrdinaryAttachments = dedupeAttachments(
-    sourceMessages.flatMap((messageItem = {}) =>
-      resolveTransferEnvelopesFromMessage(messageItem).length
-        ? []
-        : resolveAttachmentsFromMessage(messageItem)
-            .filter(shouldPromoteAttachmentToAssistant),
-    ),
-  );
-  if (
-    !generatedTransferEnvelopes.length &&
-    !generatedOrdinaryAttachments.length
-  ) return sourceMessages;
-
-  const finalAssistantIndex = (() => {
-    for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
-      const item = sourceMessages[index] || {};
-      if (
-        String(item?.role || "") === "assistant" &&
-        String(item?.type || "message") !== "tool_call"
-      ) {
-        return index;
-      }
-    }
-    return -1;
-  })();
-  if (finalAssistantIndex < 0) return sourceMessages;
-
-  const outputMessages = [...sourceMessages];
-  const finalAssistant = outputMessages[finalAssistantIndex] || {};
-  const mergedTransferEnvelopes = dedupeTransferEnvelopes([
-    ...resolveTransferEnvelopesFromMessage(finalAssistant),
-    ...generatedTransferEnvelopes,
-  ]);
-  const mergedAttachments = dedupeAttachments([
-    ...resolveAttachmentsFromMessage(finalAssistant),
-    ...generatedOrdinaryAttachments,
-  ]);
-  const nextFinalAssistant = {
-    ...finalAssistant,
-    ...(mergedTransferEnvelopes.length ? { transferEnvelopes: mergedTransferEnvelopes } : {}),
-    ...(mergedAttachments.length ? { attachments: mergedAttachments } : {}),
-  };
-  outputMessages[finalAssistantIndex] = nextFinalAssistant;
-  return outputMessages;
 }
 
 export class SessionExecutionFinalizer {
@@ -248,7 +112,7 @@ export class SessionExecutionFinalizer {
     const promotionSourceCount = Array.isArray(summaryCheckpointPromotionSources)
       ? summaryCheckpointPromotionSources.length
       : 0;
-    const promotedMessages = promoteGeneratedTransfersToFinalAssistant([
+    const promotedMessages = projectGeneratedArtifactsToFinalAssistant([
       ...(Array.isArray(summaryCheckpointPromotionSources)
         ? summaryCheckpointPromotionSources
         : []),

@@ -351,6 +351,21 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
   );
   if (mergedTransferEnvelopes.length) {
     targetMessage.transferEnvelopes = mergedTransferEnvelopes;
+    const transferAttachments = getMessageTransferAttachments(targetMessage);
+    const existingAttachmentKeys = new Set(
+      (Array.isArray(targetMessage.attachments) ? targetMessage.attachments : [])
+        .map((item) => String(item?.attachmentId || item?.identity?.attachmentId || "").trim())
+        .filter(Boolean),
+    );
+    targetMessage.attachments = [
+      ...(Array.isArray(targetMessage.attachments) ? targetMessage.attachments : []),
+      ...transferAttachments.filter((item) => {
+        const key = String(item?.attachmentId || item?.identity?.attachmentId || "").trim();
+        if (!key || existingAttachmentKeys.has(key)) return false;
+        existingAttachmentKeys.add(key);
+        return true;
+      }),
+    ];
   }
   if (sourceAssistantWithoutTurnScope) {
     clearTurnScopedAssets(targetMessage);

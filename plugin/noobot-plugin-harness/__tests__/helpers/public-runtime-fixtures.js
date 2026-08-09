@@ -50,7 +50,10 @@ function initializeTestSemanticTransfer(agentContext = {}) {
           strategy: String(payload.strategy || "harness_summary").trim(),
         },
       };
-      if (payload.strategy === "harness_summary") {
+      if (
+        payload.strategy === "harness_summary" &&
+        (payload.fullText !== undefined || payload.summaryText !== undefined)
+      ) {
         const injectMode = String(payload.injectMode || "full").trim();
         const content = injectMode === "summary"
           ? String(payload.summaryText || "")

@@ -466,6 +466,10 @@ test("completed turn summary policy marks are durably upserted before the next d
       summarized: false,
     },
   ]);
+  turnMessageStore.updateWhere(
+    { summarized: true },
+    (_message, index) => index < durableMessages.length,
+  );
   const agentResult = buildLoopResult({
     output: "done",
     traces: [],

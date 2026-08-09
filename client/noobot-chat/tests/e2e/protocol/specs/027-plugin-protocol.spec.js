@@ -5,7 +5,7 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { PLUGIN_PROTOCOL_VERSION } from "@noobot/plugin-protocol";
-import { assertUniqueAttachmentIds, readRenderedFileNames } from "../helpers/attachment-assertions.js";
+import { assertUniqueAttachmentIds, readRenderedFileNames, transferAttachmentsForTurn } from "../helpers/attachment-assertions.js";
 import {
   addAttachment, fixedAttachment, selectPlugins, sendMessage, waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
@@ -138,7 +138,11 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     record.data?.success === true,
   );
   expect(childWriteResults).toHaveLength(1);
-  expect(childWriteResults[0].data.writtenFiles).toHaveLength(1);
+  const childWrittenAttachments = transferAttachmentsForTurn(
+    childWriteResults,
+    childWriteResults[0].turnScopeId,
+  );
+  expect(childWrittenAttachments).toHaveLength(1);
   const childAttachmentIndex = await readAttachmentIndex(noobot.userId, childSessionId, "user");
   expect(childAttachmentIndex).toMatchObject({
     sessionId: childSessionId,

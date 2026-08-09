@@ -15,8 +15,6 @@ import {
   DEFAULT_SEARCH_EXCLUDED_DIRS,
   DEFAULT_SEARCH_MAX_RESULTS,
   MAX_SEARCH_BUFFER_SIZE,
-  MAX_SEARCH_FILE_BYTES,
-  RIPGREP_MAX_FILESIZE,
   escapeRegExp,
   isForbiddenWorkspaceRelativePath,
   matchesGlob,
@@ -123,7 +121,6 @@ export async function collectSearchFiles({ rootPath = "", workspacePath = "", gl
       return;
     }
     if (!entryStat.isFile()) return;
-    if (Number(entryStat.size || 0) > MAX_SEARCH_FILE_BYTES) return;
     if (!matchesGlob(rel || path.basename(currentPath), glob)) return;
     files.push({ filePath: currentPath, relativePath: rel });
   }
@@ -190,8 +187,6 @@ export async function searchFilesWithRipgrep({
     "--json",
     "--line-number",
     "--column",
-    "--max-filesize",
-    RIPGREP_MAX_FILESIZE,
     "--glob",
     "!**/.git/**",
     "--glob",

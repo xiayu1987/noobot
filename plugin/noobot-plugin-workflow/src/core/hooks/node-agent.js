@@ -225,6 +225,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
       scenario: "workflow",
       strategy,
       content: message,
+      producer: { type: "plugin", id: `workflow-upstream:${pendingName}` },
       meta: {
         pendingNodeId: String(pendingStep?.nodeId || "").trim(),
         pendingNodeName: pendingName,
