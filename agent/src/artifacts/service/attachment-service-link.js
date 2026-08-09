@@ -9,7 +9,7 @@ import { readdir } from "node:fs/promises";
 
 import { fsWriteFile } from "../../shared/storage/fs-adapter.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
-import { readAttachIndex, writeAttachIndex } from "../index-manager.js";
+import { readAttachIndex, withAttachIndexLock, writeAttachIndex } from "../index-manager.js";
 import { resolveBasePath } from "./attachment-scope-resolver.js";
 import { buildPublicRecord } from "./record-builder.js";
 import { buildSessionDisplaySummary } from "../../session/session-summary-builders.js";
@@ -97,28 +97,31 @@ export async function linkParsedResultInScopes({
 
   for (const scope of scopes) {
     if (scope?.sessionId !== normalizedSessionId || scope?.attachmentSource !== normalizedAttachmentSource) continue;
-    const index = await readAttachIndex(basePath, scope);
-    const sourceRecord = index?.attachments?.[normalizedSourceId];
-    if (!sourceRecord) continue;
-    const nextRecord = {
-      ...sourceRecord,
-      parsedResult: {
-        attachmentId: safeStr(parsedAttachmentMeta?.attachmentId),
-        name: safeStr(parsedAttachmentMeta?.name),
-        mimeType: safeStr(parsedAttachmentMeta?.mimeType),
-        size: Number(parsedAttachmentMeta?.size || 0),
-        path: safeStr(parsedAttachmentMeta?.path),
-        relativePath: safeStr(parsedAttachmentMeta?.relativePath),
-        tool: safeStr(toolName),
-        updatedAt: new Date().toISOString(),
-      },
-    };
-    index.attachments[normalizedSourceId] = {
-      ...sourceRecord,
-      parsedResult: nextRecord.parsedResult,
-    };
-    await writeAttachIndex(basePath, index, scope);
-    return buildPublicRecord(basePath, nextRecord);
+    const result = await withAttachIndexLock(basePath, scope, async () => {
+      const index = await readAttachIndex(basePath, scope);
+      const sourceRecord = index?.attachments?.[normalizedSourceId];
+      if (!sourceRecord) return null;
+      const nextRecord = {
+        ...sourceRecord,
+        parsedResult: {
+          attachmentId: safeStr(parsedAttachmentMeta?.attachmentId),
+          name: safeStr(parsedAttachmentMeta?.name),
+          mimeType: safeStr(parsedAttachmentMeta?.mimeType),
+          size: Number(parsedAttachmentMeta?.size || 0),
+          path: safeStr(parsedAttachmentMeta?.path),
+          relativePath: safeStr(parsedAttachmentMeta?.relativePath),
+          tool: safeStr(toolName),
+          updatedAt: new Date().toISOString(),
+        },
+      };
+      index.attachments[normalizedSourceId] = {
+        ...sourceRecord,
+        parsedResult: nextRecord.parsedResult,
+      };
+      await writeAttachIndex(basePath, index, scope);
+      return buildPublicRecord(basePath, nextRecord);
+    });
+    if (result) return result;
   }
   return null;
 }

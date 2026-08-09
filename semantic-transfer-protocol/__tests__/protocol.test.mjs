@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   attachmentTransfer,
+  sourceReferenceTransfer,
   directTransfer,
   validateTransferEnvelope,
   createTransferIdentity,
@@ -88,6 +89,20 @@ test("creates attachment envelope from canonical identity and rejects paths", ()
   );
 });
 
+test("creates a source reference envelope without persisting an attachment", () => {
+  const envelope = sourceReferenceTransfer({
+    transferId: "tr-source",
+    messageId: "m-source",
+    identity,
+    direction: "output",
+    reference: { address: "/workspace/u/runtime/ops_workdir/a.txt", name: "a.txt", startLine: 1, endLine: 10 },
+    intent: { source: "tool", reason: "read_file_source_reference", scenario: "tool", strategy: "tool_output" },
+  });
+  assert.equal(envelope.payload.mode, "source_reference");
+  assert.equal(envelope.payload.reference.address, "/workspace/u/runtime/ops_workdir/a.txt");
+  assert.equal(validateTransferEnvelope(envelope).ok, true);
+});
+
 test("decides attachment without fallback when content exceeds limit", () => {
   assert.equal(
     decideTransfer({
@@ -123,6 +138,21 @@ test("rejects unregistered scenarios and strategies", () => {
     intent: { source: "tool", reason: "test", scenario: "tool", strategy: "unknown" },
     content: "blocked",
   }), /semantic_transfer_strategy_not_registered/);
+});
+
+test("enforces registered flow categories and business points", () => {
+  assert.doesNotThrow(() => assertSemanticTransferRegistration({
+    scenario: "harness",
+    strategy: "harness_acceptance",
+    category: "acceptance",
+    businessPoint: "acceptance_report",
+  }));
+  assert.throws(() => assertSemanticTransferRegistration({
+    scenario: "harness",
+    strategy: "harness_summary",
+    category: "guidance",
+    businessPoint: "ordinary_guidance",
+  }), /semantic_transfer_business_point_not_registered/);
 });
 
 test("tool input and output policies come from the protocol registry", () => {

@@ -8,6 +8,7 @@ import {
   DEFAULT_TASK_CHECK_TOOL_NAME,
   DEFAULT_TASK_SUMMARY_TOOL_NAME,
   markCurrentTurnModelMessagesSummarized,
+  markCurrentTurnArraySummarized,
   markCurrentTurnStoreSummarized,
 } from "./summary-policy.js";
 
@@ -45,4 +46,19 @@ export function applyTurnCompletionPolicy({
       ? turnMessageStore.toArray()
       : [],
   };
+}
+
+export function projectTurnCompletionMessages(
+  messages = [],
+  {
+    taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
+    taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
+    policyOptions = {},
+  } = {},
+) {
+  return markCurrentTurnArraySummarized(messages, {
+    taskSummaryToolName,
+    taskCheckToolName,
+    policyOptions,
+  });
 }

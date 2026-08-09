@@ -31,7 +31,11 @@ import {
   repairSessionArtifacts,
 } from "../session-artifact-store.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { migrateSessionDocument, runAtomicSessionRepair } from "@noobot/session-repair";
+import {
+  migrateSessionDocument,
+  reconcileCompletedTurnSummaryMarks,
+  runAtomicSessionRepair,
+} from "@noobot/session-repair";
 
 export class FileSystemSessionRepository {
   constructor({
@@ -695,7 +699,7 @@ export class FileSystemSessionRepository {
       sessionDir: scope.sessionDir,
       fallback: {},
     });
-    return normalizeSessionEntity({
+    const normalized = normalizeSessionEntity({
       ...session,
       sessionId: String(session.sessionId || sessionId || "").trim(),
       parentSessionId: String(session.parentSessionId || parentSessionId || "").trim(),
@@ -704,6 +708,14 @@ export class FileSystemSessionRepository {
       messages: this.normalizeMessages(session.messages || [], { sessionId }),
       selectedConnectors: this.normalizeSelectedConnectors(session.selectedConnectors || {}),
     }, { now: this.now, sessionId, parentSessionId });
+    const summaryRepair = reconcileCompletedTurnSummaryMarks(normalized);
+    if (summaryRepair.changed) {
+      const error = new Error("completed turn summary marks require canonical Session repair");
+      error.code = "SESSION_COMPLETION_SUMMARY_REPAIR_REQUIRED";
+      error.repairedTurnScopeIds = summaryRepair.repaired;
+      throw error;
+    }
+    return normalized;
   }
 
   async getTurnMessageCount(userId = "", sessionId = "", parentSessionId = "", persistenceContext = null) {

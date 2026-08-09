@@ -181,10 +181,25 @@ export async function saveCapabilityOutputAsTransferArtifacts(
   const producerId = String(purpose || "").trim();
   if (!producerId) throw new Error("harness_semantic_transfer_producer_required");
   try {
+    const strategy = domain === CAPABILITY_DOMAIN.ACCEPTANCE
+      ? "harness_acceptance"
+      : domain === CAPABILITY_DOMAIN.PLANNING
+        ? "harness_planning"
+        : purpose === "summary_detail"
+          ? "harness_summary"
+          : "";
+    const category = domain === CAPABILITY_DOMAIN.ACCEPTANCE
+      ? "acceptance"
+      : domain === CAPABILITY_DOMAIN.PLANNING
+        ? "planning"
+        : "summary";
+    if (!strategy) return { transferEnvelopes: [] };
     if (typeof transferSemanticContent === "function") {
       const staged = await transferSemanticContent({
         scenario: "harness",
-        strategy: "harness_summary",
+        strategy,
+        category,
+        businessPoint: purpose,
         summary: "",
         detail: text,
         name: normalizeString(name) || buildCapabilityArtifactName({ purpose }),

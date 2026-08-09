@@ -67,6 +67,32 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
   });
 });
 
+test("AttachmentService concurrent model artifact writes preserve one canonical index", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const batches = Array.from({ length: 8 }, (_, batch) => service.ingestGeneratedArtifacts({
+      userId: "u1",
+      sessionId: "concurrent-session",
+      attachmentSource: "model",
+      artifacts: [{
+        name: `result-${batch}.txt`,
+        mimeType: "text/plain",
+        contentBase64: Buffer.from(`result-${batch}`, "utf8").toString("base64"),
+      }],
+    }));
+    const saved = (await Promise.all(batches)).flat();
+    assert.equal(saved.length, 8);
+    const index = await readAttachIndex(
+      path.join(workspaceRoot, "u1"),
+      { sessionId: "concurrent-session", attachmentSource: "model" },
+    );
+    assert.equal(Object.keys(index.attachments).length, 8);
+    for (const record of saved) {
+      assert.ok(index.attachments[record.attachmentId]);
+    }
+  });
+});
+
 test("AttachmentService.resolveSourceAttachment requires the complete scoped identity", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });

@@ -3,10 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-
-const TOOL_INPUT_MAX_CHARS =
-  LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars;
+import { TOOL_SCENARIO, TOOL_STRATEGIES } from "./strategies/tool-strategies.mjs";
+import { HARNESS_SCENARIO, HARNESS_STRATEGIES } from "./strategies/harness-strategies.mjs";
+import { WORKFLOW_SCENARIO, WORKFLOW_STRATEGIES } from "./strategies/workflow-strategies.mjs";
+import { registerToolInputPolicies } from "./policies/tool-input-policies.mjs";
+import { registerToolOutputPolicies } from "./policies/tool-output-policies.mjs";
 
 export const SEMANTIC_TRANSFER_REGISTRATION = Object.freeze({
   SCENARIOS: Object.freeze({
@@ -14,11 +15,9 @@ export const SEMANTIC_TRANSFER_REGISTRATION = Object.freeze({
     WORKFLOW: "workflow",
     HARNESS: "harness",
   }),
-  TOOL_STRATEGIES: Object.freeze({
-    INPUT: "tool_input",
-    OUTPUT: "tool_output",
-    RESULT_TEXT: "tool_result_text",
-  }),
+  TOOL_STRATEGIES,
+  HARNESS_STRATEGIES,
+  WORKFLOW_STRATEGIES,
 });
 
 const inputPolicies = new Map();
@@ -38,6 +37,7 @@ function requireText(value, code) {
 export function registerSemanticTransferScenario({
   name,
   strategies = [],
+  categories = {},
 } = {}) {
   const scenario = requireText(name, "semantic_transfer_scenario_required");
   if (scenarios.has(scenario))
@@ -56,6 +56,12 @@ export function registerSemanticTransferScenario({
     Object.freeze({
       name: scenario,
       strategies: Object.freeze([...registeredStrategies]),
+      categories: Object.freeze(Object.fromEntries(
+        Object.entries(categories && typeof categories === "object" ? categories : {}).map(([category, points]) => [
+          text(category),
+          Object.freeze((Array.isArray(points) ? points : []).map((point) => requireText(point, "semantic_transfer_business_point_required"))),
+        ]),
+      )),
     }),
   );
   return scenarios.get(scenario);
@@ -113,7 +119,7 @@ export function registerToolOutputPolicy({ toolName, type = "text" } = {}) {
   const name = requireText(toolName, "semantic_transfer_tool_name_required");
   if (outputPolicies.has(name))
     throw new Error(`semantic_transfer_tool_output_policy_duplicate:${name}`);
-  if (!["text", "attachment_bytes", "attachment_url"].includes(type)) {
+  if (!["text", "attachment_bytes", "attachment_url", "source_reference"].includes(type)) {
     throw new Error(`semantic_transfer_tool_output_type_invalid:${name}`);
   }
   outputPolicies.set(name, Object.freeze({ toolName: name, type }));
@@ -122,6 +128,8 @@ export function registerToolOutputPolicy({ toolName, type = "text" } = {}) {
 export function assertSemanticTransferRegistration({
   scenario,
   strategy,
+  category = "",
+  businessPoint = "",
 } = {}) {
   const registered = scenarios.get(
     requireText(scenario, "semantic_transfer_scenario_required"),
@@ -136,6 +144,12 @@ export function assertSemanticTransferRegistration({
     throw new Error(
       `semantic_transfer_strategy_not_registered:${scenario}:${normalizedStrategy}`,
     );
+  }
+  if (text(category) || text(businessPoint)) {
+    const points = registered.categories?.[text(category)];
+    if (!points || !points.includes(text(businessPoint))) {
+      throw new Error(`semantic_transfer_business_point_not_registered:${scenario}:${text(category)}:${text(businessPoint)}`);
+    }
   }
   return registered;
 }
@@ -170,95 +184,14 @@ export function getToolOutputPolicy(toolName) {
 }
 
 registerSemanticTransferScenario({
-  name: SEMANTIC_TRANSFER_REGISTRATION.SCENARIOS.TOOL,
-  strategies: Object.values(SEMANTIC_TRANSFER_REGISTRATION.TOOL_STRATEGIES),
+  ...TOOL_SCENARIO,
 });
 registerSemanticTransferScenario({
-  name: SEMANTIC_TRANSFER_REGISTRATION.SCENARIOS.WORKFLOW,
-  strategies: ["workflow_subagent", "workflow_final_plan"],
+  ...WORKFLOW_SCENARIO,
 });
 registerSemanticTransferScenario({
-  name: SEMANTIC_TRANSFER_REGISTRATION.SCENARIOS.HARNESS,
-  strategies: ["harness_summary"],
+  ...HARNESS_SCENARIO,
 });
 
-registerToolInputPolicy({
-  toolName: "write_file",
-  field: "content",
-  maxChars: TOOL_INPUT_MAX_CHARS,
-  reason: "write_file_input_too_long",
-  message: "文件内容过长，请分批写入",
-  name: ({ args = {} }) =>
-    `${text(args.filePath).split(/[\\/]/).pop() || "write-file-content"}.tool-input.txt`,
-});
-registerToolInputPolicy({
-  toolName: "execute_script",
-  field: "command",
-  maxChars: TOOL_INPUT_MAX_CHARS,
-  reason: "execute_script_input_too_long",
-  message: "脚本内容过长，请分批执行或拆分脚本/文本后重试",
-  name: "execute-script-command.tool-input.sh",
-});
-registerToolInputPolicy({
-  toolName: "search",
-  field: "text",
-  maxChars: TOOL_INPUT_MAX_CHARS,
-  reason: "semantic_transfer_tool_input",
-  message: "text is too long; search in smaller chunks",
-  enabled: ({ args = {} }) => text(args.source || "files") === "text",
-  name: "search-text.tool-input.txt",
-});
-registerToolInputPolicy({
-  toolName: "patch_file",
-  field: "patch",
-  maxChars: TOOL_INPUT_MAX_CHARS,
-  reason: "patch_file_input_too_long",
-  message: "补丁内容过长，请分批应用或拆分 patch 后重试",
-  name: "patch-file-patch.tool-input.diff",
-});
-registerToolInputPolicy({
-  toolName: "task_summary",
-  field: "summaryContent",
-  maxChars: TOOL_INPUT_MAX_CHARS,
-  forceAttachment: true,
-  reason: "semantic_transfer_tool_input",
-  name: "task-summary-content.tool-input.md",
-});
-
-for (const toolName of [
-  "read_file",
-  "write_file",
-  "search",
-  "patch_file",
-  "execute_script",
-  "list_skills",
-  "set_skill_task",
-  "call_service",
-  "call_mcp_task",
-  "delegate_task_async",
-  "wait_async_task_result",
-  "plan_multi_task_collaboration",
-  "switch_model",
-  "user_interaction",
-  "web_to_data",
-  "doc_to_data",
-  "media_to_data",
-  "process_content_task",
-  "process_connector_tool",
-  "access_connector",
-  "inspect_connectors",
-  "web_search",
-  "task_summary",
-  "task_check",
-  "request_help",
-  "final_answer",
-  "database_connect_connector",
-  "terminal_connect_connector",
-  "email_connect_connector",
-]) {
-  registerToolOutputPolicy({ toolName, type: "text" });
-}
-registerToolOutputPolicy({
-  toolName: "multimodal_generate",
-  type: "attachment_bytes",
-});
+registerToolInputPolicies(registerToolInputPolicy);
+registerToolOutputPolicies(registerToolOutputPolicy);

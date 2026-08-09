@@ -11,6 +11,7 @@ import test from "node:test";
 import { validateTransferEnvelope } from "@noobot/semantic-transfer-protocol";
 import {
   migrateSessionDocument,
+  reconcileCompletedTurnSummaryMarks,
   reconcileExecutionSegmentIndex,
   reconcileSessionSummaryIndex,
   runAtomicSessionRepair,
@@ -115,6 +116,21 @@ test("reconciles session summary membership from materialized artifact ids", () 
   });
   assert.deepEqual(result.sessions.map((item) => item.sessionId), ["a"]);
   assert.equal(result.changed, true);
+});
+
+test("repairs eligible messages in completed turns without marking preserved user or final messages", () => {
+  const result = reconcileCompletedTurnSummaryMarks({
+    turnStatuses: [{ dialogProcessId: "dialog-1", turnScopeId: "turn-1", status: "completed" }],
+    messages: [
+      { messageUid: "user-1", role: "user", dialogProcessId: "dialog-1", turnScopeId: "turn-1", summarized: false },
+      { messageUid: "tool-call-1", role: "assistant", dialogProcessId: "dialog-1", turnScopeId: "turn-1", tool_calls: [{ id: "call-1", name: "read_file" }], summarized: false },
+      { messageUid: "tool-result-1", role: "tool", dialogProcessId: "dialog-1", turnScopeId: "turn-1", tool_call_id: "call-1", toolName: "read_file", summarized: false },
+      { messageUid: "final-1", role: "assistant", dialogProcessId: "dialog-1", turnScopeId: "turn-1", content: "done", summarized: false },
+    ],
+  });
+  assert.equal(result.changed, true);
+  assert.deepEqual(result.document.messages.map((message) => message.summarized), [false, true, true, false]);
+  assert.deepEqual(result.repaired, ["turn-1"]);
 });
 
 test("atomic repair leaves the authoritative directory unchanged when validation fails", async () => {

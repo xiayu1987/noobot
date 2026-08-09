@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { applyTurnCompletionPolicy } from "@noobot/context-protocol/turn-completion-policy";
-
 export const FINAL_STREAMING_RESULT_META_KEY = "__noobotFinalStreaming";
 
 export function readFinalStreamingResultMeta(result = {}) {
@@ -43,14 +41,9 @@ function requireCanonicalTurnMessageStore(turnMessageStore = null) {
 }
 
 export function finalizeTurnMessagesBeforeReturn({
-  modelMessages = [],
   turnMessageStore = null,
 } = {}) {
   const canonicalStore = requireCanonicalTurnMessageStore(turnMessageStore);
-  applyTurnCompletionPolicy({
-    modelMessages,
-    turnMessageStore: canonicalStore,
-  });
   return canonicalStore.toArray();
 }
 

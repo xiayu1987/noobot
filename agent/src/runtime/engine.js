@@ -18,6 +18,7 @@ import {
   emitMessageEvent,
 } from "../events/message-event-stream.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "./turn/final-assistant-artifact-projection.js";
+import { applyTurnCompletionPolicy } from "@noobot/context-protocol/turn-completion-policy";
 
 function messageIdentity(message = {}) {
   return String(
@@ -124,6 +125,11 @@ export function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {
     ...canonicalTurnMessages(runtime),
   ]).slice(promotionSources.length);
   store.replaceAll(projectedMessages);
+  applyTurnCompletionPolicy({
+    modelMessages: Array.isArray(result?.modelMessages) ? result.modelMessages : [],
+    turnMessageStore: store,
+  });
+  result.turnMessages = store.toArray();
   const diagnostics = authoritativeFinalDiagnostics(result, runtime);
   emitEvent(runtime?.eventListener || null, "authoritative_final_commit_started", diagnostics);
   const messages = authoritativeFinalMessages(result, runtime);

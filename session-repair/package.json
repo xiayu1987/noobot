@@ -12,6 +12,7 @@
     "test": "node --test __tests__/*.test.mjs"
   },
   "dependencies": {
+    "@noobot/context-protocol": "file:../context-protocol",
     "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol"
   }
 }

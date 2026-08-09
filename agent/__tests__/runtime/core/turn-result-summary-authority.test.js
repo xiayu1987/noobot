@@ -10,7 +10,7 @@ import {
   finalizeTurnMessagesBeforeReturn,
 } from "../../../src/runtime/turn/turn-result-aggregator.js";
 
-test("turn result applies the summary policy to the completed canonical turn", () => {
+test("turn result aggregation does not declare the turn complete before final hooks", () => {
   const messages = [
     { messageUid: "task-check-before-summary", summarized: false },
     { messageUid: "message-summarized-by-checkpoint", summarized: true },
@@ -19,14 +19,8 @@ test("turn result applies the summary policy to the completed canonical turn", (
     modelMessages: messages,
     turnMessageStore: {
       toArray: () => messages,
-      updateWhere: (patch = {}, matcher = null) => {
-        let count = 0;
-        messages.forEach((message, index) => {
-          if (typeof matcher === "function" && !matcher(message, index)) return;
-          Object.assign(message, patch);
-          count += 1;
-        });
-        return count;
+      updateWhere: () => {
+        throw new Error("loop result aggregation must not apply terminal policy");
       },
     },
   });
