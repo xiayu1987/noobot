@@ -67,10 +67,10 @@ function migrateTransferEnvelopeV1(envelope, message, envelopeIdentity) {
       source: "service",
       reason: "session_protocol_migration",
       scenario: envelopeIdentity.includes("nodeResultTransferEnvelopes")
-        ? "workflow_plugin_subagent"
+        ? "workflow"
         : "tool",
       strategy: envelopeIdentity.includes("nodeResultTransferEnvelopes")
-        ? "bot_plugin_subagent_result"
+        ? "workflow_subagent"
         : "tool_output",
     },
     meta: {},

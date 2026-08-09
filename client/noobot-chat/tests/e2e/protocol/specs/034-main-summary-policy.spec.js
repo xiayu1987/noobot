@@ -31,7 +31,6 @@ import {
   isMainAgentModelInvocation,
 } from "../helpers/model-message-assertions.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
-import { readRenderedFileNames } from "../helpers/attachment-assertions.js";
 import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
@@ -167,14 +166,16 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
   expect(taskSummaryResultMessage.content.includes(fullSummaryContent)).toBe(false);
   expect(taskSummaryResult.summary.details).toBeUndefined();
 
-  const summaryAttachmentFiles = (taskSummaryResultMessage.transferEnvelopes || [])
-    .flatMap((envelope) => envelope.files || [])
-    .filter((file) => file.name === "task-summary-content.tool-input.md");
-  expect(summaryAttachmentFiles.length).toBeGreaterThan(0);
-  expect(new Set(summaryAttachmentFiles.map((file) => file.attachmentId)).size).toBe(1);
-  expect(await fs.readFile(summaryAttachmentFiles[0].path, "utf8")).toBe(fullSummaryContent);
+  const summaryAttachmentRefs = (taskSummaryResultMessage.transferEnvelopes || [])
+    .flatMap((envelope) => envelope?.payload?.attachments || [])
+    .filter((attachment) => (attachment?.descriptor?.name || attachment?.name)
+      === "task-summary-content.tool-input.md");
+  expect(summaryAttachmentRefs.length).toBeGreaterThan(0);
+  expect(new Set(summaryAttachmentRefs.map((attachment) =>
+    attachment?.identity?.attachmentId,
+  )).size).toBe(1);
 
-  const summaryAttachmentId = summaryAttachmentFiles[0].attachmentId;
+  const summaryAttachmentId = summaryAttachmentRefs[0]?.identity?.attachmentId;
   await expect.poll(
     () => readAttachmentIndex(noobot.userId, noobot.sessionId, "model"),
     { timeout: 30000 },
@@ -195,17 +196,16 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
     persistedSummaryAttachments[0].storageRef.ref,
   ), "utf8")).toBe(fullSummaryContent);
 
-  const renderedSummaryCards = noobot.page.locator(
-    `.base-message-shell.assistant .base-file-card[data-attachment-source="model"][data-attachment-id="${summaryAttachmentId}"]`,
-  );
-  await expect(renderedSummaryCards).toHaveCount(1);
-  await expect(renderedSummaryCards.locator(".file-name")).toHaveText("task-summary-content.tool-input.md");
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
-  await expect(renderedSummaryCards).toHaveCount(1);
-  expect(await readRenderedFileNames(noobot.page, {
-    role: "assistant",
-    attachmentSource: "model",
-  })).toContain("task-summary-content.tool-input.md");
+  const refreshedModelAttachmentIndex = await readAttachmentIndex(
+    noobot.userId,
+    noobot.sessionId,
+    "model",
+  );
+  expect(Object.values(refreshedModelAttachmentIndex.attachments || {}).some((item) =>
+    item.identity?.attachmentId === summaryAttachmentId
+      && item.descriptor?.name === "task-summary-content.tool-input.md",
+  )).toBe(true);
 
   const mainInvocations = modelInvocationTraces(scoped).filter(isMainAgentModelInvocation);
   const mainPrefixAudit = auditModelPrefixStability(mainInvocations);

@@ -8,7 +8,11 @@ import {
   TOOL_NAME_SET,
   ensureHarnessBucket,
 } from "./deps.js";
-import { collectClosedToolCallBatchMessages, collectDialogScopedMessagesToSummarize } from "@noobot/context-protocol/summary-policy";
+import {
+  collectClosedToolCallBatchMessages,
+  collectDialogScopedMessagesToSummarize,
+  collectLatestTaskCheckMessageIndexes,
+} from "@noobot/context-protocol/summary-policy";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
@@ -87,10 +91,18 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
     retentionMessages: coveredMessages,
     taskSummaryToolName: "task_summary",
   });
+  const latestTaskCheckIndexes = collectLatestTaskCheckMessageIndexes(checkpointTargets, {
+    taskCheckToolName: "task_check",
+  });
+  const latestTaskCheckIds = new Set([...latestTaskCheckIndexes]
+    .map((index) => getMessageId(checkpointTargets[index]))
+    .filter(Boolean));
+  const filteredSummaryTargets = summaryTargets.filter((message) =>
+    !latestTaskCheckIds.has(getMessageId(message)));
   requestSummaryCheckpointMainFlowInstruction(ctx, {
     source: "plugin.summary",
     summarizedMessageIds: [...new Set(
-      summaryTargets
+      filteredSummaryTargets
         .map((message) => getMessageId(message))
         .filter(Boolean),
     )],
@@ -98,7 +110,7 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   if (holder?.state?.pending && hasSummaryCheckpoint) {
     holder.state.pending.summaryCheckpointMessageIds = null;
   }
-  return summaryTargets.length;
+  return filteredSummaryTargets.length;
 }
 
 export function markToolSignals(ctx = {}) {

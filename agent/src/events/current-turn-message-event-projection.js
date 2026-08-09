@@ -83,6 +83,9 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}, {
     const currentTimeline = isToolEvent
       ? existingAssistantIndex.item.toolTimeline
       : existingAssistantIndex.item.activityTimeline;
+    const transferEnvelopes = Array.isArray(envelope.transferEnvelopes)
+      ? envelope.transferEnvelopes
+      : [];
     const observed = isToolEvent
       ? (Array.isArray(currentTimeline) ? currentTimeline : []).some((item) =>
           text(item?.call?.eventId) === eventId || text(item?.resultEvent?.eventId) === eventId)
@@ -90,7 +93,22 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}, {
     if (observed) return envelope;
 
     const patch = isToolEvent
-      ? { toolTimeline: reduceCanonicalToolTimeline(currentTimeline, envelope) }
+      ? {
+          toolTimeline: reduceCanonicalToolTimeline(currentTimeline, envelope),
+          ...(transferEnvelopes.length
+            ? {
+                transferEnvelopes: [
+                  ...(Array.isArray(existingAssistantIndex.item.transferEnvelopes)
+                    ? existingAssistantIndex.item.transferEnvelopes
+                    : []),
+                  ...transferEnvelopes,
+                ].filter((item, index, all) => all.findIndex((candidate) =>
+                  text(candidate?.transferId) === text(item?.transferId) &&
+                  text(candidate?.messageId) === text(item?.messageId),
+                ) === index),
+              }
+            : {}),
+        }
       : {
           activityTimeline: [
             ...(Array.isArray(currentTimeline) ? currentTimeline : []),

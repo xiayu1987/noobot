@@ -64,11 +64,15 @@ function enrichTransferAttachmentScope(attachmentItem = {}, messageItem = {}) {
     return attachmentItem;
   }
   const owner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : {};
+  const attachmentSource = String(
+    attachmentItem?.attachmentSource || attachmentItem?.identity?.attachmentSource || "",
+  ).trim().toLowerCase();
   const turnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : {};
   return {
     ...attachmentItem,
     ...(sessionId && !attachmentItem.sessionId && !attachmentItem.session_id ? { sessionId } : {}),
     owner: {
+      ...(attachmentSource === "model" && !owner.type ? { type: "agent" } : {}),
       ...(sessionId && !owner.sessionId && !owner.session_id ? { sessionId } : {}),
       ...(turnScopeId && !owner.turnScopeId ? { turnScopeId } : {}),
       ...(dialogProcessId && !owner.dialogProcessId && !owner.dialog_process_id ? { dialogProcessId } : {}),
