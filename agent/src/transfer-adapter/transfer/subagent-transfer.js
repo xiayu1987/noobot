@@ -109,6 +109,8 @@ export async function transferBotPluginSubagentResult({
           reason: intent.reason,
           scenario: "workflow",
           strategy: "workflow_subagent",
+          category: "sub_agent",
+          businessPoint: "task_result",
         },
         meta: {
           attributes: { nodeId: item?.nodeId, nodeName: item?.nodeName },
@@ -149,6 +151,8 @@ export async function transferBotPluginSubagentResult({
         reason: intent.reason,
         scenario: "workflow",
         strategy: "workflow_subagent",
+        category: "sub_agent",
+        businessPoint: "task_result",
       },
       meta: {
         attributes: {

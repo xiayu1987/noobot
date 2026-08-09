@@ -39,7 +39,7 @@ test("read_file: 具体工具不判断大文件，原始内容交由 semantic-tr
   assert.equal(result.transferEnvelopes, undefined);
 });
 
-test("read_file: 大文件原始结果由 semantic-transfer 物化为规范 V2 附件引用", async () => {
+test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而不物化附件", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const basePath = path.join(workspaceRoot, "primary-user");
   const hostFilePath = path.join(basePath, "runtime/ops_workdir/large_test_file.txt");
@@ -104,14 +104,12 @@ test("read_file: 大文件原始结果由 semantic-transfer 物化为规范 V2 �
   assert.equal(result.overflowed, true);
   assert.equal(envelope.protocol, "noobot.semantic-transfer");
   assert.equal(envelope.version, 2);
-  assert.equal(envelope.payload?.mode, "attachment");
-  assert.deepEqual(envelope.payload?.attachments?.[0]?.identity, {
-    attachmentId: "att-tool-input-1",
-    sessionId: "s-1",
-    attachmentSource: "model",
-  });
+  assert.equal(envelope.payload?.mode, "source_reference");
+  assert.equal(envelope.payload?.reference?.address, "/workspace/primary-user/runtime/ops_workdir/large_test_file.txt");
+  assert.equal(envelope.payload?.reference?.startLine, 1);
+  assert.equal(envelope.payload?.reference?.endLine, 1);
   assert.equal(JSON.stringify(envelope).includes(workspaceRoot), false);
-  assert.equal(JSON.stringify(envelope).includes("/workspace/primary-user"), false);
+  assert.equal(JSON.stringify(envelope).includes("/workspace/primary-user"), true);
   assert.equal("files" in envelope, false);
   assert.equal("storage" in envelope, false);
 });

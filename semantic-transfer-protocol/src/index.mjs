@@ -20,6 +20,7 @@ export const TRANSFER_DIRECTION = Object.freeze({
 export const TRANSFER_MODE = Object.freeze({
   DIRECT: "direct",
   ATTACHMENT: "attachment",
+  SOURCE_REFERENCE: "source_reference",
 });
 export const TRANSFER_SOURCE = Object.freeze({
   USER: "user",
@@ -40,7 +41,7 @@ const IDENTITY_KEYS = new Set([
   "producer",
 ]);
 const PRODUCER_KEYS = new Set(["type", "id"]);
-const INTENT_KEYS = new Set(["source", "reason", "scenario", "strategy"]);
+const INTENT_KEYS = new Set(["source", "reason", "scenario", "strategy", "category", "businessPoint"]);
 const META_KEYS = new Set([
   "mimeType",
   "originalLength",
@@ -56,6 +57,7 @@ const REF_KEYS = new Set([
   "size",
   "preview",
 ]);
+const SOURCE_REFERENCE_KEYS = new Set(["address", "name", "mimeType", "size", "startLine", "endLine"]);
 const FORBIDDEN_PATH_KEYS = new Set([
   "path",
   "filePath",
@@ -185,6 +187,8 @@ export function createTransferEnvelope({
   assertSemanticTransferRegistration({
     scenario: intent?.scenario,
     strategy: intent?.strategy,
+    category: intent?.category,
+    businessPoint: intent?.businessPoint,
   });
   const envelope = Object.freeze({
     protocol: TRANSFER_PROTOCOL,
@@ -219,6 +223,16 @@ export function attachmentTransfer({ attachments, ...options } = {}) {
   });
 }
 
+export function sourceReferenceTransfer({ reference, ...options } = {}) {
+  if (!plain(reference)) throw new Error("invalid_source_reference");
+  known(reference, SOURCE_REFERENCE_KEYS, "unknown_source_reference_field");
+  required(reference.address, "invalid_source_reference_address");
+  return createTransferEnvelope({
+    ...options,
+    payload: { mode: TRANSFER_MODE.SOURCE_REFERENCE, reference: clean(reference) },
+  });
+}
+
 export function validateTransferEnvelope(value, { strict = false } = {}) {
   const errors = [];
   try {
@@ -250,7 +264,7 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
     if (!plain(value.payload)) throw new Error("invalid_payload");
     known(
       value.payload,
-      new Set(["mode", "content", "attachments"]),
+      new Set(["mode", "content", "attachments", "reference"]),
       "unknown_payload_field",
     );
     if (value.payload.mode === TRANSFER_MODE.DIRECT) {
@@ -270,6 +284,13 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
         known(x, REF_KEYS, "unknown_attachment_field");
         createAttachmentReference(x);
       });
+    } else if (value.payload.mode === TRANSFER_MODE.SOURCE_REFERENCE) {
+      if (!plain(value.payload.reference)) throw new Error("source_reference_required");
+      known(value.payload.reference, SOURCE_REFERENCE_KEYS, "unknown_source_reference_field");
+      required(value.payload.reference.address, "invalid_source_reference_address");
+      if (value.payload.content !== undefined || value.payload.attachments !== undefined) {
+        throw new Error("source_reference_payload_exclusive");
+      }
     } else throw new Error("invalid_payload_mode");
     if (!plain(value.intent)) throw new Error("invalid_intent");
     known(value.intent, INTENT_KEYS, "unknown_intent_field");

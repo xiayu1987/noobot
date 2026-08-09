@@ -13,6 +13,25 @@ import {
   toPersistedAttachmentRecord,
 } from "./service/persisted-record-adapter.js";
 
+// Index updates are read-modify-write transactions. Serialize them per canonical
+// attachment scope so concurrent producers cannot overwrite each other's records.
+const scopeLocks = new Map();
+
+export async function withAttachIndexLock(basePath, scope, operation) {
+  const key = resolveIndexFile(basePath, scope);
+  const previous = scopeLocks.get(key) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  scopeLocks.set(key, current);
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (scopeLocks.get(key) === current) scopeLocks.delete(key);
+  }
+}
+
 export async function readAttachIndex(basePath, scope) {
   const indexFile = resolveIndexFile(basePath, scope);
   await fsMkdir(path.dirname(indexFile), { recursive: true });

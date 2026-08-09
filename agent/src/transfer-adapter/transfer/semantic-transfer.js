@@ -28,6 +28,8 @@ export const SEMANTIC_TRANSFER_STRATEGY = {
   WORKFLOW_SUBAGENT: "workflow_subagent",
   WORKFLOW_FINAL_PLAN: "workflow_final_plan",
   HARNESS_SUMMARY: "harness_summary",
+  HARNESS_PLANNING: "harness_planning",
+  HARNESS_ACCEPTANCE: "harness_acceptance",
 };
 
 function normalizeString(value = "") {
@@ -239,13 +241,16 @@ async function transferAgentPluginStrategy({
   ...options
 } = {}) {
   if (
-    strategy === SEMANTIC_TRANSFER_STRATEGY.HARNESS_SUMMARY &&
+    [SEMANTIC_TRANSFER_STRATEGY.HARNESS_SUMMARY, SEMANTIC_TRANSFER_STRATEGY.HARNESS_PLANNING, SEMANTIC_TRANSFER_STRATEGY.HARNESS_ACCEPTANCE].includes(strategy) &&
     options.detail !== undefined &&
     options.fullText === undefined &&
     options.summaryText === undefined
   ) {
     return transferAgentPluginStageMessage({
       ...options,
+      strategy,
+      category: options.category,
+      businessPoint: options.businessPoint,
       runtime,
       agentContext,
     });

@@ -89,14 +89,28 @@ test("authoritative final event owns generated attachment envelopes before persi
     assistantMessageId: "assistant-message-1",
     turnMessages: runtime.currentTurnMessages.toArray(),
   };
+  runtime.currentTurnMessages.push({
+    role: "system",
+    type: "message",
+    messageId: "final-hook-control-1",
+    content: "final response policy",
+    summarized: false,
+  });
 
   assert.equal(commitAuthoritativeFinalResult({ result, runtime }), true);
 
   const finalEvent = events.find((event) => event?.event === "authoritative_final_content");
   assert.deepEqual(finalEvent?.data?.transferEnvelopes, [transferEnvelope]);
   assert.deepEqual(
-    runtime.currentTurnMessages.toArray().at(-1)?.transferEnvelopes,
+    runtime.currentTurnMessages.toArray().find((message) => message.messageId === "assistant-message-1")?.transferEnvelopes,
     [transferEnvelope],
   );
-  assert.deepEqual(result.turnMessages.at(-1)?.transferEnvelopes, [transferEnvelope]);
+  assert.deepEqual(
+    result.turnMessages.find((message) => message.messageId === "assistant-message-1")?.transferEnvelopes,
+    [transferEnvelope],
+  );
+  assert.equal(
+    result.turnMessages.find((message) => message.messageId === "final-hook-control-1")?.summarized,
+    true,
+  );
 });

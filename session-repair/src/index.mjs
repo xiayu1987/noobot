@@ -6,6 +6,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { cp, rename, rm } from "node:fs/promises";
 import { attachmentTransfer, assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
+import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 
 export const SESSION_REPAIR_PROTOCOL_VERSION = 1;
 
@@ -135,6 +136,41 @@ function migrateMessage(message = {}, sessionId = "", index = 0) {
   return { message: next, changed };
 }
 
+export function reconcileCompletedTurnSummaryMarks(document = {}) {
+  const next = structuredClone(document);
+  const messages = Array.isArray(next.messages) ? next.messages : [];
+  const completedTurns = new Set(
+    (Array.isArray(next.turnStatuses) ? next.turnStatuses : [])
+      .filter((status) => String(status?.status || "").trim() === "completed")
+      .map((status) => `${text(status?.dialogProcessId)}\u0000${text(status?.turnScopeId)}`)
+      .filter((key) => !key.startsWith("\u0000") && !key.endsWith("\u0000")),
+  );
+  let changed = false;
+  const repaired = [];
+  for (const key of completedTurns) {
+    const [dialogProcessId, turnScopeId] = key.split("\u0000");
+    const indexes = messages
+      .map((message, index) => ({ message, index }))
+      .filter(({ message }) => text(message?.dialogProcessId) === dialogProcessId &&
+        text(message?.turnScopeId) === turnScopeId);
+    if (!indexes.length) continue;
+    const source = indexes.map(({ message }) => message);
+    const projected = projectTurnCompletionMessages(source);
+    let turnChanged = false;
+    projected.forEach((message, index) => {
+      const original = source[index];
+      if (JSON.stringify(original) === JSON.stringify(message)) return;
+      messages[indexes[index].index] = message;
+      turnChanged = true;
+    });
+    if (turnChanged) {
+      changed = true;
+      repaired.push(turnScopeId);
+    }
+  }
+  return { document: next, changed, repaired };
+}
+
 export function migrateSessionDocument(document = {}, { sessionId: suppliedSessionId = "" } = {}) {
   if (!document || typeof document !== "object" || Array.isArray(document)) {
     throw Object.assign(new TypeError("Session repair source must be an object"), { code: "SESSION_REPAIR_SOURCE_INVALID" });
@@ -156,6 +192,12 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
       changed ||= result.changed;
       return result.message;
     });
+  }
+  const summaryRepair = reconcileCompletedTurnSummaryMarks(next);
+  if (summaryRepair.changed) {
+    next.messages = summaryRepair.document.messages;
+    changed = true;
+    migrations.push("completed-turn-summary-marks");
   }
   if (next.message && typeof next.message === "object" && !Array.isArray(next.message)) {
     const result = migrateMessage(next.message, sessionId, 0);

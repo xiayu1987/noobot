@@ -168,6 +168,8 @@ export async function persistWorkflowNodeResultAttachment({
   const transferred = await semanticTransferContent({
         scenario: "workflow",
         strategy: "workflow_subagent",
+        category: "sub_agent",
+        businessPoint: "task_result",
         messages: [
           {
             nodeId,
@@ -247,6 +249,8 @@ async function upsertWorkflowMessage({
     const transferred = await semanticTransferContent({
           scenario: "workflow",
           strategy: "workflow_final_plan",
+          category: "main_agent",
+          businessPoint: "final_plan",
           messages: [
             {
               id: "workflow-final-attachment-summary",
