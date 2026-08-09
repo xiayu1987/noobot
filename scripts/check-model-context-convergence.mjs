@@ -331,6 +331,7 @@ const summaryMutationCallAllowed = new Set([
   SUMMARY_POLICY_PATH,
   "context-protocol/src/message-store.js",
   "context-protocol/src/context-mutation.js",
+  "context-protocol/src/turn-completion-policy.js",
   "agent/src/runtime/turn/turn-result-aggregator.js",
   "agent/src/bot/session/summary-checkpoint-committer.js",
 ]);
