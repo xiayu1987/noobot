@@ -12,7 +12,7 @@ import {
 import { appendWorkflowTrace } from "../hooks/phase.js";
 import { emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
-import { createBotDispatchHandled } from "@noobot/shared/bot-dispatch-protocol";
+import { createBotDispatchHandled } from "@noobot/agent-transport-protocol/bot-dispatch";
 
 function resolveWorkflowErrorMessage(error = null) {
   return String(error?.message || error || "");

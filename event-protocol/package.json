@@ -7,12 +7,15 @@
   "exports": {
     ".": "./src/index.mjs",
     "./outbox": "./src/authority-event-outbox.mjs",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./message-event": "./src/message-event.mjs",
+    "./workflow-runtime-event": "./src/workflow-runtime-event.mjs"
   },
   "scripts": {
     "test": "node --test __tests__/*.test.mjs"
   },
   "dependencies": {
-    "@noobot/shared": "file:../shared"
+    "@noobot/shared": "file:../shared",
+    "@noobot/session-protocol": "file:../session-protocol"
   }
 }

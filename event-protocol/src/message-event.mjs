@@ -172,15 +172,18 @@ export function projectMessageEventMetadata(event = {}) {
 
 export function projectAuthoritativeFinalMessage(event = {}) {
   if (!isAuthoritativeFinalContentEvent(event)) return Object.freeze({});
-  return Object.freeze({
+  const projection = {
     content: typeof event?.text === "string"
       ? event.text
       : (typeof event?.output === "string" ? event.output : ""),
-    attachments: Object.freeze(Array.isArray(event?.attachments) ? [...event.attachments] : []),
-    transferEnvelopes: Object.freeze(
-      Array.isArray(event?.transferEnvelopes) ? [...event.transferEnvelopes] : [],
-    ),
-  });
+  };
+  if (Array.isArray(event?.attachments) && event.attachments.length > 0) {
+    projection.attachments = Object.freeze([...event.attachments]);
+  }
+  if (Array.isArray(event?.transferEnvelopes) && event.transferEnvelopes.length > 0) {
+    projection.transferEnvelopes = Object.freeze([...event.transferEnvelopes]);
+  }
+  return Object.freeze(projection);
 }
 
 export function isAuthoritativeFinalContentEvent(event = {}) {

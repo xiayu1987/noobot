@@ -10,7 +10,7 @@ import {
   canonicalizeTurnScopeId,
   isCanonicalTurnScopeId,
   turnScopeIdentityKey,
-} from "../turn-scope-identity.mjs";
+} from "@noobot/session-protocol/turn-scope-identity";
 
 test("canonicalizes workflow node transport identities at the protocol boundary", () => {
   assert.equal(canonicalizeTurnScopeId("workflow-node_node-1"), "workflow-node:node-1");

@@ -120,8 +120,17 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     records.some((record) =>
       record.parentSessionId === noobot.sessionId && isMainAgentModelInvocation(record)),
   );
-  const childSessionId = traces.find((record) =>
-    record.parentSessionId === noobot.sessionId && isMainAgentModelInvocation(record))?.sessionId;
+  const childCandidates = traces
+    .filter((record) => record.parentSessionId === noobot.sessionId && isMainAgentModelInvocation(record))
+    .map((record) => record.sessionId)
+    .filter((sessionId, index, values) => sessionId && values.indexOf(sessionId) === index);
+  const childSessionId = (await Promise.all(childCandidates.map(async (candidate) => {
+    const execution = await readSessionExecutionEventTree(noobot.userId, candidate);
+    return execution.some((record) =>
+      record.sessionId === candidate && record.event === "tool_call_end"
+      && record.data?.tool === "write_file" && record.data?.success === true
+    ) ? candidate : "";
+  }))).find(Boolean);
   expect(childSessionId).toBeTruthy();
   const childExecution = await waitForSessionExecutionEventTree(
     noobot.userId,
@@ -145,17 +154,17 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     childWriteResults[0].turnScopeId,
   );
   expect(childWrittenAttachments).toHaveLength(1);
-  const childAttachmentIndex = await readAttachmentIndex(noobot.userId, childSessionId, "user");
+  const childAttachmentIndex = await readAttachmentIndex(noobot.userId, childSessionId, "model");
   expect(childAttachmentIndex).toMatchObject({
     sessionId: childSessionId,
-    attachmentSource: "user",
+    attachmentSource: "model",
   });
   const childAttachments = Object.values(childAttachmentIndex.attachments || {});
   expect(childAttachments).toHaveLength(1);
   expect(childAttachments[0]).toMatchObject({
     identity: {
       sessionId: childSessionId,
-      attachmentSource: "user",
+      attachmentSource: "model",
     },
     descriptor: {
       name: file.name,

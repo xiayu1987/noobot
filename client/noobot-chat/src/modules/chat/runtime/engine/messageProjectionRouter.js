@@ -5,7 +5,7 @@
  */
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "./turnProjectionStore.js";
 import { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./sendFlowSupport.js";
-import { resolveMessageEventPresentationId } from "@noobot/shared/message-event-protocol";
+import { resolveMessageEventPresentationId } from "@noobot/event-protocol/message-event";
 
 export function routeMessageProjectionEvent(event, data, context) {
   const {

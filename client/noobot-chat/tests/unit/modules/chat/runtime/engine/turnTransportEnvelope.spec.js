@@ -8,7 +8,7 @@ import {
   normalizeTurnTransportEnvelope,
   TURN_TRANSPORT_SEQUENCE_DOMAIN,
 } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
-import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/shared/message-event-protocol";
+import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
 
 describe("turnTransportEnvelope", () => {
   it("keeps transport and message-event sequence domains isolated", () => {

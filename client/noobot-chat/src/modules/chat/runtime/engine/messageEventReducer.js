@@ -13,7 +13,7 @@ import {
   resolveMessageEventPresentationId,
   resolveMessageEventSequenceIdentity,
   validateMessageEventEnvelope,
-} from "@noobot/shared/message-event-protocol";
+} from "@noobot/event-protocol/message-event";
 import {
   initializeMessageEventState,
   resolveMessageEventLaneState,
@@ -95,7 +95,32 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
     targetMessage.content = String(targetMessage.content || "") + contentProjection.content;
   } else if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.REPLACE) {
     if (isAuthoritativeFinalContentEvent(event)) {
-      Object.assign(targetMessage, projectAuthoritativeFinalMessage(event));
+      const finalProjection = projectAuthoritativeFinalMessage(event);
+      const existingEnvelopes = getMessageTransferEnvelopes(targetMessage);
+      const existingAttachments = getMessageAttachments(targetMessage);
+      const existingRawAttachments = Array.isArray(targetMessage.attachments)
+        ? [...targetMessage.attachments]
+        : [];
+      Object.assign(targetMessage, finalProjection);
+      if (Array.isArray(finalProjection.transferEnvelopes)) {
+        const seen = new Set(existingEnvelopes.map((item) => `${item.transferId}:${item.messageId}`));
+        targetMessage.transferEnvelopes = [
+          ...existingEnvelopes,
+          ...finalProjection.transferEnvelopes.filter((item) => {
+            const key = `${item?.transferId || ""}:${item?.messageId || ""}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }),
+        ];
+      }
+      if (Array.isArray(finalProjection.attachments)) {
+        targetMessage.attachments = finalProjection.attachments;
+      } else if (existingAttachments.length || existingRawAttachments.length) {
+        targetMessage.attachments = existingAttachments.length
+          ? existingAttachments
+          : existingRawAttachments;
+      }
       targetMessage.attachments = getMessageAttachments(targetMessage);
       state.finalContentSequence = sequence;
     } else {

@@ -13,7 +13,7 @@ import { _ensureArray, _trimStr } from "./utils.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "../engine/turnProjectionStore.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
-import { resolveMessageEventPresentationId } from "@noobot/shared/message-event-protocol";
+import { resolveMessageEventPresentationId } from "@noobot/event-protocol/message-event";
 
 function summarizeReconnectEnvelope(envelope = {}) {
   return {

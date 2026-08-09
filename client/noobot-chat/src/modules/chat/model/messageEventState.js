@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
 */
 
-import { resolveMessageEventSequenceIdentity } from "@noobot/shared/message-event-protocol";
+import { resolveMessageEventSequenceIdentity } from "@noobot/event-protocol/message-event";
 
 export function initializeMessageEventState(message = {}) {
   if (!Array.isArray(message.toolTimeline)) message.toolTimeline = [];

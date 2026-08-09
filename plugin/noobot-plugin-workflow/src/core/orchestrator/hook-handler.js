@@ -30,7 +30,7 @@ import { createWorkflowRetryMeta, markWorkflowRetrySucceeded } from "./retry-met
 import {
   createBotDispatchHandled,
   createBotDispatchPass,
-} from "@noobot/shared/bot-dispatch-protocol";
+} from "@noobot/agent-transport-protocol/bot-dispatch";
 
 export async function handleBeforeAgentDispatch({
   hookManager,

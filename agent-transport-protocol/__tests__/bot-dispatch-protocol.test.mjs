@@ -9,7 +9,7 @@ import {
   createBotDispatchHandled,
   createBotDispatchPass,
   resolveBotDispatchOutcome,
-} from "../bot-dispatch-protocol.mjs";
+} from "@noobot/agent-transport-protocol/bot-dispatch";
 
 test("dispatch protocol resolves one explicit owner", () => {
   const workflow = createBotDispatchHandled({ owner: "workflow", result: { output: "done" } });

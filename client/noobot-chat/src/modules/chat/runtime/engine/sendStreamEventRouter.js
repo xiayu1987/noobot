@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { MESSAGE_EVENT_ENVELOPE_KIND } from "@noobot/shared/message-event-protocol";
+import { MESSAGE_EVENT_ENVELOPE_KIND } from "@noobot/event-protocol/message-event";
 import { normalizeTrimmedString } from "./utils.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
 import { normalizeTurnTransportEnvelope } from "./turnTransportEnvelope.js";

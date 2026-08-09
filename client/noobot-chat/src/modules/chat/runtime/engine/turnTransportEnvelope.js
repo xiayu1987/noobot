@@ -7,7 +7,7 @@ import {
   isMessageEventEnvelope,
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   resolveMessageEventSequenceIdentity,
-} from "@noobot/shared/message-event-protocol";
+} from "@noobot/event-protocol/message-event";
 
 export const TURN_TRANSPORT_SEQUENCE_DOMAIN = "transport";
 

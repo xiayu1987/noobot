@@ -17,7 +17,7 @@ import {
   projectMessageEventToolFacets,
   resolveMessageEventPresentationId,
   resolveMessageEventSequenceIdentity,
-} from "../message-event-protocol.mjs";
+} from "@noobot/event-protocol/message-event";
 
 function envelope(overrides = {}) {
   return {

@@ -7,7 +7,7 @@ import {
   MESSAGE_EVENT_TYPE,
   projectMessageEventToolFacets,
   resolveMessageEventSequenceIdentity,
-} from "@noobot/shared/message-event-protocol";
+} from "@noobot/event-protocol/message-event";
 import {
   compareTimelineFacts,
   preferTimelineFact,

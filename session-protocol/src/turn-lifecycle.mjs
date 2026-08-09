@@ -6,8 +6,8 @@
 import {
   EXECUTION_KIND,
   normalizeExecutionIdentity,
-} from "@noobot/shared/execution-lifecycle-protocol";
-import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "@noobot/shared/turn-scope-identity";
+} from "@noobot/session-protocol/execution-lifecycle";
+import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 
 export const TURN_LIFECYCLE_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";

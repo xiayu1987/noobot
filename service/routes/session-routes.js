@@ -19,7 +19,7 @@ import {
 import {
   normalizeWorkflowRuntimeEvent,
   WORKFLOW_RUNTIME_EVENT,
-} from "@noobot/shared/workflow-runtime-event-protocol";
+} from "@noobot/event-protocol/workflow-runtime-event";
 import { assertSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
 
 function decodeSessionCommand(body, { type, userId, sessionId }) {

@@ -6,6 +6,11 @@
 const path = require("node:path");
 
 const root = __dirname;
+const serviceEnv = {
+  ...(process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS
+    ? { NOOBOT_USER_INTERACTION_TIMEOUT_MS: process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS }
+    : {}),
+};
 
 module.exports = {
   apps: [
@@ -20,6 +25,7 @@ module.exports = {
       kill_timeout: 5000,
       wait_ready: false,
       merge_logs: true,
+      env: serviceEnv,
     },
     {
       name: "noobot-agent-proxy",

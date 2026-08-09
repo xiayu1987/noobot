@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MESSAGE_EVENT_TYPE } from "@noobot/shared/message-event-protocol";
+import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 
 export function isToolMessageEvent(envelope = {}) {
   return [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END]

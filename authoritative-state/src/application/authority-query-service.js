@@ -6,7 +6,7 @@
 import {
   buildExecutionTree,
   normalizeExecutionIdentity,
-} from "@noobot/shared/execution-lifecycle-protocol";
+} from "@noobot/session-protocol/execution-lifecycle";
 import {
   createTurnLifecycleSnapshot,
   createTurnTerminalResolution,
