@@ -66,26 +66,21 @@ export function resolveParsedResultAccessMeta(
     : {};
   const attachmentId = firstString(
     parsedResult?.attachmentId,
-    parsedResult?.id,
-    attachmentItem?.parsedResultAttachmentId,
   );
   const sessionId = firstString(
     parsedResult?.sessionId,
     parsedResult?.session_id,
-    attachmentItem?.parsedResultSessionId,
   );
   const attachmentSource = firstString(
     parsedResult?.attachmentSource,
     parsedResult?.attachment_source,
     parsedResult?.source,
-    attachmentItem?.parsedResultAttachmentSource,
     defaultAttachmentSource,
   );
-  const path = firstString(parsedResult?.path, attachmentItem?.parsedResultPath);
+  const path = firstString(parsedResult?.path);
   const relativePath = firstString(
     parsedResult?.relativePath,
     parsedResult?.relative_path,
-    attachmentItem?.parsedResultRelativePath,
   );
   const url = attachmentId && sessionId && attachmentSource
       ? buildAttachmentUrl({
@@ -96,7 +91,6 @@ export function resolveParsedResultAccessMeta(
         })
       : "";
   const name = firstString(
-    attachmentItem?.parsedResultName,
     parsedResult?.name,
     parsedResult?.fileName,
     parsedResult?.filename,
@@ -112,8 +106,6 @@ export function resolveParsedResultAccessMeta(
   const size = firstKnownSize(
     parsedResult?.size,
     parsedResult?.bytes,
-    attachmentItem?.parsedResultSize,
-    attachmentItem?.parsedResultBytes,
   );
 
   return {

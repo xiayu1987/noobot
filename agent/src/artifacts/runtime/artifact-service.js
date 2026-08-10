@@ -5,19 +5,13 @@
  */
 import { logger } from "../../observability/index.js";
 import { emitEvent } from "../../events/index.js";
-import {
-  appendAttachmentMetasToRuntimeAndTurn,
-  mapAttachmentRecordsToMetas,
-} from "../index.js";
 import { tEngine } from "../../runtime/i18n-adapter.js";
 import {
   parseDataUrl,
   sanitizeGeneratedArtifactName,
 } from "../../shared/utils/mime-utils.js";
-import { safeNum } from "../../shared/utils/shared-utils.js";
 import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
-import { getTransferAttachmentMetas } from "../../transfer/storage/consumer.js";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];
@@ -142,30 +136,12 @@ function resolveGeneratedArtifactOwnership(runtime = {}, dialogProcessId = "") {
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
 }
 
-function annotateGeneratedAttachments(attachments = [], ownership = {}) {
-  const turnScopeId = String(ownership?.turnScopeId || "").trim();
-  const dialogProcessId = String(ownership?.dialogProcessId || "").trim();
-  const sessionId = String(ownership?.sessionId || "").trim();
-  return (Array.isArray(attachments) ? attachments : []).map((attachmentItem = {}) => {
-    const turnScope = {
-      ...(turnScopeId ? { turnScopeId } : {}),
-      ...(dialogProcessId ? { dialogProcessId } : {}),
-    };
-    return {
-      ...(attachmentItem && typeof attachmentItem === "object" ? attachmentItem : {}),
-      ...(sessionId && !String(attachmentItem?.sessionId || "").trim() ? { sessionId } : {}),
-      ...(Object.keys(turnScope).length ? { turnScope } : {}),
-    };
-  });
-}
-
-
 export async function persistModelGeneratedArtifacts({
   aiContent,
   runtime = {},
   eventListener = null,
   dialogProcessId = "",
-  turnMessageStore = null,
+  messageId = "",
 }) {
   const attachmentService = runtime?.attachmentService || null;
   const userId = String(runtime?.userId || "").trim();
@@ -212,109 +188,28 @@ export async function persistModelGeneratedArtifacts({
   }
   const allMediaCandidates = [...localMediaCandidates, ...remoteMediaCandidates];
   if (!allMediaCandidates.length) return [];
-  const records = await attachmentService.ingestGeneratedArtifacts({
+  const ownership = resolveGeneratedArtifactOwnership(runtime, dialogProcessId);
+  if (!String(messageId || "").trim() || !ownership.sessionId || !ownership.turnScopeId) {
+    throw new Error("model_generated_artifact_ownership_incomplete");
+  }
+  const attachmentRecords = await attachmentService.ingestGeneratedArtifacts({
     userId,
-    sessionId: String(
-      runtime?.systemRuntime?.sessionId ||
-        runtime?.systemRuntime?.rootSessionId ||
-        "",
-    ).trim(),
+    sessionId: ownership.sessionId,
     attachmentSource: "model",
-    artifacts: allMediaCandidates,
     generationSource: "llm_output",
-  });
-  const sourceMetas = mapAttachmentRecordsToMetas(records, {
-    fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
-    fallbackGenerationSource: "llm_output",
-  });
-  const seen = new Set();
-  const attachments = sourceMetas.filter((attachmentItem = {}) => {
-    const key = String(attachmentItem?.attachmentId || "").trim() ||
-      `${String(attachmentItem?.path || "").trim()}|${String(attachmentItem?.relativePath || "").trim()}|${String(attachmentItem?.name || "").trim()}`;
-    if (!key) return true;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  if (!attachments.length) return [];
-  const ownedAttachments = annotateGeneratedAttachments(
-    attachments,
-    resolveGeneratedArtifactOwnership(runtime, dialogProcessId),
-  );
-  appendAttachmentMetasToRuntimeAndTurn({
-    runtime,
-    turnMessageStore,
-    attachments: ownedAttachments,
+    turnScope: {
+      sessionId: ownership.sessionId,
+      turnScopeId: ownership.turnScopeId,
+    },
+    turnScopeId: ownership.turnScopeId,
+    dialogProcessId: ownership.dialogProcessId,
+    owner: { type: "model", id: String(messageId).trim() },
+    artifacts: allMediaCandidates,
   });
   emitEvent(eventListener, "model_generated_attachments_saved", {
     dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
-    count: ownedAttachments.length,
-    attachments: ownedAttachments,
+    count: attachmentRecords.length,
+    attachments: attachmentRecords,
   });
-  return ownedAttachments;
-}
-
-function normalizeToolResultAttachmentMetas(attachmentMetas = []) {
-  const attachments = (Array.isArray(attachmentMetas) ? attachmentMetas : [])
-    .filter(isRuntimeAttachmentMeta);
-  if (!attachments.length) return [];
-  const seen = new Set();
-  return attachments.filter((attachmentItem = {}) => {
-    const key = String(attachmentItem?.attachmentId || "").trim() ||
-      `${String(attachmentItem?.path || "").trim()}|${String(attachmentItem?.relativePath || "").trim()}|${String(attachmentItem?.name || "").trim()}`;
-    if (key && seen.has(key)) return false;
-    if (key) seen.add(key);
-    return true;
-  }).map((attachmentItem) => ({
-    attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-    name: String(attachmentItem?.name || "").trim(),
-    mimeType: String(
-      attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
-    ).trim(),
-    size: safeNum(attachmentItem?.size),
-    sessionId: String(attachmentItem?.sessionId || "").trim(),
-    attachmentSource: String(attachmentItem?.attachmentSource || "").trim(),
-    path: String(attachmentItem?.path || "").trim(),
-    relativePath: String(attachmentItem?.relativePath || "").trim(),
-    generatedByModel: attachmentItem?.generatedByModel === true,
-    generationSource: String(attachmentItem?.generationSource || "").trim(),
-    ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
-  }));
-}
-
-export function extractAttachmentMetasFromToolResult(toolName = "", toolResultText = "") {
-  void toolName;
-  const normalizedToolResultText = String(toolResultText || "").trim();
-  if (!normalizedToolResultText) return [];
-  try {
-    const parsedResult = JSON.parse(normalizedToolResultText);
-    const transferAttachmentMetas = getTransferAttachmentMetas(
-      Array.isArray(parsedResult?.transferEnvelopes) ? parsedResult.transferEnvelopes : [],
-    );
-    const directAttachmentMetas = Array.isArray(parsedResult?.attachmentMetas)
-      ? parsedResult.attachmentMetas
-      : Array.isArray(parsedResult?.attachments)
-      ? parsedResult.attachments
-      : [];
-    const preferredAttachments = transferAttachmentMetas.length
-      ? transferAttachmentMetas
-      : directAttachmentMetas;
-    return normalizeToolResultAttachmentMetas(preferredAttachments);
-  } catch {
-    return [];
-  }
-}
-
-export const extractAttachmentsFromToolResult = extractAttachmentMetasFromToolResult;
-
-function isRuntimeAttachmentMeta(attachmentItem = {}) {
-  if (!attachmentItem || typeof attachmentItem !== "object" || Array.isArray(attachmentItem)) {
-    return false;
-  }
-  const relativePath = String(attachmentItem?.relativePath || "").replaceAll("\\", "/");
-  const absolutePath = String(attachmentItem?.path || "").replaceAll("\\", "/");
-  return (
-    relativePath.startsWith("runtime/attach/") ||
-    absolutePath.includes("/runtime/attach/")
-  );
+  return attachmentRecords;
 }

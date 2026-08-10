@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "../../../shared/utils/path-resolver.js";
-import { buildTextResultFields, buildTransferFileEntry, createTransferEnvelope, getTransferAttachmentMetas, materializeTextForToolResult, resolveToolResultInlineTextLimit, TRANSFER_REASON, TRANSFER_SOURCE } from "../../../transfer/index.js";
+import { filePath as path } from "@noobot/path-resolver";
+import { buildTextResultFields, createExistingAttachmentTransferEnvelope, getTransferAttachments, materializeTextForToolResult, resolveToolResultInlineTextLimit, TRANSFER_REASON, TRANSFER_SOURCE } from "../../../transfer-adapter/index.js";
 import { MIME_TYPE } from "../../../shared/constants/index.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_NAME } from "../../constants/index.js";
 import { updateRuntimeUserMessageAttachment } from "../../../artifacts/index.js";
@@ -13,45 +13,12 @@ import { emitEvent } from "../../../events/index.js";
 const DATA_PROCESSING_ARTIFACT_SOURCES = new Set([
   ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
   ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
+  ARTIFACT_GENERATION_SOURCE.WEB_TO_DATA_TOOL,
 ]);
+
 export function isGeneratedDataProcessingArtifact(attachmentMeta = null) {
   if (!attachmentMeta || typeof attachmentMeta !== "object" || Array.isArray(attachmentMeta)) return false;
   return DATA_PROCESSING_ARTIFACT_SOURCES.has(String(attachmentMeta?.generationSource || "").trim());
-}
-
-export function looksLikeDataProcessingArtifactPath(filePath = "") {
-  const baseName = path.basename(String(filePath || "").trim()).toLowerCase();
-  return (
-    baseName.includes(".doc2data.") ||
-    baseName.includes(".media2data.")
-  ) && baseName.endsWith(".md");
-}
-
-export function buildFallbackArtifactMeta({
-  runtime = {},
-  basePath = "",
-  inputFile = "",
-  bytes = 0,
-} = {}) {
-  const normalizedInput = String(inputFile || "").trim();
-  const normalizedBase = String(basePath || runtime?.basePath || "").trim();
-  const relativePath = normalizedBase && normalizedInput.startsWith(normalizedBase)
-    ? path.relative(normalizedBase, normalizedInput)
-    : "";
-  const baseName = path.basename(normalizedInput);
-  const generationSource = baseName.toLowerCase().includes(".media2data.")
-    ? ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL
-    : ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL;
-  return {
-    name: baseName,
-    mimeType: MIME_TYPE.TEXT_MARKDOWN,
-    size: Number(bytes || 0),
-    path: normalizedInput,
-    ...(relativePath ? { relativePath } : {}),
-    generatedByModel: true,
-    generationSource,
-    attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
-  };
 }
 
 export function buildExistingArtifactPersistedOutput({
@@ -59,37 +26,38 @@ export function buildExistingArtifactPersistedOutput({
   agentContext = null,
   attachmentMeta = null,
   text = "",
+  identity = null,
 } = {}) {
   if (!attachmentMeta || typeof attachmentMeta !== "object" || Array.isArray(attachmentMeta)) {
     return { attachments: [], transferEnvelopes: [] };
   }
-  const file = buildTransferFileEntry({
-    runtime,
-    agentContext,
+  const runConfig = runtime?.runConfig || {};
+  const producerId = String(identity?.producer?.id || attachmentMeta?.attachmentId || "").trim();
+  const messageId = String(identity?.messageId || runConfig.messageId || "").trim();
+  const turnScopeId = String(identity?.turnScopeId || runConfig.turnScopeId || "").trim();
+  const runId = String(identity?.runId || runConfig.executionId || "").trim();
+  const sessionId = String(identity?.sessionId || attachmentMeta?.sessionId || runConfig.sessionId || runtime?.sessionId || "").trim();
+  if (!producerId || !messageId || !turnScopeId || !runId || !sessionId) {
+    throw new Error("semantic_transfer_reused_artifact_identity_incomplete");
+  }
+  const envelope = createExistingAttachmentTransferEnvelope({
+    identity: {
+      transferId: `transfer:${messageId}:${producerId}:output:reuse_data_processing_artifact`,
+      messageId,
+      sessionId,
+      turnScopeId,
+      runId,
+      producer: identity?.producer || { type: "tool", id: producerId },
+    },
     attachmentMeta,
-    purpose: "reuse_data_processing_artifact",
-    role: "primary",
-  });
-  const envelope = createTransferEnvelope({
-    direction: "output",
-    transport: "file",
-    files: [file],
-    storage: {
-      kind: "attachment",
-      attachmentSource: String(attachmentMeta?.attachmentSource || TOOL_ATTACHMENT_SOURCE.MODEL),
-      generationSource: String(attachmentMeta?.generationSource || ""),
-      reused: true,
-    },
-    producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },
-    meta: {
-      source: TRANSFER_SOURCE.TOOL,
-      reason: TRANSFER_REASON.REUSE_DATA_PROCESSING_ARTIFACT,
-      mimeType: String(attachmentMeta?.mimeType || MIME_TYPE.TEXT_MARKDOWN),
-    },
+    source: TRANSFER_SOURCE.TOOL,
+    reason: TRANSFER_REASON.REUSE_DATA_PROCESSING_ARTIFACT,
+    scenario: "tool",
+    strategy: "tool_output",
   });
   const transferEnvelopes = [envelope];
   return {
-    attachments: [attachmentMeta],
+    attachments: getTransferAttachments(transferEnvelopes),
     transferEnvelopes,
     resultFields: buildTextResultFields({
       text,
@@ -133,6 +101,7 @@ export async function persistDoc2DataTextAttachment({
   inputFile = "",
   text = "",
   mode = "",
+  identity = null,
 }) {
   const inputBaseName = sanitizeArtifactBaseName(
     path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
@@ -151,9 +120,10 @@ export async function persistDoc2DataTextAttachment({
     reason: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
     alwaysPersist: true,
     producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },
+    identity,
     meta: { mode, inputFile },
   });
-  const attachments = getTransferAttachmentMetas(materialized.transferEnvelopes);
+  const attachments = getTransferAttachments(materialized.transferEnvelopes);
   return {
     attachments,
     transferEnvelopes: materialized.transferEnvelopes,
@@ -201,9 +171,18 @@ export function normalizePersistedAttachments(persistedOutput) {
 }
 
 export async function backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments }) {
+  const firstAttachment = attachments?.[0] || null;
+  const parsedAttachmentMeta = firstAttachment?.identity
+    ? {
+        ...firstAttachment.identity,
+        name: firstAttachment.name,
+        mimeType: firstAttachment.mimeType,
+        size: firstAttachment.size,
+      }
+    : firstAttachment;
   return backwriteParsedResultToSourceAttachment({
     runtime,
     sourceAttachmentMeta,
-    parsedAttachmentMeta: attachments[0] || null,
+    parsedAttachmentMeta,
   });
 }

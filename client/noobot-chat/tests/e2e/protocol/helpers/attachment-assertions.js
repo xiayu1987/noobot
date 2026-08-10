@@ -31,23 +31,53 @@ export function writeFileResultsForTurn(records = [], turnScopeId = "") {
   );
 }
 
-export function persistedWriteFilesForTurn(messages = [], turnScopeId = "") {
+function transferAttachments(value = {}) {
+  return (Array.isArray(value?.transferEnvelopes) ? value.transferEnvelopes : [])
+    .flatMap((envelope) => Array.isArray(envelope?.payload?.attachments)
+      ? envelope.payload.attachments
+      : []);
+}
+
+export function transferAttachmentsForTurn(records = [], turnScopeId = "") {
+  return records
+    .filter((record) => record?.event === "tool_call_end" && record?.turnScopeId === turnScopeId)
+    .flatMap((record) => transferAttachments(record.data));
+}
+
+export function persistedTransferAttachmentsForTurn(messages = [], turnScopeId = "") {
   return messages
     .filter((message) => message?.turnScopeId === turnScopeId)
     .flatMap((message) => Array.isArray(message?.toolTimeline) ? message.toolTimeline : [])
     .filter((entry) => entry?.tool === "write_file" && entry?.status === "completed")
-    .flatMap((entry) => Array.isArray(entry?.resultEvent?.writtenFiles)
-      ? entry.resultEvent.writtenFiles
-      : []);
+    .flatMap((entry) => transferAttachments(entry.resultEvent));
 }
 
-export function writtenFileKeys(files = []) {
-  return files.map((file) => JSON.stringify([
-    String(file?.toolName || ""),
-    String(file?.resolvedPath || ""),
-    String(file?.fileName || ""),
-    String(file?.sourceType || ""),
+export function attachmentKeys(attachments = []) {
+  return attachments.map((attachment) => JSON.stringify([
+    String(attachment?.identity?.attachmentId || ""),
+    String(attachment?.descriptor?.name || attachment?.name || ""),
+    String(attachment?.descriptor?.contentSha256 || attachment?.contentSha256 || ""),
   ])).sort();
+}
+
+export async function assertAttachmentHttpAccess(page, {
+  userId = "",
+  sessionId = "",
+  attachmentSource = "model",
+  attachmentId = "",
+  expectedName = "",
+} = {}) {
+  const apiKey = await page.evaluate(() => String(localStorage.getItem("noobot_api_key") || "").trim());
+  expect(apiKey).toBeTruthy();
+  const url = `/api/internal/attachment/${encodeURIComponent(userId)}/${encodeURIComponent(attachmentId)}`
+    + `?sessionId=${encodeURIComponent(sessionId)}&attachmentSource=${encodeURIComponent(attachmentSource)}`;
+  const response = await page.request.get(url, {
+    headers: { "x-api-key": apiKey },
+  });
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-disposition"] || "").toContain(encodeURIComponent(expectedName));
+  const body = await response.body();
+  expect(body.length).toBeGreaterThan(0);
 }
 
 export async function readRenderedFileNames(page, { badgeClass = "", role = "", attachmentSource = "" } = {}) {

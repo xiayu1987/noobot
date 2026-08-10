@@ -356,6 +356,11 @@ export class ContextBuilder {
       caller: this.caller,
       turnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
       runId: String(this.runConfig?.executionId || "").trim(),
+      messageId: String(
+        this.runConfig?.messageId ||
+          runtime?.systemRuntime?.messageId ||
+          "",
+      ).trim(),
       now: this._now(),
       systemMessages: effectiveSystemMessages,
       conversationMessages,

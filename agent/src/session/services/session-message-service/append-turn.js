@@ -5,7 +5,7 @@
  */
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
 import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
-import { getTransferAttachmentMetas } from "../../../transfer/storage/consumer.js";
+import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
 
@@ -100,7 +100,7 @@ function upsertTurnInSession(service, session, resolvedParentSessionId, {
     if (tool_call_id) turn.tool_call_id = tool_call_id;
     if (toolName) turn.toolName = String(toolName || "").trim();
     if (Array.isArray(tool_calls) && tool_calls.length) turn.tool_calls = tool_calls;
-    const transferAttachments = getTransferAttachmentMetas(
+    const transferAttachments = getTransferAttachments(
       [
         ...(Array.isArray(transferEnvelopes) ? transferEnvelopes : []),
         ...(Array.isArray(turn?.transferEnvelopes) ? turn.transferEnvelopes : []),

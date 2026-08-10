@@ -259,3 +259,11 @@ export function fixedAttachment(name = "protocol-e2e.txt") {
   const body = `noobot-protocol-e2e:${name}:v1\n`;
   return { name, mimeType: "text/plain", buffer: Buffer.from(body, "utf8"), body };
 }
+
+export function fixedPngAttachment(name = "protocol-e2e.png") {
+  const buffer = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    "base64",
+  );
+  return { name, mimeType: "image/png", buffer };
+}

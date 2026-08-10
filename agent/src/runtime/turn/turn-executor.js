@@ -65,7 +65,6 @@ import {
   currentAssistantPresentationMessageId,
   emitMessageEvent,
 } from "../../events/message-event-stream.js";
-export { normalizeToolResultAttachments } from "./tool-result-normalizer.js";
 export {
   buildAssistantModelMessageForToolCalls,
   formatToolCallsForLangChain,
@@ -517,6 +516,14 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     messageUid: assistantMessageUid,
     presentationMessageId,
     chatPresentation: calls.length === 0,
+    attachments: await persistModelGeneratedArtifacts({
+      aiContent: ai?.content,
+      runtime,
+      eventListener,
+      dialogProcessId,
+      messageId: assistantMessageId,
+      turnMessageStore,
+    }),
   });
 
   const mainModelToolTurnContent = String(aiContentText || "").trim();
@@ -532,14 +539,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       eventId: `model-content:${assistantMessageId || presentationMessageId || "turn"}`,
     });
   }
-
-  await persistModelGeneratedArtifacts({
-    aiContent: ai?.content,
-    runtime,
-    eventListener,
-    dialogProcessId,
-    turnMessageStore,
-  });
 
   emitEvent(eventListener, "llm_call_end", {
     turn,

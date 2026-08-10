@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 
 import { BUILTIN_ATTACHMENT_POLICY } from "../../config/index.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";

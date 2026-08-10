@@ -100,7 +100,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     }));
   });
 
-  it("acknowledges authoritative lifecycle only after handing it to the business reducer", async () => {
+  it("acknowledges authoritative lifecycle before handing it to the business reducer", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
     const streamPromise = client.stream({
@@ -142,6 +142,42 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       turnScopeId: "turn-receipt-1",
     });
     await streamPromise;
+  });
+
+  it("keeps lifecycle delivery acknowledged when the business reducer throws", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onEvent = vi.fn(() => { throw new Error("reducer failed"); });
+    const streamPromise = client.stream({
+      action: "chat",
+      sessionId: "session-receipt-before-reducer",
+      turnScopeId: "turn-receipt-before-reducer",
+    }, onEvent);
+    const socket = MockWebSocket.instances[0];
+    socket.sent = [];
+    const lifecycle = createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      eventId: "event-receipt-before-reducer",
+      commandId: "command-receipt-before-reducer",
+      sessionId: "session-receipt-before-reducer",
+      turnScopeId: "turn-receipt-before-reducer",
+      messageId: "message-receipt-before-reducer",
+      presentationMessageId: "assistant-receipt-before-reducer",
+      dialogProcessId: "dialog-receipt-before-reducer",
+      revision: 2,
+      sequence: 2,
+      phase: TURN_PHASE.PROCESSING,
+      state: TURN_STATE.PROCESSING,
+    });
+
+    socket.emit("turn_lifecycle", lifecycle);
+
+    expect(socket.sent.map((raw) => JSON.parse(raw))).toEqual([
+      expect.objectContaining({
+        action: "turn.lifecycle.received",
+        eventId: "event-receipt-before-reducer",
+      }),
+    ]);
+    await expect(streamPromise).rejects.toThrow("reducer failed");
   });
 
   it("does not acknowledge malformed lifecycle data", () => {

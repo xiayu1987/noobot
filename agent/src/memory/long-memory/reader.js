@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { ensureUserWorkspaceMissingFilesFromTemplate } from "../../workspace-lifecycle/index.js";
 
 function resolveUserIdFromBasePath(storage, basePath = "") {

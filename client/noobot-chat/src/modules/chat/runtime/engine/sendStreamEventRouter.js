@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { MESSAGE_EVENT_ENVELOPE_KIND } from "@noobot/shared/message-event-protocol";
+import { MESSAGE_EVENT_ENVELOPE_KIND } from "@noobot/event-protocol/message-event";
 import { normalizeTrimmedString } from "./utils.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
 import { normalizeTurnTransportEnvelope } from "./turnTransportEnvelope.js";
@@ -27,7 +27,7 @@ export function createSendStreamEventHandler(context) {
     logSessionEvent, makeViewMessage, mergeAssistantAttachments, navigateOnFirstResponseOnce,
     refreshSessionConnectorsAsync, requestedTextStreaming, sessionId, setPendingInteractionRequest,
     startFinalDoneSessionDetailOnce, streamState, tryAutoResolveInteraction, turnScopeId,
-    findCanonicalMessageById, upsertConnectedConnectorInPanelState,
+    findCanonicalMessageById, findCanonicalMessagesById, upsertConnectedConnectorInPanelState,
   } = context;
 
   return (incomingEnvelope) => {
@@ -128,12 +128,12 @@ export function createSendStreamEventHandler(context) {
     })) return;
     if (routeMessageProjectionEvent(event, data, {
       botMessage: botMsg, classifyRealtimeLog,
-      findCanonicalMessageById,
+    findCanonicalMessageById, findCanonicalMessagesById,
       locateSendingStartedMessageOnce, logSessionEvent, navigateOnFirstResponseOnce,
       sessionId, turnScopeId,
     })) return;
     if (isIgnoredSubSessionEvent(event, data)) return;
-    if (!isEventForCurrentTurn(data || {}, botMsg)) return;
+    if (event !== StreamEventEnum.ATTACHMENT_PARSED && !isEventForCurrentTurn(data || {}, botMsg)) return;
     if (isUserStoppedEvent(event, data || {}) && hasDialogProcessConflictForTurn({
       activeSession,
       data: data || {},
@@ -164,6 +164,7 @@ export function createSendStreamEventHandler(context) {
         refreshSessionConnectorsAsync,
         mergeAssistantAttachments,
         makeViewMessage,
+        logSessionEvent,
         locateSendingStartedMessageOnce,
       })
     ) {

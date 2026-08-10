@@ -55,6 +55,82 @@ describe("reduceMessageEvent", () => {
     expect(target.content).toBe("hello");
   });
 
+  it("projects search overflow transfer attachments during live tool events", () => {
+    const target = message({ sessionId: "session-1", attachments: [] });
+    const transferEnvelope = {
+      protocol: "noobot.semantic-transfer",
+      version: 2,
+      transferId: "transfer-search-overflow",
+      messageId: "message-1",
+      identity: {
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+        runId: "run-1",
+        producer: { type: "tool", id: "call-1" },
+      },
+      direction: "output",
+      payload: {
+        mode: "attachment",
+        attachments: [{
+          identity: {
+            attachmentId: "att-search-result",
+            sessionId: "session-1",
+            attachmentSource: "model",
+          },
+          role: "primary",
+          name: "search.result.txt",
+          mimeType: "text/plain",
+          size: 1301812,
+        }],
+      },
+      intent: {
+        source: "tool",
+        reason: "tool_result_overflow",
+        scenario: "tool",
+        strategy: "tool_result_text",
+      },
+      meta: {},
+    };
+
+    expect(reduce(target, event({
+      eventId: "evt-search-overflow",
+      eventType: "tool_call_end",
+      sequence: 1,
+      tool: "search",
+      result: { ok: true, overflowed: true },
+      transferEnvelopes: [transferEnvelope],
+    })).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
+
+    expect(target.transferEnvelopes).toEqual([transferEnvelope]);
+    expect(target.attachments).toEqual([
+      expect.objectContaining({
+        attachmentId: "att-search-result",
+        sessionId: "session-1",
+        attachmentSource: "model",
+        name: "search.result.txt",
+        mimeType: "text/plain",
+        size: 1301812,
+        transferId: "transfer-search-overflow",
+      }),
+    ]);
+
+    expect(reduce(target, event({
+      eventId: "evt-search-final",
+      eventType: "authoritative_final_content",
+      sequence: 2,
+      text: "search complete",
+      output: "search complete",
+      transferEnvelopes: [transferEnvelope],
+    })).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
+    expect(target.content).toBe("search complete");
+    expect(target.attachments).toEqual([
+      expect.objectContaining({
+        attachmentId: "att-search-result",
+        transferId: "transfer-search-overflow",
+      }),
+    ]);
+  });
+
   it("projects persisted timeline entry detail through the same selector as live events", () => {
     const target = message({
       toolTimeline: [{
@@ -135,10 +211,39 @@ describe("reduceMessageEvent", () => {
       attachments: [{ attachmentId: "stale" }],
       transferEnvelopes: [{ protocol: "stale" }],
     });
-    const attachments = [{ attachmentId: "att-final", name: "final.md" }];
+    const attachments = [{
+      identity: {
+        attachmentId: "att-final",
+        sessionId: "session-1",
+        attachmentSource: "test",
+      },
+      attachmentId: "att-final",
+      sessionId: "session-1",
+      attachmentSource: "test",
+      name: "final.md",
+    }];
     const transferEnvelopes = [{
       protocol: "noobot.semantic-transfer",
-      files: [{ attachmentId: "att-final", name: "final.md" }],
+      version: 2,
+      transferId: "transfer-final",
+      messageId: "message-final",
+      identity: {
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+        runId: "run-1",
+        producer: { type: "agent", id: "agent-1" },
+      },
+      direction: "output",
+      payload: {
+        mode: "attachment",
+        attachments: [{
+          identity: { attachmentId: "att-final", sessionId: "session-1", attachmentSource: "test" },
+          role: "primary",
+          name: "final.md",
+        }],
+      },
+      intent: { source: "agent", reason: "test", scenario: "agent", strategy: "test" },
+      meta: {},
     }];
 
     expect(reduce(target, event({
@@ -153,7 +258,7 @@ describe("reduceMessageEvent", () => {
     expect(target).toMatchObject({ content: "complete final", attachments, transferEnvelopes });
   });
 
-  it("keeps child-agent written files available after final content resolves the placeholder", () => {
+  it("does not project tool implementation paths as completed artifacts", () => {
     const target = message({ pending: true });
     reduce(target, event());
     reduce(target, event({
@@ -178,9 +283,11 @@ describe("reduceMessageEvent", () => {
 
     expect(target.pending).toBe(true);
     expect(target.hasFirstStreamEvent).toBe(true);
-    expect(selectCompletedToolArtifacts(target).writtenFiles).toEqual([
-      expect.objectContaining({ fileName: "write_test.txt" }),
-    ]);
+    expect(selectCompletedToolArtifacts(target)).toEqual(expect.objectContaining({
+      resultCount: 1,
+      attachments: [],
+    }));
+    expect(selectCompletedToolArtifacts(target)).not.toHaveProperty("writtenFiles");
   });
 
   it("only exposes tool result attachments with the canonical identity triple", () => {

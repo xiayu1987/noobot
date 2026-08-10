@@ -198,23 +198,34 @@ test("state-committer writes tool result through message store when holder is pr
 test("state-committer stores compact LLM-facing tool result content", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   const messages = [];
-  const attachmentMeta = {
-    attachmentId: "att_compact",
-    name: "generated.png",
-    mimeType: "image/png",
-    path: "/host/generated.png",
-    relativePath: "runtime/attach/generated.png",
-    generatedByModel: true,
-    generationSource: "multimodal_generate_tool",
-  };
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 1,
+    version: 2,
+    transferId: "transfer_compact",
+    messageId: "message_compact",
+    identity: {
+      sessionId: "session_compact",
+      turnScopeId: "turn_compact",
+      runId: "run_compact",
+      producer: { type: "tool", id: "call_compact" },
+    },
     direction: "output",
-    transport: "file",
-    filePath: "/workspace/generated.png",
-    attachmentMeta,
-    files: [{ filePath: "/workspace/generated.png", attachmentMeta }],
+    payload: {
+      mode: "attachment",
+      attachments: [{
+        identity: {
+          attachmentId: "att_compact",
+          sessionId: "session_compact",
+          attachmentSource: "model",
+        },
+        role: "primary",
+        name: "generated.png",
+        mimeType: "image/png",
+        size: 123,
+      }],
+    },
+    intent: { source: "tool", reason: "generated_media", scenario: "tool", strategy: "tool_result_text" },
+    meta: { persisted: true },
   };
   const committer = createStateCommitter({
     messages,
@@ -226,19 +237,15 @@ test("state-committer stores compact LLM-facing tool result content", async () =
 
   await committer.pushToolResult({
     call: { id: "call_compact", name: "multimodal_generate", args: {} },
-    toolResultText: JSON.stringify({
-      toolName: "multimodal_generate",
-      ok: true,
-      attachmentMetas: [attachmentMeta],
-      transferEnvelopes: [envelope],
-    }),
+    toolResultText: JSON.stringify({ toolName: "multimodal_generate", ok: true }),
+    transferEnvelopes: [envelope],
   });
 
   const payload = JSON.parse(messages[0].content);
   assert.equal("transferResult" in payload, false);
-  assert.equal("transferEnvelopes" in payload, false);
   assert.equal("attachmentMetas" in payload, false);
-  assert.equal(payload.transferFiles[0].attachmentId, "att_compact");
+  assert.equal(payload.toolName, "multimodal_generate");
+  assert.equal("transferEnvelopes" in payload, false);
   assert.equal("transferEnvelopes" in turnMessageStore.items[0], true);
   assert.deepEqual(turnMessageStore.items[0].transferEnvelopes, [envelope]);
 });
@@ -247,10 +254,19 @@ test("state-committer persists transferEnvelopes only", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 1,
+    version: 2,
+    transferId: "transfer_legacy_removed",
+    messageId: "message_legacy_removed",
+    identity: {
+      sessionId: "session_legacy_removed",
+      turnScopeId: "turn_legacy_removed",
+      runId: "run_legacy_removed",
+      producer: { type: "tool", id: "call_legacy_transfer" },
+    },
     direction: "output",
-    transport: "file",
-    filePath: "/workspace/legacy.txt",
+    payload: { mode: "direct", content: "already persisted by transfer protocol" },
+    intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_result_text" },
+    meta: {},
   };
   const committer = createStateCommitter({
     messages: [],
@@ -262,100 +278,11 @@ test("state-committer persists transferEnvelopes only", async () => {
 
   await committer.pushToolResult({
     call: { id: "call_legacy_transfer", name: "legacy_transfer_tool", args: {} },
-    toolResultText: JSON.stringify({
-      ok: true,
-      transferEnvelopes: [envelope],
-    }),
+    toolResultText: "tool result",
+    transferEnvelopes: [envelope],
   });
 
   assert.equal("transferResult" in turnMessageStore.items[0], false);
   assert.equal("transferEnvelopes" in turnMessageStore.items[0], true);
   assert.deepEqual(turnMessageStore.items[0].transferEnvelopes, [envelope]);
-});
-
-test("state-committer emits before/after hooks for attachment commit", async () => {
-  const hookCalls = [];
-  const hookManager = createHookManager();
-  const runtime = { hookManager, attachments: [] };
-  const turnMessageStore = createInMemoryTurnStore();
-
-  hookManager.on(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, async (ctx = {}) => {
-    if (ctx.commitType !== "attachments") return;
-    hookCalls.push(`before:${ctx.commitType}`);
-    ctx.payload.attachments.push({
-      attachmentId: "att_2",
-      name: "b.png",
-      mimeType: "image/png",
-    });
-  }, { id: "test.attachment-commit.before" });
-  hookManager.on(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, async (ctx = {}) => {
-    if (ctx.commitType !== "attachments") return;
-    hookCalls.push(`after:${ctx.commitType}`);
-  }, { id: "test.attachment-commit.after" });
-
-  const committer = createStateCommitter({
-    turnMessageStore,
-    dialogProcessId: "dp_3",
-    runtime,
-  });
-
-  await committer.appendAttachmentMetas([
-    {
-      attachmentId: "att_1",
-      name: "a.png",
-      mimeType: "image/png",
-    },
-  ]);
-
-  assert.deepEqual(hookCalls, ["before:attachments", "after:attachments"]);
-  assert.equal(Array.isArray(runtime.attachments), true);
-  assert.equal(runtime.attachments.length, 2);
-  assert.deepEqual(
-    runtime.attachments.map((item) => item.attachmentId),
-    ["att_1", "att_2"],
-  );
-});
-
-test("state-committer annotates attachment metas with explicit turn ownership", async () => {
-  const events = [];
-  const runtime = {
-    attachments: [],
-    systemRuntime: {
-      sessionId: "session-1",
-      turnScopeId: "turn-scope-1",
-      dialogProcessId: "dp_owned",
-    },
-    eventListener: {
-      onEvent(eventPayload = {}) {
-        events.push(eventPayload);
-      },
-    },
-  };
-  const turnMessageStore = createInMemoryTurnStore();
-  turnMessageStore.push({ role: "tool", content: "{}", dialogProcessId: "dp_owned" });
-
-  const committer = createStateCommitter({
-    turnMessageStore,
-    dialogProcessId: "dp_owned",
-    runtime,
-  });
-
-  await committer.appendAttachmentMetas([
-    {
-      attachmentId: "att_owned",
-      name: "owned.png",
-      mimeType: "image/png",
-    },
-  ]);
-
-  assert.deepEqual(runtime.attachments[0].turnScope, {
-    turnScopeId: "turn-scope-1",
-    dialogProcessId: "dp_owned",
-  });
-  assert.deepEqual(turnMessageStore.items[0].attachments[0].turnScope, {
-    turnScopeId: "turn-scope-1",
-    dialogProcessId: "dp_owned",
-  });
-  const attachmentEvent = events.find((eventPayload) => eventPayload?.event === "attachments_saved");
-  assert.equal(attachmentEvent?.data?.attachments?.[0]?.turnScope?.turnScopeId, "turn-scope-1");
 });

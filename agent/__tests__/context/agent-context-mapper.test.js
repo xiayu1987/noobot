@@ -35,6 +35,7 @@ function buildEnvelope() {
     dialogProcessId: "dp1",
     turnScopeId: "turn1",
     runId: "run1",
+    messageId: "message1",
     systemMessages: ["sys"],
     conversationMessages: [{ role: "user", content: "hi" }],
     sourceRevision: "ctxsrc:test",
@@ -54,6 +55,7 @@ test("mapToAgentContextSchema creates a serializable versioned envelope", () => 
     dialogProcessId: "dp1",
     turnScopeId: "turn1",
     runId: "run1",
+    messageId: "message1",
   });
   assert.equal(context.environment.permissions.isSuperUser, true);
   assert.equal(context.execution.flags.allowUserInteraction, false);

@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
 
 test("inject-mode summary defaults to injecting full summary to main agent without attachment", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -62,8 +63,7 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
   assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);
   assert.match(String(harnessBucket.summaryFullText || ""), /\[SUMMARY_DETAIL\]/);
   assert.equal(ingestCalled, 0);
-  assert.equal(Array.isArray(harnessBucket.summaryDetailAttachments), true);
-  assert.equal(harnessBucket.summaryDetailAttachments.length, 0);
+  assert.equal(harnessBucket.summaryDetailAttachments, undefined);
   assert.equal(
     ctx.modelContext.messages.some(
       (item = {}) =>
@@ -79,7 +79,7 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
   );
 });
 
-test("inject-mode summary can save detail as attachment and inject detail path to main agent", async () => {
+test("inject-mode summary saves detail as a V2 attachment transfer and injects its overview", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const ctx = {
     userId: "admin",
@@ -102,64 +102,33 @@ test("inject-mode summary can save detail as attachment and inject detail path t
       ].join("\n"),
     },
     agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            systemRuntime: { userId: "admin", sessionId: "s1" },
-            sharedTools: {
-              semanticTransfer: {
-                async persistTransferFile() {
-                  const attachmentMeta = {
-                    attachmentId: "att-summary-detail-1",
-                    sessionId: "s1",
-                    attachmentSource: "model",
-                    name: "summary-detail.md",
-                    mimeType: "text/markdown",
-                    size: 123,
-                    path: "/workspace/admin/runtime/summary-detail.md",
-                    relativePath: "runtime/summary-detail.md",
-                    generatedByModel: true,
-                    generationSource: "harness_summary_detail",
-                  };
-                  const envelope = {
-                    protocol: "noobot.semantic-transfer",
-                    version: 1,
+      bindings: {
+        runtime: {
+          sharedTools: {
+            semanticTransfer: {
+              async transferSemanticContent(payload = {}) {
+                return {
+                  transferEnvelopes: [attachmentTransfer({
+                    transferId: "transfer-summary-detail-1",
+                    messageId: "message-summary-detail-1",
+                    identity: {
+                      sessionId: "s1",
+                      turnScopeId: "turn-summary-1",
+                      runId: "run-summary-1",
+                      producer: payload.producer,
+                    },
                     direction: "output",
-                    transport: "file",
-                    filePath: "/sandbox/admin/runtime/summary-detail.md",
-                    attachmentMeta,
-                    files: [{ filePath: "/sandbox/admin/runtime/summary-detail.md", attachmentMeta, role: "primary" }],
-                  };
-                  return {
-                    transferEnvelopes: [envelope],
-                  };
-                },
-              },
-              resolveAttachmentDisplayPath({ meta = {} } = {}) {
-                return String(meta?.path || "").replace("/workspace/admin", "/injected/admin");
-              },
-              resolveSandboxPath({ hostPath = "" } = {}) {
-                const normalized = String(hostPath || "").trim();
-                if (!normalized) return "";
-                return normalized.replace("/workspace/admin", "/sandbox/admin");
-              },
-            },
-            attachmentService: {
-              async ingestGeneratedArtifacts() {
-                return [
-                  {
-                    attachmentId: "att-summary-detail-1",
-                    sessionId: "s1",
-                    attachmentSource: "model",
-                    name: "summary-detail.md",
-                    mimeType: "text/markdown",
-                    size: 123,
-                    path: "/workspace/admin/runtime/summary-detail.md",
-                    relativePath: "runtime/summary-detail.md",
-                    generatedByModel: true,
-                    generationSource: "harness_summary_detail",
-                  },
-                ];
+                    attachments: [{
+                      identity: { attachmentId: "att-summary-detail-1", sessionId: "s1", attachmentSource: "model" },
+                      role: "primary",
+                      name: "summary-detail.md",
+                      mimeType: "text/markdown",
+                      size: 123,
+                    }],
+                    intent: { source: "plugin", reason: payload.reason, scenario: payload.scenario, strategy: payload.strategy },
+                    meta: { persisted: true },
+                  })],
+                };
               },
             },
           },
@@ -186,20 +155,19 @@ test("inject-mode summary can save detail as attachment and inject detail path t
   assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);
   assert.doesNotMatch(String(harnessBucket.summaryText || ""), /SUMMARY_DETAIL/);
 
-  const injectedDetailPathMessage = [...ctx.modelContext.messages]
+  const injectedDetailMessage = [...ctx.modelContext.messages]
     .reverse()
     .find(
       (item = {}) =>
         String(item?.role || "").trim() === "user" &&
-        String(item?.content || "").includes("summary_detail_path") &&
-        String(item?.content || "").includes("DETAIL_PATH: /injected/admin/runtime/summary-detail.md") &&
-        String(item?.content || "").includes("/injected/admin/runtime/summary-detail.md"),
+        String(item?.content || "").includes("summary_detail") &&
+        String(item?.content || "").includes("完成模块分析"),
     );
-  assert.ok(injectedDetailPathMessage);
-  assert.equal(Array.isArray(injectedDetailPathMessage?.transferEnvelopes), true);
-  assert.equal(injectedDetailPathMessage?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
-  assert.equal(injectedDetailPathMessage.transferEnvelopes.length, 1);
-  assert.equal(injectedDetailPathMessage?.transferResult, undefined);
+  assert.ok(injectedDetailMessage);
+  assert.equal(Array.isArray(injectedDetailMessage?.transferEnvelopes), true);
+  assert.equal(injectedDetailMessage?.transferEnvelopes?.[0]?.version, 2);
+  assert.equal(injectedDetailMessage?.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "att-summary-detail-1");
+  assert.equal(injectedDetailMessage?.attachments, undefined);
 
   assert.doesNotMatch(
     ctx.modelContext.messages.map((item = {}) => String(item?.content || "")).join("\n"),

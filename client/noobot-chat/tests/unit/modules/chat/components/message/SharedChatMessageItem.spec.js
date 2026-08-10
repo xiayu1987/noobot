@@ -103,13 +103,11 @@ const AssetRenderer = defineComponent({
   name: "SharedMessageAssetRendererProbe",
   props: {
     attachmentCount: { type: Number, default: 0 },
-    writtenFileCount: { type: Number, default: 0 },
   },
   setup(props) {
     return () => h("div", {
       class: "asset-renderer-probe",
       "data-attachment-count": String(props.attachmentCount),
-      "data-written-file-count": String(props.writtenFileCount),
     });
   },
 });
@@ -478,20 +476,14 @@ describe("SharedChatMessageItem", () => {
         transferEnvelopes: [
           {
             protocol: "noobot.semantic-transfer",
-            files: [
-              {
-                role: "primary",
-                filePath: "runtime/attach/report.pdf",
-                attachmentMeta: {
-                  attachmentId: "att-transfer-1",
-                  sessionId: "session-1",
-                  attachmentSource: "test",
-                  name: "report.pdf",
-                  mimeType: "application/pdf",
-                  size: 42,
-                },
-              },
-            ],
+            version: 2,
+            transferId: "transfer-shared-1",
+            messageId: "msg-transfer",
+            identity: { sessionId: "session-1", turnScopeId: "turn-1", runId: "run-1", producer: { type: "tool", id: "call-1" } },
+            direction: "output",
+            payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "att-transfer-1", sessionId: "session-1", attachmentSource: "test" }, role: "primary", name: "report.pdf", mimeType: "application/pdf", size: 42 }] },
+            intent: { source: "tool", reason: "test", scenario: "tool", strategy: "test" },
+            meta: {},
           },
         ],
       },
@@ -641,9 +633,6 @@ describe("SharedChatMessageItem", () => {
             attachmentCount: Array.isArray(context.displayedAttachments)
               ? context.displayedAttachments.length
               : -1,
-            writtenFileCount: Array.isArray(context.writtenFiles)
-              ? context.writtenFiles.length
-              : -1,
           }),
     });
 
@@ -663,7 +652,6 @@ describe("SharedChatMessageItem", () => {
 
     expect(probe.exists()).toBe(true);
     expect(probe.attributes("data-attachment-count")).toBe("2");
-    expect(probe.attributes("data-written-file-count")).toBe("0");
     expect(wrapper.find(".BaseFileCardList-stub").exists()).toBe(false);
     expect(wrapper.findAll(".BaseAttachmentFileCard-stub")).toHaveLength(0);
   });

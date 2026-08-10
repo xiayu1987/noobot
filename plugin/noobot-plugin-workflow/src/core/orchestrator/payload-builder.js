@@ -50,7 +50,7 @@ export async function buildFinalWorkflowPayload({
     },
   });
 
-  const { workflowAttachments } = enrichWorkflowPayload({
+  enrichWorkflowPayload({
     workflowPayload,
     ctx,
     semantic,
@@ -60,6 +60,5 @@ export async function buildFinalWorkflowPayload({
 
   return {
     workflowPayload,
-    workflowAttachments,
   };
 }

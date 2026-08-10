@@ -51,6 +51,13 @@ import {
 const emit = defineEmits(["open-thinking-details"]);
 
 function getAttachmentRenderKey(attachmentItem = {}) {
+  const attachmentId = String(attachmentItem?.attachmentId || "").trim();
+  const clientAttachmentId = String(
+    attachmentItem?.clientAttachmentId || attachmentItem?.draftAttachmentId || "",
+  ).trim();
+  // A newly selected file is rendered before the turn commit returns its
+  // canonical identity. Persisted attachments always use the protocol key.
+  if (!attachmentId && clientAttachmentId) return `draft:${clientAttachmentId}`;
   return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
 }
 
@@ -124,12 +131,27 @@ const {
   },
 });
 
-const { writtenFiles, displayedAttachments } = useMessageFiles({
+const { displayedAttachments } = useMessageFiles({
   getMessageItem: () => props.messageItem,
   getAllMessages: () => props.allMessages,
   getSessionDocs: () => props.sessionDocs,
   getUserId: () => props.userId,
 });
+
+watch(
+  () => displayedAttachments.value.map((attachment) => ({
+    attachmentId: String(attachment?.attachmentId || "").trim(),
+    hasParsedResult: Boolean(attachment?.parsedResult),
+    parsedResultAttachmentId: String(attachment?.parsedResult?.attachmentId || attachment?.parsedResultAttachmentId || "").trim(),
+  })),
+  (attachments) => {
+    logWorkflowDiagnostics("frontend.workflowRender.attachmentCardsProjected", {
+      ...summarizeWorkflowMessage(props.messageItem),
+      attachments,
+    });
+  },
+  { immediate: true, deep: true },
+);
 
 const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepState } = useMessageMeta({
   getMessageItem: () => props.messageItem,
@@ -303,7 +325,6 @@ function resolveRendererContext() {
     showSubTaskActivity: showSubTaskActivity.value,
     subTaskStatusText: subTaskStatusText.value,
     statusStepState: statusStepState.value,
-    writtenFiles: writtenFiles.value,
     displayedAttachments: displayedAttachments.value,
     displayedAttachmentMetas: displayedAttachments.value,
     canPreviewAttachment,
@@ -447,7 +468,7 @@ function toggleAssistantContent() {
 
     <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
 
-    <BaseFileCardList v-if="!suppressDefaultAssets && (displayedAttachments.length || writtenFiles.length)">
+    <BaseFileCardList v-if="!suppressDefaultAssets && displayedAttachments.length">
       <BaseAttachmentFileCard
         v-for="attachmentItem in displayedAttachments"
         :key="`attachment:${getAttachmentRenderKey(attachmentItem)}`"
@@ -466,23 +487,6 @@ function toggleAssistantContent() {
         @download-parsed-result="onDownloadParsedResult"
       />
 
-      <BaseAttachmentFileCard
-        v-for="fileItem in writtenFiles"
-        :key="`written-file:${fileItem.relativePath || fileItem.resolvedPath || fileItem.fileName || ''}`"
-        :attachment-item="fileItem"
-        :is-image-mime="isImageMime"
-        :can-preview-attachment="canPreviewFile"
-        :format-file-size="formatFileSize"
-        :translate="translate"
-        :name-text="fileItem.fileName || fileItem.relativePath || fileItem.resolvedPath || ''"
-        :title-text="fileItem.relativePath || fileItem.resolvedPath || fileItem.fileName || ''"
-        :size-value="fileItem.size || 0"
-        :show-size="false"
-        :custom-badge-text="fileItem.recognized ? translate('message.recognizedFile') : translate('message.generatedFile')"
-        :custom-badge-class="fileItem.recognized ? 'is-recognized' : 'is-agent'"
-        @preview="openFilePreview"
-        @download="onDownloadFile"
-      />
     </BaseFileCardList>
 
     <ExtensionOutlet

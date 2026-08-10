@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
+import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import {
   WORKFLOW_ACTION,
   WORKFLOW_PLUGIN_DEFAULTS,
@@ -19,7 +19,6 @@ import {
 import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
 import {
   getWorkflowTransferPayloadFromResult,
-  resolveWorkflowAttachmentsFromTransferPayload,
 } from "../hooks/attachments.js";
 import {
   buildWorkflowUpstreamAttachmentResults,
@@ -219,15 +218,6 @@ function resolveWorkflowExecutionLimits(options = {}) {
   };
 }
 
-function resolveNodeResultAttachments(item = {}, ctx = {}) {
-  const transferAttachments = resolveWorkflowAttachmentsFromTransferPayload(
-    getWorkflowTransferPayloadFromResult(item?.subSession?.result || {}),
-    ctx,
-  );
-  if (transferAttachments.length) return transferAttachments;
-  return Array.isArray(item?.subSession?.result?.attachments) ? item.subSession.result.attachments : [];
-}
-
 function resolveItemStepFailure(item = {}) {
   const candidates = [item?.effectiveAction, item?.action];
   for (const action of candidates) {
@@ -272,7 +262,6 @@ function buildNodeAgentRunRecord({
       ),
       4000,
     ),
-    nodeResultAttachments: resolveNodeResultAttachments(item, ctx),
     nodeResultTransferEnvelopes: resultTransferPayload.transferEnvelopes,
     stepFailure,
     upstreamNodeResults: Array.isArray(item?.upstreamNodeResults)
@@ -331,7 +320,6 @@ function rememberCompletedStepResult({
     turnScopeId: String(item?.nodeIdentity?.turnScopeId || "").trim(),
     nodeSessionId: String(item?.subSession?.sessionId || "").trim(),
     stepFailure,
-    attachments: resolveNodeResultAttachments(item, ctx),
     transferEnvelopes: resultTransferPayload.transferEnvelopes,
   });
 }

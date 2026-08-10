@@ -129,6 +129,7 @@ export async function tryDockerFallback({
   includeLineNumbers = false,
   executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND,
   abortSignal = null,
+  identity = null,
 }) {
   const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
   if (!dockerInstalled) return null;
@@ -161,6 +162,7 @@ export async function tryDockerFallback({
       runtime,
       agentContext,
       basePath: runtime?.basePath || "",
+      identity,
     });
   }
   return toolExecResult(SANDBOX_PROVIDER_NAME.DOCKER, dr, meta, {
@@ -168,5 +170,6 @@ export async function tryDockerFallback({
     runtime,
     agentContext,
     basePath: runtime?.basePath || "",
+    identity,
   });
 }

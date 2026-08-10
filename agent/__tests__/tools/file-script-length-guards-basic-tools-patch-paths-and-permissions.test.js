@@ -224,7 +224,7 @@ test("patch_file: 兼容模型误用 root=.. 和 project/ 虚拟相对前缀", a
   assert.equal(result.ok, true);
   assert.equal(result.requestedRoot, "..");
   assert.equal(result.root, "");
-  assert.deepEqual(result.changedFiles, ["i18n/src/client/locales/zh-CN.js"]);
+  assert.deepEqual(result.changedFiles, ["/workspace/u-test/i18n/src/client/locales/zh-CN.js"]);
   assert.equal(
     await fs.readFile(localeFile, "utf8"),
     "export default {\n  \"hideChatNavigator\": \"隐藏对话导航\",\n  \"sessionStatus\": \"状态\"\n};\n",
@@ -268,7 +268,9 @@ test("patch_file: 支持 /project 沙箱绝对路径视角", async () => {
 
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }));
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["i18n/src/client/locales/en-US.js"]);
+  assert.deepEqual(result.changedFiles, ["/workspace/u-test/i18n/src/client/locales/en-US.js"]);
+  assert.equal(result.resolvedFiles[0].resolvedPath, "/workspace/u-test/i18n/src/client/locales/en-US.js");
+  assert.equal(String(result.resolvedFiles[0].resolvedPath).includes(basePath), false);
   assert.equal(
     await fs.readFile(localeFile, "utf8"),
     "export default {\n  \"hideChatNavigator\": \"Hide conversation navigation\",\n  \"sessionStatus\": \"Status\"\n};\n",
@@ -322,7 +324,8 @@ test("patch_file: 沙箱 /project 挂载到 workspace 外项目时仍按沙箱�
 
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }));
   assert.equal(result.ok, true);
-  assert.equal(result.resolvedFiles[0].resolvedPath, targetFile);
+  assert.equal(result.resolvedFiles[0].resolvedPath, "/project/client/noobot-chat/src/composables/chat/useChatSession.js");
+  assert.equal(String(result.resolvedFiles[0].resolvedPath).includes(rootPath), false);
   assert.equal(
     await fs.readFile(targetFile, "utf8"),
     "function existing() {\n  return \"sandbox-project\";\n}\n",
@@ -493,7 +496,7 @@ test("patch_file: 普通用户可在唯一命中时解析 workspace 子项目路
 
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/a.txt"]);
+  assert.deepEqual(result.changedFiles, ["/workspace/u-test/noobot/client/noobot-chat/src/a.txt"]);
   assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\nTWO\n");
 });
 
@@ -526,7 +529,7 @@ test("patch_file: strip=0 时兼容 git 前缀叠加 project 虚拟根", async (
 
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 0 }));
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/app/ChatMessageNavigator.vue"]);
+  assert.deepEqual(result.changedFiles, ["/workspace/u-test/noobot/client/noobot-chat/src/app/ChatMessageNavigator.vue"]);
   assert.match(
     await fs.readFile(targetFile, "utf8"),
     /var\(--noobot-panel-bg, var\(--el-bg-color-overlay\)\)/,
@@ -562,7 +565,7 @@ test("patch_file: 父工作区下唯一子项目可解析标准 git diff 路径"
 
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/modules/session/SessionListPanel.vue"]);
+  assert.deepEqual(result.changedFiles, ["/workspace/u-test/noobot/client/noobot-chat/src/modules/session/SessionListPanel.vue"]);
   assert.match(await fs.readFile(targetFile, "utf8"), /background: var\(--noobot-panel-bg\)/);
 });
 
@@ -611,7 +614,7 @@ test("patch_file: 默认相对路径优先基于 directories.rootDirectory", asy
 
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["client/noobot-chat/src/app/ChatMessageNavigator.vue"]);
+  assert.deepEqual(result.changedFiles, ["/workspace/u-test/noobot/client/noobot-chat/src/app/ChatMessageNavigator.vue"]);
   assert.match(await fs.readFile(targetFile, "utf8"), /background: var\(--noobot-panel-bg\)/);
 });
 

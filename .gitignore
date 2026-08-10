@@ -43,5 +43,5 @@ model-proxy/model-proxy.config.json
 
 report/
 
-# Generated test artifacts (Playwright traces, screenshots, videos and reports)
-/test-results/
+# Generated test artifacts (the canonical Playwright output is /test-results/protocol/)
+**/test-results/

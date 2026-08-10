@@ -28,6 +28,19 @@ import { ERROR_CODE } from "../../src/shared/errors/constants.js";
 import { TOOL_NAME } from "../../src/tools/constants/index.js";
 import { buildAgentContext, readJsonl } from "./data-processing-guards.test-helpers.js";
 
+const TEST_TRANSFER_IDENTITY = Object.freeze({
+  transferId: "transfer:test:doc2data:output",
+  messageId: "message:test-doc2data",
+  sessionId: "s1",
+  turnScopeId: "turn:test-doc2data",
+  runId: "run:test-doc2data",
+  producer: { type: "tool", id: "call:test-doc2data" },
+});
+
+function invokeDoc(tool, args) {
+  return tool.invoke(args, { configurable: { transferIdentity: TEST_TRANSFER_IDENTITY } });
+}
+
 
 test("doc_to_data: LibreOffice text output decoder handles Windows Chinese encodings", () => {
   const gbkBuffer = Buffer.from([
@@ -113,7 +126,7 @@ test("doc_to_data: direct text result stores content in file and returns text wh
   const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
   assert.ok(tool);
 
-  const payload = JSON.parse(await tool.invoke({ filePath: "runtime/ops_workdir/input.md" }));
+  const payload = JSON.parse(await invokeDoc(tool, { filePath: "runtime/ops_workdir/input.md" }));
   assert.equal(payload.ok, true);
   assert.equal(payload.text, "hello\n".repeat(500));
   assert.equal("textPreview" in payload, false);
@@ -164,7 +177,7 @@ test("doc_to_data: direct text result returns preview when over semantic-transfe
   const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
   assert.ok(tool);
 
-  const payload = JSON.parse(await tool.invoke({ filePath: "runtime/ops_workdir/large.md" }));
+  const payload = JSON.parse(await invokeDoc(tool, { filePath: "runtime/ops_workdir/large.md" }));
   assert.equal(payload.ok, true);
   assert.equal("text" in payload, false);
   assert.equal(typeof payload.textPreview, "string");
@@ -259,17 +272,15 @@ test("doc_to_data: resolves a historical session attachment only after the model
     },
   };
   runtime.attachmentService = attachmentService;
-  runtime.userMessageAttachments = [];
-  runtime.attachments = [
+  runtime.userMessageAttachments = [
     {
       attachmentId: "source-att",
       sessionId: "s1",
-      attachmentSource: "model",
+      attachmentSource: "user",
       name: "source.md",
       mimeType: "text/markdown",
-      size: 1,
-      path: path.join(basePath, "runtime", "attach", "scoped", "s1", "model", "tool-source.md"),
-      generationSource: "tool_generated_bucket_should_not_be_user_source",
+      size: (await fs.stat(textPath)).size,
+      path: textPath,
     },
   ];
 
@@ -277,7 +288,7 @@ test("doc_to_data: resolves a historical session attachment only after the model
   const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
   assert.ok(tool);
 
-  const payload = JSON.parse(await tool.invoke({
+  const payload = JSON.parse(await invokeDoc(tool, {
     filePath: "runtime/ops_workdir/source.md",
     attachmentId: "source-att",
   }));
@@ -290,8 +301,9 @@ test("doc_to_data: resolves a historical session attachment only after the model
   assert.equal(linkCalls[0]?.parsedAttachmentMeta?.attachmentId, "parsed-1");
   assert.equal("sourceTurnScopeId" in linkCalls[0], false);
   assert.equal("requestedInTurnScopeId" in linkCalls[0], false);
-  assert.equal(runtime.userMessageAttachments.length, 0);
-  assert.equal(runtime.attachments[0]?.parsedResult, undefined);
+  assert.equal(runtime.userMessageAttachments.length, 1);
+  assert.equal(runtime.userMessageAttachments[0]?.attachmentId, "source-att");
+  assert.equal(runtime.userMessageAttachments[0]?.parsedResult?.attachmentId, "parsed-1");
   const parsedEvent = emittedEvents.find((event) => event?.event === "attachment_parsed");
   assert.equal(parsedEvent?.data?.dialogProcessId, "dialog-parent");
   assert.equal(parsedEvent?.data?.turnScopeId, "continue-turn");
@@ -347,7 +359,7 @@ test("doc_to_data: child run resolves source identity from the root session by a
   };
 
   const tool = createDoc2DataTool({ agentContext })[0];
-  const payload = JSON.parse(await tool.invoke({
+  const payload = JSON.parse(await invokeDoc(tool, {
     filePath: relativePath,
     attachmentId: "source-att",
   }));
@@ -370,7 +382,7 @@ test("doc_to_data: reuses generated data artifact instead of creating recursive 
   const agentContext = buildAgentContext(basePath);
   agentContext.bindings.runtime.userId = "primary-user";
   agentContext.bindings.runtime.systemRuntime = { sessionId: "s1" };
-  agentContext.bindings.runtime.attachments = [
+  agentContext.bindings.runtime.userMessageAttachments = [
     {
       attachmentId: "existing-att",
       sessionId: "s1",
@@ -395,48 +407,16 @@ test("doc_to_data: reuses generated data artifact instead of creating recursive 
   const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
   assert.ok(tool);
 
-  const payload = JSON.parse(await tool.invoke({ filePath: path.relative(basePath, textPath) }));
+  const payload = JSON.parse(await invokeDoc(tool, {
+    filePath: path.relative(basePath, textPath),
+    attachmentId: "existing-att",
+  }));
   assert.equal(payload.ok, true);
   assert.equal(payload.reusedExistingArtifact, true);
   assert.equal(payload.text, "already parsed\n".repeat(200));
-  assert.equal(payload.transferEnvelopes[0].files[0].attachmentMeta.attachmentId, "existing-att");
-  assert.equal(persistCalls, 0);
-});
-
-test("doc_to_data: reuses generated data artifact by path even without attachment meta", async () => {
-  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-reuse-path-"));
-  const textPath = path.join(
-    basePath,
-    "runtime",
-    "attach",
-    "scoped",
-    "s1",
-    "model",
-    "input.media2data.image.md",
-  );
-  await fs.mkdir(path.dirname(textPath), { recursive: true });
-  await fs.writeFile(textPath, "already parsed without meta\n".repeat(100), "utf8");
-
-  let persistCalls = 0;
-  const agentContext = buildAgentContext(basePath);
-  agentContext.bindings.runtime.userId = "primary-user";
-  agentContext.bindings.runtime.systemRuntime = { sessionId: "s1" };
-  agentContext.bindings.runtime.attachmentService = {
-    async ingestGeneratedArtifacts() {
-      persistCalls += 1;
-      return [];
-    },
-  };
-
-  const tools = createDoc2DataTool({ agentContext });
-  const tool = tools.find((item) => item?.name === TOOL_NAME.DOC_TO_DATA);
-  assert.ok(tool);
-
-  const payload = JSON.parse(await tool.invoke({ filePath: path.relative(basePath, textPath) }));
-  assert.equal(payload.ok, true);
-  assert.equal(payload.reusedExistingArtifact, true);
-  assert.equal(payload.text, "already parsed without meta\n".repeat(100));
-  assert.equal(payload.transferEnvelopes[0].files[0].filePath.includes("input.media2data.image.md"), true);
+  assert.equal(payload.transferEnvelopes[0]?.version, 2);
+  assert.equal(payload.transferEnvelopes[0]?.payload?.mode, "attachment");
+  assert.equal(payload.transferEnvelopes[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "existing-att");
   assert.equal(persistCalls, 0);
 });
 

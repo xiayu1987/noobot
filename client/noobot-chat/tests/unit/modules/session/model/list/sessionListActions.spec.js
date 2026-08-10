@@ -103,6 +103,26 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
   });
 });
 
+describe("createSessionListActions unavailable sessions", () => {
+  it("does not fetch details for an unavailable session", async () => {
+    const sessions = ref([{
+      sessionId: "legacy",
+      title: "Legacy session",
+      isUnavailable: true,
+      availability: "unavailable",
+      unavailableReason: { code: "INVALID_TRANSFER_ENVELOPE", message: "legacy protocol" },
+    }]);
+    const activeSessionId = ref("");
+    const { actions, fetchSessionDetail, notify } = createHarness({ sessions, activeSessionId });
+
+    await actions.selectSession("legacy");
+
+    expect(activeSessionId.value).toBe("");
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith({ type: "warning", message: "legacy protocol" });
+  });
+});
+
 describe("createSessionListActions.renameSession", () => {
   it("rejects empty titles without calling backend", async () => {
     const { actions, notify, renameSessionApi } = createHarness();

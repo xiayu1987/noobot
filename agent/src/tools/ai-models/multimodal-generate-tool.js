@@ -8,10 +8,6 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
 import {
-  canonicalAttachmentIdentityKey,
-  mapAttachmentRecordsToMetas,
-} from "../../artifacts/meta-ops.js";
-import {
   resolveDefaultModelSpec,
   resolveModelSpecByName,
 } from "../../models/index.js";
@@ -29,8 +25,6 @@ import {
   PARENT_SESSION_HEADER_KEY,
 } from "../../models/headers/plugin-headers.js";
 import {
-  ARTIFACT_GENERATION_SOURCE,
-  TOOL_ATTACHMENT_SOURCE,
   TOOL_CALL_MODE,
   IMAGE_GENERATION_API_TYPE,
   TOOL_NAME,
@@ -269,27 +263,6 @@ function appendApiTypeHint(message = "", runtime = {}) {
   return hint ? `${baseMessage}\n${hint}` : baseMessage;
 }
 
-function dedupeAttachments(attachments = []) {
-  const source = Array.isArray(attachments) ? attachments : [];
-  const seen = new Set();
-  return source.filter((item = {}) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
-    let key;
-    try {
-      key = canonicalAttachmentIdentityKey({
-        attachmentId: item?.attachmentId,
-        sessionId: item?.sessionId,
-        attachmentSource: item?.attachmentSource,
-      });
-    } catch {
-      return false;
-    }
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 function resolveGenerationModelSpec({
   modelName = "",
   runtimeModel = "",
@@ -409,8 +382,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
 
   const globalConfig = runtime?.globalConfig || {};
   const userConfig = runtime?.userConfig || {};
-  const attachmentService = runtime?.attachmentService || null;
-  const userId = String(runtime?.userId || agentContext?.userId || "").trim();
   const sharedFetch =
     typeof runtime?.sharedTools?.fetch === "function"
       ? runtime.sharedTools.fetch
@@ -575,26 +546,12 @@ export function createMultimodalGenerateTool({ agentContext }) {
             contentBase64: resolvedBase64,
           });
         }
-        const attachmentRecords =
-          attachmentService && userId && generatedAttachments.length
-            ? await attachmentService.ingestGeneratedArtifacts({
-                userId,
-                sessionId: String(
-                  runtime?.systemRuntime?.sessionId ||
-                    runtime?.systemRuntime?.rootSessionId ||
-                    "",
-                ).trim(),
-                attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
-                artifacts: generatedAttachments,
-                generationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
-              })
-            : [];
-        const mergedAttachments = dedupeAttachments(
-          mapAttachmentRecordsToMetas(attachmentRecords, {
-            fallbackMimeType: MIME_TYPE.IMAGE_PNG,
-            fallbackGenerationSource: ARTIFACT_GENERATION_SOURCE.MULTIMODAL_GENERATE_TOOL,
-          }),
-        );
+        const outputArtifacts = generatedAttachments.map((item) => ({
+          type: "attachment_bytes",
+          name: item.name,
+          mimeType: item.mimeType,
+          contentBase64: item.contentBase64,
+        }));
         return toToolJsonResult(
           TOOL_NAME.MULTIMODAL_GENERATE,
           {
@@ -605,11 +562,11 @@ export function createMultimodalGenerateTool({ agentContext }) {
             model: String(resolvedModelSpec?.model || "").trim(),
             text: String(generationResult?.rawText || "").trim(),
             generationContentSource: "tool_input_generation_content",
-            attachments: mergedAttachments,
+            outputArtifacts,
             summary: {
               task_id: String(generationResult?.taskId || "").trim(),
               generated_image_count: imageArtifacts.length,
-              saved_attachment_count: mergedAttachments.length,
+              saved_attachment_count: outputArtifacts.length,
             },
           },
           true,

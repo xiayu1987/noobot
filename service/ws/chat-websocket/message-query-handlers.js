@@ -10,7 +10,7 @@ import {
   EXECUTION_SNAPSHOT_WIRE_EVENT,
   EXECUTION_TREE_WIRE_EVENT,
   validateExecutionIdentity,
-} from "@noobot/shared/execution-lifecycle-protocol";
+} from "@noobot/session-protocol/execution-lifecycle";
 
 export function createMessageQueryHandlers({
   state, authInfo, sendEvent, translateText, resolveBot,

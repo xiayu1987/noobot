@@ -197,7 +197,7 @@ test("SessionTurnPersister persists tool transfer envelopes into session turns",
         tool_call_id: "call_1",
         toolName: "multimodal_generate",
         content: JSON.stringify({ toolName: "multimodal_generate", ok: true }),
-        transferEnvelopes: [{ protocol: "noobot.semantic-transfer", files: [] }],
+        transferEnvelopes: [{ protocol: "noobot.semantic-transfer", version: 2, transferId: "transfer-tool-1", messageId: "message-tool-1", identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "tool", id: "call_1" } }, direction: "output", payload: { mode: "direct", content: "tool result" }, intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" }, meta: {} }],
       },
     ],
     dialogProcessId: "dp1",
@@ -219,10 +219,14 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
   const persister = new SessionTurnPersister({ session });
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 1,
+    version: 2,
+    transferId: "transfer-final",
+    messageId: "message-final",
+    identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "model", id: "model-1" } },
     direction: "output",
-    transport: "file",
-    files: [{ attachmentMeta: { attachmentId: "att-final" }, role: "primary" }],
+    payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "att-final", sessionId: "s1", attachmentSource: "model" }, role: "primary", name: "final.md", mimeType: "text/markdown" }] },
+    intent: { source: "model", reason: "result", scenario: "model", strategy: "model_output" },
+    meta: {},
   };
 
   await persister.appendAgentMessages({
@@ -233,7 +237,6 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
         role: "assistant",
         type: "message",
         content: "done",
-        attachments: [{ attachmentId: "att-final", name: "final.md" }],
         transferEnvelopes: [envelope],
       },
     ],
@@ -242,13 +245,9 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
 
   assert.equal(appendedTurns.length, 1);
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
-  assert.deepEqual(appendedTurns[0].attachments, [{ attachmentId: "att-final", name: "final.md" }]);
+  assert.equal("attachments" in appendedTurns[0], false);
   assert.equal("transferEnvelopes" in appendedTurns[0], true);
-  assert.equal("attachmentMeta" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
-  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentId, "att-final");
-  assert.equal("id" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
-  assert.equal("type" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
-  assert.equal("source" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
+  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "att-final");
   assert.equal(appendedTurns[0].transferEnvelopes?.length, 1);
 });
 
@@ -274,32 +273,17 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
         type: "tool_result",
         tool_call_id: "call_doc",
         toolName: "doc_to_data",
-        attachmentMetas: [
-          {
-            attachmentId: "parsed_1",
-            name: "input.doc2data.md",
-            generationSource: "doc_to_data_tool",
-          },
-        ],
-        attachments: [
-          {
-            attachmentId: "parsed_1",
-            name: "input.doc2data.md",
-            generationSource: "doc_to_data_tool",
-          },
-        ],
         transferEnvelopes: [
           {
             protocol: "noobot.semantic-transfer",
-            files: [
-              {
-                attachmentMeta: {
-                  attachmentId: "parsed_1",
-                  generationSource: "doc_to_data_tool",
-                },
-                role: "primary",
-              },
-            ],
+            version: 2,
+            transferId: "transfer-doc-1",
+            messageId: "message-doc-1",
+            identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "tool", id: "call_doc" } },
+            direction: "output",
+            payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "parsed_1", sessionId: "s1", attachmentSource: "model" }, role: "primary", name: "input.doc2data.md", mimeType: "text/markdown" }] },
+            intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" },
+            meta: {},
           },
         ],
         content: JSON.stringify({
@@ -307,12 +291,6 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
           ok: true,
           status: "completed",
           text: "very large parsed text".repeat(100),
-          attachmentMetas: [
-            {
-              attachmentId: "parsed_1",
-              generationSource: "doc_to_data_tool",
-            },
-          ],
           summary: { saved_attachment_count: 1 },
         }),
       },
@@ -321,11 +299,10 @@ test("SessionTurnPersister drops direct-consumed intermediate tool payloads and 
   });
 
   assert.equal(appendedTurns.length, 1);
-  assert.equal(appendedTurns[0].attachmentMetas, undefined);
-  assert.deepEqual(appendedTurns[0].attachments, []);
+  assert.equal("attachmentMetas" in appendedTurns[0], false);
+  assert.equal("attachments" in appendedTurns[0], false);
   assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
-  assert.equal("attachmentMeta" in appendedTurns[0].transferEnvelopes?.[0]?.files?.[0], false);
-  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.files?.[0]?.attachmentId, "parsed_1");
+  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "parsed_1");
   const persistedContent = JSON.parse(appendedTurns[0].content);
   assert.equal(persistedContent.intermediateConsumedByModel, true);
   assert.equal(persistedContent.sessionPersistence, "summary_only");

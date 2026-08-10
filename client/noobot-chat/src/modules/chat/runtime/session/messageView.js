@@ -13,17 +13,11 @@ import {
 } from "../../model/messageModel.js";
 import { nowIso } from "../../model/timeFields.js";
 import { RoleEnum } from "../../model/chatConstants.js";
-import { getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
+import { getMessageInternalType, getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { logWorkflowDiagnostics, summarizeWorkflowMessage } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 
 function isInternalControlMessage(messageItem = {}) {
-  const marker = String(
-    messageItem?.noobotInternalMessageType ||
-    messageItem?.additional_kwargs?.noobotInternalMessageType ||
-    messageItem?.metadata?.noobotInternalMessageType ||
-    "",
-  ).trim();
-  return Boolean(marker);
+  return Boolean(getMessageInternalType(messageItem));
 }
 
 export function createSessionMessageView({
@@ -55,11 +49,31 @@ export function createSessionMessageView({
     const messages = Array.isArray(targetSession?.messages)
       ? targetSession.messages
       : [];
-    return messages.find((message) => {
+    const matchingMessages = messages.filter((message) => {
       const messageIdentity = String(message?.messageId || "").trim();
       const presentationIdentity = String(message?.presentationMessageId || "").trim();
       return messageIdentity === normalizedMessageId || presentationIdentity === normalizedMessageId;
-    }) || null;
+    });
+    if (!matchingMessages.length) return null;
+    // A presentation identity can span the hidden tool-call record and the
+    // visible assistant record. Runtime artifacts must land on the visible
+    // canonical projection so the live UI and folded history share one target.
+    return matchingMessages[matchingMessages.length - 1] || null;
+  }
+
+  function findCanonicalMessagesById(sessionId, messageId) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedMessageId = String(messageId || "").trim();
+    if (!normalizedSessionId || !normalizedMessageId) return [];
+    const sessionItems = Array.isArray(sessions?.value) ? sessions.value : [];
+    const targetSession = sessionItems.find((sessionItem) =>
+      String(sessionItem?.sessionId || "").trim() === normalizedSessionId,
+    );
+    const messages = Array.isArray(targetSession?.messages) ? targetSession.messages : [];
+    return messages.filter((message) =>
+      String(message?.messageId || "").trim() === normalizedMessageId ||
+      String(message?.presentationMessageId || "").trim() === normalizedMessageId,
+    );
   }
 
   function upsertCanonicalAssistantMessage(messageId, identity = {}) {
@@ -111,6 +125,7 @@ export function createSessionMessageView({
   return {
     appendMessage,
     findCanonicalMessageById,
+    findCanonicalMessagesById,
     upsertCanonicalAssistantMessage,
     makeViewMessage,
     foldMessagesForView,

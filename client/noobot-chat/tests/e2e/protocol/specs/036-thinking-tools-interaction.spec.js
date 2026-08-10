@@ -15,15 +15,14 @@ import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import {
-  persistedWriteFilesForTurn,
   readRenderedFileNames,
   writeFileResultsForTurn,
-  writtenFileKeys,
+  attachmentKeys,
+  transferAttachmentsForTurn,
 } from "../helpers/attachment-assertions.js";
 import {
   readAttachmentIndex,
   readSessionExecutionEvents,
-  readSessionTurnMessages,
 } from "../helpers/persistence-audit.js";
 import {
   assertCanonicalToolPairs,
@@ -51,15 +50,15 @@ async function assertGeneratedFilesConverged({ page, userId, sessionId, turnScop
   let executionResults = [];
   let persistedFiles = [];
   await expect.poll(async () => {
-    const [events, messages] = await Promise.all([
-      readSessionExecutionEvents(userId, sessionId),
-      readSessionTurnMessages(userId, sessionId),
-    ]);
+    const events = await readSessionExecutionEvents(userId, sessionId);
     executionResults = writeFileResultsForTurn(events, turnScopeId);
-    persistedFiles = persistedWriteFilesForTurn(messages, turnScopeId);
+    const attachmentIndex = await readAttachmentIndex(userId, sessionId, "model");
+    persistedFiles = Object.values(attachmentIndex?.attachments || {})
+      .filter((attachment) => (attachment?.descriptor?.name || attachment?.name)
+        === GENERATED_FILE_NAME);
     return {
       executionCount: executionResults.length,
-      executionFileCount: executionResults.flatMap((event) => event.data.writtenFiles || []).length,
+      executionFileCount: transferAttachmentsForTurn(executionResults, turnScopeId).length,
       persistedCount: persistedFiles.length,
     };
   }, { timeout: 30000 }).toEqual({
@@ -68,15 +67,15 @@ async function assertGeneratedFilesConverged({ page, userId, sessionId, turnScop
     persistedCount: 1,
   });
 
-  const executionFiles = executionResults.flatMap((event) => event.data.writtenFiles || []);
-  expect(writtenFileKeys(persistedFiles)).toEqual(writtenFileKeys(executionFiles));
+  const executionFiles = transferAttachmentsForTurn(executionResults, turnScopeId);
+  expect(attachmentKeys(persistedFiles)).toEqual(attachmentKeys(executionFiles));
   await expect.poll(
-    () => readRenderedFileNames(page, { badgeClass: "is-agent", role: "assistant" }),
+    () => readRenderedFileNames(page),
     { timeout: 30000 },
   ).toEqual([GENERATED_FILE_NAME]);
   expect(executionResults).toHaveLength((await readRenderedFileNames(
     page,
-    { badgeClass: "is-agent", role: "assistant" },
+    {},
   )).length);
 }
 

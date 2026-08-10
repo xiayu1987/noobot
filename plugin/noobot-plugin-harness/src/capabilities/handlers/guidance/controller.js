@@ -9,13 +9,10 @@ import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   CAPABILITY_DOMAIN,
-  HARNESS_I18N_KEYSET,
   LOCALE,
-  getTransferPayloadFromAttachments,
   saveCapabilityOutputAsTransferArtifacts,
   ensureHarnessBucket,
   extractRawTextContent,
-  translateI18nText,
   shouldSkipAnalysisForTrailingToolCallContent,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
@@ -37,12 +34,11 @@ import { markGuidanceSummarizedMessages, markToolSignals, updateFailureCounters 
 import {
   applySummaryText,
   recordLatestSummaryFullText,
-  recordSummaryDetailAttachments,
+  recordSummaryDetailTransferEnvelopes,
   shouldSaveSummaryDetailToAttachment,
   transferSummaryInjectionMessage,
 } from "./summary-manager.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
-import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
 import {
   resolveWorkflowMode,
   runWorkflowLifecycle,
@@ -245,24 +241,6 @@ function maybeScheduleGuidanceAnalysis(ctx = {}, meta = {}) {
   return true;
 }
 
-function resolveDetailPath(meta = {}, ctx = {}) {
-  return resolveAttachmentDisplayPath(meta, ctx);
-}
-
-function buildSummaryDetailPathRelayContent(ctx = {}, locale = LOCALE.ZH_CN, detailAttachments = []) {
-  const metas = Array.isArray(detailAttachments) ? detailAttachments : [];
-  if (!metas.length) return "";
-  const lines = metas.map((item = {}) => resolveDetailPath(item, ctx)).filter(Boolean);
-  if (!lines.length) return "";
-  const header = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.SUMMARY_DETAIL_PATHS_HEADER);
-  const footer = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.SUMMARY_DETAIL_PATHS_FOOTER);
-  return [
-    header,
-    ...lines.map((item) => `DETAIL_PATH: ${item}`),
-    footer,
-  ].join("\n");
-}
-
 function resolveWorkflowActionName(action = "", stage = "", mode = "inject") {
   const normalizedMode = String(mode || "").trim() === "separate_model" ? "separate_model" : "inject";
   if (action === GUIDANCE_DECISION.action.planUpdate) {
@@ -428,27 +406,22 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
         const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || rawSummaryText;
         const saveDetailToAttachment = shouldSaveSummaryDetailToAttachment(meta);
         const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
-        const detailAttachments = saveDetailToAttachment && summaryDetailAttachmentText
+        const detailTransferPayload = saveDetailToAttachment && summaryDetailAttachmentText
           ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
             purpose: "summary_detail",
             content: summaryDetailAttachmentText,
             generationSource: "harness_summary_detail",
             domain: CAPABILITY_DOMAIN.GUIDANCE,
           })
-          : [];
-        recordSummaryDetailAttachments(ctx, detailAttachments);
-        const detailPathRelay = buildSummaryDetailPathRelayContent(
-          ctx,
-          locale,
-          detailAttachments,
-        );
-        if (detailPathRelay) {
+          : { transferEnvelopes: [] };
+        recordSummaryDetailTransferEnvelopes(ctx, detailTransferPayload);
+        if (detailTransferPayload.transferEnvelopes.length) {
           relaySeparateModelOutputAsUserMessage(ctx, {
             locale,
-            purpose: "summary_detail_path",
-            content: detailPathRelay,
+            purpose: "summary_detail",
+            content: summaryOverviewText,
             dedupe: true,
-            transferPayload: getTransferPayloadFromAttachments(detailAttachments),
+            transferPayload: detailTransferPayload,
           });
         }
         if (!saveDetailToAttachment && rawSummaryText) {

@@ -59,10 +59,12 @@ test("search: text 输入超过上限时由 semantic-transfer 保存附件并直
   assert.equal(result.toolName, "search");
   assert.equal(result.ok, false);
   assert.equal(result.message, "text is too long; search in smaller chunks");
-  assert.equal(Array.isArray(result.transferFiles), true);
-  assert.equal(result.transferFiles.length, 1);
-  assert.equal(result.transferFiles[0].name, "search-text.tool-input.txt");
-  assert.equal(typeof result.transferFiles[0].transferFilePath, "string");
+  assert.equal(Array.isArray(result.transferEnvelopes), true);
+  assert.equal(result.transferEnvelopes.length, 1);
+  assert.equal(result.transferEnvelopes[0].version, 2);
+  assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
+  assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "search-text.tool-input.txt");
+  assert.equal(typeof result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "string");
   assert.equal(result.toolInputOverflow?.field, "text");
 });
 
@@ -103,9 +105,11 @@ test("patch_file: patch 超过 semantic-transfer 阈值时保存附件并直接�
   assert.equal(result.toolName, "patch_file");
   assert.equal(result.ok, false);
   assert.equal(result.message, "补丁内容过长，请分批应用或拆分 patch 后重试");
-  assert.equal(Array.isArray(result.transferFiles), true);
-  assert.equal(result.transferFiles.length, 1);
-  assert.equal(result.transferFiles[0].name, "patch-file-patch.tool-input.diff");
-  assert.equal(typeof result.transferFiles[0].transferFilePath, "string");
+  assert.equal(Array.isArray(result.transferEnvelopes), true);
+  assert.equal(result.transferEnvelopes.length, 1);
+  assert.equal(result.transferEnvelopes[0].version, 2);
+  assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
+  assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "patch-file-patch.tool-input.diff");
+  assert.equal(typeof result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "string");
   assert.equal(result.toolInputOverflow?.field, "patch");
 });

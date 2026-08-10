@@ -19,7 +19,7 @@ import {
   getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
-import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
+import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import {
   PLUGIN_MODEL_HEADER_KEY,
 } from "../../models/headers/plugin-headers.js";
@@ -28,7 +28,7 @@ import { resolveHookClientEmitter } from "../../extensions/hooks/index.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createHash } from "node:crypto";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
-import { MESSAGE_EVENT_TYPE } from "@noobot/shared/message-event-protocol";
+import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   requireModelContextSequencePolicy,

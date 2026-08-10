@@ -12,7 +12,7 @@ import { SystemErrorLogger } from "../observability/index.js";
 import { AsyncJobManager } from "./async-job-manager.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
-import { filePath as path } from "../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { rm } from "node:fs/promises";
 import { mergeConfig } from "../config/index.js";
 import { resolveAttachments } from "../context/providers/attachment-resolver.js";

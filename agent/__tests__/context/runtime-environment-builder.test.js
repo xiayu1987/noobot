@@ -239,6 +239,11 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
         }));
       },
     },
+    runConfig: {
+      messageId: "message-runtime-context-basepath",
+      turnScopeId: "turn-runtime-context-basepath",
+      executionId: "run-runtime-context-basepath",
+    },
     systemRuntime: {
       userId: "primary-user",
       sessionId: "s1",
@@ -252,6 +257,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
     scenario: "tool",
     strategy: "tool_input",
     runtime: {},
+    producer: { type: "tool", id: "tool-call-runtime-context-basepath" },
     call: {
       name: "write_file",
       args: {
@@ -260,16 +266,20 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
       },
     },
   });
-  const file = transferred?.transferEnvelopes?.[0]?.files?.[0] || {};
+  const envelope = transferred?.transferEnvelopes?.[0] || {};
+  const attachmentRef = envelope?.payload?.attachments?.[0] || {};
 
-  assert.equal(
-    file.filePath,
-    "/workspace/primary-user/runtime/ops_workdir/large_file_test.txt.tool-input.txt",
-  );
-  assert.notEqual(
-    file.filePath,
-    "/project/workspace/primary-user/runtime/ops_workdir/large_file_test.txt.tool-input.txt",
-  );
+  assert.equal(envelope.protocol, "noobot.semantic-transfer");
+  assert.equal(envelope.version, 2);
+  assert.equal(envelope.payload?.mode, "attachment");
+  assert.deepEqual(attachmentRef.identity, {
+    attachmentId: "att-runtime-context-basepath",
+    sessionId: "s1",
+    attachmentSource: "model",
+  });
+  assert.equal(JSON.stringify(envelope).includes("/home/xiayu"), false);
+  assert.equal(JSON.stringify(envelope).includes("/workspace/primary-user"), false);
+  assert.equal(JSON.stringify(envelope).includes("/project/workspace"), false);
 });
 
 test("initializeRuntimeEnvironment passes semantic-transfer strict envelope validation config", async () => {

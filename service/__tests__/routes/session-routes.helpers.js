@@ -56,6 +56,7 @@ export function createSessionApp(options = {}) {
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
+        listSessionIds: async () => [],
         ...(options.session || {}),
       },
       getAttachmentById: async () => null,

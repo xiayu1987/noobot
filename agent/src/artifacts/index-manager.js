@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { filePath as path } from "../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { fsMkdir, fsReadFile, fsWriteFile } from "../shared/storage/fs-adapter.js";
 import {
   applyAttachmentDisplayProjection,
@@ -12,6 +12,25 @@ import {
   toAttachmentDisplayProjection,
   toPersistedAttachmentRecord,
 } from "./service/persisted-record-adapter.js";
+
+// Index updates are read-modify-write transactions. Serialize them per canonical
+// attachment scope so concurrent producers cannot overwrite each other's records.
+const scopeLocks = new Map();
+
+export async function withAttachIndexLock(basePath, scope, operation) {
+  const key = resolveIndexFile(basePath, scope);
+  const previous = scopeLocks.get(key) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  scopeLocks.set(key, current);
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (scopeLocks.get(key) === current) scopeLocks.delete(key);
+  }
+}
 
 export async function readAttachIndex(basePath, scope) {
   const indexFile = resolveIndexFile(basePath, scope);

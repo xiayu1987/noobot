@@ -47,7 +47,7 @@ import {
   canonicalMessageId,
   emitContextIdentityDebug,
 } from "../../observability/context-identity-debug.js";
-import { assertTurnCommittedEventData } from "@noobot/shared/turn-commit-protocol";
+import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
 
 function currentTurnMessageCheckpointKey(message = {}, index = 0) {
   const messageUid = String(message?.messageUid || "").trim();

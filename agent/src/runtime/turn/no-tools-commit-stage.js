@@ -54,13 +54,14 @@ export async function commitNoToolsTurnState({
     messageId,
     presentationMessageId,
     chatPresentation: true,
-  });
-  await persistModelGeneratedArtifacts({
-    aiContent: modelResponse?.content,
-    runtime,
-    eventListener,
-    dialogProcessId,
-    turnMessageStore,
+    attachments: await persistModelGeneratedArtifacts({
+      aiContent: modelResponse?.content,
+      runtime,
+      eventListener,
+      dialogProcessId,
+      messageId,
+      turnMessageStore,
+    }),
   });
   emitEvent(eventListener, "llm_call_end", { turn, hasToolCalls: false, mode: "no_tools" });
 

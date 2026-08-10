@@ -15,7 +15,7 @@ import {
   buildCapabilityProtocolModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
-  getTransferPayloadFromAttachments,
+  normalizeTransferPayload,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   invokeWithReasoningRetry,
@@ -45,7 +45,7 @@ import {
 import {
   applySummaryText,
   recordLatestSummaryFullText,
-  recordSummaryDetailAttachments,
+  recordSummaryDetailTransferEnvelopes,
   resolvePreviousSummaryContextText,
   shouldSaveSummaryDetailToAttachment,
   transferSummaryInjectionMessage,
@@ -76,35 +76,10 @@ import { clearIncrementalCapabilityMessageCacheForContext } from "../shared/mode
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 
-function resolveDetailPath(meta = {}) {
-  const relativePath = String(meta?.relativePath || "").trim();
-  if (relativePath) return relativePath;
-  const path = String(meta?.path || "").trim();
-  if (path) return path;
-  const name = String(meta?.name || "").trim();
-  return name;
-}
-
 function buildSummaryRelayContent({
-  locale = LOCALE.ZH_CN,
   overviewText = "",
-  detailAttachments = [],
 } = {}) {
-  const overview = String(overviewText || "").trim();
-  const metas = Array.isArray(detailAttachments) ? detailAttachments : [];
-  if (!metas.length) return overview;
-  const lines = metas
-    .map((item = {}) => resolveDetailPath(item))
-    .filter(Boolean);
-  if (!lines.length) return overview;
-  const header = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.SUMMARY_DETAIL_PATHS_HEADER);
-  const footer = translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROTOCOLS.SUMMARY_DETAIL_PATHS_FOOTER);
-  const pathBlock = [
-    header,
-    ...lines.map((item) => `DETAIL_PATH: ${item}`),
-    footer,
-  ].join("\n");
-  return [overview, pathBlock].filter(Boolean).join("\n\n").trim();
+  return String(overviewText || "").trim();
 }
 
 export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
@@ -269,7 +244,7 @@ export async function runPlanUpdateAfterSummary(
     purpose: "planning_revision",
     content: revisionText,
     dedupe: true,
-    transferPayload: getTransferPayloadFromAttachments(revisionAttachments),
+    transferPayload: normalizeTransferPayload(revisionAttachments),
   });
   const revisionApplied = applyRevisedPlanFromText(ctx, revisionText, {
     source: "planning_revision",
@@ -524,20 +499,19 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     summaryMergeText = summaryOverviewText;
     const saveDetailToAttachment = shouldSaveSummaryDetailToAttachment(meta);
     const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
-    const summaryDetailAttachments = saveDetailToAttachment && summaryDetailAttachmentText
+    const summaryDetailTransferPayload = saveDetailToAttachment && summaryDetailAttachmentText
       ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
         purpose: "summary_detail",
         content: summaryDetailAttachmentText,
         generationSource: "harness_summary_detail",
         domain: CAPABILITY_DOMAIN.GUIDANCE,
       })
-      : [];
-    recordSummaryDetailAttachments(ctx, summaryDetailAttachments);
+      : { transferEnvelopes: [] };
+    recordSummaryDetailTransferEnvelopes(ctx, summaryDetailTransferPayload);
     const baseRelayText = saveDetailToAttachment
       ? buildSummaryRelayContent({
           locale,
           overviewText: summaryOverviewText,
-          detailAttachments: summaryDetailAttachments,
         })
       : responseText;
     relayText = await transferSummaryInjectionMessage(ctx, {
@@ -551,7 +525,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       relayText || baseRelayText,
       formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
     ].filter(Boolean).join("\n\n");
-    relayAttachments = summaryDetailAttachments;
+    relayAttachments = summaryDetailTransferPayload;
   } else if (workflowPurpose !== "analysis") {
     relayAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
       purpose,
@@ -577,7 +551,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
     chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
     content: relayText,
-    transferPayload: getTransferPayloadFromAttachments(relayAttachments),
+    transferPayload: normalizeTransferPayload(relayAttachments),
   });
   if (purpose === "summary") {
     recordLatestSummaryFullText(ctx, responseText);

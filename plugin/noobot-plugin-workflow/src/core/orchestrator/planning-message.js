@@ -6,7 +6,7 @@
 
 import { appendWorkflowPlanningMessage, emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
-import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
+import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import { resolveWorkflowParentRunConfig } from "../hooks/runtime.js";
 
 export function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {

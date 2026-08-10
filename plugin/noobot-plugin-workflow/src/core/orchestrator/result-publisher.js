@@ -16,7 +16,6 @@ export async function publishWorkflowResult({
   semanticText = "",
   semanticResolution = {},
   workflowPayload = {},
-  workflowAttachments = [],
   nodeAgentRuns = [],
   execution = {},
   beforeDispatchMode = false,
@@ -30,7 +29,6 @@ export async function publishWorkflowResult({
     semanticText,
     semanticResolution,
     workflowPayload,
-    attachments: workflowAttachments,
     nodeAgentRuns,
   });
   await emitWorkflowRuntimeEvent({

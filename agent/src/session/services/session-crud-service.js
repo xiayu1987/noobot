@@ -12,6 +12,7 @@ import {
 import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/application";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
+import { reconcileSessionSummaryIndex } from "@noobot/session-repair";
 
 function projectSessionTreeDepth(summary = {}, depth = 0) {
   const normalizedDepth = Number.isFinite(Number(depth)) ? Number(depth) : 0;
@@ -282,10 +283,9 @@ export class SessionCrudService {
     const sessionTree = this.sessionTreeService
       ? await this.sessionTreeService.getSessionTree({ userId })
       : await this.treeRepo.getTree(userId);
-    const treeSessionIds = Object.keys(sessionTree?.nodes || {});
-    const sessionIds = treeSessionIds.length
-      ? treeSessionIds
-      : await this.listSessionIds({ userId });
+    // The filesystem Session artifact is the sole source of list membership.
+    // The tree is relationship metadata and may retain historical orphan nodes.
+    const sessionIds = await this.listSessionIds({ userId });
     const rebuiltSessionIds = [];
     const migratedSessionIds = [];
     const failures = [];
@@ -325,10 +325,8 @@ export class SessionCrudService {
     const sessionTree = this.sessionTreeService
       ? await this.sessionTreeService.getSessionTree({ userId })
       : await this.treeRepo.getTree(userId);
-    const treeSessionIds = Object.keys(sessionTree?.nodes || {});
-    const sessionIds = treeSessionIds.length
-      ? treeSessionIds
-      : await this.listSessionIds({ userId });
+    // Session artifacts define list membership; the tree only supplies relationships.
+    const sessionIds = await this.listSessionIds({ userId });
 
     const sessionList = (await Promise.all(sessionIds.map(async (sessionId) => {
       const parentSessionId = String(
@@ -379,17 +377,16 @@ export class SessionCrudService {
     const sessionTree = this.sessionTreeService
       ? await this.sessionTreeService.getSessionTree({ userId })
       : await this.treeRepo.getTree(userId);
-    const treeSessionIds = Object.keys(sessionTree?.nodes || {});
-    const sessionIds = treeSessionIds.length
-      ? treeSessionIds
-      : await this.listSessionIds({ userId });
+    const sessionIds = await this.listSessionIds({ userId });
     const expectedIds = new Set(sessionIds.map((item) => String(item || "").trim()).filter(Boolean));
     let payload = typeof this.sessionRepo?.readSessionsSummary === "function"
       ? await this.sessionRepo.readSessionsSummary(userId)
       : { sessions: [], updatedAt: this.now() };
     const summaries = Array.isArray(payload?.sessions) ? payload.sessions : [];
+    const summaryIndex = reconcileSessionSummaryIndex({ sessions: summaries, sessionIds });
     const summaryIds = new Set(summaries.map((item) => String(item?.sessionId || "").trim()).filter(Boolean));
     const needsRebuild =
+      summaryIndex.changed ||
       !summaries.length ||
       summaryIds.size !== expectedIds.size ||
       [...expectedIds].some((sessionId) => !summaryIds.has(sessionId)) ||

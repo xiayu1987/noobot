@@ -11,35 +11,6 @@ import {
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
 
-const SEMANTIC_TRANSFER_GENERATION_SOURCE_PREFIXES = [
-  "semantic_transfer_",
-  "plugin_",
-  "bot_plugin_",
-  "agent_plugin_",
-];
-
-const SEMANTIC_TRANSFER_GENERATION_SOURCE_EXACT = new Set([
-  "tool_result_overflow",
-  "execute_script_input_too_long",
-  "write_file_input_too_long",
-  "read_file_overflow_original_file",
-]);
-
-export function isSemanticTransferAttachmentMeta(attachmentMeta = {}) {
-  const generationSource = safeStr(attachmentMeta?.generationSource);
-  if (!generationSource) return false;
-  if (SEMANTIC_TRANSFER_GENERATION_SOURCE_EXACT.has(generationSource)) return true;
-  return SEMANTIC_TRANSFER_GENERATION_SOURCE_PREFIXES.some((prefix) =>
-    generationSource.startsWith(prefix),
-  );
-}
-
-export function filterSemanticTransferAttachmentMetas(attachmentMetas = []) {
-  return (Array.isArray(attachmentMetas) ? attachmentMetas : []).filter(
-    isSemanticTransferAttachmentMeta,
-  );
-}
-
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -378,35 +349,4 @@ export function mapAttachmentRecordsToMetas(
       ...(parsedResult ? { parsedResult } : {}),
     };
   });
-}
-
-export function buildTransferPayloadFromAttachmentMetas(attachmentMetas = []) {
-  const metas = mapAttachmentRecordsToMetas(
-    (Array.isArray(attachmentMetas) ? attachmentMetas : [])
-      .filter((item) => item && typeof item === "object" && !Array.isArray(item)),
-  );
-  if (!metas.length) {
-    return { transferEnvelopes: [] };
-  }
-  const files = metas.map((meta = {}, index) => ({
-    filePath: safeStr(
-      meta?.sandboxPath ||
-        meta?.sandboxViewPath ||
-        meta?.relativePath ||
-        meta?.path ||
-        meta?.name,
-    ),
-    attachmentMeta: meta,
-    role: index === 0 ? "primary" : "secondary",
-  }));
-  const envelope = {
-    protocol: "noobot.semantic-transfer",
-    version: 1,
-    direction: "output",
-    transport: "file",
-    files,
-  };
-  return {
-    transferEnvelopes: [envelope],
-  };
 }

@@ -8,4 +8,4 @@ export {
   MESSAGE_EVENT_ENVELOPE_KIND,
   assertMessageEventEnvelope,
   isMessageEventEnvelope,
-} from "@noobot/shared/message-event-protocol";
+} from "@noobot/event-protocol/message-event";

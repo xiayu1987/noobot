@@ -68,6 +68,8 @@ export const zhCNMessages = {
     "statusRunning": "运行中",
     "statusDone": "已完成",
     "statusError": "出错",
+    "sessionUnavailableLegacyProtocol": "老协议，不能打开",
+    "sessionDateUnknown": "日期未知",
     "navRole": "角色",
     "navContent": "内容"
   },

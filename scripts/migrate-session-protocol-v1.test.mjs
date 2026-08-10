@@ -33,7 +33,13 @@ test("migrates entity message identity without creating an identity for presenta
   fs.writeFileSync(summaryFile, `${JSON.stringify({
     sessionId: "session-1",
     messages: [
-      { role: "user", messageId: "message-1", content: "source" },
+      {
+        role: "user",
+        messageId: "message-1",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+        content: "source",
+      },
       {
         role: "assistant",
         chatPresentation: true,

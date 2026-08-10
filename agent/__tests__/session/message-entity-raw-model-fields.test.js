@@ -42,20 +42,27 @@ test("normalizeMessageEntity does not persist heavy raw model fields", () => {
 test("normalizeMessageEntity persists compact transferEnvelopes", () => {
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 1,
+    version: 2,
+    transferId: "transfer:message-att-1:tool:call-att-1:output:tool_result_text:structured",
+    messageId: "message-att-1",
+    identity: {
+      sessionId: "test-session",
+      turnScopeId: "turn-att-1",
+      runId: "run-att-1",
+      producer: { type: "plugin", id: "harness-plugin" },
+    },
     direction: "output",
-    transport: "file",
-    files: [
-      {
-        filePath: "/workspace/a.md",
-        attachmentMeta: {
-          attachmentId: "att_1",
-          name: "a.md",
-          owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
-        },
-        pathView: { sandboxPath: "/sandbox/a.md", hostPath: "/host/a.md" },
-      },
-    ],
+    payload: {
+      mode: "attachment",
+      attachments: [{
+        identity: { attachmentId: "att_1", sessionId: "test-session", attachmentSource: "model" },
+        role: "primary",
+        name: "a.md",
+        mimeType: "text/markdown",
+      }],
+    },
+    intent: { source: "plugin", reason: "semantic_transfer_tool_result", scenario: "tool", strategy: "tool_result_text" },
+    meta: { persisted: true },
   };
   const normalized = normalizeMessageEntity({
     role: "assistant",
@@ -63,28 +70,8 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
     transferEnvelopes: [envelope],
   });
   assert.equal("transferEnvelopes" in normalized, true);
-  assert.deepEqual(normalized.transferEnvelopes, [
-    {
-      protocol: "noobot.semantic-transfer",
-      version: 1,
-      direction: "output",
-      transport: "file",
-      files: [
-        {
-          attachmentId: "att_1",
-          name: "a.md",
-          path: "/workspace/a.md",
-          sandboxPath: "/sandbox/a.md",
-          owner: { type: "plugin", id: "harness-plugin" },
-        },
-      ],
-    },
-  ]);
-  assert.equal("attachmentMeta" in normalized.transferEnvelopes[0], false);
-  assert.equal("pathView" in normalized.transferEnvelopes[0], false);
-  assert.equal("id" in normalized.transferEnvelopes[0].files[0], false);
-  assert.equal("type" in normalized.transferEnvelopes[0].files[0], false);
-  assert.equal("source" in normalized.transferEnvelopes[0].files[0], false);
+  assert.deepEqual(normalized.transferEnvelopes, [envelope]);
+  assert.equal(normalized.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att_1");
 });
 
 test("normalizeMessageEntity ignores non-array transferEnvelopes", () => {

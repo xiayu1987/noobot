@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { fatalSystemError } from "../../shared/errors/index.js";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { randomUUID } from "node:crypto";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -13,6 +13,7 @@ import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 import {
   buildSessionSummary,
+  buildUnavailableSessionSummary,
   normalizeSessionsSummaryPayload,
   SESSIONS_SUMMARY_SCHEMA_VERSION,
 } from "../session-summary-builders.js";
@@ -21,13 +22,20 @@ import {
   readJsonArtifactFile,
   readSessionDisplaySummaryArtifact,
   readSessionArtifact,
+  readSessionArtifactForRepair,
   readSessionMessageCount,
   readRecentSessionTurns,
   readSessionTurn,
   rebuildSessionDisplaySummaryArtifact,
   writeSessionArtifact,
+  repairSessionArtifacts,
 } from "../session-artifact-store.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import {
+  migrateSessionDocument,
+  reconcileCompletedTurnSummaryMarks,
+  runAtomicSessionRepair,
+} from "@noobot/session-repair";
 
 export class FileSystemSessionRepository {
   constructor({
@@ -235,15 +243,7 @@ export class FileSystemSessionRepository {
   _withSummaryDepth(session = {}, sessionTree = null) {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId || !sessionTree?.nodes?.[sessionId]) return buildSessionSummary(session, { depth: 0 });
-    const visited = new Set();
-    let depth = 0;
-    let currentId = sessionId;
-    while (currentId && !visited.has(currentId) && sessionTree?.nodes?.[currentId]) {
-      visited.add(currentId);
-      depth += 1;
-      currentId = String(sessionTree.nodes[currentId]?.parentSessionId || "").trim();
-    }
-    return buildSessionSummary(session, { depth });
+    return buildSessionSummary(session, { depth: this._getSummaryDepth(sessionId, sessionTree) });
   }
 
   async readSessionsSummary(userId = "") {
@@ -304,16 +304,65 @@ export class FileSystemSessionRepository {
 
   async rebuildSessionsSummary(userId = "", { sessionTree = null } = {}) {
     const tree = sessionTree || null;
-    const treeSessionIds = Object.keys(tree?.nodes || {});
-    const sessionIds = treeSessionIds.length ? treeSessionIds : await this.listSessionIds(userId);
+    // Only materialized Session directories belong in the list. The tree may
+    // contain historical nodes whose artifacts were deleted or never created.
+    const sessionIds = await this.listSessionIds(userId);
     const summaries = [];
     for (const sessionId of sessionIds) {
       const parentSessionId = String(tree?.nodes?.[sessionId]?.parentSessionId || "").trim();
-      const session = await this.findById(userId, sessionId, parentSessionId);
-      if (!session) continue;
-      summaries.push(this._withSummaryDepth(session, tree));
+      try {
+        const session = await this.findById(userId, sessionId, parentSessionId);
+        if (!session) {
+          const error = new Error("Canonical session artifact is missing");
+          error.code = "SESSION_ARTIFACT_MISSING";
+          throw error;
+        }
+        summaries.push(this._withSummaryDepth(session, tree));
+      } catch (error) {
+        const metadata = await this._readSessionSummaryMetadata(userId, sessionId, parentSessionId);
+        summaries.push(buildUnavailableSessionSummary({
+          sessionId,
+          parentSessionId,
+          title: metadata.title,
+          caller: metadata.caller,
+          createdAt: metadata.createdAt,
+          updatedAt: metadata.updatedAt,
+          depth: this._getSummaryDepth(sessionId, tree),
+          errorCode: error?.code || error?.errorCode || "SESSION_PROTOCOL_INVALID",
+          reason: error?.message || "Session uses an unsupported protocol",
+        }));
+      }
     }
     return this.writeSessionsSummary(userId, summaries);
+  }
+
+  _getSummaryDepth(sessionId = "", tree = null) {
+    const node = tree?.nodes?.[sessionId];
+    if (!node) return 0;
+    let depth = 0;
+    const visited = new Set();
+    let currentId = sessionId;
+    while (currentId && !visited.has(currentId) && tree?.nodes?.[currentId]) {
+      visited.add(currentId);
+      depth += 1;
+      currentId = String(tree.nodes[currentId]?.parentSessionId || "").trim();
+    }
+    return depth;
+  }
+
+  async _readSessionSummaryMetadata(userId = "", sessionId = "", parentSessionId = "") {
+    try {
+      const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId);
+      const manifest = await readJsonArtifactFile(scope.sessionFile, null);
+      return {
+        title: String(manifest?.customTitle || "").trim(),
+        caller: String(manifest?.caller || "user").trim() || "user",
+        createdAt: String(manifest?.createdAt || "").trim(),
+        updatedAt: String(manifest?.updatedAt || "").trim(),
+      };
+    } catch {
+      return { title: "", caller: "user", createdAt: "", updatedAt: "" };
+    }
   }
 
   async _readDeletedSessions(userId = "") {
@@ -547,20 +596,126 @@ export class FileSystemSessionRepository {
   ) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return { migrated: false };
-    const currentSchemaVersion = Number(TURN_THRESHOLDS.session.turnJournalSchemaVersion);
     const scope = await this.resolveSessionScope(
       userId,
       normalizedSessionId,
       parentSessionId,
       persistenceContext,
     );
-    const manifest = await readJsonArtifactFile(scope.sessionFile, null);
-    if (!manifest || Number(manifest.schemaVersion) === currentSchemaVersion) {
-      return { migrated: false };
+    if (!(await this.storageService.exists(scope.sessionFile))) return { migrated: false };
+    try {
+      await this._readNormalizedSession(scope, normalizedSessionId, parentSessionId);
+      return { migrated: false, migrations: [], repaired: [] };
+    } catch {
+      return this._repairSessionToCurrentProtocol(
+        userId,
+        normalizedSessionId,
+        parentSessionId,
+        persistenceContext,
+      );
     }
-    const error = new Error("Session artifact requires offline protocol migration");
-    error.code = "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED";
-    throw error;
+  }
+
+  async _repairSessionToCurrentProtocol(
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    return this.withSessionMutation(userId, sessionId, parentSessionId, async () => {
+      const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
+      const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
+      if (lifecycle?.repair?.status === "failed") {
+        const error = new Error(String(lifecycle.repair.message || "Session repair previously failed"));
+        error.code = String(lifecycle.repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
+        error.repairSkipped = true;
+        throw error;
+      }
+      let requiresRepair = false;
+      try {
+        await this._readNormalizedSession(scope, sessionId, parentSessionId);
+      } catch {
+        requiresRepair = true;
+      }
+      if (!requiresRepair) return { migrated: false, migrations: [], repaired: [] };
+      try {
+        return await runAtomicSessionRepair({
+          sessionDir: scope.sessionDir,
+          repair: async (stagingDir) => {
+          const source = await readSessionArtifactForRepair({ sessionDir: stagingDir, fallback: null });
+          if (!source) {
+            const error = new Error("Canonical session artifact is missing");
+            error.code = "SESSION_ARTIFACT_MISSING";
+            throw error;
+          }
+          const migration = migrateSessionDocument(source);
+          const normalized = normalizeSessionEntity(migration.document, {
+            now: this.now,
+            sessionId,
+            parentSessionId,
+          });
+          await writeSessionArtifact({ sessionDir: stagingDir, sessionPayload: normalized, now: this.now });
+          const artifactRepair = await repairSessionArtifacts({
+            sessionDir: stagingDir,
+            sessionId,
+            mutationCoordinator: null,
+          });
+          return {
+            migrated: migration.changed || Number(source.schemaVersion) !== Number(TURN_THRESHOLDS.session.turnJournalSchemaVersion),
+            migrations: migration.migrations,
+            repaired: artifactRepair.repaired,
+          };
+          },
+          validate: async (stagingDir) => {
+            const repairedScope = { ...scope, sessionDir: stagingDir, sessionFile: path.join(stagingDir, "session.json") };
+            await this._readNormalizedSession(repairedScope, sessionId, parentSessionId);
+          },
+        });
+      } catch (error) {
+        await this._writeSessionLifecycleRecord(userId, sessionId, {
+          ...(lifecycle || {
+            schemaVersion: 1,
+            sessionId,
+            state: "active",
+            generation: 1,
+            createdAt: this.now(),
+          }),
+          repair: {
+            status: "failed",
+            errorCode: String(error?.code || error?.errorCode || "SESSION_REPAIR_FAILED"),
+            message: String(error?.message || "Session repair failed"),
+            failedAt: this.now(),
+          },
+          updatedAt: this.now(),
+        });
+        throw error;
+      }
+    }, persistenceContext);
+  }
+
+  async _readNormalizedSession(scope, sessionId = "", parentSessionId = "") {
+    const session = await readSessionArtifact({
+      storageService: this.storageService,
+      sessionDir: scope.sessionDir,
+      fallback: {},
+    });
+    const normalized = normalizeSessionEntity({
+      ...session,
+      sessionId: String(session.sessionId || sessionId || "").trim(),
+      parentSessionId: String(session.parentSessionId || parentSessionId || "").trim(),
+      caller: String(session.caller || "user").trim() || "user",
+      modelAlias: String(session.modelAlias || ""),
+      messages: this.normalizeMessages(session.messages || [], { sessionId }),
+      selectedConnectors: this.normalizeSelectedConnectors(session.selectedConnectors || {}),
+    }, { now: this.now, sessionId, parentSessionId });
+    const summaryRepair = reconcileCompletedTurnSummaryMarks(normalized);
+    if (summaryRepair.changed) {
+      const error = new Error("completed turn summary marks require canonical Session repair");
+      error.code = "SESSION_COMPLETION_SUMMARY_REPAIR_REQUIRED";
+      error.repairedTurnScopeIds = summaryRepair.repaired;
+      throw error;
+    }
+    return normalized;
   }
 
   async getTurnMessageCount(userId = "", sessionId = "", parentSessionId = "", persistenceContext = null) {
@@ -599,11 +754,25 @@ export class FileSystemSessionRepository {
     }
     const deletedSessions = await this._readDeletedSessions(userId);
     const deletedSet = new Set(Object.keys(deletedSessions?.sessions || {}));
-    return entries
-      .filter((dirEntry) => dirEntry.isDirectory())
-      .map((dirEntry) => dirEntry.name)
-      .filter((sessionId) => !String(sessionId || "").startsWith("."))
-      .filter((sessionId) => !deletedSet.has(String(sessionId || "").trim()));
+    const sessionIds = [];
+    const visit = async (directory, relativeSegments = []) => {
+      const directoryEntries = directory === this._sessionRoot(userId)
+        ? entries
+        : await fsReaddir(directory, { withFileTypes: true });
+      for (const entry of directoryEntries) {
+        if (!entry.isDirectory() || String(entry.name || "").startsWith(".")) continue;
+        if (String(entry.name || "").includes(".repair-") || String(entry.name || "").endsWith(".mutation-lock")) continue;
+        const childDir = path.join(directory, entry.name);
+        const childSegments = [...relativeSegments, entry.name];
+        if (await this.storageService.exists(path.join(childDir, "session.json"))) {
+          const sessionId = String(entry.name || "").trim();
+          if (sessionId && !deletedSet.has(sessionId)) sessionIds.push(sessionId);
+        }
+        await visit(childDir, childSegments);
+      }
+    };
+    await visit(this._sessionRoot(userId));
+    return [...new Set(sessionIds)];
   }
 
   async ensureSession({ userId, sessionId, parentSessionId = "", meta = {}, persistenceContext = null }) {
@@ -667,20 +836,26 @@ export class FileSystemSessionRepository {
     );
     if (!(await this.storageService.exists(sessionFile))) return null;
 
-    const session = await readSessionArtifact({
-      storageService: this.storageService,
-      sessionDir,
-      fallback: {},
-    });
-    return normalizeSessionEntity({
-      ...session,
-      sessionId: String(session.sessionId || sessionId || "").trim(),
-      parentSessionId: String(session.parentSessionId || resolvedParentSessionId || "").trim(),
-      caller: String(session.caller || "user").trim() || "user",
-      modelAlias: String(session.modelAlias || ""),
-      messages: this.normalizeMessages(session.messages || [], { sessionId }),
-      selectedConnectors: this.normalizeSelectedConnectors(session.selectedConnectors || {}),
-    }, { now: this.now, sessionId, parentSessionId: resolvedParentSessionId });
+    const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
+    if (lifecycle?.repair?.status === "failed") {
+      const error = new Error(String(lifecycle.repair.message || "Session repair previously failed"));
+      error.code = String(lifecycle.repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
+      error.repairSkipped = true;
+      throw error;
+    }
+
+    const scope = { resolvedParentSessionId, sessionFile, sessionDir };
+    try {
+      return await this._readNormalizedSession(scope, sessionId, resolvedParentSessionId);
+    } catch {
+      await this._repairSessionToCurrentProtocol(
+        userId,
+        sessionId,
+        resolvedParentSessionId,
+        persistenceContext,
+      );
+      return this._readNormalizedSession(scope, sessionId, resolvedParentSessionId);
+    }
   }
 
   async save(userId, session = {}, parentSessionId = "", { expectedAggregateVersion, createOnly = false, persistenceContext = null } = {}) {

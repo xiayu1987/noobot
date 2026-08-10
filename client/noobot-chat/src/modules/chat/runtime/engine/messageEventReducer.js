@@ -13,7 +13,7 @@ import {
   resolveMessageEventPresentationId,
   resolveMessageEventSequenceIdentity,
   validateMessageEventEnvelope,
-} from "@noobot/shared/message-event-protocol";
+} from "@noobot/event-protocol/message-event";
 import {
   initializeMessageEventState,
   resolveMessageEventLaneState,
@@ -31,6 +31,8 @@ import {
   summarizeToolLogWindow,
   summarizeToolLogWindowItem,
 } from "../../../debug/loggers/toolLogWindowDebugLogger.js";
+import { getMessageTransferEnvelopes } from "../../model/transferEnvelopes.js";
+import { getMessageAttachments } from "../../model/messageModel.js";
 
 export { initializeMessageEventState } from "../../model/messageEventState.js";
 
@@ -53,10 +55,9 @@ function stateFor(message, event) {
 
 function conflicts(message, event) {
   const messageId = text(message.messageId || message.id);
-  if (
-    messageId &&
-    messageId !== resolveMessageEventPresentationId(event)
-  ) return true;
+  const presentationId = text(message.presentationMessageId);
+  const eventPresentationId = resolveMessageEventPresentationId(event);
+  if (messageId && messageId !== eventPresentationId && presentationId !== eventPresentationId) return true;
   const messageTurn = text(message.turnScopeId || message.turn_scope_id);
   const eventTurn = text(event.turnScopeId);
   return Boolean(eventTurn && messageTurn !== eventTurn);
@@ -93,7 +94,33 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
     targetMessage.content = String(targetMessage.content || "") + contentProjection.content;
   } else if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.REPLACE) {
     if (isAuthoritativeFinalContentEvent(event)) {
-      Object.assign(targetMessage, projectAuthoritativeFinalMessage(event));
+      const finalProjection = projectAuthoritativeFinalMessage(event);
+      const existingEnvelopes = getMessageTransferEnvelopes(targetMessage);
+      const existingAttachments = getMessageAttachments(targetMessage);
+      const existingRawAttachments = Array.isArray(targetMessage.attachments)
+        ? [...targetMessage.attachments]
+        : [];
+      Object.assign(targetMessage, finalProjection);
+      if (Array.isArray(finalProjection.transferEnvelopes)) {
+        const seen = new Set(existingEnvelopes.map((item) => `${item.transferId}:${item.messageId}`));
+        targetMessage.transferEnvelopes = [
+          ...existingEnvelopes,
+          ...finalProjection.transferEnvelopes.filter((item) => {
+            const key = `${item?.transferId || ""}:${item?.messageId || ""}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }),
+        ];
+      }
+      if (Array.isArray(finalProjection.attachments)) {
+        targetMessage.attachments = finalProjection.attachments;
+      } else if (existingAttachments.length || existingRawAttachments.length) {
+        targetMessage.attachments = existingAttachments.length
+          ? existingAttachments
+          : existingRawAttachments;
+      }
+      targetMessage.attachments = getMessageAttachments(targetMessage);
       state.finalContentSequence = sequence;
     } else {
       targetMessage.content = contentProjection.content;
@@ -111,6 +138,24 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       }));
     }
     targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event);
+    if (
+      event.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END &&
+      Array.isArray(event.transferEnvelopes) &&
+      event.transferEnvelopes.length
+    ) {
+      const existingEnvelopes = getMessageTransferEnvelopes(targetMessage);
+      const seen = new Set(existingEnvelopes.map((item) => `${item.transferId}:${item.messageId}`));
+      targetMessage.transferEnvelopes = [
+        ...existingEnvelopes,
+        ...event.transferEnvelopes.filter((item) => {
+          const key = `${item?.transferId || ""}:${item?.messageId || ""}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }),
+      ];
+      targetMessage.attachments = getMessageAttachments(targetMessage);
+    }
     targetMessage.activityTimeline = reduceActivityTimeline(
       targetMessage.activityTimeline,
       log

@@ -3,17 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { appendFile, readFile, writeFile } from "node:fs/promises";
 
 export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
   session: "session.json",
   sessionSummary: "session-summary.json",
+  sessionSummaryDetailsDir: "session-summary-details",
   task: "task.json",
   execution: "execution.json",
   executionEvents: "execution.jsonl",
   executionEventsDir: "execution-events",
   turnsDir: "turns",
+  turnSnapshotsDir: "turn-snapshots",
   meta: "meta.json",
 });
 
@@ -22,11 +24,13 @@ export function buildSessionArtifactFileMap(sessionDir = "") {
   return {
     session: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.session),
     sessionSummary: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.sessionSummary),
+    sessionSummaryDetailsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.sessionSummaryDetailsDir),
     task: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.task),
     execution: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.execution),
     executionEvents: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.executionEvents),
     executionEventsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.executionEventsDir),
     turnsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.turnsDir),
+    turnSnapshotsDir: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir),
     meta: path.join(dir, SESSION_ARTIFACT_FILE_NAMES.meta),
   };
 }

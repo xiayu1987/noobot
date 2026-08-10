@@ -12,4 +12,5 @@ export const REQUIRED_AGENT_CONTEXT_IDENTITY_FIELDS = Object.freeze([
   "sessionId",
   "dialogProcessId",
   "turnScopeId",
+  "messageId",
 ]);

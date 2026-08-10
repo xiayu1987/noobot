@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizePathForPlatform } from "../../../shared/utils/path-resolver.js";
+import { normalizePathForPlatform } from "@noobot/path-resolver";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { toPositiveInt } from "../file-utils.js";

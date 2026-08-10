@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
@@ -11,7 +11,7 @@ import { recoverableToolError } from "../../shared/errors/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
-import { getTransferAttachmentMetas, materializeTextForToolResult, TRANSFER_SOURCE } from "../../transfer/index.js";
+import { getTransferAttachments, materializeTextForToolResult, TRANSFER_SOURCE } from "../../transfer-adapter/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import { runWebToDataPipeline } from "./web2data/pipeline.js";
@@ -45,7 +45,8 @@ export function createWeb2DataTool({ agentContext }) {
         .optional()
         .describe(tTool(runtime, "tools.web2data.fieldUseTrafilatura")),
     }),
-    func: async ({ input = "", urls = [], prompt, useTrafilatura }) => {
+    func: async ({ input = "", urls = [], prompt, useTrafilatura }, _runManager, toolConfig = {}) => {
+      const transferIdentity = toolConfig?.configurable?.transferIdentity;
       const payload = await runWebToDataPipeline({
         agentContext,
         input,
@@ -91,9 +92,10 @@ export function createWeb2DataTool({ agentContext }) {
         reason: ARTIFACT_GENERATION_SOURCE.WEB_TO_DATA_TOOL,
         alwaysPersist: true,
         producer: { type: "tool", name: TOOL_NAME.WEB_TO_DATA },
+        identity: transferIdentity,
         meta: { mode: payload?.mode || processMode, input: payload?.input || input || "" },
       });
-      const savedAttachmentMetas = getTransferAttachmentMetas(materialized.transferEnvelopes);
+      const savedAttachments = getTransferAttachments(materialized.transferEnvelopes);
       return toToolJsonResult(
         TOOL_NAME.WEB_TO_DATA,
         {
@@ -111,7 +113,7 @@ export function createWeb2DataTool({ agentContext }) {
           model: payload?.model || {},
           summary: {
             text_length: text.length,
-            saved_attachment_count: savedAttachmentMetas.length,
+            saved_attachment_count: savedAttachments.length,
           },
         },
         true,

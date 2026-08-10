@@ -14,30 +14,35 @@ import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runt
 
 const envelope = {
   protocol: "noobot.semantic-transfer",
-  version: 1,
+  version: 2,
+  transferId: "transfer-model-1",
+  messageId: "message-model-1",
+  identity: { sessionId: "test-session", turnScopeId: "turn-1", runId: "run-1", producer: { type: "tool", id: "call-1" } },
   direction: "output",
-  transport: "file",
-  files: [
-    {
-      filePath: "/workspace/u1/report.md",
-      attachmentMeta: {
-        attachmentId: "att-1",
-        sessionId: "test-session",
-        attachmentSource: "test",
-        name: "report.md",
-        mimeType: "text/markdown",
-        path: "/legacy/report.md",
-      },
-      pathView: {
-        sandboxPath: "/workspace/u1/report.md",
-        relativePath: "runtime/report.md",
-      },
-      role: "primary",
-    },
-  ],
+  payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "att-1", sessionId: "test-session", attachmentSource: "test" }, role: "primary", name: "report.md", mimeType: "text/markdown" }] },
+  intent: { source: "tool", reason: "semantic_transfer_tool_result", scenario: "tool", strategy: "tool_result_text" },
+  meta: { persisted: true },
 };
 
 describe("messageModel semantic transfer", () => {
+  it("projects attachment identity from its owning message before live updates", () => {
+    const message = buildViewMessage({
+      role: "user",
+      sessionId: "session-1",
+      attachments: [{
+        attachmentId: "source-att",
+        name: "source.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }],
+    });
+
+    expect(message.attachments[0]).toMatchObject({
+      attachmentId: "source-att",
+      sessionId: "session-1",
+      attachmentSource: "user",
+    });
+  });
+
   it("does not admit workflow running view models into canonical messages", () => {
     const message = buildViewMessage({
       role: "assistant",
@@ -141,224 +146,24 @@ describe("messageModel semantic transfer", () => {
     expect(message.turnScopeId).toBe("client-turn:backend-scope-1");
   });
 
-  it("preserves legacy attachments alongside semantic transfer envelopes", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      content: "done",
-      attachments: [
-        {
-          attachmentId: "att-1",
-          sessionId: "s1",
-          attachmentSource: "test",
-          name: "legacy-report.md",
-          mimeType: "text/plain",
-          path: "/legacy-only/report.md",
-        },
-      ],
-      transferEnvelopes: [envelope],
-    });
-
-    expect(message.transferResult).toBeUndefined();
+  it("projects ordinary attachments independently from semantic transfer envelopes", () => {
+    const message = buildViewMessage({ role: "assistant", content: "done", attachments: [{ attachmentId: "ordinary-1", sessionId: "s1", attachmentSource: "test", name: "input.md", mimeType: "text/plain" }], transferEnvelopes: [envelope] });
     expect(message.transferEnvelopes).toHaveLength(1);
-    expect(message.transferEnvelopes[0]?.protocol).toBe("noobot.semantic-transfer");
-    expect(message.attachments).toHaveLength(2);
     expect(message.attachments).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        attachmentId: "att-1",
-        sessionId: "s1",
-        attachmentSource: "test",
-        name: "legacy-report.md",
-        mimeType: "text/plain",
-        path: "/legacy-only/report.md",
-      }),
-      expect.objectContaining({
-        attachmentId: "att-1",
-        sessionId: "test-session",
-        attachmentSource: "test",
-        name: "report.md",
-      }),
+      expect.objectContaining({ attachmentId: "ordinary-1", name: "input.md" }),
+      expect.objectContaining({ attachmentId: "att-1", name: "report.md" }),
     ]));
   });
 
-  it("restores attachment metadata from refreshed session summary transfer envelopes", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      content: "done after refresh",
-      transferEnvelopes: [
-        {
-          protocol: "noobot.semantic-transfer",
-          version: 1,
-          direction: "output",
-          transport: "file",
-          files: [
-            {
-              role: "primary",
-              filePath: "/workspace/u1/runtime/workflow-result.md",
-              attachmentMeta: {
-                attachmentId: "att-workflow-1",
-                sessionId: "s1",
-                attachmentSource: "model",
-                name: "workflow-result.md",
-                mimeType: "text/markdown",
-                relativePath: "runtime/workflow-result.md",
-              },
-              pathView: {
-                sandboxPath: "/sandbox/u1/runtime/workflow-result.md",
-                relativePath: "runtime/workflow-result.md",
-              },
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(message.attachments).toHaveLength(1);
-    expect(message.attachments[0]).toMatchObject({
-      attachmentId: "att-workflow-1",
-      sessionId: "s1",
-      attachmentSource: "model",
-      name: "workflow-result.md",
-      mimeType: "text/markdown",
-      transferFilePath: "/sandbox/u1/runtime/workflow-result.md",
-      sandboxPath: "/sandbox/u1/runtime/workflow-result.md",
-    });
+  it("restores V2 transfer attachment identity after refresh", () => {
+    const message = buildViewMessage({ role: "assistant", content: "done after refresh", transferEnvelopes: [envelope] });
+    expect(message.attachments).toEqual([expect.objectContaining({ attachmentId: "att-1", name: "report.md", sessionId: "test-session" })]);
   });
 
-  it("restores compact session summary transfer attachments with ownership", () => {
-    const message = buildViewMessage({
-      role: "assistant",
-      content: "compact transfer",
-      sessionId: "session-compact-1",
-      turnScopeId: "turn-compact-1",
-      dialogProcessId: "dialog-compact-1",
-      transferEnvelopes: [
-        {
-          protocol: "noobot.semantic-transfer",
-          version: 1,
-          direction: "output",
-          transport: "file",
-          files: [
-            {
-              attachmentId: "att-compact-1",
-              sessionId: "session-compact-1",
-              attachmentSource: "test",
-              name: "compact.md",
-              mimeType: "text/markdown",
-              relativePath: "runtime/compact.md",
-              sandboxPath: "/workspace/u1/runtime/compact.md",
-              owner: { type: "plugin", id: "harness-plugin" },
-              role: "primary",
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(message.attachments).toHaveLength(1);
-    expect(message.attachments[0]).toMatchObject({
-      attachmentId: "att-compact-1",
-      name: "compact.md",
-      mimeType: "text/markdown",
-      relativePath: "runtime/compact.md",
-      sandboxPath: "/workspace/u1/runtime/compact.md",
-      transferFilePath: "/workspace/u1/runtime/compact.md",
-      owner: expect.objectContaining({
-        type: "plugin",
-        id: "harness-plugin",
-        sessionId: "session-compact-1",
-        turnScopeId: "turn-compact-1",
-        dialogProcessId: "dialog-compact-1",
-      }),
-    });
-  });
-
-  it("enriches refreshed transfer envelope attachments with message scope", () => {
-    const message = buildViewMessage({
-      id: "msg-scope-1",
-      role: "assistant",
-      content: "done",
-      sessionId: "session-scope-1",
-      turnScopeId: "turn-scope-1",
-      dialogProcessId: "dialog-scope-1",
-      transferEnvelopes: [
-        {
-          protocol: "noobot.semantic-transfer",
-          files: [
-            {
-              filePath: "runtime/attach/scope.txt",
-              attachmentMeta: {
-                attachmentId: "att-scope-1",
-                sessionId: "session-scope-1",
-                attachmentSource: "test",
-                name: "scope.txt",
-                size: 10,
-              },
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(message.attachments[0]).toMatchObject({
-      attachmentId: "att-scope-1",
-      sessionId: "session-scope-1",
-      owner: {
-        sessionId: "session-scope-1",
-        turnScopeId: "turn-scope-1",
-        dialogProcessId: "dialog-scope-1",
-        role: "assistant",
-      },
-      turnScope: {
-        sessionId: "session-scope-1",
-        turnScopeId: "turn-scope-1",
-        dialogProcessId: "dialog-scope-1",
-      },
-    });
-  });
-
-  it("restores attachments from refreshed plugin payload transfer envelopes", () => {
-    const message = buildViewMessage({
-      id: "msg-plugin-payload-transfer",
-      role: "assistant",
-      content: "workflow done",
-      sessionId: "session-plugin-1",
-      turnScopeId: "turn-plugin-1",
-      pluginMeta: {
-        payload: {
-          execution: {
-            nodeAgentRuns: [
-              {
-                nodeResultTransferEnvelopes: [
-                  {
-                    protocol: "noobot.semantic-transfer",
-                    files: [
-                      {
-                        filePath: "runtime/workflow/report.md",
-                        attachmentMeta: {
-                          attachmentId: "att-plugin-payload-1",
-                          sessionId: "session-plugin-1",
-                          attachmentSource: "test",
-                          name: "report.md",
-                          mimeType: "text/markdown",
-                        },
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      },
-    });
-
-    expect(message.attachments).toHaveLength(1);
-    expect(message.attachments[0]).toMatchObject({
-      attachmentId: "att-plugin-payload-1",
-      name: "report.md",
-      sessionId: "session-plugin-1",
-      owner: expect.objectContaining({ turnScopeId: "turn-plugin-1" }),
-    });
+  it("rejects path-based transfer payloads without rebuilding an attachment", () => {
+    const message = buildViewMessage({ role: "assistant", content: "done", transferEnvelopes: [{ ...envelope, filePath: "/legacy/result.md" }] });
+    expect(message.transferEnvelopes).toEqual([]);
+    expect(message.attachments).toEqual([]);
   });
 
   it("normalizes parsed result metadata from attachments", () => {

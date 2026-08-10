@@ -7,7 +7,7 @@ import { execFile, spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { filePath as path } from "../../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { SCRIPT_EXECUTION_MODE } from "./constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";

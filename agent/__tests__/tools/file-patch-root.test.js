@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { resolvePatchTargetsWithOptions } from "../../src/tools/execution/file-patch.js";
-import { classifyToolInputPath, TOOL_PATH_VIEWS } from "../../src/shared/utils/path-resolver.js";
+import { classifyToolInputPath, TOOL_PATH_VIEWS } from "@noobot/path-resolver";
 import { ERROR_CODE } from "../../src/shared/errors/constants.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 

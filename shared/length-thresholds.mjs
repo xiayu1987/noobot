@@ -61,7 +61,6 @@ const LENGTH_TIERS = deepFreeze({
     connectorCommandFile: 256 * KiB,
     batchPayload: Math.floor(0.8 * MiB),
     clientNonImagePreview: 1 * MiB,
-    searchFile: 2 * MiB,
     jsonlBuffer: 5 * MiB,
     directText: 8 * MiB,
     attachmentFile: 10 * MiB,
@@ -112,11 +111,7 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   toolIO: {
     fileContentBytesPrecheckMultiplier: 2,
 
-    searchFileBytes: LENGTH_TIERS.bytes.searchFile,
-
     searchBufferBytes: LENGTH_TIERS.bytes.searchBuffer,
-
-    ripgrepMaxFilesize: "512K",
 
     connectorCommandFileBytes: LENGTH_TIERS.bytes.connectorCommandFile,
 

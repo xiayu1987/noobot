@@ -34,8 +34,7 @@ export { ensureHarnessBucket } from "./bucket-utils.js";
 export {
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
-  mapAttachmentRecordsToMetas,
-  mergeAttachments,
+  normalizeTransferPayload,
 } from "./attachment-log-utils.js";
 
 export { relaySeparateModelOutputAsUserMessage } from "./relay-model-output.js";

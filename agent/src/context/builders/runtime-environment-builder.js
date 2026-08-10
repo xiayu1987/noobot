@@ -26,10 +26,11 @@ import {
   resolveAttachmentDisplayPath,
   resolveHostPath,
   resolveSandboxPath,
-} from "../../shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 import {
+  resolveRuntimeTransferIdentity,
   transferSemanticContent,
-} from "../../transfer/index.js";
+} from "../../transfer-adapter/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 
@@ -195,12 +196,27 @@ function resolveSharedToolAgentContext(runtimeContext = {}, payload = {}) {
 
 function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
   sharedTools.semanticTransfer = {
-    transferSemanticContent: (payload = {}) =>
-      transferSemanticContent({
+    resolveIdentity: (payload = {}) => {
+      const runtime = resolveSharedToolRuntime(runtimeContext, payload?.runtime);
+      return resolveRuntimeTransferIdentity({ ...payload, runtime });
+    },
+    transferSemanticContent: (payload = {}) => {
+      const runtime = resolveSharedToolRuntime(runtimeContext, payload?.runtime);
+      const identity = resolveRuntimeTransferIdentity({
+        runtime,
+        sessionId: payload?.sessionId,
+        producer: payload?.producer,
+        direction: payload?.direction,
+        strategy: payload?.strategy,
+        transferKey: payload?.transferKey,
+      });
+      return transferSemanticContent({
         ...(payload && typeof payload === "object" ? payload : {}),
-        runtime: resolveSharedToolRuntime(runtimeContext, payload?.runtime),
+        identity,
+        runtime,
         agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
-      }),
+      });
+    },
   };
 }
 
