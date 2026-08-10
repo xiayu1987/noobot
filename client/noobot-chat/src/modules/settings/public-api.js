@@ -8,6 +8,7 @@ export { default as SettingsWorkspacePanel } from "./components/SettingsWorkspac
 export { default as SettingsActionGroup } from "./components/SettingsActionGroup.vue";
 export { default as SettingsPanelHeader } from "./components/SettingsPanelHeader.vue";
 export { default as SettingsJsonEditor } from "./components/SettingsJsonEditor.vue";
+export { default as SettingsJsonListEditorLayout } from "./components/SettingsJsonListEditorLayout.vue";
 export { default as SettingsTreeActionButton } from "./components/SettingsTreeActionButton.vue";
 export { default as WorkspaceResetDialog } from "./components/WorkspaceResetDialog.vue";
 export { default as WorkspaceEditorPanel } from "./components/WorkspaceEditorPanel.vue";

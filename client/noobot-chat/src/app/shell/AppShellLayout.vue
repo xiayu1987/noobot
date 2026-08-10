@@ -8,6 +8,8 @@ import { ref } from "vue";
 import { Tickets } from "@element-plus/icons-vue";
 import ChatMainHeader from "./ChatMainHeader.vue";
 import ChatMessageNavigator from "../../modules/chat/components/navigation/ChatMessageNavigator.vue";
+import { sharedSidebarProps } from "../../modules/session/model/sidebarProps.js";
+import { sharedComposerOptionProps } from "../../modules/composer/model/composerOptionProps.js";
 import {
   ChatComposer,
   ChatMessageListPanel,
@@ -17,19 +19,8 @@ import {
 } from "../entrypoints.js";
 
 defineProps({
-  sidebarCollapsed: { type: Boolean, default: false },
-  mobileSidebarOpen: { type: Boolean, default: false },
-  isMobile: { type: Boolean, default: false },
-  userId: { type: String, default: "" },
-  connectCode: { type: String, default: "" },
-  connecting: { type: Boolean, default: false },
-  connected: { type: Boolean, default: false },
-  sending: { type: Boolean, default: false },
+  ...sharedSidebarProps,
   composerActionState: { type: Object, default: () => ({}) },
-  loadingSessions: { type: Boolean, default: false },
-  sessions: { type: Array, default: () => [] },
-  activeSessionId: { type: String, default: "" },
-  turnRuntimeRegistry: { type: Object, default: () => ({}) },
   activeSession: { type: Object, default: () => ({}) },
   title: { type: String, default: "" },
   isSuperAdmin: { type: Boolean, default: false },
@@ -51,17 +42,9 @@ defineProps({
   composerMorePanelVisible: { type: Boolean, default: false },
   uploadFiles: { type: Array, default: () => [] },
   canStop: { type: Boolean, default: false },
+  ...sharedComposerOptionProps,
   allowUserInteraction: { type: Boolean, default: false },
-  safeConfirm: { type: Boolean, default: true },
-  safeConfirmLevel: { type: String, default: "low" },
-  sanitizeOutput: { type: Boolean, default: true },
-  streamOutput: { type: Boolean, default: false },
-  botScenario: { type: String, default: "" },
-  selectedModel: { type: String, default: "" },
-  memoryModel: { type: String, default: "" },
   availableModelOptions: { type: Array, default: () => [] },
-  pluginModelConfig: { type: Object, default: () => ({}) },
-  summaryPolicy: { type: Object, default: () => ({}) },
   availableBotScenarios: { type: Array, default: () => [] },
   availablePlugins: { type: Array, default: () => [] },
   selectedPlugins: { type: Array, default: () => [] },
@@ -95,19 +78,21 @@ const emit = defineEmits([
   "stop",
   "toggle-chat-navigator-visible",
   "toggle-sidebar",
-  "update:allow-user-interaction",
-  "update:bot-scenario",
+  "update:allowUserInteraction",
+  "update:botScenario",
   "update:connect-code",
-  "update:safe-confirm",
-  "update:safe-confirm-level",
-  "update:sanitize-output",
+  "update:safeConfirm",
+  "update:safeConfirmLevel",
+  "update:sanitizeOutput",
   "update:input",
-  "update:more-panel-visible",
-  "update:plugin-model-config",
-  "update:summary-policy",
-  "update:selected-model",
-  "update:selected-plugins",
-  "update:stream-output",
+  "update:morePanelVisible",
+  "update:pluginModelConfig",
+  "update:frontendThresholdsEnabled",
+  "update:summaryPolicy",
+  "update:selectedModel",
+  "update:memoryModel",
+  "update:selectedPlugins",
+  "update:streamOutput",
   "update:user-id",
   "interaction-confirm",
   "interaction-cancel",
@@ -204,7 +189,11 @@ defineExpose({
             <button
               type="button"
               class="chat-message-nav-icon chat-message-nav-icon-button"
-              :aria-label="chatNavigatorVisible ? translate('common.hideChatNavigator') : translate('common.showChatNavigator')"
+              :aria-label="
+                chatNavigatorVisible
+                  ? translate('common.hideChatNavigator')
+                  : translate('common.showChatNavigator')
+              "
               @click="emit('toggle-chat-navigator-visible')"
             >
               <el-icon><Tickets /></el-icon>
@@ -235,7 +224,6 @@ defineExpose({
             />
           </el-affix>
         </aside>
-
       </div>
 
       <Teleport to="body">
@@ -285,6 +273,7 @@ defineExpose({
           :memory-model="memoryModel"
           :model-options="availableModelOptions"
           :plugin-model-config="pluginModelConfig"
+          :frontend-thresholds-enabled="frontendThresholdsEnabled"
           :summary-policy="summaryPolicy"
           :scenario-options="availableBotScenarios"
           :available-plugins="availablePlugins"
@@ -293,18 +282,19 @@ defineExpose({
           @update:model-value="emit('update:input', $event)"
           @append-uploads="emit('append-uploads', $event)"
           @remove-upload="emit('remove-upload', $event)"
-          @update:allow-user-interaction="emit('update:allow-user-interaction', $event)"
-          @update:safe-confirm="emit('update:safe-confirm', $event)"
-          @update:safe-confirm-level="emit('update:safe-confirm-level', $event)"
-          @update:sanitize-output="emit('update:sanitize-output', $event)"
-          @update:stream-output="emit('update:stream-output', $event)"
-          @update:bot-scenario="emit('update:bot-scenario', $event)"
-          @update:selected-model="emit('update:selected-model', $event)"
-          @update:memory-model="emit('update:memory-model', $event)"
-          @update:plugin-model-config="emit('update:plugin-model-config', $event)"
-          @update:summary-policy="emit('update:summary-policy', $event)"
-          @update:selected-plugins="emit('update:selected-plugins', $event)"
-          @update:more-panel-visible="emit('update:more-panel-visible', $event)"
+          @update:allow-user-interaction="emit('update:allowUserInteraction', $event)"
+          @update:safe-confirm="emit('update:safeConfirm', $event)"
+          @update:safe-confirm-level="emit('update:safeConfirmLevel', $event)"
+          @update:sanitize-output="emit('update:sanitizeOutput', $event)"
+          @update:stream-output="emit('update:streamOutput', $event)"
+          @update:bot-scenario="emit('update:botScenario', $event)"
+          @update:selected-model="emit('update:selectedModel', $event)"
+          @update:memory-model="emit('update:memoryModel', $event)"
+          @update:plugin-model-config="emit('update:pluginModelConfig', $event)"
+          @update:frontend-thresholds-enabled="emit('update:frontendThresholdsEnabled', $event)"
+          @update:summary-policy="emit('update:summaryPolicy', $event)"
+          @update:selected-plugins="emit('update:selectedPlugins', $event)"
+          @update:more-panel-visible="emit('update:morePanelVisible', $event)"
           @clear-uploads="emit('clear-uploads')"
           @connector-selected="emit('connector-selected', $event)"
           @send="emit('send')"
@@ -331,8 +321,7 @@ defineExpose({
   width: 100%;
   background-color: var(--noobot-surface-sidebar);
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   overflow: hidden;
   color: var(--noobot-text-main);
   position: relative;

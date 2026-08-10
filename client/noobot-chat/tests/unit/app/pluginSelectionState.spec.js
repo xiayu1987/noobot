@@ -115,10 +115,8 @@ describe("plugin selection state", () => {
 
     syncSelectedPluginsWithConfig({ pluginOptions, selectedPlugins, hasStoredSelectedPlugins });
 
-    expect(selectedPlugins.value).toEqual(["workflow", "harness"]);
-    expect(localStorage.getItem(DEFAULT_ON_PLUGINS_STORAGE_KEY)).toBe(
-      JSON.stringify(["workflow", "harness"]),
-    );
+    expect(selectedPlugins.value).toEqual(["workflow"]);
+    expect(localStorage.getItem(DEFAULT_ON_PLUGINS_STORAGE_KEY)).toBe(JSON.stringify(["workflow"]));
     expect(localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY)).toBe(null);
   });
 

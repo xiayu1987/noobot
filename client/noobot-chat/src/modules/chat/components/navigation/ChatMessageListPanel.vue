@@ -8,7 +8,10 @@ import { computed, ref, watch } from "vue";
 import ChatMessageItem from "../message/ChatMessageItem.vue";
 import { useChatStore } from "../../stores/useChatStore.js";
 import { selectTurnPresentations } from "../../runtime/engine/turnPresentation.js";
-import { logWorkflowDiagnostics, summarizeWorkflowMessages } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import {
+  logWorkflowDiagnostics,
+  summarizeWorkflowMessages,
+} from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
@@ -20,6 +23,7 @@ import {
   getMessageRole,
   getMessageTurnScopeKey,
 } from "../../model/messageIdentity.js";
+import { sharedMessageRenderProps } from "../../model/messageItemProps.js";
 
 defineEmits(["open-thinking-details"]);
 
@@ -27,15 +31,7 @@ const props = defineProps({
   loadingSessionDetail: { type: Boolean, default: false },
   activeSession: { type: Object, default: () => ({}) },
   shouldRenderMessageInChat: { type: Function, required: true },
-  userId: { type: String, default: "" },
-  renderMarkdown: { type: Function, required: true },
-  formatTime: { type: Function, required: true },
-  formatFileSize: { type: Function, required: true },
-  isImageMime: { type: Function, required: true },
-  sending: { type: Boolean, default: false },
-  deleteMonotonicMessage: { type: Function, default: null },
-  resendMonotonicMessage: { type: Function, default: null },
-  stopExecution: { type: Function, default: null },
+  ...sharedMessageRenderProps,
   emptyLogoSrc: { type: String, default: "" },
 });
 
@@ -50,21 +46,29 @@ const presentedMessages = computed(() => {
     subSessionMessageRegistry: chatStore.subSessionMessageRegistry,
   });
 });
-const presentationDiagnosticsSignature = computed(() => [
-  String(props.activeSession?.sessionId || ""),
-  Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
-  presentedMessages.value.length,
-  Number(chatStore.workflowNodeStateRegistry?.version || 0),
-  Number(chatStore.subSessionMessageRegistryVersion || 0),
-].join("|"));
-watch(presentationDiagnosticsSignature, () => {
-  logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", () => ({
-    sessionId: String(props.activeSession?.sessionId || ""),
-    sourceMessageCount: Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
-    presentationMessageCount: presentedMessages.value.length,
-    workflowPresentations: summarizeWorkflowMessages(presentedMessages.value),
-  }));
-}, { flush: "post" });
+const presentationDiagnosticsSignature = computed(() =>
+  [
+    String(props.activeSession?.sessionId || ""),
+    Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
+    presentedMessages.value.length,
+    Number(chatStore.workflowNodeStateRegistry?.version || 0),
+    Number(chatStore.subSessionMessageRegistryVersion || 0),
+  ].join("|"),
+);
+watch(
+  presentationDiagnosticsSignature,
+  () => {
+    logWorkflowDiagnostics("frontend.workflowRender.turnPresentationsSelected", () => ({
+      sessionId: String(props.activeSession?.sessionId || ""),
+      sourceMessageCount: Array.isArray(props.activeSession?.messages)
+        ? props.activeSession.messages.length
+        : 0,
+      presentationMessageCount: presentedMessages.value.length,
+      workflowPresentations: summarizeWorkflowMessages(presentedMessages.value),
+    }));
+  },
+  { flush: "post" },
+);
 const messageItemSharedProps = computed(() => ({
   allMessages: presentedMessages.value,
   sessionDocs: props.activeSession?.sessionDocs || [],
@@ -114,31 +118,45 @@ function getMessageRenderKey(messageItem = {}, messageIndex = 0) {
     .join("|");
 }
 
-const renderedMessages = computed(() => presentedMessages.value
-  .map((messageItem, sourceIndex) => ({
-    messageItem,
-    sourceIndex,
-    renderKey: getMessageRenderKey(messageItem, sourceIndex),
-  }))
-  .filter(({ messageItem }) => props.shouldRenderMessageInChat(messageItem)));
-const renderDiagnosticsSignature = computed(() => JSON.stringify(renderedMessages.value.map((entry) => ({
-  ...summarizeStateMachineMessage(entry.messageItem),
-  sourceIndex: entry.sourceIndex,
-  renderKey: entry.renderKey,
-}))));
-watch(renderDiagnosticsSignature, (signature) => {
-  logStateMachineDebug("stateMachine.presentation.renderList.committed", () => ({
-    sessionId: String(props.activeSession?.sessionId || ""),
-    sourceMessageCount: Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
-    presentationMessageCount: presentedMessages.value.length,
-    renderedMessageCount: renderedMessages.value.length,
-    messages: JSON.parse(signature),
-  }));
-}, { immediate: true, flush: "post" });
+const renderedMessages = computed(() =>
+  presentedMessages.value
+    .map((messageItem, sourceIndex) => ({
+      messageItem,
+      sourceIndex,
+      renderKey: getMessageRenderKey(messageItem, sourceIndex),
+    }))
+    .filter(({ messageItem }) => props.shouldRenderMessageInChat(messageItem)),
+);
+const renderDiagnosticsSignature = computed(() =>
+  JSON.stringify(
+    renderedMessages.value.map((entry) => ({
+      ...summarizeStateMachineMessage(entry.messageItem),
+      sourceIndex: entry.sourceIndex,
+      renderKey: entry.renderKey,
+    })),
+  ),
+);
+watch(
+  renderDiagnosticsSignature,
+  (signature) => {
+    logStateMachineDebug("stateMachine.presentation.renderList.committed", () => ({
+      sessionId: String(props.activeSession?.sessionId || ""),
+      sourceMessageCount: Array.isArray(props.activeSession?.messages)
+        ? props.activeSession.messages.length
+        : 0,
+      presentationMessageCount: presentedMessages.value.length,
+      renderedMessageCount: renderedMessages.value.length,
+      messages: JSON.parse(signature),
+    }));
+  },
+  { immediate: true, flush: "post" },
+);
 
 function getMessageAnchorId(messageItem = {}, messageIndex = 0) {
-  return `chat-message-${getMessageRenderKey(messageItem, messageIndex)
-    .replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  return `chat-message-${getMessageRenderKey(messageItem, messageIndex).replace(
+    /[^a-zA-Z0-9_-]/g,
+    "-",
+  )}`;
 }
 
 function scrollToMessageAnchor(anchorId = "") {
@@ -171,10 +189,7 @@ defineExpose({
           class="skeleton-loading noobot-surface-card"
         />
 
-        <div
-          v-if="!presentedMessages.length && !loadingSessionDetail"
-          class="empty-state"
-        >
+        <div v-if="!presentedMessages.length && !loadingSessionDetail" class="empty-state">
           <div class="empty-icon">
             <img :src="emptyLogoSrc" alt="Noobot Logo" class="empty-logo" />
           </div>
@@ -182,7 +197,7 @@ defineExpose({
         </div>
 
         <template
-          v-for="({ messageItem, sourceIndex, renderKey }) in renderedMessages"
+          v-for="{ messageItem, sourceIndex, renderKey } in renderedMessages"
           :key="renderKey"
         >
           <div

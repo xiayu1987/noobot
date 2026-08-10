@@ -5,6 +5,28 @@
  */
 
 const contributionsByPoint = new Map();
+
+function createExtensionEntry({ contribution = {}, id = "", pluginId = "", point = "" } = {}) {
+  return {
+    ...contribution,
+    id,
+    pluginId,
+    point,
+    priority: Number.isFinite(Number(contribution?.priority)) ? Number(contribution.priority) : 100,
+    enabled:
+      typeof contribution?.enabled === "function"
+        ? contribution.enabled
+        : contribution?.enabled !== false,
+    exclusiveGroup: normalizeString(contribution?.exclusiveGroup),
+    when: typeof contribution?.when === "function" ? contribution.when : () => true,
+    resolveProps:
+      typeof contribution?.resolveProps === "function" ? contribution.resolveProps : () => ({}),
+    resolveListeners:
+      typeof contribution?.resolveListeners === "function"
+        ? contribution.resolveListeners
+        : () => ({}),
+  };
+}
 const reportedConflicts = new Set();
 import {
   EXTENSION_ARBITRATION,
@@ -25,7 +47,9 @@ function warnConflict(point, strategy, winner, skipped) {
   const key = `${point}:${strategy}:${winner.id}:${skipped.map(({ id }) => id).join(",")}`;
   if (reportedConflicts.has(key)) return;
   reportedConflicts.add(key);
-  warn(`conflict at "${point}" (${strategy}): selected "${winner.id}", skipped ${skipped.map(({ id }) => `"${id}"`).join(", ")}`);
+  warn(
+    `conflict at "${point}" (${strategy}): selected "${winner.id}", skipped ${skipped.map(({ id }) => `"${id}"`).join(", ")}`,
+  );
 }
 
 function matches(entry, context) {
@@ -41,7 +65,10 @@ function matches(entry, context) {
 function arbitrate(point, entries) {
   const strategy = EXTENSION_POINT_DEFINITIONS[point]?.strategy || EXTENSION_ARBITRATION.MULTI;
   if (entries.length < 2) return entries;
-  if (strategy === EXTENSION_ARBITRATION.FIRST_MATCH || strategy === EXTENSION_ARBITRATION.EXCLUSIVE) {
+  if (
+    strategy === EXTENSION_ARBITRATION.FIRST_MATCH ||
+    strategy === EXTENSION_ARBITRATION.EXCLUSIVE
+  ) {
     warnConflict(point, strategy, entries[0], entries.slice(1));
     return entries.slice(0, 1);
   }
@@ -78,18 +105,14 @@ export function contributeExtension(point = "", contribution = {}) {
     warn(`contribution "${id}" duplicated at "${extensionPoint}", skipped`);
     return false;
   }
-  entries.push({
-    ...contribution,
-    id,
-    pluginId,
-    point: extensionPoint,
-    priority: Number.isFinite(Number(contribution?.priority)) ? Number(contribution.priority) : 100,
-    enabled: typeof contribution?.enabled === "function" ? contribution.enabled : contribution?.enabled !== false,
-    exclusiveGroup: normalizeString(contribution?.exclusiveGroup),
-    when: typeof contribution?.when === "function" ? contribution.when : () => true,
-    resolveProps: typeof contribution?.resolveProps === "function" ? contribution.resolveProps : () => ({}),
-    resolveListeners: typeof contribution?.resolveListeners === "function" ? contribution.resolveListeners : () => ({}),
-  });
+  entries.push(
+    createExtensionEntry({
+      contribution,
+      id,
+      pluginId,
+      point: extensionPoint,
+    }),
+  );
   contributionsByPoint.set(extensionPoint, entries);
   return true;
 }
@@ -136,18 +159,14 @@ export function replacePluginExtensions(pluginId = "", contributions = []) {
     if (entries.some((entry) => entry.id === normalizeString(contribution.id))) {
       throw new Error(`extension contribution "${contribution.id}" duplicated at "${point}"`);
     }
-    entries.push({
-      ...contribution,
-      id: normalizeString(contribution.id),
-      pluginId: normalizedPluginId,
-      point,
-      priority: Number.isFinite(Number(contribution?.priority)) ? Number(contribution.priority) : 100,
-      enabled: typeof contribution?.enabled === "function" ? contribution.enabled : contribution?.enabled !== false,
-      exclusiveGroup: normalizeString(contribution?.exclusiveGroup),
-      when: typeof contribution?.when === "function" ? contribution.when : () => true,
-      resolveProps: typeof contribution?.resolveProps === "function" ? contribution.resolveProps : () => ({}),
-      resolveListeners: typeof contribution?.resolveListeners === "function" ? contribution.resolveListeners : () => ({}),
-    });
+    entries.push(
+      createExtensionEntry({
+        contribution,
+        id: normalizeString(contribution.id),
+        pluginId: normalizedPluginId,
+        point,
+      }),
+    );
     nextByPoint.set(point, entries);
   }
   contributionsByPoint.clear();
@@ -169,7 +188,9 @@ export function resolveExtensionProps(contribution = {}, context = {}) {
     const value = contribution.resolveProps(context);
     return value && typeof value === "object" ? value : {};
   } catch (error) {
-    warn(`contribution "${contribution?.id || "unknown"}" props failed: ${error?.message || error}`);
+    warn(
+      `contribution "${contribution?.id || "unknown"}" props failed: ${error?.message || error}`,
+    );
     return {};
   }
 }
@@ -179,7 +200,9 @@ export function resolveExtensionListeners(contribution = {}, context = {}) {
     const value = contribution.resolveListeners(context);
     return value && typeof value === "object" ? value : {};
   } catch (error) {
-    warn(`contribution "${contribution?.id || "unknown"}" listeners failed: ${error?.message || error}`);
+    warn(
+      `contribution "${contribution?.id || "unknown"}" listeners failed: ${error?.message || error}`,
+    );
     return {};
   }
 }

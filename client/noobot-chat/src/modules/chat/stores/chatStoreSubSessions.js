@@ -81,6 +81,17 @@ function authoritativeSubSessionMessageId(eventData = {}) {
   return text(resolveMessageEventPresentationId(eventData));
 }
 
+function summarizeSubSessionMessage(message = {}) {
+  return {
+    messageId: text(message?.messageId || message?.id),
+    presentationMessageId: text(message?.presentationMessageId),
+    role: text(message?.role),
+    type: text(message?.type),
+    pending: message?.pending,
+    contentLength: String(message?.content || "").length,
+  };
+}
+
 function mergePersistedSubSessionMessage(realtime = {}, snapshot = {}, messageId = "") {
   const canonicalMessageId = text(messageId || realtime.messageId || realtime.id);
   const realtimeOwnsFinalContent =
@@ -481,22 +492,8 @@ export function createSubSessionStore({
       transportSequence: Number(snapshotContext?.transportSequence || 0),
       snapshotMessageCount: snapshotMessages.length,
       realtimeMessageCount: realtimeMessages.length,
-      snapshotMessages: snapshotMessages.map((message = {}) => ({
-        messageId: text(message?.messageId || message?.id),
-        presentationMessageId: text(message?.presentationMessageId),
-        role: text(message?.role),
-        type: text(message?.type),
-        pending: message?.pending,
-        contentLength: String(message?.content || "").length,
-      })),
-      realtimeMessages: realtimeMessages.map((message = {}) => ({
-        messageId: text(message?.messageId || message?.id),
-        presentationMessageId: text(message?.presentationMessageId),
-        role: text(message?.role),
-        type: text(message?.type),
-        pending: message?.pending,
-        contentLength: String(message?.content || "").length,
-      })),
+      snapshotMessages: snapshotMessages.map(summarizeSubSessionMessage),
+      realtimeMessages: realtimeMessages.map(summarizeSubSessionMessage),
     }));
     const realtimeIndexByIdentity = new Map();
     realtimeMessages.forEach((message = {}, index) => {
@@ -552,14 +549,7 @@ export function createSubSessionStore({
       authoritativeSequence: Number(snapshotContext?.authoritativeSequence || 0),
       transportSequence: Number(snapshotContext?.transportSequence || 0),
       messageCount: deduplicatedMessages.length,
-      messages: deduplicatedMessages.map((message = {}) => ({
-        messageId: text(message?.messageId || message?.id),
-        presentationMessageId: text(message?.presentationMessageId),
-        role: text(message?.role),
-        type: text(message?.type),
-        pending: message?.pending,
-        contentLength: String(message?.content || "").length,
-      })),
+      messages: deduplicatedMessages.map(summarizeSubSessionMessage),
     }));
     const {
       status: _persistedStatus,

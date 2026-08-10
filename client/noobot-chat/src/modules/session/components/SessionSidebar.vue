@@ -17,21 +17,9 @@ import {
 import noobotLogo from "../../../shared/assets/noobot.svg";
 import SessionListPanel from "./SessionListPanel.vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { sharedSidebarProps } from "../model/sidebarProps.js";
 
-const props = defineProps({
-  sidebarCollapsed: { type: Boolean, default: false },
-  isMobile: { type: Boolean, default: false },
-  mobileSidebarOpen: { type: Boolean, default: false },
-  userId: { type: String, default: "" },
-  connectCode: { type: String, default: "" },
-  connecting: { type: Boolean, default: false },
-  connected: { type: Boolean, default: false },
-  sending: { type: Boolean, default: false },
-  loadingSessions: { type: Boolean, default: false },
-  sessions: { type: Array, default: () => [] },
-  activeSessionId: { type: String, default: "" },
-  turnRuntimeRegistry: { type: Object, default: () => ({}) },
-});
+const props = defineProps(sharedSidebarProps);
 
 const emit = defineEmits([
   "toggle-sidebar",
@@ -67,8 +55,12 @@ const { translate } = useLocale();
         class="collapse-btn noobot-action-btn noobot-flat-soft-btn"
         type="button"
         @click="emit('toggle-sidebar')"
-        :title="sidebarCollapsed ? translate('common.expandSidebar') : translate('common.collapseSidebar')"
-        :aria-label="sidebarCollapsed ? translate('common.expandSidebar') : translate('common.collapseSidebar')"
+        :title="
+          sidebarCollapsed ? translate('common.expandSidebar') : translate('common.collapseSidebar')
+        "
+        :aria-label="
+          sidebarCollapsed ? translate('common.expandSidebar') : translate('common.collapseSidebar')
+        "
       >
         <el-icon>
           <Expand v-if="sidebarCollapsed" />
@@ -175,9 +167,10 @@ const { translate } = useLocale();
   flex-direction: column;
   z-index: 10;
   box-shadow: none;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar.collapsed {
@@ -249,7 +242,11 @@ const { translate } = useLocale();
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .collapse-btn :deep(.el-icon) {
@@ -274,7 +271,11 @@ const { translate } = useLocale();
   border-radius: var(--noobot-radius-xs);
   background-color: transparent;
   box-shadow: var(--noobot-input-ring);
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   padding: 0 12px;
 }
 
@@ -328,7 +329,11 @@ const { translate } = useLocale();
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 22%, transparent);
   box-shadow: none;
   color: var(--noobot-base-white);
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .new-chat-btn:not(:disabled):hover {
@@ -357,7 +362,11 @@ const { translate } = useLocale();
   justify-content: center;
   font-size: var(--noobot-font-size-xl);
   margin-left: 0;
-  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .tail-btn :deep(.el-icon) {

@@ -29,51 +29,47 @@ const timestampOf = (value = {}) => {
 const sequenceScopeOf = (value = {}) =>
   text(value.sequenceScopeId || value.sequenceScope || value.messageId || value.message_id);
 
+function resolveSequenceIdentity(value = {}) {
+  return {
+    domain: text(value.sequenceDomain),
+    sequence: sequenceOf(value),
+    scope: sequenceScopeOf(value),
+  };
+}
+
 export function preferTimelineFact(left, right) {
   if (!left) return right;
   if (!right) return left;
-  const leftDomain = text(left.sequenceDomain);
-  const rightDomain = text(right.sequenceDomain);
-  const leftSequence = sequenceOf(left);
-  const rightSequence = sequenceOf(right);
-  const leftScope = sequenceScopeOf(left);
-  const rightScope = sequenceScopeOf(right);
+  const leftIdentity = resolveSequenceIdentity(left);
+  const rightIdentity = resolveSequenceIdentity(right);
   if (
-    leftDomain &&
-    leftDomain === rightDomain &&
-    leftScope === rightScope &&
-    leftSequence !== null &&
-    rightSequence !== null
+    leftIdentity.domain &&
+    leftIdentity.domain === rightIdentity.domain &&
+    leftIdentity.scope === rightIdentity.scope &&
+    leftIdentity.sequence !== null &&
+    rightIdentity.sequence !== null
   ) {
-    return rightSequence >= leftSequence ? right : left;
+    return rightIdentity.sequence >= leftIdentity.sequence ? right : left;
   }
   return right;
 }
 
 export function compareTimelineFacts(left = {}, right = {}) {
-  const leftDomain = text(left.sequenceDomain);
-  const rightDomain = text(right.sequenceDomain);
-  const leftSequence = sequenceOf(left);
-  const rightSequence = sequenceOf(right);
-  const leftScope = sequenceScopeOf(left);
-  const rightScope = sequenceScopeOf(right);
+  const leftIdentity = resolveSequenceIdentity(left);
+  const rightIdentity = resolveSequenceIdentity(right);
   if (
-    leftDomain &&
-    leftDomain === rightDomain &&
-    leftScope === rightScope &&
-    leftSequence !== null &&
-    rightSequence !== null &&
-    leftSequence !== rightSequence
+    leftIdentity.domain &&
+    leftIdentity.domain === rightIdentity.domain &&
+    leftIdentity.scope === rightIdentity.scope &&
+    leftIdentity.sequence !== null &&
+    rightIdentity.sequence !== null &&
+    leftIdentity.sequence !== rightIdentity.sequence
   ) {
-    return leftSequence - rightSequence;
+    return leftIdentity.sequence - rightIdentity.sequence;
   }
   const leftTimestamp = timestampOf(left);
   const rightTimestamp = timestampOf(right);
-  if (
-    leftTimestamp !== null &&
-    rightTimestamp !== null &&
-    leftTimestamp !== rightTimestamp
-  ) {
+  if (leftTimestamp !== null && rightTimestamp !== null && leftTimestamp !== rightTimestamp) {
     return leftTimestamp - rightTimestamp;
   }
   return 0;

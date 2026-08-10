@@ -15,9 +15,10 @@ import {
   putTemplateFileApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { createApiKeyFetch } from "../../../shared/network/apiKeyFetch.js";
 import {
   SettingsActionGroup,
-  SettingsJsonEditor,
+  SettingsJsonListEditorLayout,
   SettingsPanelHeader,
   SettingsTreeActionButton,
   SettingsWorkspaceLayout,
@@ -73,20 +74,7 @@ const templateEditorActions = computed(() => [
     disabled: !templateActivePath.value || !templateIsTextFile.value,
   },
 ]);
-
-function authHeaders(extra = {}) {
-  return {
-    ...extra,
-    ...(props.apiKey ? { "x-api-key": props.apiKey } : {}),
-  };
-}
-
-function authFetch(url, options = {}) {
-  return fetch(url, {
-    ...options,
-    headers: authHeaders(options.headers || {}),
-  });
-}
+const { authFetch } = createApiKeyFetch(() => props.apiKey);
 
 function normalizeUsers(list = []) {
   return (Array.isArray(list) ? list : [])
@@ -167,7 +155,8 @@ async function loadTemplateTree() {
   try {
     const res = await getTemplateTreeApi({ fetcher: authFetch });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadTemplateDirFailed"));
+    if (!res.ok || !data.ok)
+      throw new Error(data.error || translate("settings.loadTemplateDirFailed"));
     templateTree.value = data.tree || [];
   } catch (error) {
     ElMessage.error(error.message || translate("settings.loadTemplateDirFailed"));
@@ -180,12 +169,10 @@ async function openTemplateFile(node) {
   if (!props.connected || !props.apiKey || !node || node.type !== "file") return;
   templateLoadingFile.value = true;
   try {
-    const res = await getTemplateFileApi(
-      { path: node.path },
-      { fetcher: authFetch },
-    );
+    const res = await getTemplateFileApi({ path: node.path }, { fetcher: authFetch });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.readTemplateFileFailed"));
+    if (!res.ok || !data.ok)
+      throw new Error(data.error || translate("settings.readTemplateFileFailed"));
     templateActivePath.value = data.path || node.path;
     templateIsTextFile.value = data.isText !== false;
     templateContent.value = data.content || "";
@@ -206,7 +193,8 @@ async function saveTemplateFile() {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveTemplateFileFailed"));
+    if (!res.ok || !data.ok)
+      throw new Error(data.error || translate("settings.saveTemplateFileFailed"));
     ElMessage.success(translate("settings.templateFileSaved"));
     await loadTemplateTree();
   } catch (error) {
@@ -306,8 +294,7 @@ function validateUsers(list = []) {
     throw new Error(translate("settings.userAndCodeRequired"));
   }
   const duplicate = normalized.find(
-    (item, idx) =>
-      normalized.findIndex((subItem) => subItem.userId === item.userId) !== idx,
+    (item, idx) => normalized.findIndex((subItem) => subItem.userId === item.userId) !== idx,
   );
   if (duplicate) {
     throw new Error(translate("settings.duplicateUserId", { userId: duplicate.userId }));
@@ -323,10 +310,7 @@ async function saveUsers() {
       throw new Error(translate("settings.fixJsonError"));
     }
     const payloadUsers = validateUsers(users.value);
-    const res = await putRegularUsersApi(
-      { users: payloadUsers },
-      { fetcher: authFetch },
-    );
+    const res = await putRegularUsersApi({ users: payloadUsers }, { fetcher: authFetch });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveUsersFailed"));
     users.value = normalizeUsers(data.users || payloadUsers);
@@ -388,69 +372,64 @@ watch(
 <template>
   <el-tabs v-model="activeTab" class="settings-tabs">
     <el-tab-pane :label="translate('settings.userSettings')" name="users">
-      <SettingsWorkspaceLayout :loading="loading">
-        <SettingsWorkspacePanel>
-          <SettingsPanelHeader :title="translate('settings.users')">
-            <template #right>
-              <SettingsTreeActionButton
-                class-name="icon-btn"
-                :icon="Plus"
-                :title="translate('settings.addUser')"
-                @click="addUserRow"
-              />
-            </template>
-          </SettingsPanelHeader>
-          <div class="panel-body noobot-workspace-body">
-            <el-scrollbar class="tree-scroll">
-              <div class="users-list">
-                <div
-                  v-for="(item, idx) in users"
-                  :key="idx"
-                  class="user-row noobot-flat-card noobot-list-row"
+      <SettingsJsonListEditorLayout
+        v-model="usersJsonText"
+        :loading="loading"
+        :left-title="translate('settings.users')"
+        :left-action-icon="Plus"
+        :left-action-title="translate('settings.addUser')"
+        editor-file-path="workspace/user.json"
+        :editor-actions="usersEditorActions"
+        :parse-error="jsonParseError"
+        placeholder='{"users":[{"userId":"user-001","connectCode":"...","allowIDE":false}]}'
+        @left-action="addUserRow"
+        @editor-command="handleUsersEditorAction"
+      >
+        <template #list>
+          <div class="users-list">
+            <div
+              v-for="(item, idx) in users"
+              :key="idx"
+              class="user-row noobot-flat-card noobot-list-row"
+            >
+              <div class="row-header">
+                <span class="user-idx">User {{ idx + 1 }}</span>
+                <el-button
+                  class="icon-btn danger-text"
+                  size="small"
+                  text
+                  @click="removeUserRow(idx)"
+                  :title="translate('settings.delete')"
+                  >✕</el-button
                 >
-                  <div class="row-header">
-                    <span class="user-idx">User {{ idx + 1 }}</span>
-                    <el-button class="icon-btn danger-text" size="small" text @click="removeUserRow(idx)" :title="translate('settings.delete')">✕</el-button>
-                  </div>
-                  <el-input v-model="item.userId" placeholder="userId" clearable class="row-input" />
-                  <div class="code-row">
-                    <el-input v-model="item.connectCode" placeholder="connectCode" clearable class="row-input" />
-                    <el-button class="dark-btn action-btn noobot-action-btn noobot-flat-soft-btn" @click="regenerateSingleUserConnectCode(idx)" :title="translate('settings.regenerateConnectCode')">↻</el-button>
-                  </div>
-                  <div class="allow-ide-row">
-                    <span class="allow-ide-label">{{ translate("settings.allowIDE") }}</span>
-                    <el-switch v-model="item.allowIDE" />
-                  </div>
-                </div>
-                <div v-if="!users.length" class="empty-tip list-empty-tip">
-                  <div class="empty-icon">👥</div>
-                  <p>{{ translate("settings.noUsersAdd") }}</p>
-                </div>
               </div>
-            </el-scrollbar>
-          </div>
-        </SettingsWorkspacePanel>
-
-        <SettingsWorkspacePanel panel-class="workspace-editor">
-          <SettingsPanelHeader>
-            <template #left>
-              <div class="file-info">
-                <span class="active-file noobot-flat-chip" title="workspace/user.json">workspace/user.json</span>
+              <el-input v-model="item.userId" placeholder="userId" clearable class="row-input" />
+              <div class="code-row">
+                <el-input
+                  v-model="item.connectCode"
+                  placeholder="connectCode"
+                  clearable
+                  class="row-input"
+                />
+                <el-button
+                  class="dark-btn action-btn noobot-action-btn noobot-flat-soft-btn"
+                  @click="regenerateSingleUserConnectCode(idx)"
+                  :title="translate('settings.regenerateConnectCode')"
+                  >↻</el-button
+                >
               </div>
-            </template>
-            <template #right>
-              <SettingsActionGroup :actions="usersEditorActions" @command="handleUsersEditorAction" />
-            </template>
-          </SettingsPanelHeader>
-          <div class="panel-body noobot-workspace-body editor-body">
-              <SettingsJsonEditor
-                v-model="usersJsonText"
-                :parse-error="jsonParseError"
-              placeholder='{"users":[{"userId":"user-001","connectCode":"...","allowIDE":false}]}'
-            />
+              <div class="allow-ide-row">
+                <span class="allow-ide-label">{{ translate("settings.allowIDE") }}</span>
+                <el-switch v-model="item.allowIDE" />
+              </div>
+            </div>
+            <div v-if="!users.length" class="empty-tip list-empty-tip">
+              <div class="empty-icon">👥</div>
+              <p>{{ translate("settings.noUsersAdd") }}</p>
+            </div>
           </div>
-        </SettingsWorkspacePanel>
-      </SettingsWorkspaceLayout>
+        </template>
+      </SettingsJsonListEditorLayout>
     </el-tab-pane>
 
     <el-tab-pane :label="translate('settings.defaultUserSettings')" name="template">
@@ -492,7 +471,9 @@ watch(
           <SettingsPanelHeader>
             <template #left>
               <div class="file-info">
-                <span class="active-file noobot-flat-chip" :title="templateActivePath">{{ templateActivePath || translate("settings.noFileSelected") }}</span>
+                <span class="active-file noobot-flat-chip" :title="templateActivePath">{{
+                  templateActivePath || translate("settings.noFileSelected")
+                }}</span>
               </div>
             </template>
             <template #right>

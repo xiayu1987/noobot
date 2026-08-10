@@ -37,16 +37,14 @@ import {
   BasePreviewContent,
 } from "../../../../shared/public-api/ui.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
-import {
-  attachmentIdentityKey,
-  projectAttachmentIdentity,
-} from "@noobot/attachment-protocol";
+import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
 import { resolveExtensionPoint } from "../../../../extensions/extension-registry.js";
 import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessage,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import { chatMessageItemProps } from "../../model/messageItemProps.js";
 
 const emit = defineEmits(["open-thinking-details"]);
 
@@ -61,30 +59,7 @@ function getAttachmentRenderKey(attachmentItem = {}) {
   return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
 }
 
-const props = defineProps({
-  messageItem: { type: Object, required: true },
-  allMessages: { type: Array, default: () => [] },
-  sessionDocs: { type: Array, default: () => [] },
-  userId: { type: String, default: "" },
-  renderMarkdown: { type: Function, required: true },
-  formatTime: { type: Function, required: true },
-  formatFileSize: { type: Function, required: true },
-  isImageMime: { type: Function, required: true },
-  sending: { type: Boolean, default: false },
-  currentTurn: { type: Boolean, default: false },
-  deleteMonotonicMessage: { type: Function, default: null },
-  resendMonotonicMessage: { type: Function, default: null },
-  stopExecution: { type: Function, default: null },
-  hideHeader: { type: Boolean, default: false },
-  attachmentPreviewDialogClass: {
-    type: String,
-    default: "attachment-preview-dialog",
-  },
-  filePreviewDialogClass: {
-    type: String,
-    default: "generated-file-preview-dialog",
-  },
-});
+const props = defineProps(chatMessageItemProps);
 
 const {
   previewVisible,
@@ -139,11 +114,14 @@ const { displayedAttachments } = useMessageFiles({
 });
 
 watch(
-  () => displayedAttachments.value.map((attachment) => ({
-    attachmentId: String(attachment?.attachmentId || "").trim(),
-    hasParsedResult: Boolean(attachment?.parsedResult),
-    parsedResultAttachmentId: String(attachment?.parsedResult?.attachmentId || attachment?.parsedResultAttachmentId || "").trim(),
-  })),
+  () =>
+    displayedAttachments.value.map((attachment) => ({
+      attachmentId: String(attachment?.attachmentId || "").trim(),
+      hasParsedResult: Boolean(attachment?.parsedResult),
+      parsedResultAttachmentId: String(
+        attachment?.parsedResult?.attachmentId || attachment?.parsedResultAttachmentId || "",
+      ).trim(),
+    })),
   (attachments) => {
     logWorkflowDiagnostics("frontend.workflowRender.attachmentCardsProjected", {
       ...summarizeWorkflowMessage(props.messageItem),
@@ -153,10 +131,11 @@ watch(
   { immediate: true, deep: true },
 );
 
-const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepState } = useMessageMeta({
-  getMessageItem: () => props.messageItem,
-  getRuntimeView: () => messageRuntime.value,
-});
+const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepState } =
+  useMessageMeta({
+    getMessageItem: () => props.messageItem,
+    getRuntimeView: () => messageRuntime.value,
+  });
 
 const messageMarkdownRef = ref(null);
 const { translate } = useLocale();
@@ -171,9 +150,9 @@ const messageRuntime = computed(() => {
     messageItem: props.messageItem,
     turnTiming: realtimeRuntime
       ? {
-        thinkingStartedAt: realtimeRuntime.startedAt,
-        thinkingFinishedAt: realtimeRuntime.finishedAt,
-      }
+          thinkingStartedAt: realtimeRuntime.startedAt,
+          thinkingFinishedAt: realtimeRuntime.finishedAt,
+        }
       : null,
     turnStatus: realtimeRuntime?.state ? { status: realtimeRuntime.state } : null,
     realtimeState: realtimeRuntime,
@@ -196,11 +175,13 @@ const hasThinkingPanelContribution = computed(() =>
   preMessageCardRenderers.value.some((renderer = {}) => renderer.id === "thinking-panel"),
 );
 const thinkingPanelVisible = ref(false);
-const statusStepRunning = computed(() => Boolean(
-  statusStepState.value && !["completed", "stopped", "error"].includes(statusStepState.value),
-));
-const unifiedRuntimePanelsRunning = computed(() =>
-  statusStepRunning.value && thinkingPanelVisible.value,
+const statusStepRunning = computed(() =>
+  Boolean(
+    statusStepState.value && !["completed", "stopped", "error"].includes(statusStepState.value),
+  ),
+);
+const unifiedRuntimePanelsRunning = computed(
+  () => statusStepRunning.value && thinkingPanelVisible.value,
 );
 const workflowChildRenderDiagnosticsSignature = computed(() => {
   const turnScopeId = getMessageTurnScopeId(props.messageItem);
@@ -224,24 +205,32 @@ const workflowChildRenderDiagnosticsSignature = computed(() => {
     runtimeFinishedAt: String(runtime?.finishedAt || runtime?.thinkingFinishedAt || ""),
   });
 });
-watch(workflowChildRenderDiagnosticsSignature, (signature) => {
-  if (!signature) return;
-  const state = JSON.parse(signature);
-  logWorkflowDiagnostics("frontend.workflowRender.childMessageRuntimeCommitted", {
-    ...state,
-    sessionId: state.parentSessionId || state.sessionId,
-    nodeSessionId: state.sessionId,
-  });
-}, { immediate: true, flush: "post" });
-const showMessageTypeTag = computed(() => !(
-  getMessageRole(props.messageItem) === "assistant" &&
-  String(props.messageItem?.type || "").trim().toLowerCase() === "message" &&
-  !String(props.messageItem?.content || "").trim() &&
-  Boolean(
-    getMessageTurnScopeId(props.messageItem) ||
-    getMessageDialogProcessId(props.messageItem),
-  )
-));
+watch(
+  workflowChildRenderDiagnosticsSignature,
+  (signature) => {
+    if (!signature) return;
+    const state = JSON.parse(signature);
+    logWorkflowDiagnostics("frontend.workflowRender.childMessageRuntimeCommitted", {
+      ...state,
+      sessionId: state.parentSessionId || state.sessionId,
+      nodeSessionId: state.sessionId,
+    });
+  },
+  { immediate: true, flush: "post" },
+);
+const showMessageTypeTag = computed(
+  () =>
+    !(
+      getMessageRole(props.messageItem) === "assistant" &&
+      String(props.messageItem?.type || "")
+        .trim()
+        .toLowerCase() === "message" &&
+      !String(props.messageItem?.content || "").trim() &&
+      Boolean(
+        getMessageTurnScopeId(props.messageItem) || getMessageDialogProcessId(props.messageItem),
+      )
+    ),
+);
 watch(
   () => [
     summarizeWorkflowMessage(props.messageItem),
@@ -258,24 +247,28 @@ watch(
       message,
       preRendererIds,
       postRendererIds,
-      matched: preRendererIds.includes("workflow-card") || postRendererIds.includes("workflow-card"),
+      matched:
+        preRendererIds.includes("workflow-card") || postRendererIds.includes("workflow-card"),
     });
   },
   { immediate: true },
 );
 const suppressDefaultAssets = computed(() =>
-  postMessageCardRenderers.value.some(
-    (renderer = {}) => renderer?.suppressDefaultAssets === true,
-  ),
+  postMessageCardRenderers.value.some((renderer = {}) => renderer?.suppressDefaultAssets === true),
 );
 const preContentMessageActionRenderers = computed(() =>
-  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS, { messageItem: props.messageItem }),
+  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS, {
+    messageItem: props.messageItem,
+  }),
 );
 const postContentMessageActionRenderers = computed(() =>
-  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_ACTION_POST_CONTENT, { messageItem: props.messageItem }),
+  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_ACTION_POST_CONTENT, {
+    messageItem: props.messageItem,
+  }),
 );
-const hideMessageMarkdownForInlineEditor = computed(() =>
-  getMessageRole(props.messageItem) === "user" && props.messageItem?.__monotonicEditing === true,
+const hideMessageMarkdownForInlineEditor = computed(
+  () =>
+    getMessageRole(props.messageItem) === "user" && props.messageItem?.__monotonicEditing === true,
 );
 const defaultMonotonicMessageActionProps = computed(() =>
   resolveMonotonicMessageActionProps(resolveRendererContext()),
@@ -342,32 +335,40 @@ function resolveRendererContext() {
 const extensionRendererContext = computed(() => {
   return resolveRendererContext();
 });
-const extensionContextDiagnosticsSignature = computed(() => [
-  String(props.messageItem?.sessionId || ""),
-  String(props.messageItem?.dialogProcessId || ""),
-  String(props.messageItem?.turnScopeId || ""),
-  Number(chatStore.subSessionMessageRegistryVersion || 0),
-].join("|"));
-watch(extensionContextDiagnosticsSignature, () => {
-  logWorkflowDiagnostics("frontend.workflowRender.extensionContextProjected", () => {
-    const context = extensionRendererContext.value;
-    const sessions = context.subSessionMessageRegistry?.sessions || {};
-    return {
-    sessionId: String(props.messageItem?.sessionId || ""),
-    dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
-    turnScopeId: String(props.messageItem?.turnScopeId || ""),
-    subSessionMessageRegistryVersion: Number(context.subSessionMessageRegistryVersion || 0),
-    subSessions: Object.values(sessions).map((session = {}) => ({
-      sessionId: String(session?.sessionId || ""),
-      messages: (Array.isArray(session?.messages) ? session.messages : []).map((message = {}) => ({
-        id: String(message?.id || message?.messageId || ""),
-        role: String(message?.role || ""),
-        contentLength: String(message?.content || "").length,
-      })),
-    })),
-    };
-  });
-}, { flush: "post" });
+const extensionContextDiagnosticsSignature = computed(() =>
+  [
+    String(props.messageItem?.sessionId || ""),
+    String(props.messageItem?.dialogProcessId || ""),
+    String(props.messageItem?.turnScopeId || ""),
+    Number(chatStore.subSessionMessageRegistryVersion || 0),
+  ].join("|"),
+);
+watch(
+  extensionContextDiagnosticsSignature,
+  () => {
+    logWorkflowDiagnostics("frontend.workflowRender.extensionContextProjected", () => {
+      const context = extensionRendererContext.value;
+      const sessions = context.subSessionMessageRegistry?.sessions || {};
+      return {
+        sessionId: String(props.messageItem?.sessionId || ""),
+        dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
+        turnScopeId: String(props.messageItem?.turnScopeId || ""),
+        subSessionMessageRegistryVersion: Number(context.subSessionMessageRegistryVersion || 0),
+        subSessions: Object.values(sessions).map((session = {}) => ({
+          sessionId: String(session?.sessionId || ""),
+          messages: (Array.isArray(session?.messages) ? session.messages : []).map(
+            (message = {}) => ({
+              id: String(message?.id || message?.messageId || ""),
+              role: String(message?.role || ""),
+              contentLength: String(message?.content || "").length,
+            }),
+          ),
+        })),
+      };
+    });
+  },
+  { flush: "post" },
+);
 
 function handleOpenThinkingDetails(payload = {}) {
   emit("open-thinking-details", {
@@ -408,7 +409,10 @@ function toggleAssistantContent() {
   >
     <BaseMessageTypeTag v-if="showMessageTypeTag" :type="messageItem.type" />
     <div
-      v-if="getMessageRole(messageItem) === 'assistant' && (statusStepState || hasThinkingPanelContribution)"
+      v-if="
+        getMessageRole(messageItem) === 'assistant' &&
+        (statusStepState || hasThinkingPanelContribution)
+      "
       class="message-runtime-panels"
       :class="{
         'has-status-steps': Boolean(statusStepState),
@@ -416,10 +420,7 @@ function toggleAssistantContent() {
         'is-running': unifiedRuntimePanelsRunning,
       }"
     >
-      <MessageStatusRow
-        v-if="statusStepState"
-        :status-step-state="statusStepState"
-      />
+      <MessageStatusRow v-if="statusStepState" :status-step-state="statusStepState" />
       <ExtensionOutlet
         v-if="hasThinkingPanelContribution"
         :point="EXTENSION_POINTS.MESSAGE_CARD_PRE"
@@ -441,7 +442,10 @@ function toggleAssistantContent() {
     <BaseMessageErrorAlert :error="messageItem.error" />
 
     <AssistantCopyActions
-      :visible="getMessageRole(messageItem) === 'assistant' && Boolean(String(messageItem.content || '').trim())"
+      :visible="
+        getMessageRole(messageItem) === 'assistant' &&
+        Boolean(String(messageItem.content || '').trim())
+      "
       :translate="translate"
       :on-copy-rich="handleCopyAssistantMessageRich"
       :on-copy-text="handleCopyAssistantMessageText"
@@ -455,7 +459,10 @@ function toggleAssistantContent() {
     />
 
     <BaseMarkdownContent
-      v-if="!hideMessageMarkdownForInlineEditor && (getMessageRole(messageItem) !== 'assistant' || assistantContentExpanded)"
+      v-if="
+        !hideMessageMarkdownForInlineEditor &&
+        (getMessageRole(messageItem) !== 'assistant' || assistantContentExpanded)
+      "
       ref="messageMarkdownRef"
       :content="messageItem.content"
       :render-markdown="renderMarkdown"
@@ -486,7 +493,6 @@ function toggleAssistantContent() {
         @preview-parsed-result="openParsedResultPreview"
         @download-parsed-result="onDownloadParsedResult"
       />
-
     </BaseFileCardList>
 
     <ExtensionOutlet
@@ -558,12 +564,16 @@ function toggleAssistantContent() {
 }
 
 @keyframes message-runtime-panels-glow {
-  0%, 100% {
-    box-shadow: 0 3px 12px color-mix(in srgb, var(--el-color-primary) 14%, transparent), 0 0 6px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+  0%,
+  100% {
+    box-shadow:
+      0 3px 12px color-mix(in srgb, var(--el-color-primary) 14%, transparent),
+      0 0 6px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
   }
   50% {
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--el-color-primary) 22%, transparent), 0 0 12px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+    box-shadow:
+      0 4px 16px color-mix(in srgb, var(--el-color-primary) 22%, transparent),
+      0 0 12px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
   }
 }
-
 </style>

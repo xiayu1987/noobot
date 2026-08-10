@@ -8,25 +8,19 @@ import { computed } from "vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import ExtensionOutlet from "../../../extensions/components/ExtensionOutlet.vue";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
-import { provideExtensionValues, resolveExtensionPoint } from "../../../extensions/extension-registry.js";
+import { sharedComposerOptionProps } from "../model/composerOptionProps.js";
+import {
+  provideExtensionValues,
+  resolveExtensionPoint,
+} from "../../../extensions/extension-registry.js";
 import { createPluginContext } from "../../../extensions/create-plugin-context.js";
 
 const props = defineProps({
-  allowUserInteraction: { type: Boolean, default: true },
-  safeConfirm: { type: Boolean, default: true },
-  safeConfirmLevel: { type: String, default: "low" },
-  sanitizeOutput: { type: Boolean, default: true },
-  streamOutput: { type: Boolean, default: false },
-  botScenario: { type: String, default: "" },
+  ...sharedComposerOptionProps,
   normalizedScenarioOptions: { type: Array, default: () => [] },
   selectedScenarioDescription: { type: String, default: "" },
   normalizedPluginOptions: { type: Array, default: () => [] },
   selectedPluginKeySet: { type: Object, default: () => new Set() },
-  selectedModel: { type: String, default: "" },
-  memoryModel: { type: String, default: "" },
-  modelOptions: { type: Array, default: () => [] },
-  pluginModelConfig: { type: Object, default: () => ({}) },
-  summaryPolicy: { type: Object, default: () => ({}) },
   resolveScenarioLabel: { type: Function, required: true },
 });
 
@@ -42,13 +36,23 @@ const emit = defineEmits([
   "update:selectedModel",
   "update:memoryModel",
   "update:pluginModelConfig",
+  "update:frontendThresholdsEnabled",
   "update:summaryPolicy",
 ]);
 
 const { translate } = useLocale();
 const safeConfirmLevels = ["low", "medium", "high", "critical"];
-const safeConfirmMarks = computed(() => Object.fromEntries(safeConfirmLevels.map((level, index) => [index, translate(`composer.safeConfirmLevel.${level}`)])));
-const safeConfirmSliderValue = computed(() => Math.max(0, safeConfirmLevels.indexOf(props.safeConfirmLevel)));
+const safeConfirmMarks = computed(() =>
+  Object.fromEntries(
+    safeConfirmLevels.map((level, index) => [
+      index,
+      translate(`composer.safeConfirmLevel.${level}`),
+    ]),
+  ),
+);
+const safeConfirmSliderValue = computed(() =>
+  Math.max(0, safeConfirmLevels.indexOf(props.safeConfirmLevel)),
+);
 
 // The selection is a Set and callers may mutate it in place when a plugin is
 // toggled.  Depending on the Set object itself therefore does not invalidate
@@ -70,20 +74,28 @@ const normalizedModelOptions = computed(() => {
   const optionMap = new Map();
   const addOption = (rawOption) => {
     const value = String(
-      typeof rawOption === "string" ? rawOption : rawOption?.value || rawOption?.key || rawOption?.model || "",
-    ).trim();
-    if (!value || optionMap.has(value)) return;
-    const label = String(
       typeof rawOption === "string"
         ? rawOption
-        : rawOption?.label || rawOption?.name || rawOption?.alias || rawOption?.model || value,
-    ).trim() || value;
+        : rawOption?.value || rawOption?.key || rawOption?.model || "",
+    ).trim();
+    if (!value || optionMap.has(value)) return;
+    const label =
+      String(
+        typeof rawOption === "string"
+          ? rawOption
+          : rawOption?.label || rawOption?.name || rawOption?.alias || rawOption?.model || value,
+      ).trim() || value;
     optionMap.set(value, {
       value,
       label,
-      alias: String(typeof rawOption === "string" ? value : rawOption?.alias || value).trim() || value,
-      key: String(typeof rawOption === "string" ? value : rawOption?.key || rawOption?.alias || value).trim() || value,
-      name: String(typeof rawOption === "string" ? label : rawOption?.name || label).trim() || label,
+      alias:
+        String(typeof rawOption === "string" ? value : rawOption?.alias || value).trim() || value,
+      key:
+        String(
+          typeof rawOption === "string" ? value : rawOption?.key || rawOption?.alias || value,
+        ).trim() || value,
+      name:
+        String(typeof rawOption === "string" ? label : rawOption?.name || label).trim() || label,
       model: String(typeof rawOption === "string" ? "" : rawOption?.model || "").trim(),
       description: String(typeof rawOption === "string" ? "" : rawOption?.description || "").trim(),
     });
@@ -97,6 +109,24 @@ const normalizedModelOptions = computed(() => {
 });
 
 const hasModelOptions = computed(() => normalizedModelOptions.value.length > 0);
+const modelSelectionRows = computed(() => [
+  {
+    key: "main",
+    label: translate("composer.mainFlowModel"),
+    hint: translate("composer.mainFlowModelHint"),
+    modelValue: props.selectedModel,
+    optionKeyPrefix: "",
+    updateEvent: "update:selectedModel",
+  },
+  {
+    key: "memory",
+    label: translate("composer.memoryExperienceModel"),
+    hint: translate("composer.memoryExperienceModelHint"),
+    modelValue: props.memoryModel,
+    optionKeyPrefix: "memory-",
+    updateEvent: "update:memoryModel",
+  },
+]);
 
 function updatePluginModelConfig(nextConfig = {}) {
   emit("update:pluginModelConfig", nextConfig && typeof nextConfig === "object" ? nextConfig : {});
@@ -111,7 +141,10 @@ function pluginContext(pluginId = "") {
 }
 
 function getModelMetaText(modelItem = {}) {
-  return [modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "", modelItem.model]
+  return [
+    modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "",
+    modelItem.model,
+  ]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join(" · ");
@@ -120,13 +153,18 @@ function getModelMetaText(modelItem = {}) {
 function getSelectedModelLabel() {
   const selectedValue = String(props.selectedModel || "").trim();
   if (!selectedValue) return translate("composer.modelUsingDefault");
-  const selectedOption = normalizedModelOptions.value.find((modelItem) => modelItem.value === selectedValue);
+  const selectedOption = normalizedModelOptions.value.find(
+    (modelItem) => modelItem.value === selectedValue,
+  );
   return selectedOption?.label || selectedValue;
 }
 
 const composerModelExtensionContext = computed(() => ({
   modelOptions: normalizedModelOptions.value,
-  pluginModelConfig: props.pluginModelConfig && typeof props.pluginModelConfig === "object" ? props.pluginModelConfig : {},
+  pluginModelConfig:
+    props.pluginModelConfig && typeof props.pluginModelConfig === "object"
+      ? props.pluginModelConfig
+      : {},
   selectedPluginKeySet: selectedPluginKeySetSnapshot.value,
   updatePluginModelConfig,
   hasModelOptions: hasModelOptions.value,
@@ -134,12 +172,18 @@ const composerModelExtensionContext = computed(() => ({
 }));
 
 const composerModelExtensionRenderers = computed(() =>
-  resolveExtensionPoint(EXTENSION_POINTS.COMPOSER_OPTIONS_MODEL, composerModelExtensionContext.value),
+  resolveExtensionPoint(
+    EXTENSION_POINTS.COMPOSER_OPTIONS_MODEL,
+    composerModelExtensionContext.value,
+  ),
 );
 
 const composerExtensionBaseProps = computed(() => ({
   modelOptions: normalizedModelOptions.value,
-  pluginModelConfig: props.pluginModelConfig && typeof props.pluginModelConfig === "object" ? props.pluginModelConfig : {},
+  pluginModelConfig:
+    props.pluginModelConfig && typeof props.pluginModelConfig === "object"
+      ? props.pluginModelConfig
+      : {},
   selectedPluginKeySet: selectedPluginKeySetSnapshot.value,
   hasModelOptions: hasModelOptions.value,
   updatePluginModelConfig,
@@ -183,7 +227,9 @@ const composerExtensionBaseProps = computed(() => ({
         @update:model-value="emit('update:safeConfirm', $event)"
       />
       <div v-if="safeConfirm" class="safe-confirm-level">
-        <span class="safe-confirm-level-label">{{ translate("composer.safeConfirmLevelLabel") }}</span>
+        <span class="safe-confirm-level-label">{{
+          translate("composer.safeConfirmLevelLabel")
+        }}</span>
         <el-slider
           class="safe-confirm-level-slider"
           :model-value="safeConfirmSliderValue"
@@ -199,7 +245,10 @@ const composerExtensionBaseProps = computed(() => ({
 
     <div class="option-selector scenario-selector noobot-soft-card">
       <span class="scenario-selector-label">{{ translate("composer.botScenario") }}</span>
-      <div v-if="normalizedScenarioOptions.length" class="option-button-group scenario-button-group">
+      <div
+        v-if="normalizedScenarioOptions.length"
+        class="option-button-group scenario-button-group"
+      >
         <el-button
           v-for="scenarioItem in normalizedScenarioOptions"
           :key="scenarioItem.key"
@@ -216,7 +265,13 @@ const composerExtensionBaseProps = computed(() => ({
         v-else
         size="small"
         class="composer-option-button scenario-option-button noobot-pill-option"
-        :type="String(botScenario || '').trim().toLowerCase() === 'programming' ? 'primary' : 'default'"
+        :type="
+          String(botScenario || '')
+            .trim()
+            .toLowerCase() === 'programming'
+            ? 'primary'
+            : 'default'
+        "
         @click="emit('toggle-programming-scenario')"
       >
         {{ translate("composer.scenarioProgramming") }}
@@ -246,19 +301,25 @@ const composerExtensionBaseProps = computed(() => ({
       <div class="model-config-heading">
         <div>
           <div class="model-config-header">{{ translate("composer.modelSelection") }}</div>
-          <p class="model-config-description">{{ translate("composer.modelSelectionDescription") }}</p>
+          <p class="model-config-description">
+            {{ translate("composer.modelSelectionDescription") }}
+          </p>
         </div>
         <el-tag size="small" effect="plain" class="model-status-tag">
           {{ getSelectedModelLabel() }}
         </el-tag>
       </div>
-      <div class="model-select-card noobot-soft-card">
+      <div
+        v-for="row in modelSelectionRows"
+        :key="row.key"
+        class="model-select-card noobot-soft-card"
+      >
         <div class="model-field-copy">
-          <span class="model-field-label">{{ translate("composer.mainFlowModel") }}</span>
-          <span class="model-field-hint">{{ translate("composer.mainFlowModelHint") }}</span>
+          <span class="model-field-label">{{ row.label }}</span>
+          <span class="model-field-hint">{{ row.hint }}</span>
         </div>
         <el-select
-          :model-value="selectedModel"
+          :model-value="row.modelValue"
           size="small"
           clearable
           :filterable="false"
@@ -266,61 +327,37 @@ const composerExtensionBaseProps = computed(() => ({
           :disabled="!hasModelOptions"
           :placeholder="translate('composer.useDefaultModel')"
           class="composer-select model-select noobot-model-select-control"
-          @update:model-value="emit('update:selectedModel', String($event || '').trim())"
+          @update:model-value="emit(row.updateEvent, String($event || '').trim())"
         >
           <el-option
             v-for="modelItem in normalizedModelOptions"
-            :key="modelItem.value"
+            :key="`${row.optionKeyPrefix}${modelItem.value}`"
             :label="modelItem.label"
             :value="modelItem.value"
             class="model-select-option"
           >
             <div class="model-option-content">
               <span class="model-option-label">{{ modelItem.label }}</span>
-              <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{ getModelMetaText(modelItem) }}</span>
-              <span v-if="modelItem.description" class="model-option-description">{{ modelItem.description }}</span>
+              <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{
+                getModelMetaText(modelItem)
+              }}</span>
+              <span v-if="modelItem.description" class="model-option-description">{{
+                modelItem.description
+              }}</span>
             </div>
           </el-option>
         </el-select>
-        <span v-if="!hasModelOptions" class="plugin-empty-text">{{ translate("composer.noAvailableModels") }}</span>
-      </div>
-
-      <div class="model-select-card noobot-soft-card">
-        <div class="model-field-copy">
-          <span class="model-field-label">{{ translate("composer.memoryExperienceModel") }}</span>
-          <span class="model-field-hint">{{ translate("composer.memoryExperienceModelHint") }}</span>
-        </div>
-        <el-select
-          :model-value="memoryModel"
-          size="small"
-          clearable
-          :filterable="false"
-          popper-class="noobot-composer-select-popper noobot-model-select-popper"
-          :disabled="!hasModelOptions"
-          :placeholder="translate('composer.useDefaultModel')"
-          class="composer-select model-select noobot-model-select-control"
-          @update:model-value="emit('update:memoryModel', String($event || '').trim())"
-        >
-          <el-option
-            v-for="modelItem in normalizedModelOptions"
-            :key="`memory-${modelItem.value}`"
-            :label="modelItem.label"
-            :value="modelItem.value"
-            class="model-select-option"
-          >
-            <div class="model-option-content">
-              <span class="model-option-label">{{ modelItem.label }}</span>
-              <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{ getModelMetaText(modelItem) }}</span>
-              <span v-if="modelItem.description" class="model-option-description">{{ modelItem.description }}</span>
-            </div>
-          </el-option>
-        </el-select>
+        <span v-if="row.key === 'main' && !hasModelOptions" class="plugin-empty-text">
+          {{ translate("composer.noAvailableModels") }}
+        </span>
       </div>
 
       <div class="plugin-model-extension">
         <div class="plugin-extension-heading">
           <div class="model-config-subtitle">{{ translate("composer.pluginModelExtensions") }}</div>
-          <p class="model-config-description">{{ translate("composer.pluginModelExtensionsDescription") }}</p>
+          <p class="model-config-description">
+            {{ translate("composer.pluginModelExtensionsDescription") }}
+          </p>
         </div>
         <ExtensionOutlet
           :point="EXTENSION_POINTS.COMPOSER_OPTIONS_MODEL"
@@ -370,7 +407,8 @@ const composerExtensionBaseProps = computed(() => ({
   width: 100%;
   box-sizing: border-box;
   padding: 6px 10px 14px;
-  border-top: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 55%, transparent);
+  border-top: 1px solid
+    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 55%, transparent);
 }
 
 .safe-confirm-level-label {
@@ -464,16 +502,28 @@ const composerExtensionBaseProps = computed(() => ({
   height: 38px;
   box-sizing: border-box;
   border-radius: var(--noobot-radius-md);
-  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%, var(--el-color-primary));
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%,
+    var(--el-color-primary)
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-panel-border, var(--el-border-color)) 78%,
+    transparent
+  );
   transition:
     background-color 0.18s ease,
-    border-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .composer-select :deep(.el-select__wrapper.is-focused),
 .composer-select :deep(.el-select__wrapper:hover) {
-  border-color: color-mix(in srgb, var(--el-color-primary) 50%, var(--noobot-panel-border, var(--el-border-color)));
+  border-color: color-mix(
+    in srgb,
+    var(--el-color-primary) 50%,
+    var(--noobot-panel-border, var(--el-border-color))
+  );
 }
 
 .composer-select :deep(.el-select__selected-item),
@@ -530,8 +580,16 @@ const composerExtensionBaseProps = computed(() => ({
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--el-color-primary);
-  border-color: color-mix(in srgb, var(--el-color-primary) 42%, var(--noobot-panel-border, var(--el-border-color)));
-  background: color-mix(in srgb, var(--el-color-primary) 9%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  border-color: color-mix(
+    in srgb,
+    var(--el-color-primary) 42%,
+    var(--noobot-panel-border, var(--el-border-color))
+  );
+  background: color-mix(
+    in srgb,
+    var(--el-color-primary) 9%,
+    var(--noobot-panel-bg, var(--el-bg-color-overlay))
+  );
 }
 
 .model-select-card {
@@ -705,7 +763,11 @@ const composerExtensionBaseProps = computed(() => ({
 :global(.noobot-composer-select-popper) {
   width: auto;
   max-width: calc(100vw - 32px);
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-panel-border, var(--el-border-color)) 82%,
+    transparent
+  );
   background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
   overflow: hidden;
   border-radius: var(--noobot-radius-md);
@@ -745,17 +807,29 @@ const composerExtensionBaseProps = computed(() => ({
 :global(.noobot-composer-select-popper .el-select-dropdown__item.hover),
 :global(.noobot-composer-select-popper .el-select-dropdown__item:hover) {
   color: var(--noobot-text-strong, var(--el-text-color-primary));
-  background: color-mix(in srgb, var(--el-color-primary) 10%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
+  background: color-mix(
+    in srgb,
+    var(--el-color-primary) 10%,
+    var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))
+  );
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected) {
   color: var(--el-color-primary);
-  background: color-mix(in srgb, var(--el-color-primary) 14%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
+  background: color-mix(
+    in srgb,
+    var(--el-color-primary) 14%,
+    var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))
+  );
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected.hover),
 :global(.noobot-composer-select-popper .el-select-dropdown__item.is-selected:hover) {
-  background: color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
+  background: color-mix(
+    in srgb,
+    var(--el-color-primary) 18%,
+    var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))
+  );
 }
 
 :global(.noobot-composer-select-popper .el-select-dropdown__empty) {
@@ -765,7 +839,11 @@ const composerExtensionBaseProps = computed(() => ({
 
 :global(.noobot-composer-select-popper .el-popper__arrow::before) {
   background: var(--noobot-control-menu-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-panel-border, var(--el-border-color)) 82%,
+    transparent
+  );
 }
 
 @media (max-width: 768px) {

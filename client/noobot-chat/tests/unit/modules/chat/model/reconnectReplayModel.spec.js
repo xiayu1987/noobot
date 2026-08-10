@@ -9,6 +9,7 @@ import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   findLatestPendingAssistantAfterLastUser,
+  findRecoverableReconnectSessionId,
   findReconnectDoneEnvelopeWithMessages,
   findReusableMessageObject,
   isDialogProcessRecoverable,
@@ -121,6 +122,49 @@ describe("reconnectReplayModel", () => {
         ],
       ),
     ).toBe(true);
+  });
+
+  it("findRecoverableReconnectSessionId keeps the authoritative current session when present", () => {
+    const currentIdle = {
+      sessionId: "s-current",
+      replayBatch: createReplayBatch({
+        sessionId: "s-current",
+        snapshot: createTurnLifecycleSnapshot({
+          commandId: "command-current",
+          sessionId: "s-current",
+          sequence: 1,
+          activeTurnScopeId: "",
+          activeTurn: null,
+        }),
+        snapshotSequence: 1,
+      }),
+    };
+    const otherRecoverable = {
+      sessionId: "s-other",
+      replayBatch: createReplayBatch({
+        sessionId: "s-other",
+        snapshot: createTurnLifecycleSnapshot({
+          commandId: "command-other",
+          sessionId: "s-other",
+          sequence: 2,
+          activeTurnScopeId: "turn-other",
+          activeTurn: {
+            sessionId: "s-other",
+            turnScopeId: "turn-other",
+            messageId: "message-other",
+            presentationMessageId: "presentation-other",
+            revision: 1,
+            sequence: 2,
+            state: "processing",
+          },
+        }),
+        snapshotSequence: 2,
+      }),
+    };
+
+    expect(findRecoverableReconnectSessionId([currentIdle, otherRecoverable], "s-current")).toBe(
+      "s-current",
+    );
   });
 
   it("splitReconnectMessagesByDialogProcessId splits mixed batches", () => {
