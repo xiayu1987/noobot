@@ -47,29 +47,39 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
       prefixAudit = assertModelInvocationTraceSet(traces, { rootSessionId: sessionId });
     }
     if (policy.expectation === MODEL_CALL_EXPECTATION.REQUIRED) {
-      expect(traces.length, `${policy.caseId} requires an observed provider model invocation`).toBeGreaterThan(0);
+      expect(
+        traces.length,
+        `${policy.caseId} requires an observed provider model invocation`,
+      ).toBeGreaterThan(0);
     } else if (policy.expectation === MODEL_CALL_EXPECTATION.FORBIDDEN) {
       expect(traces, `${policy.caseId} forbids provider model invocations`).toEqual([]);
     }
     const expectedMainModel = String(process.env.NOOBOT_E2E_MODEL || "").trim();
     if (expectedMainModel) {
-      for (const trace of traces.filter((record) => record.data?.invocation?.purpose === "main_agent")) {
+      for (const trace of traces.filter(
+        (record) => record.data?.invocation?.purpose === "main_agent",
+      )) {
         expect(trace.data?.model?.alias, `${policy.caseId} main model`).toBe(expectedMainModel);
       }
     }
     const expectedHarnessModel = String(process.env.NOOBOT_E2E_HARNESS_MODEL || "").trim();
     if (expectedHarnessModel) {
       const harnessDomains = new Set(["planning", "guidance", "acceptance"]);
-      for (const trace of traces.filter((record) =>
-        String(record.data?.invocation?.flow || "").startsWith("plugin.")
-        && harnessDomains.has(String(record.data?.invocation?.domain || "")))) {
-        expect(trace.data?.model?.alias, `${policy.caseId} Harness model`).toBe(expectedHarnessModel);
+      for (const trace of traces.filter(
+        (record) =>
+          String(record.data?.invocation?.flow || "").startsWith("plugin.") &&
+          harnessDomains.has(String(record.data?.invocation?.domain || "")),
+      )) {
+        expect(trace.data?.model?.alias, `${policy.caseId} Harness model`).toBe(
+          expectedHarnessModel,
+        );
       }
     }
     const expectedMemoryModel = String(process.env.NOOBOT_E2E_MEMORY_MODEL || "").trim();
     if (expectedMemoryModel) {
-      for (const trace of traces.filter((record) =>
-        record.data?.invocation?.purpose === "memory_consolidation")) {
+      for (const trace of traces.filter(
+        (record) => record.data?.invocation?.purpose === "memory_consolidation",
+      )) {
         expect(trace.data?.model?.alias, `${policy.caseId} memory model`).toBe(expectedMemoryModel);
       }
     }
@@ -86,10 +96,13 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
     failure: validationError ? String(validationError.message || validationError) : null,
     rootSessionId: sessionId,
     invocationCount: traces.length,
-    invocationIdsUnique: new Set(traces.map((record) => record.data.invocationId)).size === traces.length,
+    invocationIdsUnique:
+      new Set(traces.map((record) => record.data.invocationId)).size === traces.length,
     modelInstanceCount: new Set(traces.map((record) => record.data.modelInstanceId)).size,
     sessionIds: [...new Set(traces.map((record) => record.sessionId))],
-    purposes: [...new Set(traces.map((record) => record.data?.invocation?.purpose).filter(Boolean))],
+    purposes: [
+      ...new Set(traces.map((record) => record.data?.invocation?.purpose).filter(Boolean)),
+    ],
     domains: [...new Set(traces.map((record) => record.data?.invocation?.domain).filter(Boolean))],
     prefixStability: prefixAudit,
   });
@@ -147,50 +160,68 @@ export const test = artifactTest.extend({
     const harnessModel = String(process.env.NOOBOT_E2E_HARNESS_MODEL || "").trim();
     const memoryModel = String(process.env.NOOBOT_E2E_MEMORY_MODEL || "").trim();
     if (selectedModel || harnessModel || memoryModel) {
-      await page.addInitScript(({ modelAlias, harnessModelAlias, memoryModelAlias }) => {
-        if (modelAlias) {
-          localStorage.setItem("noobot_selected_model", modelAlias);
-          localStorage.setItem("noobot_selected_model_by_scenario", JSON.stringify({
-            full: modelAlias,
-          }));
-          localStorage.setItem("noobot_selected_model_selection_by_scenario_v2", JSON.stringify({
-            full: { value: modelAlias, source: "user" },
-          }));
-        }
-        if (harnessModelAlias) {
-          localStorage.setItem("noobot_plugin_model_config_by_scenario_v2", JSON.stringify({
-            full: {
-              harness: {
-                stepModels: {
-                  planning: harnessModelAlias,
-                  guidance: harnessModelAlias,
-                  acceptance: harnessModelAlias,
-                  default: harnessModelAlias,
+      await page.addInitScript(
+        ({ modelAlias, harnessModelAlias, memoryModelAlias }) => {
+          if (modelAlias) {
+            localStorage.setItem("noobot_selected_model", modelAlias);
+            localStorage.setItem(
+              "noobot_selected_model_by_scenario",
+              JSON.stringify({
+                full: modelAlias,
+              }),
+            );
+            localStorage.setItem(
+              "noobot_selected_model_selection_by_scenario_v2",
+              JSON.stringify({
+                full: { value: modelAlias, source: "user" },
+              }),
+            );
+          }
+          if (harnessModelAlias) {
+            localStorage.setItem(
+              "noobot_plugin_model_config_by_scenario_v2",
+              JSON.stringify({
+                full: {
+                  harness: {
+                    stepModels: {
+                      planning: harnessModelAlias,
+                      guidance: harnessModelAlias,
+                      acceptance: harnessModelAlias,
+                      default: harnessModelAlias,
+                    },
+                  },
                 },
-              },
-            },
-          }));
-        }
-        if (memoryModelAlias) {
-          localStorage.setItem("noobot_bot_scenario", "full");
-          localStorage.setItem("noobot_memory_model_by_scenario_v1", JSON.stringify({
-            __default__: memoryModelAlias,
-            full: memoryModelAlias,
-          }));
-        }
-      }, {
-        modelAlias: selectedModel,
-        harnessModelAlias: harnessModel,
-        memoryModelAlias: memoryModel,
-      });
+              }),
+            );
+          }
+          if (memoryModelAlias) {
+            localStorage.setItem("noobot_bot_scenario", "full");
+            localStorage.setItem(
+              "noobot_memory_model_by_scenario_v1",
+              JSON.stringify({
+                __default__: memoryModelAlias,
+                full: memoryModelAlias,
+              }),
+            );
+          }
+        },
+        {
+          modelAlias: selectedModel,
+          harnessModelAlias: harnessModel,
+          memoryModelAlias: memoryModel,
+        },
+      );
     }
     await page.goto("/");
     if (memoryModel) {
       await page.evaluate((modelAlias) => {
-        localStorage.setItem("noobot_memory_model_by_scenario_v1", JSON.stringify({
-          __default__: modelAlias,
-          full: modelAlias,
-        }));
+        localStorage.setItem(
+          "noobot_memory_model_by_scenario_v1",
+          JSON.stringify({
+            __default__: modelAlias,
+            full: modelAlias,
+          }),
+        );
       }, memoryModel);
       await page.reload();
     }

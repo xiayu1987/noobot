@@ -6,8 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { sanitizeUserConfig } from "@noobot/agent-config-protocol";
 import {
+  sanitizeUserConfig,
   applySessionModelOverride,
   hasOwnConfigKey,
   mergeConfig,

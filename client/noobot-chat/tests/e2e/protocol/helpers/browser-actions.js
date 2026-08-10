@@ -31,13 +31,17 @@ export async function addAttachment(page, file) {
 export async function selectPlugins(page, pluginKeys = []) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
   const buttons = page.locator(".plugin-option-button");
-  for (let index = 0; index < await buttons.count(); index += 1) {
+  for (let index = 0; index < (await buttons.count()); index += 1) {
     const button = buttons.nth(index);
-    const key = String(await button.getAttribute("title") || await button.textContent() || "").trim().toLowerCase();
+    const key = String((await button.getAttribute("title")) || (await button.textContent()) || "")
+      .trim()
+      .toLowerCase();
     const shouldSelect = pluginKeys.some((item) => key.includes(item.toLowerCase()));
-    const selected = await button.getAttribute("type") === "primary" || await button.evaluate((node) => node.classList.contains("el-button--primary"));
+    const selected =
+      (await button.getAttribute("type")) === "primary" ||
+      (await button.evaluate((node) => node.classList.contains("el-button--primary")));
     if (selected !== shouldSelect) await button.click();
   }
   await page.locator(".more-collapse-btn").click();
@@ -47,11 +51,16 @@ export async function selectPlugins(page, pluginKeys = []) {
 export async function selectScenario(page, scenarioKey) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
-  const scenario = String(scenarioKey || "").trim().toLowerCase();
-  const target = panel.locator(".scenario-option-button").filter({
-    hasText: scenario === "programming" ? /编程|programming/i : new RegExp(scenario, "i"),
-  }).first();
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
+  const scenario = String(scenarioKey || "")
+    .trim()
+    .toLowerCase();
+  const target = panel
+    .locator(".scenario-option-button")
+    .filter({
+      hasText: scenario === "programming" ? /编程|programming/i : new RegExp(scenario, "i"),
+    })
+    .first();
   await expect(target).toBeVisible();
   await target.click();
   await expect(target).toHaveClass(/el-button--primary/);
@@ -62,7 +71,7 @@ export async function selectScenario(page, scenarioKey) {
 export async function setHarnessCapability(page, label, enabled) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
   const field = panel.locator(".plugin-model-field").filter({
     has: page.locator(".plugin-model-label").getByText(label, { exact: true }),
   });
@@ -76,7 +85,7 @@ export async function setHarnessCapability(page, label, enabled) {
 export async function setHarnessGuidanceAnalysisIntensity(page, value) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
   const control = panel.locator(".plugin-guidance-analysis-control");
   await expect(control).toBeVisible();
   const slider = control.locator(".el-slider__button-wrapper[role='slider']");
@@ -101,8 +110,10 @@ export async function setHarnessGuidanceAnalysisIntensity(page, value) {
 export async function setHarnessRuntimeThresholds(page, thresholds = {}) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
-  await expect(panel.locator("[data-threshold-key], .plugin-turn-threshold-control")).toHaveCount(0);
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
+  await expect(panel.locator("[data-threshold-key], .plugin-turn-threshold-control")).toHaveCount(
+    0,
+  );
   const normalized = Object.fromEntries(
     Object.entries(thresholds)
       .map(([key, value]) => [key, Number(value)])
@@ -190,7 +201,7 @@ export async function setHarnessRuntimeThresholds(page, thresholds = {}) {
 export async function setRunSummaryPolicy(page, policy = {}) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
   await expect(panel.locator("[data-summary-policy-key]")).toHaveCount(0);
   const normalizedPolicy = Object.fromEntries(
     Object.entries(policy)
@@ -256,7 +267,11 @@ export async function waitForNaturalCompletion({
   return terminal;
 }
 
-export async function editLatestUserMessage(page, content, { attachment = null, removeAttachments = false } = {}) {
+export async function editLatestUserMessage(
+  page,
+  content,
+  { attachment = null, removeAttachments = false } = {},
+) {
   const editButton = page.locator(".monotonic-chip-btn.is-primary").last();
   await editButton.click();
   const card = page.locator(".monotonic-edit-card").last();

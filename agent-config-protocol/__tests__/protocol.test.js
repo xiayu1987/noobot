@@ -112,10 +112,13 @@ test("run config resolver uses the canonical default scenario and intersects exp
       },
     },
   });
-  const resolved = resolver.resolveScenarioRunConfig({
-    toolPolicy: { allowToolNames: ["write_file", "other"] },
-    contextPolicy: { includeContextKeys: ["base_prompt", "services"] },
-  }, {});
+  const resolved = resolver.resolveScenarioRunConfig(
+    {
+      toolPolicy: { allowToolNames: ["write_file", "other"] },
+      contextPolicy: { includeContextKeys: ["base_prompt", "services"] },
+    },
+    {},
+  );
 
   assert.equal(resolved.scenario, "programming");
   assert.ok(resolved.scenarioProfile.tools.includes("read_file"));
@@ -140,5 +143,8 @@ test("tool binding adds user interaction once and keeps deny authoritative", () 
     },
   });
 
-  assert.deepEqual(tools.map((tool) => tool.name), ["read_file", "write_file"]);
+  assert.deepEqual(
+    tools.map((tool) => tool.name),
+    ["read_file", "write_file"],
+  );
 });

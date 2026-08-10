@@ -25,10 +25,18 @@ async function createFixture() {
 
   await writeRuntimeFile(backendSource, "service/app.js");
   await writeRuntimeFile(backendSource, "node_modules/noobot-agent/package.json", "{}");
-  await writeRuntimeFile(backendSource, "node_modules/@noobot/agent-config-protocol/package.json", "{}");
+  await writeRuntimeFile(
+    backendSource,
+    "node_modules/@noobot/agent-config-protocol/package.json",
+    "{}",
+  );
   await writeRuntimeFile(backendSource, "node_modules/@noobot/plugin-runtime/package.json", "{}");
   await writeRuntimeFile(backendSource, "node_modules/@noobot/event-protocol/package.json", "{}");
-  await writeRuntimeFile(backendSource, "node_modules/@noobot/authoritative-state/package.json", "{}");
+  await writeRuntimeFile(
+    backendSource,
+    "node_modules/@noobot/authoritative-state/package.json",
+    "{}",
+  );
   await writeRuntimeFile(backendSource, "node_modules/@noobot/sanitize/package.json", "{}");
   await writeRuntimeFile(
     backendSource,
@@ -70,11 +78,17 @@ test("copyBackendAfterPack copies backend plugins into packaged resources", asyn
 
     const backendDestination = path.join(fixture.appOutDir, "resources", "backend");
     assert.equal(
-      await readFile(path.join(backendDestination, "plugin", "noobot-plugin-harness", "manifest.json"), "utf8"),
+      await readFile(
+        path.join(backendDestination, "plugin", "noobot-plugin-harness", "manifest.json"),
+        "utf8",
+      ),
       "{}",
     );
     assert.equal(
-      await readFile(path.join(backendDestination, "plugin", "noobot-plugin-workflow", "manifest.json"), "utf8"),
+      await readFile(
+        path.join(backendDestination, "plugin", "noobot-plugin-workflow", "manifest.json"),
+        "utf8",
+      ),
       "{}",
     );
   } finally {
@@ -110,7 +124,10 @@ test("copyBackendAfterPack copies the sanitize workspace into packaged resources
 
     const backendDestination = path.join(fixture.appOutDir, "resources", "backend");
     assert.equal(
-      await readFile(path.join(backendDestination, "node_modules", "@noobot", "sanitize", "package.json"), "utf8"),
+      await readFile(
+        path.join(backendDestination, "node_modules", "@noobot", "sanitize", "package.json"),
+        "utf8",
+      ),
       "{}",
     );
   } finally {
@@ -125,7 +142,10 @@ test("copyBackendAfterPack copies plugin-runtime into packaged resources", async
 
     const backendDestination = path.join(fixture.appOutDir, "resources", "backend");
     assert.equal(
-      await readFile(path.join(backendDestination, "node_modules", "@noobot", "plugin-runtime", "package.json"), "utf8"),
+      await readFile(
+        path.join(backendDestination, "node_modules", "@noobot", "plugin-runtime", "package.json"),
+        "utf8",
+      ),
       "{}",
     );
   } finally {
@@ -152,7 +172,10 @@ test("copyBackendAfterPack copies authoritative lifecycle protocol packages", as
     ]) {
       for (const packageName of ["event-protocol", "authoritative-state"]) {
         assert.equal(
-          await readFile(path.join(backendDestination, "node_modules", "@noobot", packageName, "package.json"), "utf8"),
+          await readFile(
+            path.join(backendDestination, "node_modules", "@noobot", packageName, "package.json"),
+            "utf8",
+          ),
           "{}",
         );
       }
@@ -257,14 +280,7 @@ test("copyBackendAfterPack keeps legacy bundled agent system prompt required", a
   const fixture = await createFixture();
   try {
     await rm(
-      path.join(
-        fixture.backendSource,
-        "node_modules",
-        "noobot-agent",
-        "src",
-        "prompts",
-        "base.md",
-      ),
+      path.join(fixture.backendSource, "node_modules", "noobot-agent", "src", "prompts", "base.md"),
       { force: true },
     );
 
@@ -280,10 +296,10 @@ test("copyBackendAfterPack keeps legacy bundled agent system prompt required", a
 test("copyBackendAfterPack fails when prepared backend runtime is missing bundled agent system prompt directory", async () => {
   const fixture = await createFixture();
   try {
-    await rm(
-      path.join(fixture.backendSource, "node_modules", "noobot-agent", "src", "prompts"),
-      { recursive: true, force: true },
-    );
+    await rm(path.join(fixture.backendSource, "node_modules", "noobot-agent", "src", "prompts"), {
+      recursive: true,
+      force: true,
+    });
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
@@ -326,14 +342,7 @@ test("copyBackendAfterPack preserves the legacy base prompt content", async () =
     const backendDestination = path.join(fixture.appOutDir, "resources", "backend");
     assert.equal(
       await readFile(
-        path.join(
-          backendDestination,
-          "node_modules",
-          "noobot-agent",
-          "src",
-          "prompts",
-          "base.md",
-        ),
+        path.join(backendDestination, "node_modules", "noobot-agent", "src", "prompts", "base.md"),
         "utf8",
       ),
       "base prompt",
@@ -346,7 +355,10 @@ test("copyBackendAfterPack preserves the legacy base prompt content", async () =
 test("copyBackendAfterPack fails when prepared backend runtime is missing plugin manifests", async () => {
   const fixture = await createFixture();
   try {
-    await rm(path.join(fixture.backendSource, "plugin", "noobot-plugin-harness"), { recursive: true, force: true });
+    await rm(path.join(fixture.backendSource, "plugin", "noobot-plugin-harness"), {
+      recursive: true,
+      force: true,
+    });
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
