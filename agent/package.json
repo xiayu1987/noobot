@@ -1,6 +1,6 @@
 {
   "name": "noobot-agent",
-  "version": "4.1.5",
+  "version": "4.1.6",
   "private": true,
   "type": "module",
   "main": "src/index.js",
@@ -66,8 +66,8 @@
     "pino": "^10.3.1",
     "uuid": "^14.0.1",
     "zod": "^4.4.3",
-    "@noobot/plugin-runtime": "file:../plugin-runtime"
-    ,"@noobot/plugin-protocol": "file:../plugin-protocol",
+    "@noobot/plugin-runtime": "file:../plugin-runtime",
+    "@noobot/plugin-protocol": "file:../plugin-protocol",
     "@noobot/path-resolver": "file:../path-resolver"
   },
   "optionalDependencies": {
