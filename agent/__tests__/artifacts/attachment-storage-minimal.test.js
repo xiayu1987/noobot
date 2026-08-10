@@ -67,6 +67,32 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
   });
 });
 
+test("AttachmentService concurrent model artifact writes preserve one canonical index", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const batches = Array.from({ length: 8 }, (_, batch) => service.ingestGeneratedArtifacts({
+      userId: "u1",
+      sessionId: "concurrent-session",
+      attachmentSource: "model",
+      artifacts: [{
+        name: `result-${batch}.txt`,
+        mimeType: "text/plain",
+        contentBase64: Buffer.from(`result-${batch}`, "utf8").toString("base64"),
+      }],
+    }));
+    const saved = (await Promise.all(batches)).flat();
+    assert.equal(saved.length, 8);
+    const index = await readAttachIndex(
+      path.join(workspaceRoot, "u1"),
+      { sessionId: "concurrent-session", attachmentSource: "model" },
+    );
+    assert.equal(Object.keys(index.attachments).length, 8);
+    for (const record of saved) {
+      assert.ok(index.attachments[record.attachmentId]);
+    }
+  });
+});
+
 test("AttachmentService.resolveSourceAttachment requires the complete scoped identity", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
@@ -260,6 +286,8 @@ test("AttachmentService links parsed results to one attachment identity only", a
       attachmentId: saved[0].attachmentId,
     });
     assert.equal(linkedAttachment.parsedResult?.attachmentId, parsed.attachmentId);
+    assert.equal(linkedAttachment.parsedResult?.sessionId, parsed.sessionId);
+    assert.equal(linkedAttachment.parsedResult?.attachmentSource, parsed.attachmentSource);
     assert.equal(otherAttachment.parsedResult, undefined);
   });
 });
@@ -341,18 +369,9 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
           content: "test",
           dialogProcessId: "dialog-attachment-source",
           turnScopeId: "turn-attachment-source",
-          attachmentMetas: [
-            {
-              attachmentId: sourceAttachment.attachmentId,
-              sessionId: sourceAttachment.sessionId,
-              attachmentSource: sourceAttachment.attachmentSource,
-            },
-          ],
           attachments: [
             {
-              attachmentId: sourceAttachment.attachmentId,
-              sessionId: sourceAttachment.sessionId,
-              attachmentSource: sourceAttachment.attachmentSource,
+              ...sourceAttachment,
             },
           ],
         },
@@ -374,6 +393,8 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
 
     assert.ok(linked);
     assert.equal(linked.parsedResult?.attachmentId, parsedAttachment.attachmentId);
+    assert.equal(linked.parsedResult?.sessionId, parsedAttachment.sessionId);
+    assert.equal(linked.parsedResult?.attachmentSource, parsedAttachment.attachmentSource);
 
     const runtimeSnapshot = await readSessionArtifact({ sessionDir: path.dirname(runtimeSessionFile) });
     const pluginSnapshot = await readSessionArtifact({ sessionDir: path.dirname(pluginSessionFile) });

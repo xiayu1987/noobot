@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { filePath as path, isAbsolutePathAnyPlatform } from "../../shared/utils/path-resolver.js";
+import { filePath as path, isAbsolutePathAnyPlatform } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
@@ -17,6 +17,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
 import { isSuperUserAgentContext } from "../../shared/utils/super-user.js";
+import { resolveSandboxPath } from "@noobot/path-resolver";
 import {
   DEFAULT_MAX_SEARCH_FILES,
   DEFAULT_READ_MAX_LINES,
@@ -90,6 +91,19 @@ function resolveFileToolIsSandbox(agentContext = {}) {
     : {};
   const scriptConfig = { ...globalCfg, ...userCfg };
   return scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
+}
+
+function toFileToolDisplayPath({ resolvedPath = "", agentContext = {} } = {}) {
+  const runtime = agentContext?.bindings?.runtime || {};
+  const sandboxPath = resolveSandboxPath({
+    path: resolvedPath,
+    hostPath: resolvedPath,
+    runtime,
+    agentContext,
+  });
+  return resolveFileToolIsSandbox(agentContext) && sandboxPath
+    ? sandboxPath
+    : resolvedPath;
 }
 
 function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
@@ -242,7 +256,7 @@ export function createFileTool({ agentContext }) {
       const truncated = end < requestedEnd || end < totalLines;
       return toToolJsonResult(TOOL_NAME.READ_FILE, {
         ok: true,
-        resolvedPath,
+        resolvedPath: toFileToolDisplayPath({ resolvedPath, agentContext }),
         fileName: path.basename(resolvedPath),
         isSandbox,
         startLine: start,
@@ -276,7 +290,7 @@ export function createFileTool({ agentContext }) {
         return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
           ok: false,
           message: "file exists; set overwrite=true to replace it",
-          resolvedPath,
+          resolvedPath: toFileToolDisplayPath({ resolvedPath, agentContext }),
           fileName: path.basename(resolvedPath),
           isSandbox,
         });
@@ -286,9 +300,15 @@ export function createFileTool({ agentContext }) {
       return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
         ok: true,
         state: TOOL_RESULT_STATE.OK,
-        resolvedPath,
+        resolvedPath: toFileToolDisplayPath({ resolvedPath, agentContext }),
         fileName: path.basename(resolvedPath),
         isSandbox,
+        outputArtifacts: [{
+          type: "text",
+          name: path.basename(resolvedPath),
+          mimeType: "text/plain",
+          content,
+        }],
       });
     },
   });
@@ -461,7 +481,10 @@ export function createFileTool({ agentContext }) {
               error,
               original,
               displayPath: item.oldPath,
-              resolvedPath: item.resolvedOldPath,
+              resolvedPath: toFileToolDisplayPath({
+                resolvedPath: item.resolvedOldPath,
+                agentContext,
+              }),
             }),
           );
         }
@@ -488,17 +511,17 @@ export function createFileTool({ agentContext }) {
         dryRun: dryRun === true,
         root: String(resolvedRoot || ""),
         requestedRoot: String(root || ""),
-        changedFiles: writePlans.map((item) => item.displayPath),
-        deletedFiles: deletePlans.map((item) => item.displayPath),
+        changedFiles: writePlans.map((item) => toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext })),
+        deletedFiles: deletePlans.map((item) => toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext })),
         resolvedFiles: [
           ...writePlans.map((item) => ({
             path: item.displayPath,
-            resolvedPath: item.filePath,
+            resolvedPath: toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext }),
             action: "write",
           })),
           ...deletePlans.map((item) => ({
             path: item.displayPath,
-            resolvedPath: item.filePath,
+            resolvedPath: toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext }),
             action: "delete",
           })),
         ],

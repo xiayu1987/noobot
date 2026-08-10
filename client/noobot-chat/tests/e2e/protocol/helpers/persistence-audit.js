@@ -5,6 +5,7 @@
  */
 import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../..");
@@ -23,6 +24,150 @@ export async function readJson(filePath) {
 
 export async function readSessionFact(userId, sessionId) {
   return readJson(path.join(sessionRoot(userId, sessionId), "session.json"));
+}
+
+async function findFilesNamed(directory, filename) {
+  let entries = [];
+  try {
+    entries = await fs.readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const matches = [];
+  for (const entry of entries) {
+    const child = path.join(directory, entry.name);
+    if (entry.isDirectory()) matches.push(...await findFilesNamed(child, filename));
+    else if (entry.isFile() && entry.name === filename) matches.push(child);
+  }
+  return matches;
+}
+
+function failSummaryAudit(message, report) {
+  const error = new Error(message);
+  error.code = "E2E_SESSION_SUMMARY_ARTIFACT_INVALID";
+  error.audit = report;
+  throw error;
+}
+
+export async function auditSessionSummaryArtifacts(userId, sessionId, { expectation = "required" } = {}) {
+  const root = sessionRoot(userId, sessionId);
+  const summaryFiles = (await findFilesNamed(root, "session-summary.json")).sort();
+  const sessionsIndexFile = path.join(workspaceRoot(), userId, "runtime/session/sessions.json");
+  let sessionsIndex = null;
+  try {
+    sessionsIndex = await readJson(sessionsIndexFile);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const indexedSession = (Array.isArray(sessionsIndex?.sessions) ? sessionsIndex.sessions : [])
+    .find((item) => String(item?.sessionId || "").trim() === sessionId) || null;
+  const report = {
+    protocolVersion: 1,
+    authority: "session_summary_artifact",
+    rootSessionId: sessionId,
+    expectation,
+    status: "passed",
+    summaryCount: summaryFiles.length,
+    referencedDetailCount: 0,
+    summaryBytes: 0,
+    detailBytes: 0,
+    listAvailability: String(indexedSession?.availability || ""),
+    sessions: [],
+  };
+  if (expectation === "forbidden") {
+    if (summaryFiles.length) failSummaryAudit(`unprovisioned session created summary artifacts: ${sessionId}`, report);
+    if (indexedSession) failSummaryAudit(`unprovisioned session created a sessions index entry: ${sessionId}`, report);
+    return report;
+  }
+  if (expectation === "unavailable") {
+    const reason = indexedSession?.unavailableReason;
+    if (indexedSession?.availability !== "unavailable"
+      || !Array.isArray(indexedSession?.messages) || indexedSession.messages.length
+      || Number(indexedSession?.messageCount) !== 0 || indexedSession?.lastMessage !== null
+      || !String(reason?.code || "").trim() || !String(reason?.message || "").trim()) {
+      failSummaryAudit(`invalid unavailable sessions index projection: ${sessionId}`, report);
+    }
+    return report;
+  }
+  if (expectation !== "required") failSummaryAudit(`invalid summary audit expectation: ${expectation}`, report);
+  if (indexedSession?.availability !== "available") {
+    failSummaryAudit(`available session is missing its canonical sessions index projection: ${sessionId}`, report);
+  }
+  if (!summaryFiles.length) failSummaryAudit(`session summary artifact is missing: ${sessionId}`, report);
+
+  for (const summaryFile of summaryFiles) {
+    const sessionDir = path.dirname(summaryFile);
+    const summary = await readJson(summaryFile);
+    const messages = Array.isArray(summary?.messages) ? summary.messages : [];
+    const summaryStat = await fs.stat(summaryFile);
+    const detailsRoot = path.resolve(sessionDir, "session-summary-details");
+    const referencedFiles = new Set();
+    let detailBytes = 0;
+    let referencedDetailCount = 0;
+
+    for (const message of messages) {
+      if (Object.hasOwn(message, "toolTimeline") || Object.hasOwn(message, "activityTimeline")) {
+        failSummaryAudit(`session summary embeds thinking timeline: ${summaryFile}`, report);
+      }
+      const ref = message?.thinkingDetailRef;
+      if (ref === undefined) continue;
+      const reference = String(ref?.file || "").replaceAll("\\", "/");
+      const normalizedReference = path.normalize(reference);
+      const detailFile = path.resolve(sessionDir, normalizedReference);
+      if (!reference || path.isAbsolute(reference) || reference.includes("\0")
+        || !reference.startsWith("session-summary-details/")
+        || detailFile === detailsRoot || !detailFile.startsWith(`${detailsRoot}${path.sep}`)) {
+        failSummaryAudit(`invalid session summary detail reference: ${reference}`, report);
+      }
+      if (referencedFiles.has(detailFile)) {
+        failSummaryAudit(`duplicate session summary detail reference: ${reference}`, report);
+      }
+      referencedFiles.add(detailFile);
+      const detail = await readJson(detailFile);
+      const detailHash = `sha256:${createHash("sha256").update(JSON.stringify(detail)).digest("hex")}`;
+      const presentationMessageId = String(
+        message?.presentationMessageId || message?.messageId || message?.id || "",
+      ).trim();
+      if (detailHash !== ref?.contentHash || detail?.presentationMessageId !== presentationMessageId) {
+        failSummaryAudit(`session summary detail identity or hash mismatch: ${reference}`, report);
+      }
+      const toolTimeline = Array.isArray(detail?.toolTimeline) ? detail.toolTimeline : [];
+      const activityTimeline = Array.isArray(detail?.activityTimeline) ? detail.activityTimeline : [];
+      if (toolTimeline.length + activityTimeline.length !== Number(message?.thinkingDetailCount || 0)) {
+        failSummaryAudit(`session summary detail count mismatch: ${reference}`, report);
+      }
+      detailBytes += (await fs.stat(detailFile)).size;
+      referencedDetailCount += 1;
+    }
+
+    let detailNames = [];
+    try {
+      detailNames = (await fs.readdir(detailsRoot, { withFileTypes: true }))
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+        .map((entry) => path.join(detailsRoot, entry.name));
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    const orphanFiles = detailNames.filter((detailFile) => !referencedFiles.has(detailFile));
+    if (orphanFiles.length) {
+      failSummaryAudit(`orphan session summary details: ${orphanFiles.join(", ")}`, report);
+    }
+    report.summaryBytes += summaryStat.size;
+    report.detailBytes += detailBytes;
+    report.referencedDetailCount += referencedDetailCount;
+    report.sessions.push({
+      sessionId: String(summary?.sessionId || ""),
+      summaryFile: path.relative(root, summaryFile).replaceAll("\\", "/"),
+      summaryBytes: summaryStat.size,
+      detailBytes,
+      messageCount: messages.length,
+      referencedDetailCount,
+      embeddedTimelineCount: 0,
+      orphanDetailCount: 0,
+    });
+  }
+  return report;
 }
 
 export async function readSessionTurnMessages(userId, sessionId) {
@@ -119,9 +264,19 @@ async function findExecutionEventSegments(directory) {
   return segments;
 }
 
-export async function readSessionExecutionEventTree(userId, sessionId) {
-  const segments = await findExecutionEventSegments(sessionRoot(userId, sessionId));
-  return (await Promise.all(segments.sort().map(readJsonLinesIfPresent))).flat();
+export async function readSessionExecutionEventTree(userId, sessionId, { rootSessionId = "" } = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  const hasExplicitRoot = Boolean(String(rootSessionId || "").trim());
+  const normalizedRootSessionId = String(rootSessionId || normalizedSessionId).trim();
+  if (!normalizedSessionId || !normalizedRootSessionId) return [];
+  // Workflow child execution trees are canonically scoped below their root
+  // session. A child id alone is not a filesystem scope and must never be
+  // resolved as a top-level session.
+  const segments = await findExecutionEventSegments(sessionRoot(userId, normalizedRootSessionId));
+  const records = (await Promise.all(segments.sort().map(readJsonLinesIfPresent))).flat();
+  return hasExplicitRoot
+    ? records.filter((record) => String(record?.sessionId || "").trim() === normalizedSessionId)
+    : records;
 }
 
 export function modelInvocationTraces(records) {

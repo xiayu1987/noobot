@@ -18,7 +18,6 @@ import {
   normalizeDslLocale,
 } from "./error-messages.js";
 import { getWorkflowDslDefaultNodeNames } from "../core/i18n.js";
-import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 
 function stripCodeFence(text = "") {
   const trimmed = String(text || "").trim();
@@ -55,7 +54,7 @@ function parseAttrs(input = "") {
   return attrs;
 }
 
-function parseAttachmentRefs(value = "") {
+function parseNodeAttachmentRefs(value = "") {
   const raw = String(value || "").trim();
   if (!raw) return [];
   if (["none", "null", "[]"].includes(raw.toLowerCase())) return [];
@@ -104,8 +103,6 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
     .filter((item) => item.text && !item.text.startsWith("#") && !item.text.startsWith("//"));
 
   const semantic = { nodes: [], flowtos: [], autoActions: [] };
-  const attachmentDeclarations = [];
-  const attachmentMap = {};
   const nodeSet = new Set();
   let edgeIndex = 0;
   let headerSeen = false;
@@ -120,48 +117,11 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
     if (!tokens.length) continue;
     const head = String(tokens[0] || "").trim().toUpperCase();
 
-    if (
-      head === DSL_PROTOCOL.HEADER ||
-      (head === DSL_PROTOCOL.LEGACY_HEADER_KEYWORD &&
-        String(tokens[1] || "") === DSL_PROTOCOL.LEGACY_HEADER_VERSION)
-    ) {
+    if (head === DSL_PROTOCOL.HEADER) {
       headerSeen = true;
       continue;
     }
     if (head === DSL_PROTOCOL.CMD_END) break;
-
-    if (head === DSL_PROTOCOL.CMD_ATTACHMENT) {
-      const attrs = parseAttrs(line.slice(tokens[0].length).trim());
-      const id = String(attrs.id || attrs.attachmentId || "").trim();
-      if (!id) failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.ATTACHMENT_ID_REQUIRED, { locale }));
-      if (attachmentMap[id]) {
-        failWithLocale(
-          lineNo,
-          dslMessage(DSL_ERROR_MESSAGE.ATTACHMENT_ID_DUPLICATE, {
-            locale,
-            params: { id },
-          }),
-        );
-      }
-      const attachment = {
-        id,
-        attachmentId: String(attrs.attachmentId || "").trim(),
-        sessionId: String(attrs.sessionId || "").trim(),
-        attachmentSource: String(attrs.attachmentSource || "").trim(),
-        name: String(attrs.name || attrs.fileName || id).trim(),
-        path: String(attrs.path || "").trim(),
-        relativePath: String(attrs.relativePath || attrs.relative || "").trim(),
-        mimeType: String(attrs.mimeType || attrs.type || "").trim(),
-      };
-      try {
-        projectAttachmentIdentity(attachment);
-      } catch (error) {
-        failWithLocale(lineNo, error?.message || String(error));
-      }
-      attachmentDeclarations.push(attachment);
-      attachmentMap[id] = attachment;
-      continue;
-    }
 
     if (head === DSL_PROTOCOL.CMD_NODE) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
@@ -185,9 +145,7 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
       const task = String(
         attrs.task || attrs.taskText || attrs.instruction || attrs.mission || "",
       ).trim();
-      const attachments = parseAttachmentRefs(
-        attrs.attachments || attrs.inputAttachments || attrs.attachmentIds || attrs.files || "",
-      );
+      const attachments = parseNodeAttachmentRefs(attrs.attachments || "");
       semantic.nodes.push({
         id,
         name: name || id,
@@ -250,11 +208,6 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
   }
   if (!semantic.flowtos.length) {
     throw new Error(dslError(dslMessage(DSL_ERROR_MESSAGE.NO_EDGE, { locale }), { locale }));
-  }
-
-  if (attachmentDeclarations.length) {
-    semantic.attachments = attachmentDeclarations;
-    semantic.attachmentMap = attachmentMap;
   }
 
   for (const edge of semantic.flowtos) {

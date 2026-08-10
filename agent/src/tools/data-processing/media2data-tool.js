@@ -5,17 +5,17 @@
  */
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
-  getTransferAttachmentMetas,
+  getTransferAttachments,
   materializeTextForToolResult,
   TRANSFER_SOURCE,
-} from "../../transfer/index.js";
+} from "../../transfer-adapter/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import {
   invokeModelWithTextAndAttachments,
@@ -459,6 +459,7 @@ async function persistMedia2DataTextAttachment({
   inputFile = "",
   mediaType = "",
   text = "",
+  identity = null,
 }) {
   const inputBaseName = sanitizeArtifactBaseName(
     path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
@@ -477,9 +478,10 @@ async function persistMedia2DataTextAttachment({
     reason: ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
     alwaysPersist: true,
     producer: { type: "tool", name: TOOL_NAME.MEDIA_TO_DATA },
+    identity,
     meta: { mediaType, inputFile },
   });
-  const attachments = getTransferAttachmentMetas(materialized.transferEnvelopes);
+  const attachments = getTransferAttachments(materialized.transferEnvelopes);
   return {
     attachments,
     transferEnvelopes: materialized.transferEnvelopes,
@@ -538,7 +540,8 @@ export function createMedia2DataTool({ agentContext }) {
         .optional()
         .describe(tTool(runtime, "tools.media2data.fieldPrompt")),
     }),
-    func: async ({ filePath, attachmentId, prompt }) => {
+    func: async ({ filePath, attachmentId, prompt }, _runManager, toolConfig = {}) => {
+      const transferIdentity = toolConfig?.configurable?.transferIdentity;
       const { resolvedInputPath: resolvedInputHintPath, sourceAttachmentMeta } =
         await resolveMediaInputPathFromAttachmentMetas(
           filePath,
@@ -642,14 +645,24 @@ export function createMedia2DataTool({ agentContext }) {
         inputFile,
         mediaType,
         text: extractedText,
+        identity: transferIdentity,
       });
       const attachments = Array.isArray(persistedOutput?.attachments)
         ? persistedOutput.attachments
         : [];
+      const firstAttachment = attachments[0] || null;
+      const parsedAttachmentMeta = firstAttachment?.identity
+        ? {
+            ...firstAttachment.identity,
+            name: firstAttachment.name,
+            mimeType: firstAttachment.mimeType,
+            size: firstAttachment.size,
+          }
+        : firstAttachment;
       const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
         runtime,
         sourceAttachmentMeta,
-        parsedAttachmentMeta: attachments[0] || null,
+        parsedAttachmentMeta,
       });
       return toToolJsonResult(
         TOOL_NAME.MEDIA_TO_DATA,

@@ -23,6 +23,7 @@ import {
   relaySeparateModelOutputAsUserMessage,
 } from "../../src/capabilities/handlers/shared.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
 
 
 
@@ -115,14 +116,37 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
     purpose: "planning_refinement",
     content,
     dedupe: true,
-    attachments: [
-      {
-        attachmentId: "att-1",
-        name: "detail.md",
-        path: "/workspace/detail.md",
-        relativePath: "detail.md",
-      },
-    ],
+    transferPayload: {
+      transferEnvelopes: [attachmentTransfer({
+        transferId: "transfer-planning-refinement-1",
+        messageId: "message-planning-refinement-1",
+        identity: {
+          sessionId: "test-session-1",
+          turnScopeId: "test-turn:test-dialog-1",
+          runId: "test-run-1",
+          producer: { type: "plugin", id: "harness:planning_refinement" },
+        },
+        direction: "output",
+        intent: {
+          source: "plugin",
+          reason: "planning_refinement",
+          scenario: "harness",
+          strategy: "harness_summary",
+        },
+        attachments: [{
+          identity: {
+            attachmentId: "att-1",
+            sessionId: "test-session-1",
+            attachmentSource: "model",
+          },
+          role: "primary",
+          name: "detail.md",
+          mimeType: "text/markdown",
+          size: Buffer.byteLength(content, "utf8"),
+        }],
+        meta: { persisted: true },
+      })],
+    },
   });
 
   assert.equal(relayed, true);

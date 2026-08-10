@@ -7,122 +7,79 @@ import { describe, expect, it } from "vitest";
 import {
   getMessageTransferAttachments,
   getMessageTransferEnvelopes,
-  getTransferDisplayPath,
   normalizeTransferEnvelope,
 } from "../../../../../src/modules/chat/model/transferEnvelopes.js";
 
+const attachmentIdentity = {
+  attachmentId: "att-1",
+  sessionId: "session-1",
+  attachmentSource: "model",
+};
+
 const envelope = {
   protocol: "noobot.semantic-transfer",
-  version: 1,
+  version: 2,
+  transferId: "transfer-1",
+  messageId: "message-1",
+  identity: {
+    sessionId: "session-1",
+    turnScopeId: "turn-1",
+    runId: "run-1",
+    producer: { type: "tool", id: "call-1" },
+  },
   direction: "output",
-  transport: "file",
-  files: [
-    {
-      filePath: "/workspace/user/out/report.md",
-      attachmentMeta: {
-        attachmentId: "att-1",
-        name: "report.md",
-        mimeType: "text/markdown",
-        relativePath: "attachments/report.md",
-      },
-      pathView: {
-        displayPath: "/workspace/user/out/report.md",
-        sandboxPath: "/sandbox/out/report.md",
-        relativePath: "attachments/report.md",
-      },
+  payload: {
+    mode: "attachment",
+    attachments: [{
+      identity: attachmentIdentity,
       role: "primary",
-    },
-  ],
+      name: "report.md",
+      mimeType: "text/markdown",
+      size: 10,
+      preview: "report",
+    }],
+  },
+  intent: {
+    source: "tool",
+    reason: "semantic_transfer_tool_result",
+    scenario: "tool",
+    strategy: "tool_result_text",
+  },
+  meta: { originalLength: 10, persisted: true },
 };
 
 describe("transferEnvelopes", () => {
-  it("normalizes semantic-transfer envelopes only", () => {
+  it("accepts only the strict V2 envelope", () => {
     expect(normalizeTransferEnvelope(envelope)).toBe(envelope);
     expect(normalizeTransferEnvelope({ protocol: "legacy" })).toBeNull();
+    expect(normalizeTransferEnvelope({ ...envelope, version: 1 })).toBeNull();
   });
 
-  it("extracts attachment-like metas from transfer files", () => {
-    const metas = getMessageTransferAttachments({ transferEnvelopes: [envelope] });
-
-    expect(metas).toHaveLength(1);
-    expect(metas[0]).toMatchObject({
-      attachmentId: "att-1",
-      name: "report.md",
-      mimeType: "text/markdown",
-      relativePath: "attachments/report.md",
-      sandboxPath: "/sandbox/out/report.md",
-      transferFilePath: "/workspace/user/out/report.md",
-      transferRole: "primary",
-    });
-  });
-
-  it("extracts compact session-summary transfer file refs", () => {
-    const metas = getMessageTransferAttachments({
-      transferEnvelopes: [
-        {
-          protocol: "noobot.semantic-transfer",
-          version: 1,
-          direction: "output",
-          transport: "file",
-          files: [
-            {
-              attachmentId: "att-compact-1",
-              name: "compact.md",
-              mimeType: "text/markdown",
-              relativePath: "runtime/compact.md",
-              sandboxPath: "/workspace/u1/runtime/compact.md",
-              owner: { type: "plugin", id: "harness-plugin" },
-              role: "primary",
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(metas).toHaveLength(1);
-    expect(metas[0]).toMatchObject({
-      attachmentId: "att-compact-1",
-      name: "compact.md",
-      mimeType: "text/markdown",
-      relativePath: "runtime/compact.md",
-      sandboxPath: "/workspace/u1/runtime/compact.md",
-      transferFilePath: "/workspace/u1/runtime/compact.md",
-      owner: { type: "plugin", id: "harness-plugin" },
-      transferRole: "primary",
-    });
-  });
-
-  it("ignores legacy shortcut fields when files are absent", () => {
-    const metas = getMessageTransferAttachments({
-      transferEnvelopes: [
-        {
-          protocol: "noobot.semantic-transfer",
-          version: 1,
-          direction: "output",
-          transport: "file",
-          filePath: "/workspace/user/out/legacy.txt",
-          attachmentMeta: { name: "legacy.txt", mimeType: "text/plain" },
-        },
-      ],
-    });
-
-    expect(metas).toEqual([]);
-  });
-
-  it("collects envelopes only from transferEnvelopes", () => {
-    const envelopes = getMessageTransferEnvelopes({
-      transferEnvelopes: [envelope],
-    });
-
-    expect(envelopes).toEqual([envelope]);
-  });
-
-  it("resolves display path by semantic path view precedence", () => {
-    expect(
-      getTransferDisplayPath({
-        filePath: "/host/file.txt",
-        pathView: { displayPath: "/display/file.txt" },
+  it("projects attachment identity without any path fields", () => {
+    expect(getMessageTransferAttachments({ transferEnvelopes: [envelope] })).toEqual([
+      expect.objectContaining({
+        attachmentId: "att-1",
+        sessionId: "session-1",
+        attachmentSource: "model",
+        name: "report.md",
+        transferId: "transfer-1",
+        messageId: "message-1",
+        transferRole: "primary",
       }),
-    ).toBe("/display/file.txt");
+    ]);
+    expect(getMessageTransferAttachments({ transferEnvelopes: [envelope] })[0]).not.toHaveProperty("path");
+  });
+
+  it("rejects legacy and path-based envelopes instead of translating them", () => {
+    expect(getMessageTransferAttachments({
+      transferEnvelopes: [{ ...envelope, version: 1, files: [{ filePath: "/legacy/a.txt" }] }],
+    })).toEqual([]);
+    expect(getMessageTransferAttachments({
+      transferEnvelopes: [{ ...envelope, filePath: "/legacy/a.txt" }],
+    })).toEqual([]);
+  });
+
+  it("collects valid envelopes from the canonical transfer field only", () => {
+    expect(getMessageTransferEnvelopes({ transferEnvelopes: [envelope], files: [envelope] })).toEqual([envelope]);
   });
 });

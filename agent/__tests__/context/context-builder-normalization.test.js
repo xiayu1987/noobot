@@ -10,6 +10,15 @@ import { ContextBuilder } from "../../src/context/index.js";
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
 import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
 
+function executionRunConfig(turnScopeId, extra = {}) {
+  return {
+    turnScopeId,
+    executionId: `run:${turnScopeId}`,
+    messageId: `message:${turnScopeId}`,
+    ...extra,
+  };
+}
+
 function createBuilderForNormalizationTest() {
   return new ContextBuilder({
     config: {
@@ -31,7 +40,7 @@ function createBuilderForNormalizationTest() {
       caller: "user",
       parentSessionId: "",
       attachments: [],
-      runConfig: { turnScopeId: "turn-1" },
+      runConfig: executionRunConfig("turn-1"),
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
@@ -67,12 +76,11 @@ function createBuilderForAttachmentRuntimeTest({
       parentSessionId: "",
       ...(Array.isArray(userMessageAttachments) ? { userMessageAttachments } : {}),
       attachments,
-      runConfig: {
-        turnScopeId: "turn-1",
+      runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
           includeContextKeys,
         },
-      },
+      }),
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
@@ -168,12 +176,11 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
       caller: "user",
       parentSessionId: "",
       attachments: [],
-      runConfig: {
-        turnScopeId: "turn-1",
+      runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
           includeContextKeys: ["base_prompt", "system_runtime", "scenario"],
         },
-      },
+      }),
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
@@ -213,7 +220,7 @@ test("buildInitialContext keeps turn identity in runtime but excludes it from sy
       caller: "user",
       parentSessionId: "",
       userMessageAttachments: [],
-      runConfig: { turnScopeId: "turn-runtime-only" },
+      runConfig: executionRunConfig("turn-runtime-only"),
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
@@ -256,12 +263,11 @@ test("buildInitialContext keeps super user identity in system message when syste
       caller: "user",
       parentSessionId: "",
       attachments: [],
-      runConfig: {
-        turnScopeId: "turn-1",
+      runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
           includeContextKeys: ["base_prompt"],
         },
-      },
+      }),
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
@@ -371,10 +377,9 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
       caller: "user",
       parentSessionId: "",
       attachments: [],
-      runConfig: {
-        turnScopeId: "client-turn:edited",
+      runConfig: executionRunConfig("client-turn:edited", {
         contextPolicy: { includeContextKeys: ["base_prompt", "system_runtime"] },
-      },
+      }),
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
@@ -413,7 +418,7 @@ function createBuilderForSuperUserRuntimeTest({ globalConfig = {}, userId = "u1"
       caller: "user",
       parentSessionId: "",
       attachments: [],
-      runConfig: { turnScopeId: "turn-1", ...(systemRuntimePatch ? { systemRuntimePatch } : {}) },
+      runConfig: executionRunConfig("turn-1", systemRuntimePatch ? { systemRuntimePatch } : {}),
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
@@ -461,7 +466,7 @@ function createBuilderForStartupDependencyRuntimeTest() {
       caller: "user",
       parentSessionId: "",
       attachments: [],
-      runConfig: { turnScopeId: "turn-1" },
+      runConfig: executionRunConfig("turn-1"),
       abortSignal: null,
       parentAsyncResultContainer: null,
     },

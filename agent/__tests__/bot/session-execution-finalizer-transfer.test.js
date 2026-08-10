@@ -10,6 +10,47 @@ import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js"
 import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
 import { buildLoopResult } from "../../src/runtime/turn/turn-result-aggregator.js";
 
+function semanticTransferEnvelope() {
+  return {
+    protocol: "noobot.semantic-transfer",
+    version: 2,
+    transferId: "transfer:assistant-message:tool:tool-call-1:output:tool_result_text",
+    messageId: "assistant-message",
+    identity: {
+      sessionId: "s1",
+      turnScopeId: "turn-1",
+      runId: "run-1",
+      producer: { type: "tool", id: "tool-call-1" },
+    },
+    direction: "output",
+    payload: {
+      mode: "attachment",
+      attachments: [{
+        identity: {
+          attachmentId: "att-generated",
+          sessionId: "s1",
+          attachmentSource: "model",
+        },
+        role: "primary",
+        name: "image.png",
+        mimeType: "image/png",
+      }],
+    },
+    intent: {
+      source: "tool",
+      reason: "semantic_transfer_tool_output",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
+    meta: {
+      attributes: {
+        generatedByModel: true,
+        generationSource: "semantic_transfer_tool_output",
+      },
+    },
+  };
+}
+
 test("SessionExecutionFinalizer waits for execution event durability before reading the bundle", async () => {
   const order = [];
   const finalizer = new SessionExecutionFinalizer({
@@ -84,18 +125,7 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
         {
           role: "tool",
           type: "tool_result",
-          attachments: [
-            {
-              attachmentId: "att-generated",
-              attachmentSource: "model",
-              generatedByModel: true,
-              name: "image.png",
-              mimeType: "image/png",
-              path: "/attachments/image.png",
-              generationSource: "semantic_transfer_tool_output",
-              owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
-            },
-          ],
+          transferEnvelopes: [semanticTransferEnvelope()],
         },
         { role: "assistant", type: "message", content: "done" },
       ],
@@ -109,11 +139,11 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
   assert.equal("transferEnvelopes" in finalAssistant, true);
   assert.equal(Array.isArray(finalAssistant.transferEnvelopes), true);
   assert.equal(
-    finalAssistant.transferEnvelopes[0]?.files?.[0]?.attachmentId,
+    finalAssistant.transferEnvelopes[0]?.payload?.attachments?.[0]?.identity?.attachmentId,
     "att-generated",
   );
-  assert.equal(finalAssistant.transferEnvelopes[0]?.files?.[0]?.owner?.type, "plugin");
-  assert.equal("attachmentMeta" in finalAssistant.transferEnvelopes[0].files[0], false);
+  assert.equal(finalAssistant.transferEnvelopes[0]?.identity?.producer?.type, "tool");
+  assert.equal("attachmentMeta" in finalAssistant.transferEnvelopes[0].payload.attachments[0], false);
   assert.equal(appendedMessages.find((item = {}) => item.role === "assistant")?.attachmentMetas, undefined);
 });
 
@@ -212,6 +242,10 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
       type: "tool_result",
       attachments: [{
         attachmentId: "att-checkpoint",
+        attachmentSource: "model",
+        sessionId: "s1",
+        name: "checkpoint.png",
+        mimeType: "image/png",
         generatedByModel: true,
         generationSource: "multimodal_generate_tool",
       }],
@@ -432,6 +466,10 @@ test("completed turn summary policy marks are durably upserted before the next d
       summarized: false,
     },
   ]);
+  turnMessageStore.updateWhere(
+    { summarized: true },
+    (_message, index) => index < durableMessages.length,
+  );
   const agentResult = buildLoopResult({
     output: "done",
     traces: [],

@@ -33,7 +33,7 @@ const OVERFLOW_FIELD_REGEXES = [
 ];
 
 const OVERFLOW_ALLOWED_FILES = new Set([
-  "agent/src/transfer/legacy-adapter.js",
+  "agent/src/transfer-adapter/legacy-adapter.js",
 ]);
 
 const SETTLED_ATTACHMENT_SERVICE_ONLY_FILES = new Map(Object.entries({
@@ -110,13 +110,12 @@ const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
   "agent/src/context/builders/runtime-environment-builder.js": "runtime environment exposes semantic-transfer helpers and legacy metas",
   "agent/src/context/index.js": "context builder public attachment contract",
   "agent/src/context/session/message-converter.js": "replay compatibility preserves legacy fields",
-  "agent/src/transfer/storage/attachment-adapter.js": "semantic-transfer adapter derives legacy fields centrally (semantic dir layout)",
-  "agent/src/transfer/storage/consumer.js": "semantic-transfer consumer accepts legacy fallback (semantic dir layout)",
-  "agent/src/transfer/core/compact.js": "semantic-transfer compact model view reads envelope attachmentMeta/filePath fields",
-  "agent/src/transfer/transfer/tool-result-overflow.js": "semantic-transfer overflow compacts TransferEnvelope file fields and emits original-file envelope references",
-  "agent/src/transfer/legacy-adapter.js": "central legacy compatibility adapter",
-  "agent/src/transfer/envelope/normalizer.js": "semantic-transfer normalizes legacy fallback (semantic dir layout)",
-  "agent/src/transfer/storage/transfer-path-view.js": "semantic-transfer path-view compatibility (semantic dir layout)",
+  "agent/src/transfer-adapter/storage/attachment-adapter.js": "semantic-transfer adapter derives legacy fields centrally (semantic dir layout)",
+  "agent/src/transfer-adapter/storage/consumer.js": "semantic-transfer consumer accepts legacy fallback (semantic dir layout)",
+  "agent/src/transfer-adapter/core/compact.js": "semantic-transfer compact model view reads envelope attachmentMeta/filePath fields",
+  "agent/src/transfer-adapter/transfer/tool-result-overflow.js": "semantic-transfer overflow compacts TransferEnvelope file fields and emits original-file envelope references",
+  "agent/src/transfer-adapter/legacy-adapter.js": "central legacy compatibility adapter",
+  "agent/src/transfer-adapter/envelope/normalizer.js": "semantic-transfer normalizes legacy fallback (semantic dir layout)",
   "agent/src/tools/ai-models/multimodal-generate-tool.js": "multimodal tool returns attachmentMetas from attachmentService for existing consumers",
   "agent/src/tools/connectors/connector-toolkit/tool-access-connector.js": "connector output keeps attachmentMetas compatibility; ordinary email attachment save stays on attachmentService",
   "agent/src/tools/data-processing/doc2data-tool.js": "tool input/output compatibility",

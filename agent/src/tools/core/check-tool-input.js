@@ -10,7 +10,7 @@ import {
   resolveToolPathPolicy,
   resolveToolInputPath,
   buildToolPathScopeErrorDetails,
-} from "../../shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,

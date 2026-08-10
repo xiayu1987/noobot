@@ -26,7 +26,7 @@ export async function resolveCanonicalUserSourceAttachment({
   const attachmentService = runtime?.attachmentService || null;
   const { userId, sessionId, parentSessionId, rootSessionId } =
     getSessionIdsFromAgentContext(agentContext, runtime);
-  const sourceSessionId = rootSessionId || parentSessionId || sessionId;
+  const sourceSessionId = parentSessionId || rootSessionId || sessionId;
   if (!attachmentService?.resolveSourceAttachment || !userId || !sourceSessionId) return null;
 
   return attachmentService.resolveSourceAttachment({

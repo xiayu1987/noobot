@@ -13,7 +13,7 @@ import { mergeToolTimelines } from "./toolTimeline.js";
 import { mergeActivityTimelines } from "./activityTimeline.js";
 import { createTurnObservation } from "./turnObservation.js";
 import { mergeAttachmentSnapshot } from "../../model/dialogProcessChain.js";
-import { validateMessageEventEnvelope } from "@noobot/shared/message-event-protocol";
+import { validateMessageEventEnvelope } from "@noobot/event-protocol/message-event";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import {
   resolveSessionRunMessageRuntimePatch,
@@ -246,6 +246,9 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
   const currentAttachments = Array.isArray(targetMessage?.attachments)
     ? targetMessage.attachments
     : [];
+  const currentTransferEnvelopes = Array.isArray(targetMessage?.transferEnvelopes)
+    ? targetMessage.transferEnvelopes
+    : [];
   const currentConsumedEventIds = targetMessage?.messageEventState?.consumedEventIds || [];
   const snapshotState = snapshot?.messageEventState || {};
   const preservedIdentity = {
@@ -256,6 +259,19 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
     if (!TURN_UI_SNAPSHOT_FIELDS.has(key)) targetMessage[key] = value;
   });
   Object.assign(targetMessage, preservedIdentity);
+  const snapshotTransferEnvelopes = Array.isArray(targetMessage.transferEnvelopes)
+    ? targetMessage.transferEnvelopes
+    : [];
+  const transferKeys = new Set(currentTransferEnvelopes.map((item) => `${item?.transferId || ""}:${item?.messageId || ""}`));
+  targetMessage.transferEnvelopes = [
+    ...currentTransferEnvelopes,
+    ...snapshotTransferEnvelopes.filter((item) => {
+      const key = `${item?.transferId || ""}:${item?.messageId || ""}`;
+      if (transferKeys.has(key)) return false;
+      transferKeys.add(key);
+      return true;
+    }),
+  ];
   if (Array.isArray(snapshot?.attachments)) {
     targetMessage.attachments = mergeAttachmentSnapshot(
       currentAttachments,

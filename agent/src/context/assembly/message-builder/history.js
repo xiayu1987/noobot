@@ -6,7 +6,7 @@
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { filterCurrentTurnMessagesFromHistory } from "@noobot/context-protocol/block-strategy";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
-import { compactToolResultTextForModel } from "../../../transfer/core/compact.js";
+import { compactToolResultTextForModel } from "../../../transfer-adapter/core/compact.js";
 import { resolveMessageRole, resolveMessageToolCalls, resolveMessageToolCallId, toLangChainToolCalls, buildModelMessageIdentityKwargs } from "./message-utils.js";
 import { isTaskSummaryToolResultMessage, buildTaskSummaryFallbackHumanMessage, shouldSkipSummarizedHistoryMessage } from "./task-summary.js";
 import { resolveFallbackAttachments, buildHumanMessageContent, buildHumanMessagesForUser, shouldBuildUserMetaForHistoryMessage, isDerivedUserMetaMessage, buildRestoredUserMetaIndex, buildRestorableUserMetaKeys, normalizeRestoredUserSource } from "./user-meta.js";

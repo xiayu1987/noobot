@@ -9,7 +9,8 @@
     "./commands": "./src/commands.mjs",
     "./run-preferences": "./src/run-preferences.mjs",
     "./diagnostics": "./src/diagnostics.mjs",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./bot-dispatch": "./src/bot-dispatch.mjs"
   },
   "scripts": {
     "test": "node --test __tests__/*.test.mjs"

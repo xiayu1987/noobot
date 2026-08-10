@@ -4,14 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { ToolMessage } from "@langchain/core/messages";
-import { appendAttachmentMetasToRuntimeAndTurn } from "../../artifacts/index.js";
 import { emitEvent } from "../../events/index.js";
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
-import { compactToolResultTextForModel } from "../../transfer/core/compact.js";
-import { parseJsonObjectSafely } from "../utils/json-utils.js";
+import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { appendContextMessage as appendMessage } from "@noobot/context-protocol/context-mutation";
 import {
   applyAuthoritativeMessageId,
@@ -24,15 +22,6 @@ const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
   "media_to_data_tool",
   "tool_result_overflow",
 ]);
-
-function filterDisplayableAttachments(attachments = []) {
-  return (Array.isArray(attachments) ? attachments : []).filter(
-    (attachmentItem = {}) => {
-      const generationSource = String(attachmentItem?.generationSource || "").trim();
-      return !HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource);
-    },
-  );
-}
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -60,48 +49,6 @@ function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
   ).trim();
   const sessionId = String(systemRuntime?.sessionId || "").trim();
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
-}
-
-function annotateAttachments(attachments = [], ownership = {}) {
-  const turnScopeId = String(ownership?.turnScopeId || "").trim();
-  const dialogProcessId = String(ownership?.dialogProcessId || "").trim();
-  const sessionId = String(ownership?.sessionId || "").trim();
-  return (Array.isArray(attachments) ? attachments : []).map((attachmentItem = {}) => {
-    const turnScope = {
-      ...(turnScopeId ? { turnScopeId } : {}),
-      ...(dialogProcessId ? { dialogProcessId } : {}),
-    };
-    return {
-      ...(attachmentItem && typeof attachmentItem === "object" ? attachmentItem : {}),
-      ...(sessionId && !String(attachmentItem?.sessionId || "").trim() ? { sessionId } : {}),
-      ...(Object.keys(turnScope).length ? { turnScope } : {}),
-    };
-  });
-}
-
-function dedupeTransferEnvelopes(envelopes = []) {
-  const output = [];
-  const seen = new Set();
-  for (const envelope of Array.isArray(envelopes) ? envelopes : []) {
-    if (!isPlainObject(envelope)) continue;
-    const key = JSON.stringify(envelope);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    output.push(envelope);
-  }
-  return output;
-}
-
-function parseTransferPayloadFromToolResultText(toolResultText = "") {
-  const parsed = parseJsonObjectSafely(String(toolResultText || ""));
-  if (!isPlainObject(parsed)) return null;
-  const transferEnvelopes = dedupeTransferEnvelopes(
-    Array.isArray(parsed.transferEnvelopes) ? parsed.transferEnvelopes : [],
-  );
-  if (!transferEnvelopes.length) return null;
-  return {
-    transferEnvelopes,
-  };
 }
 
 export function createStateCommitter({
@@ -141,6 +88,8 @@ export function createStateCommitter({
       messageUid = "",
       presentationMessageId = "",
       chatPresentation = false,
+      transferEnvelopes = [],
+      attachments = [],
     } = {}) {
       if (!turnMessageStore?.push) return;
       if (typeof runtime?.materializePendingCurrentTurnMessageEvents !== "function") {
@@ -173,6 +122,10 @@ export function createStateCommitter({
         modelName: String(modelName || "").trim(),
         presentationMessageId: String(presentationMessageId || "").trim(),
         chatPresentation: chatPresentation === true,
+        ...(Array.isArray(transferEnvelopes) && transferEnvelopes.length
+          ? { transferEnvelopes }
+          : {}),
+        ...(Array.isArray(attachments) && attachments.length ? { attachments } : {}),
         ...(canonicalActivityTimeline.length ? { activityTimeline: canonicalActivityTimeline } : {}),
         ...(pendingProjection.toolTimeline.length ? { toolTimeline: pendingProjection.toolTimeline } : {}),
         rawModelContent:
@@ -227,10 +180,9 @@ export function createStateCommitter({
         }),
       });
     },
-    async pushToolResult({ call = {}, toolResultText = "" } = {}) {
+    async pushToolResult({ call = {}, toolResultText = "", transferEnvelopes = [] } = {}) {
       const resolvedCallId = resolveCallId(call);
       const resolvedCallName = resolveCallName(call);
-      const rawTransferPayload = parseTransferPayloadFromToolResultText(toolResultText);
       const compactedToolResultText = compactToolResultTextForModel(toolResultText);
       const messageUid = createSessionMessageUid();
       const toolResultPayload = {
@@ -247,11 +199,8 @@ export function createStateCommitter({
           ? { presentationMessageId: currentAssistantPresentationMessageId(runtime) }
           : {}),
       };
-      const transferPayload = rawTransferPayload || parseTransferPayloadFromToolResultText(compactedToolResultText);
-      if (transferPayload) {
-        if (Array.isArray(transferPayload.transferEnvelopes) && transferPayload.transferEnvelopes.length) {
-          toolResultPayload.transferEnvelopes = transferPayload.transferEnvelopes;
-        }
+      if (Array.isArray(transferEnvelopes) && transferEnvelopes.length) {
+        toolResultPayload.transferEnvelopes = transferEnvelopes;
       }
       await runAgentRuntimeHook({
         runtime,
@@ -299,48 +248,6 @@ export function createStateCommitter({
           agentContext,
         }),
       });
-    },
-    async appendAttachmentMetas(attachments = []) {
-      if (!Array.isArray(attachments) || !attachments.length) return;
-      const ownedAttachments = annotateAttachments(attachments, ownership);
-      await runAgentRuntimeHook({
-        runtime,
-        point: HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
-        context: buildHookContext(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, runtime, {
-          phase: "state_commit",
-          commitType: "attachments",
-          status: "start",
-          payload: { attachments: ownedAttachments },
-          agentContext,
-        }),
-      });
-      const committedAttachments = annotateAttachments(ownedAttachments, ownership);
-      appendAttachmentMetasToRuntimeAndTurn({
-        runtime,
-        turnMessageStore,
-        attachments: committedAttachments,
-      });
-      const displayableAttachments = filterDisplayableAttachments(committedAttachments);
-      if (displayableAttachments.length) {
-        emitEvent(runtime?.eventListener || null, "attachments_saved", {
-          dialogProcessId,
-          attachments: displayableAttachments,
-        });
-      }
-      await runAgentRuntimeHook({
-        runtime,
-        point: HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
-        context: buildHookContext(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, runtime, {
-          phase: "state_commit",
-          commitType: "attachments",
-          status: "success",
-          payload: { attachments: committedAttachments },
-          agentContext,
-        }),
-      });
-    },
-    async appendAttachments(attachments = []) {
-      return this.appendAttachmentMetas(attachments);
     },
   };
 }

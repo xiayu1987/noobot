@@ -66,6 +66,17 @@ Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭�
 
 - `protocol-evidence/model-invocations.jsonl`：本用例全部权威 provider 调用记录。
 - `protocol-evidence/model-observation-audit.json`：调用期望、计数、模型实例、Session、purpose 与 domain 汇总。
+- `protocol-evidence/session-summary-artifact-audit.json`：根及子 Session 的轻量 summary、详情引用、哈希、计数和孤儿文件审计。
+
+统一 fixture 在每条用例结束时还会审计 Session summary 持久化协议：`session-summary.json`
+不得内嵌 `toolTimeline` 或 `activityTimeline`；每个 `thinkingDetailRef` 必须唯一、限制在
+`session-summary-details/` 内，并与详情文件的展示消息身份、SHA-256 和 timeline 计数一致；目录中
+不得存在未被主 summary 引用的详情 JSON。该审计与模型调用审计独立收尾，任一失败都会使场景失败，
+同时保留各自的证据文件。
+同一审计还验证 `sessions.json` 的唯一列表协议：正常 Session 必须为 `availability: available`；
+不可用 Session 必须为零消息投影并包含结构化失败原因；未 provision 的 Session 不得留下列表索引。
+对 PBE-026、PBE-030 这类明确禁止模型调用且不 provision 的场景，收尾审计反向要求不能产生
+任何 Session summary artifact，确保非法协议或纯本地 Session 不污染持久化事实。
 
 业务 spec 只保留主 Agent、Workflow 子 Session 或专用模型的领域身份断言，不得重复实现通用
 消息闭合规则。`required` 无调用、`forbidden` 有调用、未登记 PBE、重复 PBE 或废弃策略项均直接失败。

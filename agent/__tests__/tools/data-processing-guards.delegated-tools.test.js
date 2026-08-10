@@ -30,7 +30,7 @@ import { TOOL_NAME } from "../../src/tools/constants/index.js";
 import { AGENT_DETACHED_SESSION_ROOT } from "../../src/bot/session/detached-subsession-strategy.js";
 import { buildAgentContext } from "./data-processing-guards.test-helpers.js";
 
-function createDetachedBotManager(calls = []) {
+function createDetachedBotManager(calls = [], resultOverrides = {}) {
   return {
     async runDetachedSubSession(payload = {}) {
       calls.push(payload);
@@ -42,9 +42,47 @@ function createDetachedBotManager(calls = []) {
           traces: [],
           messages: [],
           dialogProcessId: "child-dialog",
+          ...resultOverrides,
         },
       };
     },
+  };
+}
+
+function createTransferEnvelope(attachmentId = "child-att") {
+  return {
+    protocol: "noobot.semantic-transfer",
+    version: 2,
+    transferId: `transfer:child-message:${attachmentId}`,
+    messageId: "child-message",
+    identity: {
+      sessionId: "child-session",
+      turnScopeId: "internal-turn:child",
+      runId: "agent:internal-turn:child",
+      producer: { type: "tool", id: "child-tool" },
+    },
+    direction: "output",
+    payload: {
+      mode: "attachment",
+      attachments: [{
+        identity: {
+          attachmentId,
+          sessionId: "child-session",
+          attachmentSource: "model",
+        },
+        role: "primary",
+        name: "result.md",
+        mimeType: "text/markdown",
+        size: 1,
+      }],
+    },
+    intent: {
+      source: "tool",
+      reason: "semantic_transfer_tool_result",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
+    meta: { persisted: true },
   };
 }
 
@@ -103,6 +141,29 @@ test("process_content_task: detached runtime uses durable parent session", async
   );
   assert.equal(result.sessionId, "child-session");
   assert.equal(result.parentSessionId, "root-plugin-session");
+});
+
+test("process_content_task: preserves child semantic transfer envelopes", async () => {
+  const envelope = createTransferEnvelope("content-child-att");
+  const calls = [];
+  const botManager = createDetachedBotManager(calls, {
+    transferEnvelopes: [envelope],
+  });
+  const tools = createContentProcessTool({
+    agentContext: createTestAgentExecutionScope({
+      basePath: await fs.mkdtemp(path.join(os.tmpdir(), "noobot-process-content-transfer-")),
+      userId: "primary-user",
+      globalConfig: {},
+      userConfig: {},
+      botManager,
+      sharedTools: {},
+      systemRuntime: { sessionId: "parent-session", config: {} },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONTENT_TASK);
+  const result = JSON.parse(await tool.invoke({ task: "parse content", contentPath: "runtime/attach/file.png" }));
+
+  assert.deepEqual(result.transferEnvelopes, [envelope]);
 });
 
 test("process_content_task: 透传父 runConfig 显式 streaming=false 到子 session", async () => {
@@ -254,6 +315,34 @@ test("process_connector_tool: detached runtime uses durable parent session", asy
     false,
   );
   assert.equal(result.parentSessionId, "root-plugin-session");
+});
+
+test("process_connector_tool: preserves child semantic transfer envelopes", async () => {
+  const envelope = createTransferEnvelope("connector-child-att");
+  const calls = [];
+  const botManager = createDetachedBotManager(calls, {
+    transferEnvelopes: [envelope],
+  });
+  const tools = createConnectorAccessTool({
+    agentContext: createTestAgentExecutionScope({
+      userId: "primary-user",
+      globalConfig: {},
+      userConfig: {},
+      botManager,
+      sharedTools: {
+        connectorChannelStore: {
+          getSessionConnectors() {
+            return { databases: [], terminals: [], emails: [] };
+          },
+        },
+      },
+      systemRuntime: { sessionId: "parent-session", config: {} },
+    }),
+  });
+  const tool = tools.find((item) => item?.name === TOOL_NAME.PROCESS_CONNECTOR_TOOL);
+  const result = JSON.parse(await tool.invoke({ task: "inspect connector" }));
+
+  assert.deepEqual(result.transferEnvelopes, [envelope]);
 });
 
 test("process_connector_tool: 透传父 runConfig 显式 streaming=false 到子 session", async () => {

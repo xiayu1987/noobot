@@ -7,7 +7,7 @@ import { readShortMemory, flattenShortItems, getSortedShortItems } from "./reade
 import { writeShortMemory, assignShortItems } from "./writer.js";
 import { compactShortMemory } from "./compactor.js";
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { readSessionArtifact } from "../../session/session-artifact-store.js";
 
 function sanitizeDialogRecordsForMemory(messages = []) {

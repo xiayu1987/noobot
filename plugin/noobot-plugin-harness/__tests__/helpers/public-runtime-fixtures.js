@@ -9,8 +9,79 @@ import {
   resolveModelFinalMessages,
 } from "@noobot/context-protocol";
 import { createHookManager } from "@noobot/hook-protocol";
+import {
+  attachmentTransfer,
+  directTransfer,
+  TRANSFER_DIRECTION,
+} from "@noobot/semantic-transfer-protocol";
 
 let testScopeSequence = 0;
+let testTransferSequence = 0;
+
+function initializeTestSemanticTransfer(agentContext = {}) {
+  const runtime = agentContext?.bindings?.runtime;
+  if (!runtime || typeof runtime !== "object") return;
+  const sharedTools = runtime.sharedTools && typeof runtime.sharedTools === "object"
+    ? runtime.sharedTools
+    : (runtime.sharedTools = {});
+  if (typeof sharedTools?.semanticTransfer?.transferSemanticContent === "function") return;
+  sharedTools.semanticTransfer = {
+    async transferSemanticContent(payload = {}) {
+      testTransferSequence += 1;
+      const identitySource = agentContext?.context?.identity || {};
+      const sessionId = String(identitySource.sessionId || "").trim();
+      const producer = payload?.producer && typeof payload.producer === "object"
+        ? payload.producer
+        : { type: "plugin", id: "harness-test" };
+      const common = {
+        transferId: `test-transfer-${testTransferSequence}`,
+        messageId: `test-transfer-message-${testTransferSequence}`,
+        identity: {
+          sessionId,
+          turnScopeId: String(identitySource.turnScopeId || "").trim(),
+          runId: String(identitySource.runId || "").trim(),
+          producer,
+        },
+        direction: payload.direction || TRANSFER_DIRECTION.OUTPUT,
+        intent: {
+          source: String(payload.source || producer.type || "plugin").trim(),
+          reason: String(payload.reason || payload.strategy || "harness_test_transfer").trim(),
+          scenario: String(payload.scenario || "harness").trim(),
+          strategy: String(payload.strategy || "harness_summary").trim(),
+        },
+      };
+      if (
+        payload.strategy === "harness_summary" &&
+        (payload.fullText !== undefined || payload.summaryText !== undefined)
+      ) {
+        const injectMode = String(payload.injectMode || "full").trim();
+        const content = injectMode === "summary"
+          ? String(payload.summaryText || "")
+          : String(payload.fullText || payload.summaryText || "");
+        return { transferEnvelopes: [directTransfer({ ...common, content })] };
+      }
+      const content = String(payload.detail || payload.content || payload.text || "");
+      const name = String(payload.name || `harness-test-${testTransferSequence}.md`).trim();
+      return {
+        transferEnvelopes: [attachmentTransfer({
+          ...common,
+          attachments: [{
+            identity: {
+              attachmentId: `test-attachment-${testTransferSequence}`,
+              sessionId,
+              attachmentSource: String(payload.attachmentSource || "model").trim(),
+            },
+            role: "primary",
+            name,
+            mimeType: String(payload.mimeType || "text/plain").trim(),
+            size: Buffer.byteLength(content, "utf8"),
+          }],
+          meta: { persisted: true },
+        })],
+      };
+    },
+  };
+}
 
 export function ensureTestAgentExecutionScope(ctx = {}) {
   if (!ctx || typeof ctx !== "object") return null;
@@ -64,6 +135,7 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
       modelContext: null,
     };
   }
+  initializeTestSemanticTransfer(agentContext);
   return agentContext;
 }
 

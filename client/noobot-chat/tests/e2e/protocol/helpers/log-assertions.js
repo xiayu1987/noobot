@@ -11,6 +11,7 @@ const FORBIDDEN = [
   /authoritative_snapshot_failed/i,
   /snapshot_timeout/i,
   /duplicate canonical attachment/i,
+  /invalid_attachment_id/i,
   /session identity conflict/i,
 ];
 

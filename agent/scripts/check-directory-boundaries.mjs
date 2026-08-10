@@ -33,6 +33,7 @@ const EXPECTED_SOURCE_DIRECTORIES = new Set([
   "skills",
   "system-core",
   "tools",
+  "transfer-adapter",
   "transfer",
   "workspace-lifecycle",
 ]);

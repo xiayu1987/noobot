@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { appendSystemErrorLog } from "./system-error-log.js";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { logError } from "../console/logger.js";
 
 function resolveErrorStatus(error = {}) {

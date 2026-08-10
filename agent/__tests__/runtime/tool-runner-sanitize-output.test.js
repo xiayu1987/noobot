@@ -12,14 +12,22 @@ const email = "alice@example.com";
 
 function runtime(sanitizeOutput) {
   return {
-    systemRuntime: { config: { sanitizeOutput } },
+    runConfig: {
+      messageId: "message-sanitize-output",
+      turnScopeId: "turn-sanitize-output",
+      executionId: "run-sanitize-output",
+    },
+    systemRuntime: {
+      sessionId: "session-sanitize-output",
+      config: { sanitizeOutput },
+    },
   };
 }
 
 test("tool runner sanitizes successful output by default and preserves it when disabled", async () => {
   const tool = { invoke: async () => email };
-  const sanitized = await executeToolCall({ call: { name: "demo" }, tool, runtime: runtime(undefined) });
-  const raw = await executeToolCall({ call: { name: "demo" }, tool, runtime: runtime(false) });
+  const sanitized = await executeToolCall({ call: { id: "call-sanitized", name: "demo" }, tool, sessionId: "session-sanitize-output", runtime: runtime(undefined) });
+  const raw = await executeToolCall({ call: { id: "call-raw", name: "demo" }, tool, sessionId: "session-sanitize-output", runtime: runtime(false) });
 
   assert.doesNotMatch(sanitized.toolResultText, /alice@example\.com/);
   assert.equal(raw.toolResultText, email);
@@ -27,8 +35,8 @@ test("tool runner sanitizes successful output by default and preserves it when d
 
 test("tool runner applies the output sanitization preference to recoverable errors", async () => {
   const tool = { invoke: async () => { throw new Error(email); } };
-  const sanitized = await executeToolCall({ call: { name: "demo" }, tool, runtime: runtime(true) });
-  const raw = await executeToolCall({ call: { name: "demo" }, tool, runtime: runtime(false) });
+  const sanitized = await executeToolCall({ call: { id: "call-error-sanitized", name: "demo" }, tool, sessionId: "session-sanitize-output", runtime: runtime(true) });
+  const raw = await executeToolCall({ call: { id: "call-error-raw", name: "demo" }, tool, sessionId: "session-sanitize-output", runtime: runtime(false) });
 
   assert.doesNotMatch(sanitized.toolResultText, /alice@example\.com/);
   assert.match(raw.toolResultText, /alice@example\.com/);

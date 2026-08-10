@@ -61,6 +61,7 @@ import {
 } from "../../debug/loggers/stateMachineLogger.js";
 import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationReplay.js";
 import { applyReconnectInteractionRequest } from "../runtime/reconnect/interactionReplay.js";
+import { handleAttachmentParsedStreamEvent } from "../runtime/engine/streamHandlers.js";
 
 export function useReconnectReplay({
   sessions,
@@ -71,6 +72,7 @@ export function useReconnectReplay({
   chatWebSocketClient,
   appendMessage,
   findCanonicalMessageById,
+  findCanonicalMessagesById,
   makeViewMessage,
   foldMessagesForView,
   sessionTitleFromMessages,
@@ -427,6 +429,7 @@ export function useReconnectReplay({
       activeSession,
       activeSessionId,
       findCanonicalMessageById,
+      findCanonicalMessagesById,
       chatList,
       messages,
       dialogProcessId,
@@ -455,6 +458,18 @@ export function useReconnectReplay({
       applyExecutionTree,
       applyWorkflowRuntimeEvent,
       isDeletedTurn,
+      onAttachmentParsed: (payload) => handleAttachmentParsedStreamEvent({
+        data: payload,
+        activeSession,
+        makeViewMessage,
+        logSessionEvent: ({ event, sessionId, dialogProcessId, turnScopeId, data: details }) =>
+          logWorkflowDiagnostics(event, {
+            sessionId,
+            dialogProcessId,
+            turnScopeId,
+            ...(details || {}),
+          }),
+      }),
     });
   }
 

@@ -8,7 +8,7 @@ import {
   mergeAttachmentMetaPreferRich,
   readAttachIndex,
 } from "../../artifacts/index.js";
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
 

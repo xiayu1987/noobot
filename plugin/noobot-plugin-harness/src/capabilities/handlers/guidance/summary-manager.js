@@ -5,8 +5,8 @@
  */
 import { ensureHarnessBucket } from "./deps.js";
 import { mergeSummaryText } from "../shared/plan/summary-text-protocol.js";
-import { resolveAttachmentDisplayPath } from "../shared/sandbox-path.js";
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
+import { attachmentIdentityKey } from "@noobot/semantic-transfer-protocol";
 
 export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   const holder = ensureHarnessBucket(ctx);
@@ -48,68 +48,57 @@ export async function transferSummaryInjectionMessage(
 ) {
   const runtime = ctx?.agentContext?.bindings?.runtime || null;
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
-  const fallback = String(
-    String(injectMode || "").trim().toLowerCase() === "summary"
-      ? summaryText || fullText
-      : fullText || summaryText
-  ).trim();
-  if (typeof transferSemanticContent !== "function") return fallback;
-  try {
-    const transferred = await transferSemanticContent({
-      scenario: "harness",
-      strategy: "harness_summary_injection",
-      injectMode,
-      fullText,
-      summaryText,
-      detailText,
-      meta,
-    });
-    return String(transferred?.injectionMessage || fallback).trim();
-  } catch {
-    return fallback;
+  if (typeof transferSemanticContent !== "function") {
+    throw new Error("harness_semantic_transfer_runtime_required");
   }
+  const transferred = await transferSemanticContent({
+    scenario: "harness",
+    strategy: "harness_summary",
+    producer: { type: "plugin", id: "harness-summary" },
+    direction: "output",
+    injectMode,
+    fullText,
+    summaryText,
+    detailText,
+    meta,
+  });
+  const directEnvelope = (Array.isArray(transferred?.transferEnvelopes)
+    ? transferred.transferEnvelopes
+    : []).find((envelope = {}) => envelope?.payload?.mode === "direct");
+  if (!directEnvelope || typeof directEnvelope?.payload?.content !== "string") {
+    throw new Error("harness_summary_direct_transfer_required");
+  }
+  return directEnvelope.payload.content.trim();
 }
 
 export function resolvePreviousSummaryContextText(ctx = {}) {
   const holder = ensureHarnessBucket(ctx);
   const bucket = holder?.bucket || {};
   const latestCompleteSummaryText = resolveLatestCompleteSummaryText({ bucket, ctx });
-  const paths = Array.isArray(bucket?.summaryDetailPaths)
-    ? bucket.summaryDetailPaths.map((item) => String(item || "").trim()).filter(Boolean)
-    : [];
-  const pathBlock = paths.length
-    ? ["SUMMARY_DETAIL_PATHS:", ...paths.map((item) => `- ${item}`)].join("\n")
-    : "";
-  return [latestCompleteSummaryText, pathBlock]
-    .filter(Boolean)
-    .join("\n\n")
-    .trim();
+  return latestCompleteSummaryText;
 }
 
-function resolveAttachmentPath(meta = {}, ctx = {}) {
-  return resolveAttachmentDisplayPath(meta, ctx);
-}
-
-export function recordSummaryDetailAttachments(ctx = {}, metas = []) {
+export function recordSummaryDetailTransferEnvelopes(ctx = {}, transferPayload = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return [];
   const { bucket } = holder;
-  const source = Array.isArray(metas) ? metas : [];
-  if (!Array.isArray(bucket.summaryDetailAttachments)) {
-    bucket.summaryDetailAttachments = [];
+  const envelopes = Array.isArray(transferPayload?.transferEnvelopes)
+    ? transferPayload.transferEnvelopes
+    : [];
+  if (!Array.isArray(bucket.summaryDetailTransferEnvelopes)) {
+    bucket.summaryDetailTransferEnvelopes = [];
   }
-  const keyOf = (item = {}) =>
-    String(item?.attachmentId || "").trim() ||
-    `${String(item?.name || "").trim()}|${String(item?.path || "").trim()}`;
-  const seen = new Set(bucket.summaryDetailAttachments.map((item = {}) => keyOf(item)).filter(Boolean));
-  for (const item of source) {
-    const key = keyOf(item);
+  const envelopeKey = (envelope = {}) => `${envelope.transferId}:${envelope.messageId}`;
+  const seen = new Set(bucket.summaryDetailTransferEnvelopes.map(envelopeKey));
+  for (const envelope of envelopes) {
+    if (envelope?.payload?.mode !== "attachment") continue;
+    for (const reference of envelope.payload.attachments || []) {
+      attachmentIdentityKey(reference.identity);
+    }
+    const key = envelopeKey(envelope);
     if (key && seen.has(key)) continue;
-    bucket.summaryDetailAttachments.push(item);
+    bucket.summaryDetailTransferEnvelopes.push(envelope);
     if (key) seen.add(key);
   }
-  bucket.summaryDetailPaths = bucket.summaryDetailAttachments
-    .map((item = {}) => resolveAttachmentPath(item, ctx))
-    .filter(Boolean);
-  return bucket.summaryDetailPaths;
+  return bucket.summaryDetailTransferEnvelopes;
 }

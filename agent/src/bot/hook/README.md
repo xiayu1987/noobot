@@ -17,7 +17,7 @@ main Agent must:
    rootExecutionId, origin, stage })` as
    soon as it accepts exclusive ownership;
 2. return a versioned `bot_dispatch_outcome` from
-   `@noobot/shared/bot-dispatch-protocol`;
+   `@noobot/agent-transport-protocol/bot-dispatch`;
 3. return `handled` with its final result, or `handled` with a structured
    failure; and
 4. never return `pass` after creating side effects or child executions.

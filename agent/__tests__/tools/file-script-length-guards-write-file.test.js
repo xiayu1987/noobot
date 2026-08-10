@@ -53,19 +53,23 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, false);
   assert.equal(result.message, "文件内容过长，请分批写入");
-  assert.equal(Array.isArray(result.transferFiles), true);
-  assert.equal(result.transferFiles.length, 1);
-  assert.equal(result.transferFiles[0].name, "large.txt.tool-input.txt");
-  assert.equal(typeof result.transferFiles[0].transferFilePath, "string");
+  assert.equal(Array.isArray(result.transferEnvelopes), true);
+  assert.equal(result.transferEnvelopes.length, 1);
+  assert.equal(result.transferEnvelopes[0].version, 2);
+  assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
+  assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "large.txt.tool-input.txt");
+  assert.equal(typeof result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "string");
   assert.equal(result.toolInputOverflow?.field, "content");
   await assert.rejects(() => fs.access(path.join(basePath, filePath)));
 });
 
 test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-path-view-"));
+  const attachmentService = buildAttachmentService();
   const tools = createFileTool({
     agentContext: buildAgentContext(basePath, "primary-user", {
       runtime: {
+        attachmentService,
         globalConfig: {
           tools: {
             execute_script: {
@@ -81,6 +85,7 @@ test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
 
   const runtime = buildAgentContext(basePath, "primary-user", {
     runtime: {
+      attachmentService,
       globalConfig: {
         tools: {
           execute_script: {
@@ -107,12 +112,43 @@ test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
   assert.equal(result.resolvedPath, path.join(basePath, "runtime/ops_workdir/write-ok.txt"));
 });
 
+test("write_file: successful output is published as a canonical attachment", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-transfer-"));
+  const attachmentService = buildAttachmentService();
+  const agentContext = buildAgentContext(basePath, "primary-user", {
+    runtime: { attachmentService },
+  });
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "write_file");
+  const runnerResult = await executeToolCall({
+    call: {
+      id: "call_write_transfer",
+      name: "write_file",
+      args: { riskLevel: "low", filePath: "runtime/ops_workdir/result.md", content: "# result" },
+    },
+    tool,
+    runtime: agentContext.bindings.runtime,
+    agentContext,
+    sessionId: "s-1",
+  });
+  const result = parseToolResult(runnerResult.toolResultText);
+
+  assert.equal(runnerResult.success, true);
+  assert.equal(runnerResult.transferEnvelopes?.length, 1);
+  assert.equal(runnerResult.transferEnvelopes[0]?.version, 2);
+  assert.equal(runnerResult.transferEnvelopes[0]?.payload?.attachments?.[0]?.name, "result.md");
+  assert.equal("attachments" in result, false);
+  assert.equal("outputArtifacts" in result, false);
+  assert.equal(await fs.readFile(path.join(basePath, "runtime/ops_workdir/result.md"), "utf8"), "# result");
+});
+
 test("write_file: 启用沙箱返回沙箱路径视角", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-sandbox-view-"));
   const basePath = path.join(workspaceRoot, "primary-user");
+  const attachmentService = buildAttachmentService();
   const tools = createFileTool({
     agentContext: buildAgentContext(basePath, "primary-user", {
       runtime: {
+        attachmentService,
         globalConfig: {
           tools: {
             execute_script: {
@@ -132,6 +168,7 @@ test("write_file: 启用沙箱返回沙箱路径视角", async () => {
 
   const runtime = buildAgentContext(basePath, "primary-user", {
     runtime: {
+      attachmentService,
       globalConfig: {
         tools: {
           execute_script: {

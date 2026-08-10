@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { SessionExecutionRunner } from "../../../src/bot/execution/runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
-import { createBotDispatchHandled } from "@noobot/shared/bot-dispatch-protocol";
+import { createBotDispatchHandled } from "@noobot/agent-transport-protocol/bot-dispatch";
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
 
 const NOOP_EVENT_LISTENER = Object.freeze({ onEvent() {} });

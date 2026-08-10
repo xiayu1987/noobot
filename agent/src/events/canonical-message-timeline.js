@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { MESSAGE_EVENT_TYPE } from "@noobot/shared/message-event-protocol";
+import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 
 export function isToolMessageEvent(envelope = {}) {
   return [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END]
@@ -36,9 +36,6 @@ export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
     turnScopeId: String(envelope.turnScopeId || "").trim(),
     ...(Array.isArray(envelope.attachments) && envelope.attachments.length
       ? { attachments: envelope.attachments }
-      : {}),
-    ...(Array.isArray(envelope.writtenFiles) && envelope.writtenFiles.length
-      ? { writtenFiles: envelope.writtenFiles }
       : {}),
   };
   const updated = isCall

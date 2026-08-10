@@ -13,7 +13,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { filePath as path } from "../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { fatalSystemError } from "../shared/errors/index.js";
 import { deepMerge } from "../shared/utils/shared-utils.js";
 import { tSystem } from "noobot-i18n/agent/system-text";

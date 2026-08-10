@@ -6,10 +6,12 @@
 import { readFile } from "node:fs/promises";
 import {
   filePath as path,
-  resolveAttachmentDisplayPath,
   resolveRuntimePathContext,
-} from "../../../shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
+import {
+  persistTransferArtifacts,
+} from "../../../transfer-adapter/index.js";
 import {
   EXECUTE_SCRIPT_TOOL_NAME,
   SANDBOX_PROVIDER_NAME,
@@ -176,33 +178,6 @@ function resolveRuntimeSessionId(runtime = {}, agentContext = null) {
   ).trim();
 }
 
-function buildScriptOutputFileView({
-  runtime = {},
-  agentContext = null,
-  basePath = "",
-  filePath = "",
-  bytes = 0,
-  role = "",
-} = {}) {
-  const relativePath = basePath && filePath.startsWith(basePath)
-    ? path.relative(basePath, filePath).split(path.sep).join("/")
-    : "";
-  return compactObject({
-    role,
-    filePath,
-    relativePath,
-    displayPath: resolveAttachmentDisplayPath({
-      path: filePath,
-      hostPath: filePath,
-      relativePath,
-      runtime,
-      agentContext,
-      purpose: "execute_script_output_file",
-    }),
-    bytes: Number(bytes || 0),
-  });
-}
-
 async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = "" } = {}) {
   const bytes = await readFile(filePath).catch(() => Buffer.alloc(0));
   if (!bytes.length) return null;
@@ -214,38 +189,13 @@ async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = 
   };
 }
 
-function buildAttachmentView({
-  record = {},
-  runtime = {},
-  agentContext = null,
-} = {}) {
-  return compactObject({
-    attachmentId: record.attachmentId,
-    name: record.name,
-    mimeType: record.mimeType,
-    size: record.size,
-    path: record.path,
-    relativePath: record.relativePath,
-    displayPath: resolveAttachmentDisplayPath({
-      meta: record,
-      runtime,
-      agentContext,
-      purpose: "execute_script_output_attachment",
-    }),
-  });
-}
-
 async function persistBackgroundScriptOutput({
   runtime = {},
   agentContext = null,
   result = {},
+  identity = null,
 } = {}) {
-  const service = runtime?.attachmentService || null;
   const userId = resolveRuntimeUserId(runtime, agentContext);
-  const sessionId = resolveRuntimeSessionId(runtime, agentContext);
-  if (!service || typeof service.ingestGeneratedArtifacts !== "function" || !userId || !sessionId) {
-    return [];
-  }
   const artifacts = [
     await buildBackgroundOutputArtifact({
       filePath: result.stdoutPath,
@@ -258,21 +208,37 @@ async function persistBackgroundScriptOutput({
       role: "stderr",
     }),
   ].filter(Boolean);
-  if (!artifacts.length) return [];
-  return service.ingestGeneratedArtifacts({
+  if (!artifacts.length) return null;
+  return persistTransferArtifacts({
+    runtime,
+    agentContext,
     userId,
-    sessionId,
+    artifacts,
     attachmentSource: "model",
     generationSource: "execute_script_background",
-    artifacts,
+    source: "tool",
+    reason: "execute_script_background",
+    identity,
+    intent: {
+      source: "tool",
+      reason: "execute_script_background",
+      scenario: "tool",
+      strategy: "tool_output",
+    },
+    meta: { contentOmitted: true },
   });
 }
 
 export async function toolFileBackedExecResult(mode, r = {}, extra = {}, options = {}) {
   const runtime = options?.runtime || {};
   const agentContext = options?.agentContext || null;
-  const basePath = String(options?.basePath || "").trim();
-  const records = await persistBackgroundScriptOutput({ runtime, agentContext, result: r });
+  const persisted = await persistBackgroundScriptOutput({
+    runtime,
+    agentContext,
+    result: r,
+    identity: options?.identity,
+  });
+  const transferEnvelopes = persisted?.transferEnvelopes || [];
   return toToolJsonResult(EXECUTE_SCRIPT_TOOL_NAME, {
     ok: Number(r?.code || 0) === 0,
     mode,
@@ -280,24 +246,6 @@ export async function toolFileBackedExecResult(mode, r = {}, extra = {}, options
     ...extra,
     code: Number(r?.code || 0),
     ...(r?.signal ? { signal: r.signal } : {}),
-    outputFiles: {
-      stdout: buildScriptOutputFileView({
-        runtime,
-        agentContext,
-        basePath,
-        filePath: r.stdoutPath,
-        bytes: r.stdoutBytes,
-        role: "stdout",
-      }),
-      stderr: buildScriptOutputFileView({
-        runtime,
-        agentContext,
-        basePath,
-        filePath: r.stderrPath,
-        bytes: r.stderrBytes,
-        role: "stderr",
-      }),
-    },
-    attachments: records.map((record) => buildAttachmentView({ record, runtime, agentContext })),
+    transferEnvelopes,
   });
 }

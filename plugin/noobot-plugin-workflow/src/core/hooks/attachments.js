@@ -5,19 +5,25 @@
  */
 
 import { WORKFLOW_ATTACHMENT_SCOPE } from "../constants.js";
-import { resolveWorkflowAgentContext, resolveWorkflowRuntimeFromContext } from "./runtime.js";
+import { resolveWorkflowAgentContext } from "./runtime.js";
 import {
   attachmentIdentityKey,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
+import {
+  createAttachmentReference,
+  createTransferIdentity,
+  createTransferEnvelope,
+  assertTransferEnvelope,
+  TRANSFER_DIRECTION,
+} from "@noobot/semantic-transfer-protocol";
 
 function canonicalAttachmentKey(attachment = {}) {
   return attachmentIdentityKey(projectAttachmentIdentity(attachment));
 }
 
-function assertTransferAttachmentMeta(meta = {}) {
-  projectAttachmentIdentity(meta);
-  return meta;
+function assertTransferAttachmentIdentity(attachment = {}) {
+  return projectAttachmentIdentity(attachment);
 }
 
 export function mergeAttachments(existing = [], incoming = []) {
@@ -33,6 +39,28 @@ export function mergeAttachments(existing = [], incoming = []) {
       continue;
     }
     merged.push(item);
+    indexByKey.set(key, merged.length - 1);
+  }
+  return merged;
+}
+
+export function mergeAttachmentReferences(existing = [], incoming = []) {
+  const merged = Array.isArray(existing) ? existing.slice() : [];
+  const indexByKey = new Map();
+  merged.forEach((reference, index) => {
+    const identity = reference?.identity;
+    indexByKey.set(attachmentIdentityKey(identity), index);
+  });
+  for (const reference of Array.isArray(incoming) ? incoming : []) {
+    if (!reference || typeof reference !== "object") continue;
+    const identity = reference.identity;
+    const key = attachmentIdentityKey(identity);
+    if (indexByKey.has(key)) {
+      const index = indexByKey.get(key);
+      merged[index] = { ...merged[index], ...reference, identity };
+      continue;
+    }
+    merged.push(reference);
     indexByKey.set(key, merged.length - 1);
   }
   return merged;
@@ -61,100 +89,25 @@ export function isAllUserAttachmentRef(ref = "") {
   return WORKFLOW_ATTACHMENT_SCOPE.USER_ALL_TOKENS.includes(normalized);
 }
 
-export function resolveSemanticAttachmentDeclarationMap(semantic = {}) {
-  if (semantic?.attachmentMap && typeof semantic.attachmentMap === "object") {
-    return semantic.attachmentMap;
-  }
-  const map = {};
-  for (const item of Array.isArray(semantic?.attachments) ? semantic.attachments : []) {
-    const id = String(item?.id || item?.attachmentId || "").trim();
-    if (!id) continue;
-    map[id] = item;
-  }
-  return map;
-}
-
-export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {}, semantic = {} } = {}) {
+export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {} } = {}) {
   const userAttachments = resolveWorkflowInputAttachments(ctx);
   if (!userAttachments.length) return [];
   const canonicalUserAttachments = userAttachments.map((attachment) => ({
     attachment,
     key: canonicalAttachmentKey(attachment),
   }));
-  const refs = normalizeAttachmentRefs(
-    semanticNode?.attachments || semanticNode?.inputAttachments || semanticNode?.attachmentIds || [],
-  );
+  const refs = normalizeAttachmentRefs(semanticNode?.attachments || []);
   if (!refs.length) return [];
   if (refs.some(isAllUserAttachmentRef)) return canonicalUserAttachments.map(({ attachment }) => attachment);
-  const semanticAttachmentMap = resolveSemanticAttachmentDeclarationMap(semantic);
-  const declaredIdentityKeys = refs.map((ref) => {
-    const normalizedRef = String(ref || "").trim();
-    const declared = semanticAttachmentMap[normalizedRef] || null;
-    if (!declared || typeof declared !== "object") return "";
-    return canonicalAttachmentKey(declared);
-  }).filter(Boolean);
-  const identityKeySet = new Set(declaredIdentityKeys);
-  if (!identityKeySet.size) return [];
-  return canonicalUserAttachments
-    .filter(({ key }) => identityKeySet.has(key))
-    .map(({ attachment }) => attachment);
-}
-
-export function resolveAttachmentDisplayPath(meta = {}, ctx = {}) {
-  const agentContext = resolveWorkflowAgentContext(ctx);
-  const runtime = resolveWorkflowRuntimeFromContext(ctx);
-  const primaryFile = Array.isArray(meta?.files) && meta.files.length ? meta.files[0] : null;
-  const sourceMeta = primaryFile?.attachmentMeta || meta?.attachmentMeta || meta;
-  const directFilePath = String(
-    primaryFile?.pathView?.displayPath ||
-      primaryFile?.filePath ||
-      meta?.pathView?.displayPath ||
-      "",
-  ).trim();
-  if (directFilePath) return directFilePath;
-
-  const resolved = resolveViaRuntimeAttachmentPathResolvers(sourceMeta, runtime, agentContext);
-  if (resolved) return resolved;
-  return String(sourceMeta?.relativePath || sourceMeta?.path || sourceMeta?.name || "").trim();
-}
-
-function callAttachmentPathResolver(resolver, ...args) {
-  if (typeof resolver !== "function") return "";
-  try {
-    return String(resolver(...args) || "").trim();
-  } catch {
-    return "";
+  const selected = [];
+  for (const ref of refs) {
+    const matches = canonicalUserAttachments.filter(({ attachment }) => (
+      String(attachment?.attachmentId || "").trim() === ref
+    ));
+    if (matches.length > 1) throw new Error(`ambiguous_attachment_id:${ref}`);
+    if (matches.length === 1) selected.push(matches[0].attachment);
   }
-}
-
-function buildAttachmentPathResolverPayload(sourceMeta = {}, runtime = null, agentContext = null) {
-  const path = String(sourceMeta?.path || "").trim();
-  return {
-    ...(sourceMeta && typeof sourceMeta === "object" ? sourceMeta : {}),
-    attachmentMeta: sourceMeta,
-    meta: sourceMeta,
-    path,
-    hostPath: path,
-    relativePath: String(sourceMeta?.relativePath || "").trim(),
-    runtime,
-    agentContext,
-    purpose: "workflow_attachment_display_path",
-  };
-}
-
-function resolveViaRuntimeAttachmentPathResolvers(sourceMeta = {}, runtime = null, agentContext = null) {
-  const payload = buildAttachmentPathResolverPayload(sourceMeta, runtime, agentContext);
-  const resolvers = [
-    runtime?.sharedTools?.resolveAttachmentDisplayPath,
-    runtime?.sharedTools?.resolveSandboxPath,
-    runtime?.sharedTools?.toSandboxPath,
-    runtime?.sharedTools?.pathMapper?.toSandboxPath,
-  ];
-  for (const resolver of resolvers) {
-    const resolved = callAttachmentPathResolver(resolver, payload);
-    if (resolved) return resolved;
-  }
-  return "";
+  return mergeAttachments([], selected);
 }
 
 export function isPlainObject(value) {
@@ -190,104 +143,50 @@ export function applyWorkflowTransferPayload(target = {}, payload = {}) {
   return target;
 }
 
-export function buildWorkflowTransferPayloadFromAttachments(attachments = []) {
+export function buildWorkflowTransferPayloadFromAttachments({
+  attachments = [],
+  transferId = "",
+  messageId = "",
+  identity = null,
+  intent = {},
+  meta = {},
+} = {}) {
   const metas = (Array.isArray(attachments) ? attachments : [])
     .filter((item) => item && typeof item === "object" && !Array.isArray(item));
   if (!metas.length) return normalizeWorkflowTransferPayload();
-  const files = metas.map((meta = {}, index) => ({
-    filePath: String(
-      meta?.sandboxPath ||
-        meta?.sandboxViewPath ||
-        meta?.relativePath ||
-        meta?.path ||
-        meta?.name ||
-        "",
-    ).trim(),
-    attachmentMeta: assertTransferAttachmentMeta(meta),
+  if (!String(transferId || "").trim() || !String(messageId || "").trim()) throw new Error("workflow transfer identity is required");
+  const refs = metas.map((item, index) => createAttachmentReference({
+    identity: assertTransferAttachmentIdentity(item),
     role: index === 0 ? "primary" : "secondary",
+    name: item.name,
+    mimeType: item.mimeType,
+    size: Number.isSafeInteger(item.size) && item.size >= 0 ? item.size : undefined,
   }));
-  const primaryEnvelope = {
-    protocol: "noobot.semantic-transfer",
-    version: 1,
-    direction: "output",
-    transport: "file",
-    filePath: String(files[0]?.filePath || "").trim(),
-    files,
-  };
+  const envelope = createTransferEnvelope({
+    transferId: String(transferId).trim(),
+    messageId: String(messageId).trim(),
+    identity: createTransferIdentity(identity),
+    direction: TRANSFER_DIRECTION.OUTPUT,
+    payload: { mode: "attachment", attachments: refs },
+    intent,
+    meta,
+  });
   return normalizeWorkflowTransferPayload({
-    transferEnvelopes: [primaryEnvelope],
+    transferEnvelopes: [envelope],
   });
 }
 
-export function resolveWorkflowTransferFilesFromPayload(payload = {}, ctx = {}) {
+export function resolveWorkflowTransferAttachmentReferences(payload = {}) {
   const transferPayload = normalizeWorkflowTransferPayload(payload);
   if (!transferPayload.transferEnvelopes.length) return [];
   const source = transferPayload.transferEnvelopes;
   return source.flatMap((envelope = {}) => {
-    if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return [];
-    if (Array.isArray(envelope.files) && envelope.files.length) {
-      return envelope.files
-        .filter((item) => item && typeof item === "object" && !Array.isArray(item))
-        .map((item) => ({
-          ...item,
-          ...(item.attachmentMeta
-            ? { attachmentMeta: assertTransferAttachmentMeta(item.attachmentMeta) }
-            : {}),
-        }));
-    }
-    if (envelope.filePath || envelope.attachmentMeta || envelope.pathView) {
-      if (envelope.attachmentMeta) assertTransferAttachmentMeta(envelope.attachmentMeta);
-      return [
-        {
-          filePath: String(envelope.filePath || "").trim(),
-          ...(envelope.attachmentMeta && typeof envelope.attachmentMeta === "object"
-            ? { attachmentMeta: envelope.attachmentMeta }
-            : {}),
-          ...(envelope.pathView && typeof envelope.pathView === "object"
-            ? { pathView: envelope.pathView }
-            : {}),
-          role: "primary",
-        },
-      ];
-    }
-    return [];
+    assertTransferEnvelope(envelope);
+    const references = envelope?.payload?.mode === "attachment"
+      ? envelope.payload.attachments
+      : [];
+    return (Array.isArray(references) ? references : []).map((reference) => ({ ...reference }));
   });
 }
 
-export function resolveWorkflowAttachmentsFromTransferPayload(payload = {}, ctx = {}) {
-  const transferPayload = normalizeWorkflowTransferPayload(payload);
-  return resolveWorkflowTransferFilesFromPayload(transferPayload, ctx)
-    .map((item = {}) => item?.attachmentMeta)
-    .filter((item) => item && typeof item === "object" && !Array.isArray(item));
-}
 
-export function resolveWorkflowAttachments({
-  workflowPayload = null,
-  attachments = [],
-  ctx = {},
-} = {}) {
-  const transferAttachments = resolveWorkflowAttachmentsFromTransferPayload(
-    workflowPayload && typeof workflowPayload === "object" ? workflowPayload : {},
-    ctx,
-  );
-  if (transferAttachments.length) return transferAttachments;
-  return Array.isArray(attachments) ? attachments : [];
-}
-
-export function resolveWorkflowTransferFileDisplayPath(file = {}, ctx = {}) {
-  return String(
-    file?.pathView?.displayPath ||
-      resolveAttachmentDisplayPath(
-        {
-          ...(file?.attachmentMeta && typeof file.attachmentMeta === "object" ? file.attachmentMeta : {}),
-          pathView: file?.pathView,
-          path: file?.attachmentMeta?.path || file?.pathView?.hostPath,
-          relativePath: file?.attachmentMeta?.relativePath || file?.pathView?.relativePath,
-          sandboxPath: file?.attachmentMeta?.sandboxPath || file?.pathView?.sandboxPath,
-        },
-        ctx,
-      ) ||
-      file?.filePath ||
-      "",
-  ).trim();
-}

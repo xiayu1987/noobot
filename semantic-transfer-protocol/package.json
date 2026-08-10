@@ -1,0 +1,18 @@
+{
+  "name": "@noobot/semantic-transfer-protocol",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Canonical Noobot semantic information transfer protocol",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.mjs"
+  },
+  "dependencies": {
+    "@noobot/attachment-protocol": "file:../attachment-protocol",
+    "@noobot/shared": "file:../shared"
+  }
+}

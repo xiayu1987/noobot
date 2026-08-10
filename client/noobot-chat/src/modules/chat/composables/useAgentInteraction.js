@@ -85,9 +85,13 @@ export function useAgentInteraction({
       pendingInteractionRequests.value = queue;
     }
     const currentSessionId = String(activeSessionId.value || "").trim();
+    // During initial connection the authoritative request can arrive before
+    // the active session identity is committed. Keep the queued protocol
+    // record visible until that identity is available; the watcher below
+    // then narrows it to the exact session.
     pendingInteractionRequest.value = currentSessionId
       ? queue.find((requestItem) => String(requestItem?.sessionId || "").trim() === currentSessionId) || null
-      : null;
+      : queue[0] || null;
     if (!pendingInteractionRequest.value) {
       interactionSubmitting.value = false;
     }

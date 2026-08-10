@@ -23,6 +23,19 @@ import {
 import { run } from "../../src/tools/execution/script-tool/process-exec.js";
 import { enqueueDockerContainerTask } from "../../src/tools/execution/script-tool/docker-queue.js";
 
+const TEST_TRANSFER_IDENTITY = Object.freeze({
+  transferId: "transfer:test:execute-script:output",
+  messageId: "message:test-execute-script",
+  sessionId: "session:test-execute-script",
+  turnScopeId: "turn:test-execute-script",
+  runId: "run:test-execute-script",
+  producer: { type: "tool", id: "call:test-execute-script" },
+});
+
+function invokeScript(tool, args) {
+  return tool.invoke(args, { configurable: { transferIdentity: TEST_TRANSFER_IDENTITY } });
+}
+
 test("execute_script: command 超过 semantic-transfer 阈值时保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-guard-"));
   let invoked = false;
@@ -54,10 +67,12 @@ test("execute_script: command 超过 semantic-transfer 阈值时保存附件并�
   assert.equal(result.toolName, "execute_script");
   assert.equal(result.ok, false);
   assert.equal(result.message, "脚本内容过长，请分批执行或拆分脚本/文本后重试");
-  assert.equal(Array.isArray(result.transferFiles), true);
-  assert.equal(result.transferFiles.length, 1);
-  assert.equal(result.transferFiles[0].name, "execute-script-command.tool-input.sh");
-  assert.equal(typeof result.transferFiles[0].transferFilePath, "string");
+  assert.equal(Array.isArray(result.transferEnvelopes), true);
+  assert.equal(result.transferEnvelopes.length, 1);
+  assert.equal(result.transferEnvelopes[0].version, 2);
+  assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
+  assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "execute-script-command.tool-input.sh");
+  assert.equal(typeof result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "string");
   assert.equal(result.toolInputOverflow?.field, "command");
 });
 
@@ -89,7 +104,7 @@ test("execute_script: 非沙箱返回仅包含当前 host 工作目录视角", a
   const tool = tools.find((item) => item?.name === "execute_script");
   assert.ok(tool);
 
-  const result = parseToolResult(await tool.invoke({ command: "printf 'ok'", riskLevel: "low" }));
+  const result = parseToolResult(await invokeScript(tool, { command: "printf 'ok'", riskLevel: "low" }));
 
   assert.equal(result.toolName, "execute_script");
   assert.equal(result.ok, true);
@@ -123,14 +138,14 @@ test("execute_script: 可选给 stdout/stderr 加行号", async () => {
   assert.ok(tool);
 
   const defaultResult = parseToolResult(
-    await tool.invoke({ command: "printf 'a\\nb\\n'", riskLevel: "low" }),
+    await invokeScript(tool, { command: "printf 'a\\nb\\n'", riskLevel: "low" }),
   );
   assert.equal(defaultResult.ok, true);
   assert.equal(defaultResult.includeLineNumbers, false);
   assert.equal(defaultResult.stdout, "a\nb\n");
 
   const withLines = parseToolResult(
-    await tool.invoke({ command: "printf 'a\\nb\\n'; printf 'err\\n' >&2", riskLevel: "low", includeLineNumbers: true }),
+    await invokeScript(tool, { command: "printf 'a\\nb\\n'; printf 'err\\n' >&2", riskLevel: "low", includeLineNumbers: true }),
   );
   assert.equal(withLines.ok, true);
   assert.equal(withLines.includeLineNumbers, true);
@@ -157,14 +172,14 @@ test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退
   assert.ok(tool);
 
   const shellResult = parseToolResult(
-    await tool.invoke({ command: "printf 'alpha\\nbeta\\n' | grep beta", riskLevel: "low" }),
+    await invokeScript(tool, { command: "printf 'alpha\\nbeta\\n' | grep beta", riskLevel: "low" }),
   );
   assert.equal(shellResult.ok, true);
   assert.equal(shellResult.stdout, "beta\n");
   assert.equal(shellResult.stderr, "");
 
   const failResult = parseToolResult(
-    await tool.invoke({
+    await invokeScript(tool, {
       command: "node -e \"console.error('boom'); process.stdout.write('partial'); process.exit(7)\"",
       riskLevel: "low",
     }),
@@ -175,7 +190,7 @@ test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退
   assert.equal(failResult.stderr.trim(), "boom");
 });
 
-test("execute_script: foreground 大输出流式落盘并返回完整文件引用", async () => {
+test("execute_script: foreground 大输出通过 V2 附件身份保留", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-large-output-"));
   const tools = createScriptTool({
     agentContext: buildAgentContext(basePath, "primary-user", {
@@ -187,6 +202,7 @@ test("execute_script: foreground 大输出流式落盘并返回完整文件引�
             },
           },
         },
+        attachmentService: buildAttachmentService(),
       },
     }),
   });
@@ -195,7 +211,7 @@ test("execute_script: foreground 大输出流式落盘并返回完整文件引�
 
   const outputLength = 1024 * 1024 + 12345;
   const result = parseToolResult(
-    await tool.invoke({
+    await invokeScript(tool, {
       command: `node -e "process.stdout.write('x'.repeat(${outputLength}))"`,
       riskLevel: "low",
     }),
@@ -206,13 +222,13 @@ test("execute_script: foreground 大输出流式落盘并返回完整文件引�
   assert.equal(result.stdout.length, LENGTH_THRESHOLDS.semanticTransfer.previewChars);
   assert.equal(result.stderr, "");
   assert.equal(result.stdout.endsWith("xxx"), true);
-  assert.equal(result.outputFiles.stdout.bytes, outputLength);
-  const stdoutFile = result.transferEnvelopes[0].files.find((item) => item.attachmentMeta?.name === "execute-script-stdout.txt");
-  assert.equal((await fs.stat(stdoutFile.pathView.hostPath)).size, outputLength);
+  const stdoutRef = result.transferEnvelopes[0].payload.attachments.find((item) => item.name === "execute-script-stdout.txt");
+  assert.equal(stdoutRef.size, outputLength);
+  assert.equal(typeof stdoutRef.identity.attachmentId, "string");
   assert.equal(result.stdoutPath, undefined);
 });
 
-test("execute_script: background 模式将 stdout/stderr 交给附件层并返回路径", async () => {
+test("execute_script: background 模式将 stdout/stderr 交给附件层并返回 V2 身份", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-background-mode-"));
   const savedArtifacts = [];
   const attachmentService = {
@@ -251,7 +267,7 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
   assert.ok(tool);
 
   const result = parseToolResult(
-    await tool.invoke({
+    await invokeScript(tool, {
       command: "printf 'out'; printf 'err' >&2",
       riskLevel: "low",
       executionMode: "background",
@@ -264,16 +280,14 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
   assert.equal(result.executionMode, "background");
   assert.equal(result.stdout, undefined);
   assert.equal(result.stderr, undefined);
-  assert.equal(result.transferEnvelopes, undefined);
-  assert.equal(result.outputFiles.stdout.bytes, 3);
-  assert.equal(result.outputFiles.stderr.bytes, 3);
-  assert.equal(await fs.readFile(result.outputFiles.stdout.filePath, "utf8"), "out");
-  assert.equal(await fs.readFile(result.outputFiles.stderr.filePath, "utf8"), "err");
+  assert.equal(result.transferEnvelopes.length, 1);
+  assert.equal(result.transferEnvelopes[0].version, 2);
+  assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
   assert.equal(stdoutArtifact?.content, "out");
   assert.equal(stderrArtifact?.content, "err");
   assert.equal(stdoutArtifact?.generationSource, "execute_script_background");
-  assert.equal(result.attachments.length, 2);
-  assert.equal(result.attachments[0].path.startsWith("/host/background/"), true);
+  assert.equal(result.transferEnvelopes[0].payload.attachments.length, 2);
+  assert.equal(result.transferEnvelopes[0].payload.attachments.every((item) => item.identity.attachmentId), true);
 });
 
 test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer 保留完整内容", async () => {
@@ -342,14 +356,15 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
     sessionId: "s-script-large-output",
   });
   const result = parseToolResult(runnerResult.toolResultText);
-  const stdoutFile = result.transferFiles.find((item) => item.name === "execute-script-stdout.txt");
+  const stdoutFile = result.transferEnvelopes[0].payload.attachments.find((item) => item.name === "execute-script-stdout.txt");
 
   assert.equal(result.ok, true);
   assert.equal(result.outputOverflow, true);
   assert.equal(result.overflowed, undefined);
-  assert.equal(savedArtifacts.length, 0);
+  assert.equal(savedArtifacts.length, 1);
+  assert.equal(savedArtifacts[0].content.length, outputLength);
   assert.equal(stdoutFile.size, outputLength);
-  assert.match(stdoutFile.transferFilePath, /execute-script-stdout\.txt|stdout\.txt/);
+  assert.equal(typeof stdoutFile.identity.attachmentId, "string");
 });
 
 test("execute_script: foreground timeout terminates the process group and settles", async (t) => {

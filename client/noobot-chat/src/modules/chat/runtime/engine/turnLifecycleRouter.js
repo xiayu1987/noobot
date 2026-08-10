@@ -6,7 +6,7 @@
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { applyLatestSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
-import { validateTurnCommittedEventData } from "@noobot/shared/turn-commit-protocol";
+import { validateTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
   const { activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;

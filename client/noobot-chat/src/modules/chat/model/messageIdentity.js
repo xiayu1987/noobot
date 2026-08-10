@@ -7,7 +7,7 @@ import {
   areCanonicalTurnScopeIdsEqual,
   canonicalizeTurnScopeId,
   turnScopeIdentityKey,
-} from "@noobot/shared/turn-scope-identity";
+} from "@noobot/session-protocol/turn-scope-identity";
 
 function trim(value = "") {
   return String(value || "").trim();
@@ -79,6 +79,21 @@ function hasTurnOwner(owner = {}) {
 
 export function getMessageSessionId(messageItem = {}) {
   return trim(messageItem?.sessionId || messageItem?.session_id || messageItem?.sessionId);
+}
+
+export function getMessageInternalType(messageItem = {}) {
+  return trim(
+    messageItem?.noobotInternalMessageType ||
+      messageItem?.internalType ||
+      messageItem?.additional_kwargs?.noobotInternalMessageType ||
+      messageItem?.additional_kwargs?.internalType ||
+      messageItem?.metadata?.noobotInternalMessageType ||
+      messageItem?.metadata?.internalType ||
+      messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
+      messageItem?.lc_kwargs?.additional_kwargs?.internalType ||
+      messageItem?.lc_kwargs?.metadata?.noobotInternalMessageType ||
+      messageItem?.lc_kwargs?.metadata?.internalType
+  );
 }
 
 export function normalizeTurnOwner(raw = {}) {

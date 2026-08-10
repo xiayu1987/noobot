@@ -20,7 +20,7 @@ import {
   validateTurnLifecycleSnapshot,
   validateTurnTerminalResolution,
 } from "@noobot/session-protocol";
-import { validateExecutionIdentity } from "@noobot/shared/execution-lifecycle-protocol";
+import { validateExecutionIdentity } from "@noobot/session-protocol/execution-lifecycle";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { canonicalizeTurnScopeId } from "../../model/messageIdentity.js";
 

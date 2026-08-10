@@ -3,12 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath as path } from "../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { readFile, readdir, rm } from "node:fs/promises";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
-import { assertArtifactSessionWritable, buildSessionArtifactFileMap, readJsonArtifactFile, resolveArtifactMutationLockDir } from "./session-artifact-files.js";
+import { assertArtifactSessionWritable, buildSessionArtifactFileMap, readJsonArtifactFile, resolveArtifactMutationLockDir, SESSION_ARTIFACT_FILE_NAMES } from "./session-artifact-files.js";
 import { writeArtifactIndex } from "./session-artifact-execution-logs.js";
 import { resolveTurnArtifactPath, readRecentSessionTurns } from "./session-artifact-session.js";
+import { reconcileExecutionSegmentIndex } from "@noobot/session-repair";
 
 function diagnostic(code, message, extra = {}) {
   return { code, message, ...extra };
@@ -16,7 +17,7 @@ function diagnostic(code, message, extra = {}) {
 
 export async function inspectSessionArtifacts({ sessionDir = "" } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
-  const result = { sessionDir, ok: true, issues: [], turns: { referenced: 0, orphaned: [] }, execution: null };
+  const result = { sessionDir, ok: true, issues: [], turns: { referenced: 0, orphaned: [] }, summarySnapshots: { orphaned: [] }, execution: null };
   const manifest = await readJsonArtifactFile(files.session, null);
   if (!manifest) return { ...result, ok: false, issues: [diagnostic("SESSION_MANIFEST_MISSING", "session manifest is missing")] };
   const referenced = new Set();
@@ -33,12 +34,28 @@ export async function inspectSessionArtifacts({ sessionDir = "" } = {}) {
     }
     catch (error) { result.ok = false; result.issues.push(diagnostic(error.code || "TURN_INVALID", error.message, { file })); }
   }
-  if (Number(manifest.schemaVersion) === 5) {
-    try { await readRecentSessionTurns({ sessionDir, limit: manifest.turnOrder?.length || 0 }); }
-    catch (error) { result.ok = false; result.issues.push(diagnostic(error.code || "TURN_INVALID", error.message)); }
-  }
   try { for (const entry of await readdir(files.turnsDir, { withFileTypes: true })) if (entry.isFile() && (entry.name.endsWith(".json") || entry.name.endsWith(".jsonl")) && !referenced.has(entry.name)) result.turns.orphaned.push(entry.name); }
   catch (error) { if (error.code !== "ENOENT") { result.ok = false; result.issues.push(diagnostic("TURNS_READ_FAILED", error.message)); } }
+  const referencedSnapshots = new Set();
+  try {
+    const turns = await readRecentSessionTurns({ sessionDir, limit: manifest.turnOrder?.length || 0 });
+    for (const snapshot of turns.flatMap((entry) => entry.summarySnapshots || [])) {
+      referencedSnapshots.add(String(snapshot.file || "").replaceAll("\\", "/"));
+    }
+  } catch (error) {
+    result.ok = false;
+    result.issues.push(diagnostic(error.code || "SUMMARY_SNAPSHOT_INVALID", error.message));
+  }
+  try {
+    for (const turnEntry of await readdir(files.turnSnapshotsDir, { withFileTypes: true })) {
+      if (!turnEntry.isDirectory()) continue;
+      for (const entry of await readdir(path.join(files.turnSnapshotsDir, turnEntry.name), { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+        const relative = path.join(SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir, turnEntry.name, entry.name).replaceAll("\\", "/");
+        if (!referencedSnapshots.has(relative)) result.summarySnapshots.orphaned.push(relative);
+      }
+    }
+  } catch (error) { if (error.code !== "ENOENT") { result.ok = false; result.issues.push(diagnostic("SUMMARY_SNAPSHOTS_READ_FAILED", error.message)); } }
   try {
     const index = await readJsonArtifactFile(path.join(files.executionEventsDir, "index.json"), null);
     result.execution = { segments: index?.segments?.length || 0, index };
@@ -68,6 +85,7 @@ export async function cleanupSessionArtifacts({
       if (!dryRun) await rm(targetPath, { recursive: true, force: true, ...options });
     };
     for (const name of report.turns.orphaned) await removePath(path.join(files.turnsDir, name), { recursive: false });
+    for (const name of report.summarySnapshots.orphaned) await removePath(path.join(sessionDir, name), { recursive: false });
     for (const dir of [sessionDir, files.turnsDir, files.executionEventsDir]) {
       try {
         for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -101,8 +119,9 @@ export async function repairSessionArtifacts({
     const before = await inspectSessionArtifacts({ sessionDir });
     const files = buildSessionArtifactFileMap(sessionDir);
     const index = await readJsonArtifactFile(path.join(files.executionEventsDir, "index.json"), null);
-    const repaired = [];
+    let repaired = [];
     if (index?.segments) {
+      const segmentMetadata = [];
       for (const segment of index.segments) {
         const segmentPath = path.join(files.executionEventsDir, segment.file);
         const raw = await readFile(segmentPath, "utf8");
@@ -114,12 +133,11 @@ export async function repairSessionArtifacts({
         const records = raw ? raw.split("\n").filter(Boolean) : [];
         for (const record of records) JSON.parse(record);
         const bytes = Buffer.byteLength(raw, "utf8");
-        if (Number(segment.bytes) !== bytes || Number(segment.records) !== records.length) {
-          segment.bytes = bytes;
-          segment.records = records.length;
-          repaired.push(segment.file);
-        }
+        segmentMetadata.push({ file: segment.file, bytes, records: records.length });
       }
+      const reconciled = reconcileExecutionSegmentIndex(index, segmentMetadata);
+      repaired = reconciled.repaired;
+      Object.assign(index, reconciled.index);
       if (repaired.length) await writeArtifactIndex(files.executionEventsDir, index);
     }
     return { before, repaired, after: await inspectSessionArtifacts({ sessionDir }) };

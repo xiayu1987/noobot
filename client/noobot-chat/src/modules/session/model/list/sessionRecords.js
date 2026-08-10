@@ -26,6 +26,7 @@ export function createLocalSessionItem({ id, title, createConnectorPanelState })
 }
 
 export function mapSummaryToSession(item, { sessionTitleFromMessages, createConnectorPanelState }) {
+  const isUnavailable = item?.availability === "unavailable";
   const messages = Array.isArray(item.messages) ? item.messages : [];
   const titleFallback = item.sessionId.slice(0, 8);
   const title = String(item.title || "").trim()
@@ -42,7 +43,12 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
   return {
     title,
     isLocal: false,
-    loaded: false,
+    loaded: isUnavailable,
+    isUnavailable,
+    availability: isUnavailable ? "unavailable" : "available",
+    unavailableReason: isUnavailable && item?.unavailableReason
+      ? { code: String(item.unavailableReason.code || ""), message: String(item.unavailableReason.message || "") }
+      : null,
     sessionId: item.sessionId,
     aggregateVersion: Number(item.aggregateVersion || 0),
     currentTaskId: item.currentTaskId || "",

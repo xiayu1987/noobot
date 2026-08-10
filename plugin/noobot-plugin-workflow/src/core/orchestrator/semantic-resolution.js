@@ -13,7 +13,6 @@ import {
   throwIfWorkflowAborted,
 } from "../hooks/runtime.js";
 import {
-  resolveAttachmentDisplayPath,
   resolveWorkflowInputAttachments,
 } from "../hooks/attachments.js";
 import {
@@ -34,30 +33,28 @@ export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx 
       const name = String(
           item?.name ||
           item?.fileName ||
-          tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.DEFAULT_LABEL, { index: index + 1 }),
+          tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
       const mimeType = String(item?.mimeType || "").trim();
-      const path = resolveAttachmentDisplayPath(item, ctx);
       const parts = [
         attachmentId ? `attachmentId=${attachmentId}` : "",
         `sessionId=${identity.sessionId}`,
         `attachmentSource=${identity.attachmentSource}`,
         name ? `name=${name}` : "",
         mimeType ? `mimeType=${mimeType}` : "",
-        path ? `path=${path}` : "",
       ].filter(Boolean);
       return parts.length ? `- ${parts.join("; ")}` : "";
     })
     .filter(Boolean);
   if (!lines.length) return "";
   return [
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_HEADER),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.HEADER),
     ...lines,
     "",
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_PLAN_HINT_1),
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_PLAN_HINT_2),
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_PLAN_HINT_3),
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.ATTACHMENT.INPUT_PLAN_HINT_4),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.PLAN_HINT_1),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.PLAN_HINT_2),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.PLAN_HINT_3),
+    tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.PLAN_HINT_4),
   ].join("\n");
 }
 

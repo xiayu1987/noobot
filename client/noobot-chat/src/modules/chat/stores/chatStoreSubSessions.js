@@ -7,8 +7,8 @@ import {
   isMessageEventEnvelope,
   resolveMessageEventPresentationId,
   resolveMessageEventSequenceIdentity, validateMessageEventEnvelope,
-} from "@noobot/shared/message-event-protocol";
-import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/shared/workflow-runtime-event-protocol";
+} from "@noobot/event-protocol/message-event";
+import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import { classifyRealtimeLog } from "../runtime/engine/realtimeLogClassifier.js";
 import { canonicalizeTurnScopeId, normalizeTurnScopeIdKey } from "../model/messageIdentity.js";

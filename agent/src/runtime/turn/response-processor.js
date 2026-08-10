@@ -10,7 +10,6 @@ import {
   DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
 } from "@noobot/context-protocol/summary-policy";
 import { assertNotAborted } from "../utils/error-utils.js";
-import { normalizeToolResultAttachments } from "./turn-executor.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../tools/collaboration/final-answer-tool.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
@@ -94,10 +93,11 @@ export async function processToolResults({
     for (const toolCallResult of toolCallResults) {
       const call = toolCallResult?.call || {};
       const toolResultText = String(toolCallResult?.toolResultText || "");
-      const extractedAttachments = normalizeToolResultAttachments(toolCallResult, call);
-
-      await stateCommitter.pushToolResult({ call, toolResultText });
-      await stateCommitter.appendAttachments(extractedAttachments);
+      await stateCommitter.pushToolResult({
+        call,
+        toolResultText,
+        transferEnvelopes: toolCallResult?.transferEnvelopes || [],
+      });
       updateToolFailureState({ modelState, loopState, toolCallResult });
     }
   };

@@ -13,26 +13,23 @@ import {
 } from "../../src/capabilities/handlers/acceptance/report-builder.js";
 import { maybeAppendAcceptanceReportAtFinalOutput } from "../../src/capabilities/handlers/acceptance/output-finalizer.js";
 
-test("acceptance report includes summary detail paths", () => {
+test("acceptance report does not project semantic-transfer storage paths", () => {
   const report = buildAcceptanceReport({
     bucket: {
       planText: "1. 主计划一",
-      summaryDetailPaths: ["runtime/summary/detail-1.md"],
     },
     state: { locale: "zh-CN", signals: {} },
   });
-  assert.equal(Array.isArray(report?.summaryDetailPaths), true);
-  assert.equal(report.summaryDetailPaths.includes("runtime/summary/detail-1.md"), true);
+  assert.equal(report?.summaryDetailPaths, undefined);
   const text = renderAcceptanceReportText(report, "zh-CN");
-  assert.match(String(text), /小结明细路径/);
-  assert.match(String(text), /runtime\/summary\/detail-1\.md/);
+  assert.doesNotMatch(String(text), /小结明细路径|summary detail path/i);
+  assert.doesNotMatch(String(text), /runtime\/summary\/detail-1\.md/);
 });
 
 test("before_final_output keeps last acceptance report off the final output", async () => {
   const report = buildAcceptanceReport({
     bucket: {
       planText: "1. 主计划一",
-      summaryDetailPaths: ["runtime/summary/detail-2.md"],
     },
     state: { locale: "zh-CN", signals: {} },
   });

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/shared/message-event-protocol";
+import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
 
 const text = (value) => String(value || "").trim();
 

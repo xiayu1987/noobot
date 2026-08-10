@@ -16,7 +16,7 @@ import {
   resolveToolPathPolicy,
   resolveSandboxPath,
   TOOL_PATH_VIEWS,
-} from "../../../shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import {

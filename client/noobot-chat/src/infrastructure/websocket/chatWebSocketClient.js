@@ -52,6 +52,11 @@ export function createChatWebSocketClient({
   let reconnectReject = null;
   let reconnectTimeout = null;
   let liveEventSubscriber = null;
+  // A server can answer the turn immediately after the command is sent. Keep
+  // authoritative message events received during the short handler-bind
+  // window until the stream owns the socket; dropping them makes live
+  // artifacts appear only after a later replay.
+  const pendingMessageEvents = [];
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
   function logAgentTransportCommand(event, command, extra = {}) {
     try {
@@ -252,8 +257,12 @@ export function createChatWebSocketClient({
                 ? "reconnect_handler"
                 : hasLiveSubscriber
                   ? "transport_live_subscriber"
-                  : "unowned";
+                : "unowned";
           const dispatchEligible = owner !== "unowned";
+          if (owner === "unowned" && event === "message_event") {
+            pendingMessageEvents.push({ event, data });
+            return;
+          }
           if (event === TURN_LIFECYCLE_WIRE_EVENT) {
             if (
               data?.eventType === TURN_EVENT.ACTION_ACCEPTED &&
@@ -289,6 +298,10 @@ export function createChatWebSocketClient({
               dispatchEligible,
               owner,
             }));
+            // Receipt is a transport acknowledgement. Send it immediately after
+            // validating the envelope so a business reducer failure cannot stall
+            // the authoritative lifecycle delivery queue.
+            acknowledgeTurnLifecycleReceipt(ws, event, data);
           }
           if (owner === "reconnect_handler") {
             activeReconnectContext.handleProtocolEvent({ event, data });
@@ -297,7 +310,6 @@ export function createChatWebSocketClient({
           } else if (owner === "transport_live_subscriber") {
             liveEventSubscriber({ event, data });
           }
-          if (dispatchEligible) acknowledgeTurnLifecycleReceipt(ws, event, data);
           logWorkflowDiagnostics("frontend.websocket.protocolEventDispatched", () => ({
             sessionId: normalizeTrimmedString(data?.sessionId),
             dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
@@ -577,6 +589,11 @@ export function createChatWebSocketClient({
             rebindSocket: bindStreamSocketHandlers,
             handleProtocolEvent,
           };
+          const pending = pendingMessageEvents.splice(0, pendingMessageEvents.length);
+          for (const packet of pending) {
+            if (isEventForStreamScope(packet.data, payload)) handleProtocolEvent(packet);
+            else pendingMessageEvents.push(packet);
+          }
         }
       }
     });

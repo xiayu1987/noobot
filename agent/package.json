@@ -23,7 +23,7 @@
     "./store": "./src/shared/storage/index.js",
     "./session": "./src/session/index.js",
     "./attach": "./src/artifacts/index.js",
-    "./semantic-transfer": "./src/transfer/index.js",
+    "./semantic-transfer": "./src/transfer-adapter/index.js",
     "./context": "./src/context/index.js",
     "./config": "./src/config/index.js",
     "./plugin": "./src/extensions/plugins/session-plugin-runtime-provider.js",
@@ -52,11 +52,13 @@
     "@langchain/openai": "^1.5.5",
     "@noobot/authoritative-state": "file:../authoritative-state",
     "@noobot/attachment-protocol": "file:../attachment-protocol",
+    "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
     "@noobot/context-protocol": "file:../context-protocol",
     "@noobot/hook-protocol": "file:../hook-protocol",
     "@noobot/runtime-events": "file:../runtime-events",
     "@noobot/sanitize": "file:../sanitize",
     "@noobot/session-protocol": "file:../session-protocol",
+    "@noobot/session-repair": "file:../session-repair",
     "@noobot/shared": "file:../shared",
     "@vscode/ripgrep": "^1.18.0",
     "noobot-i18n": "file:../i18n",
@@ -65,7 +67,8 @@
     "uuid": "^14.0.1",
     "zod": "^4.4.3",
     "@noobot/plugin-runtime": "file:../plugin-runtime"
-    ,"@noobot/plugin-protocol": "file:../plugin-protocol"
+    ,"@noobot/plugin-protocol": "file:../plugin-protocol",
+    "@noobot/path-resolver": "file:../path-resolver"
   },
   "optionalDependencies": {
     "@mozilla/readability": "^0.6.0",

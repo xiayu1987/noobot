@@ -27,15 +27,7 @@ describe("detailMessages", () => {
         dialogProcessId: "root-dp",
         sessionId: "root-session",
         transferEnvelopes: [
-          {
-            protocol: "noobot.semantic-transfer",
-            files: [
-              {
-                filePath: "/workspace/root.md",
-                attachmentMeta: { attachmentId: "root-attachment", sessionId: "root-session", attachmentSource: "test", name: "root.md" },
-              },
-            ],
-          },
+          { protocol: "noobot.semantic-transfer", version: 2, transferId: "root", messageId: "message-root", identity: { sessionId: "root-session", turnScopeId: "turn-root", runId: "run-root", producer: { type: "plugin", id: "producer-root" } }, direction: "output", payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "root-attachment", sessionId: "root-session", attachmentSource: "test" }, role: "primary", name: "root.md", mimeType: "text/markdown" }] }, intent: { source: "plugin", reason: "test", scenario: "plugin", strategy: "test" }, meta: {} },
         ],
       },
     ];
@@ -50,15 +42,7 @@ describe("detailMessages", () => {
             parentDialogProcessId: "root-dp",
             turnScopeId: "turn-child",
             transferEnvelopes: [
-              {
-                protocol: "noobot.semantic-transfer",
-                files: [
-                  {
-                    filePath: "/workspace/child.md",
-                    attachmentMeta: { attachmentId: "child-attachment", sessionId: "child-session", attachmentSource: "test", name: "child.md" },
-                  },
-                ],
-              },
+              { protocol: "noobot.semantic-transfer", version: 2, transferId: "child", messageId: "message-child", identity: { sessionId: "child-session", turnScopeId: "turn-child", runId: "run-child", producer: { type: "plugin", id: "producer-child" } }, direction: "output", payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "child-attachment", sessionId: "child-session", attachmentSource: "test" }, role: "primary", name: "child.md", mimeType: "text/markdown" }] }, intent: { source: "plugin", reason: "test", scenario: "plugin", strategy: "test" }, meta: {} },
             ],
           },
         ],
@@ -132,21 +116,7 @@ describe("detailMessages", () => {
               dialogProcessId: "child-dp",
               parentDialogProcessId: "root-dp",
               transferEnvelopes: [
-                {
-                  protocol: "noobot.semantic-transfer",
-                  version: 1,
-                  files: [
-                    {
-                      filePath: "/workspace/result.md",
-                      attachmentMeta: {
-                        attachmentId: "child-transfer-1",
-                        sessionId: "child-session",
-                        attachmentSource: "test",
-                        name: "result.md",
-                      },
-                    },
-                  ],
-                },
+                { protocol: "noobot.semantic-transfer", version: 2, transferId: "child-transfer-b", messageId: "message-child-transfer-b", identity: { sessionId: "child-session", turnScopeId: "turn-child-transfer-b", runId: "run-child-transfer-b", producer: { type: "plugin", id: "producer-child-transfer-b" } }, direction: "output", payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "child-transfer-1", sessionId: "child-session", attachmentSource: "test" }, role: "primary", name: "result.md", mimeType: "text/markdown" }] }, intent: { source: "plugin", reason: "test", scenario: "plugin", strategy: "test" }, meta: {} },
               ],
             },
           ],
@@ -191,20 +161,36 @@ describe("detailMessages", () => {
               transferEnvelopes: [
                 {
                   protocol: "noobot.semantic-transfer",
-                  version: 1,
+                  version: 2,
+                  transferId: "child-transfer",
+                  messageId: "message-child-transfer",
+                  identity: {
+                    sessionId: "child-session",
+                    turnScopeId: "turn-child-transfer",
+                    runId: "run-child-transfer",
+                    producer: { type: "subagent", id: "child-dp" },
+                  },
                   direction: "output",
-                  files: [
-                    {
-                      filePath: "/workspace/result.md",
-                      attachmentMeta: {
+                  payload: {
+                    mode: "attachment",
+                    attachments: [{
+                      identity: {
                         attachmentId: "child-transfer-1",
                         sessionId: "child-session",
                         attachmentSource: "test",
-                        name: "result.md",
-                        mimeType: "text/markdown",
                       },
-                    },
-                  ],
+                      role: "primary",
+                      name: "result.md",
+                      mimeType: "text/markdown",
+                    }],
+                  },
+                  intent: {
+                    source: "subagent",
+                    reason: "test",
+                    scenario: "subagent",
+                    strategy: "test",
+                  },
+                  meta: {},
                 },
               ],
             },
@@ -234,54 +220,15 @@ describe("detailMessages", () => {
           pluginMeta: {
             payload: {
               transferEnvelopes: [
-                {
-                  protocol: "noobot.semantic-transfer",
-                  files: [
-                    {
-                      filePath: "/workspace/plugin.md",
-                      attachmentMeta: {
-                        attachmentId: "plugin-transfer-1",
-                        sessionId: "root-session",
-                        attachmentSource: "test",
-                        name: "plugin.md",
-                      },
-                    },
-                  ],
-                },
+                { protocol: "noobot.semantic-transfer", version: 2, transferId: "plugin", messageId: "message-plugin", identity: { sessionId: "root-session", turnScopeId: "turn-plugin", runId: "run-plugin", producer: { type: "plugin", id: "producer-plugin" } }, direction: "output", payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "plugin-transfer-1", sessionId: "root-session", attachmentSource: "test" }, role: "primary", name: "plugin.md", mimeType: "text/markdown" }] }, intent: { source: "plugin", reason: "test", scenario: "plugin", strategy: "test" }, meta: {} },
               ],
               nodeResultTransferEnvelopes: [
-                {
-                  protocol: "noobot.semantic-transfer",
-                  files: [
-                    {
-                      filePath: "/workspace/node-result.md",
-                      attachmentMeta: {
-                        attachmentId: "node-result-1",
-                        sessionId: "root-session",
-                        attachmentSource: "test",
-                        name: "node-result.md",
-                      },
-                    },
-                  ],
-                },
+                { protocol: "noobot.semantic-transfer", version: 2, transferId: "node-result", messageId: "message-node-result", identity: { sessionId: "root-session", turnScopeId: "turn-node-result", runId: "run-node-result", producer: { type: "plugin", id: "producer-node-result" } }, direction: "output", payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "node-result-1", sessionId: "root-session", attachmentSource: "test" }, role: "primary", name: "node-result.md", mimeType: "text/markdown" }] }, intent: { source: "plugin", reason: "test", scenario: "plugin", strategy: "test" }, meta: {} },
               ],
               nodeSessions: [
                 {
                   transferEnvelopes: [
-                    {
-                      protocol: "noobot.semantic-transfer",
-                      files: [
-                        {
-                          filePath: "/workspace/node-session.md",
-                          attachmentMeta: {
-                            attachmentId: "node-session-1",
-                            sessionId: "root-session",
-                            attachmentSource: "test",
-                            name: "node-session.md",
-                          },
-                        },
-                      ],
-                    },
+                    { protocol: "noobot.semantic-transfer", version: 2, transferId: "node-session", messageId: "message-node-session", identity: { sessionId: "root-session", turnScopeId: "turn-node-session", runId: "run-node-session", producer: { type: "plugin", id: "producer-node-session" } }, direction: "output", payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "node-session-1", sessionId: "root-session", attachmentSource: "test" }, role: "primary", name: "node-session.md", mimeType: "text/markdown" }] }, intent: { source: "plugin", reason: "test", scenario: "plugin", strategy: "test" }, meta: {} },
                   ],
                 },
               ],

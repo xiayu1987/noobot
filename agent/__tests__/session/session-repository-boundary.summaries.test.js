@@ -117,7 +117,101 @@ test("session summaries should be maintained and rebuilt for list API", async ()
   });
 });
 
-test("display maintenance rejects artifacts that require offline protocol migration", async () => {
+test("session list excludes orphan session-tree nodes without Session artifacts", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-tree-orphans";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionCrudService.ensureSession(userId, "materialized", "");
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "orphan" });
+
+    const summaries = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
+    assert.deepEqual(summaries.map((item) => item.sessionId), ["materialized"]);
+  });
+});
+
+test("session summary rebuild isolates an unreadable session as an unavailable projection", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-unavailable";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices(
+      { workspaceRoot },
+      { now: () => "2026-08-08T00:00:00.000Z" },
+    );
+    await runtime.sessionCrudService.ensureSession(userId, "available", "");
+    await runtime.sessionCrudService.ensureSession(userId, "legacy", "");
+
+    const repository = runtime.repositories.sessionRepository;
+    const findById = repository.findById.bind(repository);
+    repository.findById = async (...args) => {
+      if (args[1] === "legacy") {
+        const error = new Error("invalid_transfer_envelope:forbidden_path_field");
+        error.code = "INVALID_TRANSFER_ENVELOPE";
+        throw error;
+      }
+      return findById(...args);
+    };
+
+    const payload = await repository.rebuildSessionsSummary(userId);
+    const available = payload.sessions.find((item) => item.sessionId === "available");
+    const unavailable = payload.sessions.find((item) => item.sessionId === "legacy");
+    assert.equal(available.availability, "available");
+    assert.equal(unavailable.availability, "unavailable");
+    assert.deepEqual(unavailable.messages, []);
+    assert.equal(unavailable.messageCount, 0);
+    assert.equal(unavailable.lastMessage, null);
+    assert.equal(unavailable.unavailableReason.code, "INVALID_TRANSFER_ENVELOPE");
+    assert.equal(unavailable.unavailableReason.message, "invalid_transfer_envelope:forbidden_path_field");
+
+    const persisted = await repository.readSessionsSummary(userId);
+    assert.equal(
+      persisted.sessions.find((item) => item.sessionId === "legacy").availability,
+      "unavailable",
+    );
+  });
+});
+
+test("failed Session repair is marked and skipped on subsequent reads", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-repair-failed";
+    const sessionId = "broken";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
+    const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
+    await writeFile(path.join(sessionDir, "session.json"), "{invalid-json", "utf8");
+
+    const repository = runtime.repositories.sessionRepository;
+    let firstErrorCode = "";
+    await assert.rejects(
+      repository.findById(userId, sessionId, ""),
+      (error) => {
+        firstErrorCode = error.code;
+        return Boolean(firstErrorCode);
+      },
+    );
+    const lifecycleFile = path.join(
+      workspaceRoot,
+      userId,
+      "runtime",
+      "session",
+      ".lifecycle",
+      "records",
+      `${encodeURIComponent(sessionId)}.json`,
+    );
+    const lifecycle = JSON.parse(await readFile(lifecycleFile, "utf8"));
+    assert.equal(lifecycle.repair.status, "failed");
+
+    await assert.rejects(
+      repository.findById(userId, sessionId, ""),
+      (error) => error.code === firstErrorCode,
+    );
+    const unchanged = JSON.parse(await readFile(lifecycleFile, "utf8"));
+    assert.equal(unchanged.repair.failedAt, lifecycle.repair.failedAt);
+  });
+});
+
+test("display maintenance migrates repairable artifacts through the Session repair project", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
     const sessionId = "legacy";
@@ -149,17 +243,13 @@ test("display maintenance rejects artifacts that require offline protocol migrat
     );
 
     const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
-    assert.deepEqual(maintenance.failures, [{
-      sessionId,
-      code: "SESSION_TURN_JOURNAL_SCHEMA_REQUIRED",
-      message: "Session artifact requires offline protocol migration",
-    }]);
-    assert.deepEqual(maintenance.migratedSessionIds, []);
+    assert.deepEqual(maintenance.failures, []);
+    assert.deepEqual(maintenance.migratedSessionIds, [sessionId]);
     assert.deepEqual(maintenance.rebuiltSessionIds, []);
 
     const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
-    assert.equal(manifest.schemaVersion, 4);
-    assert.equal("messages" in manifest, true);
+    assert.equal(manifest.schemaVersion, 5);
+    assert.equal("messages" in manifest, false);
   });
 });
 
@@ -426,20 +516,13 @@ test("session display summary retains a workflow final assistant with stable pre
       presentationMessageId: "assistant-presentation-workflow",
       chatPresentation: true,
       turnScopeId: "turn-workflow",
-      transferEnvelopes: [{
-        protocol: "noobot.semantic-transfer",
-        version: 1,
-        direction: "output",
-        transport: "file",
-        files: [{ filePath: "/workspace/result.md" }],
-      }],
     }],
   });
 
   assert.equal(summary.messages.length, 1);
   assert.equal(summary.messages[0]?.messageId, "assistant-presentation-workflow");
   assert.equal(summary.messages[0]?.content.includes("/workspace/result.md"), true);
-  assert.equal(summary.messages[0]?.transferEnvelopes?.length, 1);
+  assert.equal(summary.messages[0]?.transferEnvelopes, undefined);
 });
 
 test("session display summary does not synthesize a missing workflow presentation identity", () => {
@@ -785,32 +868,28 @@ test("session display summary should keep chat view lightweight and rebuild stal
     const longWorkflowContent = `workflow final ${"workflow-long-content-".repeat(400)}${workflowContentTail}`;
     const workflowTransferEnvelope = {
       protocol: "noobot.semantic-transfer",
-      version: 1,
+      version: 2,
+      transferId: "transfer:sm-workflow-final:plugin:workflow-node:output:workflow:result",
+      messageId: "sm-workflow-final",
+      identity: {
+        sessionId: "B",
+        turnScopeId: "turn-workflow",
+        runId: "run-workflow",
+        producer: { type: "plugin", id: "workflow-node" },
+      },
       direction: "output",
-      transport: "file",
-      payload: { huge: true },
-      files: [
-        {
+      payload: {
+        mode: "attachment",
+        attachments: [{
+          identity: { attachmentId: "att-workflow-1", sessionId: "B", attachmentSource: "model" },
           role: "primary",
-          filePath: "/workspace/u1/runtime/workflow-result.md",
-          attachmentMeta: {
-            attachmentId: "att-workflow-1",
-            sessionId: "B",
-            attachmentSource: "model",
-            name: "workflow-result.md",
-            mimeType: "text/markdown",
-            size: 321,
-            path: "/host/workflow-result.md",
-            relativePath: "runtime/workflow-result.md",
-          },
-          pathView: {
-            displayPath: "/workspace/u1/runtime/workflow-result.md",
-            sandboxPath: "/sandbox/u1/runtime/workflow-result.md",
-            relativePath: "runtime/workflow-result.md",
-            hostPath: "/host/workflow-result.md",
-          },
-        },
-      ],
+          name: "workflow-result.md",
+          mimeType: "text/markdown",
+          size: 321,
+        }],
+      },
+      intent: { source: "plugin", reason: "workflow_result", scenario: "harness", strategy: "harness_summary" },
+      meta: { persisted: true },
     };
 
     const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
@@ -823,7 +902,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
         turnScopeId: "turn-scope-u1",
         dialogProcessId: "dp-u1",
         content: longUserContent,
-        attachments: [{ id: "att-1", name: "a.txt", type: "text/plain", size: 12, raw: "large" }],
+        attachments: [{ attachmentId: "att-1", name: "a.txt", mimeType: "text/plain", size: 12 }],
       },
       {
         id: "i1",
@@ -847,13 +926,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
           call: { eventId: "tool-call-1" },
           resultEvent: {
             eventId: "tool-result-1",
-            writtenFiles: [{
-              toolName: "write_file",
-              resolvedPath: "/workspace/u1/project/a.txt",
-              fileName: "a.txt",
-              sourceType: "tool",
-              recognized: false,
-            }],
+            transferEnvelopes: [],
           },
         }],
         tool_calls: [{ id: "call-1", function: { name: "write_file", arguments: { path: "/tmp/a" } } }],
@@ -1017,21 +1090,18 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.thinkingMessageCount, 3);
     assert.equal(summary.stats.attachmentCount, 3);
     assert.equal(summary.stats.toolLogCount, 5);
-    assert.equal(summary.stats.displayToolLogCount, 1);
+    assert.equal(summary.stats.displayToolLogCount, 0);
     assert.equal(summary.stats.hasToolDetails, true);
     assert.equal("toolLogSummaries" in summary, false);
-    const assistantMessage = summary.messages.find((item) => item.id === "a1");
+    assert.equal(summary.messages.find((item) => item.id === "a1").toolTimeline, undefined);
+    assert.equal(typeof summary.messages.find((item) => item.id === "a1").thinkingDetailRef?.file, "string");
+    const hydratedSummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(userId, "B", "A");
+    const assistantMessage = hydratedSummary.messages.find((item) => item.id === "a1");
     assert.equal(assistantMessage.toolTimeline.length, 1);
     assert.equal(assistantMessage.toolTimeline[0].status, "completed");
     assert.equal("log" in assistantMessage.toolTimeline[0].resultEvent, false);
-    assert.equal(assistantMessage.toolTimeline[0].resultEvent.turnScopeId, "turn-scope-u1");
-    assert.deepEqual(assistantMessage.toolTimeline[0].resultEvent.writtenFiles, [{
-      toolName: "write_file",
-      resolvedPath: "/workspace/u1/project/a.txt",
-      fileName: "a.txt",
-      sourceType: "tool",
-      recognized: false,
-    }]);
+    assert.equal(assistantMessage.toolTimeline[0].resultEvent.turnScopeId, undefined);
+    assert.equal("writtenFiles" in assistantMessage.toolTimeline[0].resultEvent, false);
     assert.equal(JSON.stringify(assistantMessage.toolTimeline).includes("ordinary tool result"), false);
 
     const userMessage = summary.messages.find((item) => item.id === "u1");
@@ -1106,19 +1176,15 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(Array.isArray(workflowMessage.transferEnvelopes), true);
     assert.equal(workflowMessage.transferEnvelopes[0].protocol, "noobot.semantic-transfer");
     assert.equal("filePath" in workflowMessage.transferEnvelopes[0], false);
-    assert.equal(workflowMessage.transferEnvelopes[0].files[0].attachmentId, "att-workflow-1");
-    assert.equal(workflowMessage.transferEnvelopes[0].files[0].sandboxPath, "/sandbox/u1/runtime/workflow-result.md");
-    assert.equal(workflowMessage.attachments[0].attachmentId, "att-workflow-1");
-    assert.equal(workflowMessage.attachments[0].relativePath, "runtime/workflow-result.md");
-    assert.equal("payload" in workflowMessage.transferEnvelopes[0], false);
-    assert.equal("attachmentMeta" in workflowMessage.transferEnvelopes[0].files[0], false);
-    assert.equal("pathView" in workflowMessage.transferEnvelopes[0].files[0], false);
+    assert.equal(workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att-workflow-1");
+    assert.equal(workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.sessionId, "B");
+    assert.equal("files" in workflowMessage.transferEnvelopes[0], false);
     assert.equal(
-      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0].files[0].attachmentId,
+      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0].payload.attachments[0].identity.attachmentId,
       "att-workflow-1",
     );
     assert.equal(
-      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].files[0].attachmentId,
+      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
       "att-workflow-1",
     );
     assert.equal(JSON.stringify(summary).includes("injected secret"), false);

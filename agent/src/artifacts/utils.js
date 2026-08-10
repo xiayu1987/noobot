@@ -12,4 +12,3 @@ export {
   normalizeAttachmentParsedResultMeta,
   normalizeAttachmentTurnScopeMeta,
 } from "./meta-ops.js";
-export { appendAttachmentMetasToRuntimeAndTurn } from "./runtime-attachment.js";

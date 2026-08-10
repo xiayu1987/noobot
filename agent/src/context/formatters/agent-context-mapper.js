@@ -21,6 +21,7 @@ export function mapToAgentContextSchema({
   caller = "user",
   turnScopeId = "",
   runId = "",
+  messageId = "",
   now = new Date().toISOString(),
   systemMessages = [],
   conversationMessages = [],
@@ -45,6 +46,12 @@ export function mapToAgentContextSchema({
     dialogProcessId,
     turnScopeId,
     runId,
+    messageId: String(
+      messageId ||
+        runtimeRef?.systemRuntime?.messageId ||
+        runtimeRef?.runConfig?.messageId ||
+        "",
+    ).trim(),
   };
   const contextScopeIsComplete = Boolean(
     String(identity.sessionId || "").trim() &&

@@ -13,8 +13,6 @@ const ignoredDirectories = new Set(["node_modules", "dist", "build", "coverage",
 const sourceExtension = /\.(?:[cm]?js|jsx|ts|tsx)$/;
 const resolverFiles = new Set([
   "client/shared/path-resolver.js",
-  "agent/src/shared/utils/path-resolver.js",
-  "agent/src/shared/utils/path-resolver/platform.js",
 ]);
 const violations = [];
 export const directPathModulePattern = /(?:\bfrom\s*|\brequire\s*\(\s*|\bimport\s*\(\s*)["'](?:node:)?path(?:\/(?:posix|win32))?["']/g;

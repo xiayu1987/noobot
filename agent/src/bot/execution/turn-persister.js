@@ -31,7 +31,6 @@ const DIRECT_CONSUMED_INTERMEDIATE_TOOLS = new Set([
   "media_to_data",
   "web_to_data",
 ]);
-const LEGACY_ATTACHMENT_MIRROR_KEY = "attachment" + "Metas";
 const SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS = LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
 const SESSION_TURN_FULL_RAW_MODEL_PREVIEW_CHARS = LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
 
@@ -53,20 +52,6 @@ function parseJsonObjectSafely(text = "") {
   } catch {
     return null;
   }
-}
-
-function hasHiddenIntermediateMeta(value = null) {
-  if (!value) return false;
-  if (Array.isArray(value)) return value.some(hasHiddenIntermediateMeta);
-  if (!isPlainObject(value)) return false;
-  const generationSource = String(value?.generationSource || "").trim();
-  if (HIDDEN_INTERMEDIATE_GENERATION_SOURCES.has(generationSource)) return true;
-  return (
-    hasHiddenIntermediateMeta(value?.attachmentMeta) ||
-    hasHiddenIntermediateMeta(value?.[LEGACY_ATTACHMENT_MIRROR_KEY]) ||
-    hasHiddenIntermediateMeta(value?.transferFiles) ||
-    hasHiddenIntermediateMeta(value?.files)
-  );
 }
 
 function filterSessionAttachments(attachments = []) {
@@ -107,9 +92,7 @@ function sanitizeToolContentForSession(content = "", explicitToolName = "") {
   const parsed = parseJsonObjectSafely(content);
   if (!parsed) return String(content || "");
   const toolName = String(explicitToolName || parsed?.toolName || "").trim();
-  const shouldDropDirectConsumedPayload =
-    DIRECT_CONSUMED_INTERMEDIATE_TOOLS.has(toolName) ||
-    hasHiddenIntermediateMeta(parsed);
+  const shouldDropDirectConsumedPayload = DIRECT_CONSUMED_INTERMEDIATE_TOOLS.has(toolName);
   if (!shouldDropDirectConsumedPayload) return String(content || "");
 
   const summary =
@@ -309,7 +292,7 @@ export class SessionTurnPersister {
       turnScopeId: normalizedTurnScopeId,
       tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
       tool_call_id: tool_call_id || "",
-      attachments: sessionAttachments,
+      ...(sessionAttachments.length ? { attachments: sessionAttachments } : {}),
       modelAlias: String(modelAlias || "").trim(),
       modelName: String(modelName || "").trim(),
       summarized: summarized === true,
@@ -403,7 +386,7 @@ export class SessionTurnPersister {
       turnScopeId: normalizedTurnScopeId,
       tool_calls,
       tool_call_id,
-      attachments: sessionAttachments,
+      ...(sessionAttachments.length ? { attachments: sessionAttachments } : {}),
       modelAlias,
       modelName,
       summarized,

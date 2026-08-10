@@ -8,7 +8,7 @@ import {
   buildToolPathScopeErrorDetails,
   resolveToolInputPath,
   resolveToolPathPolicy,
-} from "../../../shared/utils/path-resolver.js";
+} from "@noobot/path-resolver";
 import { access, readFile, realpath, stat } from "node:fs/promises";
 import { BUILTIN_THRESHOLDS, normalizeConnectorType } from "../../../config/index.js";
 import { recoverableToolError } from "../../../shared/errors/index.js";

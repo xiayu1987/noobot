@@ -10,6 +10,10 @@ import {
 } from "@noobot/context-protocol/context-mutation";
 import { createHash } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
+import {
+  collectLatestTaskCheckMessageIndexes,
+  hasTaskSummaryToolCall,
+} from "@noobot/context-protocol/summary-policy";
 
 function isSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
@@ -90,7 +94,22 @@ export async function commitSummaryCheckpoint({
   }
 
   const turnMessages = currentTurnMessages.toArray();
-  const createSummaryMarker = createSummaryCompletionMarker(summaryCompletion);
+  const summaryCallIndex = turnMessages.findIndex((message) => hasTaskSummaryToolCall(message));
+  const taskCheckScope = summaryCallIndex >= 0
+    ? turnMessages.slice(0, summaryCallIndex)
+    : turnMessages;
+  const latestTaskCheckIds = new Set([...collectLatestTaskCheckMessageIndexes(taskCheckScope)]
+    .map((index) => resolveMessageUid(taskCheckScope[index]))
+    .filter(Boolean));
+  const normalizedSummaryCompletion = summaryCompletion && typeof summaryCompletion === "object"
+    ? {
+        ...summaryCompletion,
+        summarizedMessageIds: Array.isArray(summaryCompletion.summarizedMessageIds)
+          ? summaryCompletion.summarizedMessageIds.filter((id) => !latestTaskCheckIds.has(String(id || "").trim()))
+          : summaryCompletion.summarizedMessageIds,
+      }
+    : summaryCompletion;
+  const createSummaryMarker = createSummaryCompletionMarker(normalizedSummaryCompletion);
   const persistedPrefixCount = Math.min(
     turnMessages.length,
     Math.max(0, Number(runtime?.summaryCheckpointPersistedCount) || 0),
@@ -131,7 +150,7 @@ export async function commitSummaryCheckpoint({
     .filter((messageUid) => durablyPersistedMessageUids.has(messageUid)
       || newlyPersistedMessageUids.includes(messageUid));
   const summarizedMessageUids = createSummaryMarker
-    ? [...new Set(summaryCompletion.summarizedMessageIds
+    ? [...new Set(normalizedSummaryCompletion.summarizedMessageIds
         .map((messageUid) => String(messageUid || "").trim())
         .filter(Boolean))]
     : turnMessages.filter(isSummarized).map(resolveMessageUid).filter(Boolean);
@@ -175,14 +194,15 @@ export async function commitSummaryCheckpoint({
   const markedCount = Number(checkpointResult?.markedCount) || 0;
   const committed = checkpointResult?.committed === true || checkpointResult?.deduplicated === true;
   emitEvent(eventListener, "summary_checkpoint_committed", {
-    source: String(summaryCompletion?.source || "").trim(),
-    requestedMessageCount: Array.isArray(summaryCompletion?.summarizedMessageIds)
-      ? summaryCompletion.summarizedMessageIds.length
+    source: String(normalizedSummaryCompletion?.source || "").trim(),
+    requestedMessageCount: Array.isArray(normalizedSummaryCompletion?.summarizedMessageIds)
+      ? normalizedSummaryCompletion.summarizedMessageIds.length
       : 0,
     turnMessageCount: turnMessages.length,
     summarizedMessageCount: summarizedMessageUids.length,
     persistedMessageCount: pendingMessages.length,
     markedMessageCount: Number(markedCount) || 0,
+    preservedTaskCheckMessageUids: [...latestTaskCheckIds].sort(),
     exactCheckpoint: true,
   });
   if (!committed) {

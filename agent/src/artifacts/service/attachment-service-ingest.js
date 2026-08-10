@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { filePath as path } from "../../shared/utils/path-resolver.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { v4 as uuidv4 } from "uuid";
@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 import { fsMkdir, fsWriteFile } from "../../shared/storage/fs-adapter.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
-import { readAttachIndex, writeAttachIndex } from "../index-manager.js";
+import { readAttachIndex, withAttachIndexLock, writeAttachIndex } from "../index-manager.js";
 import { resolveAttachmentPolicy, isMimeTypeAllowed, isExtensionAllowed } from "../policy/policy-validator.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
@@ -107,9 +107,10 @@ export async function ingestAttachments(service, { userId, sessionId = "", attac
     );
   }
 
-  const index = await readAttachIndex(basePath, scope);
-  const saved = [];
-  let totalBytes = 0;
+  return withAttachIndexLock(basePath, scope, async () => {
+    const index = await readAttachIndex(basePath, scope);
+    const saved = [];
+    let totalBytes = 0;
 
   for (const item of attachments) {
     const { name, contentBase64, mimeType = DEFAULT_MIME_TYPE } = item;
@@ -197,8 +198,9 @@ export async function ingestAttachments(service, { userId, sessionId = "", attac
     saved.push(record);
   }
 
-  await writeAttachIndex(basePath, index, scope);
-  return saved;
+    await writeAttachIndex(basePath, index, scope);
+    return saved;
+  });
 }
 
 export async function ingestGeneratedArtifacts(service, {
@@ -218,8 +220,9 @@ export async function ingestGeneratedArtifacts(service, {
   if (!list.length) return [];
 
   const scope = resolveAttachmentScope({ sessionId, attachmentSource, requireSessionId: true });
-  const index = await readAttachIndex(basePath, scope);
-  const saved = [];
+  return withAttachIndexLock(basePath, scope, async () => {
+    const index = await readAttachIndex(basePath, scope);
+    const saved = [];
 
   for (const item of list) {
     const artifactName = safeStr(item?.name);
@@ -248,8 +251,9 @@ export async function ingestGeneratedArtifacts(service, {
     saved.push(record);
   }
 
-  await writeAttachIndex(basePath, index, scope);
-  return saved;
+    await writeAttachIndex(basePath, index, scope);
+    return saved;
+  });
 }
 
 export async function ingestEmailArtifacts(service, { userId, sessionId = "", artifacts = [] } = {}) {

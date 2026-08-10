@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { TURN_COMMAND } from "@noobot/session-protocol";
-import { EXECUTION_QUERY_COMMAND } from "@noobot/shared/execution-lifecycle-protocol";
+import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
 
 export const AGENT_TRANSPORT_PROTOCOL_VERSION = 2;
 

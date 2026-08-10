@@ -22,7 +22,6 @@ export {
   canonicalAttachmentIdentityKey,
   assertCanonicalAttachments,
 } from "./meta-ops.js";
-export { appendAttachmentMetasToRuntimeAndTurn } from "./runtime-attachment.js";
 export { resolveCanonicalUserSourceAttachment } from "./source-attachment-resolver.js";
 export {
   applyRuntimeUserMessageAttachments,

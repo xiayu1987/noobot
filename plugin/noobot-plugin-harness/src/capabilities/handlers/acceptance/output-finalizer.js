@@ -11,13 +11,11 @@ import {
   LOCALE,
   appendCapabilityLog,
   applyTransferPayloadToMessage,
-  attachMetasToLatestInjectedMessage,
+  attachTransferPayloadToLatestInjectedMessage,
   ensureHarnessBucket,
-  getTransferPayloadFromAttachments,
-  markHarnessPluginAttachments,
-  markHarnessPluginTransferPayload,
-  mapAttachmentRecordsToMetas,
+  normalizeTransferPayload,
   relaySeparateModelOutputAsUserMessage,
+  saveCapabilityOutputAsTransferArtifacts,
   translateI18nText,
 } from "./deps.js";
 import { buildAcceptanceReport, renderAcceptanceReportText } from "./report-builder.js";
@@ -25,12 +23,9 @@ import { runAcceptanceBySeparateModel } from "./validation-runner.js";
 
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
 
-function attachMetasToFinalOutputTurn(ctx = {}, metas = [], transferPayload = null) {
-  if (!Array.isArray(metas) || !metas.length) return false;
-  const normalizedTransferPayload = getTransferPayloadFromAttachments(
-    metas,
-    transferPayload,
-  );
+function attachTransferPayloadToFinalOutputTurn(ctx = {}, transferPayload = {}) {
+  const normalizedTransferPayload = normalizeTransferPayload(transferPayload);
+  if (!normalizedTransferPayload.transferEnvelopes.length) return false;
   const result = ctx?.result && typeof ctx.result === "object" ? ctx.result : null;
   if (!result) return false;
   const turnMessages = Array.isArray(result.turnMessages) ? result.turnMessages : [];
@@ -50,19 +45,6 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   const { bucket, state } = holder;
   if (state.flags.checklistArtifactsAttached === true) return false;
 
-  const runtime = ctx?.agentContext?.bindings?.runtime || null;
-  const attachmentService = runtime?.attachmentService || null;
-  if (!attachmentService || typeof attachmentService.ingestGeneratedArtifacts !== "function") {
-    return false;
-  }
-  const userId = String(
-    runtime?.systemRuntime?.userId || runtime?.userId || "",
-  ).trim();
-  const sessionId = String(
-    runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
-  ).trim();
-  if (!userId || !sessionId) return false;
-
   const locale = state?.locale || LOCALE.ZH_CN;
   const acceptanceReport =
     bucket?.lastAcceptanceReport && typeof bucket.lastAcceptanceReport === "object"
@@ -81,47 +63,30 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
         ].filter(Boolean).join(" | "),
       });
 
-  const artifacts = [
-    {
-      name: "harness-plan-text.txt",
-      mimeType: "text/plain",
-      contentBase64: Buffer.from(
-        [
-          `[generatedAt] ${new Date().toISOString()}`,
-          "[planText]",
-          String(bucket?.planText || "").trim(),
-        ].filter(Boolean).join("\n"),
-        "utf8",
-      ).toString("base64"),
-    },
-    {
-      name: "harness-acceptance-report.txt",
-      mimeType: "text/plain",
-      contentBase64: Buffer.from(
-        [
-          `[generatedAt] ${new Date().toISOString()}`,
-          renderAcceptanceReportText(acceptanceReport, locale),
-        ].filter(Boolean).join("\n\n"),
-        "utf8",
-      ).toString("base64"),
-    },
-  ];
-
-  let metas = [];
-  let transferPayload = {};
+  let transferPayload = { transferEnvelopes: [] };
   try {
-    const savedRecords = await attachmentService.ingestGeneratedArtifacts({
-      userId,
-      sessionId,
-      attachmentSource: "model",
-      generationSource: "harness_checklist",
-      owner: {
-        type: "plugin",
-        id: "harness-plugin",
-      },
-      artifacts,
+    const generatedAt = new Date().toISOString();
+    const outputs = await Promise.all([
+      saveCapabilityOutputAsTransferArtifacts(ctx, {
+        purpose: "acceptance_plan",
+        name: "harness-plan-text.txt",
+        mimeType: "text/plain",
+        generationSource: "harness_checklist",
+        domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+        content: [generatedAt, "[planText]", String(bucket?.planText || "").trim()].filter(Boolean).join("\n"),
+      }),
+      saveCapabilityOutputAsTransferArtifacts(ctx, {
+        purpose: "acceptance_report",
+        name: "harness-acceptance-report.txt",
+        mimeType: "text/plain",
+        generationSource: "harness_checklist",
+        domain: CAPABILITY_DOMAIN.ACCEPTANCE,
+        content: [generatedAt, renderAcceptanceReportText(acceptanceReport, locale)].filter(Boolean).join("\n\n"),
+      }),
+    ]);
+    transferPayload = normalizeTransferPayload({
+      transferEnvelopes: outputs.flatMap((item = {}) => item.transferEnvelopes || []),
     });
-    metas = markHarnessPluginAttachments(mapAttachmentRecordsToMetas(savedRecords));
   } catch (error) {
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
@@ -131,14 +96,9 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
     return false;
   }
 
-  if (!metas.length) return false;
-  transferPayload = getTransferPayloadFromAttachments(metas, transferPayload);
-  const attachedToInjectedMessage = attachMetasToLatestInjectedMessage(
-    ctx,
-    metas,
-    transferPayload,
-  );
-  const attachedToFinalOutput = attachMetasToFinalOutputTurn(ctx, metas, transferPayload);
+  if (!transferPayload.transferEnvelopes.length) return false;
+  const attachedToInjectedMessage = attachTransferPayloadToLatestInjectedMessage(ctx, transferPayload);
+  const attachedToFinalOutput = attachTransferPayloadToFinalOutputTurn(ctx, transferPayload);
   if (!attachedToInjectedMessage && !attachedToFinalOutput) {
     relaySeparateModelOutputAsUserMessage(ctx, {
       locale,
@@ -156,7 +116,7 @@ export async function maybeAttachChecklistArtifactsAtFinalOutput(ctx = {}) {
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
     event: ACCEPTANCE_EVENTS.checklistArtifactsAttached,
-    detail: { attachmentCount: metas.length },
+    detail: { attachmentCount: transferPayload.transferEnvelopes.length },
   });
   return true;
 }

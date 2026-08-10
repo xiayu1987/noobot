@@ -11,11 +11,13 @@ import {
   compactAttachmentRef,
   compactTransferEnvelopes,
   dedupeAttachmentRefs,
+  compactSessionAttachmentRef,
+  dedupeSessionAttachmentRefs,
 } from "./transfer-attachment-refs.js";
 import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 18;
-export const SESSIONS_SUMMARY_SCHEMA_VERSION = 1;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 19;
+export const SESSIONS_SUMMARY_SCHEMA_VERSION = 2;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 const SUMMARY_ARRAY_ITEM_CHARS = LENGTH_THRESHOLDS.display.sessionSummaryArrayItemChars;
@@ -59,7 +61,6 @@ function compactThinkingTimeline(items = []) {
     ...(String(fact.dialogProcessId || "").trim() ? { dialogProcessId: String(fact.dialogProcessId).trim() } : {}),
     ...(String(fact.turnScopeId || "").trim() ? { turnScopeId: String(fact.turnScopeId).trim() } : {}),
     ...(Array.isArray(fact.attachments) && fact.attachments.length ? { attachments: fact.attachments } : {}),
-    ...(Array.isArray(fact.writtenFiles) && fact.writtenFiles.length ? { writtenFiles: fact.writtenFiles } : {}),
     ...(summary ? { summary } : {}),
   });
   return (Array.isArray(items) ? items : []).map((item = {}) => ({
@@ -113,6 +114,40 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
       : sessionId.slice(0, 8)),
     messageCount: messages.length,
     lastMessage,
+    availability: "available",
+  };
+}
+
+export function buildUnavailableSessionSummary({
+  sessionId = "",
+  parentSessionId = "",
+  title = "",
+  caller = "user",
+  createdAt = "",
+  updatedAt = "",
+  errorCode = "SESSION_PROTOCOL_INVALID",
+  reason = "",
+  depth = 0,
+} = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  return {
+    sessionId: normalizedSessionId,
+    parentSessionId: String(parentSessionId || "").trim(),
+    caller: String(caller || "user").trim() || "user",
+    currentTaskId: "",
+    createdAt: String(createdAt || "").trim(),
+    updatedAt: String(updatedAt || "").trim(),
+    depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
+    aggregateVersion: 0,
+    title: String(title || "").trim() || normalizedSessionId.slice(0, 8),
+    messages: [],
+    messageCount: 0,
+    lastMessage: null,
+    availability: "unavailable",
+    unavailableReason: {
+      code: String(errorCode || "SESSION_PROTOCOL_INVALID").trim() || "SESSION_PROTOCOL_INVALID",
+      message: String(reason || "Session uses an unsupported protocol").trim(),
+    },
   };
 }
 
@@ -171,10 +206,7 @@ function pickPlainObjectFields(source = null, keys = []) {
 
 function pickLightAttachments(message = {}) {
   const metas = Array.isArray(message?.attachments) ? message.attachments : [];
-  return dedupeAttachmentRefs([
-    ...metas.map((item) => compactAttachmentRef(item)).filter(Boolean),
-    ...collectAttachmentRefsFromTransferEnvelopes(message?.transferEnvelopes),
-  ]);
+  return dedupeSessionAttachmentRefs(metas.map(compactSessionAttachmentRef).filter(Boolean));
 }
 
 function pickLightObject(source = {}, allowedKeys = []) {
@@ -515,20 +547,10 @@ function buildToolArtifactTimelineProjection(session = {}) {
       const resultEvent = item?.resultEvent && typeof item.resultEvent === "object"
         ? item.resultEvent
         : {};
-      const attachments = pickLightAttachments({
-        attachments: Array.isArray(resultEvent?.attachments)
-          ? resultEvent.attachments
-          : [],
-      });
-      const writtenFiles = (Array.isArray(resultEvent?.writtenFiles)
-        ? resultEvent.writtenFiles
-        : [])
-        .map((fileItem = {}) => pickLightObject(fileItem, [
-          "toolName", "resolvedPath", "relativePath", "fileName", "isSandbox",
-          "size", "mimeType", "sourceType", "recognized",
-        ]))
-        .filter(Boolean);
-      if (attachments.length || writtenFiles.length) {
+      const attachments = collectAttachmentRefsFromTransferEnvelopes(
+        resultEvent?.transferEnvelopes,
+      );
+      if (attachments.length) {
         artifactByCallId.set(callKey, {
           toolCallId,
           toolName: String(item?.tool || "").trim(),
@@ -543,7 +565,6 @@ function buildToolArtifactTimelineProjection(session = {}) {
           parentDialogProcessId,
           turnScopeId,
           attachments,
-          writtenFiles,
         });
       }
     }
@@ -564,13 +585,10 @@ function buildToolArtifactTimelineProjection(session = {}) {
         String(message?.toolName || canonicalArtifact?.toolName || "tool_result");
       totalCount += 1;
       const attachments = dedupeAttachmentRefs([
-        ...pickLightAttachments(message),
+        ...collectAttachmentRefsFromTransferEnvelopes(message?.transferEnvelopes),
         ...(Array.isArray(canonicalArtifact?.attachments) ? canonicalArtifact.attachments : []),
       ]);
-      const writtenFiles = Array.isArray(canonicalArtifact?.writtenFiles)
-        ? canonicalArtifact.writtenFiles
-        : [];
-      if (!callKey || (!attachments.length && !writtenFiles.length)) continue;
+      if (!callKey || !attachments.length) continue;
       artifactByCallId.set(callKey, {
         ...canonicalArtifact,
         toolCallId,
@@ -581,7 +599,6 @@ function buildToolArtifactTimelineProjection(session = {}) {
         parentDialogProcessId,
         turnScopeId,
         attachments,
-        writtenFiles,
       });
     }
   }
@@ -597,7 +614,6 @@ function buildToolArtifactTimelineProjection(session = {}) {
       ...(artifact.sequenceDomain ? { sequenceDomain: artifact.sequenceDomain } : {}),
       ...(artifact.ts ? { timestamp: artifact.ts } : {}),
       ...(artifact.attachments.length ? { attachments: artifact.attachments } : {}),
-      ...(artifact.writtenFiles.length ? { writtenFiles: artifact.writtenFiles } : {}),
       sessionId,
       dialogProcessId: artifact.dialogProcessId,
       turnScopeId: artifact.turnScopeId,
@@ -760,13 +776,20 @@ export function buildSessionDisplaySummary(session = {}) {
     presentation.toolTimeline = canonicalTimeline;
     assignedToolArtifactCount += toolTimeline.length;
   }
-  const attachmentCount = displayMessages.reduce(
-    (count, message) => count + dedupeAttachmentRefs([
-      ...(Array.isArray(message?.attachments) ? message.attachments : []),
-      ...(Array.isArray(message?.toolTimeline) ? message.toolTimeline.flatMap((item) => Array.isArray(item?.resultEvent?.attachments) ? item.resultEvent.attachments : []) : []),
-    ]).length,
-    0,
-  );
+  const attachmentCount = displayMessages.reduce((count, message) => {
+    const sessionAttachments = dedupeSessionAttachmentRefs(
+      Array.isArray(message?.attachments) ? message.attachments : [],
+    );
+    const transferAttachments = dedupeAttachmentRefs([
+      ...collectAttachmentRefsFromTransferEnvelopes(message?.transferEnvelopes),
+      ...(Array.isArray(message?.toolTimeline)
+        ? message.toolTimeline.flatMap((item) => (
+            Array.isArray(item?.resultEvent?.attachments) ? item.resultEvent.attachments : []
+          ))
+        : []),
+    ]);
+    return count + sessionAttachments.length + transferAttachments.length;
+  }, 0);
   const turnLifecycleSnapshot = lifecycle
     ? createAuthoritativeTurnSnapshot({
       lifecycle,
@@ -826,6 +849,16 @@ export function normalizeSessionsSummaryPayload(payload = {}, now = () => new Da
         item?.lastMessage && typeof item.lastMessage === "object" && !Array.isArray(item.lastMessage)
           ? item.lastMessage
           : null,
+      ...(item?.availability === "unavailable" ? { messages: [] } : {}),
+      availability: item?.availability === "unavailable" ? "unavailable" : "available",
+      ...(item?.availability === "unavailable"
+        ? {
+            unavailableReason: {
+              code: String(item?.unavailableReason?.code || "SESSION_PROTOCOL_INVALID").trim(),
+              message: String(item?.unavailableReason?.message || "Session uses an unsupported protocol").trim(),
+            },
+          }
+        : {}),
     }))
     .filter((item) => item.sessionId);
   return {

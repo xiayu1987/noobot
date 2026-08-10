@@ -774,20 +774,30 @@ test("mini-runner compacts semantic-transfer tool messages before model invoke",
     }),
     adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
   });
-  const attachmentMeta = {
-    attachmentId: "att-mini",
-    name: "result.md",
-    mimeType: "text/markdown",
-    size: 12,
-    relativePath: "runtime/attach/scoped/s1/model/result.md",
-  };
   const envelope = {
     protocol: "noobot.semantic-transfer",
-    version: 1,
+    version: 2,
+    transferId: "transfer-mini",
+    messageId: "message-mini",
+    identity: {
+      sessionId: "s1",
+      turnScopeId: "turn-mini",
+      runId: "run-mini",
+      producer: { type: "tool", id: "c1" },
+    },
     direction: "output",
-    transport: "file",
-    filePath: "/workspace/result.md",
-    files: [{ filePath: "/workspace/result.md", attachmentMeta }],
+    payload: {
+      mode: "attachment",
+      attachments: [{
+        identity: { attachmentId: "att-mini", sessionId: "s1", attachmentSource: "model" },
+        role: "primary",
+        name: "result.md",
+        mimeType: "text/markdown",
+        size: 12,
+      }],
+    },
+    intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_result_text" },
+    meta: { persisted: true },
   };
 
   await invoker({
@@ -798,7 +808,6 @@ test("mini-runner compacts semantic-transfer tool messages before model invoke",
         content: JSON.stringify({
           ok: true,
           transferEnvelopes: [envelope],
-          attachmentMetas: [attachmentMeta],
         }),
         tool_call_id: "c1",
       },
@@ -807,7 +816,10 @@ test("mini-runner compacts semantic-transfer tool messages before model invoke",
   });
 
   const compactedToolPayload = JSON.parse(firstInvokeMessages.find((item) => item.role === "tool").content);
-  assert.equal("transferEnvelopes" in compactedToolPayload, false);
-  assert.equal("attachmentMetas" in compactedToolPayload, false);
-  assert.equal(compactedToolPayload.transferFiles[0].attachmentId, "att-mini");
+  assert.equal(compactedToolPayload.transferEnvelopes[0].version, 2);
+  assert.equal(
+    compactedToolPayload.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "att-mini",
+  );
+  assert.equal("transferFiles" in compactedToolPayload, false);
 });

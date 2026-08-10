@@ -1,5 +1,7 @@
 # Semantic-Transfer 非原始需求场景审计
 
+> 本文档是历史边界审计，部分场景状态已被后续统一工具出口重构改变。当前代码场景清单以 `docs/semantic-transfer-scenario-inventory.md` 为准。
+
 > 来源：对照 `docs/semantic-transfer-raw-notes.md` 的边界澄清。
 >
 > 核心边界：**不是所有附件都走 semantic-transfer**。只有需要语义转换的信息流才走 semantic-transfer：
@@ -130,7 +132,7 @@ resolveTransferFilePath
 
 - 文件：
   - `agent/src/runtime/tool-execution/tool-runner.js`
-  - `agent/src/transfer/tool-result-text.js`
+  - `agent/src/transfer-adapter/tool-result-text.js`
 - 判断：**对齐**。
 
 ### 3.3 data-processing 工具文本结果处理

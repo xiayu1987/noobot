@@ -3,14 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  markCurrentTurnModelMessagesSummarized,
-  markCurrentTurnStoreSummarized,
-} from "@noobot/context-protocol/summary-policy";
-import {
-  DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
-} from "@noobot/context-protocol/summary-policy";
-
 export const FINAL_STREAMING_RESULT_META_KEY = "__noobotFinalStreaming";
 
 export function readFinalStreamingResultMeta(result = {}) {
@@ -49,16 +41,9 @@ function requireCanonicalTurnMessageStore(turnMessageStore = null) {
 }
 
 export function finalizeTurnMessagesBeforeReturn({
-  modelMessages = [],
   turnMessageStore = null,
 } = {}) {
-  markCurrentTurnModelMessagesSummarized(modelMessages, {
-    taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
-  });
   const canonicalStore = requireCanonicalTurnMessageStore(turnMessageStore);
-  markCurrentTurnStoreSummarized(canonicalStore, {
-    taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
-  });
   return canonicalStore.toArray();
 }
 
