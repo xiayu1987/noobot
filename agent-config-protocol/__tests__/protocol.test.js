@@ -11,6 +11,7 @@ import {
   localizeBuiltinScenarios,
   mergeToolPolicyPatch,
   resolveBuiltinScenarios,
+  RunConfigResolver,
   resolveToolBindings,
   validateConfigSnapshot,
 } from "../src/index.js";
@@ -18,6 +19,31 @@ test("config snapshot is versioned and validated", () => {
   const snapshot = createConfigSnapshot({ config: { x: 1 } });
   assert.equal(snapshot.protocol, "noobot.agent-config");
   assert.equal(validateConfigSnapshot(snapshot), snapshot);
+});
+
+test("config snapshot owns immutable metadata arrays", () => {
+  const metadata = { migrations: ["v0"], warnings: ["legacy"], source: "test" };
+  const snapshot = createConfigSnapshot({ metadata });
+
+  assert.notEqual(snapshot.metadata.migrations, metadata.migrations);
+  assert.notEqual(snapshot.metadata.warnings, metadata.warnings);
+  assert.equal(Object.isFrozen(snapshot.metadata), true);
+  assert.equal(Object.isFrozen(snapshot.metadata.migrations), true);
+  assert.equal(Object.isFrozen(snapshot.metadata.warnings), true);
+  assert.throws(() => snapshot.metadata.migrations.push("v1"), TypeError);
+  metadata.migrations.push("caller-mutation");
+  assert.deepEqual(snapshot.metadata.migrations, ["v0"]);
+});
+
+test("config snapshot rejects protocol and version drift", () => {
+  assert.throws(
+    () => validateConfigSnapshot({ protocol: "other", version: 1 }),
+    /invalid agent config protocol/,
+  );
+  assert.throws(
+    () => validateConfigSnapshot({ protocol: "noobot.agent-config", version: 2 }),
+    /unsupported agent config protocol version/,
+  );
 });
 test("tool policy is monotonic and deny wins", () => {
   const policy = mergeToolPolicyPatch({
@@ -76,4 +102,43 @@ test("custom_only is not widened by programming scenario requirements", () => {
     tools.map(({ name }) => name),
     ["custom"],
   );
+});
+
+test("run config resolver uses the canonical default scenario and intersects explicit policy", () => {
+  const resolver = new RunConfigResolver({
+    globalConfig: {
+      scenarios: {
+        default: "programming",
+      },
+    },
+  });
+  const resolved = resolver.resolveScenarioRunConfig({
+    toolPolicy: { allowToolNames: ["write_file", "other"] },
+    contextPolicy: { includeContextKeys: ["base_prompt", "services"] },
+  }, {});
+
+  assert.equal(resolved.scenario, "programming");
+  assert.ok(resolved.scenarioProfile.tools.includes("read_file"));
+  assert.deepEqual(resolved.toolPolicy.allowToolNames, ["write_file"]);
+  assert.equal(resolved.toolPolicy.forceIncludeUserInteraction, false);
+  assert.deepEqual(resolved.contextPolicy.includeContextKeys, ["base_prompt", "services"]);
+});
+
+test("tool binding adds user interaction once and keeps deny authoritative", () => {
+  const tools = resolveToolBindings({
+    sourceTools: [
+      { name: "read_file" },
+      { name: "user_interaction" },
+      { name: "user_interaction" },
+      { name: "write_file" },
+    ],
+    runConfig: {
+      toolPolicy: {
+        allowToolNames: ["read_file", "user_interaction", "write_file"],
+        denyToolNames: ["user_interaction"],
+      },
+    },
+  });
+
+  assert.deepEqual(tools.map((tool) => tool.name), ["read_file", "write_file"]);
 });

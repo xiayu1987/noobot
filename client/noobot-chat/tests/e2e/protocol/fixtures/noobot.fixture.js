@@ -194,10 +194,23 @@ export const test = artifactTest.extend({
       }, memoryModel);
       await page.reload();
     }
-    await connectThroughUi(page, credentials);
+    const connectConfig = await connectThroughUi(page, credentials);
+    const { apiKey: _apiKey, ...publicConnectConfig } = connectConfig || {};
+    const connectEvidenceDir = testInfo.outputPath("protocol-evidence");
+    const connectEvidencePath = path.join(connectEvidenceDir, "connect-config.json");
+    await fs.mkdir(connectEvidenceDir, { recursive: true });
+    await fs.writeFile(
+      connectEvidencePath,
+      `${JSON.stringify(publicConnectConfig, null, 2)}\n`,
+      "utf8",
+    );
+    await testInfo.attach("connect-config.json", {
+      path: connectEvidencePath,
+      contentType: "application/json",
+    });
     const sessionId = await createSessionThroughUi(page);
     try {
-      await use(Object.freeze({ page, sessionId, userId: credentials.userId }));
+      await use(Object.freeze({ page, sessionId, userId: credentials.userId, connectConfig }));
     } finally {
       const failures = [];
       try {

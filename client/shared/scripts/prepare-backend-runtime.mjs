@@ -173,6 +173,7 @@ async function main() {
   await assertExists(path.join(backendRoot, 'agent/src/prompts/base.zh-CN.md'), 'Prepared backend Chinese system prompt');
   await assertExists(path.join(backendRoot, 'agent/src/prompts/base.en-US.md'), 'Prepared backend English system prompt');
   await assertExists(path.join(backendRoot, 'node_modules/noobot-agent/package.json'), 'Prepared backend dependency noobot-agent');
+  await assertExists(path.join(backendRoot, 'node_modules/@noobot/agent-config-protocol/package.json'), 'Prepared backend dependency @noobot/agent-config-protocol');
   await assertExists(path.join(backendRoot, 'node_modules/@noobot/plugin-runtime/package.json'), 'Prepared backend dependency @noobot/plugin-runtime');
   await assertExists(path.join(backendRoot, 'node_modules/@noobot/context-protocol/package.json'), 'Prepared backend dependency @noobot/context-protocol');
   await assertExists(path.join(backendRoot, 'node_modules/@noobot/event-protocol/package.json'), 'Prepared backend dependency @noobot/event-protocol');

@@ -25,6 +25,7 @@ async function createFixture() {
 
   await writeRuntimeFile(backendSource, "service/app.js");
   await writeRuntimeFile(backendSource, "node_modules/noobot-agent/package.json", "{}");
+  await writeRuntimeFile(backendSource, "node_modules/@noobot/agent-config-protocol/package.json", "{}");
   await writeRuntimeFile(backendSource, "node_modules/@noobot/plugin-runtime/package.json", "{}");
   await writeRuntimeFile(backendSource, "node_modules/@noobot/event-protocol/package.json", "{}");
   await writeRuntimeFile(backendSource, "node_modules/@noobot/authoritative-state/package.json", "{}");

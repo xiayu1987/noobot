@@ -149,6 +149,125 @@ test("mergeConfig: session/context/preferences 用户覆盖应保持深度合并
   });
 });
 
+test("mergeConfig: admin 每类配置至少覆盖一项且不污染全局配置", () => {
+  const globalConfig = {
+    defaultProvider: "global-provider",
+    providers: {
+      global: { model: "global-model", temperature: 0.2 },
+      shared: { model: "shared-global-model" },
+    },
+    attachments: {
+      storage: "global-storage",
+      maxFileCount: 10,
+    },
+    session: {
+      mode: "global-mode",
+      contextWindow: { maxTokens: 1000, reserveTokens: 100 },
+    },
+    context: {
+      mode: "global-context",
+      sections: { services: true, tools: true },
+    },
+    services: {
+      globalService: { enabled: true },
+      sharedService: { endpoint: "https://global.example.com" },
+    },
+    mcpServers: {
+      globalServer: { command: "global-command" },
+      sharedServer: { url: "https://global.example.com" },
+    },
+    tools: {
+      globalTool: { enabled: true },
+      sharedTool: { mode: "global-mode" },
+    },
+    plugins: {
+      globalPlugin: { enabled: true },
+      workflow: { enabled: true, timeoutMs: 1000 },
+    },
+    preferences: {
+      locale: "zh-CN",
+      theme: { mode: "light", density: "comfortable" },
+    },
+    scenarios: {
+      default: "full",
+      definitions: { programming: { model: "global-programming-model" } },
+    },
+    configParams: { GLOBAL_ONLY: "global-value", SHARED: "global-shared" },
+  };
+  const adminConfig = {
+    defaultProvider: "admin-provider",
+    providers: {
+      admin: { model: "admin-model" },
+      shared: { temperature: 0.8 },
+    },
+    attachments: {
+      storage: "admin-storage",
+      maxFileCount: 99,
+    },
+    session: { mode: "admin-mode", contextWindow: { reserveTokens: 250 } },
+    context: { mode: "admin-context", sections: { tools: false } },
+    services: {
+      adminService: { enabled: true },
+      sharedService: { endpoint: "https://admin.example.com" },
+    },
+    mcpServers: {
+      adminServer: { command: "admin-command" },
+      sharedServer: { headers: { authorization: "admin-token" } },
+    },
+    tools: {
+      adminTool: { enabled: true },
+      sharedTool: { mode: "admin-mode" },
+      execute_script: { enabled: false },
+    },
+    plugins: {
+      adminPlugin: { enabled: true },
+      workflow: { enabled: false, timeoutMs: 9999 },
+    },
+    preferences: { locale: "en-US", theme: { density: "compact" } },
+    scenarios: {
+      default: "programming",
+      definitions: { programming: { model: "admin-programming-model" } },
+    },
+    configParams: { shared: "admin-shared", ADMIN_ONLY: "admin-value" },
+  };
+  const globalBefore = structuredClone(globalConfig);
+  const adminBefore = structuredClone(adminConfig);
+
+  const out = mergeConfig(globalConfig, adminConfig);
+
+  assert.equal(out.defaultProvider, "admin-provider");
+  assert.equal(out.providers.global.model, "global-model");
+  assert.equal(out.providers.shared.temperature, 0.8);
+  assert.equal(out.attachments.storage, "admin-storage");
+  assert.equal(out.attachments.maxFileCount, 10, "受保护的附件限制仍来自全局");
+  assert.equal(out.session.mode, "admin-mode");
+  assert.equal(out.session.contextWindow.maxTokens, 1000);
+  assert.equal(out.session.contextWindow.reserveTokens, 250);
+  assert.equal(out.context.mode, "admin-context");
+  assert.equal(out.context.sections.services, true);
+  assert.equal(out.context.sections.tools, false);
+  assert.equal(out.services.sharedService.endpoint, "https://admin.example.com");
+  assert.equal(out.mcpServers.sharedServer.url, "https://global.example.com");
+  assert.equal(out.mcpServers.sharedServer.headers.authorization, "admin-token");
+  assert.equal(out.tools.sharedTool.mode, "admin-mode");
+  assert.equal(out.tools.execute_script, undefined, "execute_script 不允许用户覆盖");
+  assert.equal(out.plugins.adminPlugin.enabled, true);
+  assert.equal(out.plugins.workflow.enabled, false);
+  assert.equal(out.plugins.workflow.timeoutMs, 1000, "工作流超时仍来自全局");
+  assert.equal(out.preferences.locale, "en-US");
+  assert.equal(out.preferences.theme.mode, "light");
+  assert.equal(out.preferences.theme.density, "compact");
+  assert.equal(out.scenarios.default, "programming");
+  assert.equal(out.scenarios.definitions.programming.model, "admin-programming-model");
+  assert.deepEqual(out.configParams, {
+    GLOBAL_ONLY: "global-value",
+    SHARED: "admin-shared",
+    ADMIN_ONLY: "admin-value",
+  });
+  assert.deepEqual(globalConfig, globalBefore, "全局配置对象不得被合并过程修改");
+  assert.deepEqual(adminConfig, adminBefore, "admin 配置对象不得被合并过程修改");
+});
+
 test("applySessionModelOverride: 传入 alias 时应覆盖 defaultProvider", () => {
   const out = applySessionModelOverride({ defaultProvider: "openai" }, "anthropic");
   assert.equal(out.defaultProvider, "anthropic");
