@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
+import { validateAttachmentParsedEvent } from "@noobot/session-protocol";
 import {
   getMessageDialogProcessId,
+  getMessageRole,
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../model/messageIdentity.js";
@@ -42,6 +44,24 @@ function resolveFirstResponseNavigator({
   if (typeof navigateOnFirstResponseOnce === "function") return navigateOnFirstResponseOnce;
   if (typeof scrollOnFirstResponseOnce === "function") return scrollOnFirstResponseOnce;
   return () => {};
+}
+
+function canonicalAttachmentProjectionKey(attachment = {}) {
+  const attachmentId = String(attachment?.attachmentId || "").trim();
+  const sessionId = String(attachment?.sessionId || "").trim();
+  const attachmentSource = String(attachment?.attachmentSource || "").trim().toLowerCase();
+  if (attachmentId && sessionId && attachmentSource) {
+    return `canonical:${attachmentIdentityKey(projectAttachmentIdentity(attachment))}`;
+  }
+  return "";
+}
+
+function draftAttachmentProjectionKey(attachment = {}) {
+  const clientAttachmentId = String(
+    attachment?.clientAttachmentId || attachment?.draftAttachmentId || "",
+  ).trim();
+  if (clientAttachmentId) return `draft:${clientAttachmentId}`;
+  return "";
 }
 
 export function handleDeltaStreamEvent({
@@ -106,39 +126,68 @@ export function handleAttachmentParsedStreamEvent({
   data,
   activeSession,
   makeViewMessage,
+  logSessionEvent,
 }) {
   const incoming = Array.isArray(data?.attachments) ? data.attachments : [];
-  if (!incoming.length || !activeSession?.value) return;
+  const protocolResult = validateAttachmentParsedEvent({
+    eventType: StreamEventEnum.ATTACHMENT_PARSED,
+    ...(data || {}),
+  });
+  logSessionEvent?.({
+    category: "debug",
+    level: "debug",
+    debugType: "workflow-diagnostics",
+    event: "frontend.attachmentParsed.received",
+    sessionId: String(data?.sessionId || activeSession?.value?.sessionId || "").trim(),
+    dialogProcessId: String(data?.dialogProcessId || "").trim(),
+    turnScopeId: String(data?.turnScopeId || "").trim(),
+    data: { incomingCount: incoming.length },
+  });
+  if (!protocolResult.valid || !activeSession?.value) return;
   const normalized = typeof makeViewMessage === "function"
     ? makeViewMessage({ attachments: incoming })?.attachments || incoming
     : incoming;
-  const normalizedByIdentity = new Map(
-    normalized.map((attachment) => [
-      attachmentIdentityKey(projectAttachmentIdentity(attachment)),
-      attachment,
-    ]),
-  );
+  const normalizedByIdentity = new Map();
+  for (const attachment of normalized) {
+    const canonicalKey = canonicalAttachmentProjectionKey(attachment);
+    const draftKey = draftAttachmentProjectionKey(attachment);
+    if (canonicalKey) normalizedByIdentity.set(canonicalKey, attachment);
+    if (draftKey) normalizedByIdentity.set(draftKey, attachment);
+  }
   const messages = Array.isArray(activeSession.value.messages)
     ? activeSession.value.messages
     : [];
+  let matchedCount = 0;
   for (const message of messages) {
-    if (message?.role !== "user" || !Array.isArray(message?.attachments)) continue;
-    message.attachments = message.attachments.map((existing) => {
-      const matching = normalizedByIdentity.get(
-        attachmentIdentityKey(projectAttachmentIdentity(existing)),
-      );
+    if (getMessageRole(message) !== "user" || !Array.isArray(message?.attachments)) continue;
+    const nextAttachments = message.attachments.map((existing) => {
+      const canonicalKey = canonicalAttachmentProjectionKey(existing);
+      const draftKey = canonicalKey ? "" : draftAttachmentProjectionKey(existing);
+      const matching = normalizedByIdentity.get(canonicalKey || draftKey);
       if (!matching) return existing;
-      return {
-        ...existing,
-        ...(matching?.parsedResult ? { parsedResult: matching.parsedResult } : {}),
-        ...(matching?.parsedResultUrl ? { parsedResultUrl: matching.parsedResultUrl } : {}),
-        ...(matching?.parsedResultName ? { parsedResultName: matching.parsedResultName } : {}),
-        ...(matching?.parsedResultAttachmentId
-          ? { parsedResultAttachmentId: matching.parsedResultAttachmentId }
-          : {}),
-      };
+      matchedCount += 1;
+      return typeof makeViewMessage === "function"
+        ? makeViewMessage({ attachments: [{ ...existing, parsedResult: matching.parsedResult }] })?.attachments?.[0]
+          || { ...existing, parsedResult: matching.parsedResult }
+        : { ...existing, parsedResult: matching.parsedResult };
     });
+    message.attachments.splice(0, message.attachments.length, ...nextAttachments);
   }
+  logSessionEvent?.({
+    category: "debug",
+    level: "debug",
+    debugType: "workflow-diagnostics",
+    event: "frontend.attachmentParsed.projected",
+    sessionId: String(activeSession?.value?.sessionId || "").trim(),
+    dialogProcessId: String(data?.dialogProcessId || "").trim(),
+    turnScopeId: String(data?.turnScopeId || "").trim(),
+    data: {
+      incomingCount: incoming.length,
+      messageCount: messages.length,
+      matchedCount,
+      userMessageCount: messages.filter((message) => getMessageRole(message) === "user").length,
+    },
+  });
 }
 
 export function handleInteractionRequestStreamEvent({

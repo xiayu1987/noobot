@@ -11,6 +11,7 @@ import {
 } from "../../model/messageIdentity.js";
 import { isTurnRuntimeDeleted } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
+import { getMessageTransferEnvelopes } from "../../model/transferEnvelopes.js";
 
 function text(value = "") {
   return String(value || "").trim();
@@ -320,6 +321,42 @@ export function selectTurnPresentations({
       sessionId: getMessageSessionId(message) || activeSessionId,
       turnScopeId: getMessageTurnScopeId(message),
     }));
+  // Tool records are non-renderable, but their transfer envelopes are
+  // canonical artifacts of the same turn. Project that envelope set onto
+  // every visible assistant in the turn before coalescing presentations.
+  const envelopesByTurn = new Map();
+  for (const message of sourceMessages) {
+    const key = messageTurnKey(message, activeSessionId);
+    if (!key) continue;
+    const envelopes = getMessageTransferEnvelopes(message);
+    if (!envelopes.length) continue;
+    const existing = envelopesByTurn.get(key) || [];
+    const seen = new Set(existing.map((item) => `${item?.transferId || ""}:${item?.messageId || ""}`));
+    for (const envelope of envelopes) {
+      const identity = `${envelope?.transferId || ""}:${envelope?.messageId || ""}`;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      existing.push(envelope);
+    }
+    envelopesByTurn.set(key, existing);
+  }
+  const projectedSourceMessages = sourceMessages.map((message) => {
+    if (getMessageRole(message) !== "assistant") return message;
+    const messageKey = messageTurnKey(message, activeSessionId);
+    const envelopes = envelopesByTurn.get(messageKey) || [];
+    if (!envelopes.length) return message;
+    const existing = getMessageTransferEnvelopes(message);
+    const seen = new Set(existing.map((item) => `${item?.transferId || ""}:${item?.messageId || ""}`));
+    const merged = [...existing];
+    for (const envelope of envelopes) {
+      const identity = `${envelope?.transferId || ""}:${envelope?.messageId || ""}`;
+      if (!seen.has(identity)) {
+        seen.add(identity);
+        merged.push(envelope);
+      }
+    }
+    return { ...message, transferEnvelopes: merged };
+  });
   const terminalStatuses = [
     ...(Array.isArray(activeSession?.turnStatuses) ? activeSession.turnStatuses : []),
     ...terminalStatusesFromRuntime(turnRuntimeRegistry, activeSessionId),
@@ -335,7 +372,7 @@ export function selectTurnPresentations({
       .filter(([key]) => Boolean(key)),
   );
   const projectedTerminalTurns = new Set();
-  const messagesWithTerminalPresentation = sourceMessages.map((message) => {
+  const messagesWithTerminalPresentation = projectedSourceMessages.map((message) => {
     if (getMessageRole(message) !== "assistant") return message;
     const key = messageTurnKey(message, activeSessionId);
     const status = terminalByTurn.get(key);

@@ -650,10 +650,19 @@ export function createMedia2DataTool({ agentContext }) {
       const attachments = Array.isArray(persistedOutput?.attachments)
         ? persistedOutput.attachments
         : [];
+      const firstAttachment = attachments[0] || null;
+      const parsedAttachmentMeta = firstAttachment?.identity
+        ? {
+            ...firstAttachment.identity,
+            name: firstAttachment.name,
+            mimeType: firstAttachment.mimeType,
+            size: firstAttachment.size,
+          }
+        : firstAttachment;
       const updatedSourceAttachment = await backwriteParsedResultToSourceAttachment({
         runtime,
         sourceAttachmentMeta,
-        parsedAttachmentMeta: attachments[0] || null,
+        parsedAttachmentMeta,
       });
       return toToolJsonResult(
         TOOL_NAME.MEDIA_TO_DATA,

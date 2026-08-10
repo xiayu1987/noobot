@@ -67,9 +67,13 @@ export async function assertAttachmentHttpAccess(page, {
   attachmentId = "",
   expectedName = "",
 } = {}) {
+  const apiKey = await page.evaluate(() => String(localStorage.getItem("noobot_api_key") || "").trim());
+  expect(apiKey).toBeTruthy();
   const url = `/api/internal/attachment/${encodeURIComponent(userId)}/${encodeURIComponent(attachmentId)}`
     + `?sessionId=${encodeURIComponent(sessionId)}&attachmentSource=${encodeURIComponent(attachmentSource)}`;
-  const response = await page.request.get(url);
+  const response = await page.request.get(url, {
+    headers: { "x-api-key": apiKey },
+  });
   expect(response.status()).toBe(200);
   expect(response.headers()["content-disposition"] || "").toContain(encodeURIComponent(expectedName));
   const body = await response.body();

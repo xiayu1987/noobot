@@ -104,10 +104,19 @@ function buildModelRunLabel(messageItem = {}) {
 
 function normalizeAttachment(
   attachmentItem = {},
-  { userId = "", isImageMime = () => false } = {},
+  { userId = "", isImageMime = () => false, scopeSessionId = "", scopeAttachmentSource = "" } = {},
 ) {
-  const attachmentAccess = resolveAttachmentAccessMeta(attachmentItem, { userId });
-  const parsedAccess = resolveParsedResultAccessMeta(attachmentItem, { userId });
+  const scopedAttachment = {
+    ...attachmentItem,
+    ...(String(scopeSessionId || "").trim() && !String(attachmentItem?.sessionId || "").trim()
+      ? { sessionId: String(scopeSessionId).trim() }
+      : {}),
+    ...(String(scopeAttachmentSource || "").trim() && !String(attachmentItem?.attachmentSource || "").trim()
+      ? { attachmentSource: String(scopeAttachmentSource).trim() }
+      : {}),
+  };
+  const attachmentAccess = resolveAttachmentAccessMeta(scopedAttachment, { userId });
+  const parsedAccess = resolveParsedResultAccessMeta(scopedAttachment, { userId });
   const attachmentId = attachmentAccess.attachmentId;
   const mimeType = String(
     attachmentItem?.mimeType || "application/octet-stream",
@@ -116,7 +125,7 @@ function normalizeAttachment(
   const attachmentSource = attachmentAccess.attachmentSource;
   const parsedResultSize = parsedAccess.size;
   return {
-    ...attachmentItem,
+    ...scopedAttachment,
     attachmentId,
     sessionId,
     attachmentSource,
@@ -134,7 +143,7 @@ function normalizeAttachment(
           ...(parsedAccess.path ? { path: parsedAccess.path } : {}),
           ...(parsedAccess.relativePath ? { relativePath: parsedAccess.relativePath } : {}),
         }
-      : attachmentItem?.parsedResult,
+      : scopedAttachment?.parsedResult,
     parsedResultAttachmentId: parsedAccess.attachmentId,
     parsedResultPath: parsedAccess.path,
     parsedResultRelativePath: parsedAccess.relativePath,
@@ -333,7 +342,12 @@ function buildViewMessage(
   { userId = "", isImageMime = () => false } = {},
 ) {
   const normalizedAttachments = getMessageAttachments(messageItem).map((attachmentItem) =>
-    normalizeAttachment(attachmentItem, { userId, isImageMime }),
+    normalizeAttachment(attachmentItem, {
+      userId,
+      isImageMime,
+      scopeSessionId: getMessageSessionId(messageItem),
+      scopeAttachmentSource: getMessageRole(messageItem) === "user" ? "user" : "model",
+    }),
   );
   return createMessageModel({
     ...messageItem,
@@ -342,7 +356,8 @@ function buildViewMessage(
 }
 
 function foldConversationMessages(messages = [], buildView) {
-  const foldedMessages = normalizeArray(messages)
+  const sourceMessages = normalizeArray(messages);
+  const foldedMessages = sourceMessages
     .filter((messageItem) => {
       if (isPluginInjectedMessage(messageItem)) return false;
       const role = getMessageRole(messageItem);
@@ -443,6 +458,10 @@ function foldConversationMessages(messages = [], buildView) {
         ...currentTransferEnvelopes,
       ];
     }
+    // transferEnvelopes are the canonical artifact source. Rebuild the
+    // render projection after folding so an envelope arriving on a later
+    // assistant record cannot be lost from the displayed message.
+    previousMessage.attachments = getMessageAttachments(previousMessage);
     previousMessage.ts = currentMessage?.ts || previousMessage?.ts;
     if (String(currentMessage?.modelAlias || "").trim()) {
       previousMessage.modelAlias = String(currentMessage.modelAlias || "").trim();
@@ -456,6 +475,32 @@ function foldConversationMessages(messages = [], buildView) {
       new Set([...previousModelRuns, ...currentModelRuns].filter(Boolean)),
     );
     previousMessage.modelRuns = mergedModelRuns;
+  }
+  // A turn may contain hidden tool-call records and a separate visible
+  // assistant record. Their artifact envelopes still belong to one turn
+  // projection, so expose the canonical envelope set on each assistant view
+  // record instead of relying on which record happened to receive the event.
+  const turnArtifacts = new Map();
+  // Tool records are intentionally excluded from chat rendering, but their
+  // transfer envelopes are canonical turn artifacts. Collect from the full
+  // canonical stream before role filtering so a live tool result cannot
+  // disappear from the visible assistant projection.
+  for (const message of sourceMessages) {
+    const key = resolveMessageTurnScopeMergeKey(message);
+    if (!key || getMessageRole(message) !== "assistant") continue;
+    const envelopes = getMessageTransferEnvelopes(message);
+    if (!envelopes.length) continue;
+    turnArtifacts.set(key, [
+      ...(turnArtifacts.get(key) || []),
+      ...envelopes,
+    ]);
+  }
+  for (const message of mergedMessages) {
+    const key = resolveMessageTurnScopeMergeKey(message);
+    const envelopes = turnArtifacts.get(key) || [];
+    if (!envelopes.length || getMessageRole(message) !== "assistant") continue;
+    message.transferEnvelopes = envelopes;
+    message.attachments = getMessageAttachments(message);
   }
   return mergedMessages;
 }

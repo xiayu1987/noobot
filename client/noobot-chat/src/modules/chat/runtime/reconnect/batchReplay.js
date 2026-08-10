@@ -77,6 +77,7 @@ export function prepareReconnectReplayBatchPlan({
 export function applyReconnectEnvelopeToTargetMessage({
   envelope,
   findCanonicalMessageById,
+  findCanonicalMessagesById,
   normalizedDpId = "",
   classifyRealtimeLog,
   normalizeExecutionLogForRealtime,
@@ -101,7 +102,9 @@ export function applyReconnectEnvelopeToTargetMessage({
       return false;
     }
     const targetSessionId = _trimStr(messageEvent?.sessionId || eventData?.sessionId);
-    const canonicalTarget = findCanonicalMessageById?.(targetSessionId, presentationMessageId);
+    const canonicalTargets = findCanonicalMessagesById?.(targetSessionId, presentationMessageId)
+      || [findCanonicalMessageById?.(targetSessionId, presentationMessageId)].filter(Boolean);
+    const canonicalTarget = canonicalTargets[canonicalTargets.length - 1] || null;
     if (
       !canonicalTarget ||
       ![
@@ -120,12 +123,13 @@ export function applyReconnectEnvelopeToTargetMessage({
       }));
       return false;
     }
-    const reduction = dispatchTurnEnvelope({
-      targetMessage: canonicalTarget,
+    const reductions = canonicalTargets.map((targetMessage) => dispatchTurnEnvelope({
+      targetMessage,
       envelope: messageEvent,
       classifyRealtimeLog,
       source: TURN_PROJECTION_SOURCE.HISTORY_REPLAY,
-    });
+    }));
+    const reduction = reductions.find((item) => item.applied) || reductions[0] || { result: "target_missing" };
     logThinkingReplayDebug("frontend.messageEvent.reduced", () => ({
       source: "history_replay",
       sessionId: String(messageEvent?.sessionId || eventData?.sessionId || ""),
@@ -171,6 +175,7 @@ export function applyReconnectEnvelopeToTargetMessage({
 export function applyReconnectEnvelopeBatchToTargetMessage({
   messages = [],
   findCanonicalMessageById,
+  findCanonicalMessagesById,
   normalizedDpId = "",
   lastAppliedSeq = 0,
   classifyRealtimeLog,
@@ -186,6 +191,7 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
     applyReconnectEnvelopeToTargetMessage({
       envelope,
       findCanonicalMessageById,
+      findCanonicalMessagesById,
       normalizedDpId,
       classifyRealtimeLog,
       normalizeExecutionLogForRealtime,
@@ -234,6 +240,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   activeSession,
   activeSessionId,
   findCanonicalMessageById,
+  findCanonicalMessagesById,
   chatList,
   messages = [],
   dialogProcessId = "",
@@ -312,6 +319,7 @@ export async function applyReconnectReplayBatchToActiveSession({
   const maxAppliedSeq = applyReconnectEnvelopeBatchToTargetMessage({
     messages: nextMessages,
     findCanonicalMessageById,
+    findCanonicalMessagesById,
     normalizedDpId,
     lastAppliedSeq,
     classifyRealtimeLog,

@@ -55,10 +55,9 @@ function stateFor(message, event) {
 
 function conflicts(message, event) {
   const messageId = text(message.messageId || message.id);
-  if (
-    messageId &&
-    messageId !== resolveMessageEventPresentationId(event)
-  ) return true;
+  const presentationId = text(message.presentationMessageId);
+  const eventPresentationId = resolveMessageEventPresentationId(event);
+  if (messageId && messageId !== eventPresentationId && presentationId !== eventPresentationId) return true;
   const messageTurn = text(message.turnScopeId || message.turn_scope_id);
   const eventTurn = text(event.turnScopeId);
   return Boolean(eventTurn && messageTurn !== eventTurn);

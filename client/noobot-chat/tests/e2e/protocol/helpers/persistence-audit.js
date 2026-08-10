@@ -264,9 +264,19 @@ async function findExecutionEventSegments(directory) {
   return segments;
 }
 
-export async function readSessionExecutionEventTree(userId, sessionId) {
-  const segments = await findExecutionEventSegments(sessionRoot(userId, sessionId));
-  return (await Promise.all(segments.sort().map(readJsonLinesIfPresent))).flat();
+export async function readSessionExecutionEventTree(userId, sessionId, { rootSessionId = "" } = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  const hasExplicitRoot = Boolean(String(rootSessionId || "").trim());
+  const normalizedRootSessionId = String(rootSessionId || normalizedSessionId).trim();
+  if (!normalizedSessionId || !normalizedRootSessionId) return [];
+  // Workflow child execution trees are canonically scoped below their root
+  // session. A child id alone is not a filesystem scope and must never be
+  // resolved as a top-level session.
+  const segments = await findExecutionEventSegments(sessionRoot(userId, normalizedRootSessionId));
+  const records = (await Promise.all(segments.sort().map(readJsonLinesIfPresent))).flat();
+  return hasExplicitRoot
+    ? records.filter((record) => String(record?.sessionId || "").trim() === normalizedSessionId)
+    : records;
 }
 
 export function modelInvocationTraces(records) {

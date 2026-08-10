@@ -286,6 +286,8 @@ test("AttachmentService links parsed results to one attachment identity only", a
       attachmentId: saved[0].attachmentId,
     });
     assert.equal(linkedAttachment.parsedResult?.attachmentId, parsed.attachmentId);
+    assert.equal(linkedAttachment.parsedResult?.sessionId, parsed.sessionId);
+    assert.equal(linkedAttachment.parsedResult?.attachmentSource, parsed.attachmentSource);
     assert.equal(otherAttachment.parsedResult, undefined);
   });
 });
@@ -391,6 +393,8 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
 
     assert.ok(linked);
     assert.equal(linked.parsedResult?.attachmentId, parsedAttachment.attachmentId);
+    assert.equal(linked.parsedResult?.sessionId, parsedAttachment.sessionId);
+    assert.equal(linked.parsedResult?.attachmentSource, parsedAttachment.attachmentSource);
 
     const runtimeSnapshot = await readSessionArtifact({ sessionDir: path.dirname(runtimeSessionFile) });
     const pluginSnapshot = await readSessionArtifact({ sessionDir: path.dirname(pluginSessionFile) });

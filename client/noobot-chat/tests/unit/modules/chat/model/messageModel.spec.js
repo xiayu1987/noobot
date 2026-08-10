@@ -25,6 +25,24 @@ const envelope = {
 };
 
 describe("messageModel semantic transfer", () => {
+  it("projects attachment identity from its owning message before live updates", () => {
+    const message = buildViewMessage({
+      role: "user",
+      sessionId: "session-1",
+      attachments: [{
+        attachmentId: "source-att",
+        name: "source.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }],
+    });
+
+    expect(message.attachments[0]).toMatchObject({
+      attachmentId: "source-att",
+      sessionId: "session-1",
+      attachmentSource: "user",
+    });
+  });
+
   it("does not admit workflow running view models into canonical messages", () => {
     const message = buildViewMessage({
       role: "assistant",

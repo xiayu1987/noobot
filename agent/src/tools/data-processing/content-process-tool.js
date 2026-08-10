@@ -20,6 +20,7 @@ import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { normalizeSelectedConnectors } from "../../shared/utils/shared-utils.js";
+import { filePath as path } from "@noobot/path-resolver";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
   SANDBOX_CONFIG,
@@ -91,15 +92,38 @@ export function createContentProcessTool({ agentContext }) {
           },
         );
       }
+      const canonicalAttachments = Array.isArray(runtime?.userMessageAttachments)
+        ? runtime.userMessageAttachments
+        : [];
+      const userId = String(runtime?.userId || agentContext?.userId || "").trim();
+      const normalizedPathForIdentity = normalizedContentPath.startsWith("file://")
+        ? normalizedContentPath.slice("file://".length)
+        : normalizedContentPath;
+      const sourceAttachment = canonicalAttachments.find((attachment) => {
+        const attachmentPath = String(attachment?.path || "").trim();
+        if (attachmentPath === normalizedPathForIdentity) return true;
+        const relativePath = runtime?.basePath && attachmentPath
+          ? path.relative(String(runtime.basePath), attachmentPath)
+          : "";
+        const workspacePath = relativePath
+          ? path.join("/workspace", String(userId || "").trim(), relativePath)
+          : "";
+        return (
+          relativePath === normalizedPathForIdentity ||
+          workspacePath === normalizedPathForIdentity
+        );
+      }) || null;
+      const sourceAttachmentId = String(sourceAttachment?.attachmentId || "").trim();
       const composedTask = normalizedContentPath
-        ? `${normalizedTask}\n\ncontent_path: ${normalizedContentPath}`
+        ? `${normalizedTask}\n\ncontent_path: ${normalizedContentPath}${
+            sourceAttachmentId ? `\nattachment_id: ${sourceAttachmentId}` : ""
+          }`
         : normalizedTask;
 
       const systemRuntime = runtime?.systemRuntime || {};
       const botManager = runtime?.botManager || null;
       const eventListener = runtime?.eventListener || null;
       const signal = runtime?.abortSignal || null;
-      const userId = String(runtime?.userId || agentContext?.userId || "").trim();
       const sessionId = String(systemRuntime?.sessionId || "").trim();
       const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
       const parentDialogProcessId = String(runtime?.systemRuntime?.dialogProcessId || "").trim();
@@ -128,6 +152,7 @@ export function createContentProcessTool({ agentContext }) {
         const detachedRun = await botManager.runDetachedSubSession({
           parentExecutionScope: agentContext,
           message: composedTask,
+          attachments: canonicalAttachments,
           eventListener,
           abortSignal: signal,
           strategy: createAgentDetachedSubSessionStrategy({

@@ -17,7 +17,36 @@ import {
   validateTurnLifecycleSnapshot,
   validateTurnLifecycleReceipt,
   validateSessionProvisionIntent,
+  validateAttachmentParsedEvent,
 } from "@noobot/session-protocol";
+
+test("attachment parsed event requires canonical source and parsed-result identities", () => {
+  const validEvent = {
+    eventType: "attachment_parsed",
+    sessionId: "root-session",
+    turnScopeId: "client-turn:parsed-1",
+    attachments: [{
+      attachmentId: "source-attachment",
+      sessionId: "root-session",
+      attachmentSource: "user",
+      parsedResult: {
+        attachmentId: "parsed-attachment",
+        sessionId: "child-session",
+        attachmentSource: "model",
+      },
+    }],
+  };
+  assert.deepEqual(validateAttachmentParsedEvent(validEvent), {
+    valid: true,
+    recognized: true,
+    errors: [],
+  });
+  assert.equal(validateAttachmentParsedEvent({ ...validEvent, attachments: [] }).valid, false);
+  assert.equal(validateAttachmentParsedEvent({
+    ...validEvent,
+    attachments: [{ ...validEvent.attachments[0], parsedResult: null }],
+  }).valid, false);
+});
 
 test("turn lifecycle snapshot carries authoritative replacement tombstones", () => {
   const snapshot = createTurnLifecycleSnapshot({
