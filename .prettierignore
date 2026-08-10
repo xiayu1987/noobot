@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+coverage
+vendor
+report
+workspace
+client/*/dist
+client/*/build
+**/generated/**
+**/*.min.js
