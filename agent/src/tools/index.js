@@ -22,7 +22,10 @@ import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { CONNECTOR_TYPE, TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
-import { getRuntimeFromAgentContext, getToolsFromAgentContext } from "../context/agent-context-accessor.js";
+import {
+  getRuntimeFromAgentContext,
+  getToolsFromAgentContext,
+} from "../context/agent-context-accessor.js";
 export {
   setToolBuilderAdapter,
   getToolBuilderAdapter,
@@ -30,14 +33,6 @@ export {
 } from "./adapter.js";
 
 const DEFAULT_MAX_SUB_AGENT_DEPTH = BUILTIN_THRESHOLDS.agentCollab.maxSubAgentDepth;
-const CODING_SCENARIO_KEYS = new Set(["coding", "programming"]);
-const CODING_REQUIRED_TOOL_NAMES = new Set([
-  TOOL_NAME.READ_FILE,
-  TOOL_NAME.WRITE_FILE,
-  TOOL_NAME.SEARCH,
-  TOOL_NAME.PATCH_FILE,
-  TOOL_NAME.EXECUTE_SCRIPT,
-]);
 const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
   TOOL_NAME.DELEGATE_TASK_ASYNC,
   TOOL_NAME.WAIT_ASYNC_TASK_RESULT,
@@ -46,58 +41,6 @@ const BLOCKED_AGENT_COLLAB_TOOL_NAMES = new Set([
   "waitAsyncTaskResult",
   "planMultiTaskCollaboration",
 ]);
-
-function normalizeToolNameList(input = []) {
-  return Array.isArray(input)
-    ? input.map((item) => String(item || "").trim()).filter(Boolean)
-    : [];
-}
-
-function resolveAlwaysIncludedToolNames(runtime = {}) {
-  const runConfig =
-    runtime?.runConfig && typeof runtime.runConfig === "object"
-      ? runtime.runConfig
-      : {};
-  const alwaysIncludedToolNames = new Set();
-  const scenario = String(runConfig?.scenario || "").trim().toLowerCase();
-  const scenarioProfileKey = String(runConfig?.scenarioProfile?.key || "")
-    .trim()
-    .toLowerCase();
-  const scenarioProfileName = String(runConfig?.scenarioProfile?.name || "")
-    .trim()
-    .toLowerCase();
-  const isCodingScenario =
-    CODING_SCENARIO_KEYS.has(scenario) ||
-    CODING_SCENARIO_KEYS.has(scenarioProfileKey) ||
-    scenarioProfileName.includes("coding") ||
-    scenarioProfileName.includes("programming") ||
-    scenarioProfileName.includes("编程");
-  if (isCodingScenario) {
-    for (const toolName of CODING_REQUIRED_TOOL_NAMES) {
-      alwaysIncludedToolNames.add(toolName);
-    }
-  }
-  return alwaysIncludedToolNames;
-}
-
-function resolveDeniedToolNamesByRuntimePolicy(runtime = {}) {
-  const runConfig =
-    runtime?.runConfig && typeof runtime.runConfig === "object"
-      ? runtime.runConfig
-      : {};
-  const toolPolicy =
-    runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
-      ? runConfig.toolPolicy
-      : {};
-  const denyToolNames = new Set([
-    ...normalizeToolNameList(toolPolicy?.denyToolNames),
-  ]);
-  const alwaysIncludedToolNames = resolveAlwaysIncludedToolNames(runtime);
-  for (const toolName of alwaysIncludedToolNames) {
-    denyToolNames.delete(toolName);
-  }
-  return denyToolNames;
-}
 
 function isNamedToolEnabled(effectiveConfig = {}, toolName = "", defaultEnabled = true) {
   const normalized = String(toolName || "").trim();
@@ -151,22 +94,15 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.REQUEST_HELP]: [TOOL_NAME.REQUEST_HELP],
 };
 
-function filterToolsByConfigEnabled(
-  tools = [],
-  effectiveConfig = {},
-  alwaysIncludedToolNames = new Set(),
-) {
+function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
   const source = Array.isArray(tools) ? tools : [];
   return source.filter((toolDefinition) => {
     const name = normalizeToolName(toolDefinition);
-    if (alwaysIncludedToolNames.has(name)) return true;
     const candidates =
       Array.isArray(TOOL_CONFIG_ALIASES[name]) && TOOL_CONFIG_ALIASES[name].length
         ? TOOL_CONFIG_ALIASES[name]
         : [name];
-    return candidates.every((key) =>
-      isNamedToolEnabled(effectiveConfig, key, true),
-    );
+    return candidates.every((key) => isNamedToolEnabled(effectiveConfig, key, true));
   });
 }
 
@@ -189,7 +125,9 @@ function hasEnabledMultimodalGenerationProvider(effectiveConfig = {}) {
     if (!generationEnabled) continue;
     const supportScope = Array.isArray(supportGeneration?.support_scope)
       ? supportGeneration.support_scope.map((scopeItem) =>
-          String(scopeItem || "").trim().toLowerCase(),
+          String(scopeItem || "")
+            .trim()
+            .toLowerCase(),
         )
       : [];
     if (supportScope.includes("image")) return true;
@@ -203,16 +141,9 @@ function resolveMaxSubAgentDepth(_effectiveConfig = {}) {
 
 async function buildToolsDefault(ctx) {
   const runtime = getRuntimeFromAgentContext(ctx.agentContext);
-  const effectiveConfig = mergeConfig(
-    runtime?.globalConfig || {},
-    runtime?.userConfig || {},
-  );
-  const allowUserInteraction =
-    runtime?.systemRuntime?.config?.allowUserInteraction !== false;
-  const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(
-    effectiveConfig,
-  );
-  const alwaysIncludedToolNames = resolveAlwaysIncludedToolNames(runtime);
+  const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
+  const allowUserInteraction = runtime?.systemRuntime?.config?.allowUserInteraction !== false;
+  const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(effectiveConfig);
   const baseTools = [
     ...createFileTool(ctx),
     ...createScriptTool(ctx),
@@ -229,16 +160,11 @@ async function buildToolsDefault(ctx) {
     ...createRequestHelpTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
-  const enabledTools = filterToolsByConfigEnabled(
-    baseTools,
-    effectiveConfig,
-    alwaysIncludedToolNames,
-  );
+  const enabledTools = filterToolsByConfigEnabled(baseTools, effectiveConfig);
   return await filterToolsByRuntimePolicy({
     agentContext: ctx?.agentContext || {},
     tools: enabledTools,
     effectiveConfig,
-    alwaysIncludedToolNames,
     eventListener: runtime?.eventListener || null,
   });
 }
@@ -251,39 +177,16 @@ async function filterToolsByRuntimePolicy({
   agentContext,
   tools,
   effectiveConfig,
-  alwaysIncludedToolNames = new Set(),
   eventListener = null,
 }) {
-  const sourceTools = Array.isArray(tools)
-    ? tools
-    : getToolsFromAgentContext(agentContext);
+  const sourceTools = Array.isArray(tools) ? tools : getToolsFromAgentContext(agentContext);
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const sessionId = String(
-    runtime?.systemRuntime?.sessionId || runtime?.sessionId || "",
-  ).trim();
+  const sessionId = String(runtime?.systemRuntime?.sessionId || runtime?.sessionId || "").trim();
   const parentSessionId = resolveParentSessionId({ runtime });
   const userId = String(runtime?.userId || "").trim();
   const sessionManager = runtime?.sessionManager || null;
   const maxSubAgentDepth = resolveMaxSubAgentDepth(effectiveConfig);
   const depthTargetSessionId = sessionId || parentSessionId;
-  const deniedToolNames = resolveDeniedToolNamesByRuntimePolicy(runtime);
-
-  if (deniedToolNames.size) {
-    const filteredTools = sourceTools.filter((toolDefinition) => {
-      const toolName = normalizeToolName(toolDefinition);
-      if (alwaysIncludedToolNames.has(toolName)) return true;
-      return !deniedToolNames.has(toolName);
-    });
-    if (filteredTools.length !== sourceTools.length) {
-      emitEvent(eventListener, "tools_disabled_by_runtime_policy", {
-        sessionId: depthTargetSessionId,
-        parentSessionId,
-        disabledTools: Array.from(deniedToolNames),
-      });
-    }
-    return filteredTools;
-  }
-
   if (!sessionManager || !userId) {
     return sourceTools;
   }
@@ -305,8 +208,7 @@ async function filterToolsByRuntimePolicy({
   if (currentDepth < maxSubAgentDepth) return sourceTools;
 
   const filteredTools = sourceTools.filter(
-    (toolDefinition) =>
-      !BLOCKED_AGENT_COLLAB_TOOL_NAMES.has(normalizeToolName(toolDefinition)),
+    (toolDefinition) => !BLOCKED_AGENT_COLLAB_TOOL_NAMES.has(normalizeToolName(toolDefinition)),
   );
 
   if (filteredTools.length !== sourceTools.length) {

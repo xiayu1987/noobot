@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
-import { tSystem } from "noobot-i18n/agent/system-text";
+import { isPlainObject } from "./utils.js";
 
 export const BUILTIN_SCENARIO_KEYS = Object.freeze(["full", "programming", "text"]);
 export const PROGRAMMING_SCENARIO_KEY = "programming";
@@ -44,7 +43,8 @@ export const BUILTIN_SCENARIOS = Object.freeze({
     }),
     programming: Object.freeze({
       name: "编程",
-      description: "编程情景：先 search/read_file 确认真实内容，再用 patch_file 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 write_file。",
+      description:
+        "编程情景：先 search/read_file 确认真实内容，再用 patch_file 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 write_file。",
       model: "",
       tools: PROGRAMMING_TOOL_NAMES,
       context: Object.freeze([
@@ -77,7 +77,7 @@ export const BUILTIN_SCENARIOS = Object.freeze({
   }),
 });
 
-const BUILTIN_SCENARIO_I18N_KEYS = Object.freeze({
+export const BUILTIN_SCENARIO_I18N_KEYS = Object.freeze({
   full: Object.freeze({
     name: "scenarios.full.name",
     description: "scenarios.full.description",
@@ -92,55 +92,20 @@ const BUILTIN_SCENARIO_I18N_KEYS = Object.freeze({
   }),
 });
 
-function localizeScenarioText(locale, key, fallback) {
-  return tSystem(key, locale, fallback);
-}
-
-export function getBuiltinScenarios(locale) {
-  return Object.freeze({
-    default: BUILTIN_SCENARIOS.default,
-    definitions: Object.freeze({
-      full: Object.freeze({
-        ...BUILTIN_SCENARIOS.definitions.full,
-        name: localizeScenarioText(
-          locale,
-          BUILTIN_SCENARIO_I18N_KEYS.full.name,
-          BUILTIN_SCENARIOS.definitions.full.name,
-        ),
-        description: localizeScenarioText(
-          locale,
-          BUILTIN_SCENARIO_I18N_KEYS.full.description,
-          BUILTIN_SCENARIOS.definitions.full.description,
-        ),
-      }),
-      programming: Object.freeze({
-        ...BUILTIN_SCENARIOS.definitions.programming,
-        name: localizeScenarioText(
-          locale,
-          BUILTIN_SCENARIO_I18N_KEYS.programming.name,
-          BUILTIN_SCENARIOS.definitions.programming.name,
-        ),
-        description: localizeScenarioText(
-          locale,
-          BUILTIN_SCENARIO_I18N_KEYS.programming.description,
-          BUILTIN_SCENARIOS.definitions.programming.description,
-        ),
-      }),
-      text: Object.freeze({
-        ...BUILTIN_SCENARIOS.definitions.text,
-        name: localizeScenarioText(
-          locale,
-          BUILTIN_SCENARIO_I18N_KEYS.text.name,
-          BUILTIN_SCENARIOS.definitions.text.name,
-        ),
-        description: localizeScenarioText(
-          locale,
-          BUILTIN_SCENARIO_I18N_KEYS.text.description,
-          BUILTIN_SCENARIOS.definitions.text.description,
-        ),
-      }),
-    }),
-  });
+export function localizeBuiltinScenarios(scenarios, { locale = "", translate } = {}) {
+  if (typeof translate !== "function") {
+    throw new TypeError("localizeBuiltinScenarios requires an explicit translate function");
+  }
+  const source = isPlainObject(scenarios) ? scenarios : BUILTIN_SCENARIOS;
+  const definitions = cloneJson(source.definitions || {});
+  for (const scenarioKey of BUILTIN_SCENARIO_KEYS) {
+    const definition = definitions[scenarioKey];
+    const keys = BUILTIN_SCENARIO_I18N_KEYS[scenarioKey];
+    if (!definition || !keys) continue;
+    definition.name = translate(keys.name, locale, definition.name);
+    definition.description = translate(keys.description, locale, definition.description);
+  }
+  return { default: source.default, definitions };
 }
 
 function cloneJson(value) {
@@ -155,9 +120,7 @@ function normalizeScenarioKey(value = "") {
 function readScenarioModel(sourceScenarios = {}, scenarioKey = "") {
   const source = isPlainObject(sourceScenarios) ? sourceScenarios : {};
   const definitions = isPlainObject(source?.definitions) ? source.definitions : {};
-  const scenario = isPlainObject(definitions?.[scenarioKey])
-    ? definitions[scenarioKey]
-    : {};
+  const scenario = isPlainObject(definitions?.[scenarioKey]) ? definitions[scenarioKey] : {};
   if (!Object.prototype.hasOwnProperty.call(scenario, "model")) {
     return undefined;
   }
@@ -184,8 +147,8 @@ export function sanitizeScenarioConfig(input = {}) {
   return out;
 }
 
-export function resolveBuiltinScenarios(globalScenarios = {}, userScenarios = {}, options = {}) {
-  const builtinScenarios = getBuiltinScenarios(options?.locale);
+export function resolveBuiltinScenarios(globalScenarios = {}, userScenarios = {}) {
+  const builtinScenarios = BUILTIN_SCENARIOS;
   const globalSafe = sanitizeScenarioConfig(globalScenarios);
   const userSafe = sanitizeScenarioConfig(userScenarios);
   const definitions = cloneJson(builtinScenarios.definitions);

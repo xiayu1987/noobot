@@ -6,8 +6,8 @@
 import { readFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { recoverableToolError } from "../../shared/errors/index.js";
-import { resolveConfigSecrets } from "./template-resolver.js";
-import { sanitizeUserConfig } from "./user-override-policy.js";
+import { resolveConfigSecrets } from "./config-secret-resolver.js";
+import { sanitizeUserConfig } from "@noobot/agent-config-protocol";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
 function normalizeConfigParams(input = {}) {
@@ -15,7 +15,9 @@ function normalizeConfigParams(input = {}) {
   return Object.fromEntries(
     Object.entries(rawValues)
       .map(([paramKey, paramValue]) => [
-        String(paramKey || "").trim().toUpperCase(),
+        String(paramKey || "")
+          .trim()
+          .toUpperCase(),
         String(paramValue ?? "").trim(),
       ])
       .filter(([paramKey]) => Boolean(paramKey)),
@@ -26,10 +28,11 @@ function mergeConfigParamsWithFallback(systemParams = {}, overrideParams = {}) {
   const base = {
     ...(systemParams && typeof systemParams === "object" ? systemParams : {}),
   };
-  const overrideSource =
-    overrideParams && typeof overrideParams === "object" ? overrideParams : {};
+  const overrideSource = overrideParams && typeof overrideParams === "object" ? overrideParams : {};
   for (const [paramKey, rawValue] of Object.entries(overrideSource)) {
-    const normalizedKey = String(paramKey || "").trim().toUpperCase();
+    const normalizedKey = String(paramKey || "")
+      .trim()
+      .toUpperCase();
     if (!normalizedKey) continue;
     const normalizedValue = String(rawValue ?? "").trim();
     if (!normalizedValue) continue;
@@ -53,12 +56,9 @@ export class ConfigService {
     try {
       raw = JSON.parse(rawText);
     } catch (error) {
-      throw recoverableToolError(
-        `config.json parse failed: ${error?.message || String(error)}`,
-        {
-          code: ERROR_CODE.RECOVERABLE_INVALID_USER_CONFIG,
-        },
-      );
+      throw recoverableToolError(`config.json parse failed: ${error?.message || String(error)}`, {
+        code: ERROR_CODE.RECOVERABLE_INVALID_USER_CONFIG,
+      });
     }
 
     let workspaceConfigParamsJson = {};
@@ -84,7 +84,10 @@ export class ConfigService {
       systemConfigParams,
       workspaceConfigParams,
     );
-    const mergedConfigParams = mergeConfigParamsWithFallback(mergedWorkspaceConfigParams, userConfigParams);
+    const mergedConfigParams = mergeConfigParamsWithFallback(
+      mergedWorkspaceConfigParams,
+      userConfigParams,
+    );
     const resolvedRaw = resolveConfigSecrets(raw, {
       configParams: mergedConfigParams,
     });

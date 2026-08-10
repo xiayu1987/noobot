@@ -8,7 +8,7 @@ import { filePath as path, resolveSandboxPath } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
-import { normalizeSkillAction, SKILL_ACTION } from "../../config/core/enums.js";
+import { normalizeSkillAction, SKILL_ACTION } from "@noobot/agent-config-protocol";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { safeJoin } from "../../shared/utils/fs-safe.js";

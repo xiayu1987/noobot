@@ -6,11 +6,14 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { normalizeProviderFormat } from "../../config/core/enums.js";
+import { normalizeProviderFormat } from "@noobot/agent-config-protocol";
 import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
 import { resolveModelSpecByName } from "../resolver/index.js";
 import { createChatModelFromSpec } from "../factory/chat-model.js";
-import { buildAttachmentContentBlock, normalizeModelOutputContent } from "../attachment/formatter.js";
+import {
+  buildAttachmentContentBlock,
+  normalizeModelOutputContent,
+} from "../attachment/formatter.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
 export async function invokeModelWithTextAndAttachments({
@@ -56,9 +59,7 @@ export async function invokeModelWithTextAndAttachments({
   const messageContent = attachmentBlocks.length
     ? [{ type: "text", text: userText }, ...attachmentBlocks]
     : userText;
-  const modelResponse = await modelInstance.invoke([
-    new HumanMessage({ content: messageContent }),
-  ]);
+  const modelResponse = await modelInstance.invoke([new HumanMessage({ content: messageContent })]);
   return {
     response: modelResponse,
     text: normalizeModelOutputContent(modelResponse?.content),

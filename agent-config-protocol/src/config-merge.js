@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { deepMerge, isPlainObject } from "../../shared/utils/shared-utils.js";
+import { deepMerge, isPlainObject } from "./utils.js";
 import { normalizeKnownConfigKeys } from "./key-normalizer.js";
 import { resolveBuiltinScenarios } from "./builtin-scenarios.js";
 import { sanitizeUserConfig } from "./user-override-policy.js";
@@ -47,7 +47,9 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
       ...(isPlainObject(globalBase?.configParams) ? globalBase.configParams : {}),
     };
     for (const [paramKey, rawValue] of Object.entries(userRuntimeConfigParams)) {
-      const normalizedKey = String(paramKey || "").trim().toUpperCase();
+      const normalizedKey = String(paramKey || "")
+        .trim()
+        .toUpperCase();
       if (!normalizedKey) continue;
       const normalizedValue = String(rawValue ?? "").trim();
       if (!normalizedValue) continue;
@@ -71,8 +73,8 @@ export function hasOwnConfigKey(source = {}, key = "") {
   const normalizedKey = String(key || "").trim();
   return Boolean(
     normalizedKey &&
-      isPlainObject(source) &&
-      Object.prototype.hasOwnProperty.call(source, normalizedKey),
+    isPlainObject(source) &&
+    Object.prototype.hasOwnProperty.call(source, normalizedKey),
   );
 }
 
@@ -80,7 +82,9 @@ export function normalizeBooleanLike(value, fallback = false) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
   if (typeof value === "string") {
-    const normalized = String(value || "").trim().toLowerCase();
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase();
     if (["true", "1", "yes", "on"].includes(normalized)) return true;
     if (["false", "0", "no", "off", ""].includes(normalized)) return false;
   }

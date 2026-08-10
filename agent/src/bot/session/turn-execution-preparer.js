@@ -9,19 +9,20 @@ import { MIME_TYPE } from "../../shared/constants/index.js";
 import { loadStoppedModelMessageSnapshot } from "../../runtime/resume/model-message-snapshot-store.js";
 import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
 import { projectRecoveredMessagesToIdentity } from "@noobot/context-protocol/snapshot-policy";
-
+import { resolveToolBindings } from "@noobot/agent-config-protocol";
 
 export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}) {
-  const payload = buildContextPayload && typeof buildContextPayload === "object"
-    ? buildContextPayload
-    : {};
+  const payload =
+    buildContextPayload && typeof buildContextPayload === "object" ? buildContextPayload : {};
   const contextBuilder = engine._buildContextBuilder(payload);
-  const runtimeBasePath = typeof contextBuilder._resolveRuntimeBasePath === "function"
-    ? contextBuilder._resolveRuntimeBasePath()
-    : await engine._resolveAttachmentIndexBasePath(String(payload.userId || "").trim());
-  const effectiveConfig = typeof contextBuilder._getEffectiveConfig === "function"
-    ? contextBuilder._getEffectiveConfig()
-    : engine.globalConfig;
+  const runtimeBasePath =
+    typeof contextBuilder._resolveRuntimeBasePath === "function"
+      ? contextBuilder._resolveRuntimeBasePath()
+      : await engine._resolveAttachmentIndexBasePath(String(payload.userId || "").trim());
+  const effectiveConfig =
+    typeof contextBuilder._getEffectiveConfig === "function"
+      ? contextBuilder._getEffectiveConfig()
+      : engine.globalConfig;
   const userMessageAttachments = await resolveAttachments({
     attachmentService: contextBuilder.attachmentService || engine.attach,
     runtimeBasePath,
@@ -35,31 +36,30 @@ export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}
   return { contextBuilder, userMessageAttachments };
 }
 
-export async function prepareAgentTurnExecution(engine, {
-  buildContextPayload = {},
-  abortSignal = null,
-} = {}) {
+export async function prepareAgentTurnExecution(
+  engine,
+  { buildContextPayload = {}, abortSignal = null } = {},
+) {
   const payload =
-    buildContextPayload && typeof buildContextPayload === "object"
-      ? buildContextPayload
-      : {};
+    buildContextPayload && typeof buildContextPayload === "object" ? buildContextPayload : {};
   const contextBuilder =
     payload?.contextBuilder && typeof payload.contextBuilder === "object"
       ? payload.contextBuilder
       : engine._buildContextBuilder(payload);
-  const prepared = payload?.runConfig?.resumeFromStoppedSnapshot === true
-    ? await prepareStoppedSnapshotResumeTurnExecution(engine, {
-        payload,
-        contextBuilder,
-        abortSignal,
-      })
-    : await engine.agentRuntimeFacade.prepareTurnExecution({
-        buildContextPayload: {
-          ...payload,
+  const prepared =
+    payload?.runConfig?.resumeFromStoppedSnapshot === true
+      ? await prepareStoppedSnapshotResumeTurnExecution(engine, {
+          payload,
           contextBuilder,
-        },
-        abortSignal,
-      });
+          abortSignal,
+        })
+      : await engine.agentRuntimeFacade.prepareTurnExecution({
+          buildContextPayload: {
+            ...payload,
+            contextBuilder,
+          },
+          abortSignal,
+        });
   const preparedRuntime = getRuntimeFromAgentContext(prepared?.agentContext || {});
   const preparedRuntimeAttachments = Array.isArray(preparedRuntime?.userMessageAttachments)
     ? preparedRuntime.userMessageAttachments
@@ -67,9 +67,10 @@ export async function prepareAgentTurnExecution(engine, {
   const payloadUserMessageAttachments = Array.isArray(payload?.userMessageAttachments)
     ? payload.userMessageAttachments
     : [];
-  const runtimeAttachments = Array.isArray(preparedRuntimeAttachments) && preparedRuntimeAttachments.length > 0
-    ? preparedRuntimeAttachments
-    : payloadUserMessageAttachments;
+  const runtimeAttachments =
+    Array.isArray(preparedRuntimeAttachments) && preparedRuntimeAttachments.length > 0
+      ? preparedRuntimeAttachments
+      : payloadUserMessageAttachments;
   const existingSessionAttachments = await engine._resolveExistingUserMessageAttachments({
     userId: String(payload?.userId || "").trim(),
     sessionId: String(payload?.sessionId || "").trim(),
@@ -92,17 +93,15 @@ export async function prepareAgentTurnExecution(engine, {
   };
 }
 
-export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
-  payload = {},
-  contextBuilder = null,
-  abortSignal = null,
-} = {}) {
+export async function prepareStoppedSnapshotResumeTurnExecution(
+  engine,
+  { payload = {}, contextBuilder = null, abortSignal = null } = {},
+) {
   if (!contextBuilder || typeof contextBuilder._buildAgentContext !== "function") {
     throw new Error("stopped snapshot resume requires a compatible contextBuilder");
   }
-  const runConfig = payload?.runConfig && typeof payload.runConfig === "object"
-    ? payload.runConfig
-    : {};
+  const runConfig =
+    payload?.runConfig && typeof payload.runConfig === "object" ? payload.runConfig : {};
   const resumeDialogProcessId = String(runConfig.resumeDialogProcessId || "").trim();
   const resumeTurnScopeId = String(runConfig.resumeTurnScopeId || "").trim();
   if (!resumeDialogProcessId || !resumeTurnScopeId) {
@@ -138,8 +137,12 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
     contextBuilder,
     payload,
   });
-  const systemMessages = Array.isArray(snapshot?.messageBlocks?.system) ? snapshot.messageBlocks.system : [];
-  const historyMessages = Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : [];
+  const systemMessages = Array.isArray(snapshot?.messageBlocks?.system)
+    ? snapshot.messageBlocks.system
+    : [];
+  const historyMessages = Array.isArray(snapshot?.messageBlocks?.history)
+    ? snapshot.messageBlocks.history
+    : [];
   const incrementalMessages = Array.isArray(snapshot?.messageBlocks?.incremental)
     ? snapshot.messageBlocks.incremental
     : [];
@@ -151,8 +154,14 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
     parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
     turnScopeId: String(payload?.turnScopeId || runConfig?.turnScopeId || "").trim(),
   };
-  const resumedHistoryMessages = projectRecoveredMessagesToIdentity(historyMessages, currentMessageIdentity);
-  const resumedIncrementalMessages = projectRecoveredMessagesToIdentity(incrementalMessages, currentMessageIdentity);
+  const resumedHistoryMessages = projectRecoveredMessagesToIdentity(
+    historyMessages,
+    currentMessageIdentity,
+  );
+  const resumedIncrementalMessages = projectRecoveredMessagesToIdentity(
+    incrementalMessages,
+    currentMessageIdentity,
+  );
   const agentContext = await contextBuilder._buildAgentContext(
     systemMessages,
     resumedHistoryMessages,
@@ -162,7 +171,16 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
       incrementalMessages: resumedIncrementalMessages,
     },
   );
-  const scopedAgentContext = engine._applyRunConfigToolPolicy(agentContext, runConfig);
+  const scopedAgentContext = {
+    ...agentContext,
+    bindings: {
+      ...(agentContext?.bindings || {}),
+      tools: resolveToolBindings({
+        sourceTools: agentContext?.bindings?.tools,
+        runConfig,
+      }),
+    },
+  };
   const runtimeAgentContext = engine.agentRuntimeFacade.buildRunTurnContext(
     scopedAgentContext,
     abortSignal,
@@ -179,16 +197,21 @@ export async function prepareStoppedSnapshotResumeTurnExecution(engine, {
 
 export { projectRecoveredMessagesToIdentity };
 
-export async function resolveStoppedResumeAttachments(engine, { contextBuilder = null, payload = {} } = {}) {
+export async function resolveStoppedResumeAttachments(
+  engine,
+  { contextBuilder = null, payload = {} } = {},
+) {
   if (!contextBuilder) return [];
   return resolveAttachments({
     attachmentService: contextBuilder.attachmentService,
-    runtimeBasePath: typeof contextBuilder._resolveRuntimeBasePath === "function"
-      ? contextBuilder._resolveRuntimeBasePath()
-      : "",
-    effectiveConfig: typeof contextBuilder._getEffectiveConfig === "function"
-      ? contextBuilder._getEffectiveConfig()
-      : {},
+    runtimeBasePath:
+      typeof contextBuilder._resolveRuntimeBasePath === "function"
+        ? contextBuilder._resolveRuntimeBasePath()
+        : "",
+    effectiveConfig:
+      typeof contextBuilder._getEffectiveConfig === "function"
+        ? contextBuilder._getEffectiveConfig()
+        : {},
     userMessageAttachments: Array.isArray(payload?.userMessageAttachments)
       ? payload.userMessageAttachments
       : [],

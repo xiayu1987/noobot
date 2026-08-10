@@ -1,0 +1,15 @@
+{
+  "name": "@noobot/agent-config-protocol",
+  "version": "4.1.6",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./enums": "./src/enums.js",
+    "./tool-policy": "./src/tool-policy.js"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  }
+}

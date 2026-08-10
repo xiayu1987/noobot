@@ -6,7 +6,7 @@
 import { emitEvent } from "../../events/index.js";
 import { createChatModelFromSpec, resolveInvokeLlm } from "../../models/index.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { normalizeProviderFormat, PROVIDER_FORMAT } from "../../config/core/enums.js";
+import { normalizeProviderFormat, PROVIDER_FORMAT } from "@noobot/agent-config-protocol";
 
 export function resolveBoundToolModelRequestOverrides(modelSpec = {}) {
   const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
@@ -124,7 +124,9 @@ export function isRequiredToolChoiceUnsupportedError(error = null) {
 }
 
 export function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "", modelSpec = {}) {
-  const normalizedToolChoice = String(toolChoice || "").trim().toLowerCase();
+  const normalizedToolChoice = String(toolChoice || "")
+    .trim()
+    .toLowerCase();
   const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
   const hasEnableThinkingConfig = Object.prototype.hasOwnProperty.call(
     modelSpec || {},

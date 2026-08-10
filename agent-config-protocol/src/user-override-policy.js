@@ -6,7 +6,7 @@
 import { normalizeKnownConfigKeys } from "./key-normalizer.js";
 import { normalizeTimeMs } from "./time-config-normalizer.js";
 import { sanitizeScenarioConfig } from "./builtin-scenarios.js";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
+import { isPlainObject } from "./utils.js";
 
 const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
@@ -22,10 +22,7 @@ const USER_OVERRIDE_POLICY = {
   preferences: "deep",
 };
 
-const USER_OVERRIDE_TOP_LEVEL_DENY_KEYS = new Set([
-  "workspaceRoot",
-  "workspaceTemplatePath",
-]);
+const USER_OVERRIDE_TOP_LEVEL_DENY_KEYS = new Set(["workspaceRoot", "workspaceTemplatePath"]);
 
 const USER_OVERRIDE_DENY_PATHS = new Set([
   "attachments.maxFileCount",
@@ -97,9 +94,7 @@ function cloneAllowedValue(key, value) {
       fallback: Number.NaN,
       min: 1,
     });
-    return Number.isFinite(normalizedNumber) && normalizedNumber > 0
-      ? normalizedNumber
-      : undefined;
+    return Number.isFinite(normalizedNumber) && normalizedNumber > 0 ? normalizedNumber : undefined;
   }
   if (mode === "scenarios") {
     const sanitizedScenarios = sanitizeScenarioConfig(value);

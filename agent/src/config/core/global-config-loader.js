@@ -5,12 +5,9 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { readFile } from "node:fs/promises";
-import { normalizeKnownConfigKeys } from "./key-normalizer.js";
+import { normalizeKnownConfigKeys } from "@noobot/agent-config-protocol";
 
-function resolveDefaultGlobalConfigPath({
-  cwd = process.cwd(),
-  env = process.env,
-} = {}) {
+function resolveDefaultGlobalConfigPath({ cwd = process.cwd(), env = process.env } = {}) {
   const rawEnvPath =
     String(env?.AGENT_GLOBAL_CONFIG_PATH || "").trim() ||
     String(env?.NOOBOT_GLOBAL_CONFIG_PATH || "").trim();

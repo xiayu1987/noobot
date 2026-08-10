@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { PROGRAMMING_REQUIRED_TOOL_NAMES, mergeConfig } from "../../config/index.js";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
-
-const CODING_SCENARIO_KEYS = new Set(["coding", "programming"]);
-const CODING_REQUIRED_TOOL_NAMES = PROGRAMMING_REQUIRED_TOOL_NAMES;
+import { mergeConfig } from "./config-merge.js";
+import { isPlainObject } from "./utils.js";
 
 export class RunConfigResolver {
   constructor({ globalConfig = {} } = {}) {
@@ -16,11 +13,7 @@ export class RunConfigResolver {
   }
 
   normalizeStringArray(input = []) {
-    return Array.isArray(input)
-      ? input
-          .map((item) => (item ?? "").trim())
-          .filter(Boolean)
-      : [];
+    return Array.isArray(input) ? input.map((item) => (item ?? "").trim()).filter(Boolean) : [];
   }
 
   normalizeToolItems(input = []) {
@@ -33,128 +26,11 @@ export class RunConfigResolver {
     if (typeof modelConfig === "string") return modelConfig.trim();
     if (!isPlainObject(modelConfig)) return "";
     return String(
-      modelConfig?.value ||
-        modelConfig?.alias ||
-        modelConfig?.key ||
-        modelConfig?.model ||
-        "",
+      modelConfig?.value || modelConfig?.alias || modelConfig?.key || modelConfig?.model || "",
     ).trim();
   }
 
-  resolveAlwaysIncludedToolNames(runConfig = {}) {
-    const alwaysIncludedToolNames = new Set();
-    const toolPolicyMode = String(runConfig?.toolPolicy?.mode || "")
-      .trim()
-      .toLowerCase();
-    if (toolPolicyMode === "custom_only") return alwaysIncludedToolNames;
-    const scenario = String(runConfig?.scenario || "").trim().toLowerCase();
-    const scenarioProfileKey = String(runConfig?.scenarioProfile?.key || "")
-      .trim()
-      .toLowerCase();
-    const scenarioProfileName = String(runConfig?.scenarioProfile?.name || "")
-      .trim()
-      .toLowerCase();
-    const isCodingScenario =
-      CODING_SCENARIO_KEYS.has(scenario) ||
-      CODING_SCENARIO_KEYS.has(scenarioProfileKey) ||
-      scenarioProfileName.includes("coding") ||
-      scenarioProfileName.includes("programming") ||
-      scenarioProfileName.includes("编程");
-    if (isCodingScenario) {
-      for (const toolName of CODING_REQUIRED_TOOL_NAMES) {
-        alwaysIncludedToolNames.add(toolName);
-      }
-    }
-    return alwaysIncludedToolNames;
-  }
-
-  applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
-    const sourceTools = Array.isArray(agentContext?.bindings?.tools)
-      ? agentContext.bindings.tools
-      : [];
-    if (!sourceTools.length) return agentContext;
-    const alwaysIncludedToolNames = this.resolveAlwaysIncludedToolNames(runConfig);
-    const toolPolicy = runConfig?.toolPolicy || {};
-    const mode = (toolPolicy?.mode ?? "").trim().toLowerCase();
-    const customTools = this.normalizeToolItems(toolPolicy?.customTools);
-    const configuredIncludeToolNames = this.normalizeStringArray(
-      toolPolicy?.includeToolNames,
-    );
-    const includeToolNames = Array.from(
-      new Set([
-        ...configuredIncludeToolNames,
-        ...(runConfig?.allowUserInteraction !== false &&
-        runConfig?.toolPolicy?.forceIncludeUserInteraction !== false
-          ? ["user_interaction"]
-          : []),
-      ]),
-    );
-    const includedTools = includeToolNames.length
-      ? sourceTools.filter((toolItem) =>
-          includeToolNames.includes(String(toolItem?.name || "")),
-        )
-      : [];
-
-    let nextTools = sourceTools;
-    if (mode === "custom_only") {
-      nextTools = [...customTools, ...includedTools];
-    } else if (mode === "append_custom" && customTools.length) {
-      nextTools = [...sourceTools, ...customTools];
-    }
-
-    const allowToolNames = this.normalizeStringArray(toolPolicy?.allowToolNames);
-    if (allowToolNames.length) {
-      const allowSet = new Set(allowToolNames);
-      nextTools = nextTools.filter((toolItem) =>
-        allowSet.has(String(toolItem?.name || "")),
-      );
-    }
-    const denyToolNames = Array.from(
-      new Set([
-        ...this.normalizeStringArray(toolPolicy?.denyToolNames),
-      ]),
-    );
-    if (denyToolNames.length) {
-      const denySet = new Set(denyToolNames);
-      for (const toolName of alwaysIncludedToolNames) {
-        denySet.delete(toolName);
-      }
-      nextTools = nextTools.filter(
-        (toolItem) => !denySet.has(String(toolItem?.name || "")),
-      );
-    }
-
-    const dedupedTools = [];
-    const seenNames = new Set();
-    for (const toolItem of nextTools) {
-      const toolName = (toolItem?.name ?? "").trim();
-      if (!toolName || seenNames.has(toolName)) continue;
-      seenNames.add(toolName);
-      dedupedTools.push(toolItem);
-    }
-
-    for (const sourceTool of sourceTools) {
-      const sourceToolName = String(sourceTool?.name || "").trim();
-      if (!alwaysIncludedToolNames.has(sourceToolName)) continue;
-      if (seenNames.has(sourceToolName)) continue;
-      seenNames.add(sourceToolName);
-      dedupedTools.push(sourceTool);
-    }
-
-    return {
-      ...agentContext,
-      bindings: {
-        ...(agentContext?.bindings || {}),
-        tools: dedupedTools,
-      },
-    };
-  }
-
-  mergeScenarioRestrictedList({
-    scenarioItems = [],
-    currentItems = [],
-    hasWildcard = false,
-  }) {
+  mergeScenarioRestrictedList({ scenarioItems = [], currentItems = [], hasWildcard = false }) {
     if (!Array.isArray(scenarioItems) || !scenarioItems.length) return [];
     if (hasWildcard) return [];
     if (!Array.isArray(currentItems) || !currentItems.length) {
@@ -168,9 +44,7 @@ export class RunConfigResolver {
     if (!isPlainObject(toolPolicy)) return toolPolicy;
     const allowToolNames = this.normalizeStringArray(toolPolicy?.allowToolNames);
     if (!allowToolNames.length) return toolPolicy;
-    const denySet = new Set([
-      ...this.normalizeStringArray(toolPolicy?.denyToolNames),
-    ]);
+    const denySet = new Set([...this.normalizeStringArray(toolPolicy?.denyToolNames)]);
     if (!denySet.size) return toolPolicy;
     return {
       ...toolPolicy,
@@ -197,14 +71,9 @@ export class RunConfigResolver {
     const scenarioConfig = isPlainObject(effectiveConfig?.scenarios)
       ? effectiveConfig.scenarios
       : {};
-    const hasScenarioField = Object.prototype.hasOwnProperty.call(
-      normalizedRunConfig,
-      "scenario",
-    );
+    const hasScenarioField = Object.prototype.hasOwnProperty.call(normalizedRunConfig, "scenario");
     const resolvedScenarioKey = String(
-      hasScenarioField
-        ? normalizedRunConfig?.scenario || ""
-        : scenarioConfig?.default || "",
+      hasScenarioField ? normalizedRunConfig?.scenario || "" : scenarioConfig?.default || "",
     ).trim();
     if (!resolvedScenarioKey) {
       return this.normalizeRunConfigToolPolicyConflicts(normalizedRunConfig);
@@ -212,9 +81,7 @@ export class RunConfigResolver {
     const scenarioDefinitions = isPlainObject(scenarioConfig?.definitions)
       ? scenarioConfig.definitions
       : {};
-    const scenarioDefinition = isPlainObject(
-      scenarioDefinitions?.[resolvedScenarioKey],
-    )
+    const scenarioDefinition = isPlainObject(scenarioDefinitions?.[resolvedScenarioKey])
       ? scenarioDefinitions[resolvedScenarioKey]
       : null;
     if (!scenarioDefinition) {
@@ -257,9 +124,7 @@ export class RunConfigResolver {
         mcpServers: scenarioMcpServerItems,
       },
     };
-    const requestedRuntimeModel = String(
-      normalizedRunConfig?.runtimeModel || "",
-    ).trim();
+    const requestedRuntimeModel = String(normalizedRunConfig?.runtimeModel || "").trim();
     if (requestedRuntimeModel) {
       resolvedRunConfig.runtimeModel = requestedRuntimeModel;
     }
@@ -270,9 +135,7 @@ export class RunConfigResolver {
       const currentToolPolicy = isPlainObject(normalizedRunConfig?.toolPolicy)
         ? normalizedRunConfig.toolPolicy
         : {};
-      const currentAllowToolNames = normalizeStringArray(
-        currentToolPolicy?.allowToolNames,
-      );
+      const currentAllowToolNames = normalizeStringArray(currentToolPolicy?.allowToolNames);
       const mergedAllowToolNames = this.mergeScenarioRestrictedList({
         scenarioItems: scenarioToolNames,
         currentItems: currentAllowToolNames,
@@ -287,9 +150,7 @@ export class RunConfigResolver {
       const currentContextPolicy = isPlainObject(normalizedRunConfig?.contextPolicy)
         ? normalizedRunConfig.contextPolicy
         : {};
-      const currentContextKeys = normalizeStringArray(
-        currentContextPolicy?.includeContextKeys,
-      );
+      const currentContextKeys = normalizeStringArray(currentContextPolicy?.includeContextKeys);
       const mergedContextKeys = this.mergeScenarioRestrictedList({
         scenarioItems: scenarioContextKeys,
         currentItems: currentContextKeys,

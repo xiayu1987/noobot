@@ -5,7 +5,6 @@
  */
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
-
 export const TASK_STATUS = Object.freeze({
   COMPLETED: "completed",
   FAILED: "failed",
@@ -95,7 +94,6 @@ export const DEFAULT_ASYNC_JOB_CONFIG = {
   retentionMs: ASYNC_JOB_RETENTION_MS,
 };
 
-
 export const SCENARIO_CONFIG_KEYS = [
   "tools",
   "context",
@@ -105,22 +103,3 @@ export const SCENARIO_CONFIG_KEYS = [
   "temperature",
   "maxTokens",
 ];
-
-
-export const TOOL_POLICY_MODE = {
-  NONE: "none",
-  WHITELIST: "whitelist",
-  BLACKLIST: "blacklist",
-};
-
-export const VALID_TOOL_POLICY_MODES = Object.freeze(
-  Object.values(TOOL_POLICY_MODE),
-);
-
-export const DEFAULT_TOOL_POLICY = {
-  tools: {
-    allowed: [],
-    denied: [],
-    mode: TOOL_POLICY_MODE.WHITELIST,
-  },
-};

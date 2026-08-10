@@ -10,12 +10,10 @@ import {
   createPluginPolicyApi,
   hasToolPolicyPatchContent,
   mergeToolPolicyPatch,
-} from "../../src/bot/session/plugin-policy-api.js";
+} from "@noobot/agent-config-protocol";
 
 function normalizeStringArray(input = []) {
-  return Array.isArray(input)
-    ? input.map((item) => String(item || "").trim()).filter(Boolean)
-    : [];
+  return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
 }
 
 test("mergeToolPolicyPatch merges base/patched deny tool names", () => {

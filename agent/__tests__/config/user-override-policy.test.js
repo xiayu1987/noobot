@@ -6,14 +6,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { sanitizeUserConfig } from "../../src/config/core/user-override-policy.js";
+import { sanitizeUserConfig } from "@noobot/agent-config-protocol";
 import {
   applySessionModelOverride,
   hasOwnConfigKey,
   mergeConfig,
   normalizeBooleanLike,
   resolveRunConfigValue,
-} from "../../src/config/core/config-merge.js";
+} from "@noobot/agent-config-protocol";
 
 test("sanitizeUserConfig: 应仅保留允许覆盖字段并规范化键名", () => {
   const out = sanitizeUserConfig({
@@ -158,7 +158,6 @@ test("applySessionModelOverride: 空 alias 应保持原样", () => {
   const out = applySessionModelOverride({ defaultProvider: "openai" }, "");
   assert.equal(out.defaultProvider, "openai");
 });
-
 
 test("resolveRunConfigValue: 显式 runConfig 值应覆盖配置默认值", () => {
   assert.equal(
