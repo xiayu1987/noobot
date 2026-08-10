@@ -7,7 +7,8 @@
 import { execFileSync } from "node:child_process";
 
 const supported = /\.(?:cjs|js|json|md|mjs|vue|yaml|yml)$/i;
-const ignored = /(?:^|\/)(?:build|coverage|dist|node_modules|report|vendor|workspace)(?:\/|$)|(?:^|\/)assets\/.*\.js$/;
+const ignored =
+  /(?:^|\/)(?:build|coverage|dist|node_modules|report|vendor|workspace)(?:\/|$)|(?:^|\/)assets\/.*\.js$/;
 
 function changedFiles(args) {
   try {
@@ -24,7 +25,8 @@ const files = [
   ...changedFiles(["diff", "--name-only", "--diff-filter=ACMR", "HEAD^", "HEAD"]),
   ...changedFiles(["diff", "--name-only", "--diff-filter=ACMR"]),
   ...changedFiles(["diff", "--cached", "--name-only", "--diff-filter=ACMR"]),
-].filter((file, index, all) => all.indexOf(file) === index)
+]
+  .filter((file, index, all) => all.indexOf(file) === index)
   .filter((file) => supported.test(file) && !ignored.test(file));
 
 if (!files.length) {
