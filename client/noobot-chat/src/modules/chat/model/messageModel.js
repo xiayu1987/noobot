@@ -8,10 +8,7 @@ import {
   resolveParsedResultAccessMeta,
 } from "../../../infrastructure/api/attachments/attachmentAccess.js";
 import { mergeAttachments } from "./dialogProcessChain.js";
-import {
-  getMessageTransferAttachments,
-  getMessageTransferEnvelopes,
-} from "./transferEnvelopes.js";
+import { getMessageTransferAttachments, getMessageTransferEnvelopes } from "./transferEnvelopes.js";
 import {
   getMessageContentIdentity,
   getMessageDialogProcessId,
@@ -20,14 +17,13 @@ import {
   getMessageSessionId,
   getMessageTurnScopeId,
 } from "./messageIdentity.js";
-import {
-  getMessageTimestamp,
-  nowIso,
-  nowMs,
-} from "./timeFields.js";
+import { getMessageTimestamp, nowIso, nowMs } from "./timeFields.js";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { initializeMessageEventState } from "./messageEventState.js";
-import { mergeToolTimelines } from "../runtime/engine/toolTimeline.js";
+import {
+  mergeToolTimelines,
+  selectCompletedToolArtifacts,
+} from "../runtime/engine/toolTimeline.js";
 import { mergeActivityTimelines } from "../runtime/engine/activityTimeline.js";
 import {
   mergeMessagePresentationFacets,
@@ -39,14 +35,16 @@ function normalizeArray(value) {
 }
 
 function getMessageAttachments(messageItem = {}) {
-  const sourceAttachments = Array.isArray(messageItem?.attachments)
-    ? messageItem.attachments
-    : [];
+  const sourceAttachments = Array.isArray(messageItem?.attachments) ? messageItem.attachments : [];
   const transferAttachments = getMessageTransferAttachments(messageItem).map((attachmentItem) =>
     enrichTransferAttachmentScope(attachmentItem, messageItem),
   );
-  return transferAttachments.length
-    ? mergeAttachments(transferAttachments, sourceAttachments)
+  const toolTimelineAttachments = selectCompletedToolArtifacts(messageItem).attachments.map(
+    (attachmentItem) => enrichTransferAttachmentScope(attachmentItem, messageItem),
+  );
+  const derivedAttachments = mergeAttachments(transferAttachments, toolTimelineAttachments);
+  return derivedAttachments.length
+    ? mergeAttachments(derivedAttachments, sourceAttachments)
     : sourceAttachments;
 }
 
@@ -66,7 +64,9 @@ function enrichTransferAttachmentScope(attachmentItem = {}, messageItem = {}) {
   const owner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : {};
   const attachmentSource = String(
     attachmentItem?.attachmentSource || attachmentItem?.identity?.attachmentSource || "",
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
   const turnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : {};
   return {
     ...attachmentItem,
@@ -75,15 +75,21 @@ function enrichTransferAttachmentScope(attachmentItem = {}, messageItem = {}) {
       ...(attachmentSource === "model" && !owner.type ? { type: "agent" } : {}),
       ...(sessionId && !owner.sessionId && !owner.session_id ? { sessionId } : {}),
       ...(turnScopeId && !owner.turnScopeId ? { turnScopeId } : {}),
-      ...(dialogProcessId && !owner.dialogProcessId && !owner.dialog_process_id ? { dialogProcessId } : {}),
+      ...(dialogProcessId && !owner.dialogProcessId && !owner.dialog_process_id
+        ? { dialogProcessId }
+        : {}),
       ...(role && !owner.role ? { role } : {}),
       ...owner,
     },
     turnScope: {
       ...(sessionId && !turnScope.sessionId && !turnScope.session_id ? { sessionId } : {}),
       ...(turnScopeId && !turnScope.turnScopeId ? { turnScopeId } : {}),
-      ...(dialogProcessId && !turnScope.dialogProcessId && !turnScope.dialog_process_id ? { dialogProcessId } : {}),
-      ...(parentDialogProcessId && !turnScope.parentDialogProcessId && !turnScope.parent_dialog_process_id
+      ...(dialogProcessId && !turnScope.dialogProcessId && !turnScope.dialog_process_id
+        ? { dialogProcessId }
+        : {}),
+      ...(parentDialogProcessId &&
+      !turnScope.parentDialogProcessId &&
+      !turnScope.parent_dialog_process_id
         ? { parentDialogProcessId }
         : {}),
       ...turnScope,
@@ -95,9 +101,7 @@ const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDispl
 
 function buildModelRunLabel(messageItem = {}) {
   const modelAlias = String(messageItem?.modelAlias || "").trim();
-  const modelName = String(
-    messageItem?.modelName || messageItem?.model || "",
-  ).trim();
+  const modelName = String(messageItem?.modelName || messageItem?.model || "").trim();
   if (modelAlias && modelName) return `${modelAlias} (${modelName})`;
   return modelAlias || modelName || "";
 }
@@ -111,16 +115,15 @@ function normalizeAttachment(
     ...(String(scopeSessionId || "").trim() && !String(attachmentItem?.sessionId || "").trim()
       ? { sessionId: String(scopeSessionId).trim() }
       : {}),
-    ...(String(scopeAttachmentSource || "").trim() && !String(attachmentItem?.attachmentSource || "").trim()
+    ...(String(scopeAttachmentSource || "").trim() &&
+    !String(attachmentItem?.attachmentSource || "").trim()
       ? { attachmentSource: String(scopeAttachmentSource).trim() }
       : {}),
   };
   const attachmentAccess = resolveAttachmentAccessMeta(scopedAttachment, { userId });
   const parsedAccess = resolveParsedResultAccessMeta(scopedAttachment, { userId });
   const attachmentId = attachmentAccess.attachmentId;
-  const mimeType = String(
-    attachmentItem?.mimeType || "application/octet-stream",
-  );
+  const mimeType = String(attachmentItem?.mimeType || "application/octet-stream");
   const sessionId = attachmentAccess.sessionId;
   const attachmentSource = attachmentAccess.attachmentSource;
   const parsedResultSize = parsedAccess.size;
@@ -131,14 +134,15 @@ function normalizeAttachment(
     attachmentSource,
     mimeType,
     url: attachmentAccess.url,
-    previewUrl:
-      String(attachmentItem?.previewUrl || ""),
+    previewUrl: String(attachmentItem?.previewUrl || ""),
     parsedResult: parsedAccess.hasIdentity
       ? {
           ...parsedAccess.raw,
           ...(parsedAccess.attachmentId ? { attachmentId: parsedAccess.attachmentId } : {}),
           ...(parsedAccess.sessionId ? { sessionId: parsedAccess.sessionId } : {}),
-          ...(parsedAccess.attachmentSource ? { attachmentSource: parsedAccess.attachmentSource } : {}),
+          ...(parsedAccess.attachmentSource
+            ? { attachmentSource: parsedAccess.attachmentSource }
+            : {}),
           ...(parsedResultSize !== null && parsedResultSize > 0 ? { size: parsedResultSize } : {}),
           ...(parsedAccess.path ? { path: parsedAccess.path } : {}),
           ...(parsedAccess.relativePath ? { relativePath: parsedAccess.relativePath } : {}),
@@ -157,8 +161,7 @@ function normalizeAttachment(
 
 function isPluginInjectedMessage(messageItem = {}) {
   return (
-    messageItem?.injectedMessage === true &&
-    Boolean(String(messageItem?.injectedBy || "").trim())
+    messageItem?.injectedMessage === true && Boolean(String(messageItem?.injectedBy || "").trim())
   );
 }
 
@@ -180,12 +183,22 @@ function normalizeWorkflowMeta(messageItem = {}) {
 }
 
 function isWorkflowMessageLike(messageItem = {}) {
-  const type = String(messageItem?.type || "").trim().toLowerCase();
+  const type = String(messageItem?.type || "")
+    .trim()
+    .toLowerCase();
   const workflowMeta = normalizeWorkflowMeta(messageItem);
-  const source = String(workflowMeta?.source || "").trim().toLowerCase();
-  const kind = String(workflowMeta?.kind || "").trim().toLowerCase();
-  const phase = String(workflowMeta?.phase || "").trim().toLowerCase();
-  return type === "workflow" && source === "workflow-plugin" && kind === "workflow" && Boolean(phase);
+  const source = String(workflowMeta?.source || "")
+    .trim()
+    .toLowerCase();
+  const kind = String(workflowMeta?.kind || "")
+    .trim()
+    .toLowerCase();
+  const phase = String(workflowMeta?.phase || "")
+    .trim()
+    .toLowerCase();
+  return (
+    type === "workflow" && source === "workflow-plugin" && kind === "workflow" && Boolean(phase)
+  );
 }
 
 function normalizeMessageType(messageItem = {}) {
@@ -204,14 +217,15 @@ function createMessageModel(messageItem = {}) {
   const transferEnvelopes = getMessageTransferEnvelopes(canonicalMessage);
   const workflowMeta = normalizeWorkflowMeta(canonicalMessage);
   const turnScopeId = getMessageTurnScopeId(canonicalMessage);
-  const sessionId = String(canonicalMessage?.sessionId || canonicalMessage?.session_id || "").trim();
+  const sessionId = String(
+    canonicalMessage?.sessionId || canonicalMessage?.session_id || "",
+  ).trim();
   const messageTimestamp = getMessageTimestamp(canonicalMessage);
   const messageRole = getMessageRole(canonicalMessage) || "assistant";
   const sourceMessageId = String(canonicalMessage?.messageId || canonicalMessage?.id || "").trim();
   const presentationMessageId = String(canonicalMessage?.presentationMessageId || "").trim();
-  const messageId = messageRole === "assistant" && presentationMessageId
-    ? presentationMessageId
-    : sourceMessageId;
+  const messageId =
+    messageRole === "assistant" && presentationMessageId ? presentationMessageId : sourceMessageId;
   const messageType = normalizeMessageType(canonicalMessage);
   const activityTimeline = normalizeArray(canonicalMessage.activityTimeline);
   return initializeMessageEventState({
@@ -223,9 +237,10 @@ function createMessageModel(messageItem = {}) {
     sessionId,
     session_id: sessionId,
     role: messageRole,
-    content: canonicalMessage?.chatPresentation === false
-      ? ""
-      : getMessageContentIdentity(canonicalMessage),
+    content:
+      canonicalMessage?.chatPresentation === false
+        ? ""
+        : getMessageContentIdentity(canonicalMessage),
     type: messageType,
     tool_calls: normalizeArray(canonicalMessage.tool_calls),
     toolCalls: normalizeArray(canonicalMessage.toolCalls),
@@ -266,9 +281,9 @@ function createMessageModel(messageItem = {}) {
     taskId: canonicalMessage.taskId || "",
     noobotInternalMessageType: String(
       canonicalMessage?.noobotInternalMessageType ||
-      canonicalMessage?.additional_kwargs?.noobotInternalMessageType ||
-      canonicalMessage?.metadata?.noobotInternalMessageType ||
-      "",
+        canonicalMessage?.additional_kwargs?.noobotInternalMessageType ||
+        canonicalMessage?.metadata?.noobotInternalMessageType ||
+        "",
     ).trim(),
     injectedMessage: canonicalMessage.injectedMessage === true,
     injectedBy: String(canonicalMessage.injectedBy || "").trim(),
@@ -312,10 +327,10 @@ function normalizeFoldedPresentationMessage(sourceMessage = {}, projectedMessage
   ).trim();
   const sourceMessageId = String(
     projectedMessage?.sourceMessageId ||
-    sourceMessage?.sourceMessageId ||
-    sourceMessage?.messageId ||
-    sourceMessage?.id ||
-    "",
+      sourceMessage?.sourceMessageId ||
+      sourceMessage?.messageId ||
+      sourceMessage?.id ||
+      "",
   ).trim();
   const normalizedMessage = { ...projectedMessage };
 
@@ -337,10 +352,7 @@ function normalizeFoldedPresentationMessage(sourceMessage = {}, projectedMessage
   return normalizedMessage;
 }
 
-function buildViewMessage(
-  messageItem = {},
-  { userId = "", isImageMime = () => false } = {},
-) {
+function buildViewMessage(messageItem = {}, { userId = "", isImageMime = () => false } = {}) {
   const normalizedAttachments = getMessageAttachments(messageItem).map((attachmentItem) =>
     normalizeAttachment(attachmentItem, {
       userId,
@@ -363,10 +375,7 @@ function foldConversationMessages(messages = [], buildView) {
       const role = getMessageRole(messageItem);
       return role === "assistant" || role === "user";
     })
-    .map((messageItem) => normalizeFoldedPresentationMessage(
-      messageItem,
-      buildView(messageItem),
-    ));
+    .map((messageItem) => normalizeFoldedPresentationMessage(messageItem, buildView(messageItem)));
 
   const mergedMessages = [];
   for (const currentMessage of foldedMessages) {
@@ -389,9 +398,9 @@ function foldConversationMessages(messages = [], buildView) {
       currentStableMessageIdentity &&
       previousStableMessageIdentity &&
       currentStableMessageIdentity !== previousStableMessageIdentity;
-    const hasUnpairedStableMessageIdentity = Boolean(
-      currentStableMessageIdentity || previousStableMessageIdentity,
-    ) && currentStableMessageIdentity !== previousStableMessageIdentity;
+    const hasUnpairedStableMessageIdentity =
+      Boolean(currentStableMessageIdentity || previousStableMessageIdentity) &&
+      currentStableMessageIdentity !== previousStableMessageIdentity;
     const canMergeAssistantMessage =
       previousMessage &&
       currentRole === "assistant" &&
@@ -410,9 +419,10 @@ function foldConversationMessages(messages = [], buildView) {
 
     const previousContent = String(previousMessage?.content || "").trim();
     const currentContent = String(currentMessage?.content || "").trim();
-    const mergedContent = previousContent && previousContent === currentContent
-      ? previousContent
-      : [previousContent, currentContent].filter(Boolean).join("\n\n");
+    const mergedContent =
+      previousContent && previousContent === currentContent
+        ? previousContent
+        : [previousContent, currentContent].filter(Boolean).join("\n\n");
     previousMessage.content = mergedContent;
 
     const currentType = String(currentMessage?.type || "").trim();
@@ -436,19 +446,13 @@ function foldConversationMessages(messages = [], buildView) {
       Number(previousMessage?.thinkingDetailCount || 0),
       Number(currentMessage?.thinkingDetailCount || 0),
     );
-    Object.assign(
-      previousMessage,
-      mergeMessagePresentationFacets(previousMessage, currentMessage),
-    );
+    Object.assign(previousMessage, mergeMessagePresentationFacets(previousMessage, currentMessage));
     previousMessage.pending = previousMessage.pending === true || currentMessage.pending === true;
     const currentAttachments = normalizeArray(currentMessage?.attachments);
     const previousAttachments = normalizeArray(previousMessage?.attachments);
 
     if (currentAttachments.length) {
-      previousMessage.attachments = mergeAttachments(
-        previousAttachments,
-        currentAttachments,
-      );
+      previousMessage.attachments = mergeAttachments(previousAttachments, currentAttachments);
     }
     const previousTransferEnvelopes = normalizeArray(previousMessage?.transferEnvelopes);
     const currentTransferEnvelopes = getMessageTransferEnvelopes(currentMessage);
@@ -482,24 +486,35 @@ function foldConversationMessages(messages = [], buildView) {
   // record instead of relying on which record happened to receive the event.
   const turnArtifacts = new Map();
   // Tool records are intentionally excluded from chat rendering, but their
-  // transfer envelopes are canonical turn artifacts. Collect from the full
-  // canonical stream before role filtering so a live tool result cannot
-  // disappear from the visible assistant projection.
+  // completed result artifacts are canonical turn artifacts. Collect from the
+  // full canonical stream before role filtering so a live or persisted tool
+  // result cannot disappear from the visible assistant projection.
   for (const message of sourceMessages) {
     const key = resolveMessageTurnScopeMergeKey(message);
     if (!key || getMessageRole(message) !== "assistant") continue;
     const envelopes = getMessageTransferEnvelopes(message);
-    if (!envelopes.length) continue;
-    turnArtifacts.set(key, [
-      ...(turnArtifacts.get(key) || []),
-      ...envelopes,
-    ]);
+    const attachments = getMessageAttachments(message);
+    const existing = turnArtifacts.get(key) || { envelopes: [], attachments: [] };
+    turnArtifacts.set(key, {
+      envelopes: envelopes.length ? [...existing.envelopes, ...envelopes] : existing.envelopes,
+      attachments: attachments.length
+        ? mergeAttachments(existing.attachments, attachments)
+        : existing.attachments,
+    });
   }
   for (const message of mergedMessages) {
     const key = resolveMessageTurnScopeMergeKey(message);
-    const envelopes = turnArtifacts.get(key) || [];
-    if (!envelopes.length || getMessageRole(message) !== "assistant") continue;
-    message.transferEnvelopes = envelopes;
+    const artifacts = turnArtifacts.get(key) || { envelopes: [], attachments: [] };
+    if (getMessageRole(message) !== "assistant") continue;
+    if (artifacts.envelopes.length) {
+      message.transferEnvelopes = artifacts.envelopes;
+    }
+    if (artifacts.attachments.length) {
+      message.attachments = mergeAttachments(
+        normalizeArray(message.attachments),
+        artifacts.attachments,
+      );
+    }
     message.attachments = getMessageAttachments(message);
   }
   return mergedMessages;

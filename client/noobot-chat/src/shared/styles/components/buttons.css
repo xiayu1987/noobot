@@ -27,7 +27,9 @@ button,
   border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-md);
   box-shadow: none;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .noobot-flat-card:hover {
@@ -37,23 +39,45 @@ button,
 
 .noobot-soft-card {
   box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
   border-radius: var(--noobot-radius-md);
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 97%, var(--el-fill-color-light)),
-    color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 93%, var(--el-color-primary))
+    color-mix(
+      in srgb,
+      var(--noobot-surface-sidebar, var(--el-bg-color)) 97%,
+      var(--el-fill-color-light)
+    ),
+    color-mix(
+      in srgb,
+      var(--noobot-surface-sidebar, var(--el-bg-color)) 93%,
+      var(--el-color-primary)
+    )
   );
 }
 
 .noobot-panel-card {
   box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 16%, var(--noobot-panel-border, var(--el-border-color)));
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--el-color-primary) 16%,
+      var(--noobot-panel-border, var(--el-border-color))
+    );
   border-radius: var(--noobot-radius-lg);
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 98%, var(--el-color-primary)),
-    color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 96%, var(--noobot-cyber-cyan, var(--noobot-base-blue-500)))
+    color-mix(
+      in srgb,
+      var(--noobot-panel-bg, var(--el-bg-color-overlay)) 98%,
+      var(--el-color-primary)
+    ),
+    color-mix(
+      in srgb,
+      var(--noobot-surface-sidebar, var(--el-bg-color)) 96%,
+      var(--noobot-cyber-cyan, var(--noobot-base-blue-500))
+    )
   );
   box-shadow: var(--noobot-shadow-panel);
 }
@@ -75,10 +99,17 @@ button,
 .noobot-composer-surface {
   box-sizing: border-box;
   background: var(--noobot-surface-sidebar, var(--noobot-base-white));
-  border: 1px solid color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 24%, var(--noobot-panel-border, var(--noobot-panel-border)));
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 24%,
+      var(--noobot-panel-border, var(--noobot-panel-border))
+    );
   border-radius: var(--noobot-radius-lg);
   box-shadow: none;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .noobot-composer-surface:focus-within {
@@ -87,9 +118,18 @@ button,
 }
 
 .noobot-drop-surface {
-  border: 1px dashed color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 62%, var(--noobot-panel-border, var(--noobot-panel-border)));
+  border: 1px dashed
+    color-mix(
+      in srgb,
+      var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 62%,
+      var(--noobot-panel-border, var(--noobot-panel-border))
+    );
   border-radius: var(--noobot-radius-lg);
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 88%, var(--noobot-base-blue-500, var(--noobot-base-blue-500)));
+  background: color-mix(
+    in srgb,
+    var(--noobot-surface-sidebar, var(--noobot-base-white)) 88%,
+    var(--noobot-base-blue-500, var(--noobot-base-blue-500))
+  );
   color: var(--noobot-text-strong, var(--noobot-text-strong));
 }
 
@@ -106,7 +146,10 @@ button,
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 20%, transparent);
   border-radius: var(--noobot-radius-sm);
   background: color-mix(in srgb, var(--noobot-panel-bg) 78%, transparent);
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .noobot-subtle-row:hover {
@@ -134,21 +177,33 @@ button,
 
 .noobot-soft-badge.is-agent,
 .noobot-soft-badge.is-primary {
-  color: color-mix(in srgb, var(--el-color-primary) 78%, var(--noobot-base-white, var(--noobot-base-white)));
+  color: color-mix(
+    in srgb,
+    var(--el-color-primary) 78%,
+    var(--noobot-base-white, var(--noobot-base-white))
+  );
   border: 1px solid color-mix(in srgb, var(--el-color-primary) 35%, transparent);
   background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
 }
 
 .noobot-soft-badge.is-plugin,
 .noobot-soft-badge.is-warning {
-  color: color-mix(in srgb, var(--el-color-warning) 80%, var(--noobot-base-white, var(--noobot-base-white)));
+  color: color-mix(
+    in srgb,
+    var(--el-color-warning) 80%,
+    var(--noobot-base-white, var(--noobot-base-white))
+  );
   border: 1px solid color-mix(in srgb, var(--el-color-warning) 35%, transparent);
   background: color-mix(in srgb, var(--el-color-warning) 14%, transparent);
 }
 
 .noobot-soft-badge.is-recognized,
 .noobot-soft-badge.is-success {
-  color: color-mix(in srgb, var(--el-color-success) 82%, var(--noobot-base-white, var(--noobot-base-white)));
+  color: color-mix(
+    in srgb,
+    var(--el-color-success) 82%,
+    var(--noobot-base-white, var(--noobot-base-white))
+  );
   border: 1px solid color-mix(in srgb, var(--el-color-success) 35%, transparent);
   background: color-mix(in srgb, var(--el-color-success) 14%, transparent);
 }
@@ -165,7 +220,9 @@ button,
 
 .noobot-selectable-row {
   border-radius: var(--noobot-radius-sm);
-  transition: background-color 0.16s ease, border-color 0.16s ease;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .noobot-selectable-row:hover {
@@ -185,7 +242,9 @@ button,
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  transition: background-color 0.18s ease, border-color 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .noobot-message-bubble:hover {
@@ -378,7 +437,11 @@ button,
   font-size: var(--noobot-font-size-md);
   font-weight: 500;
   line-height: 1;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .noobot-chip-action-btn:hover:not(:disabled) {
@@ -405,23 +468,43 @@ button,
 }
 
 .noobot-primary-pill-action {
-  border: 1px solid color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 42%, transparent);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 14%, transparent), color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 6%, transparent));
+  border: 1px solid
+    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 42%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 14%, transparent),
+    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 6%, transparent)
+  );
   color: var(--noobot-primary, var(--noobot-base-blue-500));
   font-weight: 600;
   filter: none;
-  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .noobot-primary-pill-action:hover {
   filter: none;
-  border-color: color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 62%, transparent);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 20%, transparent), color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 10%, transparent));
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-primary, var(--noobot-base-blue-500)) 62%,
+    transparent
+  );
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 20%, transparent),
+    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 10%, transparent)
+  );
 }
 
 .noobot-primary-pill-action:active {
   filter: none;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 16%, transparent), color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 8%, transparent));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 16%, transparent),
+    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 8%, transparent)
+  );
 }
 
 .noobot-pill-option.el-button {
@@ -433,28 +516,56 @@ button,
   font-size: var(--noobot-font-size-sm);
   font-weight: 600;
   line-height: 16px;
-  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .noobot-pill-option.el-button--default {
   color: var(--noobot-text-main, var(--el-text-color-primary));
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 82%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-panel-border, var(--el-border-color)) 82%,
+    transparent
+  );
   background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
 }
 
 .noobot-pill-option.el-button--default:hover,
 .noobot-pill-option.el-button--default:focus {
   color: var(--el-color-primary);
-  border-color: color-mix(in srgb, var(--el-color-primary) 48%, var(--noobot-panel-border, var(--el-border-color)));
-  background: color-mix(in srgb, var(--el-color-primary) 9%, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))));
+  border-color: color-mix(
+    in srgb,
+    var(--el-color-primary) 48%,
+    var(--noobot-panel-border, var(--el-border-color))
+  );
+  background: color-mix(
+    in srgb,
+    var(--el-color-primary) 9%,
+    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))
+  );
 }
 
 .noobot-pill-option.el-button--primary {
-  border-color: color-mix(in srgb, var(--el-color-primary) 72%, var(--noobot-panel-border, var(--el-border-color)));
+  border-color: color-mix(
+    in srgb,
+    var(--el-color-primary) 72%,
+    var(--noobot-panel-border, var(--el-border-color))
+  );
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--el-color-primary) 92%, var(--noobot-panel-bg, var(--el-bg-color-overlay))),
-    color-mix(in srgb, var(--el-color-primary) 76%, var(--noobot-cyber-cyan, var(--noobot-base-blue-500)))
+    color-mix(
+      in srgb,
+      var(--el-color-primary) 92%,
+      var(--noobot-panel-bg, var(--el-bg-color-overlay))
+    ),
+    color-mix(
+      in srgb,
+      var(--el-color-primary) 76%,
+      var(--noobot-cyber-cyan, var(--noobot-base-blue-500))
+    )
   );
 }
 
@@ -462,8 +573,16 @@ button,
 .noobot-pill-option.is-disabled:hover,
 .noobot-pill-option.is-disabled:focus {
   color: var(--noobot-text-muted, var(--el-text-color-placeholder));
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 58%, transparent);
-  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 72%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-panel-border, var(--el-border-color)) 58%,
+    transparent
+  );
+  background: color-mix(
+    in srgb,
+    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 72%,
+    transparent
+  );
   box-shadow: none;
 }
 
@@ -484,7 +603,11 @@ button,
   justify-content: center;
   cursor: pointer;
   backdrop-filter: none;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .noobot-flat-icon-btn {
@@ -561,8 +684,8 @@ button,
   height: 32px;
   background: var(--noobot-btn-soft-bg);
   border: 1px solid var(--noobot-btn-soft-border);
-  color: var(--noobot-btn-soft-text);
   padding: 0;
+  color: var(--noobot-btn-soft-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;

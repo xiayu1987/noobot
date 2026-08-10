@@ -35,9 +35,7 @@ export function createSessionDetailRequests({
     if (!sessionItem?.loaded) return null;
     const sessionDocs = Array.isArray(sessionItem.sessionDocs) ? sessionItem.sessionDocs : [];
     if (!sessionDocs.length) return null;
-    const resolvedSessionId = normalizeSessionId(
-      sessionItem.sessionId || normalizedSessionId,
-    );
+    const resolvedSessionId = normalizeSessionId(sessionItem.sessionId || normalizedSessionId);
     return {
       ok: true,
       exists: true,
@@ -75,7 +73,8 @@ export function createSessionDetailRequests({
     const allowLoadedSnapshot = intent.allowLoadedSnapshot === true;
     const reuseRecentlyLoaded = intent.reuseRecentlyLoaded === true;
     if (!state.sessionId) return { action: "skip", state, source };
-    if (state.pendingPromise) return { action: "wait", promise: state.pendingPromise, state, source };
+    if (state.pendingPromise)
+      return { action: "wait", promise: state.pendingPromise, state, source };
     if (!requireFresh && reuseRecentlyLoaded && state.recentDetail) {
       return { action: "reuse", detail: state.recentDetail, state, source };
     }
@@ -89,6 +88,41 @@ export function createSessionDetailRequests({
       if (detail) return { action: "reuse", detail, state, source };
     }
     return { action: "fetch", state, source };
+  }
+
+  async function requestSessionDetailData(
+    requestFactory,
+    {
+      requireExists = true,
+      missingMessage = translate("chat.sessionNotFound"),
+      failedMessageFromPayload = true,
+    } = {},
+  ) {
+    const res = await requestFactory();
+    if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
+    const data = await res.json();
+    if (!data.ok) {
+      throw new Error(
+        failedMessageFromPayload
+          ? data.error || translate("chat.getSessionFailed", { status: res.status })
+          : translate("chat.getSessionFailed", { status: res.status }),
+      );
+    }
+    if (requireExists && !data.exists) {
+      throw new Error(data.error || missingMessage);
+    }
+    return data;
+  }
+
+  function collectSessionResponseDetails(data = {}) {
+    const sessionDocs = Array.isArray(data?.sessions) ? data.sessions : [];
+    const responseMessages = sessionDocs.flatMap((doc = {}) =>
+      Array.isArray(doc?.messages) ? doc.messages : [],
+    );
+    return {
+      sessionDocs,
+      responseMessages,
+    };
   }
 
   async function fetchSessionDetail(sessionId, options = {}) {
@@ -106,20 +140,18 @@ export function createSessionDetailRequests({
     if (decision.action === "wait") return decision.promise;
 
     const requestPromise = (async () => {
-      const res = await getSessionDetailApi(
-        { userId: userId.value, sessionId: normalizedSessionId || sessionId },
-        { fetcher: authFetch },
+      const data = await requestSessionDetailData(
+        () =>
+          getSessionDetailApi(
+            { userId: userId.value, sessionId: normalizedSessionId || sessionId },
+            { fetcher: authFetch },
+          ),
+        {
+          requireExists: options.requireExists !== false,
+        },
       );
-      if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || translate("chat.getSessionFailed", { status: res.status }));
-      if (!data.exists) {
-        if (options.requireExists === false) return null;
-        throw new Error(data.error || translate("chat.sessionNotFound"));
-      }
-      const sessionDocs = Array.isArray(data?.sessions) ? data.sessions : [];
-      const responseMessages = sessionDocs.flatMap((doc = {}) =>
-        Array.isArray(doc?.messages) ? doc.messages : []);
+      if (!data?.exists && options.requireExists === false) return null;
+      const { sessionDocs, responseMessages } = collectSessionResponseDetails(data);
       logWorkflowDiagnostics("frontend.workflowDetail.responseReceived", () => ({
         sessionId: normalizeSessionId(data.sessionId || normalizedSessionId || sessionId),
         requestSource: decision.source,
@@ -160,16 +192,13 @@ export function createSessionDetailRequests({
       sessionId: normalizedSessionId || sessionId,
       requestSource: normalizeSessionId(options.source || options.reason || "full-detail"),
     }));
-    const res = await getSessionFullDetailApi(
-      { userId: userId.value, sessionId: normalizedSessionId || sessionId },
-      { fetcher: authFetch },
+    const data = await requestSessionDetailData(() =>
+      getSessionFullDetailApi(
+        { userId: userId.value, sessionId: normalizedSessionId || sessionId },
+        { fetcher: authFetch },
+      ),
     );
-    if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
-    const data = await res.json();
-    if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
-    const sessionDocs = Array.isArray(data?.sessions) ? data.sessions : [];
-    const responseMessages = sessionDocs.flatMap((doc = {}) =>
-      Array.isArray(doc?.messages) ? doc.messages : []);
+    const { sessionDocs, responseMessages } = collectSessionResponseDetails(data);
     const rawMessageCount = sessionDocs.reduce(
       (count, doc = {}) => count + (Array.isArray(doc?.rawMessages) ? doc.rawMessages.length : 0),
       0,
@@ -201,19 +230,17 @@ export function createSessionDetailRequests({
     if (typeof getSessionThinkingDetailApi !== "function") {
       throw new Error("thinking detail api is unavailable");
     }
-    const res = await getSessionThinkingDetailApi(
-      {
-        userId: userId.value,
-        sessionId: normalizedSessionId || sessionId,
-        dialogProcessId: normalizedDialogProcessId,
-        turnScopeId: normalizedTurnScopeId,
-      },
-      { fetcher: authFetch },
+    return requestSessionDetailData(() =>
+      getSessionThinkingDetailApi(
+        {
+          userId: userId.value,
+          sessionId: normalizedSessionId || sessionId,
+          dialogProcessId: normalizedDialogProcessId,
+          turnScopeId: normalizedTurnScopeId,
+        },
+        { fetcher: authFetch },
+      ),
     );
-    if (!res.ok) throw new Error(translate("chat.getSessionFailed", { status: res.status }));
-    const data = await res.json();
-    if (!data.ok || !data.exists) throw new Error(data.error || translate("chat.sessionNotFound"));
-    return data;
   }
 
   return {

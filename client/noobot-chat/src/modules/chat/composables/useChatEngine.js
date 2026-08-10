@@ -311,10 +311,14 @@ export function useChatEngine({
   }
 
   const messageOperationStore = createPendingMessageOperationStore();
-  const send = createChatEngineSender({
+  const senderSessionDeps = {
     activeSession,
     activeSessionId,
-    allowUserInteraction,
+    userId,
+    turnRuntimeRegistry,
+    ensureConnected,
+  };
+  const senderConversationDeps = {
     applyConversationState,
     applyConversationStateFromEvent,
     applyAssistantFailureState,
@@ -323,51 +327,71 @@ export function useChatEngine({
     findCanonicalMessageById,
     findCanonicalMessagesById,
     upsertCanonicalAssistantMessage,
-    botScenario,
-    chatWebSocketClient,
-    sessionLogWebSocketClient,
-    applyWorkflowRuntimeEvent,
-    classifyRealtimeLog,
-    clearMissingInteractionPayloadTimer,
-    clearPendingInteraction,
-    clearPendingInteractionIfObsolete,
-    clearUploads,
-    connectorTypeSet,
-    upsertConnectedConnectorInPanelState,
-    ensureConnected,
-    fetchSessionDetail,
     foldMessagesForView,
-    safeConfirmLevel,
-    sanitizeOutput,
-    input,
-    interactionSubmitting,
-    isImageMime,
-    locale,
-    locateSendingStartedMessage,
-    locateDoneMessage,
     makeViewMessage,
     mergeAssistantAttachments,
-    notify,
+  };
+  const senderInteractionDeps = {
     pendingInteractionRequest,
+    interactionSubmitting,
+    clearPendingInteraction,
+    clearPendingInteractionIfObsolete,
+    clearMissingInteractionPayloadTimer,
+    setPendingInteractionRequest,
+    tryAutoResolveInteraction,
+  };
+  const senderComposerDeps = {
+    allowUserInteraction,
+    safeConfirmLevel,
+    sanitizeOutput,
+    streamOutput,
+    input,
+    uploadFiles,
+    clearUploads,
+    serializeAttachments,
+    isImageMime,
+  };
+  const senderModelDeps = {
+    botScenario,
+    selectedModel,
+    memoryModel,
     pluginModelConfig,
     frontendThresholdsEnabled,
     summaryPolicy,
-    refreshSessionConnectorsAsync,
-    navigateToLastMessage,
-    memoryModel,
-    selectedModel,
     selectedPlugins,
-    turnRuntimeRegistry,
+    locale,
+  };
+  const senderTransportDeps = {
+    chatWebSocketClient,
+    sessionLogWebSocketClient,
+    applyWorkflowRuntimeEvent,
     applyRunStateEvent,
     applyTurnLifecycleEnvelope,
-    serializeAttachments,
-    streamOutput,
+    classifyRealtimeLog,
+  };
+  const senderUiDeps = {
+    locateSendingStartedMessage,
+    locateDoneMessage,
+    navigateToLastMessage,
+    notify,
     translate,
-    tryAutoResolveInteraction,
-    setPendingInteractionRequest,
-    uploadFiles,
-    userId,
+  };
+  const senderConnectorDeps = {
+    connectorTypeSet,
+    upsertConnectedConnectorInPanelState,
+    refreshSessionConnectorsAsync,
+    fetchSessionDetail,
     processStore,
+  };
+  const send = createChatEngineSender({
+    ...senderSessionDeps,
+    ...senderConversationDeps,
+    ...senderInteractionDeps,
+    ...senderComposerDeps,
+    ...senderModelDeps,
+    ...senderTransportDeps,
+    ...senderUiDeps,
+    ...senderConnectorDeps,
     finalizePendingResendOperation: (...args) =>
       monotonicMessageActions?.finalizePendingResendOperation?.(...args),
   });

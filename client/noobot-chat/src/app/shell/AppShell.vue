@@ -10,11 +10,7 @@ import AppShellDrawers from "./AppShellDrawers.vue";
 import AppShellLayout from "./AppShellLayout.vue";
 import { buildAppShellDrawerPanels } from "../state/drawerPanelsState.js";
 import ThinkingPanel from "../../modules/chat/components/thinking/ThinkingPanel.vue";
-import {
-  ConfigParamsPanel,
-  UserSettingsPanel,
-  WorkspacePanel,
-} from "../entrypoints.js";
+import { ConfigParamsPanel, UserSettingsPanel, WorkspacePanel } from "../entrypoints.js";
 import { useApiConnection } from "../../modules/chat/composables/connectivity/useApiConnection.js";
 import { useChatSession } from "../../modules/chat/composables/useChatSession.js";
 import { useUiFeedback } from "../../shared/composables/useUiFeedback.js";
@@ -47,6 +43,8 @@ import {
   hasActiveSessionForReconnect as hasActiveSessionForReconnectState,
   isImageMime,
 } from "../state/sessionMessageState.js";
+
+const E2E_APP_SHELL_BRIDGE_KEY = "__NOOBOT_E2E_APP_SHELL__";
 
 const { renderMarkdown } = useMarkdownRenderer();
 
@@ -386,33 +384,50 @@ const {
   handleDrawerModelUpdate,
 } = appShellPanelActions;
 
-const {
-  handleInteractionConfirm,
-  handleInteractionCancel,
-} = useAppShellInteractionActions({
+const { handleInteractionConfirm, handleInteractionCancel } = useAppShellInteractionActions({
   submitInteractionResponse,
   notify: notifyUi,
   translate,
 });
 
-const {
-  handleDeleteSession,
-  handleRenameSession,
-  handleWorkspaceReset,
-  onConnectorSelected,
-} = useAppShellSessionActions({
-  activeSessionId,
-  confirmDeleteSession,
-  deleteSession,
-  renameSession,
-  fetchSessions,
-  refreshSessionConnectorsAsync,
-  updateSessionSelectedConnector,
-  notify: notifyUi,
-  translate,
-});
+const { handleDeleteSession, handleRenameSession, handleWorkspaceReset, onConnectorSelected } =
+  useAppShellSessionActions({
+    activeSessionId,
+    confirmDeleteSession,
+    deleteSession,
+    renameSession,
+    fetchSessions,
+    refreshSessionConnectorsAsync,
+    updateSessionSelectedConnector,
+    notify: notifyUi,
+    translate,
+  });
 
 async function onAppMounted() {
+  window[E2E_APP_SHELL_BRIDGE_KEY] = Object.freeze({
+    updateFrontendThresholdsEnabled(value = false) {
+      onFrontendThresholdsEnabledUpdate(value === true);
+    },
+    updateSummaryPolicy(value = {}) {
+      onSummaryPolicyUpdate(value);
+    },
+    updatePluginModelConfig(value = {}) {
+      onPluginModelConfigUpdate(value);
+    },
+    getComposerConfigSnapshot() {
+      return {
+        frontendThresholdsEnabled: frontendThresholdsEnabled.value === true,
+        summaryPolicy:
+          summaryPolicy.value && typeof summaryPolicy.value === "object"
+            ? { ...summaryPolicy.value }
+            : {},
+        pluginModelConfig:
+          pluginModelConfig.value && typeof pluginModelConfig.value === "object"
+            ? { ...pluginModelConfig.value }
+            : {},
+      };
+    },
+  });
   addPseudoRoutePopStateListener();
   const autoConnected = await tryAutoConnect();
   if (autoConnected || connected.value) return;
@@ -421,6 +436,9 @@ async function onAppMounted() {
 }
 
 function onAppUnmounted() {
+  if (window[E2E_APP_SHELL_BRIDGE_KEY]) {
+    delete window[E2E_APP_SHELL_BRIDGE_KEY];
+  }
   removePseudoRoutePopStateListener();
   unbindChatMessageScrollSync();
   releaseAllPreviewUrls();
@@ -465,7 +483,7 @@ const drawerPanels = computed(() =>
     thinkingDetailService,
     getThinkingDetailsTitle,
     handleWorkspaceReset,
-  })
+  }),
 );
 </script>
 
@@ -517,6 +535,7 @@ const drawerPanels = computed(() =>
       :memory-model="memoryModel"
       :available-model-options="availableModelOptions"
       :plugin-model-config="pluginModelConfig"
+      :frontend-thresholds-enabled="frontendThresholdsEnabled"
       :summary-policy="summaryPolicy"
       :available-bot-scenarios="availableBotScenarios"
       :available-plugins="availablePlugins"
@@ -594,7 +613,6 @@ const drawerPanels = computed(() =>
   overscroll-behavior: none;
 }
 
-
 :deep(.workspace-drawer .el-tree) {
   --el-tree-node-hover-bg-color: var(--noobot-surface-item-hover);
   --el-tree-text-color: var(--noobot-text-main);
@@ -603,6 +621,8 @@ const drawerPanels = computed(() =>
 }
 
 @media (max-width: 720px) {
-  .app-shell-root { min-height: 100svh; }
+  .app-shell-root {
+    min-height: 100svh;
+  }
 }
 </style>
