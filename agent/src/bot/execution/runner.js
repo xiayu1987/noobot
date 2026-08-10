@@ -6,11 +6,12 @@
 
 import { emitEvent } from "../../events/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { isAbortError, isUserStopAbort, resolveAbortStopType } from "../../shared/utils/error-utils.js";
 import {
-  runBotRuntimeHook,
-  withBotHookRuntimeMeta,
-} from "../hook/index.js";
+  isAbortError,
+  isUserStopAbort,
+  resolveAbortStopType,
+} from "../../shared/utils/error-utils.js";
+import { runBotRuntimeHook, withBotHookRuntimeMeta } from "../hook/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import {
   BOT_MANAGE_LOG_EVENT,
@@ -48,6 +49,17 @@ import {
   emitContextIdentityDebug,
 } from "../../observability/context-identity-debug.js";
 import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
+
+function applyCanonicalRunMessageIdentity(runConfig = {}) {
+  const resolvedTurnScopeId = String(runConfig?.turnScopeId || "").trim();
+  const presentationMessageId = String(
+    runConfig?.presentationMessageId || `msg_${resolvedTurnScopeId}`,
+  ).trim();
+  const messageId = String(runConfig?.messageId || `msg_event_${presentationMessageId}`).trim();
+  runConfig.presentationMessageId = presentationMessageId;
+  runConfig.messageId = messageId;
+  return { resolvedTurnScopeId, presentationMessageId, messageId };
+}
 
 function currentTurnMessageCheckpointKey(message = {}, index = 0) {
   const messageUid = String(message?.messageUid || "").trim();
@@ -149,15 +161,12 @@ export class SessionExecutionRunner {
     const userMessageAttachments = Array.isArray(runtime?.userMessageAttachments)
       ? runtime.userMessageAttachments
       : [];
-    const runtimeAttachments = Array.isArray(runtime?.attachments)
-      ? runtime.attachments
-      : [];
+    const runtimeAttachments = Array.isArray(runtime?.attachments) ? runtime.attachments : [];
     return {
       userId: String(systemRuntime?.userId || "").trim(),
       sessionId: String(systemRuntime?.sessionId || "").trim(),
       parentSessionId: resolveParentSessionId({ runtime }),
-      dialogProcessId:
-        getDialogProcessIdFromAgentContext(agentContext),
+      dialogProcessId: getDialogProcessIdFromAgentContext(agentContext),
       caller: String(systemRuntime?.caller || "").trim(),
       runtimeModel: String(runtime?.runtimeModel || "").trim(),
       messageCount: messagesHistory.length,
@@ -209,7 +218,10 @@ export class SessionExecutionRunner {
     try {
       const normalizedMessage = this.normalizeRunMessage(message);
       this.validateRunInput({ userId, sessionId, caller, parentSessionId });
-      if (runConfig?.reuseExistingUserTurn === true && !String(requestedDialogProcessId || "").trim()) {
+      if (
+        runConfig?.reuseExistingUserTurn === true &&
+        !String(requestedDialogProcessId || "").trim()
+      ) {
         const error = new Error("reused Turn requires its precommitted dialogProcessId");
         error.statusCode = 400;
         error.errorCode = "MISSING_REUSED_TURN_DIALOG_PROCESS_ID";
@@ -217,7 +229,9 @@ export class SessionExecutionRunner {
       }
       if (runConfig?.reuseExistingUserTurn === true) {
         if (typeof this.assertReusedUserTurnIdentity !== "function") {
-          throw new Error("assertReusedUserTurnIdentity is required before reused Turn initialization");
+          throw new Error(
+            "assertReusedUserTurnIdentity is required before reused Turn initialization",
+          );
         }
         await this.assertReusedUserTurnIdentity({
           userId,
@@ -265,10 +279,7 @@ export class SessionExecutionRunner {
         sessionId: usedSessionId,
         dialogProcessId,
       };
-      const scenarioResolvedRunConfig = this.resolveScenarioRunConfig(
-        requestRunConfig,
-        userConfig,
-      );
+      const scenarioResolvedRunConfig = this.resolveScenarioRunConfig(requestRunConfig, userConfig);
       resolvedRunConfig =
         typeof this.prepareRunConfig === "function"
           ? this.prepareRunConfig({
@@ -277,15 +288,8 @@ export class SessionExecutionRunner {
               userConfig,
             })
           : scenarioResolvedRunConfig;
-      const resolvedTurnScopeId = String(resolvedRunConfig?.turnScopeId || "").trim();
-      const presentationMessageId = String(
-        resolvedRunConfig?.presentationMessageId || `msg_${resolvedTurnScopeId}`,
-      ).trim();
-      const messageId = String(
-        resolvedRunConfig?.messageId || `msg_event_${presentationMessageId}`,
-      ).trim();
-      resolvedRunConfig.presentationMessageId = presentationMessageId;
-      resolvedRunConfig.messageId = messageId;
+      const { resolvedTurnScopeId, presentationMessageId, messageId } =
+        applyCanonicalRunMessageIdentity(resolvedRunConfig);
       const resumeFromStoppedSnapshot = resolvedRunConfig?.resumeFromStoppedSnapshot === true;
       const contextMode = sessionLoadState === "loaded" ? "existing_session" : "new_session";
       lifecycle = createAgentLifecycleMachine({
@@ -299,7 +303,9 @@ export class SessionExecutionRunner {
           executionId: String(resolvedRunConfig?.executionId || "").trim(),
           executionKind: String(resolvedRunConfig?.executionKind || "agent").trim(),
           parentExecutionId: String(resolvedRunConfig?.parentExecutionId || "").trim(),
-          rootExecutionId: String(resolvedRunConfig?.rootExecutionId || resolvedRunConfig?.executionId || "").trim(),
+          rootExecutionId: String(
+            resolvedRunConfig?.rootExecutionId || resolvedRunConfig?.executionId || "",
+          ).trim(),
         },
       });
       lifecycle.transition(resolveInitialLifecycleState(resolvedRunConfig));
@@ -314,8 +320,7 @@ export class SessionExecutionRunner {
         eventListener: runtimeEventListener,
         abortSignal,
         botHookManager:
-          resolvedRunConfig?.botHookManager &&
-          typeof resolvedRunConfig.botHookManager === "object"
+          resolvedRunConfig?.botHookManager && typeof resolvedRunConfig.botHookManager === "object"
             ? resolvedRunConfig.botHookManager
             : null,
       };
@@ -389,16 +394,20 @@ export class SessionExecutionRunner {
         resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
         reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
         attachments: summarizeDebugAttachments(attachments),
-        userMessageAttachments: summarizeDebugAttachments(buildContextPayload.userMessageAttachments),
+        userMessageAttachments: summarizeDebugAttachments(
+          buildContextPayload.userMessageAttachments,
+        ),
       });
-      const preparedTurnInput = typeof this.prepareTurnInput === "function"
-        ? await this.prepareTurnInput({ buildContextPayload })
-        : { userMessageAttachments: attachments };
+      const preparedTurnInput =
+        typeof this.prepareTurnInput === "function"
+          ? await this.prepareTurnInput({ buildContextPayload })
+          : { userMessageAttachments: attachments };
       const canonicalAttachments = Array.isArray(preparedTurnInput?.userMessageAttachments)
         ? preparedTurnInput.userMessageAttachments
         : [];
       buildContextPayload.userMessageAttachments = canonicalAttachments;
-      if (preparedTurnInput?.contextBuilder) buildContextPayload.contextBuilder = preparedTurnInput.contextBuilder;
+      if (preparedTurnInput?.contextBuilder)
+        buildContextPayload.contextBuilder = preparedTurnInput.contextBuilder;
       let currentUserMessage;
       let reusedTurnResult = null;
       let committedTurnResult = null;
@@ -435,7 +444,11 @@ export class SessionExecutionRunner {
         }
         committedTurnResult = await this.commitSessionTurn(commitPayloadWithPersistence);
         currentUserMessage = committedTurnResult?.userMessage;
-        canonicalAttachments.splice(0, canonicalAttachments.length, ...(committedTurnResult?.attachments || []));
+        canonicalAttachments.splice(
+          0,
+          canonicalAttachments.length,
+          ...(committedTurnResult?.attachments || []),
+        );
         const turnCommittedEvent = assertTurnCommittedEventData({
           sessionId: committedTurnResult?.sessionId || usedSessionId,
           aggregateVersion: committedTurnResult?.aggregateVersion,
@@ -447,7 +460,9 @@ export class SessionExecutionRunner {
       }
       const persistedMessageUid = String(currentUserMessage?.messageUid || "").trim();
       if (!persistedMessageUid) {
-        throw new Error("persisted current user message identity is required before Context construction");
+        throw new Error(
+          "persisted current user message identity is required before Context construction",
+        );
       }
       const contextIdentity = {
         userId,
@@ -458,13 +473,13 @@ export class SessionExecutionRunner {
       };
       emitContextIdentityDebug(
         runtimeEventListener,
-        resolvedRunConfig?.reuseExistingUserTurn === true
-          ? "reusedTurnResolved"
-          : "turnCommitted",
+        resolvedRunConfig?.reuseExistingUserTurn === true ? "reusedTurnResolved" : "turnCommitted",
         contextIdentity,
         {
           messageUid: persistedMessageUid,
-          persistedMessageId: String(currentUserMessage?.messageId || currentUserMessage?.id || "").trim(),
+          persistedMessageId: String(
+            currentUserMessage?.messageId || currentUserMessage?.id || "",
+          ).trim(),
           canonicalMessageId: canonicalMessageId(currentUserMessage),
           role: String(currentUserMessage?.role || "").trim(),
           frontendUserMessage: currentUserMessage?.frontendUserMessage === true,
@@ -498,17 +513,17 @@ export class SessionExecutionRunner {
       if (dispatchRuntime && typeof dispatchRuntime === "object") {
         lifecycleRuntime = dispatchRuntime;
         dispatchRuntime.eventListener = runtimeEventListener;
-        const dispatchSystemRuntime = dispatchRuntime.systemRuntime &&
-          typeof dispatchRuntime.systemRuntime === "object"
-          ? dispatchRuntime.systemRuntime
-          : (dispatchRuntime.systemRuntime = {});
+        const dispatchSystemRuntime =
+          dispatchRuntime.systemRuntime && typeof dispatchRuntime.systemRuntime === "object"
+            ? dispatchRuntime.systemRuntime
+            : (dispatchRuntime.systemRuntime = {});
         dispatchSystemRuntime.sessionId = usedSessionId;
         dispatchSystemRuntime.dialogProcessId = dialogProcessId;
         dispatchSystemRuntime.turnScopeId = resolvedTurnScopeId;
-        dispatchSystemRuntime.config = dispatchSystemRuntime.config &&
-          typeof dispatchSystemRuntime.config === "object"
-          ? dispatchSystemRuntime.config
-          : {};
+        dispatchSystemRuntime.config =
+          dispatchSystemRuntime.config && typeof dispatchSystemRuntime.config === "object"
+            ? dispatchSystemRuntime.config
+            : {};
         dispatchSystemRuntime.config.turnScopeId = resolvedTurnScopeId;
         bindAssistantMessageEventStream(dispatchRuntime, {
           messageId,
@@ -524,24 +539,28 @@ export class SessionExecutionRunner {
         initializeCurrentTurnMessageEventProjection(dispatchRuntime, {
           sequenceScopeId: resolvedTurnScopeId,
         });
-        emitEvent(runtimeEventListener, "agent_transport_parameters_consumed", buildAgentTransportConsumption({
-          transportCommand: resolvedRunConfig?.transportCommand,
-          identity: {
-            sessionId: usedSessionId,
-            parentSessionId,
-            dialogProcessId,
-            parentDialogProcessId,
-            turnScopeId: resolvedTurnScopeId,
-          },
-          normalizedMessage,
-          requestedAttachments: attachments,
-          canonicalAttachments,
-          currentUserMessage,
-          resolvedRunConfig,
-          turnCommand: effectiveTurnCommand,
-          committedTurnResult,
-          dispatchRuntime,
-        }));
+        emitEvent(
+          runtimeEventListener,
+          "agent_transport_parameters_consumed",
+          buildAgentTransportConsumption({
+            transportCommand: resolvedRunConfig?.transportCommand,
+            identity: {
+              sessionId: usedSessionId,
+              parentSessionId,
+              dialogProcessId,
+              parentDialogProcessId,
+              turnScopeId: resolvedTurnScopeId,
+            },
+            normalizedMessage,
+            requestedAttachments: attachments,
+            canonicalAttachments,
+            currentUserMessage,
+            resolvedRunConfig,
+            turnCommand: effectiveTurnCommand,
+            committedTurnResult,
+            dispatchRuntime,
+          }),
+        );
         let persistCurrentTurnMessagesTail = Promise.resolve();
         let currentTurnPersistenceBatchDepth = 0;
         let currentTurnPersistenceRequested = false;
@@ -553,8 +572,11 @@ export class SessionExecutionRunner {
             const messages = store?.toArray?.();
             if (!Array.isArray(messages) || !messages.length) return;
             const checkpointEntries = buildCurrentTurnCheckpointEntries(messages);
-            const changedEntries = checkpointEntries.filter(({ key, fingerprint }) =>
-              fingerprint === null || persistedCurrentTurnMessageFingerprints.get(key) !== fingerprint);
+            const changedEntries = checkpointEntries.filter(
+              ({ key, fingerprint }) =>
+                fingerprint === null ||
+                persistedCurrentTurnMessageFingerprints.get(key) !== fingerprint,
+            );
             const messagesToPersist = changedEntries.map(({ message }) => message);
             if (!messagesToPersist.length) {
               dispatchRuntime.timelineCheckpointPersistedMessageUids = messages
@@ -573,41 +595,53 @@ export class SessionExecutionRunner {
               eventListener: runtimeEventListener,
               persistenceContext,
             });
-            const activityMessages = messagesToPersist.filter((item = {}) =>
-              String(item.messageUid || "").trim() &&
-              Array.isArray(item.activityTimeline) &&
-              item.activityTimeline.length > 0);
+            const activityMessages = messagesToPersist.filter(
+              (item = {}) =>
+                String(item.messageUid || "").trim() &&
+                Array.isArray(item.activityTimeline) &&
+                item.activityTimeline.length > 0,
+            );
             let durableActivityMessages = [];
-            if (activityMessages.length > 0 && (
-              Array.isArray(persistedMessages) && persistedMessages.length > 0
-              || typeof this.getSessionTurns === "function"
-            )) {
-              const durableMessages = Array.isArray(persistedMessages) && persistedMessages.length > 0
-                ? persistedMessages
-                : typeof this.getSessionTurns === "function"
-                  ? await this.getSessionTurns({
-                      userId,
-                      sessionId: usedSessionId,
-                      parentSessionId,
-                      persistenceContext,
-                    })
-                  : [];
-              const durableByUid = new Map((Array.isArray(durableMessages) ? durableMessages : [])
-                .map((item = {}) => [String(item.messageUid || "").trim(), item])
-                .filter(([messageUid]) => messageUid));
+            if (
+              activityMessages.length > 0 &&
+              ((Array.isArray(persistedMessages) && persistedMessages.length > 0) ||
+                typeof this.getSessionTurns === "function")
+            ) {
+              const durableMessages =
+                Array.isArray(persistedMessages) && persistedMessages.length > 0
+                  ? persistedMessages
+                  : typeof this.getSessionTurns === "function"
+                    ? await this.getSessionTurns({
+                        userId,
+                        sessionId: usedSessionId,
+                        parentSessionId,
+                        persistenceContext,
+                      })
+                    : [];
+              const durableByUid = new Map(
+                (Array.isArray(durableMessages) ? durableMessages : [])
+                  .map((item = {}) => [String(item.messageUid || "").trim(), item])
+                  .filter(([messageUid]) => messageUid),
+              );
               durableActivityMessages = activityMessages.map((item = {}) => {
                 const messageUid = String(item.messageUid || "").trim();
                 const expectedEventIds = item.activityTimeline
                   .map((activity = {}) => String(activity.eventId || "").trim())
                   .filter(Boolean);
                 const durable = durableByUid.get(messageUid);
-                const durableEventIds = (Array.isArray(durable?.activityTimeline) ? durable.activityTimeline : [])
+                const durableEventIds = (
+                  Array.isArray(durable?.activityTimeline) ? durable.activityTimeline : []
+                )
                   .map((activity = {}) => String(activity.eventId || "").trim())
                   .filter(Boolean);
-                const missingEventIds = expectedEventIds.filter((eventId) => !durableEventIds.includes(eventId));
+                const missingEventIds = expectedEventIds.filter(
+                  (eventId) => !durableEventIds.includes(eventId),
+                );
                 return { messageUid, expectedEventIds, durableEventIds, missingEventIds };
               });
-              const mismatch = durableActivityMessages.find((item) => item.missingEventIds.length > 0);
+              const mismatch = durableActivityMessages.find(
+                (item) => item.missingEventIds.length > 0,
+              );
               if (mismatch) {
                 emitEvent(runtimeEventListener, "timeline_checkpoint_durability_mismatch", {
                   sessionId: usedSessionId,
@@ -625,7 +659,8 @@ export class SessionExecutionRunner {
               if (!currentKeys.has(key)) persistedCurrentTurnMessageFingerprints.delete(key);
             }
             for (const { key, fingerprint } of changedEntries) {
-              if (fingerprint !== null) persistedCurrentTurnMessageFingerprints.set(key, fingerprint);
+              if (fingerprint !== null)
+                persistedCurrentTurnMessageFingerprints.set(key, fingerprint);
             }
             dispatchRuntime.timelineCheckpointPersistedMessageUids = messages
               .map((item = {}) => String(item.messageUid || "").trim())
@@ -654,7 +689,9 @@ export class SessionExecutionRunner {
                 type: String(item.type || "").trim(),
                 chatPresentation: item.chatPresentation === true,
                 contentLength: typeof item.content === "string" ? item.content.length : 0,
-                activityTimelineCount: Array.isArray(item.activityTimeline) ? item.activityTimeline.length : 0,
+                activityTimelineCount: Array.isArray(item.activityTimeline)
+                  ? item.activityTimeline.length
+                  : 0,
                 toolTimelineCount: Array.isArray(item.toolTimeline) ? item.toolTimeline.length : 0,
                 toolCallIds: Array.isArray(item.toolTimeline)
                   ? item.toolTimeline
@@ -760,12 +797,25 @@ export class SessionExecutionRunner {
         runtime: dispatchRuntime,
       });
       const finalizedResult = await finalizeAgentTurn({
-        resolvedRunConfig, runtimeEventListener, usedSessionId, dialogProcessId,
-        resolvedTurnScopeId, dispatchRuntime, getSessionTurns: this.getSessionTurns,
+        resolvedRunConfig,
+        runtimeEventListener,
+        usedSessionId,
+        dialogProcessId,
+        resolvedTurnScopeId,
+        dispatchRuntime,
+        getSessionTurns: this.getSessionTurns,
         getTurnSummaryCheckpointState: this.getTurnSummaryCheckpointState,
-        finalizeRunSession: this.finalizeRunSession, userId, parentSessionId,
-        parentDialogProcessId, caller, agentResult, executionStartIndex, userConfig,
-        resolvedParentAsyncResultContainer, lifecycle, persistenceContext,
+        finalizeRunSession: this.finalizeRunSession,
+        userId,
+        parentSessionId,
+        parentDialogProcessId,
+        caller,
+        agentResult,
+        executionStartIndex,
+        userConfig,
+        resolvedParentAsyncResultContainer,
+        lifecycle,
+        persistenceContext,
       });
       await runBotRuntimeHook({
         runtime: botHookRuntime,
@@ -788,7 +838,8 @@ export class SessionExecutionRunner {
           // work already committed to the current turn.  Keep the same
           // canonical messages used by live checkpoints and replay.
           await lifecycleRuntime?.persistCurrentTurnMessages?.();
-          const stoppedSnapshotPersistence = await persistStoppedSnapshotFromRuntime("runner_user_stop_catch");
+          const stoppedSnapshotPersistence =
+            await persistStoppedSnapshotFromRuntime("runner_user_stop_catch");
           await lifecycle?.userStop?.({
             reason: tSystem("ws.dialogStoppedByUser"),
             stoppedSnapshotPersistence,
@@ -852,13 +903,15 @@ export class SessionExecutionRunner {
         sessionId,
         parentSessionId,
         patch: {
-          status: isAbortError(error) && isUserStopAbort(error, abortSignal)
-            ? SESSION_ASYNC_STATUS.USER_STOPPED
-            : SESSION_ASYNC_STATUS.FAILED,
+          status:
+            isAbortError(error) && isUserStopAbort(error, abortSignal)
+              ? SESSION_ASYNC_STATUS.USER_STOPPED
+              : SESSION_ASYNC_STATUS.FAILED,
           endedAt: this.now(),
-          error: isAbortError(error) && isUserStopAbort(error, abortSignal)
-            ? tSystem("ws.dialogStoppedByUser")
-            : error?.message || String(error),
+          error:
+            isAbortError(error) && isUserStopAbort(error, abortSignal)
+              ? tSystem("ws.dialogStoppedByUser")
+              : error?.message || String(error),
           result: null,
         },
       });
