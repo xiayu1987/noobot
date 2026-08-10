@@ -1,6 +1,6 @@
 {
   "name": "@noobot/authoritative-state",
-  "version": "4.1.5",
+  "version": "4.1.6",
   "private": true,
   "type": "module",
   "description": "Noobot authoritative lifecycle contracts and domain state machine",

@@ -2,7 +2,7 @@
   "protocolVersion": 2,
   "id": "harness",
   "name": "noobot-plugin-harness",
-  "version": "4.1.5",
+  "version": "4.1.6",
   "entries": {
     "agent": "src/entries/agent.js",
     "service": "src/entries/service.js",
@@ -13,22 +13,22 @@
       "hooks": {
         "registers": [
           "agent.before_context_build",
-        "agent.after_context_build",
-        "agent.context_build_error",
-        "agent.before_turn",
-        "agent.after_turn",
-        "agent.on_abort",
-        "agent.on_error",
-        "agent.before_llm_call",
-        "agent.after_llm_call",
-        "agent.llm_call_error",
-        "agent.before_tool_calls",
-        "agent.after_tool_calls",
-        "agent.before_tool_call",
-        "agent.after_tool_call",
-        "agent.tool_call_error",
-        "agent.before_state_commit",
-        "agent.after_state_commit",
+          "agent.after_context_build",
+          "agent.context_build_error",
+          "agent.before_turn",
+          "agent.after_turn",
+          "agent.on_abort",
+          "agent.on_error",
+          "agent.before_llm_call",
+          "agent.after_llm_call",
+          "agent.llm_call_error",
+          "agent.before_tool_calls",
+          "agent.after_tool_calls",
+          "agent.before_tool_call",
+          "agent.after_tool_call",
+          "agent.tool_call_error",
+          "agent.before_state_commit",
+          "agent.after_state_commit",
           "agent.before_final_output"
         ],
         "emits": []
@@ -36,15 +36,26 @@
     },
     "service": {
       "hooks": {
-        "registers": ["service.after_session_delete"],
+        "registers": [
+          "service.after_session_delete"
+        ],
         "emits": []
       }
     },
     "frontend": {
       "extensions": [
-        { "id": "harness-legacy-collapse-marker", "point": "markdown.collapse.markers" },
-        { "id": "harness-model-extension", "point": "composer.options.model" },
-        { "id": "thinking-panel", "point": "message.card.pre" }
+        {
+          "id": "harness-legacy-collapse-marker",
+          "point": "markdown.collapse.markers"
+        },
+        {
+          "id": "harness-model-extension",
+          "point": "composer.options.model"
+        },
+        {
+          "id": "thinking-panel",
+          "point": "message.card.pre"
+        }
       ]
     }
   },

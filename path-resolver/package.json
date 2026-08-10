@@ -1,6 +1,6 @@
 {
   "name": "@noobot/path-resolver",
-  "version": "4.1.5",
+  "version": "4.1.6",
   "private": true,
   "type": "module",
   "main": "src/index.mjs",
