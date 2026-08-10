@@ -10,7 +10,7 @@ import { resolveMessageEventPresentationId } from "@noobot/event-protocol/messag
 export function routeMessageProjectionEvent(event, data, context) {
   const {
     botMessage, classifyRealtimeLog, locateSendingStartedMessageOnce,
-    findCanonicalMessageById, logSessionEvent, navigateOnFirstResponseOnce, sessionId, turnScopeId,
+    findCanonicalMessageById, findCanonicalMessagesById, logSessionEvent, navigateOnFirstResponseOnce, sessionId, turnScopeId,
   } = context;
   if (event === "subagent_message_event") {
     logSessionEvent({
@@ -45,7 +45,21 @@ export function routeMessageProjectionEvent(event, data, context) {
   if (shouldProjectMain) {
     const presentationMessageId = resolveMessageEventPresentationId(messageEvent);
     const targetSessionId = String(messageEvent.sessionId || sessionId || "").trim();
-    const targetMessage = findCanonicalMessageById?.(targetSessionId, presentationMessageId);
+    const targetMessages = findCanonicalMessagesById?.(targetSessionId, presentationMessageId)
+      || [findCanonicalMessageById?.(targetSessionId, presentationMessageId)].filter(Boolean);
+    // The send flow creates the visible assistant projection before replay
+    // can materialize hidden tool records. Always include that canonical bot
+    // object for the same presentation identity so live artifacts cannot land
+    // exclusively on a non-rendered record.
+    if (
+      botMessage &&
+      String(botMessage?.sessionId || botMessage?.session_id || targetSessionId).trim() === targetSessionId &&
+      String(botMessage?.turnScopeId || botMessage?.turn_scope_id || turnScopeId).trim() ===
+        String(messageEvent.turnScopeId || turnScopeId).trim() &&
+      String(botMessage?.role || "assistant").trim() === "assistant" &&
+      !targetMessages.includes(botMessage)
+    ) targetMessages.push(botMessage);
+    const targetMessage = targetMessages[targetMessages.length - 1] || null;
     const targetBefore = {
       found: Boolean(targetMessage),
       id: String(targetMessage?.id || ""),
@@ -66,7 +80,13 @@ export function routeMessageProjectionEvent(event, data, context) {
         targetSessionId, target: targetBefore,
       },
     });
-    const reduction = dispatchTurnEnvelope({ targetMessage, envelope: messageEvent, classifyRealtimeLog, source: TURN_PROJECTION_SOURCE.NORMAL_LIVE });
+    const reductions = targetMessages.map((message) => dispatchTurnEnvelope({
+      targetMessage: message,
+      envelope: messageEvent,
+      classifyRealtimeLog,
+      source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
+    }));
+    const reduction = reductions.find((item) => item.applied) || reductions[0] || { result: "target_missing", applied: false };
     logSessionEvent({
       category: "transport", level: reduction.applied ? "debug" : "warn", event: "frontend.messageEvent.reduced",
       sessionId: messageEvent.sessionId || sessionId, dialogProcessId: messageEvent.dialogProcessId || "",

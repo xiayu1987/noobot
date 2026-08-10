@@ -451,6 +451,7 @@ export function useChatSession({
   const {
     appendMessage,
     findCanonicalMessageById,
+    findCanonicalMessagesById,
     upsertCanonicalAssistantMessage,
     makeViewMessage,
     foldMessagesForView,
@@ -560,6 +561,7 @@ export function useChatSession({
     chatWebSocketClient,
     appendMessage,
     findCanonicalMessageById,
+    findCanonicalMessagesById,
     makeViewMessage,
     foldMessagesForView,
     sessionTitleFromMessages,

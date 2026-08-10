@@ -5,7 +5,7 @@
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { validateRegisteredEvent } from "@noobot/event-protocol";
-import { validateSessionEvent } from "@noobot/session-protocol";
+import { validateSessionEvent, validateAttachmentParsedEvent } from "@noobot/session-protocol";
 import { normalizeReplayCacheKey } from "./replayCache.js";
 import { _trimStr } from "./utils.js";
 import { normalizeTurnTransportEnvelope } from "../engine/turnTransportEnvelope.js";
@@ -29,6 +29,7 @@ export async function applyReconnectEventReplay({
   applyExecutionChildren,
   applyExecutionTree,
   applyWorkflowRuntimeEvent,
+  onAttachmentParsed,
   isDeletedTurn,
 } = {}) {
   const normalizedTransportEnvelope = normalizeTurnTransportEnvelope({
@@ -101,6 +102,23 @@ export async function applyReconnectEventReplay({
   }
   const { routed: runtimeRouted, result: runtimeResult } = routeRuntimeEvent();
   if (runtimeRouted) return runtimeResult || { applied: true };
+  if (replayEvent === StreamEventEnum.ATTACHMENT_PARSED) {
+    const protocolResult = validateAttachmentParsedEvent({
+      eventType: replayEvent,
+      ...(data || {}),
+    });
+    if (!protocolResult.valid) {
+      logWorkflowDiagnostics("frontend.workflowReplay.attachmentParsedRejected", {
+        sessionId: _trimStr(data?.sessionId),
+        dialogProcessId: _trimStr(data?.dialogProcessId),
+        turnScopeId: _trimStr(data?.turnScopeId),
+        errors: protocolResult.errors,
+      });
+      return { applied: false, reason: "invalid_attachment_parsed_event", errors: protocolResult.errors };
+    }
+    onAttachmentParsed?.(data || {});
+    return { applied: true, reason: "attachment_parsed_projected" };
+  }
   // Let registered extensions consume their own events before applying the
   // core registry. Core authority events are excluded by the router, so they
   // still always pass through the authoritative protocol validation below.

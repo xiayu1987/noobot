@@ -20,10 +20,7 @@ import {
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
 } from "../../runtime/sessionRunStateMachine.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
-import {
-  attachmentIdentityKey,
-  projectAttachmentIdentity,
-} from "@noobot/attachment-protocol";
+import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 
 function getMessageAttachments(messageItem = {}) {
   return resolveRenderableMessageAttachments(messageItem);
@@ -134,16 +131,47 @@ function logDisplayedAttachmentsSummary({
 
 export function useMessageFiles({
   getMessageItem = () => ({}),
+  getAllMessages = () => [],
   getUserId = () => "",
 } = {}) {
   const displayedAttachments = computed(() => {
     const messageItem = getMessageItem() || {};
+    const sessionId = getMessageSessionId(messageItem);
+    const turnScopeId = getMessageTurnScopeId(messageItem);
+    const sameTurnMessages = getMessageRole(messageItem) === "assistant" && sessionId && turnScopeId
+      ? (Array.isArray(getAllMessages?.()) ? getAllMessages() : [])
+      .filter((candidate) =>
+        candidate !== messageItem &&
+        getMessageRole(candidate) === "assistant" &&
+        getMessageSessionId(candidate) === sessionId &&
+        getMessageTurnScopeId(candidate) === turnScopeId,
+      )
+      : [];
+    const turnAttachments = sameTurnMessages.reduce(
+      (result, candidate) => mergeAttachments(result, getMessageAttachments(candidate)),
+      [],
+    );
     const sourceAttachments = filterAttachmentsForMessage(
-      getMessageAttachments(messageItem),
+      turnAttachments.length
+        ? mergeAttachments(getMessageAttachments(messageItem), turnAttachments)
+        : getMessageAttachments(messageItem),
       messageItem,
     );
     const freshPendingAssistant = isFreshPendingAssistant(messageItem);
     const result = sourceAttachments;
+    logWorkflowDiagnostics("frontend.workflowRender.displayedAttachmentsProjected", () => ({
+      ...getMessageScopeIdentity(messageItem),
+      messageId: String(messageItem?.messageId || messageItem?.id || "").trim(),
+      role: getMessageRole(messageItem),
+      attachments: result.map((attachment) => ({
+        attachmentId: String(attachment?.attachmentId || "").trim(),
+        clientAttachmentId: String(attachment?.clientAttachmentId || attachment?.draftAttachmentId || "").trim(),
+        sessionId: String(attachment?.sessionId || "").trim(),
+        attachmentSource: String(attachment?.attachmentSource || "").trim(),
+        hasParsedResult: Boolean(attachment?.parsedResult),
+        parsedResultAttachmentId: String(attachment?.parsedResult?.attachmentId || attachment?.parsedResultAttachmentId || "").trim(),
+      })),
+    }));
     logDisplayedAttachmentsSummary({
       messageItem,
       baseAttachmentsCount: sourceAttachments.length,

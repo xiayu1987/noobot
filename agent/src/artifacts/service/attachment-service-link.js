@@ -105,6 +105,8 @@ export async function linkParsedResultInScopes({
         ...sourceRecord,
         parsedResult: {
           attachmentId: safeStr(parsedAttachmentMeta?.attachmentId),
+          sessionId: safeStr(parsedAttachmentMeta?.sessionId),
+          attachmentSource: safeStr(parsedAttachmentMeta?.attachmentSource).toLowerCase(),
           name: safeStr(parsedAttachmentMeta?.name),
           mimeType: safeStr(parsedAttachmentMeta?.mimeType),
           size: Number(parsedAttachmentMeta?.size || 0),
@@ -192,6 +194,7 @@ export async function syncParsedResultToSessionSnapshots({
     const nextSessionPayload = { ...(sessionPayload || {}), messages: nextMessages };
     try {
       await writeSessionArtifact({ sessionDir, sessionPayload: nextSessionPayload });
+      await syncSessionSummaryForSessionFile(sessionJsonFile, nextSessionPayload);
     } catch {
     }
   }

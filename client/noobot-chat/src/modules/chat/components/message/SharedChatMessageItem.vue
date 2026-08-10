@@ -138,6 +138,21 @@ const { displayedAttachments } = useMessageFiles({
   getUserId: () => props.userId,
 });
 
+watch(
+  () => displayedAttachments.value.map((attachment) => ({
+    attachmentId: String(attachment?.attachmentId || "").trim(),
+    hasParsedResult: Boolean(attachment?.parsedResult),
+    parsedResultAttachmentId: String(attachment?.parsedResult?.attachmentId || attachment?.parsedResultAttachmentId || "").trim(),
+  })),
+  (attachments) => {
+    logWorkflowDiagnostics("frontend.workflowRender.attachmentCardsProjected", {
+      ...summarizeWorkflowMessage(props.messageItem),
+      attachments,
+    });
+  },
+  { immediate: true, deep: true },
+);
+
 const { messageModelLabel, showSubTaskActivity, subTaskStatusText, statusStepState } = useMessageMeta({
   getMessageItem: () => props.messageItem,
   getRuntimeView: () => messageRuntime.value,

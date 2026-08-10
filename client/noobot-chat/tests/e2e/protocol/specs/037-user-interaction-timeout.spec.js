@@ -23,7 +23,11 @@ test("@core PBE-037 user_interaction timeout closes the real modal and is not re
   const interaction = noobot.page.locator(".interaction-card");
   await expect(interaction).toBeVisible({ timeout: 60000 });
   await expect(interaction.locator(".interaction-title")).toContainText("CASE037-TIMEOUT");
-  await expect(interaction).toBeHidden({ timeout: 30000 });
+  // The terminal lifecycle timeout is measured by the service from request
+  // creation; the card becomes visible only after websocket delivery. Allow
+  // transport/startup latency while keeping the authoritative lifecycle
+  // assertion unchanged.
+  await expect(interaction).toBeHidden({ timeout: 60000 });
 
   await waitForTurnTerminal(
     protocolCapture,

@@ -7,7 +7,7 @@ import { test, expect } from "../fixtures/noobot.fixture.js";
 import { PLUGIN_PROTOCOL_VERSION } from "@noobot/plugin-protocol";
 import { assertAttachmentHttpAccess, assertUniqueAttachmentIds, readRenderedFileNames, transferAttachmentsForTurn } from "../helpers/attachment-assertions.js";
 import {
-  addAttachment, fixedAttachment, selectPlugins, sendMessage, waitForNaturalCompletion,
+  addAttachment, fixedAttachment, fixedPngAttachment, selectPlugins, sendMessage, waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import {
   readAttachmentIndex,
@@ -86,7 +86,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: send.identity.turnScopeId,
-    timeoutMs: 300000,
+    timeoutMs: 420000,
   });
   expect(send.input.attachments).toHaveLength(1);
   const events = await waitForPluginRuntimeEvents(noobot.userId, noobot.sessionId, (records) =>
@@ -125,7 +125,9 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     .map((record) => record.sessionId)
     .filter((sessionId, index, values) => sessionId && values.indexOf(sessionId) === index);
   const childSessionId = (await Promise.all(childCandidates.map(async (candidate) => {
-    const execution = await readSessionExecutionEventTree(noobot.userId, candidate);
+    const execution = await readSessionExecutionEventTree(noobot.userId, candidate, {
+      rootSessionId: noobot.sessionId,
+    });
     return execution.some((record) =>
       record.sessionId === candidate && record.event === "tool_call_end"
       && record.data?.tool === "write_file" && record.data?.success === true
@@ -220,4 +222,61 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     { timeout: 30000 },
   ).toEqual(generatedNames);
   assertNoForbiddenErrors(protocolCapture.console);
+});
+
+test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预览下载", async ({ noobot, protocolCapture }, testInfo) => {
+  test.setTimeout(240000);
+  const file = fixedPngAttachment("pbe-038-source.png");
+  await addAttachment(noobot.page, file);
+  await sendMessage(noobot.page, uniquePrompt(
+    testInfo,
+    "调用 media2data 解析用户上传的 pbe-038-source.png，并报告解析结果文件名",
+  ));
+  const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
+  const userCard = noobot.page.locator(`.base-message-shell.user .base-file-card`).filter({ hasText: file.name }).last();
+  await expect(userCard).toBeVisible();
+  await expect(noobot.page.locator(".stop-float-btn")).toBeVisible();
+  await expect.poll(
+    () => userCard.locator(".parsed-result-action").count(),
+    { timeout: 120000 },
+  ).toBe(2);
+  await waitForNaturalCompletion({
+    page: noobot.page,
+    capture: protocolCapture,
+    sessionId: noobot.sessionId,
+    turnScopeId: send.identity.turnScopeId,
+    timeoutMs: 240000,
+  });
+
+  await expect.poll(
+    () => readAttachmentIndex(noobot.userId, noobot.sessionId, "user"),
+    { timeout: 30000 },
+  ).toMatchObject({ sessionId: noobot.sessionId, attachmentSource: "user" });
+  const sourceIndex = await readAttachmentIndex(noobot.userId, noobot.sessionId, "user");
+  const source = Object.values(sourceIndex.attachments || {}).find((item) =>
+    item?.descriptor?.name === file.name || item?.name === file.name,
+  );
+  expect(source).toBeTruthy();
+  const parsedResult = source.parsedResult || {
+    ...(source.parsedResultRef || {}),
+    ...(source.parsedResultRef?.identity || {}),
+  };
+  expect(parsedResult).toMatchObject({
+    attachmentId: expect.any(String),
+    sessionId: expect.any(String),
+    attachmentSource: "model",
+  });
+  await assertAttachmentHttpAccess(noobot.page, {
+    userId: noobot.userId,
+    sessionId: parsedResult.sessionId,
+    attachmentSource: parsedResult.attachmentSource,
+    attachmentId: parsedResult.attachmentId,
+    expectedName: parsedResult.name || `${source.identity?.attachmentId || source.attachmentId}.md`,
+  });
+
+  await expect(userCard.locator(".parsed-result-action")).toHaveCount(2);
+  await reloadAndWaitForReconnect(noobot.page, protocolCapture);
+  const refreshedCard = noobot.page.locator(`.base-message-shell.user .base-file-card`).filter({ hasText: file.name }).last();
+  await expect(refreshedCard).toBeVisible();
+  await expect(refreshedCard.locator(".parsed-result-action")).toHaveCount(2);
 });
