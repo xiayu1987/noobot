@@ -10,7 +10,7 @@ import {
   createTemplateResolveContext,
   resolveConfigSecrets,
   resolveConfigTemplates,
-} from "../../src/config/core/template-resolver.js";
+} from "../../src/config/core/config-secret-resolver.js";
 
 test("createTemplateResolveContext: 应生成大写参数查询映射", () => {
   const ctx = createTemplateResolveContext({
@@ -84,9 +84,6 @@ test("resolveConfigSecrets: 应递归处理数组和对象", () => {
 });
 
 test("resolveConfigTemplates: 应仅使用 variables（不读取 env）", () => {
-  const out = resolveConfigTemplates(
-    { key: "${API_KEY}" },
-    { API_KEY: "from-variables" },
-  );
+  const out = resolveConfigTemplates({ key: "${API_KEY}" }, { API_KEY: "from-variables" });
   assert.equal(out.key, "from-variables");
 });

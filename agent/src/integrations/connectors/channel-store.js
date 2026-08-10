@@ -11,8 +11,11 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { matchesSensitiveFieldPattern } from "../../tools/core/sensitive-field-patterns.js";
-import { CONNECTOR_TYPE, normalizeConnectorType } from "../../config/core/enums.js";
-import { normalizeTimeMs } from "../../config/core/time-config-normalizer.js";
+import {
+  CONNECTOR_TYPE,
+  normalizeConnectorType,
+  normalizeTimeMs,
+} from "@noobot/agent-config-protocol";
 import {
   CONNECTOR_RUNTIME_STATUS,
   CONNECTOR_STATUS_CODE,

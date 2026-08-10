@@ -6,14 +6,8 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import {
-  CONNECTOR_TYPE,
-  normalizeConnectorType,
-} from "../../config/core/enums.js";
-import {
-  CONNECTOR_RUNTIME_STATUS,
-  CONNECTOR_STATUS_CODE,
-} from "./constants.js";
+import { CONNECTOR_TYPE, normalizeConnectorType } from "@noobot/agent-config-protocol";
+import { CONNECTOR_RUNTIME_STATUS, CONNECTOR_STATUS_CODE } from "./constants.js";
 import { matchesSensitiveFieldPattern } from "../../tools/core/sensitive-field-patterns.js";
 
 const HISTORY_FILE_NAME = "connector-history.json";
@@ -24,9 +18,7 @@ function isSensitiveKeyName(keyName = "") {
 
 function sanitizeObject(inputValue = {}) {
   const sourceObject =
-    inputValue && typeof inputValue === "object" && !Array.isArray(inputValue)
-      ? inputValue
-      : {};
+    inputValue && typeof inputValue === "object" && !Array.isArray(inputValue) ? inputValue : {};
   const sanitizedObject = {};
   for (const [rawKey, rawValue] of Object.entries(sourceObject)) {
     const normalizedKey = String(rawKey || "").trim();
@@ -38,8 +30,7 @@ function sanitizeObject(inputValue = {}) {
 }
 
 function normalizeHistoryPayload(inputValue = {}) {
-  const sourceObject =
-    inputValue && typeof inputValue === "object" ? inputValue : {};
+  const sourceObject = inputValue && typeof inputValue === "object" ? inputValue : {};
   const sourceSessions =
     sourceObject?.sessions && typeof sourceObject.sessions === "object"
       ? sourceObject.sessions
@@ -49,27 +40,19 @@ function normalizeHistoryPayload(inputValue = {}) {
     const normalizedSessionId = String(rawSessionId || "").trim();
     if (!normalizedSessionId) continue;
     const sessionValue =
-      rawSessionValue && typeof rawSessionValue === "object"
-        ? rawSessionValue
-        : {};
+      rawSessionValue && typeof rawSessionValue === "object" ? rawSessionValue : {};
     const sourceConnectors =
       sessionValue?.connectors && typeof sessionValue.connectors === "object"
         ? sessionValue.connectors
         : {};
     const normalizedConnectors = {
-      [CONNECTOR_TYPE.DATABASE]: Array.isArray(
-        sourceConnectors?.[CONNECTOR_TYPE.DATABASE],
-      )
+      [CONNECTOR_TYPE.DATABASE]: Array.isArray(sourceConnectors?.[CONNECTOR_TYPE.DATABASE])
         ? sourceConnectors[CONNECTOR_TYPE.DATABASE]
         : [],
-      [CONNECTOR_TYPE.TERMINAL]: Array.isArray(
-        sourceConnectors?.[CONNECTOR_TYPE.TERMINAL],
-      )
+      [CONNECTOR_TYPE.TERMINAL]: Array.isArray(sourceConnectors?.[CONNECTOR_TYPE.TERMINAL])
         ? sourceConnectors[CONNECTOR_TYPE.TERMINAL]
         : [],
-      [CONNECTOR_TYPE.EMAIL]: Array.isArray(
-        sourceConnectors?.[CONNECTOR_TYPE.EMAIL],
-      )
+      [CONNECTOR_TYPE.EMAIL]: Array.isArray(sourceConnectors?.[CONNECTOR_TYPE.EMAIL])
         ? sourceConnectors[CONNECTOR_TYPE.EMAIL]
         : [],
     };
@@ -137,7 +120,10 @@ class ConnectorHistoryStore {
     const currentTask = new Promise((resolve) => {
       releaseLock = resolve;
     });
-    this.userLockMap.set(normalizedUserId, previousTask.then(() => currentTask));
+    this.userLockMap.set(
+      normalizedUserId,
+      previousTask.then(() => currentTask),
+    );
     await previousTask;
     try {
       return await executor();
@@ -167,19 +153,13 @@ class ConnectorHistoryStore {
         ? sessionHistory.connectors
         : {};
     return {
-      [CONNECTOR_TYPE.DATABASE]: Array.isArray(
-        sessionConnectors?.[CONNECTOR_TYPE.DATABASE],
-      )
+      [CONNECTOR_TYPE.DATABASE]: Array.isArray(sessionConnectors?.[CONNECTOR_TYPE.DATABASE])
         ? sessionConnectors[CONNECTOR_TYPE.DATABASE]
         : [],
-      [CONNECTOR_TYPE.TERMINAL]: Array.isArray(
-        sessionConnectors?.[CONNECTOR_TYPE.TERMINAL],
-      )
+      [CONNECTOR_TYPE.TERMINAL]: Array.isArray(sessionConnectors?.[CONNECTOR_TYPE.TERMINAL])
         ? sessionConnectors[CONNECTOR_TYPE.TERMINAL]
         : [],
-      [CONNECTOR_TYPE.EMAIL]: Array.isArray(
-        sessionConnectors?.[CONNECTOR_TYPE.EMAIL],
-      )
+      [CONNECTOR_TYPE.EMAIL]: Array.isArray(sessionConnectors?.[CONNECTOR_TYPE.EMAIL])
         ? sessionConnectors[CONNECTOR_TYPE.EMAIL]
         : [],
     };
@@ -225,13 +205,10 @@ class ConnectorHistoryStore {
         : [];
       const existingIndex = connectorList.findIndex(
         (connectorItem) =>
-          String(connectorItem?.connector_name || "").trim() ===
-          normalizedConnectorName,
+          String(connectorItem?.connector_name || "").trim() === normalizedConnectorName,
       );
       const existingItem =
-        existingIndex >= 0 && connectorList[existingIndex]
-          ? connectorList[existingIndex]
-          : {};
+        existingIndex >= 0 && connectorList[existingIndex] ? connectorList[existingIndex] : {};
       const sanitizedDefaults = sanitizeObject(connectionInfo);
       const sanitizedMeta = sanitizeObject(connectionMeta);
       const nextItem = {
@@ -251,8 +228,7 @@ class ConnectorHistoryStore {
           ...sanitizedDefaults,
         },
         connection_meta: {
-          ...(existingItem?.connection_meta &&
-          typeof existingItem.connection_meta === "object"
+          ...(existingItem?.connection_meta && typeof existingItem.connection_meta === "object"
             ? existingItem.connection_meta
             : {}),
           ...sanitizedMeta,
@@ -273,19 +249,13 @@ class ConnectorHistoryStore {
         sessionId: normalizedSessionId,
         updatedAt: nowIso,
         connectors: {
-          [CONNECTOR_TYPE.DATABASE]: Array.isArray(
-            currentConnectors?.[CONNECTOR_TYPE.DATABASE],
-          )
+          [CONNECTOR_TYPE.DATABASE]: Array.isArray(currentConnectors?.[CONNECTOR_TYPE.DATABASE])
             ? currentConnectors[CONNECTOR_TYPE.DATABASE]
             : [],
-          [CONNECTOR_TYPE.TERMINAL]: Array.isArray(
-            currentConnectors?.[CONNECTOR_TYPE.TERMINAL],
-          )
+          [CONNECTOR_TYPE.TERMINAL]: Array.isArray(currentConnectors?.[CONNECTOR_TYPE.TERMINAL])
             ? currentConnectors[CONNECTOR_TYPE.TERMINAL]
             : [],
-          [CONNECTOR_TYPE.EMAIL]: Array.isArray(
-            currentConnectors?.[CONNECTOR_TYPE.EMAIL],
-          )
+          [CONNECTOR_TYPE.EMAIL]: Array.isArray(currentConnectors?.[CONNECTOR_TYPE.EMAIL])
             ? currentConnectors[CONNECTOR_TYPE.EMAIL]
             : [],
           [normalizedConnectorType]: connectorList,

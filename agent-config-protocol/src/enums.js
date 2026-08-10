@@ -109,16 +109,8 @@ export const DOC2DATA_PARSE_ENGINE = {
 };
 
 export const DOC2DATA_PARSE_ENGINE_ALIASES = {
-  [DOC2DATA_PARSE_ENGINE.LIBREOFFICE]: [
-    DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
-    "libre_office",
-    "lo",
-  ],
-  [DOC2DATA_PARSE_ENGINE.VISION]: [
-    DOC2DATA_PARSE_ENGINE.VISION,
-    "image_model",
-    "model",
-  ],
+  [DOC2DATA_PARSE_ENGINE.LIBREOFFICE]: [DOC2DATA_PARSE_ENGINE.LIBREOFFICE, "libre_office", "lo"],
+  [DOC2DATA_PARSE_ENGINE.VISION]: [DOC2DATA_PARSE_ENGINE.VISION, "image_model", "model"],
 };
 
 export const MULTIMODAL_SCOPE = {
@@ -158,20 +150,15 @@ export const CONTEXT_SECTION_ALIASES = {
   [CONTEXT_SECTION.MODEL]: [CONTEXT_SECTION.MODEL, "models"],
   [CONTEXT_SECTION.SKILLS]: [CONTEXT_SECTION.SKILLS],
   [CONTEXT_SECTION.SERVICES]: [CONTEXT_SECTION.SERVICES],
-  [CONTEXT_SECTION.MCP_SERVERS]: [
-    CONTEXT_SECTION.MCP_SERVERS,
-    "mcp",
-    "mcpservers",
-  ],
-  [CONTEXT_SECTION.CONNECTORS]: [
-    CONTEXT_SECTION.CONNECTORS,
-    "connector_status",
-  ],
+  [CONTEXT_SECTION.MCP_SERVERS]: [CONTEXT_SECTION.MCP_SERVERS, "mcp", "mcpservers"],
+  [CONTEXT_SECTION.CONNECTORS]: [CONTEXT_SECTION.CONNECTORS, "connector_status"],
   [CONTEXT_SECTION.ATTACHMENTS]: [CONTEXT_SECTION.ATTACHMENTS],
 };
 
 export function normalizeWithAliases(input = "", aliasesMap = {}) {
-  const value = String(input || "").trim().toLowerCase();
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
   if (!value) return "";
   for (const [canonical, aliases] of Object.entries(aliasesMap)) {
     if (aliases.map((a) => String(a).toLowerCase()).includes(value)) {
@@ -204,7 +191,9 @@ export function normalizeDockerContainerScope(input = "") {
 }
 
 export function normalizeProviderFormat(input = "") {
-  const value = String(input || "").trim().toLowerCase();
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
   if (value === PROVIDER_FORMAT.DASHSCOPE) return PROVIDER_FORMAT.DASHSCOPE;
   return PROVIDER_FORMAT.OPENAI_COMPATIBLE;
 }

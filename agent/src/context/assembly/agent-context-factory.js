@@ -12,6 +12,7 @@ import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-
 import { getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeParentSessionId } from "../parent-session-id-resolver.js";
+import { resolveToolBindings } from "@noobot/agent-config-protocol";
 
 export class AgentContextFactory {
   constructor({
@@ -21,7 +22,6 @@ export class AgentContextFactory {
     attach = null,
     skill = null,
     botManager = null,
-    applyRunConfigToolPolicy = (agentContext = {}, runConfig = {}) => agentContext,
   } = {}) {
     this.globalConfig = globalConfig;
     this.session = session;
@@ -29,7 +29,6 @@ export class AgentContextFactory {
     this.attach = attach;
     this.skill = skill;
     this.botManager = botManager;
-    this.applyRunConfigToolPolicy = applyRunConfigToolPolicy;
   }
 
   buildContextBuilder({
@@ -194,10 +193,12 @@ export class AgentContextFactory {
         throw error;
       }
       if (isNewSession) {
-        const buildNewSessionContext = contextBuilder.buildNewSessionContext || contextBuilder.buildInitialContext;
+        const buildNewSessionContext =
+          contextBuilder.buildNewSessionContext || contextBuilder.buildInitialContext;
         agentContext = await buildNewSessionContext.call(contextBuilder, { dialogProcessId });
       } else {
-        const buildExistingSessionContext = contextBuilder.buildExistingSessionContext || contextBuilder.buildContinueContext;
+        const buildExistingSessionContext =
+          contextBuilder.buildExistingSessionContext || contextBuilder.buildContinueContext;
         agentContext = await buildExistingSessionContext.call(contextBuilder, { dialogProcessId });
       }
     } catch (error) {
@@ -218,10 +219,16 @@ export class AgentContextFactory {
       });
       throw error;
     }
-    const scopedAgentContext = this.applyRunConfigToolPolicy(
-      agentContext,
-      runConfig,
-    );
+    const scopedAgentContext = {
+      ...agentContext,
+      bindings: {
+        ...(agentContext?.bindings || {}),
+        tools: resolveToolBindings({
+          sourceTools: agentContext?.bindings?.tools,
+          runConfig,
+        }),
+      },
+    };
     const runtime = getRuntimeFromAgentContext(scopedAgentContext);
     const completedAtMs = Date.now();
     await runAgentRuntimeHook({
@@ -241,8 +248,7 @@ export class AgentContextFactory {
     });
     emitEvent(eventListener, "context_ready", {
       sessionId,
-      messageCount:
-        scopedAgentContext?.context?.modelContext?.messageBlocks?.history?.length || 0,
+      messageCount: scopedAgentContext?.context?.modelContext?.messageBlocks?.history?.length || 0,
     });
     return scopedAgentContext;
   }

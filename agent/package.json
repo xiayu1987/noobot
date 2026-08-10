@@ -54,6 +54,7 @@
     "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
     "@noobot/context-protocol": "file:../context-protocol",
+    "@noobot/agent-config-protocol": "file:../agent-config-protocol",
     "@noobot/hook-protocol": "file:../hook-protocol",
     "@noobot/runtime-events": "file:../runtime-events",
     "@noobot/sanitize": "file:../sanitize",

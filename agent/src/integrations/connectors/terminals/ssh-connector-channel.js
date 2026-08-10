@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { normalizeTimeMs, resolveTimeMs } from "../../../config/core/time-config-normalizer.js";
+import { normalizeTimeMs, resolveTimeMs } from "@noobot/agent-config-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function resolveSshConnection(connectionInfo = {}) {
-  const source =
-    connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
+  const source = connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
   return {
     host: String(source?.host || source?.ip || "").trim(),
     port: normalizeTimeMs(source?.port, {
@@ -40,11 +39,7 @@ async function importSsh2() {
 
 const sshShellStates = new Map();
 
-function buildChannelKey({
-  channelKey = "",
-  sessionId = "",
-  connectorName = "",
-} = {}) {
+function buildChannelKey({ channelKey = "", sessionId = "", connectorName = "" } = {}) {
   const explicit = String(channelKey || "").trim();
   if (explicit) return explicit;
   const sid = String(sessionId || "").trim();
@@ -59,12 +54,10 @@ function resetSshState(key = "") {
   if (!state) return;
   try {
     state?.stream?.end?.();
-  } catch {
-  }
+  } catch {}
   try {
     state?.client?.end?.();
-  } catch {
-  }
+  } catch {}
   sshShellStates.delete(normalizedKey);
 }
 
@@ -171,9 +164,7 @@ function runSshShellCommand(
       reject(new Error("ssh shell not ready"));
       return;
     }
-    const marker = `__NOOBOT_DONE_${Date.now()}_${Math.random()
-      .toString(16)
-      .slice(2)}__`;
+    const marker = `__NOOBOT_DONE_${Date.now()}_${Math.random().toString(16).slice(2)}__`;
     let stdout = "";
     let stderr = "";
     const stream = state.stream;
@@ -251,11 +242,7 @@ export async function executeSshCommand({
   }
 }
 
-export function closeSshChannel({
-  channelKey = "",
-  sessionId = "",
-  connectorName = "",
-} = {}) {
+export function closeSshChannel({ channelKey = "", sessionId = "", connectorName = "" } = {}) {
   const key = buildChannelKey({ channelKey, sessionId, connectorName });
   if (!key) return false;
   if (!sshShellStates.has(key)) return false;

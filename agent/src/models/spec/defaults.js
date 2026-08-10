@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { PROVIDER_FORMAT, normalizeProviderFormat } from "../../config/core/enums.js";
+import { PROVIDER_FORMAT, normalizeProviderFormat } from "@noobot/agent-config-protocol";
 
 export const MODEL_DEFAULT_FIELDS_BY_FORMAT = Object.freeze({
   [PROVIDER_FORMAT.OPENAI_COMPATIBLE]: Object.freeze({
@@ -101,8 +101,12 @@ const PROFILE_RULES = [
 ];
 
 function resolveModelProfiles(modelSpec = {}) {
-  const modelName = String(modelSpec?.model || "").trim().toLowerCase();
-  const aliasName = String(modelSpec?.alias || "").trim().toLowerCase();
+  const modelName = String(modelSpec?.model || "")
+    .trim()
+    .toLowerCase();
+  const aliasName = String(modelSpec?.alias || "")
+    .trim()
+    .toLowerCase();
   const mergedName = `${aliasName} ${modelName}`;
 
   const profiles = [];

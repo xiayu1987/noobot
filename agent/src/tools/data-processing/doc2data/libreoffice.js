@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import { filePath as path } from "@noobot/path-resolver";
 import { promisify } from "node:util";
-import { DOC2DATA_PARSE_ENGINE } from "../../../config/core/enums.js";
+import { DOC2DATA_PARSE_ENGINE } from "@noobot/agent-config-protocol";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { tTool } from "../../core/tool-i18n.js";
@@ -24,16 +24,13 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const require = createRequire(import.meta.url);
 const execFileAsync = promisify(execFile);
-const LIBREOFFICE_CONVERT_BASE_TIMEOUT_MS =
-  TIME_THRESHOLDS.tools.docToDataLibreOfficeBaseTimeoutMs;
+const LIBREOFFICE_CONVERT_BASE_TIMEOUT_MS = TIME_THRESHOLDS.tools.docToDataLibreOfficeBaseTimeoutMs;
 const LIBREOFFICE_CONVERT_PER_MIB_TIMEOUT_MS =
   TIME_THRESHOLDS.tools.docToDataLibreOfficePerMiBTimeoutMs;
-const LIBREOFFICE_CONVERT_MAX_TIMEOUT_MS =
-  TIME_THRESHOLDS.tools.docToDataLibreOfficeMaxTimeoutMs;
+const LIBREOFFICE_CONVERT_MAX_TIMEOUT_MS = TIME_THRESHOLDS.tools.docToDataLibreOfficeMaxTimeoutMs;
 const LIBREOFFICE_CONVERT_PROGRESS_CHECK_INTERVAL_MS =
   TIME_THRESHOLDS.tools.docToDataLibreOfficeProgressCheckIntervalMs;
-const LIBREOFFICE_TEMP_MAX_BYTES =
-  LENGTH_THRESHOLDS.dataProcessing.libreOfficeTempMaxBytes;
+const LIBREOFFICE_TEMP_MAX_BYTES = LENGTH_THRESHOLDS.dataProcessing.libreOfficeTempMaxBytes;
 const LIBREOFFICE_TEMP_INPUT_RATIO = 20;
 const LIBREOFFICE_TEXT_DECODER_ENCODINGS = Object.freeze([
   "utf-8",
@@ -92,8 +89,7 @@ export function decodeLibreOfficeTextBuffer(outputBuffer = Buffer.alloc(0)) {
         bestText = decodedText;
         bestScore = score;
       }
-    } catch {
-    }
+    } catch {}
   }
   return bestText.replace(/^\uFEFF/, "");
 }
@@ -101,11 +97,7 @@ export function decodeLibreOfficeTextBuffer(outputBuffer = Buffer.alloc(0)) {
 let libreOfficeConverters = null;
 
 function uniqueTruthyStrings(values = []) {
-  return [...new Set(
-    values
-      .map((value) => String(value || "").trim())
-      .filter(Boolean),
-  )];
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
 function resolveLibreOfficeBinaryPaths() {
@@ -127,9 +119,7 @@ function resolveLibreOfficeBinaryPaths() {
   if (process.platform === "win32") {
     const programFiles = process.env.PROGRAMFILES || "C:/Program Files";
     const programFilesX86 =
-      process.env["PROGRAMFILES(X86)"] ||
-      process.env.PROGRAMFILES_X86 ||
-      "C:/Program Files (x86)";
+      process.env["PROGRAMFILES(X86)"] || process.env.PROGRAMFILES_X86 || "C:/Program Files (x86)";
     return uniqueTruthyStrings([
       ...configuredPaths,
       path.join(programFiles, "LibreOffice", "program", "soffice.exe"),
@@ -174,8 +164,7 @@ function resolveLibreOfficeConverters() {
         };
         return libreOfficeConverters;
       }
-    } catch {
-    }
+    } catch {}
   }
   return null;
 }
@@ -217,47 +206,49 @@ async function recordLibreOfficeParseFailed({
   const systemRuntime = runtime?.systemRuntime || {};
   const sessionId = String(systemRuntime?.sessionId || systemRuntime?.rootSessionId || "").trim();
   const dialogProcessId = String(systemRuntime?.dialogProcessId || "").trim();
-  const turnScopeId = String(systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "").trim();
+  const turnScopeId = String(
+    systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "",
+  ).trim();
   if (!userId || !sessionId) return { ok: true, skipped: true };
   const inputValue = String(inputFile || "");
-  return writeRoutedRuntimeEvent({
-    scope: "session",
-    source: "agent",
-    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-    event: "agent.doc2data.libreofficeParse.failed",
-    userId,
-    sessionId,
-    ...(dialogProcessId ? { dialogProcessId } : {}),
-    ...(turnScopeId ? { turnScopeId } : {}),
-    data: {
-      inputFileName: String(inputFileName || path.basename(inputValue)),
-      inputPathLength: inputValue.length,
-      errorName: String(error?.name || ""),
-      errorCode: String(error?.code || ""),
-      errorMessage: error?.message || String(error || ""),
-      parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
-      libreOfficeModule: String(converters?.moduleName || ""),
-      libreOfficeOutputFormat: outputFormat?.format || "",
-      timeoutMs: Number(convertBudget?.timeoutMs || 0),
-      tempMaxBytes: Number(convertBudget?.tempMaxBytes || 0),
+  return writeRoutedRuntimeEvent(
+    {
+      scope: "session",
+      source: "agent",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+      event: "agent.doc2data.libreofficeParse.failed",
+      userId,
+      sessionId,
+      ...(dialogProcessId ? { dialogProcessId } : {}),
+      ...(turnScopeId ? { turnScopeId } : {}),
+      data: {
+        inputFileName: String(inputFileName || path.basename(inputValue)),
+        inputPathLength: inputValue.length,
+        errorName: String(error?.name || ""),
+        errorCode: String(error?.code || ""),
+        errorMessage: error?.message || String(error || ""),
+        parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
+        libreOfficeModule: String(converters?.moduleName || ""),
+        libreOfficeOutputFormat: outputFormat?.format || "",
+        timeoutMs: Number(convertBudget?.timeoutMs || 0),
+        tempMaxBytes: Number(convertBudget?.tempMaxBytes || 0),
+      },
     },
-  }, {
-    workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
-  });
+    {
+      workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
+    },
+  );
 }
 
 function resolveLibreOfficeConvertBudget(inputBytes = 0) {
   const normalizedInputBytes =
-    Number.isFinite(Number(inputBytes)) && Number(inputBytes) > 0
-      ? Number(inputBytes)
-      : 0;
+    Number.isFinite(Number(inputBytes)) && Number(inputBytes) > 0 ? Number(inputBytes) : 0;
   const mib = 1024 * 1024;
   const fileMiB = Math.ceil(normalizedInputBytes / mib);
   const timeoutMs = Math.min(
     LIBREOFFICE_CONVERT_MAX_TIMEOUT_MS,
-    LIBREOFFICE_CONVERT_BASE_TIMEOUT_MS +
-      fileMiB * LIBREOFFICE_CONVERT_PER_MIB_TIMEOUT_MS,
+    LIBREOFFICE_CONVERT_BASE_TIMEOUT_MS + fileMiB * LIBREOFFICE_CONVERT_PER_MIB_TIMEOUT_MS,
   );
   const tempMaxBytes = Math.max(
     LIBREOFFICE_TEMP_MAX_BYTES,
@@ -290,8 +281,7 @@ async function collectDirectoryBytes(directoryPath = "") {
         const entryStat = await stat(entryPath);
         totalBytes += Number(entryStat?.size || 0);
       }
-    } catch {
-    }
+    } catch {}
   }
   return totalBytes;
 }
@@ -322,10 +312,7 @@ async function createLibreOfficeGuardTempDir() {
 async function collectLibreOfficeTempBytesForNodePid(pid = process.pid) {
   const normalizedPid = String(pid || "").trim();
   if (!normalizedPid || process.platform === "win32") return 0;
-  const prefixes = [
-    `libreofficeConvert_-${normalizedPid}-`,
-    `soffice-${normalizedPid}-`,
-  ];
+  const prefixes = [`libreofficeConvert_-${normalizedPid}-`, `soffice-${normalizedPid}-`];
   let totalBytes = 0;
   for (const tempRoot of resolveLibreOfficeTempRoots()) {
     let tmpEntries = [];
@@ -377,8 +364,7 @@ async function listWindowsLibreOfficeProcesses() {
       },
     );
     return parseWindowsProcessRows(stdout);
-  } catch {
-  }
+  } catch {}
   try {
     const { stdout } = await execFileAsync(
       "wmic",
@@ -420,20 +406,23 @@ async function killLibreOfficeProcessesForNodePid(pid = process.pid, extraPathTo
           const isCurrentConvert = tempPathTokens.some((token) =>
             processItem.commandLine.includes(token),
           );
-          return Number.isInteger(processItem.processId) && processItem.processId > 0 && isCurrentConvert
+          return Number.isInteger(processItem.processId) &&
+            processItem.processId > 0 &&
+            isCurrentConvert
             ? processItem.processId
             : null;
         })
         .filter((processId) => Number.isInteger(processId) && processId > 0);
-      await Promise.all(targetPids.map((processId) =>
-        execFileAsync("taskkill", ["/PID", String(processId), "/T", "/F"], {
-          timeout: 5000,
-          maxBuffer: 1024 * 1024,
-          windowsHide: true,
-        }).catch(() => {}),
-      ));
-    } catch {
-    }
+      await Promise.all(
+        targetPids.map((processId) =>
+          execFileAsync("taskkill", ["/PID", String(processId), "/T", "/F"], {
+            timeout: 5000,
+            maxBuffer: 1024 * 1024,
+            windowsHide: true,
+          }).catch(() => {}),
+        ),
+      );
+    } catch {}
     return;
   }
   try {
@@ -449,9 +438,7 @@ async function killLibreOfficeProcessesForNodePid(pid = process.pid, extraPathTo
         if (!match) return null;
         const [, processId, args] = match;
         const isLibreOfficeProcess =
-          args.includes("/libreoffice/") ||
-          args.includes("soffice") ||
-          args.includes("oosplash");
+          args.includes("/libreoffice/") || args.includes("soffice") || args.includes("oosplash");
         const isCurrentConvert = tempPathTokens.some((token) => args.includes(token));
         return isLibreOfficeProcess && isCurrentConvert ? Number(processId) : null;
       })
@@ -460,21 +447,18 @@ async function killLibreOfficeProcessesForNodePid(pid = process.pid, extraPathTo
     for (const processId of targetPids) {
       try {
         process.kill(processId, "SIGTERM");
-      } catch {
-      }
+      } catch {}
     }
     if (targetPids.length) {
       setTimeout(() => {
         for (const processId of targetPids) {
           try {
             process.kill(processId, "SIGKILL");
-          } catch {
-          }
+          } catch {}
         }
       }, 1500).unref?.();
     }
-  } catch {
-  }
+  } catch {}
 }
 
 async function withLibreOfficeConvertGuard(
@@ -496,7 +480,8 @@ async function withLibreOfficeConvertGuard(
     Number(budget.progressCheckIntervalMs) > 0
       ? Number(budget.progressCheckIntervalMs)
       : 0;
-  if (!timeoutMs && (!tempMaxBytes || !progressCheckIntervalMs) && !abortSignal) return convertPromise;
+  if (!timeoutMs && (!tempMaxBytes || !progressCheckIntervalMs) && !abortSignal)
+    return convertPromise;
 
   let timeoutTimer = null;
   let progressTimer = null;
@@ -584,20 +569,23 @@ export async function parseDocumentToTextViaLibreOffice({
     convertBudget = resolveLibreOfficeConvertBudget(inputBuffer.length);
     const inputPathBaseName = path.basename(String(inputFile || "").trim());
     const sourceAttachmentName = String(sourceAttachmentMeta?.name || "").trim();
-    inputFileName =
-      path.extname(inputPathBaseName)
-        ? inputPathBaseName
-        : (path.extname(sourceAttachmentName) ? sourceAttachmentName : inputPathBaseName || "source.bin");
+    inputFileName = path.extname(inputPathBaseName)
+      ? inputPathBaseName
+      : path.extname(sourceAttachmentName)
+        ? sourceAttachmentName
+        : inputPathBaseName || "source.bin";
     outputFormat = resolveLibreOfficeOutputFormat(inputFileName);
     let outputBuffer = null;
     try {
       outputBuffer = await withLibreOfficeConvertGuard(
         converterWithOptions
           ? converterWithOptions(inputBuffer, outputFormat.format, outputFormat.filter, {
-            fileName: inputFileName,
-            sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
-            tmpOptions: { dir: guardTempDir || (guardTempDir = await createLibreOfficeGuardTempDir()) },
-          })
+              fileName: inputFileName,
+              sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
+              tmpOptions: {
+                dir: guardTempDir || (guardTempDir = await createLibreOfficeGuardTempDir()),
+              },
+            })
           : converter(inputBuffer, outputFormat.format, outputFormat.filter),
         convertBudget,
         runtime?.abortSignal || null,
@@ -612,10 +600,12 @@ export async function parseDocumentToTextViaLibreOffice({
       outputBuffer = await withLibreOfficeConvertGuard(
         converterWithOptions
           ? converterWithOptions(inputBuffer, "txt", "Text", {
-            fileName: inputFileName,
-            sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
-            tmpOptions: { dir: guardTempDir || (guardTempDir = await createLibreOfficeGuardTempDir()) },
-          })
+              fileName: inputFileName,
+              sofficeBinaryPaths: resolveLibreOfficeBinaryPaths(),
+              tmpOptions: {
+                dir: guardTempDir || (guardTempDir = await createLibreOfficeGuardTempDir()),
+              },
+            })
           : converter(inputBuffer, "txt", "Text"),
         convertBudget,
         runtime?.abortSignal || null,
@@ -665,14 +655,7 @@ function sanitizeArtifactBaseName(input = "", fallback = "doc2data_result") {
 
 function resolveLibreOfficeOutputFormat(inputFileName = "") {
   const extension = path.extname(String(inputFileName || "").trim()).toLowerCase();
-  if ([
-    ".xlsx",
-    ".xls",
-    ".xlsm",
-    ".xlsb",
-    ".ods",
-    ".csv",
-  ].includes(extension)) {
+  if ([".xlsx", ".xls", ".xlsm", ".xlsb", ".ods", ".csv"].includes(extension)) {
     return {
       format: "csv",
       filter: undefined,

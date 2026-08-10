@@ -6,10 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { RunConfigResolver } from "../../src/bot/config/run-config-resolver.js";
+import { RunConfigResolver, resolveToolBindings } from "@noobot/agent-config-protocol";
 
-test("applyRunConfigToolPolicy should only keep tools allowed by runtime policy", () => {
-  const resolver = new RunConfigResolver();
+test("resolveToolBindings should only keep tools allowed by runtime policy", () => {
   const agentContext = {
     bindings: { tools: [{ name: "final_answer" }, { name: "read_file" }] },
   };
@@ -20,14 +19,15 @@ test("applyRunConfigToolPolicy should only keep tools allowed by runtime policy"
     },
   };
 
-  const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.bindings?.tools || []).map((tool) => tool.name);
+  const toolNames = resolveToolBindings({
+    sourceTools: agentContext.bindings.tools,
+    runConfig,
+  }).map((tool) => tool.name);
 
   assert.deepEqual(toolNames, ["read_file"]);
 });
 
-test("applyRunConfigToolPolicy should not force keep final_answer when safety confirmation is disabled", () => {
-  const resolver = new RunConfigResolver();
+test("resolveToolBindings should not force keep final_answer when safety confirmation is disabled", () => {
   const agentContext = {
     bindings: { tools: [{ name: "final_answer" }, { name: "read_file" }] },
   };
@@ -38,20 +38,19 @@ test("applyRunConfigToolPolicy should not force keep final_answer when safety co
     },
   };
 
-  const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.bindings?.tools || []).map((tool) => tool.name);
+  const toolNames = resolveToolBindings({
+    sourceTools: agentContext.bindings.tools,
+    runConfig,
+  }).map((tool) => tool.name);
 
   assert.deepEqual(toolNames, ["read_file"]);
 });
 
-test("applyRunConfigToolPolicy should support denyToolNames as unified runtime field", () => {
-  const resolver = new RunConfigResolver();
+test("resolveToolBindings should support denyToolNames as unified runtime field", () => {
   const agentContext = {
-    bindings: { tools: [
-      { name: "read_file" },
-      { name: "read_file" },
-      { name: "delegate_task_async" },
-    ] },
+    bindings: {
+      tools: [{ name: "read_file" }, { name: "read_file" }, { name: "delegate_task_async" }],
+    },
   };
   const runConfig = {
     toolPolicy: {
@@ -59,14 +58,15 @@ test("applyRunConfigToolPolicy should support denyToolNames as unified runtime f
     },
   };
 
-  const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.bindings?.tools || []).map((tool) => tool.name);
+  const toolNames = resolveToolBindings({
+    sourceTools: agentContext.bindings.tools,
+    runConfig,
+  }).map((tool) => tool.name);
 
   assert.deepEqual(toolNames, []);
 });
 
-test("applyRunConfigToolPolicy denyToolNames should override allowToolNames", () => {
-  const resolver = new RunConfigResolver();
+test("resolveToolBindings denyToolNames should override allowToolNames", () => {
   const agentContext = {
     bindings: { tools: [{ name: "execute_script" }, { name: "read_file" }] },
   };
@@ -77,23 +77,26 @@ test("applyRunConfigToolPolicy denyToolNames should override allowToolNames", ()
     },
   };
 
-  const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.bindings?.tools || []).map((tool) => tool.name);
+  const toolNames = resolveToolBindings({
+    sourceTools: agentContext.bindings.tools,
+    runConfig,
+  }).map((tool) => tool.name);
 
   assert.deepEqual(toolNames, ["read_file"]);
 });
 
-test("applyRunConfigToolPolicy should keep custom_only as the complete tool boundary", () => {
-  const resolver = new RunConfigResolver();
+test("resolveToolBindings should keep custom_only as the complete tool boundary", () => {
   const agentContext = {
-    bindings: { tools: [
-      { name: "read_file" },
-      { name: "write_file" },
-      { name: "search" },
-      { name: "patch_file" },
-      { name: "execute_script" },
-      { name: "request_help" },
-    ] },
+    bindings: {
+      tools: [
+        { name: "read_file" },
+        { name: "write_file" },
+        { name: "search" },
+        { name: "patch_file" },
+        { name: "execute_script" },
+        { name: "request_help" },
+      ],
+    },
   };
   const runConfig = {
     scenario: "coding",
@@ -101,18 +104,14 @@ test("applyRunConfigToolPolicy should keep custom_only as the complete tool boun
       mode: "custom_only",
       customTools: [{ name: "request_help" }],
       allowToolNames: ["request_help"],
-      denyToolNames: [
-        "read_file",
-        "write_file",
-        "search",
-        "patch_file",
-        "execute_script",
-      ],
+      denyToolNames: ["read_file", "write_file", "search", "patch_file", "execute_script"],
     },
   };
 
-  const nextContext = resolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  const toolNames = (nextContext?.bindings?.tools || [])
+  const toolNames = resolveToolBindings({
+    sourceTools: agentContext.bindings.tools,
+    runConfig,
+  })
     .map((tool) => tool.name)
     .sort();
 
@@ -237,8 +236,14 @@ test("custom_only should not inherit tools from any scenario", () => {
         ],
       },
     };
-    const scoped = resolver.applyRunConfigToolPolicy(context, resolved);
-    assert.deepEqual(scoped.bindings.tools.map((tool) => tool.name), [`${scenario}_tool`]);
+    const tools = resolveToolBindings({
+      sourceTools: context.bindings.tools,
+      runConfig: resolved,
+    });
+    assert.deepEqual(
+      tools.map((tool) => tool.name),
+      [`${scenario}_tool`],
+    );
   }
 });
 

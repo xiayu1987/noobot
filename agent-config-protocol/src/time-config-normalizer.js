@@ -3,16 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { logWarn } from "../../observability/console/logger.js";
+const logWarn = () => {};
 
 const LEGACY_TIME_KEY_WARN_CACHE = new Set();
 const LEGACY_TIME_KEY_USAGE_COUNTER = new Map();
 
-function increaseLegacyUsageCounter({
-  sourceTag = "",
-  key = "",
-  legacyKey = "",
-} = {}) {
+function increaseLegacyUsageCounter({ sourceTag = "", key = "", legacyKey = "" } = {}) {
   const tag = String(sourceTag || "").trim() || "unknown";
   const canonicalKey = String(key || "").trim() || "unknown";
   const legacy = String(legacyKey || "").trim() || "unknown";
@@ -29,12 +25,7 @@ function normalizeBoundary(rawValue, fallback) {
 
 export function normalizeTimeMs(
   rawValue,
-  {
-    fallback = 0,
-    min = 0,
-    max = Number.POSITIVE_INFINITY,
-    allowZero = false,
-  } = {},
+  { fallback = 0, min = 0, max = Number.POSITIVE_INFINITY, allowZero = false } = {},
 ) {
   const parsed = Number(rawValue);
   const fallbackValue = Number.isFinite(Number(fallback)) ? Number(fallback) : 0;
@@ -64,10 +55,7 @@ export function resolveTimeMs(
   const normalizedSource =
     source && typeof source === "object" && !Array.isArray(source) ? source : {};
   const preferredKey = String(key || "").trim();
-  const keyCandidates = [
-    preferredKey,
-    ...(Array.isArray(legacyKeys) ? legacyKeys : []),
-  ]
+  const keyCandidates = [preferredKey, ...(Array.isArray(legacyKeys) ? legacyKeys : [])]
     .map((item) => String(item || "").trim())
     .filter(Boolean);
 

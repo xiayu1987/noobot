@@ -12,35 +12,20 @@ import {
   __resetLegacyTimeKeyWarnCacheForTest,
   __resetLegacyTimeKeyUsageStatsForTest,
   getLegacyTimeKeyUsageStats,
-} from "../../src/config/core/time-config-normalizer.js";
+} from "@noobot/agent-config-protocol";
 
 test("normalizeTimeMs: 非法值应回退 fallback", () => {
-  assert.equal(
-    normalizeTimeMs(undefined, { fallback: 30000, min: 1000 }),
-    30000,
-  );
-  assert.equal(
-    normalizeTimeMs("NaN", { fallback: 30000, min: 1000 }),
-    30000,
-  );
+  assert.equal(normalizeTimeMs(undefined, { fallback: 30000, min: 1000 }), 30000);
+  assert.equal(normalizeTimeMs("NaN", { fallback: 30000, min: 1000 }), 30000);
 });
 
 test("normalizeTimeMs: 应应用 min/max clamp", () => {
-  assert.equal(
-    normalizeTimeMs(500, { fallback: 30000, min: 1000, max: 60000 }),
-    1000,
-  );
-  assert.equal(
-    normalizeTimeMs(120000, { fallback: 30000, min: 1000, max: 60000 }),
-    60000,
-  );
+  assert.equal(normalizeTimeMs(500, { fallback: 30000, min: 1000, max: 60000 }), 1000);
+  assert.equal(normalizeTimeMs(120000, { fallback: 30000, min: 1000, max: 60000 }), 60000);
 });
 
 test("normalizeTimeMs: min=0 时可允许 0", () => {
-  assert.equal(
-    normalizeTimeMs(0, { fallback: 30000, min: 0, allowZero: true }),
-    0,
-  );
+  assert.equal(normalizeTimeMs(0, { fallback: 30000, min: 0, allowZero: true }), 0);
 });
 
 test("resolveTimeMs: 应优先读取 canonical 字段，缺失时读取 legacy 字段", () => {
