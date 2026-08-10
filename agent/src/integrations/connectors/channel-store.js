@@ -4,18 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { executeDatabaseCommand } from "./databases/index.js";
-import { executeTerminalCommand } from "./terminals/index.js";
-import { releaseTerminalChannel } from "./terminals/index.js";
+import { executeTerminalCommand, releaseTerminalChannel } from "./terminals/index.js";
 import { executeEmailCommand } from "./emails/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { matchesSensitiveFieldPattern } from "../../tools/core/sensitive-field-patterns.js";
-import {
-  CONNECTOR_TYPE,
-  normalizeConnectorType,
-} from "../../config/core/enums.js";
+import { CONNECTOR_TYPE, normalizeConnectorType } from "../../config/core/enums.js";
 import { normalizeTimeMs } from "../../config/core/time-config-normalizer.js";
 import {
   CONNECTOR_RUNTIME_STATUS,
@@ -28,8 +24,7 @@ function hasSensitiveKeyName(keyName = "") {
 }
 
 function sanitizeConnectorMeta(connectionMeta = {}) {
-  const sourceMeta =
-    connectionMeta && typeof connectionMeta === "object" ? connectionMeta : {};
+  const sourceMeta = connectionMeta && typeof connectionMeta === "object" ? connectionMeta : {};
   const sanitizedMeta = {};
   for (const [metaKey, metaValue] of Object.entries(sourceMeta)) {
     const normalizedMetaKey = String(metaKey || "").trim();
@@ -110,8 +105,7 @@ class ConnectorChannelStore {
     if (deleted && normalizeConnectorType(connectorType) === CONNECTOR_TYPE.TERMINAL) {
       releaseTerminalChannel({
         connectionInfo:
-          existingChannel?.connectionInfo &&
-          typeof existingChannel.connectionInfo === "object"
+          existingChannel?.connectionInfo && typeof existingChannel.connectionInfo === "object"
             ? existingChannel.connectionInfo
             : {},
         sessionId: String(sessionId || "").trim(),
@@ -124,15 +118,9 @@ class ConnectorChannelStore {
   getSessionConnectors(sessionId = "") {
     const bucket = this._ensureSessionBucket(sessionId);
     return {
-      databases: Array.from((bucket.databases || new Map()).values()).map(
-        toSerializableConnector,
-      ),
-      terminals: Array.from((bucket.terminals || new Map()).values()).map(
-        toSerializableConnector,
-      ),
-      emails: Array.from((bucket.emails || new Map()).values()).map(
-        toSerializableConnector,
-      ),
+      databases: Array.from((bucket.databases || new Map()).values()).map(toSerializableConnector),
+      terminals: Array.from((bucket.terminals || new Map()).values()).map(toSerializableConnector),
+      emails: Array.from((bucket.emails || new Map()).values()).map(toSerializableConnector),
     };
   }
 
@@ -156,8 +144,7 @@ class ConnectorChannelStore {
     }
     const bucket = this._ensureSessionBucket(sessionId);
     const connectedAt = new Date().toISOString();
-    const info =
-      connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
+    const info = connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
     const channel = {
       connectorName: normalizedName,
       connectorType: normalizedType,
@@ -170,28 +157,24 @@ class ConnectorChannelStore {
             }
           : normalizedType === CONNECTOR_TYPE.TERMINAL
             ? {
-              terminalType: String(info?.terminal_type || ""),
-              host: String(info?.host || ""),
-              port: Number(info?.port || 22),
-              username: String(info?.username || ""),
-            }
+                terminalType: String(info?.terminal_type || ""),
+                host: String(info?.host || ""),
+                port: Number(info?.port || 22),
+                username: String(info?.username || ""),
+              }
             : {
-              smtpHost: String(info?.smtp_host || ""),
-              smtpPort: Number(info?.smtp_port || 587),
-              imapHost: String(info?.imap_host || ""),
-              imapPort: Number(info?.imap_port || 993),
-              username: String(info?.username || ""),
-            },
+                smtpHost: String(info?.smtp_host || ""),
+                smtpPort: Number(info?.smtp_port || 587),
+                imapHost: String(info?.imap_host || ""),
+                imapPort: Number(info?.imap_port || 993),
+                username: String(info?.username || ""),
+              },
     };
     this._registerConnectorChannel(bucket, channel);
     return toSerializableConnector(channel);
   }
 
-  disconnectConnector({
-    sessionId = "",
-    connectorName = "",
-    connectorType = "",
-  } = {}) {
+  disconnectConnector({ sessionId = "", connectorName = "", connectorType = "" } = {}) {
     const normalizedName = String(connectorName || "").trim();
     const normalizedType = normalizeConnectorType(connectorType);
     if (!normalizedName || !normalizedType) return false;
@@ -222,18 +205,13 @@ class ConnectorChannelStore {
         releasedCounts: { databases: 0, terminals: 0, emails: 0, total: 0 },
       };
     }
-    const databaseChannels = Array.from(
-      (bucket.databases || new Map()).values(),
-    );
-    const terminalChannels = Array.from(
-      (bucket.terminals || new Map()).values(),
-    );
+    const databaseChannels = Array.from((bucket.databases || new Map()).values());
+    const terminalChannels = Array.from((bucket.terminals || new Map()).values());
     const emailChannels = Array.from((bucket.emails || new Map()).values());
     for (const terminalChannel of terminalChannels) {
       releaseTerminalChannel({
         connectionInfo:
-          terminalChannel?.connectionInfo &&
-          typeof terminalChannel.connectionInfo === "object"
+          terminalChannel?.connectionInfo && typeof terminalChannel.connectionInfo === "object"
             ? terminalChannel.connectionInfo
             : {},
         sessionId: normalizedSessionId,
@@ -245,8 +223,7 @@ class ConnectorChannelStore {
       databases: databaseChannels.length,
       terminals: terminalChannels.length,
       emails: emailChannels.length,
-      total:
-        databaseChannels.length + terminalChannels.length + emailChannels.length,
+      total: databaseChannels.length + terminalChannels.length + emailChannels.length,
     };
     return {
       released: releasedCounts.total > 0,
@@ -303,9 +280,7 @@ class ConnectorChannelStore {
     if (normalizedType === CONNECTOR_TYPE.TERMINAL) {
       const execution = await executeTerminalCommand({
         command: cmd,
-        channelKey: `${String(sessionId || "").trim()}::${String(
-          connectorName || "",
-        ).trim()}`,
+        channelKey: `${String(sessionId || "").trim()}::${String(connectorName || "").trim()}`,
         sessionId: String(sessionId || "").trim(),
         connectorName: String(connectorName || "").trim(),
         connectionInfo:
@@ -327,9 +302,7 @@ class ConnectorChannelStore {
       const execution = await executeEmailCommand({
         command: cmd,
         attachmentHandler:
-          typeof emailAttachmentHandler === "function"
-            ? emailAttachmentHandler
-            : null,
+          typeof emailAttachmentHandler === "function" ? emailAttachmentHandler : null,
         connectionInfo:
           channel?.connectionInfo && typeof channel.connectionInfo === "object"
             ? channel.connectionInfo
@@ -401,13 +374,8 @@ class ConnectorChannelStore {
     const terminalSourceList = Array.isArray(sourceConnectors?.terminals)
       ? sourceConnectors.terminals
       : [];
-    const emailSourceList = Array.isArray(sourceConnectors?.emails)
-      ? sourceConnectors.emails
-      : [];
-    const resolveConnectorStatus = async (
-      connectorItem = {},
-      connectorType = "",
-    ) => {
+    const emailSourceList = Array.isArray(sourceConnectors?.emails) ? sourceConnectors.emails : [];
+    const resolveConnectorStatus = async (connectorItem = {}, connectorType = "") => {
       const connectorName = String(connectorItem?.connectorName || "").trim();
       const baseStatus = {
         connector_name: connectorName,
@@ -433,9 +401,7 @@ class ConnectorChannelStore {
         const executionOk = executionResult?.ok === true;
         return {
           ...baseStatus,
-          status: executionOk
-            ? CONNECTOR_RUNTIME_STATUS.CONNECTED
-            : CONNECTOR_RUNTIME_STATUS.ERROR,
+          status: executionOk ? CONNECTOR_RUNTIME_STATUS.CONNECTED : CONNECTOR_RUNTIME_STATUS.ERROR,
           status_code: Number.isFinite(executionCode)
             ? executionCode
             : executionOk
@@ -452,9 +418,7 @@ class ConnectorChannelStore {
           status: CONNECTOR_RUNTIME_STATUS.ERROR,
           status_code: CONNECTOR_STATUS_CODE.INTERNAL_ERROR,
           status_message: String(
-            error?.message ||
-              error ||
-              CONNECTOR_RUNTIME_STATUS_TEXT.HEALTH_CHECK_FAILED,
+            error?.message || error || CONNECTOR_RUNTIME_STATUS_TEXT.HEALTH_CHECK_FAILED,
           ),
           checked_at: new Date().toISOString(),
         };
@@ -487,18 +451,14 @@ class ConnectorChannelStore {
         total_count: allConnectors.length,
         connected_count: allConnectors.filter(
           (connectorItem) =>
-            String(connectorItem?.status || "") ===
-            CONNECTOR_RUNTIME_STATUS.CONNECTED,
+            String(connectorItem?.status || "") === CONNECTOR_RUNTIME_STATUS.CONNECTED,
         ).length,
         error_count: allConnectors.filter(
-          (connectorItem) =>
-            String(connectorItem?.status || "") ===
-            CONNECTOR_RUNTIME_STATUS.ERROR,
+          (connectorItem) => String(connectorItem?.status || "") === CONNECTOR_RUNTIME_STATUS.ERROR,
         ).length,
         unknown_count: allConnectors.filter(
           (connectorItem) =>
-            String(connectorItem?.status || "") ===
-            CONNECTOR_RUNTIME_STATUS.UNKNOWN,
+            String(connectorItem?.status || "") === CONNECTOR_RUNTIME_STATUS.UNKNOWN,
         ).length,
       },
     };
@@ -551,8 +511,7 @@ class ConnectorChannelStore {
     const hitConnector =
       sourceList.find(
         (connectorItem) =>
-          String(connectorItem?.connector_name || "").trim() ===
-          normalizedConnectorName,
+          String(connectorItem?.connector_name || "").trim() === normalizedConnectorName,
       ) || null;
     if (hitConnector) return hitConnector;
     return {

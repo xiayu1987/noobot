@@ -4,26 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IFlowto from './flowto/interfaces/flowto.js';
-import INodeLineRLAT from './flowto/interfaces/node-line-rlat.js';
-import INode from './node/interfaces/node.js';
-import IStateNode from './node/interfaces/state-node.js';
+import IFlowto from "./flowto/interfaces/flowto.js";
+import INodeLineRLAT from "./flowto/interfaces/node-line-rlat.js";
+import INode from "./node/interfaces/node.js";
+import IStateNode from "./node/interfaces/state-node.js";
 
 class ModelUtility {
-  constructor() {
-  }
-  static getStartNode(model) {
-  }
-  static getEndNode(model) {
-  }
+  constructor() {}
+  static getStartNode(model) {}
+  static getEndNode(model) {}
   static getNodeStartFlowtos(node) {
     var result = [];
     var nodeLineRLATs = node.getModel().getNodeLineRLATs();
     for (var i = 0; i < nodeLineRLATs.length; i++) {
-    var nodeLineRLAT = nodeLineRLATs.get(i);
-    if (nodeLineRLAT.getNode() == node && nodeLineRLAT.getRLATType() == 1) {
-    result.push(nodeLineRLAT.getFlowto());
-    }
+      var nodeLineRLAT = nodeLineRLATs.get(i);
+      if (nodeLineRLAT.getNode() === node && nodeLineRLAT.getRLATType() === 1) {
+        result.push(nodeLineRLAT.getFlowto());
+      }
     }
     var result;
   }
@@ -31,13 +28,13 @@ class ModelUtility {
     var result = [];
     var nodeLineRLATs = node.getModel().getNodeLineRLATs();
     for (var i = 0; i < nodeLineRLATs.length; i++) {
-    var nodeLineRLAT = nodeLineRLATs.get(i);
-    if (nodeLineRLAT.getNode() == node && nodeLineRLAT.getRLATType() == 0) {
-    result.push(nodeLineRLAT.getFlowto());
-    }
+      var nodeLineRLAT = nodeLineRLATs.get(i);
+      if (nodeLineRLAT.getNode() === node && nodeLineRLAT.getRLATType() === 0) {
+        result.push(nodeLineRLAT.getFlowto());
+      }
     }
     var result;
   }
 }
 
-export default  ModelUtility;
+export default ModelUtility;

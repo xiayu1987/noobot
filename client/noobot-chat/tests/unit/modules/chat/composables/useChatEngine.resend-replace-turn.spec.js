@@ -16,10 +16,7 @@ import {
   BackendChannelState,
   FrontendRunState,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import {
-  RoleEnum,
-  StreamEventEnum,
-} from "../../../../../src/modules/chat/model/chatConstants.js";
+import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.resend replace turn", () => {
   it("does not start a stale resend stream after delete supersedes its pending replace command", async () => {
@@ -81,19 +78,21 @@ describe("useChatEngine.resend replace turn", () => {
 
     await expect(engine.deleteMonotonicMessage(user)).resolves.toBe(true);
     const resendRequest = replaceSessionTurnApi.mock.calls[0][0];
-    resolveReplace(makeTurnReplacementResponse({
-      commandId: resendRequest.commandId,
-      sessionId: "resend-delete-race",
-      aggregateVersion: 2,
-      replacedTurnScopeIds: ["client-turn:old"],
-      replacementUser: {
-        id: "replacement-user",
-        messageId: "replacement-user",
-        turnScopeId: "client-turn:replacement",
-        role: RoleEnum.USER,
-        content: "edited question",
-      },
-    }));
+    resolveReplace(
+      makeTurnReplacementResponse({
+        commandId: resendRequest.commandId,
+        sessionId: "resend-delete-race",
+        aggregateVersion: 2,
+        replacedTurnScopeIds: ["client-turn:old"],
+        replacementUser: {
+          id: "replacement-user",
+          messageId: "replacement-user",
+          turnScopeId: "client-turn:replacement",
+          role: RoleEnum.USER,
+          content: "edited question",
+        },
+      }),
+    );
 
     await expect(resendPromise).resolves.toBe(false);
     expect(stream).not.toHaveBeenCalled();
@@ -110,9 +109,15 @@ describe("useChatEngine.resend replace turn", () => {
       removedSessionIds: ["child-session-old"],
     }));
     const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, commandId, anchor }) => {
-      const replacementUser = { id: "msg-user-replace-success", messageId: "msg-user-replace-success", turnScopeId, role: RoleEnum.USER, content: "edited question" };
+      const replacementUser = {
+        id: "msg-user-replace-success",
+        messageId: "msg-user-replace-success",
+        turnScopeId,
+        role: RoleEnum.USER,
+        content: "edited question",
+      };
       return makeTurnReplacementResponse({
-        commandId: commandId,
+        commandId,
         sessionId: "local-resend-replace-success",
         aggregateVersion: 4,
         replacedTurnScopeIds: [anchor.turnScopeId],
@@ -125,34 +130,38 @@ describe("useChatEngine.resend replace turn", () => {
       activeSession.value = { ...activeSession.value, ...mainSession };
       input.value = "";
     });
-    const { engine, activeSession, input, appendMessage, sending, canStop, activeTurnRuntime } = createHarness({
-      sessionId: "local-resend-replace-success",
-      stream,
-      deps: {
-        replaceSessionTurnApi,
-        deleteSessionMessagesFromApi,
-        applySessionDetail,
-        removeWorkflowOwnersForReplacedTurns,
-      },
-    });
+    const { engine, activeSession, input, appendMessage, sending, canStop, activeTurnRuntime } =
+      createHarness({
+        sessionId: "local-resend-replace-success",
+        stream,
+        deps: {
+          replaceSessionTurnApi,
+          deleteSessionMessagesFromApi,
+          applySessionDetail,
+          removeWorkflowOwnersForReplacedTurns,
+        },
+      });
     const first = { turnScopeId: "client-turn:old", role: RoleEnum.USER, content: "first" };
     const target = { turnScopeId: "client-turn:old", role: RoleEnum.ASSISTANT, content: "target" };
     activeSession.value.messages = [first, target];
     activeSession.value.rawMessages = [first, target];
     activeSession.value.aggregateVersion = 3;
     input.value = "draft before replace";
-  
+
     await expect(engine.resendMonotonicMessage(target, "edited question")).resolves.toBe(true);
-  
-    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
-      sessionId: "local-resend-replace-success",
-      parentSessionId: "",
-      anchor: { turnScopeId: "client-turn:old" },
-      newContent: "edited question",
-      turnScopeId: expect.stringMatching(/^client-turn:/),
-      expectedAggregateVersion: 3,
-      commandId: expect.any(String),
-    }), expect.any(Object));
+
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "local-resend-replace-success",
+        parentSessionId: "",
+        anchor: { turnScopeId: "client-turn:old" },
+        newContent: "edited question",
+        turnScopeId: expect.stringMatching(/^client-turn:/),
+        expectedAggregateVersion: 3,
+        commandId: expect.any(String),
+      }),
+      expect.any(Object),
+    );
     expect(applySessionDetail.mock.calls[0][1]).toEqual({
       mode: "delete-confirmed",
       deletedTurnScopeIds: ["client-turn:old"],
@@ -165,14 +174,16 @@ describe("useChatEngine.resend replace turn", () => {
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.mock.calls[0][0].input.message).toBe("edited question");
     expect(stream.mock.calls[0][0].identity.sessionId).toBe("local-resend-replace-success");
-    expect(stream.mock.calls[0][0].identity.turnScopeId).toEqual(expect.stringMatching(/^client-turn:/));
+    expect(stream.mock.calls[0][0].identity.turnScopeId).toEqual(
+      expect.stringMatching(/^client-turn:/),
+    );
     expect(stream.mock.calls[0][0].commandType).toBe("turn.resend");
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);
     expect(activeTurnRuntime.value.backendState).toBe(BackendChannelState.SENDING);
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
-        expect(appendMessage).toHaveBeenCalledTimes(1);
+    expect(appendMessage).toHaveBeenCalledTimes(1);
     expect(appendMessage).not.toHaveBeenCalledWith(RoleEnum.USER, "edited question", []);
     expect(appendMessage).toHaveBeenCalledWith(
       RoleEnum.ASSISTANT,
@@ -185,9 +196,16 @@ describe("useChatEngine.resend replace turn", () => {
         turnScopeId: expect.stringMatching(/^client-turn:/),
       }),
     );
-    expect(activeSession.value.messages.filter((message) => message.role === RoleEnum.USER)).toHaveLength(1);
-    expect(activeSession.value.messages.map((message) => message.content)).toEqual(["edited question", ""]);
-    expect(activeSession.value.messages[0].turnScopeId).toBe(activeSession.value.messages[1].turnScopeId);
+    expect(
+      activeSession.value.messages.filter((message) => message.role === RoleEnum.USER),
+    ).toHaveLength(1);
+    expect(activeSession.value.messages.map((message) => message.content)).toEqual([
+      "edited question",
+      "",
+    ]);
+    expect(activeSession.value.messages[0].turnScopeId).toBe(
+      activeSession.value.messages[1].turnScopeId,
+    );
     const replacementUserIndex = activeSession.value.messages.findIndex(
       (message) => message.role === RoleEnum.USER && message.content === "edited question",
     );
@@ -195,7 +213,9 @@ describe("useChatEngine.resend replace turn", () => {
       (message) => message.role === RoleEnum.ASSISTANT && /^msg_/.test(message.messageId || ""),
     );
     expect(canonicalAssistantIndex).toBeGreaterThan(replacementUserIndex);
-    expect(activeSession.value.messages[canonicalAssistantIndex]).not.toHaveProperty("turnPlaceholder");
+    expect(activeSession.value.messages[canonicalAssistantIndex]).not.toHaveProperty(
+      "turnPlaceholder",
+    );
     expect(input.value).toBe("");
   });
 
@@ -203,8 +223,18 @@ describe("useChatEngine.resend replace turn", () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitAuthorityProcessing(onEvent, payload);
     });
-    const keptAttachment = { attachmentId: "kept", sessionId: "local-resend-attachments", attachmentSource: "test", name: "kept.txt" };
-    const removedAttachment = { attachmentId: "removed", sessionId: "local-resend-attachments", attachmentSource: "test", name: "removed.txt" };
+    const keptAttachment = {
+      attachmentId: "kept",
+      sessionId: "local-resend-attachments",
+      attachmentSource: "test",
+      name: "kept.txt",
+    };
+    const removedAttachment = {
+      attachmentId: "removed",
+      sessionId: "local-resend-attachments",
+      attachmentSource: "test",
+      name: "removed.txt",
+    };
     const newAttachment = { name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" };
     const localFile = {
       raw: new File(["new"], "new.txt", { type: "text/plain" }),
@@ -212,34 +242,36 @@ describe("useChatEngine.resend replace turn", () => {
       name: "new.txt",
       mimeType: "text/plain",
     };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
-      const canonicalAttachments = attachments.map((attachment, index) => (
-        attachment.contentBase64
-          ? {
-              ...attachment,
-              attachmentId: `canonical-${index}`,
-              attachmentSource: "test",
-              sessionId: "local-resend-attachments",
-              path: `/attachments/canonical-${index}`,
-            }
-          : attachment
-      ));
-      const replacementUser = {
-        id: "msg-user-resend-attachments",
-        messageId: "msg-user-resend-attachments",
-        turnScopeId,
-        role: RoleEnum.USER,
-        content: newContent,
-        attachments: canonicalAttachments.map(({ contentBase64, ...attachment }) => attachment),
-      };
-      return makeTurnReplacementResponse({
-        commandId: commandId,
-        sessionId: "local-resend-attachments",
-        aggregateVersion: 4,
-        replacedTurnScopeIds: [anchor.turnScopeId],
-        replacementUser,
-      });
-    });
+    const replaceSessionTurnApi = vi.fn(
+      async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
+        const canonicalAttachments = attachments.map((attachment, index) =>
+          attachment.contentBase64
+            ? {
+                ...attachment,
+                attachmentId: `canonical-${index}`,
+                attachmentSource: "test",
+                sessionId: "local-resend-attachments",
+                path: `/attachments/canonical-${index}`,
+              }
+            : attachment,
+        );
+        const replacementUser = {
+          id: "msg-user-resend-attachments",
+          messageId: "msg-user-resend-attachments",
+          turnScopeId,
+          role: RoleEnum.USER,
+          content: newContent,
+          attachments: canonicalAttachments.map(({ contentBase64, ...attachment }) => attachment),
+        };
+        return makeTurnReplacementResponse({
+          commandId,
+          sessionId: "local-resend-attachments",
+          aggregateVersion: 4,
+          replacedTurnScopeIds: [anchor.turnScopeId],
+          replacementUser,
+        });
+      },
+    );
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
@@ -265,35 +297,42 @@ describe("useChatEngine.resend replace turn", () => {
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
     activeSession.value.aggregateVersion = 3;
 
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited with attachments", {
-      attachments: [keptAttachment],
-      attachmentFiles: [localFile],
-      removedAttachmentKeys: ['["local-resend-attachments","test","removed"]'],
-    })).resolves.toBe(true);
+    await expect(
+      engine.resendMonotonicMessage(stoppedAssistant, "edited with attachments", {
+        attachments: [keptAttachment],
+        attachmentFiles: [localFile],
+        removedAttachmentKeys: ['["local-resend-attachments","test","removed"]'],
+      }),
+    ).resolves.toBe(true);
 
     const expectedAttachments = [
       keptAttachment,
       { ...newAttachment, clientAttachmentId: "draft-new" },
     ];
-    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
-      newContent: "edited with attachments",
-      attachments: expectedAttachments,
-    }), expect.any(Object));
-    expect(stream).toHaveBeenCalledTimes(1);
-    expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
-      commandType: "turn.resend",
-      input: expect.objectContaining({
-        message: "edited with attachments",
-        attachments: [
-          keptAttachment,
-          expect.objectContaining({
-            attachmentId: "canonical-1",
-            name: "new.txt",
-            sessionId: "local-resend-attachments",
-          }),
-        ],
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        newContent: "edited with attachments",
+        attachments: expectedAttachments,
       }),
-    }));
+      expect.any(Object),
+    );
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        commandType: "turn.resend",
+        input: expect.objectContaining({
+          message: "edited with attachments",
+          attachments: [
+            keptAttachment,
+            expect.objectContaining({
+              attachmentId: "canonical-1",
+              name: "new.txt",
+              sessionId: "local-resend-attachments",
+            }),
+          ],
+        }),
+      }),
+    );
     expect(activeSession.value.messages[0].attachments).toEqual([
       keptAttachment,
       expect.objectContaining({
@@ -306,23 +345,37 @@ describe("useChatEngine.resend replace turn", () => {
   });
 
   it("preserves target attachments when the editor did not explicitly remove them", async () => {
-    const originalAttachment = { attachmentId: "original", sessionId: "local-resend-preserve-baseline", attachmentSource: "test", name: "original.docx" };
+    const originalAttachment = {
+      attachmentId: "original",
+      sessionId: "local-resend-preserve-baseline",
+      attachmentSource: "test",
+      name: "original.docx",
+    };
     const localFile = {
       raw: new File(["new"], "new.txt", { type: "text/plain" }),
       clientAttachmentId: "draft-new",
       name: "new.txt",
       mimeType: "text/plain",
     };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
-      const replacementUser = { id: "msg-user-preserve-baseline", messageId: "msg-user-preserve-baseline", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
-      return makeTurnReplacementResponse({
-        commandId: commandId,
-        sessionId: "local-resend-preserve-baseline",
-        aggregateVersion: 2,
-        replacedTurnScopeIds: [anchor.turnScopeId],
-        replacementUser,
-      });
-    });
+    const replaceSessionTurnApi = vi.fn(
+      async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
+        const replacementUser = {
+          id: "msg-user-preserve-baseline",
+          messageId: "msg-user-preserve-baseline",
+          turnScopeId,
+          role: RoleEnum.USER,
+          content: newContent,
+          attachments,
+        };
+        return makeTurnReplacementResponse({
+          commandId,
+          sessionId: "local-resend-preserve-baseline",
+          aggregateVersion: 2,
+          replacedTurnScopeIds: [anchor.turnScopeId],
+          replacementUser,
+        });
+      },
+    );
     const applySessionDetail = vi.fn((detail) => {
       activeSession.value = { ...activeSession.value, ...(detail.sessions?.[0] || {}) };
     });
@@ -353,12 +406,20 @@ describe("useChatEngine.resend replace turn", () => {
       removedAttachmentKeys: [],
     });
 
-    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
-      attachments: [
-        originalAttachment,
-        { clientAttachmentId: "draft-new", name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" },
-      ],
-    }), expect.any(Object));
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          originalAttachment,
+          {
+            clientAttachmentId: "draft-new",
+            name: "new.txt",
+            mimeType: "text/plain",
+            contentBase64: "bmV3",
+          },
+        ],
+      }),
+      expect.any(Object),
+    );
   });
 
   it("resendMonotonicMessage keeps original attachment when editing without attachment changes", async () => {
@@ -371,16 +432,25 @@ describe("useChatEngine.resend replace turn", () => {
       mimeType: "text/plain",
       contentBase64: "YQ==",
     };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
-      const replacementUser = { id: "msg-user-unchanged-attachment", messageId: "msg-user-unchanged-attachment", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
-      return makeTurnReplacementResponse({
-        commandId: commandId,
-        sessionId: "local-resend-unchanged-attachment",
-        aggregateVersion: 4,
-        replacedTurnScopeIds: [anchor.turnScopeId],
-        replacementUser,
-      });
-    });
+    const replaceSessionTurnApi = vi.fn(
+      async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
+        const replacementUser = {
+          id: "msg-user-unchanged-attachment",
+          messageId: "msg-user-unchanged-attachment",
+          turnScopeId,
+          role: RoleEnum.USER,
+          content: newContent,
+          attachments,
+        };
+        return makeTurnReplacementResponse({
+          commandId,
+          sessionId: "local-resend-unchanged-attachment",
+          aggregateVersion: 4,
+          replacedTurnScopeIds: [anchor.turnScopeId],
+          replacementUser,
+        });
+      },
+    );
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
@@ -406,19 +476,26 @@ describe("useChatEngine.resend replace turn", () => {
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
     activeSession.value.aggregateVersion = 3;
 
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "old with attachment A", {
-      attachments: [originalAttachment],
-      attachmentFiles: [],
-    })).resolves.toBe(true);
+    await expect(
+      engine.resendMonotonicMessage(stoppedAssistant, "old with attachment A", {
+        attachments: [originalAttachment],
+        attachmentFiles: [],
+      }),
+    ).resolves.toBe(true);
 
-    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({
-      newContent: "old with attachment A",
-      attachments: [originalAttachment],
-    }), expect.any(Object));
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        newContent: "old with attachment A",
+        attachments: [originalAttachment],
+      }),
+      expect.any(Object),
+    );
     expect(stream).toHaveBeenCalledTimes(1);
-    expect(stream.mock.calls[0][0]).toEqual(expect.objectContaining({
-      input: { message: "old with attachment A", attachments: [originalAttachment] },
-    }));
+    expect(stream.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        input: { message: "old with attachment A", attachments: [originalAttachment] },
+      }),
+    );
     expect(activeSession.value.messages[0].attachments).toEqual([originalAttachment]);
   });
 
@@ -452,16 +529,25 @@ describe("useChatEngine.resend replace turn", () => {
       size: richAttachment.size,
     };
     const stream = vi.fn(async () => {});
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
-      const replacementUser = { id: "msg-user-rich-raw", messageId: "msg-user-rich-raw", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
-      return makeTurnReplacementResponse({
-        commandId: commandId,
-        sessionId: "local-resend-rich-raw",
-        aggregateVersion: 4,
-        replacedTurnScopeIds: [anchor.turnScopeId],
-        replacementUser,
-      });
-    });
+    const replaceSessionTurnApi = vi.fn(
+      async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
+        const replacementUser = {
+          id: "msg-user-rich-raw",
+          messageId: "msg-user-rich-raw",
+          turnScopeId,
+          role: RoleEnum.USER,
+          content: newContent,
+          attachments,
+        };
+        return makeTurnReplacementResponse({
+          commandId,
+          sessionId: "local-resend-rich-raw",
+          aggregateVersion: 4,
+          replacedTurnScopeIds: [anchor.turnScopeId],
+          replacementUser,
+        });
+      },
+    );
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
@@ -487,16 +573,26 @@ describe("useChatEngine.resend replace turn", () => {
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
     activeSession.value.aggregateVersion = 3;
 
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "old with rich attachment", {
-      attachments: [richAttachment],
-      attachmentFiles: [],
-    })).resolves.toBe(true);
-
-    expect(stream).toHaveBeenCalledWith(expect.objectContaining({
-      input: expect.objectContaining({
-        attachments: [expect.objectContaining({ attachmentId: "attachment-rich", parsedResultAttachmentId: "parsed-rich" })],
+    await expect(
+      engine.resendMonotonicMessage(stoppedAssistant, "old with rich attachment", {
+        attachments: [richAttachment],
+        attachmentFiles: [],
       }),
-    }), expect.any(Function));
+    ).resolves.toBe(true);
+
+    expect(stream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          attachments: [
+            expect.objectContaining({
+              attachmentId: "attachment-rich",
+              parsedResultAttachmentId: "parsed-rich",
+            }),
+          ],
+        }),
+      }),
+      expect.any(Function),
+    );
     expect(activeSession.value.messages[0].attachments).toEqual([
       expect.objectContaining({
         attachmentId: "attachment-rich",
@@ -510,22 +606,39 @@ describe("useChatEngine.resend replace turn", () => {
         parsedResult: expect.objectContaining({ attachmentId: "parsed-rich" }),
       }),
     ]);
-    expect(activeSession.value.messages[0].attachments[0]).toEqual(expect.objectContaining(rawAttachment));
+    expect(activeSession.value.messages[0].attachments[0]).toEqual(
+      expect.objectContaining(rawAttachment),
+    );
   });
 
   it("resendMonotonicMessage preserves explicit empty attachment deletion", async () => {
     const stream = vi.fn(async () => {});
-    const oldAttachment = { attachmentId: "old", sessionId: "local-resend-delete-attachments", attachmentSource: "test", name: "old.txt", parsedResultAttachmentId: "parsed-old" };
-    const replaceSessionTurnApi = vi.fn(async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
-      const replacementUser = { id: "msg-user-delete-attachments", messageId: "msg-user-delete-attachments", turnScopeId, role: RoleEnum.USER, content: newContent, attachments };
-      return makeTurnReplacementResponse({
-        commandId: commandId,
-        sessionId: "local-resend-delete-attachments",
-        aggregateVersion: 4,
-        replacedTurnScopeIds: [anchor.turnScopeId],
-        replacementUser,
-      });
-    });
+    const oldAttachment = {
+      attachmentId: "old",
+      sessionId: "local-resend-delete-attachments",
+      attachmentSource: "test",
+      name: "old.txt",
+      parsedResultAttachmentId: "parsed-old",
+    };
+    const replaceSessionTurnApi = vi.fn(
+      async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {
+        const replacementUser = {
+          id: "msg-user-delete-attachments",
+          messageId: "msg-user-delete-attachments",
+          turnScopeId,
+          role: RoleEnum.USER,
+          content: newContent,
+          attachments,
+        };
+        return makeTurnReplacementResponse({
+          commandId,
+          sessionId: "local-resend-delete-attachments",
+          aggregateVersion: 4,
+          replacedTurnScopeIds: [anchor.turnScopeId],
+          replacementUser,
+        });
+      },
+    );
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
@@ -551,16 +664,24 @@ describe("useChatEngine.resend replace turn", () => {
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
     activeSession.value.aggregateVersion = 3;
 
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "old", {
-      attachments: [],
-      attachmentFiles: [],
-      removedAttachmentKeys: ['["local-resend-delete-attachments","test","old"]'],
-    })).resolves.toBe(true);
+    await expect(
+      engine.resendMonotonicMessage(stoppedAssistant, "old", {
+        attachments: [],
+        attachmentFiles: [],
+        removedAttachmentKeys: ['["local-resend-delete-attachments","test","old"]'],
+      }),
+    ).resolves.toBe(true);
 
-    expect(replaceSessionTurnApi).toHaveBeenCalledWith(expect.objectContaining({ attachments: [] }), expect.any(Object));
-    expect(stream).toHaveBeenCalledWith(expect.objectContaining({
-      input: expect.objectContaining({ attachments: [] }),
-    }), expect.any(Function));
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(
+      expect.objectContaining({ attachments: [] }),
+      expect.any(Object),
+    );
+    expect(stream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ attachments: [] }),
+      }),
+      expect.any(Function),
+    );
     expect(activeSession.value.messages[0].attachments).toEqual([]);
   });
 
@@ -568,14 +689,21 @@ describe("useChatEngine.resend replace turn", () => {
     const stream = vi.fn(async () => {});
     const fetchSessionDetail = vi.fn(async () => ({
       sessionId: "local-resend-version-retry",
-      sessions: [makeSession("local-resend-version-retry", {
-        aggregateVersion: 5,
-        revision: 5,
-        messages: [
-          { turnScopeId: "client-turn:old-version", role: RoleEnum.USER, content: "old" },
-          { turnScopeId: "client-turn:old-version", role: RoleEnum.ASSISTANT, content: "stopped", stopState: "user_stopped" },
-        ],
-      })],
+      sessions: [
+        makeSession("local-resend-version-retry", {
+          aggregateVersion: 5,
+          revision: 5,
+          messages: [
+            { turnScopeId: "client-turn:old-version", role: RoleEnum.USER, content: "old" },
+            {
+              turnScopeId: "client-turn:old-version",
+              role: RoleEnum.ASSISTANT,
+              content: "stopped",
+              stopState: "user_stopped",
+            },
+          ],
+        }),
+      ],
     }));
     const replaceSessionTurnApi = vi.fn(async () => ({
       ok: false,
@@ -593,17 +721,30 @@ describe("useChatEngine.resend replace turn", () => {
       stream,
       deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
     });
-    const stoppedUser = { turnScopeId: "client-turn:old-version", role: RoleEnum.USER, content: "old" };
-    const stoppedAssistant = { turnScopeId: "client-turn:old-version", role: RoleEnum.ASSISTANT, content: "partial", stopState: "user_stopped" };
+    const stoppedUser = {
+      turnScopeId: "client-turn:old-version",
+      role: RoleEnum.USER,
+      content: "old",
+    };
+    const stoppedAssistant = {
+      turnScopeId: "client-turn:old-version",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      stopState: "user_stopped",
+    };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
     activeSession.value.aggregateVersion = 3;
     activeSession.value.revision = 3;
-  
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited after conflict")).resolves.toBe(false);
-  
+
+    await expect(
+      engine.resendMonotonicMessage(stoppedAssistant, "edited after conflict"),
+    ).resolves.toBe(false);
+
     expect(replaceSessionTurnApi).toHaveBeenCalledTimes(1);
-    expect(replaceSessionTurnApi.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedAggregateVersion: 3 }));
+    expect(replaceSessionTurnApi.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ expectedAggregateVersion: 3 }),
+    );
     expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
     expect(appendMessage).not.toHaveBeenCalled();
@@ -622,7 +763,7 @@ describe("useChatEngine.resend replace turn", () => {
         content: newContent,
       };
       return makeTurnReplacementResponse({
-        commandId: commandId,
+        commandId,
         sessionId: "local-resend-fresh-stopped-assistant",
         aggregateVersion: 1,
         replacedTurnScopeIds: [anchor.turnScopeId],
@@ -655,25 +796,33 @@ describe("useChatEngine.resend replace turn", () => {
     };
     activeSession.value.messages = [stoppedUser, stoppedAssistant];
     activeSession.value.rawMessages = [...activeSession.value.messages];
-  
-    await expect(engine.resendMonotonicMessage(stoppedAssistant, "edited first resend")).resolves.toBe(true);
-  
+
+    await expect(
+      engine.resendMonotonicMessage(stoppedAssistant, "edited first resend"),
+    ).resolves.toBe(true);
+
     expect(stream).toHaveBeenCalledTimes(1);
     const [replacementUser, placeholder] = activeSession.value.messages;
-    expect(replacementUser).toEqual(expect.objectContaining({
-      role: RoleEnum.USER,
-      content: "edited first resend",
-      turnScopeId: expect.stringMatching(/^client-turn:/),
-    }));
-    expect(placeholder).toEqual(expect.objectContaining({
-      role: RoleEnum.ASSISTANT,
-      content: "",
-      pending: false,
-      statusLabel: "",
-      turnScopeId: replacementUser.turnScopeId,
-    }));
+    expect(replacementUser).toEqual(
+      expect.objectContaining({
+        role: RoleEnum.USER,
+        content: "edited first resend",
+        turnScopeId: expect.stringMatching(/^client-turn:/),
+      }),
+    );
+    expect(placeholder).toEqual(
+      expect.objectContaining({
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        pending: false,
+        statusLabel: "",
+        turnScopeId: replacementUser.turnScopeId,
+      }),
+    );
     expect(activeSession.value.messages).toHaveLength(2);
-    expect(activeSession.value.messages.some((message) => message.stopState === "user_stopped")).toBe(false);
+    expect(
+      activeSession.value.messages.some((message) => message.stopState === "user_stopped"),
+    ).toBe(false);
     expect(sending.value).toBe(true);
     expect(canStop.value).toBe(true);
     expect(activeTurnRuntime.value.state).toBe(FrontendRunState.PROCESSING);

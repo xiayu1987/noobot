@@ -88,7 +88,10 @@ function createDeps(overrides = {}) {
       },
       createScopedPersistenceContext(payload = {}) {
         calls.persistencePayloads.push(payload);
-        return Object.freeze({ locationResolver: { marker: payload.relativeDir }, metadataContributor: payload.metadataContributor });
+        return Object.freeze({
+          locationResolver: { marker: payload.relativeDir },
+          metadataContributor: payload.metadataContributor,
+        });
       },
     },
     mergeRunConfigWithPluginStrategy(payload = {}) {
@@ -162,7 +165,6 @@ test("detached sub-session delegates execution and persistence to the main runne
   const runner = createDetachedSubSessionRunner(deps);
   const result = await runner({
     parentExecutionScope: createParentExecutionScope(),
-    parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext(),
     message: "hello",
     attachments: [{ name: "a.txt" }],
@@ -230,7 +232,10 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(metadata.nodeId, "n1");
   assert.equal(metadata.sessionId, "sub1");
   assert.equal(metadata.runtimePluginState.scope, "detached_sub_session");
-  assert.equal(events.some((event) => event?.event === "plugin_runtime_resolved"), true);
+  assert.equal(
+    events.some((event) => event?.event === "plugin_runtime_resolved"),
+    true,
+  );
   assert.deepEqual(
     calls.lifecyclePayloads.map((payload) => payload.eventType),
     [
@@ -240,14 +245,14 @@ test("detached sub-session delegates execution and persistence to the main runne
       "turn.completed",
     ],
   );
-  assert.equal(
-    events.filter((event) => event?.event === "turn_lifecycle_committed").length,
-    4,
-  );
+  assert.equal(events.filter((event) => event?.event === "turn_lifecycle_committed").length, 4);
   assert.equal(
     events
       .filter((event) => event?.event === "turn_lifecycle_committed")
-      .every((event) => event.data.persistenceContext === undefined && event.data.envelope.persistenceScope),
+      .every(
+        (event) =>
+          event.data.persistenceContext === undefined && event.data.envelope.persistenceScope,
+      ),
     true,
   );
   const completedLifecycle = calls.lifecyclePayloads.at(-1);
@@ -267,7 +272,10 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(result.parentSessionId, "parent1");
   assert.equal(result.dialogProcessId, payload.dialogProcessId);
   assert.equal(result.dialogProcessId, "sub-dialog");
-  assert.equal(calls.lifecyclePayloads.every((item) => item.dialogProcessId === result.dialogProcessId), true);
+  assert.equal(
+    calls.lifecyclePayloads.every((item) => item.dialogProcessId === result.dialogProcessId),
+    true,
+  );
   assert.equal(result.persisted.aggregateVersion, 3);
   assert.equal(result.lifecycle.executionState, "completed");
   assert.equal(result.result.answer, "agent answer");
@@ -313,7 +321,10 @@ test("detached sub-session transfers canonical parent attachments into child own
     async ingest(payload) {
       assert.equal(payload.sessionId, "sub1");
       assert.equal(payload.attachments[0].clientAttachmentId, "session-transfer:parent-attachment");
-      assert.equal(payload.attachments[0].contentBase64, Buffer.from("attachment body", "utf8").toString("base64"));
+      assert.equal(
+        payload.attachments[0].contentBase64,
+        Buffer.from("attachment body", "utf8").toString("base64"),
+      );
       return [transferred];
     },
   };
@@ -324,14 +335,16 @@ test("detached sub-session transfers canonical parent attachments into child own
     parentExecutionScope: createParentExecutionScope(),
     parentContext: createParentContext(),
     message: "read attachment",
-    attachments: [{
-      attachmentId: "parent-attachment",
-      sessionId: "parent1",
-      attachmentSource: "user",
-      path: "/tmp/workspace/u1/runtime/attach/user/parent1/parent-attachment.txt",
-      name: "a.txt",
-      mimeType: "text/plain",
-    }],
+    attachments: [
+      {
+        attachmentId: "parent-attachment",
+        sessionId: "parent1",
+        attachmentSource: "user",
+        path: "/tmp/workspace/u1/runtime/attach/user/parent1/parent-attachment.txt",
+        name: "a.txt",
+        mimeType: "text/plain",
+      },
+    ],
     strategy: createCompleteStrategy(),
   });
 
@@ -345,7 +358,7 @@ test("detached sub-session rejects an incomplete persistence and identity strate
   await assert.rejects(
     runner({
       parentExecutionScope: createParentExecutionScope(),
-    parentContext: createParentContext(),
+      parentContext: createParentContext(),
       message: "hello",
       strategy: {
         userId: "u1",
@@ -395,18 +408,27 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   let persisted = null;
   const fixedNow = () => "2026-07-30T12:53:35.738Z";
   const repo = {
-    async withSessionMutation(_userId, _sessionId, _context, operation) { return operation(); },
-    async resolveParentSessionId() { return "parent1"; },
+    async withSessionMutation(_userId, _sessionId, _context, operation) {
+      return operation();
+    },
+    async resolveParentSessionId() {
+      return "parent1";
+    },
     createInitialSession({ sessionId, parentSessionId }) {
-      return normalizeSessionEntity({
-        sessionId,
-        parentSessionId,
-        aggregateVersion: 0,
-        messages: [],
-      }, { now: fixedNow });
+      return normalizeSessionEntity(
+        {
+          sessionId,
+          parentSessionId,
+          aggregateVersion: 0,
+          messages: [],
+        },
+        { now: fixedNow },
+      );
     },
     async findById() {
-      return persisted ? normalizeSessionEntity(structuredClone(persisted), { now: fixedNow }) : null;
+      return persisted
+        ? normalizeSessionEntity(structuredClone(persisted), { now: fixedNow })
+        : null;
     },
     async save(_userId, next, _context, { expectedAggregateVersion, createOnly } = {}) {
       if (createOnly) assert.equal(persisted, null);
@@ -476,7 +498,7 @@ test("detached sub-session rejects a runner result with a second dialog identity
   await assert.rejects(
     runner({
       parentExecutionScope: createParentExecutionScope(),
-    parentContext: createParentContext(),
+      parentContext: createParentContext(),
       message: "hello",
       strategy: createCompleteStrategy({
         dialogProcessId: "authoritative-dialog",
@@ -487,22 +509,22 @@ test("detached sub-session rejects a runner result with a second dialog identity
         forwardEvent: (event) => events.push(event),
       },
     }),
-    (error) => (
+    (error) =>
       error?.code === "DETACHED_DIALOG_IDENTITY_MISMATCH" &&
       error?.lifecycle?.state === "processing_failed" &&
-      error?.lifecycle?.executionId === "agent:turn-identity-mismatch"
-    ),
+      error?.lifecycle?.executionId === "agent:turn-identity-mismatch",
   );
   assert.equal(
     events.some((event) => event?.event === "detached_sub_session_identity_mismatch"),
     true,
   );
   assert.equal(
-    events.some((event) => (
-      event?.event === "detached_sub_session_failure_committed" &&
-      event?.data?.errorCode === "DETACHED_DIALOG_IDENTITY_MISMATCH" &&
-      event?.data?.revision > 0
-    )),
+    events.some(
+      (event) =>
+        event?.event === "detached_sub_session_failure_committed" &&
+        event?.data?.errorCode === "DETACHED_DIALOG_IDENTITY_MISMATCH" &&
+        event?.data?.revision > 0,
+    ),
     true,
   );
   assert.equal(calls.lifecyclePayloads.at(-1)?.eventType, "turn.failed");
@@ -611,18 +633,19 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   const runner = createDetachedSubSessionRunner(deps);
   const events = [];
   await assert.rejects(
-    () => runner({
-      parentExecutionScope: createParentExecutionScope(),
-    parentContext: createParentContext(),
-      eventListener: {
-        onEvent: (event) => events.push(event),
-        forwardEvent: (event) => events.push(event),
-      },
-      strategy: createCompleteStrategy({
-        turnScopeId: "internal-turn:abort-test",
-        executionId: "agent:internal-turn:abort-test",
+    () =>
+      runner({
+        parentExecutionScope: createParentExecutionScope(),
+        parentContext: createParentContext(),
+        eventListener: {
+          onEvent: (event) => events.push(event),
+          forwardEvent: (event) => events.push(event),
+        },
+        strategy: createCompleteStrategy({
+          turnScopeId: "internal-turn:abort-test",
+          executionId: "agent:internal-turn:abort-test",
+        }),
       }),
-    }),
     (error) => error === abortError,
   );
   assert.deepEqual(
@@ -647,11 +670,12 @@ test("detached sub-session propagates main runner abort and failure contracts", 
   });
   assert.equal(abortError.lifecycle.state, "stop_completed");
   assert.equal(
-    events.some((event) => (
-      event?.event === "detached_sub_session_stop_committed" &&
-      event?.data?.reason === "user_stop" &&
-      event?.data?.state === "stop_completed"
-    )),
+    events.some(
+      (event) =>
+        event?.event === "detached_sub_session_stop_committed" &&
+        event?.data?.reason === "user_stop" &&
+        event?.data?.state === "stop_completed",
+    ),
     true,
   );
   assert.equal(
@@ -693,12 +717,13 @@ test("createDetachedSubSessionRunner requires userId and parentSessionId", async
   const { deps } = createDeps();
   const runner = createDetachedSubSessionRunner(deps);
   await assert.rejects(
-    () => runner({
-      parentExecutionScope: createParentExecutionScope(),
-      parentContext: {
-        userId: "u1",
-      },
-    }),
+    () =>
+      runner({
+        parentExecutionScope: createParentExecutionScope(),
+        parentContext: {
+          userId: "u1",
+        },
+      }),
     /sub-session runner requires userId and parentSessionId/,
   );
 });
@@ -716,8 +741,12 @@ test("createDetachedSubSessionRunner aborts before execution when signal is alre
   });
   const runner = createDetachedSubSessionRunner(deps);
   await assert.rejects(
-    () => runner({ parentExecutionScope: createParentExecutionScope(),
-      parentContext: createParentContext(), abortSignal: controller.signal }),
+    () =>
+      runner({
+        parentExecutionScope: createParentExecutionScope(),
+        parentContext: createParentContext(),
+        abortSignal: controller.signal,
+      }),
     /bot plugin sub-session aborted/,
   );
   assert.equal(runCalled, false);

@@ -6,9 +6,11 @@
 import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
 import { firstNormalizedString } from "../core/compact.js";
 import { resolveTransferIntent } from "../core/intent.js";
-import { persistTransferFile } from "../storage/attachment-adapter.js";
+import {
+  createDirectTransferEnvelope,
+  persistTransferFile,
+} from "../storage/attachment-adapter.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { createDirectTransferEnvelope } from "../storage/attachment-adapter.js";
 
 export const DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS =
   LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
@@ -24,7 +26,10 @@ function toSafePositiveInt(value, fallback = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHA
   return Math.max(min, Math.floor(parsed));
 }
 
-export function resolveToolResultInlineTextLimit(runtime = {}, fallback = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS) {
+export function resolveToolResultInlineTextLimit(
+  runtime = {},
+  fallback = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS,
+) {
   const userLimit = runtime?.userConfig?.tools?.maxToolResultChars;
   const globalLimit = runtime?.globalConfig?.tools?.maxToolResultChars;
   return toSafePositiveInt(userLimit ?? globalLimit, fallback, 512);
@@ -59,7 +64,9 @@ export function buildTextResultFields({
     ...textPayload,
     textLength: normalizedText.length,
     contentStoredInFile: normalizedTransferEnvelopes.length > 0,
-    ...(normalizedTransferEnvelopes.length ? { transferEnvelopes: normalizedTransferEnvelopes } : {}),
+    ...(normalizedTransferEnvelopes.length
+      ? { transferEnvelopes: normalizedTransferEnvelopes }
+      : {}),
   };
 }
 
@@ -95,9 +102,10 @@ export async function materializeTextForToolResult({
     defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_TOOL_RESULT,
     allowCustom: true,
   });
-  const maxInline = inlineMaxChars == null
-    ? resolveToolResultInlineTextLimit(runtime)
-    : toSafePositiveInt(inlineMaxChars, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, 0);
+  const maxInline =
+    inlineMaxChars == null
+      ? resolveToolResultInlineTextLimit(runtime)
+      : toSafePositiveInt(inlineMaxChars, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, 0);
   const shouldPersist = alwaysPersist || normalizedText.length > maxInline;
   let persisted = null;
   if (shouldPersist) {
@@ -123,28 +131,32 @@ export async function materializeTextForToolResult({
   }
 
   const persistedTransferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
-    ? persisted.transferEnvelopes.filter((item) => item && typeof item === "object" && !Array.isArray(item))
+    ? persisted.transferEnvelopes.filter(
+        (item) => item && typeof item === "object" && !Array.isArray(item),
+      )
     : [];
   if (shouldPersist && !persistedTransferEnvelopes.length) {
     throw new Error("semantic_transfer_attachment_persistence_required");
   }
   const transferEnvelopes = shouldPersist
     ? persistedTransferEnvelopes
-    : [createDirectTransferEnvelope({
-        identity,
-        content: normalizedText,
-        intent: {
-          source: intent.source,
-          reason: intent.reason,
-          scenario,
-          strategy,
-        },
-        meta: {
-          mimeType,
-          originalLength: normalizedText.length,
-          previewLength: normalizedText.length,
-        },
-      })];
+    : [
+        createDirectTransferEnvelope({
+          identity,
+          content: normalizedText,
+          intent: {
+            source: intent.source,
+            reason: intent.reason,
+            scenario,
+            strategy,
+          },
+          meta: {
+            mimeType,
+            originalLength: normalizedText.length,
+            previewLength: normalizedText.length,
+          },
+        }),
+      ];
   const resultFields = buildTextResultFields({
     text: normalizedText,
     transferEnvelopes,

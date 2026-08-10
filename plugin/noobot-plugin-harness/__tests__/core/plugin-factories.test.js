@@ -6,13 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  createPluginRuntimeContextFactory,
-  assertHookManager,
-} from "../../src/core/context.js";
+import { createPluginRuntimeContextFactory, assertHookManager } from "../../src/core/context.js";
 import { formatHarnessCoreError, HARNESS_CORE_ERROR } from "../../src/core/error-messages.js";
-import { createHarnessRegistration } from "../../src/core/plugin.js";
-import { createHarnessCoreFactory } from "../../src/core/plugin.js";
+import { createHarnessCoreFactory, createHarnessRegistration } from "../../src/core/plugin.js";
 import { PLUGIN_NAME, PLUGIN_VERSION } from "../../src/core/constants.js";
 
 test("createPluginRuntimeContextFactory wires injected deps and normalizes planning guidance", () => {
@@ -58,15 +54,17 @@ test("createPluginRuntimeContextFactory wires injected deps and normalizes plann
   assert.equal(result.hookManager, hookManager);
   assert.equal(result.capabilityRuntime, capabilityRuntime);
   assert.equal(result.options.capabilityRuntime, capabilityRuntime);
-  assert.deepEqual(calls.map((item) => item[0]), [
-    "normalizeOptions",
-    "resolveHookManager",
-    "createCapabilityRuntime",
-  ]);
+  assert.deepEqual(
+    calls.map((item) => item[0]),
+    ["normalizeOptions", "resolveHookManager", "createCapabilityRuntime"],
+  );
 });
 
 test("assertHookManager throws on invalid manager", () => {
-  assert.throws(() => assertHookManager(null), /hookManager with \.on\(point, handler, options\) is required/);
+  assert.throws(
+    () => assertHookManager(null),
+    /hookManager with \.on\(point, handler, options\) is required/,
+  );
   assert.doesNotThrow(() => assertHookManager({ on() {} }));
 });
 
@@ -156,13 +154,16 @@ test("createHarnessRegistration uses injected collaborators on happy path", asyn
   assert.equal(result.version, PLUGIN_VERSION);
   assert.equal(Array.isArray(result.disposers), true);
   assert.equal(result.disposers.length, 1);
-  assert.deepEqual(calls.map((item) => item[0]), [
-    "createPluginRuntimeContext",
-    "assertHookManager",
-    "extractBasePath",
-    "cleanupOldRuns",
-    "registerHarnessHooks",
-  ]);
+  assert.deepEqual(
+    calls.map((item) => item[0]),
+    [
+      "createPluginRuntimeContext",
+      "assertHookManager",
+      "extractBasePath",
+      "cleanupOldRuns",
+      "registerHarnessHooks",
+    ],
+  );
   assert.equal(
     warnings.some((item) => /cleanupOldRuns failed during plugin registration/.test(item)),
     true,
@@ -216,6 +217,9 @@ test("createHarnessCoreFactory binds normalized options into register", () => {
 
   const registration = plugin.register({ hookManager: { on() {} } });
   assert.equal(registration, expectedRegistration);
-  assert.deepEqual(calls.map((item) => item[0]), ["normalizeOptions", "registerHarnessCore"]);
+  assert.deepEqual(
+    calls.map((item) => item[0]),
+    ["normalizeOptions", "registerHarnessCore"],
+  );
   assert.equal(calls[1][2], normalized);
 });

@@ -37,7 +37,6 @@ import { useReconnectReplay } from "./useReconnectReplay.js";
 import { useChatStore } from "../stores/useChatStore.js";
 import { useProcessStore } from "../stores/useProcessStore.js";
 import { hydrateSessionDetailExtensions } from "../../../extensions/session-detail-hydrator.js";
-import { isTurnRuntimeDeleted } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import {
   getMessageDialogProcessId,
@@ -62,9 +61,7 @@ import { setResendDebugLogSink } from "../../debug/loggers/resendDebugLogger.js"
 import { setStopDebugLogSink } from "../../debug/loggers/stopDebugLogger.js";
 import { setStopContinueDebugLogSink } from "../../debug/loggers/stopContinueDebugLogger.js";
 import { setReconnectTimingDebugLogSink } from "../../debug/loggers/reconnectTimingDebugLogger.js";
-import {
-  setWorkflowDiagnosticsLogSink,
-} from "../../debug/loggers/workflowDiagnosticsLogger.js";
+import { setWorkflowDiagnosticsLogSink } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
   logThinkingReplayDebug,
   setThinkingReplayDebugLogSink,
@@ -75,6 +72,7 @@ import {
   resolveSessionTurnRuntime,
   resolveLatestContinuableStoppedTurn,
   sessionRuntimeId,
+  isTurnRuntimeDeleted,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import {
   closeMobileSidebarOnSelect,
@@ -132,29 +130,18 @@ export function useChatSession({
   const pendingTerminalResolutionDiscoveries = new Map();
   let resolveDiscoveredTerminalTurn = null;
   function resolveActiveSessionIdentity() {
-    const sessionId = String(
-      activeSession.value?.sessionId
-      || activeSessionId.value
-      || "",
-    ).trim();
+    const sessionId = String(activeSession.value?.sessionId || activeSessionId.value || "").trim();
     return sessionId;
   }
 
   function resolveActiveTurnScopeIdentity() {
     const sessionId = resolveActiveSessionIdentity();
-    const activeTurn = resolveSessionTurnRuntime(
-      turnRuntimeRegistry.value,
-      sessionId,
-    );
+    const activeTurn = resolveSessionTurnRuntime(turnRuntimeRegistry.value, sessionId);
     const continuableStoppedTurn = !activeTurn
       ? resolveLatestContinuableStoppedTurn(turnRuntimeRegistry.value, sessionId)
       : null;
-    return String(
-      activeTurn?.turnScopeId || continuableStoppedTurn?.turnScopeId || "",
-    ).trim();
+    return String(activeTurn?.turnScopeId || continuableStoppedTurn?.turnScopeId || "").trim();
   }
-
-
 
   function scheduleTerminalResolution(sessionId, turnScopeId, metadata = {}) {
     const normalizedSessionId = String(sessionId || "").trim();
@@ -175,7 +162,11 @@ export function useChatSession({
       resolverReady: Boolean(resolveDiscoveredTerminalTurn),
     }));
     if (resolveDiscoveredTerminalTurn) {
-      void resolveDiscoveredTerminalTurn(normalizedSessionId, normalizedTurnScopeId, resolutionMetadata);
+      void resolveDiscoveredTerminalTurn(
+        normalizedSessionId,
+        normalizedTurnScopeId,
+        resolutionMetadata,
+      );
       return;
     }
     pendingTerminalResolutionDiscoveries.set(key, {
@@ -192,15 +183,12 @@ export function useChatSession({
     scheduleTerminalResolution,
   });
 
-  const {
-    composerActionState,
-    activeSessionSending,
-    activeSessionCanStop,
-  } = createComposerRuntimeState({
-    turnRuntimeRegistry,
-    resolveActiveSessionIdentity,
-    resolveActiveTurnScopeIdentity,
-  });
+  const { composerActionState, activeSessionSending, activeSessionCanStop } =
+    createComposerRuntimeState({
+      turnRuntimeRegistry,
+      resolveActiveSessionIdentity,
+      resolveActiveTurnScopeIdentity,
+    });
 
   const submitTurnRuntimeEvent = createRuntimeEventProjector({
     sessions,
@@ -222,7 +210,9 @@ export function useChatSession({
         ? `dialogProcess:${dialogProcessId}`
         : "";
     const stateKey = `${sessionId || "__session__"}::${stateIdentity || "__session__"}`;
-    const { createdAtMs, updatedAtMs, createdAt, updatedAt } = normalizeTimePair(stateEntry, { nowFallback: true });
+    const { createdAtMs, updatedAtMs, createdAt, updatedAt } = normalizeTimePair(stateEntry, {
+      nowFallback: true,
+    });
     const applied = stateEntry?.applied !== false;
     const normalizedEntry = {
       source: String(stateEntry?.source || "").trim(),
@@ -258,18 +248,18 @@ export function useChatSession({
       data: normalizedEntry,
     });
     submitTurnRuntimeEvent({
-        type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
-        state,
-        sessionId,
-        dialogProcessId,
-        turnScopeId,
-        source: normalizedEntry.source || "conversation_state",
-        sourceEvent: normalizedEntry.sourceEvent,
-        seq: normalizedEntry.seq,
-        createdAtMs,
-        updatedAtMs,
-        createdAt,
-        updatedAt,
+      type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
+      state,
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      source: normalizedEntry.source || "conversation_state",
+      sourceEvent: normalizedEntry.sourceEvent,
+      seq: normalizedEntry.seq,
+      createdAtMs,
+      updatedAtMs,
+      createdAt,
+      updatedAt,
     });
 
     if (state.toLowerCase() === "user_stopped" && sessionId && (turnScopeId || dialogProcessId)) {
@@ -279,16 +269,24 @@ export function useChatSession({
         currentSessionId,
         resolveActiveTurnScopeIdentity(),
       );
-      const identityMatches = sessionId === currentSessionId && Boolean(currentTurn) && (
-        (turnScopeId && currentTurn.turnScopeId === turnScopeId) ||
-        (!turnScopeId && dialogProcessId && currentTurn.dialogProcessId === dialogProcessId)
-      );
+      const identityMatches =
+        sessionId === currentSessionId &&
+        Boolean(currentTurn) &&
+        ((turnScopeId && currentTurn.turnScopeId === turnScopeId) ||
+          (!turnScopeId && dialogProcessId && currentTurn.dialogProcessId === dialogProcessId));
       const reconciliationKey = `${sessionId}::${turnScopeId || dialogProcessId}`;
-      if (identityMatches && !currentTurn.terminal && !pendingStoppedSummaryReconciliations.has(reconciliationKey)) {
-        pendingStoppedSummaryReconciliations.set(reconciliationKey, Promise.resolve({
-          applied: false,
-          reason: "terminal_resolution_delegated",
-        }));
+      if (
+        identityMatches &&
+        !currentTurn.terminal &&
+        !pendingStoppedSummaryReconciliations.has(reconciliationKey)
+      ) {
+        pendingStoppedSummaryReconciliations.set(
+          reconciliationKey,
+          Promise.resolve({
+            applied: false,
+            reason: "terminal_resolution_delegated",
+          }),
+        );
       }
     }
   }
@@ -298,34 +296,28 @@ export function useChatSession({
     sessionItem = null,
     mainSessionDoc = {},
   } = {}) {
-    hydrateSessionDetailExtensions({
-      detail,
-      sessionItem,
-      mainSessionDoc,
-    }, {
-      applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
-      turnRuntimeRegistry: turnRuntimeRegistry.value,
-      isTurnRuntimeDeleted,
-    });
-    const sessionId = String(
-      sessionItem?.sessionId || "",
-    ).trim();
+    hydrateSessionDetailExtensions(
+      {
+        detail,
+        sessionItem,
+        mainSessionDoc,
+      },
+      {
+        applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
+        turnRuntimeRegistry: turnRuntimeRegistry.value,
+        isTurnRuntimeDeleted,
+      },
+    );
+    const sessionId = String(sessionItem?.sessionId || "").trim();
     const terminalTurn = null;
     const isCurrentSession = Boolean(sessionId && sessionId === resolveActiveSessionIdentity());
-
   }
 
-  const {
-    input,
-    uploadFiles,
-    appendUploads,
-    clearUploads,
-    removeUpload,
-    serializeAttachments,
-  } = useChatInput({
-    isImageMime,
-    clearUploadSelection,
-  });
+  const { input, uploadFiles, appendUploads, clearUploads, removeUpload, serializeAttachments } =
+    useChatInput({
+      isImageMime,
+      clearUploadSelection,
+    });
 
   const sessionLogWebSocketClient = createSessionLogWebSocketClient({
     resolveWebSocketUrl: () => buildLogWebSocketUrl({ apiKey: apiKey.value || "" }),
@@ -333,8 +325,7 @@ export function useChatSession({
     refreshAuthentication,
   });
   const chatWebSocketClient = createChatWebSocketClient({
-    resolveWebSocketUrl: () =>
-      buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
+    resolveWebSocketUrl: () => buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
     translateText: translate,
     refreshAuthentication,
     sessionLogSink: sessionLogWebSocketClient,
@@ -414,7 +405,8 @@ export function useChatSession({
     sessionLogWebSocketClient.log({
       category: "system",
       event,
-      sessionId: payload?.sessionId || String(activeSession.value?.sessionId || activeSessionId.value || ""),
+      sessionId:
+        payload?.sessionId || String(activeSession.value?.sessionId || activeSessionId.value || ""),
       dialogProcessId: payload?.dialogProcessId || "",
       turnScopeId: payload?.turnScopeId || "",
       data: {
@@ -525,8 +517,7 @@ export function useChatSession({
     authFetch,
     refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     connectorTypeSet: connectorPanel.connectorTypeSet,
-    upsertConnectedConnectorInPanelState:
-      connectorPanel.upsertConnectedConnectorInPanelState,
+    upsertConnectedConnectorInPanelState: connectorPanel.upsertConnectedConnectorInPanelState,
     pendingInteractionRequest,
     interactionSubmitting,
     clearPendingInteraction,
@@ -547,7 +538,11 @@ export function useChatSession({
   });
   resolveDiscoveredTerminalTurn = chatEngine.resolveTurnTerminalState;
   for (const discovery of pendingTerminalResolutionDiscoveries.values()) {
-    void resolveDiscoveredTerminalTurn(discovery.sessionId, discovery.turnScopeId, discovery.metadata);
+    void resolveDiscoveredTerminalTurn(
+      discovery.sessionId,
+      discovery.turnScopeId,
+      discovery.metadata,
+    );
   }
   pendingTerminalResolutionDiscoveries.clear();
 
@@ -571,8 +566,7 @@ export function useChatSession({
     setPendingInteractionRequest,
     isInteractionRequestHandled,
     connectorTypeSet: connectorPanel.connectorTypeSet,
-    upsertConnectedConnectorInPanelState:
-      connectorPanel.upsertConnectedConnectorInPanelState,
+    upsertConnectedConnectorInPanelState: connectorPanel.upsertConnectedConnectorInPanelState,
     refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     classifyRealtimeLog,
     navigateToLastMessage,
@@ -590,17 +584,19 @@ export function useChatSession({
     applyTurnLifecycleSnapshot: (snapshot) => chatStore.applyTurnLifecycleSnapshot(snapshot),
   });
 
-  const { sendWithComposerActionState, stopSendingWithComposerActionState } = createComposerActions({
-    composerActionState,
-    turnRuntimeRegistry,
-    resolveActiveSessionIdentity,
-    resolveActiveTurnScopeIdentity,
-    submitTurnRuntimeEvent,
-    send: chatEngine.send,
-    stopSending: chatEngine.stopSending,
-    notify,
-    translate,
-  });
+  const { sendWithComposerActionState, stopSendingWithComposerActionState } = createComposerActions(
+    {
+      composerActionState,
+      turnRuntimeRegistry,
+      resolveActiveSessionIdentity,
+      resolveActiveTurnScopeIdentity,
+      submitTurnRuntimeEvent,
+      send: chatEngine.send,
+      stopSending: chatEngine.stopSending,
+      notify,
+      translate,
+    },
+  );
 
   const { handleReconnect } = createReconnectCoordinator({
     activeSession,

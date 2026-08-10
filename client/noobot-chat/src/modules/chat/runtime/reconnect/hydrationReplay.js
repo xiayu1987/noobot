@@ -19,7 +19,9 @@ export function resolveMatchingSessionDetail(detail, sessionId = "") {
   const detailSessionId = sessionIdentity(detail);
   if (detailSessionId && detailSessionId !== expectedSessionId) return null;
   const sessionDocs = Array.isArray(detail?.sessions) ? detail.sessions : [];
-  return sessionDocs.find((sessionDoc) => sessionIdentity(sessionDoc) === expectedSessionId) || null;
+  return (
+    sessionDocs.find((sessionDoc) => sessionIdentity(sessionDoc) === expectedSessionId) || null
+  );
 }
 
 export async function renderActiveSessionBeforeReplay({
@@ -49,7 +51,7 @@ export async function renderActiveSessionBeforeReplay({
       const currentActiveSessionId = sessionIdentity(activeSession?.value);
       if (!matchingSessionDoc || currentActiveSessionId !== sessionId) {
         logResendDebug("hydration.detail.rejected", () => ({
-          sessionId: sessionId,
+          sessionId,
           currentActiveSessionId,
           detailSessionId: sessionIdentity(detail),
           reason: !matchingSessionDoc ? "identity_mismatch_or_empty" : "active_session_changed",
@@ -57,12 +59,12 @@ export async function renderActiveSessionBeforeReplay({
         return false;
       }
       logResendDebug("hydration.detail.apply.before", () => ({
-        sessionId: sessionId,
+        sessionId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       }));
       chatList.applySessionDetail(detail);
       logResendDebug("hydration.detail.apply.after", () => ({
-        sessionId: sessionId,
+        sessionId,
         messages: summarizeDebugMessages(activeSession?.value?.messages),
       }));
       return true;
