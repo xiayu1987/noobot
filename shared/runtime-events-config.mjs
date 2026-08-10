@@ -93,7 +93,7 @@ export const RUNTIME_EVENTS_CONFIG_DEFAULTS = deepFreeze({
       frontendToolLogWindow: false,
       frontendTerminalResolution: false,
       agentProxyRoute: false,
-      workflowDiagnostics: true,
+      workflowDiagnostics: false,
       contextIdentity: true,
       agentContext: true,
       agentTransport: true,
