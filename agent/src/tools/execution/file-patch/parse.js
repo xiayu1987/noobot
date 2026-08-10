@@ -33,8 +33,29 @@ function normalizePatchPathInput(rawPath = "") {
   return normalizePathForPlatform(trimmed);
 }
 
+function parseApplyPatchHunk(lines, startIndex) {
+  let index = startIndex + 1;
+  const hunkLines = [];
+  while (
+    index < lines.length &&
+    !lines[index].startsWith("@@") &&
+    !lines[index].startsWith("*** ")
+  ) {
+    const prefix = lines[index][0];
+    if ([" ", "+", "-"].includes(prefix)) {
+      hunkLines.push({ type: prefix, text: lines[index].slice(1) });
+    }
+    index += 1;
+  }
+  return { index, hunk: { lines: hunkLines } };
+}
+
 function stripDiffPath(rawPath = "", strip = 1) {
-  const withoutTimestamp = normalizePatchPathInput(String(rawPath || "").trim().split(/\s+/)[0] || "");
+  const withoutTimestamp = normalizePatchPathInput(
+    String(rawPath || "")
+      .trim()
+      .split(/\s+/)[0] || "",
+  );
   if (!withoutTimestamp || withoutTimestamp === "/dev/null") return withoutTimestamp;
   const parts = withoutTimestamp.split("/").filter(Boolean);
   if (/^[A-Za-z]:$/.test(parts[0] || "")) return withoutTimestamp;
@@ -104,13 +125,14 @@ export function parseUnifiedDiff(patch = "", strip = 1) {
       oldPath,
       newPath,
       hunks,
-      mode: newPath === "/dev/null"
-        ? "delete"
-        : oldPath === "/dev/null"
-          ? "add"
-          : oldPath !== newPath
-            ? "move"
-            : "update",
+      mode:
+        newPath === "/dev/null"
+          ? "delete"
+          : oldPath === "/dev/null"
+            ? "add"
+            : oldPath !== newPath
+              ? "move"
+              : "update",
     });
   }
   if (!filePatches.length) {
@@ -149,7 +171,11 @@ export function parseApplyPatch(patch = "") {
         contentLines.push(lines[i].slice(1));
         i += 1;
       }
-      patches.push({ mode: "add", newPath: filePath, content: contentLines.join("\n") + (contentLines.length ? "\n" : "") });
+      patches.push({
+        mode: "add",
+        newPath: filePath,
+        content: contentLines.join("\n") + (contentLines.length ? "\n" : ""),
+      });
       continue;
     }
     if (line.startsWith("*** Delete File: ")) {
@@ -168,16 +194,9 @@ export function parseApplyPatch(patch = "") {
       const hunks = [];
       while (i < lines.length && !lines[i].startsWith("*** ")) {
         if (lines[i].startsWith("@@")) {
-          i += 1;
-          const hunkLines = [];
-          while (i < lines.length && !lines[i].startsWith("@@") && !lines[i].startsWith("*** ")) {
-            const prefix = lines[i][0];
-            if ([" ", "+", "-"].includes(prefix)) {
-              hunkLines.push({ type: prefix, text: lines[i].slice(1) });
-            }
-            i += 1;
-          }
-          hunks.push({ lines: hunkLines });
+          const parsedHunk = parseApplyPatchHunk(lines, i);
+          i = parsedHunk.index;
+          hunks.push(parsedHunk.hunk);
           continue;
         }
         i += 1;
