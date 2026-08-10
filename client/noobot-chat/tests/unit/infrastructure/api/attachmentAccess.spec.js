@@ -90,7 +90,7 @@ describe("attachmentAccess", () => {
     ).toMatchObject({
       attachmentId: "",
       url: "",
-      name: "result.md",
+      name: "",
       hasIdentity: false,
     });
   });
