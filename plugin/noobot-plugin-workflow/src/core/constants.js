@@ -67,5 +67,12 @@ export const WORKFLOW_PROTOCOL = Object.freeze({
 });
 
 export const WORKFLOW_ATTACHMENT_SCOPE = Object.freeze({
-  USER_ALL_TOKENS: Object.freeze(["*", "all", "user:*", "user:all", "\u7528\u6237:*", "\u7528\u6237:\u5168\u90e8"]),
+  USER_ALL_TOKENS: Object.freeze([
+    "*",
+    "all",
+    "user:*",
+    "user:all",
+    "\u7528\u6237:*",
+    "\u7528\u6237:\u5168\u90e8",
+  ]),
 });

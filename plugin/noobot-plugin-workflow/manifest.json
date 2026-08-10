@@ -11,12 +11,8 @@
   "contributes": {
     "agent": {
       "hooks": {
-        "registers": [
-          "bot.before_agent_dispatch"
-        ],
-        "emits": [
-          "workflow.node_agent_execute"
-        ]
+        "registers": ["bot.before_agent_dispatch"],
+        "emits": ["workflow.node_agent_execute"]
       },
       "executionIntent": {
         "kind": "workflow",
@@ -28,9 +24,7 @@
     },
     "service": {
       "hooks": {
-        "registers": [
-          "service.after_session_delete"
-        ],
+        "registers": ["service.after_session_delete"],
         "emits": []
       },
       "routes": [

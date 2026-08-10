@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  duplication:
-    name: Check code duplication
+  quality:
+    name: Lightweight code quality
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -28,5 +28,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check duplication baseline
-        run: npm run check:duplication
+      - name: Run lightweight code quality checks
+        run: npm run check:quality
