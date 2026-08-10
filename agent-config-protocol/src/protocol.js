@@ -13,17 +13,21 @@ export function createConfigSnapshot({
   scope = {},
   metadata = {},
 } = {}) {
+  const sourceMetadata = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? metadata
+    : {};
+  const normalizedMetadata = {
+    ...sourceMetadata,
+    migrations: Object.freeze([...(Array.isArray(sourceMetadata.migrations) ? sourceMetadata.migrations : [])]),
+    warnings: Object.freeze([...(Array.isArray(sourceMetadata.warnings) ? sourceMetadata.warnings : [])]),
+  };
   return Object.freeze({
     protocol: AGENT_CONFIG_PROTOCOL_NAME,
     version: AGENT_CONFIG_PROTOCOL_VERSION,
     scope: Object.freeze({ ...scope }),
     config: Object.freeze({ ...config }),
     policies: Object.freeze({ ...policies }),
-    metadata: Object.freeze({
-      migrations: Object.freeze([...(metadata.migrations || [])]),
-      warnings: Object.freeze([...(metadata.warnings || [])]),
-      ...metadata,
-    }),
+    metadata: Object.freeze(normalizedMetadata),
   });
 }
 

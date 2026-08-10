@@ -44,6 +44,21 @@ export async function selectPlugins(page, pluginKeys = []) {
   await expect(page.locator(".more-panel-overlay")).toBeHidden();
 }
 
+export async function selectScenario(page, scenarioKey) {
+  const panel = page.locator(".more-panel");
+  const overlay = page.locator(".more-panel-overlay");
+  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  const scenario = String(scenarioKey || "").trim().toLowerCase();
+  const target = panel.locator(".scenario-option-button").filter({
+    hasText: scenario === "programming" ? /编程|programming/i : new RegExp(scenario, "i"),
+  }).first();
+  await expect(target).toBeVisible();
+  await target.click();
+  await expect(target).toHaveClass(/el-button--primary/);
+  await page.locator(".more-collapse-btn").click();
+  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+}
+
 export async function setHarnessCapability(page, label, enabled) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
