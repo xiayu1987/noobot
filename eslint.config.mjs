@@ -68,12 +68,12 @@ export default [
   },
   {
     files: [
-      "**/constants.js",
-      "**/*-constants.js",
-      "**/*_constants.js",
-      "**/constants/**/*.js",
-      "**/constants-*.js",
-      "**/constants.*.js",
+      "service/**/constants.js",
+      "service/**/*-constants.js",
+      "service/**/*_constants.js",
+      "service/**/constants/**/*.js",
+      "service/**/constants-*.js",
+      "service/**/constants.*.js",
     ],
     rules: {
       "id-match": [

@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, vi } from "vitest";
-import { createHarness, assistantMessage, emitChannelState } from "../helpers/useChatEngineHarness.js";
+import {
+  createHarness,
+  assistantMessage,
+  emitChannelState,
+} from "../helpers/useChatEngineHarness.js";
 import { StreamEventEnum, RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { createSessionListActions } from "../../../../../src/modules/session/model/list/sessionListActions.js";
@@ -45,7 +49,10 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     let releaseResponse;
     const terminalResolutionFetcher = vi.fn(async () => ({
       ok: true,
-      json: async () => new Promise((resolve) => { releaseResponse = resolve; }),
+      json: async () =>
+        new Promise((resolve) => {
+          releaseResponse = resolve;
+        }),
     }));
     const { engine, turnRuntimeRegistry, sessions } = createHarness({
       sessionId,
@@ -54,19 +61,21 @@ describe("useChatEngine.interaction-stop: terminal", () => {
 
     const first = engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
     await vi.waitFor(() => expect(releaseResponse).toBeTypeOf("function"));
-    expect(applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, {
-      protocolVersion: 1,
-      eventType: "turn.snapshot",
-      commandId: "snapshot-refresh",
-      userId: "u-1",
-      sessionId,
-      sequence: 4,
-      activeTurnScopeId: "",
-      activeTurn: null,
-      recentTerminalTurns: [terminalTurn],
-      replacedTurns: [],
-      unchanged: false,
-    }).applied).toBe(true);
+    expect(
+      applyTurnLifecycleSnapshot(turnRuntimeRegistry.value, {
+        protocolVersion: 1,
+        eventType: "turn.snapshot",
+        commandId: "snapshot-refresh",
+        userId: "u-1",
+        sessionId,
+        sequence: 4,
+        activeTurnScopeId: "",
+        activeTurn: null,
+        recentTerminalTurns: [terminalTurn],
+        replacedTurns: [],
+        unchanged: false,
+      }).applied,
+    ).toBe(true);
     turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
     releaseResponse({
       ok: true,
@@ -87,8 +96,10 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     const second = await engine.resolveTurnTerminalState(sessionId, turnScopeId, terminalTurn);
     expect(second).toMatchObject({ applied: true });
     expect(terminalResolutionFetcher).toHaveBeenCalledTimes(1);
-    expect(sessions.value[0]).toMatchObject({ sessionId: sessionId });
-    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId)).toMatchObject({
+    expect(sessions.value[0]).toMatchObject({ sessionId });
+    expect(
+      selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId),
+    ).toMatchObject({
       terminal: "completed",
       sending: false,
       canStop: false,
@@ -106,12 +117,12 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         protocolVersion: 1,
         eventType: "turn.terminal_resolved",
         commandId: "terminal-resolution:identity-promotion",
-        sessionId: sessionId,
+        sessionId,
         turnScopeId,
         resolved: true,
         retryable: false,
         turn: {
-          sessionId: sessionId,
+          sessionId,
           turnScopeId,
           state: "completed",
           revision: 4,
@@ -141,7 +152,9 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       sessionId: localSessionId,
       isLocal: true,
     });
-    expect(selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId)).toMatchObject({
+    expect(
+      selectSessionTurnRuntime(turnRuntimeRegistry.value, sessionId, turnScopeId),
+    ).toMatchObject({
       terminal: "completed",
       sending: false,
       canStop: false,
@@ -159,12 +172,12 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         protocolVersion: 1,
         eventType: "turn.terminal_resolved",
         commandId: "terminal-resolution:refresh-e2e",
-        sessionId: sessionId,
+        sessionId,
         turnScopeId,
         resolved: true,
         retryable: false,
         turn: {
-          sessionId: sessionId,
+          sessionId,
           turnScopeId,
           state: "completed",
           revision: 2,
@@ -204,15 +217,19 @@ describe("useChatEngine.interaction-stop: terminal", () => {
         ok: true,
         json: async () => ({
           ok: true,
-          sessions: [{
-            sessionId: sessionId,
-            caller: RoleEnum.USER,
-            updatedAt: "2026-07-24T05:42:15.485Z",
-            turnLifecycleSnapshot: {
-              activeTurn: null,
-              recentTerminalTurns: [{ turnScopeId, state: "completed", revision: 2, sequence: 2 }],
+          sessions: [
+            {
+              sessionId,
+              caller: RoleEnum.USER,
+              updatedAt: "2026-07-24T05:42:15.485Z",
+              turnLifecycleSnapshot: {
+                activeTurn: null,
+                recentTerminalTurns: [
+                  { turnScopeId, state: "completed", revision: 2, sequence: 2 },
+                ],
+              },
             },
-          }],
+          ],
         }),
       })),
       deleteSessionApi: vi.fn(),
@@ -237,14 +254,14 @@ describe("useChatEngine.interaction-stop: terminal", () => {
 
     expect(resolution).toMatchObject({ applied: true });
     expect(terminalResolutionFetcher).toHaveBeenCalledTimes(1);
-    expect(harness.turnRuntimeRegistry.value.sessions[sessionId]?.turns?.[turnScopeId]).toMatchObject({
+    expect(
+      harness.turnRuntimeRegistry.value.sessions[sessionId]?.turns?.[turnScopeId],
+    ).toMatchObject({
       terminalResolved: true,
     });
-    expect(selectSessionTurnRuntime(
-      harness.turnRuntimeRegistry.value,
-      sessionId,
-      turnScopeId,
-    )).toMatchObject({
+    expect(
+      selectSessionTurnRuntime(harness.turnRuntimeRegistry.value, sessionId, turnScopeId),
+    ).toMatchObject({
       terminal: "completed",
       sending: false,
       canStop: false,

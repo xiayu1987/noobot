@@ -27,7 +27,6 @@ import {
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
 
-
 function normalizeAttachmentMeta(attachment = {}) {
   if (!attachment || typeof attachment !== "object" || Array.isArray(attachment)) return null;
   const out = { ...attachment };
@@ -90,7 +89,9 @@ function enrichPersistedAttachmentsWithDraftMetadata(
   pendingDisplayAttachments = [],
 ) {
   const pendingByClientAttachmentId = new Map();
-  for (const attachment of Array.isArray(pendingDisplayAttachments) ? pendingDisplayAttachments : []) {
+  for (const attachment of Array.isArray(pendingDisplayAttachments)
+    ? pendingDisplayAttachments
+    : []) {
     const clientAttachmentId = normalizeTrimmedString(
       attachment?.clientAttachmentId || attachment?.draftAttachmentId,
     );
@@ -101,17 +102,13 @@ function enrichPersistedAttachmentsWithDraftMetadata(
     const clientAttachmentId = normalizeTrimmedString(
       attachment?.clientAttachmentId || attachment?.draftAttachmentId,
     );
-    const pending = clientAttachmentId
-      ? pendingByClientAttachmentId.get(clientAttachmentId)
-      : null;
+    const pending = clientAttachmentId ? pendingByClientAttachmentId.get(clientAttachmentId) : null;
     return pending ? { ...pending, ...attachment } : attachment;
   });
 }
 
 function resolveSessionId(activeSession, activeSessionId) {
-  return normalizeTrimmedString(
-    activeSession?.value?.sessionId || activeSessionId?.value,
-  );
+  return normalizeTrimmedString(activeSession?.value?.sessionId || activeSessionId?.value);
 }
 
 function createSessionDetailSnapshot(session = {}) {
@@ -142,9 +139,10 @@ function findReplacementUserMessageById({ session, messageId }) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   const expectedMessageId = normalizeTrimmedString(messageId);
   if (!expectedMessageId) return null;
-  return messages.find((message) => (
-    normalizeTrimmedString(message?.messageId) === expectedMessageId
-  )) || null;
+  return (
+    messages.find((message) => normalizeTrimmedString(message?.messageId) === expectedMessageId) ||
+    null
+  );
 }
 
 function createTurnScopeId() {
@@ -173,8 +171,9 @@ export function createResendMessageTransaction({
 } = {}) {
   function finalizePendingResendOperation() {
     const sessionId = resolveSessionId(activeSession, activeSessionId);
-    const operation = messageOperationStore?.getActiveOperation(sessionId, "resend")
-      || messageOperationStore?.getLatestOperation("resend");
+    const operation =
+      messageOperationStore?.getActiveOperation(sessionId, "resend") ||
+      messageOperationStore?.getLatestOperation("resend");
     if (!operation) return false;
     messageOperationStore?.completeOperation(operation.opId);
     return true;
@@ -184,13 +183,24 @@ export function createResendMessageTransaction({
     activeSession,
     fetchSessionDetail,
     applySessionDetail,
-    log: (event, payload) => logResendDebug(`resend.${event}`, () => ({
-      ...payload,
-      messages: summarizeDebugMessages(activeSession?.value?.messages),
-    })),
+    log: (event, payload) =>
+      logResendDebug(`resend.${event}`, () => ({
+        ...payload,
+        messages: summarizeDebugMessages(activeSession?.value?.messages),
+      })),
   });
 
-  async function requestReplaceTurn({ sessionId, originalSession, anchor, text, resendTurnScopeId, commandId, attempt, expectedAggregateVersion, attachments }) {
+  async function requestReplaceTurn({
+    sessionId,
+    originalSession,
+    anchor,
+    text,
+    resendTurnScopeId,
+    commandId,
+    attempt,
+    expectedAggregateVersion,
+    attachments,
+  }) {
     logResendDebug("resend.replaceTurn.request", () => ({
       sessionId,
       turnScopeId: resendTurnScopeId,
@@ -201,17 +211,20 @@ export function createResendMessageTransaction({
       attachments: summarizeDebugAttachments(attachments),
       messages: summarizeDebugMessages(activeSession?.value?.messages),
     }));
-    const result = await replaceSessionTurnApi({
-      userId: userId?.value || userId,
-      sessionId,
-      parentSessionId: normalizeTrimmedString(originalSession?.parentSessionId),
-      anchor,
-      newContent: text,
-      turnScopeId: resendTurnScopeId,
-      expectedAggregateVersion,
-      commandId,
-      attachments,
-    }, { fetcher: authFetch });
+    const result = await replaceSessionTurnApi(
+      {
+        userId: userId?.value || userId,
+        sessionId,
+        parentSessionId: normalizeTrimmedString(originalSession?.parentSessionId),
+        anchor,
+        newContent: text,
+        turnScopeId: resendTurnScopeId,
+        expectedAggregateVersion,
+        commandId,
+        attachments,
+      },
+      { fetcher: authFetch },
+    );
     const payload = typeof result?.json === "function" ? await result.json() : result;
     return { result, payload };
   }
@@ -245,8 +258,9 @@ export function createResendMessageTransaction({
         .map((key) => String(key || "").trim())
         .filter(Boolean),
     );
-    const authoritativeAttachments = dedupeAttachmentMetas(userTargetMessage?.attachments || [])
-      .filter((attachment) => !removedAttachmentKeys.has(attachmentIdentityKey(attachment)));
+    const authoritativeAttachments = dedupeAttachmentMetas(
+      userTargetMessage?.attachments || [],
+    ).filter((attachment) => !removedAttachmentKeys.has(attachmentIdentityKey(attachment)));
     const keptAttachments = dedupeAttachmentMetas([
       ...authoritativeAttachments,
       ...(Array.isArray(options?.attachments) ? options.attachments : []),
@@ -254,7 +268,7 @@ export function createResendMessageTransaction({
     const attachmentFiles = Array.isArray(options?.attachmentFiles) ? options.attachmentFiles : [];
     let serializedNewAttachments;
     try {
-      serializedNewAttachments = await serializeAttachments?.(attachmentFiles) || [];
+      serializedNewAttachments = (await serializeAttachments?.(attachmentFiles)) || [];
     } catch (error) {
       messageOperationStore?.completeOperation(operation.opId);
       throw error;
@@ -274,7 +288,10 @@ export function createResendMessageTransaction({
       optionsAttachments: summarizeDebugAttachments(options?.attachments),
       targetAttachments: summarizeDebugAttachments(userTargetMessage?.attachments),
       keptAttachments: summarizeDebugAttachments(keptAttachments),
-      attachmentFiles: { kind: Array.isArray(options?.attachmentFiles) ? "array" : "undefined", count: attachmentFiles.length },
+      attachmentFiles: {
+        kind: Array.isArray(options?.attachmentFiles) ? "array" : "undefined",
+        count: attachmentFiles.length,
+      },
       serializedNewAttachments: summarizeDebugAttachments(serializedNewAttachments),
       finalAttachments: summarizeDebugAttachments(finalAttachments),
     }));
@@ -313,19 +330,20 @@ export function createResendMessageTransaction({
     try {
       const mutationResult = await sessionAggregateVersionManager.runAggregateVersionedMutation({
         shouldRetry: false,
-        mutate: ({ expectedAggregateVersion, attempt }) => requestReplaceTurn({
-          sessionId,
-          originalSession,
-          anchor,
-          text,
-          resendTurnScopeId,
-          expectedAggregateVersion,
-          commandId: operation?.opId || "",
-          attempt,
-          attachments: finalAttachments,
-        }),
+        mutate: ({ expectedAggregateVersion, attempt }) =>
+          requestReplaceTurn({
+            sessionId,
+            originalSession,
+            anchor,
+            text,
+            resendTurnScopeId,
+            expectedAggregateVersion,
+            commandId: operation?.opId || "",
+            attempt,
+            attachments: finalAttachments,
+          }),
       });
-      let { result, payload, expectedAggregateVersion } = mutationResult || {};
+      const { result, payload, expectedAggregateVersion } = mutationResult || {};
       logResendDebug("resend.replaceTurn.result", () => ({
         sessionId,
         turnScopeId: resendTurnScopeId,
@@ -393,10 +411,11 @@ export function createResendMessageTransaction({
         removedWorkflowRunIds: workflowOwnerDeletion.removedWorkflowRunIds,
         removedSubSessionIds: workflowOwnerDeletion.removedSessionIds,
       }));
-      if (operation) messageOperationStore?.updateOperation(operation.opId, {
-        status: "materializing",
-        turnReplacement,
-      });
+      if (operation)
+        messageOperationStore?.updateOperation(operation.opId, {
+          status: "materializing",
+          turnReplacement,
+        });
       const sessionDetail = createSessionDetailSnapshot(materialization.session);
       logResendDebug("resend.detail.apply.before", () => ({
         sessionId,

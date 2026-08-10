@@ -35,7 +35,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
   const semanticTransferCalls = [];
-  let artifactCounter = 0;
+  const artifactCounter = 0;
 
   registerWorkflowHooks({
     hookManager,
@@ -75,7 +75,13 @@ test("workflow hook injects upstream node result attachments into downstream sub
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || payload?.message || "").trim();
         return {
-          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+          lifecycle: {
+            executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+            executionKind: "agent",
+            state: "completed",
+            revision: 4,
+            sequence: 4,
+          },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: {
@@ -133,21 +139,16 @@ test("workflow hook injects upstream node result attachments into downstream sub
   assert.match(nodeESystem, /节点C/);
   assert.doesNotMatch(nodeESystem, /节点A \/ workflow-node-1-节点A-result\.md/);
   assert.equal(
-    semanticTransferCalls.some(
-      (item = {}) => String(item?.strategy || "") === "workflow_subagent",
-    ),
+    semanticTransferCalls.some((item = {}) => String(item?.strategy || "") === "workflow_subagent"),
     true,
   );
 });
-
-
-
 
 test("workflow hook injects one upstream action attachments into multiple direct downstream action nodes", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
-  let artifactCounter = 0;
+  const artifactCounter = 0;
 
   registerWorkflowHooks({
     hookManager,
@@ -176,7 +177,13 @@ test("workflow hook injects one upstream action attachments into multiple direct
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || payload?.message || "").trim();
         return {
-          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+          lifecycle: {
+            executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+            executionKind: "agent",
+            state: "completed",
+            revision: 4,
+            sequence: 4,
+          },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: {

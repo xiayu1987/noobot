@@ -5,10 +5,7 @@
  */
 import { RoleEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
-import {
-  SESSION_RUN_EVENT,
-  rememberStopRequestedEvent,
-} from "../sessionRunStateMachine.js";
+import { SESSION_RUN_EVENT, rememberStopRequestedEvent } from "../sessionRunStateMachine.js";
 import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
@@ -44,16 +41,16 @@ function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "
     if (!execution) return { execution: null, turnRuntime: null, session: null };
     const sessionId = normalizeTrimmedString(execution.sessionId);
     const active = activeSession?.value || null;
-    const session = sessionRuntimeId(active) === sessionId
-      ? active
-      : {
-          sessionId: sessionId,
-          sessionId,
-          id: sessionId,
-          parentSessionId: execution.parentSessionId || "",
-          parentDialogProcessId: execution.parentDialogProcessId || "",
-          messages: [],
-        };
+    const session =
+      sessionRuntimeId(active) === sessionId
+        ? active
+        : {
+            sessionId,
+            id: sessionId,
+            parentSessionId: execution.parentSessionId || "",
+            parentDialogProcessId: execution.parentDialogProcessId || "",
+            messages: [],
+          };
     return { execution, turnRuntime: execution, session };
   }
   const session = activeSession?.value || null;
@@ -66,7 +63,12 @@ function resolveStopTarget({ activeSession, turnRuntimeRegistry, executionId = "
   };
 }
 
-function buildStopPayload({ activeSession, session: targetSession, pendingAssistantMessage, turnRuntime } = {}) {
+function buildStopPayload({
+  activeSession,
+  session: targetSession,
+  pendingAssistantMessage,
+  turnRuntime,
+} = {}) {
   const session = targetSession || activeSession?.value || {};
   const dialogProcessId = normalizeTrimmedString(turnRuntime?.dialogProcessId);
   const turnScopeId = normalizeTrimmedString(turnRuntime?.turnScopeId);
@@ -75,10 +77,14 @@ function buildStopPayload({ activeSession, session: targetSession, pendingAssist
     commandId: `stop:${turnScopeId}`,
     identity: {
       sessionId: String(session.sessionId || ""),
-      parentSessionId: String(session.parentSessionId || pendingAssistantMessage?.parentSessionId || ""),
+      parentSessionId: String(
+        session.parentSessionId || pendingAssistantMessage?.parentSessionId || "",
+      ),
       dialogProcessId,
       parentDialogProcessId: String(
-        getMessageParentDialogProcessId(pendingAssistantMessage) || session.parentDialogProcessId || "",
+        getMessageParentDialogProcessId(pendingAssistantMessage) ||
+          session.parentDialogProcessId ||
+          "",
       ),
       turnScopeId,
     },
@@ -132,8 +138,11 @@ export function stopSending({
     if (getMessageRole(messageItem) !== RoleEnum.ASSISTANT) return false;
     const messageTurnScopeId = getMessageTurnScopeId(messageItem);
     if (expectedTurnScopeId && messageTurnScopeId === expectedTurnScopeId) return true;
-    return !expectedTurnScopeId && expectedDialogProcessId &&
-      getMessageDialogProcessId(messageItem) === expectedDialogProcessId;
+    return (
+      !expectedTurnScopeId &&
+      expectedDialogProcessId &&
+      getMessageDialogProcessId(messageItem) === expectedDialogProcessId
+    );
   });
   logResendDebug("stop.request", () => ({
     pendingAssistant: summarizeDebugMessage(pendingAssistantMessage),

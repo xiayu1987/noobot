@@ -5,8 +5,10 @@
  */
 import { mergeConfig, CONTEXT_SECTION_ALIASES } from "../config/index.js";
 import { buildTools } from "../tools/index.js";
-import { getConnectorChannelStore } from "../integrations/connectors/index.js";
-import { getConnectorHistoryStore } from "../integrations/connectors/index.js";
+import {
+  getConnectorChannelStore,
+  getConnectorHistoryStore,
+} from "../integrations/connectors/index.js";
 import {
   resolveRuntimeBasePath,
   buildStaticInfo,
@@ -17,10 +19,7 @@ import { resolveWorkspaceDirectories } from "./providers/workspace-provider.js";
 import { resolveConnectorStatusSection } from "./providers/connector-status-provider.js";
 import { resolveServices } from "./providers/service-provider.js";
 import { resolveAvailableMcpServers } from "./providers/mcp-provider.js";
-import {
-  resolveModelSection,
-  resolveAllEnabledProviders,
-} from "./providers/model-provider.js";
+import { resolveModelSection, resolveAllEnabledProviders } from "./providers/model-provider.js";
 import { loadSystemPrompt } from "./providers/system-prompt-loader.js";
 import { resolveSessionTreeWithRootSessionId } from "./providers/session-tree-resolver.js";
 import { resolveAttachments } from "./providers/attachment-resolver.js";
@@ -69,9 +68,7 @@ function applyIdentityToStaticPathInfo(staticInfo = {}, identityInfo = {}) {
 
 function normalizeAdditionalSystemMessages(input = []) {
   if (!Array.isArray(input)) return [];
-  return input
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
+  return input.map((item) => String(item || "").trim()).filter(Boolean);
 }
 
 export class ContextBuilder {
@@ -167,7 +164,11 @@ export class ContextBuilder {
       ? contextPolicy.includeContextKeys
       : [];
     const normalizedKeys = includeContextKeys
-      .map((item) => String(item || "").trim().toLowerCase())
+      .map((item) =>
+        String(item || "")
+          .trim()
+          .toLowerCase(),
+      )
       .filter(Boolean);
     if (normalizedKeys.includes("*")) return new Set();
     return new Set(normalizedKeys);
@@ -175,7 +176,9 @@ export class ContextBuilder {
 
   _isContextSectionEnabled(includeSet, sectionKey = "") {
     if (!(includeSet instanceof Set) || includeSet.size === 0) return true;
-    const normalizedSectionKey = String(sectionKey || "").trim().toLowerCase();
+    const normalizedSectionKey = String(sectionKey || "")
+      .trim()
+      .toLowerCase();
     if (!normalizedSectionKey) return false;
     const aliasMap = CONTEXT_SECTION_ALIASES;
     const aliasList = aliasMap[normalizedSectionKey] || [normalizedSectionKey];
@@ -196,24 +199,15 @@ export class ContextBuilder {
       platform: staticInfo.platform || process.platform,
       arch: staticInfo.arch || process.arch,
       nodeVersion: staticInfo.nodeVersion || process.version,
-      timezone:
-        staticInfo.timezone ||
-        Intl.DateTimeFormat().resolvedOptions().timeZone ||
-        "",
+      timezone: staticInfo.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "",
       globalDefaults: staticInfo.globalDefaults || {
         workspaceRoot: this.globalConfig?.workspaceRoot || "",
       },
-      workspaceDirectories: await this._resolveWorkspaceDirectoriesCached(
-        resolvedBasePath,
-      ),
+      workspaceDirectories: await this._resolveWorkspaceDirectoriesCached(resolvedBasePath),
     };
   }
 
-  _buildSystemRuntime({
-    dialogProcessId = "",
-    rootSessionId = "",
-    staticInfo = null,
-  } = {}) {
+  _buildSystemRuntime({ dialogProcessId = "", rootSessionId = "", staticInfo = null } = {}) {
     const dynamicInfo = buildDynamicInfo({
       userId: this.userId,
       sessionId: this.sessionId,
@@ -236,8 +230,12 @@ export class ContextBuilder {
       this.runConfig?.systemRuntimePatch && typeof this.runConfig.systemRuntimePatch === "object"
         ? this.runConfig.systemRuntimePatch
         : null;
-    const mergedRuntime = systemRuntimePatch ? { ...systemRuntimeWithStartup, ...systemRuntimePatch } : systemRuntimeWithStartup;
-    const protectedDialogProcessId = String(dynamicInfo?.dialogProcessId || dialogProcessId || "").trim();
+    const mergedRuntime = systemRuntimePatch
+      ? { ...systemRuntimeWithStartup, ...systemRuntimePatch }
+      : systemRuntimeWithStartup;
+    const protectedDialogProcessId = String(
+      dynamicInfo?.dialogProcessId || dialogProcessId || "",
+    ).trim();
     return {
       ...mergedRuntime,
       ...(staticInfo && typeof staticInfo === "object" ? { staticInfo } : {}),
@@ -273,8 +271,7 @@ export class ContextBuilder {
       ...(Array.isArray(systemMessages) ? systemMessages : []),
       ...this.additionalSystemMessages,
     ];
-    const resolvedRuntimeBasePath =
-      runtimeBasePath || this._resolveRuntimeBasePath();
+    const resolvedRuntimeBasePath = runtimeBasePath || this._resolveRuntimeBasePath();
     const { sessionTree: resolvedSessionTree, rootSessionId: resolvedRootSessionId } =
       sessionTree && typeof sessionTree === "object" && String(rootSessionId || "").trim()
         ? {
@@ -357,9 +354,7 @@ export class ContextBuilder {
       turnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
       runId: String(this.runConfig?.executionId || "").trim(),
       messageId: String(
-        this.runConfig?.messageId ||
-          runtime?.systemRuntime?.messageId ||
-          "",
+        this.runConfig?.messageId || runtime?.systemRuntime?.messageId || "",
       ).trim(),
       now: this._now(),
       systemMessages: effectiveSystemMessages,
@@ -403,10 +398,7 @@ export class ContextBuilder {
     const effectiveConfig = this._getEffectiveConfig();
     const includeSet = this._resolveContextIncludeSet();
     const includeBasePrompt = this._isContextSectionEnabled(includeSet, "base_prompt");
-    const includeSystemRuntime = this._isContextSectionEnabled(
-      includeSet,
-      "system_runtime",
-    );
+    const includeSystemRuntime = this._isContextSectionEnabled(includeSet, "system_runtime");
     const includeScenario = this._isContextSectionEnabled(includeSet, "scenario");
     const includeLongMemory = this._isContextSectionEnabled(includeSet, "long_memory");
     const includeModel = this._isContextSectionEnabled(includeSet, "model");
@@ -426,28 +418,25 @@ export class ContextBuilder {
       now: this._now(),
     });
 
-    const [systemPrompt, skills, attachments, workspaceDirectories] =
-      await Promise.all([
-        includeBasePrompt ? loadSystemPrompt({ locale }) : "",
-        includeSkills
-          ? resolveSkills({
-              skillService: this.skillService,
-              runtimeBasePath,
-              userId: this.userId,
-            })
-          : [],
-        resolveAttachments({
-          attachmentService: this.attachmentService,
-          runtimeBasePath,
-          effectiveConfig,
-          userMessageAttachments: this.userMessageAttachments,
-          userId: this.userId,
-          sessionId: this.sessionId,
-        }),
-        includeSystemRuntime
-          ? this._resolveWorkspaceDirectoriesCached(runtimeBasePath)
-          : [],
-      ]);
+    const [systemPrompt, skills, attachments, workspaceDirectories] = await Promise.all([
+      includeBasePrompt ? loadSystemPrompt({ locale }) : "",
+      includeSkills
+        ? resolveSkills({
+            skillService: this.skillService,
+            runtimeBasePath,
+            userId: this.userId,
+          })
+        : [],
+      resolveAttachments({
+        attachmentService: this.attachmentService,
+        runtimeBasePath,
+        effectiveConfig,
+        userMessageAttachments: this.userMessageAttachments,
+        userId: this.userId,
+        sessionId: this.sessionId,
+      }),
+      includeSystemRuntime ? this._resolveWorkspaceDirectoriesCached(runtimeBasePath) : [],
+    ]);
     const scenarioProfile = resolveScenarioProfile({
       runConfig: this.runConfig,
       effectiveConfig,
@@ -491,15 +480,18 @@ export class ContextBuilder {
     };
 
     const staticInfo = includeSystemRuntime
-      ? applyIdentityToStaticPathInfo({
-          ...buildSandboxViewStaticInfo({
-            runtimeBasePath,
-            userId: this.userId,
-            globalConfig: this.globalConfig,
-            effectiveConfig,
-          }),
-          identity: identityInfo,
-        }, identityInfo)
+      ? applyIdentityToStaticPathInfo(
+          {
+            ...buildSandboxViewStaticInfo({
+              runtimeBasePath,
+              userId: this.userId,
+              globalConfig: this.globalConfig,
+              effectiveConfig,
+            }),
+            identity: identityInfo,
+          },
+          identityInfo,
+        )
       : { identity: identityInfo };
     const dynamicInfo = includeSystemRuntime
       ? this._buildSystemRuntime({
@@ -539,20 +531,19 @@ export class ContextBuilder {
       dialogProcessId,
     });
     const sessionRecords = sessionProjection?.messages || [];
-    emitModelContextTrace({ ...(this.runConfig || {}), eventListener: this.eventListener }, "context_records_resolved", {
-      mode: "new_session",
-      sessionId: this.sessionId || "",
-      dialogProcessId,
-      currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
-      records: summarizeDiagnosticMessages(sessionRecords),
-    });
-    const {
-      systemContext,
-      runtimeBasePath,
-      sessionTree,
-      rootSessionId,
-      attachments,
-    } = await this._buildSystemContext({ dialogProcessId });
+    emitModelContextTrace(
+      { ...(this.runConfig || {}), eventListener: this.eventListener },
+      "context_records_resolved",
+      {
+        mode: "new_session",
+        sessionId: this.sessionId || "",
+        dialogProcessId,
+        currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
+        records: summarizeDiagnosticMessages(sessionRecords),
+      },
+    );
+    const { systemContext, runtimeBasePath, sessionTree, rootSessionId, attachments } =
+      await this._buildSystemContext({ dialogProcessId });
     return this._buildAgentContext(systemContext, toConversationMessages(sessionRecords), {
       runtimeBasePath,
       dialogProcessId,
@@ -570,38 +561,33 @@ export class ContextBuilder {
       dialogProcessId,
     });
     const sessionRecords = sessionProjection?.messages || [];
-    emitModelContextTrace({ ...(this.runConfig || {}), eventListener: this.eventListener }, "context_records_resolved", {
-      mode: "existing_session",
-      sessionId: this.sessionId || "",
-      dialogProcessId,
-      currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
-      records: summarizeDiagnosticMessages(sessionRecords),
-    });
+    emitModelContextTrace(
+      { ...(this.runConfig || {}), eventListener: this.eventListener },
+      "context_records_resolved",
+      {
+        mode: "existing_session",
+        sessionId: this.sessionId || "",
+        dialogProcessId,
+        currentTurnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
+        records: summarizeDiagnosticMessages(sessionRecords),
+      },
+    );
     const longMemory = await resolveLongMemory({
       memoryService: this.memoryService,
       runtimeBasePath: this._resolveRuntimeBasePath(),
       userId: this.userId,
     });
-    const {
-      systemContext,
+    const { systemContext, runtimeBasePath, sessionTree, rootSessionId, attachments } =
+      await this._buildSystemContext({ dialogProcessId, longMemory });
+    return this._buildAgentContext(systemContext, toConversationMessages(sessionRecords), {
       runtimeBasePath,
+      dialogProcessId,
       sessionTree,
       rootSessionId,
       attachments,
-    } = await this._buildSystemContext({ dialogProcessId, longMemory });
-    return this._buildAgentContext(
-      systemContext,
-      toConversationMessages(sessionRecords),
-      {
-        runtimeBasePath,
-        dialogProcessId,
-        sessionTree,
-        rootSessionId,
-        attachments,
-        sourceRevision: sessionProjection?.sourceRevision || "",
-        contextBuildMode: "existing_session",
-      },
-    );
+      sourceRevision: sessionProjection?.sourceRevision || "",
+      contextBuildMode: "existing_session",
+    });
   }
 
   async buildInitialContext(payload = {}) {

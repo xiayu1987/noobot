@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { access, readdir } from "node:fs/promises";
-import { filePath as path } from "@noobot/path-resolver";
+import { filePath as path, resolveSandboxPath } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
@@ -12,7 +12,6 @@ import { normalizeSkillAction, SKILL_ACTION } from "../../config/core/enums.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { safeJoin } from "../../shared/utils/fs-safe.js";
-import { resolveSandboxPath } from "@noobot/path-resolver";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -20,11 +19,7 @@ import { TOOL_NAME } from "../constants/index.js";
 
 function getBasePath(agentContext) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  return (
-    agentContext?.context?.environment?.workspace?.basePath ||
-    runtime?.basePath ||
-    ""
-  );
+  return agentContext?.context?.environment?.workspace?.basePath || runtime?.basePath || "";
 }
 
 function toSkillDisplayPath({ targetPath = "", runtime = {}, agentContext = null } = {}) {
@@ -60,9 +55,7 @@ export function createSkillTool({ agentContext }) {
         return toToolJsonResult(TOOL_NAME.LIST_SKILLS, { ok: true, items: [] }, true);
       }
 
-      const rootDir = parentSkill
-        ? safeJoin(skillRoot, parentSkill)
-        : skillRoot;
+      const rootDir = parentSkill ? safeJoin(skillRoot, parentSkill) : skillRoot;
       try {
         await access(rootDir);
       } catch {
@@ -111,18 +104,16 @@ export function createSkillTool({ agentContext }) {
     func: async ({ action, skillName, taskName, taskId, result }) => {
       const normalizedAction = normalizeSkillAction(action);
       if (!normalizedAction) {
-        throw recoverableToolError(
-          tTool(runtime, "tools.skill.invalidAction", { action }),
-          { code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT },
-        );
+        throw recoverableToolError(tTool(runtime, "tools.skill.invalidAction", { action }), {
+          code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT,
+        });
       }
 
       if (normalizedAction === SKILL_ACTION.START) {
         if (!String(skillName || "").trim()) {
-          throw recoverableToolError(
-            tTool(runtime, "tools.skill.skillNameRequiredOnStart"),
-            { code: ERROR_CODE.RECOVERABLE_INPUT_MISSING },
-          );
+          throw recoverableToolError(tTool(runtime, "tools.skill.skillNameRequiredOnStart"), {
+            code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+          });
         }
         const createdTaskId = uuidv4();
         if (
@@ -174,10 +165,7 @@ export function createSkillTool({ agentContext }) {
             endedAt: new Date().toISOString(),
             result: result || "",
           });
-          if (
-            currentTurnMessages &&
-            typeof currentTurnMessages.updateLast === "function"
-          ) {
+          if (currentTurnMessages && typeof currentTurnMessages.updateLast === "function") {
             currentTurnMessages.updateLast({
               taskId: resolvedTaskId,
               taskStatus: SKILL_ACTION.COMPLETED,

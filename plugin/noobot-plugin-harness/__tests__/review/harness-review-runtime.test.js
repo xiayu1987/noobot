@@ -9,11 +9,15 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
-import { TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestHookManager as createAgentHookManager,
+  TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import {
+  createAcceptanceHandler,
+  createGuidanceHandler,
+} from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
@@ -22,7 +26,10 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 1, true);
   const roles = messages.map((item = {}) => String(item?.role || "").trim());
-  assert.equal(roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)), true);
+  assert.equal(
+    roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)),
+    true,
+  );
   const first = messages[0] || {};
   const last = messages[messages.length - 1] || {};
   assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
@@ -61,11 +68,15 @@ test("harness review keeps its report internal by default", async () => {
     true,
   );
   assert.equal(
-    agentContext.payload.harness.logs.review.some((item = {}) => item?.event === "workflow_priority_decision"),
+    agentContext.payload.harness.logs.review.some(
+      (item = {}) => item?.event === "workflow_priority_decision",
+    ),
     true,
   );
   assert.equal(
-    agentContext.payload.harness.logs.review.some((item = {}) => item?.event === "workflow_execution_result"),
+    agentContext.payload.harness.logs.review.some(
+      (item = {}) => item?.event === "workflow_execution_result",
+    ),
     true,
   );
   const reviewDecision = agentContext.payload.harness.logs.review.find(
@@ -114,7 +125,12 @@ test("harness before_final_output capability runtime runs once", async () => {
           }
           return { capability: "acceptance", point, status: "active", changed: true };
         },
-        review: async ({ point }) => ({ capability: "review", point, status: "active", changed: false }),
+        review: async ({ point }) => ({
+          capability: "review",
+          point,
+          status: "active",
+          changed: false,
+        }),
       },
     },
   );
@@ -201,35 +217,39 @@ test("acceptance checklist attachments are bound to final assistant turn output"
                 const record = records.shift();
                 assert.ok(record);
                 return {
-                  transferEnvelopes: [attachmentTransfer({
-                    transferId: `transfer-${record.attachmentId}`,
-                    messageId: `message-${record.attachmentId}`,
-                    identity: {
-                      sessionId: "s-attach",
-                      turnScopeId: "turn-attach",
-                      runId: "run-attach",
-                      producer: payload.producer,
-                    },
-                    direction: "output",
-                    attachments: [{
+                  transferEnvelopes: [
+                    attachmentTransfer({
+                      transferId: `transfer-${record.attachmentId}`,
+                      messageId: `message-${record.attachmentId}`,
                       identity: {
-                        attachmentId: record.attachmentId,
-                        sessionId: record.sessionId,
-                        attachmentSource: record.attachmentSource,
+                        sessionId: "s-attach",
+                        turnScopeId: "turn-attach",
+                        runId: "run-attach",
+                        producer: payload.producer,
                       },
-                      role: "primary",
-                      name: record.name,
-                      mimeType: record.mimeType,
-                      size: record.size,
-                    }],
-                    intent: {
-                      source: "plugin",
-                      reason: payload.reason,
-                      scenario: payload.scenario,
-                      strategy: payload.strategy,
-                    },
-                    meta: { persisted: true },
-                  })],
+                      direction: "output",
+                      attachments: [
+                        {
+                          identity: {
+                            attachmentId: record.attachmentId,
+                            sessionId: record.sessionId,
+                            attachmentSource: record.attachmentSource,
+                          },
+                          role: "primary",
+                          name: record.name,
+                          mimeType: record.mimeType,
+                          size: record.size,
+                        },
+                      ],
+                      intent: {
+                        source: "plugin",
+                        reason: payload.reason,
+                        scenario: payload.scenario,
+                        strategy: payload.strategy,
+                      },
+                      meta: { persisted: true },
+                    }),
+                  ],
                 };
               },
             },
@@ -239,23 +259,25 @@ test("acceptance checklist attachments are bound to final assistant turn output"
     },
   };
 
-  const result = await handler({ capability: "acceptance", point: "agent.before_final_output", ctx, meta: {} });
+  const result = await handler({
+    capability: "acceptance",
+    point: "agent.before_final_output",
+    ctx,
+    meta: {},
+  });
   assert.equal(result.status, "active");
   const finalAssistant = ctx.result.turnMessages?.[0] || {};
-  const transferAttachmentIds = (Array.isArray(finalAssistant.transferEnvelopes)
-    ? finalAssistant.transferEnvelopes
-    : []
+  const transferAttachmentIds = (
+    Array.isArray(finalAssistant.transferEnvelopes) ? finalAssistant.transferEnvelopes : []
   )
-    .flatMap((envelope = {}) => (Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments : []))
+    .flatMap((envelope = {}) =>
+      Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments : [],
+    )
     .map((reference = {}) => String(reference?.identity?.attachmentId || "").trim())
     .filter(Boolean);
-  assert.deepEqual(
-    transferAttachmentIds.slice().sort(),
-    ["att_plan", "att_report"],
-  );
-  const transferProducers = (Array.isArray(finalAssistant.transferEnvelopes)
-    ? finalAssistant.transferEnvelopes
-    : []
+  assert.deepEqual(transferAttachmentIds.slice().sort(), ["att_plan", "att_report"]);
+  const transferProducers = (
+    Array.isArray(finalAssistant.transferEnvelopes) ? finalAssistant.transferEnvelopes : []
   ).map((envelope = {}) => envelope?.identity?.producer?.type);
   assert.deepEqual(transferProducers, ["plugin", "plugin"]);
   assert.equal(finalAssistant.attachments, undefined);
@@ -272,7 +294,10 @@ test("acceptance checklist attachments are bound to final assistant turn output"
 
 test("harness finalResponseGuard false skips final policy injection but keeps review", async () => {
   const hookManager = createAgentHookManager();
-  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: true, finalResponseGuard: false });
+  registerHarnessCore(
+    { hookManager },
+    { trace: false, promptPolicy: true, finalResponseGuard: false },
+  );
 
   const result = { output: "done" };
   const agentContext = { payload: { messages: { system: [], history: [] }, harness: {} } };
@@ -305,8 +330,14 @@ test("harness promptPolicy false still traces before_llm_call", async () => {
 
   const eventsFile = path.join(basePath, "runtime", "harness", "runs", "dp15", "events.jsonl");
   assert.equal(await waitForFile(eventsFile), true);
-  const events = (await fs.readFile(eventsFile, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
-  assert.equal(events.some((event) => event.point === "agent.before_llm_call"), true);
+  const events = (await fs.readFile(eventsFile, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  assert.equal(
+    events.some((event) => event.point === "agent.before_llm_call"),
+    true,
+  );
 });
 
 test("harness review records reports on error and abort hooks", async () => {
@@ -332,7 +363,9 @@ test("harness review records reports on error and abort hooks", async () => {
   assert.equal(agentContext.payload.harness.reviewReports[0].status, "error");
   assert.equal(agentContext.payload.harness.reviewReports[1].status, "abort");
   assert.equal(
-    agentContext.payload.harness.logs.review.filter((item = {}) => item?.event === "review_report_generated").length,
+    agentContext.payload.harness.logs.review.filter(
+      (item = {}) => item?.event === "review_report_generated",
+    ).length,
     2,
   );
 });
@@ -397,10 +430,7 @@ test("harness full engineering capability flow plans, guides, accepts and review
       agentContext,
     });
   }
-  assert.equal(
-    agentContext.payload.harness.state.pending.guidance,
-    "consecutive_failures",
-  );
+  assert.equal(agentContext.payload.harness.state.pending.guidance, "consecutive_failures");
 
   await hookManager.emit("agent.before_llm_call", {
     userId: "flow-user",
@@ -474,7 +504,9 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
   assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
   assert.equal(agentContext.payload.harness.reviewReports.length, 1);
   assert.equal(
-    agentContext.payload.harness.logs.review.filter((item = {}) => item?.event === "review_report_generated").length,
+    agentContext.payload.harness.logs.review.filter(
+      (item = {}) => item?.event === "review_report_generated",
+    ).length,
     1,
   );
 });
@@ -531,7 +563,12 @@ test("harness forced acceptance is owned by acceptance without appending to fina
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
-          signals: { parsedAttachment: false, subtaskStarted: false, subtaskWaited: false, successfulToolCount: 1 },
+          signals: {
+            parsedAttachment: false,
+            subtaskStarted: false,
+            subtaskWaited: false,
+            successfulToolCount: 1,
+          },
           pending: { guidance: null, summary: false },
         },
         logs: { planning: [], guidance: [], acceptance: [], review: [] },
@@ -553,6 +590,16 @@ test("harness forced acceptance is owned by acceptance without appending to fina
   assert.doesNotMatch(String(result.output), /NOOBOT_HARNESS_COLLAPSE/);
   assert.doesNotMatch(String(result.output), /acceptanceReport|完整计划清单/);
   assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
-  assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "forced_acceptance_triggered"), true);
-  assert.equal(agentContext.payload.harness.logs.planning.some((log) => log.event === "forced_acceptance_triggered"), false);
+  assert.equal(
+    agentContext.payload.harness.logs.acceptance.some(
+      (log) => log.event === "forced_acceptance_triggered",
+    ),
+    true,
+  );
+  assert.equal(
+    agentContext.payload.harness.logs.planning.some(
+      (log) => log.event === "forced_acceptance_triggered",
+    ),
+    false,
+  );
 });

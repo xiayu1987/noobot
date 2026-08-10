@@ -15,9 +15,11 @@ import {
   decryptPayloadBySessionId,
   encryptPayloadBySessionId,
 } from "../../shared/utils/session-crypto.js";
-import { getConnectorChannelStore } from "../../integrations/connectors/index.js";
-import { getConnectorHistoryStore } from "../../integrations/connectors/index.js";
-import { createConnectorEventListener } from "../../integrations/connectors/index.js";
+import {
+  createConnectorEventListener,
+  getConnectorChannelStore,
+  getConnectorHistoryStore,
+} from "../../integrations/connectors/index.js";
 import {
   createCurrentTurnMessagesStore,
   createCurrentTurnTasksStore,
@@ -33,7 +35,6 @@ import {
 } from "../../transfer-adapter/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
-
 
 async function defaultSharedFetch(url, init = {}) {
   return await globalThis.fetch(url, init);
@@ -52,8 +53,7 @@ function createDefaultTextCleaner() {
       if (!html) return "";
       if (readable) {
         return (
-          extractReadableTextFromHtml(html, String(url || "")) ||
-          extractVisibleTextFromHtml(html)
+          extractReadableTextFromHtml(html, String(url || "")) || extractVisibleTextFromHtml(html)
         );
       }
       return extractVisibleTextFromHtml(html);
@@ -109,13 +109,9 @@ export function buildRuntimeContext({
     abortSignal: abortSignal || null,
     runtimeModel: String(runtimeModel || "").trim(),
     runConfig:
-      runConfig && typeof runConfig === "object" && !Array.isArray(runConfig)
-        ? runConfig
-        : {},
+      runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {},
     allEnabledProviders:
-      allEnabledProviders && typeof allEnabledProviders === "object"
-        ? allEnabledProviders
-        : {},
+      allEnabledProviders && typeof allEnabledProviders === "object" ? allEnabledProviders : {},
     sharedTools: passthroughSharedTools,
     hookManager: runtimeHookManager,
     childAsyncResultContainers: [],
@@ -126,33 +122,26 @@ export function buildRuntimeContext({
     systemRuntime: systemRuntime && typeof systemRuntime === "object" ? systemRuntime : {},
     currentTurnMessages: createCurrentTurnMessagesStore(),
     currentTurnTasks: createCurrentTurnTasksStore(),
-    userMessageAttachments: Array.isArray(userMessageAttachments)
-      ? userMessageAttachments
-      : [],
+    userMessageAttachments: Array.isArray(userMessageAttachments) ? userMessageAttachments : [],
     attachments: [],
   };
 }
 
 function ensureSharedTools(runtimeContext = {}) {
-  const sharedTools = isPlainObject(runtimeContext.sharedTools)
-    ? runtimeContext.sharedTools
-    : {};
+  const sharedTools = isPlainObject(runtimeContext.sharedTools) ? runtimeContext.sharedTools : {};
   runtimeContext.sharedTools = sharedTools;
   return sharedTools;
 }
 
 function initializeSharedFetch(sharedTools = {}) {
   if (typeof sharedTools.fetch !== "function") {
-    sharedTools.fetch =
-      typeof globalThis.fetch === "function" ? defaultSharedFetch : null;
+    sharedTools.fetch = typeof globalThis.fetch === "function" ? defaultSharedFetch : null;
   }
 }
 
 function initializeTextCleaner(sharedTools = {}) {
   const defaultTextCleaner = createDefaultTextCleaner();
-  const currentTextCleaner = isPlainObject(sharedTools.textCleaner)
-    ? sharedTools.textCleaner
-    : {};
+  const currentTextCleaner = isPlainObject(sharedTools.textCleaner) ? sharedTools.textCleaner : {};
   sharedTools.textCleaner = {
     ...defaultTextCleaner,
     ...currentTextCleaner,
@@ -165,10 +154,7 @@ function initializeSessionCrypto(sharedTools = {}, { sessionId = "" } = {}) {
       return encryptPayloadBySessionId(payload, String(sid || sessionId || ""));
     },
     decryptBySessionId(cipherText = "", sid = sessionId) {
-      return decryptPayloadBySessionId(
-        String(cipherText || ""),
-        String(sid || sessionId || ""),
-      );
+      return decryptPayloadBySessionId(String(cipherText || ""), String(sid || sessionId || ""));
     },
   };
 }
@@ -220,7 +206,6 @@ function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
   };
 }
 
-
 function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
   const existingResolver =
     typeof sharedTools.resolveSandboxPath === "function" ? sharedTools.resolveSandboxPath : null;
@@ -243,23 +228,19 @@ function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
   }
   if (typeof sharedTools.toSandboxPath !== "function") {
     sharedTools.toSandboxPath = (payload = {}) =>
-      resolver(
-        payload && typeof payload === "object"
-          ? payload
-          : { path: String(payload || "") },
-      );
+      resolver(payload && typeof payload === "object" ? payload : { path: String(payload || "") });
   }
   const hostResolver =
     typeof sharedTools.resolveHostPath === "function"
       ? sharedTools.resolveHostPath
-      : ((payload = {}) =>
+      : (payload = {}) =>
           resolveHostPath({
             ...(payload && typeof payload === "object"
               ? payload
               : { path: String(payload || ""), sandboxPath: String(payload || "") }),
             runtime: resolveSharedToolRuntime(runtimeContext, payload?.runtime),
             agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
-          }));
+          });
   sharedTools.resolveHostPath = hostResolver;
   if (typeof sharedTools.toHostPath !== "function") {
     sharedTools.toHostPath = (payload = {}) =>

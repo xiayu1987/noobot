@@ -5,16 +5,12 @@
  */
 import {
   collectScopedMessagesToSummarize,
-} from "@noobot/context-protocol/summary-policy";
-import { emitEvent } from "../../events/index.js";
-import { tEngine } from "../i18n-adapter.js";
-import {
-  DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS,
-} from "../constants/index.js";
-import {
   DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
   DEFAULT_TASK_CHECK_TOOL_NAME as TASK_CHECK_TOOL_NAME,
 } from "@noobot/context-protocol/summary-policy";
+import { emitEvent } from "../../events/index.js";
+import { tEngine } from "../i18n-adapter.js";
+import { DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS } from "../constants/index.js";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/injected-message-policy";
 import { handleEngineError } from "../errors/index.js";
 import {
@@ -31,9 +27,7 @@ import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
-import {
-  removeContextMessagesByIds,
-} from "@noobot/context-protocol/context-mutation";
+import { removeContextMessagesByIds } from "@noobot/context-protocol/context-mutation";
 import { getMessageId } from "@noobot/context-protocol/message-store";
 import {
   clearMainFlowFinalNoToolsTurnInstruction,
@@ -59,25 +53,30 @@ export function createTurnOrchestrator({
   handleEngineErrorFn = handleEngineError,
 } = {}) {
   function resolveTaskSummaryCall(calls = []) {
-    return (Array.isArray(calls) ? calls : []).find(
-      (call = {}) => String(call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
-    ) || null;
+    return (
+      (Array.isArray(calls) ? calls : []).find(
+        (call = {}) => String(call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+      ) || null
+    );
   }
 
   function resolveTaskCheckCall(calls = []) {
-    return (Array.isArray(calls) ? calls : []).find(
-      (call = {}) => String(call?.name || "").trim() === TASK_CHECK_TOOL_NAME,
-    ) || null;
+    return (
+      (Array.isArray(calls) ? calls : []).find(
+        (call = {}) => String(call?.name || "").trim() === TASK_CHECK_TOOL_NAME,
+      ) || null
+    );
   }
 
-  function removeLastAssistantToolCallMessage({ loopState: targetLoopState, turnMessageStore = null } = {}) {
+  function removeLastAssistantToolCallMessage({
+    loopState: targetLoopState,
+    turnMessageStore = null,
+  } = {}) {
     const modelMessages = targetLoopState?.modelContext?.messages;
     const lastMessage = Array.isArray(modelMessages)
       ? modelMessages[modelMessages.length - 1]
       : null;
-    const lastToolCalls = Array.isArray(lastMessage?.tool_calls)
-      ? lastMessage.tool_calls
-      : [];
+    const lastToolCalls = Array.isArray(lastMessage?.tool_calls) ? lastMessage.tool_calls : [];
     if (lastToolCalls.length) {
       const messageId = getMessageId(lastMessage);
       if (!messageId) {
@@ -220,13 +219,8 @@ export function createTurnOrchestrator({
           eventName: "main_flow_final_no_tools_turn_enforced",
         });
       }
-      const {
-        aiContentText,
-        calls,
-        turnMessageStore,
-        turnTaskStore,
-        stateCommitter,
-      } = withToolsResult;
+      const { aiContentText, calls, turnMessageStore, turnTaskStore, stateCommitter } =
+        withToolsResult;
 
       if (!calls.length) {
         if (isOverMaxTurns) {
@@ -316,12 +310,7 @@ export function createTurnOrchestrator({
         });
       }
 
-      const {
-        toolCallResults,
-        hasTaskSummaryCall,
-        hasRequestHelpCall,
-        hasFinalAnswerCall,
-      } =
+      const { toolCallResults, hasTaskSummaryCall, hasRequestHelpCall, hasFinalAnswerCall } =
         await processToolResultsFn({
           modelState,
           loopState,
@@ -344,7 +333,9 @@ export function createTurnOrchestrator({
       });
 
       if (hasTaskSummaryCall) {
-        const incrementalMessages = Array.isArray(loopState?.modelContext?.messageBlocks?.incremental)
+        const incrementalMessages = Array.isArray(
+          loopState?.modelContext?.messageBlocks?.incremental,
+        )
           ? loopState.modelContext.messageBlocks.incremental
           : [];
         const summaryTargets = collectScopedMessagesToSummarize(incrementalMessages, {
@@ -355,9 +346,13 @@ export function createTurnOrchestrator({
         }).messages;
         requestMainFlowSummaryCheckpoint(runtime, {
           source: "task_summary",
-          summarizedMessageIds: summaryTargets.map((message) => String(
-            message?.messageUid || message?.additional_kwargs?.noobotMessageId || "",
-          ).trim()).filter(Boolean),
+          summarizedMessageIds: summaryTargets
+            .map((message) =>
+              String(
+                message?.messageUid || message?.additional_kwargs?.noobotMessageId || "",
+              ).trim(),
+            )
+            .filter(Boolean),
         });
         await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
       }
