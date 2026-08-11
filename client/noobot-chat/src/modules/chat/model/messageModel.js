@@ -344,9 +344,8 @@ function normalizeFoldedPresentationMessage(sourceMessage = {}, projectedMessage
     }
   }
 
-  // Canonical model-history records may contain analysis text that belongs in
-  // the activity timeline but is explicitly excluded from the chat body.
-  // Enforce that protocol here so every caller gets the same presentation.
+  // Canonical model-history records contribute presentation facets while
+  // remaining excluded from the chat body.
   if (sourceMessage?.chatPresentation === false) {
     normalizedMessage.content = "";
   }
@@ -413,7 +412,8 @@ function foldConversationMessages(messages = [], buildView) {
       previousTurnScopeKey &&
       currentTurnScopeKey === previousTurnScopeKey &&
       !hasDifferentStableMessageIdentity &&
-      !hasUnpairedStableMessageIdentity;
+      !hasUnpairedStableMessageIdentity &&
+      !(previousMessage?.chatPresentation === true && currentMessage?.chatPresentation === true);
     if (!canMergeAssistantMessage) {
       mergedMessages.push(currentMessage);
       continue;
@@ -426,6 +426,9 @@ function foldConversationMessages(messages = [], buildView) {
         ? previousContent
         : [previousContent, currentContent].filter(Boolean).join("\n\n");
     previousMessage.content = mergedContent;
+    if (currentMessage?.chatPresentation === true) {
+      previousMessage.chatPresentation = true;
+    }
 
     const currentType = String(currentMessage?.type || "").trim();
     if (currentType && currentType !== "tool_call") {
@@ -519,7 +522,7 @@ function foldConversationMessages(messages = [], buildView) {
     }
     message.attachments = getMessageAttachments(message);
   }
-  return mergedMessages;
+  return mergedMessages.filter((message) => message?.chatPresentation !== false);
 }
 
 export {

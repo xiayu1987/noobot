@@ -6,7 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { readJsonlArtifactFile, readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  readJsonlArtifactFile,
+  readSessionArtifact,
+} from "../../src/session/session-artifact-store.js";
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import os from "node:os";
 import path from "node:path";
@@ -131,9 +134,24 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
     version: 2,
     transferId: `transfer-${id}`,
     messageId: `message-${id}`,
-    identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "tool", id: `call-${id}` } },
+    identity: {
+      sessionId: "s1",
+      turnScopeId: "t1",
+      runId: "r1",
+      producer: { type: "tool", id: `call-${id}` },
+    },
     direction: "output",
-    payload: { mode: "attachment", attachments: [{ identity: { attachmentId: `att-${id}`, sessionId: "s1", attachmentSource: "model" }, role: "primary", name: `${id}.txt`, mimeType: "text/plain" }] },
+    payload: {
+      mode: "attachment",
+      attachments: [
+        {
+          identity: { attachmentId: `att-${id}`, sessionId: "s1", attachmentSource: "model" },
+          role: "primary",
+          name: `${id}.txt`,
+          mimeType: "text/plain",
+        },
+      ],
+    },
     intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" },
     meta: {},
   });
@@ -144,8 +162,14 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
 
   assert.equal(isPlainObject({}), true);
   assert.equal(isPlainObject([]), false);
-  assert.deepEqual(resolveTransferEnvelopeListFromMessage(message).map((item) => item.transferId), ["transfer-1", "transfer-3"]);
-  assert.deepEqual(resolveTransferEnvelopesFromMessage(message).map((item) => item.transferId), ["transfer-1", "transfer-3"]);
+  assert.deepEqual(
+    resolveTransferEnvelopeListFromMessage(message).map((item) => item.transferId),
+    ["transfer-1", "transfer-3"],
+  );
+  assert.deepEqual(
+    resolveTransferEnvelopesFromMessage(message).map((item) => item.transferId),
+    ["transfer-1", "transfer-3"],
+  );
   assert.deepEqual(
     resolvePreferredAttachments(message).map((item) => item.identity.attachmentId),
     ["att-1", "att-3"],
@@ -153,7 +177,10 @@ test("session-execution-engine-utils resolves transfer envelopes and preferred a
   assert.deepEqual(resolvePreferredAttachments({ attachments: [{ attachmentId: "fallback" }] }), [
     { attachmentId: "fallback" },
   ]);
-  assert.deepEqual(resolvePreferredAttachments({ attachmentMetas: [{ attachmentId: "legacy" }] }), []);
+  assert.deepEqual(
+    resolvePreferredAttachments({ attachmentMetas: [{ attachmentId: "legacy" }] }),
+    [],
+  );
 });
 
 test("session-execution-engine-utils selects only the canonical manager or creates one", () => {
@@ -201,7 +228,15 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
           content: "canonical attachment",
           dialogProcessId: "dialog-snapshot",
           turnScopeId: "turn-snapshot",
-          attachments: [{ attachmentId: "att-1", sessionId: "s1", attachmentSource: "user", name: "a.txt", mimeType: "text/plain" }],
+          attachments: [
+            {
+              attachmentId: "att-1",
+              sessionId: "s1",
+              attachmentSource: "user",
+              name: "a.txt",
+              mimeType: "text/plain",
+            },
+          ],
         },
       ],
     },
@@ -215,7 +250,7 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
   const sessionPayload = JSON.parse(await fs.readFile(persisted.files.session, "utf8"));
   assert.equal(sessionPayload.sessionId, "s1");
   assert.equal(sessionPayload.parentSessionId, "p1");
-  assert.equal(sessionPayload.schemaVersion, 5);
+  assert.equal(sessionPayload.schemaVersion, 6);
   assert.equal(sessionPayload.messageIdentityVersion, 1);
   assert.equal("messages" in sessionPayload, false);
   assert.equal(sessionPayload.turnOrder.length, 1);
@@ -251,7 +286,9 @@ test("session-execution-engine-utils persists snapshot json files", async () => 
     sessionId: "s1",
     logs: [{ event: "started" }],
   });
-  assert.deepEqual(await readJsonlArtifactFile(persisted.files.executionEvents), [{ event: "started" }]);
+  assert.deepEqual(await readJsonlArtifactFile(persisted.files.executionEvents), [
+    { event: "started" },
+  ]);
   assert.deepEqual(JSON.parse(await fs.readFile(persisted.files.meta, "utf8")), {
     node: "n1",
   });

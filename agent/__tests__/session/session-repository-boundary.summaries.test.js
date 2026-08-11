@@ -232,7 +232,7 @@ test("display maintenance migrates repairable artifacts through the Session repa
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
     await writeFile(
       path.join(sessionDir, "session.json"),
-      JSON.stringify({ ...session, schemaVersion: 4 }),
+      JSON.stringify({ ...session, schemaVersion: 5 }),
       "utf8",
     );
     await writeFile(
@@ -249,7 +249,7 @@ test("display maintenance migrates repairable artifacts through the Session repa
     assert.deepEqual(maintenance.rebuiltSessionIds, []);
 
     const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
-    assert.equal(manifest.schemaVersion, 5);
+    assert.equal(manifest.schemaVersion, 6);
     assert.equal("messages" in manifest, false);
   });
 });

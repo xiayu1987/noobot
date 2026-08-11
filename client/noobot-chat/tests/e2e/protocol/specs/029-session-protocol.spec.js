@@ -73,8 +73,11 @@ test("@core PBE-029 统一 Session 协议闭环审计", async ({ noobot, protoco
   const commands = assertCommandChain(protocolCapture, noobot.sessionId);
   assertNoLegacySessionProtocolKeys(commands);
   const runCommands = commands.filter((command) =>
-    ["turn.send", "turn.continue", "turn.resend"].includes(command.commandType));
-  const aggregateVersions = runCommands.map((command) => command.concurrency.expectedAggregateVersion);
+    ["turn.send", "turn.continue", "turn.resend"].includes(command.commandType),
+  );
+  const aggregateVersions = runCommands.map(
+    (command) => command.concurrency.expectedAggregateVersion,
+  );
   expect(aggregateVersions.every(Number.isSafeInteger)).toBe(true);
   for (let index = 1; index < aggregateVersions.length; index += 1) {
     expect(aggregateVersions[index]).toBeGreaterThanOrEqual(aggregateVersions[index - 1]);
@@ -85,22 +88,26 @@ test("@core PBE-029 统一 Session 协议闭环审计", async ({ noobot, protoco
   assertNoLegacySessionProtocolKeys(lifecycle);
   const terminalCounts = new Map();
   for (const event of lifecycle.filter((item) =>
-    ["turn.completed", "turn.stop_completed", "turn.failed"].includes(item.eventType))) {
+    ["turn.completed", "turn.stop_completed", "turn.failed"].includes(item.eventType),
+  )) {
     terminalCounts.set(event.turnScopeId, (terminalCounts.get(event.turnScopeId) || 0) + 1);
   }
   expect([...terminalCounts.values()].every((count) => count === 1)).toBe(true);
 
-  await expect.poll(
-    () => readSessionFact(noobot.userId, noobot.sessionId),
-    { timeout: 15000 },
-  ).toMatchObject({ sessionId: noobot.sessionId, schemaVersion: 5 });
+  await expect
+    .poll(() => readSessionFact(noobot.userId, noobot.sessionId), { timeout: 15000 })
+    .toMatchObject({ sessionId: noobot.sessionId, schemaVersion: 6 });
 
   const persisted = await readSessionFact(noobot.userId, noobot.sessionId);
   expect(Number.isSafeInteger(persisted.aggregateVersion)).toBe(true);
   expect(persisted.aggregateVersion).toBeGreaterThanOrEqual(5);
   expect("messages" in persisted).toBe(false);
-  expect(new Set(persisted.turnOrder.map((turn) => turn.turnScopeId)).size).toBe(persisted.turnOrder.length);
-  expect(new Set(persisted.messageOrder.map((message) => message.messageUid)).size).toBe(persisted.messageOrder.length);
+  expect(new Set(persisted.turnOrder.map((turn) => turn.turnScopeId)).size).toBe(
+    persisted.turnOrder.length,
+  );
+  expect(new Set(persisted.messageOrder.map((message) => message.messageUid)).size).toBe(
+    persisted.messageOrder.length,
+  );
   assertResendReplacementIdentityChain(commands, persisted);
   assertNoLegacySessionProtocolKeys(persisted);
 
@@ -115,8 +122,10 @@ test("@core PBE-029 统一 Session 协议闭环审计", async ({ noobot, protoco
   assertNoLegacySessionProtocolKeys(executionEvents);
   assertNoLegacySessionProtocolKeys(snapshots);
 
-  expect(protocolCapture.httpRequests
-    .filter((request) => /terminal/i.test(request.url))
-    .every((request) => !new URL(request.url).searchParams.has("persistenceScope"))).toBe(true);
+  expect(
+    protocolCapture.httpRequests
+      .filter((request) => /terminal/i.test(request.url))
+      .every((request) => !new URL(request.url).searchParams.has("persistenceScope")),
+  ).toBe(true);
   assertNoForbiddenErrors(protocolCapture.console);
 });

@@ -4,11 +4,306 @@
  * SPDX-License-Identifier: MIT
  */
 import { createHash, randomUUID } from "node:crypto";
-import { cp, rename, rm } from "node:fs/promises";
+import { cp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { attachmentTransfer, assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
 import { projectTurnCompletionMessages } from "@noobot/context-protocol";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 
 export const SESSION_REPAIR_PROTOCOL_VERSION = 1;
+
+function resolveRepairArtifactPath(sessionDir, relativeFile, expectedRoot, extensions) {
+  const reference = String(relativeFile || "").replaceAll("\\", "/");
+  const normalized = path.normalize(reference);
+  const root = path.resolve(sessionDir, expectedRoot);
+  const resolved = path.resolve(sessionDir, normalized);
+  if (
+    !reference ||
+    path.isAbsolute(reference) ||
+    reference.includes("\0") ||
+    normalized === "." ||
+    normalized.startsWith(`..${path.sep}`) ||
+    (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) ||
+    !extensions.includes(path.extname(resolved))
+  ) {
+    throw Object.assign(new Error(`invalid Session repair artifact reference: ${reference}`), {
+      code: "SESSION_REPAIR_ARTIFACT_PATH_INVALID",
+    });
+  }
+  return resolved;
+}
+
+async function readRepairJson(file) {
+  try {
+    return JSON.parse(await readFile(file, "utf8"));
+  } catch (error) {
+    throw Object.assign(new Error(`Session repair artifact is unreadable: ${file}`), {
+      code:
+        error instanceof SyntaxError
+          ? "ARTIFACT_JSON_CORRUPTED"
+          : "SESSION_REPAIR_ARTIFACT_READ_FAILED",
+      cause: error,
+    });
+  }
+}
+
+async function readRepairJournal(file, committedBytes) {
+  const raw = await readFile(file);
+  const committed = Number(committedBytes || 0);
+  if (!Number.isSafeInteger(committed) || committed < 0 || raw.length < committed) {
+    throw Object.assign(new Error(`Session repair journal has an invalid boundary: ${file}`), {
+      code: "TURN_JOURNAL_TRUNCATED",
+    });
+  }
+  return raw
+    .subarray(0, committed)
+    .toString("utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch (error) {
+        throw Object.assign(new Error(`Session repair journal is corrupted: ${file}`), {
+          code: "ARTIFACT_JSON_CORRUPTED",
+          cause: error,
+        });
+      }
+    });
+}
+
+function materializeRepairRecords(records, order, baseMessages = []) {
+  const byUid = new Map(
+    baseMessages.map((message) => [text(message?.messageUid), message]).filter(([uid]) => uid),
+  );
+  for (const record of records) {
+    const uid = text(record?.messageUid);
+    if (!uid) continue;
+    if (record.op === "remove") byUid.delete(uid);
+    else if (record.op === "upsert" && record.message && typeof record.message === "object")
+      byUid.set(uid, record.message);
+  }
+  const orderedUids = Array.isArray(order) ? order.map(text).filter(Boolean) : [];
+  const ordered = orderedUids.map((uid) => byUid.get(uid)).filter(Boolean);
+  const selected = new Set(orderedUids);
+  return [
+    ...ordered,
+    ...[...byUid].filter(([uid]) => !selected.has(uid)).map(([, message]) => message),
+  ];
+}
+
+async function readLegacyCheckpointMessages(sessionDir, records) {
+  const indexes = records.filter((record) => record?.op === "summary_snapshot");
+  if (!indexes.length) return [];
+  const latest = indexes.at(-1);
+  const file = resolveRepairArtifactPath(sessionDir, latest.file, "turn-snapshots", [".json"]);
+  const payload = await readRepairJson(file);
+  const contentHash = `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+  if (
+    payload?.checkpointId !== latest.checkpointId ||
+    Number(payload?.checkpointRevision) !== Number(latest.checkpointRevision) ||
+    contentHash !== latest.contentHash ||
+    !Array.isArray(payload.messages)
+  ) {
+    throw Object.assign(
+      new Error(`legacy cumulative checkpoint does not match its index: ${latest.file}`),
+      {
+        code: "SESSION_REPAIR_CHECKPOINT_MISMATCH",
+      },
+    );
+  }
+  return payload.messages;
+}
+
+export async function readSessionForProtocolRepair({ sessionDir = "", session = null } = {}) {
+  if (!session || typeof session !== "object" || Array.isArray(session)) {
+    throw Object.assign(new TypeError("Session repair source must be an object"), {
+      code: "SESSION_REPAIR_SOURCE_INVALID",
+    });
+  }
+  if (Array.isArray(session.messages)) return session;
+  const messagesByTurnId = new Map();
+  const messages = [];
+  for (const item of Array.isArray(session.turnOrder) ? session.turnOrder : []) {
+    const relativeFile = typeof item === "string" ? item : item?.file;
+    if (!relativeFile) continue;
+    const artifact = resolveRepairArtifactPath(sessionDir, relativeFile, "turns", [
+      ".json",
+      ".jsonl",
+    ]);
+    let turnMessages;
+    if (path.extname(artifact) === ".jsonl") {
+      const records = await readRepairJournal(artifact, item?.committedBytes);
+      const baseMessages = await readLegacyCheckpointMessages(sessionDir, records);
+      turnMessages = materializeRepairRecords(records, item?.messageOrder, baseMessages);
+    } else {
+      const turn = await readRepairJson(artifact);
+      if (!Array.isArray(turn?.messages)) {
+        throw Object.assign(new Error(`legacy Session turn is invalid: ${relativeFile}`), {
+          code: "SESSION_TURN_ARTIFACT_MISSING",
+        });
+      }
+      turnMessages = turn.messages;
+    }
+    const turnId = text(item?.turnId);
+    if (turnId) messagesByTurnId.set(turnId, turnMessages);
+    messages.push(...turnMessages);
+  }
+  const order = Array.isArray(session.messageOrder) ? session.messageOrder : [];
+  return {
+    ...session,
+    messages:
+      order.length && order.some((reference) => reference?.turnId)
+        ? order
+            .map(
+              (reference) =>
+                messagesByTurnId.get(text(reference?.turnId))?.[Number(reference?.messageIndex)],
+            )
+            .filter(Boolean)
+        : order.length
+          ? order
+              .map((reference) =>
+                messages.find(
+                  (message) => text(message?.messageUid) === text(reference?.messageUid),
+                ),
+              )
+              .filter(Boolean)
+          : messages,
+  };
+}
+
+function checkpointContentHash(payload) {
+  return `sha256:${createHash("sha256").update(JSON.stringify(payload)).digest("hex")}`;
+}
+
+function messageTimestamp(record, turnId) {
+  const timestamp = Date.parse(String(record?.message?.ts || "").trim());
+  if (Number.isFinite(timestamp)) return timestamp;
+  throw Object.assign(
+    new Error(`Cannot resegment checkpoint baseline with an invalid message timestamp: ${turnId}`),
+    { code: "SESSION_REPAIR_CHECKPOINT_MESSAGE_TIMESTAMP_INVALID" },
+  );
+}
+
+function checkpointTimestamp(payload, turnId) {
+  const timestamp = Date.parse(String(payload?.committedAt || "").trim());
+  if (Number.isFinite(timestamp)) return timestamp;
+  throw Object.assign(
+    new Error(`Cannot resegment checkpoint baseline with an invalid commit timestamp: ${turnId}`),
+    { code: "SESSION_REPAIR_CHECKPOINT_TIMESTAMP_INVALID" },
+  );
+}
+
+function assertCheckpointIndex(payload, index, previousHash, turnId) {
+  if (
+    Number(payload?.schemaVersion) !== 2 ||
+    !Array.isArray(payload.records) ||
+    Object.hasOwn(payload, "messages") ||
+    payload.checkpointId !== index.checkpointId ||
+    Number(payload.checkpointRevision) !== Number(index.checkpointRevision) ||
+    payload.previousCheckpointHash !== previousHash ||
+    checkpointContentHash(payload) !== index.contentHash
+  ) {
+    throw Object.assign(new Error(`Cannot resegment an invalid checkpoint chain: ${turnId}`), {
+      code: "SESSION_REPAIR_CHECKPOINT_CHAIN_INVALID",
+    });
+  }
+}
+
+/**
+ * Rebuilds the artificial first-checkpoint baseline produced while converting a
+ * cumulative legacy Session. This is repair-only: canonical runtime writers
+ * already emit true incremental checkpoint records.
+ */
+export async function resegmentMigratedCheckpointBaselines({ sessionDir = "" } = {}) {
+  const manifestFile = path.join(sessionDir, "session.json");
+  const manifest = await readRepairJson(manifestFile);
+  const repaired = [];
+  for (const turn of Array.isArray(manifest?.turnOrder) ? manifest.turnOrder : []) {
+    const turnId = text(turn?.turnId);
+    const journalFile = resolveRepairArtifactPath(sessionDir, turn?.file, "turns", [".jsonl"]);
+    const journal = await readRepairJournal(journalFile, turn?.committedBytes);
+    const indexes = journal.filter((record) => record?.op === "summary_snapshot");
+    const existingTail = journal.filter((record) => record?.op !== "summary_snapshot");
+    if (indexes.length < 2) continue;
+
+    const checkpoints = [];
+    let previousHash = "";
+    let previousCommittedAt = -Infinity;
+    for (const index of indexes) {
+      const checkpointFile = resolveRepairArtifactPath(sessionDir, index.file, "turn-snapshots", [
+        ".json",
+      ]);
+      const payload = await readRepairJson(checkpointFile);
+      assertCheckpointIndex(payload, index, previousHash, turnId);
+      const committedAt = checkpointTimestamp(payload, turnId);
+      if (committedAt <= previousCommittedAt) {
+        throw Object.assign(
+          new Error(`Checkpoint commit order is not strictly increasing: ${turnId}`),
+          { code: "SESSION_REPAIR_CHECKPOINT_ORDER_INVALID" },
+        );
+      }
+      checkpoints.push({ index, checkpointFile, payload, committedAt });
+      previousHash = index.contentHash;
+      previousCommittedAt = committedAt;
+    }
+
+    const [baseline, ...following] = checkpoints;
+    if (!baseline.payload.records.length || following.some(({ payload }) => payload.records.length))
+      continue;
+    const incrementalRecords = baseline.payload.records;
+    if (
+      incrementalRecords.some(
+        (record) =>
+          record?.op !== "upsert" ||
+          !text(record?.messageUid) ||
+          text(record?.message?.messageUid) !== text(record?.messageUid),
+      )
+    ) {
+      throw Object.assign(
+        new Error(`Migrated checkpoint baseline is not a canonical upsert set: ${turnId}`),
+        { code: "SESSION_REPAIR_CHECKPOINT_BASELINE_INVALID" },
+      );
+    }
+
+    const buckets = checkpoints.map(() => []);
+    const repairedTail = [];
+    for (const record of incrementalRecords) {
+      const createdAt = messageTimestamp(record, turnId);
+      const checkpointIndex = checkpoints.findIndex(({ committedAt }) => createdAt <= committedAt);
+      if (checkpointIndex < 0) repairedTail.push(record);
+      else buckets[checkpointIndex].push(record);
+    }
+
+    const nextIndexes = [];
+    previousHash = "";
+    for (let index = 0; index < checkpoints.length; index += 1) {
+      const checkpoint = checkpoints[index];
+      const payload = {
+        ...checkpoint.payload,
+        previousCheckpointHash: previousHash,
+        records: buckets[index],
+      };
+      const contentHash = checkpointContentHash(payload);
+      await writeFile(checkpoint.checkpointFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+      nextIndexes.push({ ...checkpoint.index, contentHash });
+      previousHash = contentHash;
+    }
+    const nextJournal = [...nextIndexes, ...repairedTail, ...existingTail];
+    const journalText = nextJournal.map((record) => `${JSON.stringify(record)}\n`).join("");
+    await writeFile(journalFile, journalText, "utf8");
+    turn.committedBytes = Buffer.byteLength(journalText, "utf8");
+    turn.recordCount = nextJournal.length;
+    repaired.push({
+      turnId,
+      checkpointRecordCounts: buckets.map((records) => records.length),
+      tailRecordCount: repairedTail.length + existingTail.length,
+    });
+  }
+  if (repaired.length)
+    await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return repaired;
+}
 
 function text(value) {
   return String(value || "").trim();
@@ -32,14 +327,16 @@ function migrateTransferEnvelopeV1(envelope, message, envelopeIdentity) {
   const turnScopeId = text(message.turnScopeId);
   const producerId = text(message.messageUid || messageId);
   if (!messageId || !sessionId || !turnScopeId || !producerId) {
-    throw Object.assign(new Error("Semantic Transfer V1 migration requires canonical message and Turn identity"), {
-      code: "SESSION_TRANSFER_V1_IDENTITY_REQUIRED",
-    });
+    throw Object.assign(
+      new Error("Semantic Transfer V1 migration requires canonical message and Turn identity"),
+      {
+        code: "SESSION_TRANSFER_V1_IDENTITY_REQUIRED",
+      },
+    );
   }
   const attachments = envelope.files.map((file) => {
-    const metadata = file?.attachmentMeta && typeof file.attachmentMeta === "object"
-      ? file.attachmentMeta
-      : file;
+    const metadata =
+      file?.attachmentMeta && typeof file.attachmentMeta === "object" ? file.attachmentMeta : file;
     return {
       identity: {
         attachmentId: text(metadata?.attachmentId),
@@ -49,7 +346,8 @@ function migrateTransferEnvelopeV1(envelope, message, envelopeIdentity) {
       role: text(file?.role || metadata?.role) || "primary",
       name: text(file?.name || metadata?.name),
       mimeType: text(file?.mimeType || metadata?.mimeType) || "application/octet-stream",
-      ...(Number.isSafeInteger(Number(file?.size ?? metadata?.size)) && Number(file?.size ?? metadata?.size) >= 0
+      ...(Number.isSafeInteger(Number(file?.size ?? metadata?.size)) &&
+      Number(file?.size ?? metadata?.size) >= 0
         ? { size: Number(file?.size ?? metadata?.size) }
         : {}),
     };
@@ -67,9 +365,7 @@ function migrateTransferEnvelopeV1(envelope, message, envelopeIdentity) {
     intent: {
       source: "service",
       reason: "session_protocol_migration",
-      scenario: envelopeIdentity.includes("nodeResultTransferEnvelopes")
-        ? "workflow"
-        : "tool",
+      scenario: envelopeIdentity.includes("nodeResultTransferEnvelopes") ? "workflow" : "tool",
       strategy: envelopeIdentity.includes("nodeResultTransferEnvelopes")
         ? "workflow_subagent"
         : "tool_output",
@@ -82,13 +378,17 @@ function migrateTransferCollections(value, message, path = "message") {
   if (!value || typeof value !== "object") return false;
   if (Array.isArray(value)) {
     return value.reduce(
-      (changed, item, index) => migrateTransferCollections(item, message, `${path}[${index}]`) || changed,
+      (changed, item, index) =>
+        migrateTransferCollections(item, message, `${path}[${index}]`) || changed,
       false,
     );
   }
   let changed = false;
   for (const [key, child] of Object.entries(value)) {
-    if ((key === "transferEnvelopes" || key === "nodeResultTransferEnvelopes") && Array.isArray(child)) {
+    if (
+      (key === "transferEnvelopes" || key === "nodeResultTransferEnvelopes") &&
+      Array.isArray(child)
+    ) {
       value[key] = child.map((envelope, index) => {
         const migrated = migrateTransferEnvelopeV1(envelope, message, `${path}.${key}[${index}]`);
         if (migrated !== envelope) changed = true;
@@ -105,17 +405,34 @@ function migrateMessage(message = {}, sessionId = "", index = 0) {
   const hadSessionId = Object.hasOwn(message, "sessionId");
   const next = { ...message, sessionId: text(message.sessionId || sessionId) };
   let changed = false;
-  if (next.chatPresentation === true && text(next.presentationMessageId) && text(next.sourceMessageUid)
-    && Object.hasOwn(next, "messageUid")) {
+  if (
+    next.chatPresentation === true &&
+    text(next.presentationMessageId) &&
+    text(next.sourceMessageUid) &&
+    Object.hasOwn(next, "messageUid")
+  ) {
     delete next.messageUid;
     changed = true;
   }
   if (!text(next.messageUid) && next.chatPresentation !== true) {
-    const identitySeed = [sessionId, next.dialogProcessId, next.turnScopeId, next.messageId || next.id, index];
-    if (!text(next.dialogProcessId) || !text(next.turnScopeId) || !text(next.messageId || next.id)) {
-      throw Object.assign(new Error(`Session message ${index} has no migratable canonical identity`), {
-        code: "SESSION_MESSAGE_IDENTITY_UNMIGRATABLE",
-      });
+    const identitySeed = [
+      sessionId,
+      next.dialogProcessId,
+      next.turnScopeId,
+      next.messageId || next.id,
+      index,
+    ];
+    if (
+      !text(next.dialogProcessId) ||
+      !text(next.turnScopeId) ||
+      !text(next.messageId || next.id)
+    ) {
+      throw Object.assign(
+        new Error(`Session message ${index} has no migratable canonical identity`),
+        {
+          code: "SESSION_MESSAGE_IDENTITY_UNMIGRATABLE",
+        },
+      );
     }
     next.messageUid = stableId("sm_migrated", identitySeed);
     changed = true;
@@ -125,9 +442,16 @@ function migrateMessage(message = {}, sessionId = "", index = 0) {
     delete next.injected_message_type;
     changed = true;
   }
-  if (next.turnCommit && typeof next.turnCommit === "object" && !Array.isArray(next.turnCommit)
-    && next.turnCommit.idempotencyKey !== undefined) {
-    next.turnCommit = { ...next.turnCommit, commandId: next.turnCommit.commandId || next.turnCommit.idempotencyKey };
+  if (
+    next.turnCommit &&
+    typeof next.turnCommit === "object" &&
+    !Array.isArray(next.turnCommit) &&
+    next.turnCommit.idempotencyKey !== undefined
+  ) {
+    next.turnCommit = {
+      ...next.turnCommit,
+      commandId: next.turnCommit.commandId || next.turnCommit.idempotencyKey,
+    };
     delete next.turnCommit.idempotencyKey;
     changed = true;
   }
@@ -151,8 +475,11 @@ export function reconcileCompletedTurnSummaryMarks(document = {}) {
     const [dialogProcessId, turnScopeId] = key.split("\u0000");
     const indexes = messages
       .map((message, index) => ({ message, index }))
-      .filter(({ message }) => text(message?.dialogProcessId) === dialogProcessId &&
-        text(message?.turnScopeId) === turnScopeId);
+      .filter(
+        ({ message }) =>
+          text(message?.dialogProcessId) === dialogProcessId &&
+          text(message?.turnScopeId) === turnScopeId,
+      );
     if (!indexes.length) continue;
     const source = indexes.map(({ message }) => message);
     const projected = projectTurnCompletionMessages(source);
@@ -171,16 +498,95 @@ export function reconcileCompletedTurnSummaryMarks(document = {}) {
   return { document: next, changed, repaired };
 }
 
+function isUncommittedAggregateConflictContinuation(turn, turns, messages) {
+  const turnScopeId = text(turn?.turnScopeId);
+  const sourceTurnScopeId = text(turn?.continuationSource?.turnScopeId);
+  const sourceDialogProcessId = text(turn?.continuationSource?.dialogProcessId);
+  if (
+    !turnScopeId ||
+    turn?.action !== "continue" ||
+    turn?.state !== "action_failed" ||
+    turn?.phase !== "action" ||
+    turn?.failure?.code !== SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT ||
+    !sourceTurnScopeId ||
+    !sourceDialogProcessId ||
+    messages.some((message) => text(message?.turnScopeId) === turnScopeId)
+  ) {
+    return false;
+  }
+  const source = turns[sourceTurnScopeId];
+  return (
+    source?.state === "stop_completed" &&
+    source?.executionState === "user_stopped" &&
+    text(source?.dialogProcessId) === sourceDialogProcessId &&
+    text(source?.continuedByTurnScopeId) === turnScopeId
+  );
+}
+
+/**
+ * Removes failed pre-commit continuation attempts left by the former runtime
+ * ordering. This repair is valid only when the failed Turn committed no message.
+ */
+export function reconcileUncommittedAggregateConflictContinuations(document = {}) {
+  if (!document || typeof document !== "object" || Array.isArray(document)) {
+    throw Object.assign(new TypeError("Session repair source must be an object"), {
+      code: "SESSION_REPAIR_SOURCE_INVALID",
+    });
+  }
+  const next = structuredClone(document);
+  const turns =
+    next.turnLifecycle?.turns &&
+    typeof next.turnLifecycle.turns === "object" &&
+    !Array.isArray(next.turnLifecycle.turns)
+      ? next.turnLifecycle.turns
+      : {};
+  const messages = Array.isArray(next.messages) ? next.messages : [];
+  const repaired = Object.values(turns)
+    .filter((turn) => isUncommittedAggregateConflictContinuation(turn, turns, messages))
+    .map((turn) => text(turn.turnScopeId));
+  if (repaired.length === 0) return { document: next, changed: false, repaired };
+
+  const repairedSet = new Set(repaired);
+  const sourceScopeIds = new Set(
+    Object.values(turns)
+      .filter((turn) => repairedSet.has(text(turn?.turnScopeId)))
+      .map((turn) => text(turn?.continuationSource?.turnScopeId)),
+  );
+  next.turnLifecycle.turns = Object.fromEntries(
+    Object.entries(turns)
+      .filter(([turnScopeId]) => !repairedSet.has(turnScopeId))
+      .map(([turnScopeId, turn]) => [
+        turnScopeId,
+        sourceScopeIds.has(turnScopeId) ? { ...turn, continuedByTurnScopeId: "" } : turn,
+      ]),
+  );
+  next.turnLifecycle.commandReceipts = (
+    Array.isArray(next.turnLifecycle.commandReceipts) ? next.turnLifecycle.commandReceipts : []
+  ).filter((receipt) => !repairedSet.has(text(receipt?.turnScopeId)));
+  next.turnStatuses = (Array.isArray(next.turnStatuses) ? next.turnStatuses : []).filter(
+    (status) => !repairedSet.has(text(status?.turnScopeId)),
+  );
+  next.authorityEventOutbox = (
+    Array.isArray(next.authorityEventOutbox) ? next.authorityEventOutbox : []
+  ).filter((entry) => !repairedSet.has(text(entry?.envelope?.turnScopeId)));
+  return { document: next, changed: true, repaired };
+}
+
 export function migrateSessionDocument(document = {}, { sessionId: suppliedSessionId = "" } = {}) {
   if (!document || typeof document !== "object" || Array.isArray(document)) {
-    throw Object.assign(new TypeError("Session repair source must be an object"), { code: "SESSION_REPAIR_SOURCE_INVALID" });
+    throw Object.assign(new TypeError("Session repair source must be an object"), {
+      code: "SESSION_REPAIR_SOURCE_INVALID",
+    });
   }
   const next = structuredClone(document);
   const sessionId = text(next.sessionId || suppliedSessionId);
   let changed = false;
   const migrations = [];
   if ("version" in next || "revision" in next) {
-    next.aggregateVersion = Math.max(0, Number(next.aggregateVersion || next.version || next.revision) || 0);
+    next.aggregateVersion = Math.max(
+      0,
+      Number(next.aggregateVersion || next.version || next.revision) || 0,
+    );
     delete next.version;
     delete next.revision;
     changed = true;
@@ -221,30 +627,40 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
   const replacementDialogProcessId = (replacement = {}) => {
     const replacementTurnScopeId = text(replacement.replacementTurnScopeId);
     const replacementUserMessageId = text(replacement.replacementUserMessageId);
-    const message = (Array.isArray(next.messages) ? next.messages : []).find((item) =>
-      text(item.messageId || item.id || item.messageUid) === replacementUserMessageId);
-    const turn = (Array.isArray(next.turnOrder) ? next.turnOrder : []).find((item) =>
-      text(item.turnScopeId) === replacementTurnScopeId);
+    const message = (Array.isArray(next.messages) ? next.messages : []).find(
+      (item) => text(item.messageId || item.id || item.messageUid) === replacementUserMessageId,
+    );
+    const turn = (Array.isArray(next.turnOrder) ? next.turnOrder : []).find(
+      (item) => text(item.turnScopeId) === replacementTurnScopeId,
+    );
     const resolved = text(message?.dialogProcessId || turn?.dialogProcessId);
     if (!resolved) {
-      throw Object.assign(new Error(`Cannot migrate replacement dialog identity for Session ${sessionId}`), {
-        code: "SESSION_REPLACEMENT_IDENTITY_UNMIGRATABLE",
-      });
+      throw Object.assign(
+        new Error(`Cannot migrate replacement dialog identity for Session ${sessionId}`),
+        {
+          code: "SESSION_REPLACEMENT_IDENTITY_UNMIGRATABLE",
+        },
+      );
     }
     return resolved;
   };
   const migrateReplacement = (replacement) => {
     if (!replacement || typeof replacement !== "object" || Array.isArray(replacement)) return;
-    if (replacement.committedVersion === undefined && replacement.replacementDialogProcessId !== undefined) return;
+    if (
+      replacement.committedVersion === undefined &&
+      replacement.replacementDialogProcessId !== undefined
+    )
+      return;
     replacement.committedAggregateVersion = Number(
       replacement.committedAggregateVersion || replacement.committedVersion || 0,
     );
-    replacement.replacementDialogProcessId = text(replacement.replacementDialogProcessId)
-      || replacementDialogProcessId(replacement);
+    replacement.replacementDialogProcessId =
+      text(replacement.replacementDialogProcessId) || replacementDialogProcessId(replacement);
     delete replacement.committedVersion;
     changed = true;
   };
-  for (const replacement of Object.values(next.turnLifecycle?.replacedTurns || {})) migrateReplacement(replacement);
+  for (const replacement of Object.values(next.turnLifecycle?.replacedTurns || {}))
+    migrateReplacement(replacement);
   for (const receipt of Array.isArray(next.mutationReceipts) ? next.mutationReceipts : []) {
     migrateReplacement(receipt?.result?.turnReplacement);
   }
@@ -272,8 +688,9 @@ export function reconcileExecutionSegmentIndex(index = {}, segments = []) {
 }
 
 export function reconcileSessionSummaryIndex({ sessions = [], sessionIds = [] } = {}) {
-  const allowedIds = new Set((Array.isArray(sessionIds) ? sessionIds : [])
-    .map((id) => text(id)).filter(Boolean));
+  const allowedIds = new Set(
+    (Array.isArray(sessionIds) ? sessionIds : []).map((id) => text(id)).filter(Boolean),
+  );
   const next = [];
   const seen = new Set();
   let changed = false;
@@ -292,9 +709,12 @@ export function reconcileSessionSummaryIndex({ sessions = [], sessionIds = [] } 
 
 export async function runAtomicSessionRepair({ sessionDir = "", repair, validate } = {}) {
   if (!text(sessionDir) || typeof repair !== "function" || typeof validate !== "function") {
-    throw Object.assign(new TypeError("Atomic Session repair requires sessionDir, repair and validate"), {
-      code: "SESSION_REPAIR_ARGUMENT_INVALID",
-    });
+    throw Object.assign(
+      new TypeError("Atomic Session repair requires sessionDir, repair and validate"),
+      {
+        code: "SESSION_REPAIR_ARGUMENT_INVALID",
+      },
+    );
   }
   const stagingDir = `${sessionDir}.repair-staging-${randomUUID()}`;
   const backupDir = `${sessionDir}.repair-backup-${randomUUID()}`;

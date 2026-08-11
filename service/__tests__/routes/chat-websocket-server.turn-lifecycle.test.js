@@ -23,6 +23,7 @@ import {
   TURN_COMMAND,
   TURN_PHASE,
   TURN_STATE,
+  SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
@@ -36,13 +37,31 @@ import {
   unregisterActiveRun,
 } from "../../ws/chat-websocket/run-registry.js";
 import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
-import { startServerWithWs, closeServer, callChatWs, stopChatWs, createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
+import {
+  startServerWithWs,
+  closeServer,
+  callChatWs,
+  stopChatWs,
+  createProtocolTestCommand,
+} from "./chat-websocket-server.test-helpers.js";
 
 const TEST_EVENT_FACTS = Object.freeze({
-  [TURN_EVENT.ACTION_ACCEPTED]: Object.freeze({ phase: TURN_PHASE.ACTION, state: TURN_STATE.ACTION_REQUESTING }),
-  [TURN_EVENT.PROCESSING_STARTED]: Object.freeze({ phase: TURN_PHASE.PROCESSING, state: TURN_STATE.PROCESSING }),
-  [TURN_EVENT.PROCESSING_COMPLETED]: Object.freeze({ phase: TURN_PHASE.COMPLETION, state: TURN_STATE.COMPLETION_REQUESTING }),
-  [TURN_EVENT.COMPLETED]: Object.freeze({ phase: TURN_PHASE.COMPLETION, state: TURN_STATE.COMPLETED }),
+  [TURN_EVENT.ACTION_ACCEPTED]: Object.freeze({
+    phase: TURN_PHASE.ACTION,
+    state: TURN_STATE.ACTION_REQUESTING,
+  }),
+  [TURN_EVENT.PROCESSING_STARTED]: Object.freeze({
+    phase: TURN_PHASE.PROCESSING,
+    state: TURN_STATE.PROCESSING,
+  }),
+  [TURN_EVENT.PROCESSING_COMPLETED]: Object.freeze({
+    phase: TURN_PHASE.COMPLETION,
+    state: TURN_STATE.COMPLETION_REQUESTING,
+  }),
+  [TURN_EVENT.COMPLETED]: Object.freeze({
+    phase: TURN_PHASE.COMPLETION,
+    state: TURN_STATE.COMPLETED,
+  }),
 });
 
 function createTestLifecycleEnvelope({
@@ -138,12 +157,19 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
         deliveredAt: new Date().toISOString(),
       });
       if (result.found) eventOutbox = result.outbox;
-      return { acknowledged: result.found, deduplicated: result.deduplicated, reason: result.reason };
+      return {
+        acknowledged: result.found,
+        deduplicated: result.deduplicated,
+        reason: result.reason,
+      };
     },
     async runSession({ sessionId, runConfig, eventListener }) {
       runCount += 1;
       lastRunConfig = structuredClone(runConfig);
-      if (failureAt === "action") throw Object.assign(new Error("agent initialization failed"), { code: "agent_init_failed" });
+      if (failureAt === "action")
+        throw Object.assign(new Error("agent initialization failed"), {
+          code: "agent_init_failed",
+        });
       eventListener.onEvent({
         event: "agent_lifecycle_state_changed",
         data: {
@@ -153,7 +179,10 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
           dialogProcessId: "dp-authoritative",
         },
       });
-      if (failureAt === "processing") throw Object.assign(new Error("agent processing failed"), { code: "agent_processing_failed" });
+      if (failureAt === "processing")
+        throw Object.assign(new Error("agent processing failed"), {
+          code: "agent_processing_failed",
+        });
       return {
         sessionId,
         dialogProcessId: "dp-authoritative",
@@ -173,7 +202,7 @@ function createAuthoritativeBot({ persistSummary = true, failureAt = "" } = {}) 
           dialogProcessId: event.dialogProcessId,
           status: terminalStatus.command,
           reason: terminalStatus.command === "user_stopped" ? "user_stop" : "run_completed",
-        }
+        },
       };
     },
   };
@@ -203,7 +232,11 @@ const payload = {
 
 function installLifecycleSnapshotReader(authoritative) {
   authoritative.bot.getTurnLifecycleSnapshot = async ({
-    userId, sessionId, commandId, knownSequence, terminalLimit,
+    userId,
+    sessionId,
+    commandId,
+    knownSequence,
+    terminalLimit,
   } = {}) => ({
     found: true,
     snapshot: createAuthoritativeTurnSnapshot({
@@ -232,15 +265,22 @@ async function requestTurnSnapshot({ port, sessionId, commandId }) {
       ws.close();
       callback(value);
     };
-    ws.on("open", () => ws.send(JSON.stringify(createProtocolTestCommand({
-      commandType: TURN_COMMAND.SNAPSHOT_GET,
-      userId: "u1",
-      sessionId,
-      commandId,
-    }))));
+    ws.on("open", () =>
+      ws.send(
+        JSON.stringify(
+          createProtocolTestCommand({
+            commandType: TURN_COMMAND.SNAPSHOT_GET,
+            userId: "u1",
+            sessionId,
+            commandId,
+          }),
+        ),
+      ),
+    );
     ws.on("message", (raw) => {
       const message = JSON.parse(String(raw || "{}"));
-      if (message?.event === "error") settle(reject, new Error(message?.data?.errorCode || "snapshot_error"));
+      if (message?.event === "error")
+        settle(reject, new Error(message?.data?.errorCode || "snapshot_error"));
       if (message?.event === "turn_snapshot") settle(resolve, message.data);
     });
     ws.on("error", (error) => settle(reject, error));
@@ -249,12 +289,23 @@ async function requestTurnSnapshot({ port, sessionId, commandId }) {
 
 test("run event publishing awaits the actual transport send result", async () => {
   const handle = {};
-  assert.equal(await publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-0" }), false);
+  assert.equal(
+    await publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-0" }),
+    false,
+  );
   attachRunTransport(handle, async () => false);
-  assert.equal(await publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-1" }), false);
+  assert.equal(
+    await publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-1" }),
+    false,
+  );
   attachRunTransport(handle, async () => true);
-  assert.equal(await publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-2" }), true);
-  attachRunTransport(handle, async () => { throw new Error("send failed"); });
+  assert.equal(
+    await publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-2" }),
+    true,
+  );
+  attachRunTransport(handle, async () => {
+    throw new Error("send failed");
+  });
   await assert.rejects(
     publishRunEvent(handle, TURN_LIFECYCLE_WIRE_EVENT, { eventId: "event-3" }),
     /send failed/,
@@ -279,7 +330,10 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
       .filter((item) => item?.event === "turn_lifecycle")
       .map((item) => item.data.eventType);
     assert.deepEqual(wireEvents, authoritative.committed());
-    assert.equal(events.some((item) => item?.event === "done"), true);
+    assert.equal(
+      events.some((item) => item?.event === "done"),
+      true,
+    );
     const turn = authoritative.lifecycle().turns[payload.turnScopeId];
     assert.equal(turn.state, "completed");
     assert.equal(turn.summaryVersion, 7);
@@ -293,13 +347,17 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     assert.equal(authoritative.lastRunConfig().thinkingStartedAt, authoritativeStartedAt);
     assert.equal(turn.messageId, authoritative.lastRunConfig().messageId);
     assert.equal(turn.presentationMessageId, authoritative.lastRunConfig().presentationMessageId);
-    const completedEnvelope = events.find((item) =>
-      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.COMPLETED);
+    const completedEnvelope = events.find(
+      (item) => item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.COMPLETED,
+    );
     assert.equal(completedEnvelope.data.startedAt, authoritativeStartedAt);
     assert.equal(completedEnvelope.data.messageId, turn.messageId);
     assert.equal(completedEnvelope.data.presentationMessageId, turn.presentationMessageId);
     assert.equal(Boolean(completedEnvelope.data.finishedAt), true);
-    assert.equal(inputs.slice(1).some((input) => "createSessionIfAbsent" in input), false);
+    assert.equal(
+      inputs.slice(1).some((input) => "createSessionIfAbsent" in input),
+      false,
+    );
   } finally {
     await closeServer(server);
   }
@@ -365,8 +423,57 @@ test("rejected initial provision does not start Agent execution", async () => {
       },
     });
     assert.equal(authoritative.runCount(), 0);
-    assert.equal(events.some((item) => item?.event === "done"), false);
-    assert.equal(events.some((item) => item?.event === "error"), true);
+    assert.equal(
+      events.some((item) => item?.event === "done"),
+      false,
+    );
+    assert.equal(
+      events.some((item) => item?.event === "error"),
+      true,
+    );
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("stale aggregate version is rejected before lifecycle state and Agent execution", async () => {
+  const authoritative = createAuthoritativeBot();
+  let lifecycleCalls = 0;
+  authoritative.bot.applyTurnLifecycleEvent = async (input) => {
+    lifecycleCalls += 1;
+    assert.equal(input.eventType, TURN_EVENT.ACTION_ACCEPTED);
+    assert.equal(input.expectedAggregateVersion, 2);
+    return {
+      applied: false,
+      reason: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
+      currentVersion: 3,
+    };
+  };
+  const server = await startServerWithWs({ bot: authoritative.bot });
+  try {
+    const events = await callChatWs({
+      port: server.address().port,
+      payload: {
+        ...payload,
+        sessionId: "s-stale-aggregate",
+        turnScopeId: "turn-stale-aggregate",
+        commandId: "command-stale-aggregate",
+        expectedAggregateVersion: 2,
+        config: { ...payload.config, turnScopeId: "turn-stale-aggregate" },
+      },
+    });
+    assert.equal(lifecycleCalls, 1);
+    assert.equal(authoritative.runCount(), 0);
+    assert.equal(
+      events.some((item) => item?.event === "turn_lifecycle"),
+      false,
+    );
+    const errorData = events.find((item) => item?.event === "error")?.data;
+    assert.equal(errorData?.error, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
+    assert.equal(errorData?.status, 409);
+    assert.equal(errorData?.errorCode, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
+    assert.equal(errorData?.currentVersion, 3);
+    assert.equal(errorData?.turnScopeId, "turn-stale-aggregate");
   } finally {
     await closeServer(server);
   }
@@ -378,35 +485,39 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
   let eventOutbox = [];
   let eventIdSequence = 0;
   const bot = {
-      applyTurnLifecycleEvent: async (event = {}) => {
-        const result = commitTurnLifecycle({
-          lifecycle,
-          event,
-          eventOutbox,
-          createEventId: () => `deduplicated-event-${++eventIdSequence}`,
-        });
-        if (result.applied) {
-          lifecycle = result.lifecycle;
-          eventOutbox = result.eventOutbox;
-        }
-        return result;
-      },
-      async getPendingAuthorityEvents() {
-        return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
-      },
-      async recordAuthorityEventAttempt({ eventId } = {}) {
-        const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
-        if (result.found) eventOutbox = result.outbox;
-        return { recorded: result.found, reason: result.reason };
-      },
-      async acknowledgeAuthorityEvent({ eventId } = {}) {
-        const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
-          eventId,
-          deliveredAt: new Date().toISOString(),
-        });
-        if (result.found) eventOutbox = result.outbox;
-        return { acknowledged: result.found, deduplicated: result.deduplicated, reason: result.reason };
-      },
+    applyTurnLifecycleEvent: async (event = {}) => {
+      const result = commitTurnLifecycle({
+        lifecycle,
+        event,
+        eventOutbox,
+        createEventId: () => `deduplicated-event-${++eventIdSequence}`,
+      });
+      if (result.applied) {
+        lifecycle = result.lifecycle;
+        eventOutbox = result.eventOutbox;
+      }
+      return result;
+    },
+    async getPendingAuthorityEvents() {
+      return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
+    },
+    async recordAuthorityEventAttempt({ eventId } = {}) {
+      const result = recordAuthorityEventDeliveryAttempt(eventOutbox, { eventId });
+      if (result.found) eventOutbox = result.outbox;
+      return { recorded: result.found, reason: result.reason };
+    },
+    async acknowledgeAuthorityEvent({ eventId } = {}) {
+      const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
+        eventId,
+        deliveredAt: new Date().toISOString(),
+      });
+      if (result.found) eventOutbox = result.outbox;
+      return {
+        acknowledged: result.found,
+        deduplicated: result.deduplicated,
+        reason: result.reason,
+      };
+    },
   };
   const dispatchAuthorityEvents = createAuthorityEventDispatcher({
     resolveBot: () => bot,
@@ -487,17 +598,22 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
       return { acknowledged: result.found, reason: result.reason };
     },
   };
-  const createDispatcher = () => createAuthorityEventDispatcher({
-    resolveBot: () => bot,
-    sendEvent: (_eventName, envelope) => {
-      if (!socketAvailable) return false;
-      sent.push(structuredClone(envelope));
-      return true;
-    },
-  });
+  const createDispatcher = () =>
+    createAuthorityEventDispatcher({
+      resolveBot: () => bot,
+      sendEvent: (_eventName, envelope) => {
+        if (!socketAvailable) return false;
+        sent.push(structuredClone(envelope));
+        return true;
+      },
+    });
 
   const failed = await createDispatcher()({ userId: "u1", sessionId: "s-send-retry" });
-  assert.deepEqual(failed, { dispatched: false, reason: "authority_event_send_failed", delivered: 0 });
+  assert.deepEqual(failed, {
+    dispatched: false,
+    reason: "authority_event_send_failed",
+    delivered: 0,
+  });
   assert.equal(listPendingAuthorityEvents(eventOutbox).length, 1);
   assert.equal(eventOutbox[0].delivery.attempts, 1);
 
@@ -509,7 +625,10 @@ test("authority dispatcher keeps a failed send pending and reconnect retries the
   assert.deepEqual(sent[0], committed.envelope);
   assert.equal(listPendingAuthorityEvents(eventOutbox).length, 0);
 
-  const afterAcknowledgement = await createDispatcher()({ userId: "u1", sessionId: "s-send-retry" });
+  const afterAcknowledgement = await createDispatcher()({
+    userId: "u1",
+    sessionId: "s-send-retry",
+  });
   assert.deepEqual(afterAcknowledgement, { dispatched: true, delivered: 0 });
   assert.equal(sent.length, 1);
 });
@@ -563,7 +682,10 @@ test("authority dispatcher preserves the child persistence scope across every ou
   });
 
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
-  assert.deepEqual(calls.map(({ method }) => method), ["get", "attempt", "acknowledge", "get", "compact"]);
+  assert.deepEqual(
+    calls.map(({ method }) => method),
+    ["get", "attempt", "acknowledge", "get", "compact"],
+  );
   for (const { input } of calls) {
     assert.equal(input.persistenceScope, persistenceScope);
     assert.equal(input.sessionId, "child-session");
@@ -631,12 +753,13 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   });
   const listener = createRunEventListener({
     sessionId: "root-session",
-    onCommittedTurnLifecycle: (envelope, context) => dispatchAuthorityEvents({
-      userId: envelope.userId,
-      sessionId: envelope.sessionId,
-      parentSessionId: envelope.parentSessionId,
-      persistenceScope: context.persistenceScope,
-    }),
+    onCommittedTurnLifecycle: (envelope, context) =>
+      dispatchAuthorityEvents({
+        userId: envelope.userId,
+        sessionId: envelope.sessionId,
+        parentSessionId: envelope.parentSessionId,
+        persistenceScope: context.persistenceScope,
+      }),
   });
 
   const result = await listener.onEvent({
@@ -645,20 +768,37 @@ test("a detached child lifecycle commit drains its complete scoped outbox to the
   });
 
   assert.deepEqual(result, { dispatched: true, delivered: 4 });
-  assert.deepEqual(sent.map(({ event }) => event), eventTypes.map(() => TURN_LIFECYCLE_WIRE_EVENT));
-  assert.deepEqual(sent.map(({ envelope }) => envelope.eventType), eventTypes);
-  assert.equal(sent.every(({ envelope }) => envelope.sessionId === "child-session"), true);
-  assert.equal(calls.every(({ input }) => (
-    JSON.stringify(input.persistenceScope) === JSON.stringify(persistenceScope)
-  )), true);
-  assert.equal(sent.every(({ envelope }) => "persistenceScope" in envelope === false), true);
+  assert.deepEqual(
+    sent.map(({ event }) => event),
+    eventTypes.map(() => TURN_LIFECYCLE_WIRE_EVENT),
+  );
+  assert.deepEqual(
+    sent.map(({ envelope }) => envelope.eventType),
+    eventTypes,
+  );
+  assert.equal(
+    sent.every(({ envelope }) => envelope.sessionId === "child-session"),
+    true,
+  );
+  assert.equal(
+    calls.every(
+      ({ input }) => JSON.stringify(input.persistenceScope) === JSON.stringify(persistenceScope),
+    ),
+    true,
+  );
+  assert.equal(
+    sent.every(({ envelope }) => "persistenceScope" in envelope === false),
+    true,
+  );
   assert.equal(pending.length, 0);
 });
 
 test("authority dispatcher serializes concurrent scoped drains and performs the requested confirmation pass", async () => {
   let pending = true;
   let releaseSend;
-  const sendBarrier = new Promise((resolve) => { releaseSend = resolve; });
+  const sendBarrier = new Promise((resolve) => {
+    releaseSend = resolve;
+  });
   const calls = { get: 0, attempt: 0, acknowledge: 0, send: 0 };
   const envelope = createTestLifecycleEnvelope({
     eventId: "authority-event-single-flight",
@@ -709,18 +849,24 @@ test("authority dispatcher serializes concurrent scoped drains and performs the 
 });
 
 test("authority dispatcher repeats a scoped drain when a lifecycle commit arrives during its final empty read", async () => {
-  let pending = [{
-    eventId: "authority-event-running",
-    envelope: createTestLifecycleEnvelope({
+  let pending = [
+    {
       eventId: "authority-event-running",
-      eventType: TURN_EVENT.PROCESSING_STARTED,
-      sequence: 1,
-    }),
-  }];
+      envelope: createTestLifecycleEnvelope({
+        eventId: "authority-event-running",
+        eventType: TURN_EVENT.PROCESSING_STARTED,
+        sequence: 1,
+      }),
+    },
+  ];
   let releaseEmptyRead;
-  const emptyReadBarrier = new Promise((resolve) => { releaseEmptyRead = resolve; });
+  const emptyReadBarrier = new Promise((resolve) => {
+    releaseEmptyRead = resolve;
+  });
   let emptyReadStarted;
-  const emptyReadObserved = new Promise((resolve) => { emptyReadStarted = resolve; });
+  const emptyReadObserved = new Promise((resolve) => {
+    emptyReadStarted = resolve;
+  });
   let reads = 0;
   const sent = [];
   const bot = {
@@ -877,14 +1023,20 @@ test("processing-start persistence rejection is observed while Agent execution i
   };
   const server = await startServerWithWs({ bot: authoritative.bot });
   try {
-    const events = await callChatWs({ port: server.address().port, payload: {
-      ...payload,
-      sessionId: "s-processing-rejected",
-      turnScopeId: "turn-processing-rejected",
-      commandId: "command-processing-rejected",
-      config: { turnScopeId: "turn-processing-rejected" },
-    } });
-    assert.equal(events.some((item) => item?.event === "error"), true);
+    const events = await callChatWs({
+      port: server.address().port,
+      payload: {
+        ...payload,
+        sessionId: "s-processing-rejected",
+        turnScopeId: "turn-processing-rejected",
+        commandId: "command-processing-rejected",
+        config: { turnScopeId: "turn-processing-rejected" },
+      },
+    });
+    assert.equal(
+      events.some((item) => item?.event === "error"),
+      true,
+    );
     assert.equal(server.server.listening, true);
   } finally {
     await closeServer(server);
@@ -898,14 +1050,20 @@ test("message listener boundary contains failures raised by terminal error persi
   };
   const server = await startServerWithWs({ bot: authoritative.bot });
   try {
-    const events = await callChatWs({ port: server.address().port, payload: {
-      ...payload,
-      sessionId: "s-terminal-boundary",
-      turnScopeId: "turn-terminal-boundary",
-      commandId: "command-terminal-boundary",
-      config: { turnScopeId: "turn-terminal-boundary" },
-    } });
-    assert.equal(events.some((item) => item?.event === "error"), true);
+    const events = await callChatWs({
+      port: server.address().port,
+      payload: {
+        ...payload,
+        sessionId: "s-terminal-boundary",
+        turnScopeId: "turn-terminal-boundary",
+        commandId: "command-terminal-boundary",
+        config: { turnScopeId: "turn-terminal-boundary" },
+      },
+    });
+    assert.equal(
+      events.some((item) => item?.event === "error"),
+      true,
+    );
     assert.equal(server.server.listening, true);
   } finally {
     await closeServer(server);
@@ -916,32 +1074,45 @@ test("summary persistence failure never commits authoritative completed", async 
   const authoritative = createAuthoritativeBot({ persistSummary: false });
   const server = await startServerWithWs({ bot: authoritative.bot });
   try {
-    const events = await callChatWs({ port: server.address().port, payload: {
-      ...payload,
-      sessionId: "s-summary-failure",
-      turnScopeId: "turn-summary-failure",
-      commandId: "command-summary-failure",
-      config: { turnScopeId: "turn-summary-failure" },
-    } });
+    const events = await callChatWs({
+      port: server.address().port,
+      payload: {
+        ...payload,
+        sessionId: "s-summary-failure",
+        turnScopeId: "turn-summary-failure",
+        commandId: "command-summary-failure",
+        config: { turnScopeId: "turn-summary-failure" },
+      },
+    });
     assert.deepEqual(authoritative.committed(), [
       TURN_EVENT.ACTION_ACCEPTED,
       TURN_EVENT.PROCESSING_STARTED,
       TURN_EVENT.PROCESSING_COMPLETED,
       TURN_EVENT.FAILED,
     ]);
-    assert.equal(events.some((item) => item?.event === "done"), false);
     assert.equal(
-      events.filter((item) => item?.event === "turn_lifecycle")
+      events.some((item) => item?.event === "done"),
+      false,
+    );
+    assert.equal(
+      events
+        .filter((item) => item?.event === "turn_lifecycle")
         .some((item) => item?.data?.eventType === TURN_EVENT.COMPLETED),
       false,
     );
-    assert.equal(authoritative.lifecycle().turns["turn-summary-failure"].state, "completion_failed");
+    assert.equal(
+      authoritative.lifecycle().turns["turn-summary-failure"].state,
+      "completion_failed",
+    );
   } finally {
     await closeServer(server);
   }
 });
 
-for (const [failureAt, expectedPhase] of [["action", "action"], ["processing", "processing"]]) {
+for (const [failureAt, expectedPhase] of [
+  ["action", "action"],
+  ["processing", "processing"],
+]) {
   test(`authoritative failure before/after RUNNING is classified as ${expectedPhase}`, async () => {
     const authoritative = createAuthoritativeBot({ failureAt });
     const scopedPayload = {
@@ -954,16 +1125,24 @@ for (const [failureAt, expectedPhase] of [["action", "action"], ["processing", "
     const server = await startServerWithWs({ bot: authoritative.bot });
     try {
       const events = await callChatWs({ port: server.address().port, payload: scopedPayload });
-      const lifecycleEvents = events.filter((item) => item?.event === "turn_lifecycle").map((item) => item.data);
-      assert.deepEqual(lifecycleEvents.map((item) => item.eventType), [
-        TURN_EVENT.ACTION_ACCEPTED,
-        ...(failureAt === "processing" ? [TURN_EVENT.PROCESSING_STARTED] : []),
-        TURN_EVENT.FAILED,
-      ]);
+      const lifecycleEvents = events
+        .filter((item) => item?.event === "turn_lifecycle")
+        .map((item) => item.data);
+      assert.deepEqual(
+        lifecycleEvents.map((item) => item.eventType),
+        [
+          TURN_EVENT.ACTION_ACCEPTED,
+          ...(failureAt === "processing" ? [TURN_EVENT.PROCESSING_STARTED] : []),
+          TURN_EVENT.FAILED,
+        ],
+      );
       const failed = lifecycleEvents.at(-1);
       assert.equal(failed.phase, expectedPhase);
       assert.equal(failed.failure.phase, expectedPhase);
-      assert.equal(authoritative.lifecycle().turns[scopedPayload.turnScopeId].state, `${expectedPhase}_failed`);
+      assert.equal(
+        authoritative.lifecycle().turns[scopedPayload.turnScopeId].state,
+        `${expectedPhase}_failed`,
+      );
     } finally {
       await closeServer(server);
     }
@@ -998,12 +1177,21 @@ test("socket close terminates an accepted turn and releases the session mutex", 
       ws.on("open", () => ws.send(JSON.stringify(createProtocolTestCommand(scopedPayload))));
       ws.on("message", (raw) => {
         const message = JSON.parse(String(raw || "{}"));
-        if (message?.event === "turn_lifecycle" && message?.data?.eventType === TURN_EVENT.ACTION_ACCEPTED) {
+        if (
+          message?.event === "turn_lifecycle" &&
+          message?.data?.eventType === TURN_EVENT.ACTION_ACCEPTED
+        ) {
           ws.close(1000, "restart");
         }
       });
-      ws.on("close", () => { clearTimeout(timer); resolve(); });
-      ws.on("error", (error) => { clearTimeout(timer); reject(error); });
+      ws.on("close", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      ws.on("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
     });
 
     const deadline = Date.now() + 1000;
@@ -1057,10 +1245,16 @@ test("a new action recovers a stale persisted turn lost after service restart", 
 
     assert.equal(authoritative.lifecycle().turns["turn-before-restart"].state, "processing_failed");
     assert.equal(authoritative.lifecycle().turns["turn-after-restart"].state, "completed");
-    assert.equal(events.some((item) => item?.event === "done"), true);
-    const orphanFailure = authoritative.commitInputs().find(
-      (input) => input.eventType === TURN_EVENT.FAILED && input.turnScopeId === "turn-before-restart",
+    assert.equal(
+      events.some((item) => item?.event === "done"),
+      true,
     );
+    const orphanFailure = authoritative
+      .commitInputs()
+      .find(
+        (input) =>
+          input.eventType === TURN_EVENT.FAILED && input.turnScopeId === "turn-before-restart",
+      );
     assert.equal(orphanFailure?.failure?.code, "service_restart_orphaned_turn");
   } finally {
     await closeServer(server);
@@ -1118,9 +1312,15 @@ test("snapshot reconnect recovers a stale persisted turn lost after service rest
       commandId: "snapshot-restart-2",
     });
     assert.equal(second.activeTurn, null);
-    assert.equal(authoritative.commitInputs().filter((input) => (
-      input.eventType === TURN_EVENT.FAILED && input.turnScopeId === "turn-snapshot-restart"
-    )).length, 1);
+    assert.equal(
+      authoritative
+        .commitInputs()
+        .filter(
+          (input) =>
+            input.eventType === TURN_EVENT.FAILED && input.turnScopeId === "turn-snapshot-restart",
+        ).length,
+      1,
+    );
   } finally {
     await closeServer(server);
   }
@@ -1173,7 +1373,10 @@ test("snapshot reconnect does not terminate a matching live execution", async ()
     });
     assert.equal(snapshot.activeTurn?.turnScopeId, "turn-live-snapshot");
     assert.equal(snapshot.activeTurn?.state, TURN_STATE.PROCESSING);
-    assert.equal(authoritative.commitInputs().some((input) => input.eventType === TURN_EVENT.FAILED), false);
+    assert.equal(
+      authoritative.commitInputs().some((input) => input.eventType === TURN_EVENT.FAILED),
+      false,
+    );
   } finally {
     unregisterActiveRun(liveHandle);
     await closeServer(server);
@@ -1192,11 +1395,19 @@ test("summary failure is classified as completion without authoritative complete
   const server = await startServerWithWs({ bot: authoritative.bot });
   try {
     const events = await callChatWs({ port: server.address().port, payload: scopedPayload });
-    const lifecycleEvents = events.filter((item) => item?.event === "turn_lifecycle").map((item) => item.data);
-    assert.equal(lifecycleEvents.some((item) => item.eventType === TURN_EVENT.COMPLETED), false);
+    const lifecycleEvents = events
+      .filter((item) => item?.event === "turn_lifecycle")
+      .map((item) => item.data);
+    assert.equal(
+      lifecycleEvents.some((item) => item.eventType === TURN_EVENT.COMPLETED),
+      false,
+    );
     const failed = lifecycleEvents.find((item) => item.eventType === TURN_EVENT.FAILED);
     assert.equal(failed?.phase, "completion");
-    assert.equal(authoritative.lifecycle().turns[scopedPayload.turnScopeId].state, "completion_failed");
+    assert.equal(
+      authoritative.lifecycle().turns[scopedPayload.turnScopeId].state,
+      "completion_failed",
+    );
   } finally {
     await closeServer(server);
   }
@@ -1267,8 +1478,10 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
     const turn = authoritative.lifecycle().turns["turn-stop-authoritative"];
     assert.equal(turn.state, "stop_completed");
     assert.equal(turn.summaryVersion, 9);
-    const stoppedEvent = events.find((item) =>
-      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED);
+    const stoppedEvent = events.find(
+      (item) =>
+        item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED,
+    );
     assert.equal(stoppedEvent?.data?.sessionId, "s-stop-authoritative");
     assert.equal(stoppedEvent?.data?.turnScopeId, "turn-stop-authoritative");
     assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-stop-authoritative");
@@ -1293,13 +1506,30 @@ test("rejected stop has no abort or interaction side effects", async () => {
     normalizeLocale: (value) => value,
     resolveBot: () => ({}),
     pendingInteractionRequests: new Map(),
-    rejectAllPendingInteractions: () => { rejectCount += 1; },
-    commitTurnLifecycle: async () => ({ applied: false, reason: "stop_not_allowed", currentRevision: 2 }),
+    rejectAllPendingInteractions: () => {
+      rejectCount += 1;
+    },
+    commitTurnLifecycle: async () => ({
+      applied: false,
+      reason: "stop_not_allowed",
+      currentRevision: 2,
+    }),
   });
   const originalAbort = AbortController.prototype.abort;
-  AbortController.prototype.abort = function (...args) { abortCount += 1; return originalAbort.apply(this, args); };
+  AbortController.prototype.abort = function (...args) {
+    abortCount += 1;
+    return originalAbort.apply(this, args);
+  };
   try {
-    await handler(JSON.stringify(createProtocolTestCommand({ action: "stop", sessionId: "session-locked", turnScopeId: "turn-locked" })));
+    await handler(
+      JSON.stringify(
+        createProtocolTestCommand({
+          action: "stop",
+          sessionId: "session-locked",
+          turnScopeId: "turn-locked",
+        }),
+      ),
+    );
   } finally {
     AbortController.prototype.abort = originalAbort;
   }
@@ -1323,19 +1553,39 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     action: "send",
   });
-  apply({ turnScopeId: "turn-recover", commandId: "running", eventType: TURN_EVENT.PROCESSING_STARTED, phase: "processing", executionState: "sending" });
-  apply({ turnScopeId: "turn-recover", commandId: "processed", eventType: TURN_EVENT.PROCESSING_COMPLETED, phase: "completion", finalizeCommandId: "stable-finalize" });
+  apply({
+    turnScopeId: "turn-recover",
+    commandId: "running",
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    phase: "processing",
+    executionState: "sending",
+  });
+  apply({
+    turnScopeId: "turn-recover",
+    commandId: "processed",
+    eventType: TURN_EVENT.PROCESSING_COMPLETED,
+    phase: "completion",
+    finalizeCommandId: "stable-finalize",
+  });
   const bot = {
     async getTurnLifecycleSnapshot({ commandId }) {
       const turn = lifecycle.turns["turn-recover"];
-      return { found: true, snapshot: { commandId, activeTurn: lifecycle.activeTurnScopeId ? turn : null } };
+      return {
+        found: true,
+        snapshot: { commandId, activeTurn: lifecycle.activeTurnScopeId ? turn : null },
+      };
     },
   };
-  const commitTurnLifecycle = async (input) => apply(input.terminalStatus ? {
-    ...input,
-    summaryVersion: 4,
-    completionCommitId: input.completionCommitId || input.commandId,
-  } : input);
+  const commitTurnLifecycle = async (input) =>
+    apply(
+      input.terminalStatus
+        ? {
+            ...input,
+            summaryVersion: 4,
+            completionCommitId: input.completionCommitId || input.commandId,
+          }
+        : input,
+    );
   const request = { bot, commitTurnLifecycle, userId: "u1", sessionId: "s1", commandId: "recover" };
   const first = await recoverTurnFinalize(request);
   const second = await recoverTurnFinalize(request);
@@ -1351,48 +1601,132 @@ test("finalize recovery is idempotent across repeated service recovery attempts"
 test("execution queries expose authoritative snapshot, children and tree envelopes", async () => {
   const sent = [];
   const root = {
-    executionId: "agent:root", executionKind: "agent", rootExecutionId: "agent:root",
-    sessionId: "root-session", turnScopeId: "root", state: "processing", revision: 2, sequence: 2,
+    executionId: "agent:root",
+    executionKind: "agent",
+    rootExecutionId: "agent:root",
+    sessionId: "root-session",
+    turnScopeId: "root",
+    state: "processing",
+    revision: 2,
+    sequence: 2,
   };
   const child = {
-    executionId: "agent:child", executionKind: "agent", parentExecutionId: "agent:root",
-    rootExecutionId: "agent:root", sessionId: "child-session", turnScopeId: "child",
-    state: "processing", revision: 1, sequence: 1,
+    executionId: "agent:child",
+    executionKind: "agent",
+    parentExecutionId: "agent:root",
+    rootExecutionId: "agent:root",
+    sessionId: "child-session",
+    turnScopeId: "child",
+    state: "processing",
+    revision: 1,
+    sequence: 1,
   };
   const bot = {
-    async getExecution() { return { found: true, execution: root, generatedAt: "now" }; },
-    async getExecutionChildren() { return { found: true, execution: root, children: [child], generatedAt: "now" }; },
+    async getExecution() {
+      return { found: true, execution: root, generatedAt: "now" };
+    },
+    async getExecutionChildren() {
+      return { found: true, execution: root, children: [child], generatedAt: "now" };
+    },
     async getExecutionTree() {
-      return { found: true, execution: root, rootExecutionId: root.executionId, tree: {
-        executions: { [root.executionId]: { ...root, childExecutionIds: [child.executionId] }, [child.executionId]: { ...child, childExecutionIds: [] } },
-        rootExecutionIds: [root.executionId],
-      }, generatedAt: "now" };
+      return {
+        found: true,
+        execution: root,
+        rootExecutionId: root.executionId,
+        tree: {
+          executions: {
+            [root.executionId]: { ...root, childExecutionIds: [child.executionId] },
+            [child.executionId]: { ...child, childExecutionIds: [] },
+          },
+          rootExecutionIds: [root.executionId],
+        },
+        generatedAt: "now",
+      };
     },
   };
   const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
   const handler = createMessageHandler({
-    state: {}, authInfo: { userId: "u1" }, webSocket: { close() {} },
-    sendEvent: (event, data) => sent.push({ event, data }), resolveBot: () => bot,
-    isForbiddenUserScope: () => false, pendingInteractionRequests: new Map(),
+    state: {},
+    authInfo: { userId: "u1" },
+    webSocket: { close() {} },
+    sendEvent: (event, data) => sent.push({ event, data }),
+    resolveBot: () => bot,
+    isForbiddenUserScope: () => false,
+    pendingInteractionRequests: new Map(),
   });
-  await handler(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, sessionId: "root-session", executionId: root.executionId, commandId: "q1" })));
-  await handler(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.CHILDREN_GET, sessionId: "root-session", executionId: root.executionId, commandId: "q2" })));
-  await handler(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.TREE_GET, sessionId: "root-session", rootExecutionId: root.executionId, commandId: "q3" })));
-  assert.deepEqual(sent.map(({ event }) => event), ["execution_snapshot", "execution_children", "execution_tree"]);
-  assert.deepEqual(sent.map(({ data }) => data.commandId), ["q1", "q2", "q3"]);
+  await handler(
+    JSON.stringify(
+      createProtocolTestCommand({
+        commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
+        sessionId: "root-session",
+        executionId: root.executionId,
+        commandId: "q1",
+      }),
+    ),
+  );
+  await handler(
+    JSON.stringify(
+      createProtocolTestCommand({
+        commandType: EXECUTION_QUERY_COMMAND.CHILDREN_GET,
+        sessionId: "root-session",
+        executionId: root.executionId,
+        commandId: "q2",
+      }),
+    ),
+  );
+  await handler(
+    JSON.stringify(
+      createProtocolTestCommand({
+        commandType: EXECUTION_QUERY_COMMAND.TREE_GET,
+        sessionId: "root-session",
+        rootExecutionId: root.executionId,
+        commandId: "q3",
+      }),
+    ),
+  );
+  assert.deepEqual(
+    sent.map(({ event }) => event),
+    ["execution_snapshot", "execution_children", "execution_tree"],
+  );
+  assert.deepEqual(
+    sent.map(({ data }) => data.commandId),
+    ["q1", "q2", "q3"],
+  );
 });
 
 test("execution query rejects malformed and unavailable requests", async () => {
   const sent = [];
   const { createMessageHandler } = await import("../../ws/chat-websocket/message-handler.js");
-  const create = ({ bot = {} } = {}) => createMessageHandler({
-    state: {}, authInfo: { userId: "u1" }, webSocket: { close() {} },
-    sendEvent: (event, data) => sent.push({ event, data }), resolveBot: () => bot,
-    pendingInteractionRequests: new Map(),
-  });
-  await create()(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, sessionId: "s1", commandId: "bad" })));
-  await create()(JSON.stringify(createProtocolTestCommand({ commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET, sessionId: "s1", executionId: "agent:x", commandId: "missing-reader" })));
-  assert.deepEqual(sent.map(({ data }) => data.errorCode), [
-    "INVALID_AGENT_COMMAND", "execution_query_unavailable",
-  ]);
+  const create = ({ bot = {} } = {}) =>
+    createMessageHandler({
+      state: {},
+      authInfo: { userId: "u1" },
+      webSocket: { close() {} },
+      sendEvent: (event, data) => sent.push({ event, data }),
+      resolveBot: () => bot,
+      pendingInteractionRequests: new Map(),
+    });
+  await create()(
+    JSON.stringify(
+      createProtocolTestCommand({
+        commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
+        sessionId: "s1",
+        commandId: "bad",
+      }),
+    ),
+  );
+  await create()(
+    JSON.stringify(
+      createProtocolTestCommand({
+        commandType: EXECUTION_QUERY_COMMAND.SNAPSHOT_GET,
+        sessionId: "s1",
+        executionId: "agent:x",
+        commandId: "missing-reader",
+      }),
+    ),
+  );
+  assert.deepEqual(
+    sent.map(({ data }) => data.errorCode),
+    ["INVALID_AGENT_COMMAND", "execution_query_unavailable"],
+  );
 });
