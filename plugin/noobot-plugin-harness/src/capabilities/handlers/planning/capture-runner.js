@@ -6,10 +6,7 @@
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { processPlanningResult } from "./result-pipeline.js";
-import {
-  buildPlanningMessagePlan,
-  resolveLatestUserMessageText,
-} from "./prompt-builder.js";
+import { buildPlanningMessagePlan, resolveLatestUserMessageText } from "./prompt-builder.js";
 import { renderMessagePlanForSeparateModel } from "../shared/model/message-plan.js";
 import {
   CAPABILITY_DOMAIN,
@@ -22,7 +19,7 @@ import {
   extractRawTextContent,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
-  invokeWithReasoningRetry,
+  invokeCapabilityModel,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelName,
   resolveCapabilityModelMessages,
@@ -54,7 +51,9 @@ const PLANNING_RAW_OUTPUT_PREVIEW_MAX_CHARS =
 const PLANNING_CONTEXT_GOAL_MAX_CHARS = WORKFLOW_PARAMS.planning.capture.contextGoalMaxChars;
 
 function compactText(text = "", maxChars = PLANNING_COMPACT_TEXT_MAX_CHARS) {
-  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  const raw = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!raw) return "";
   if (raw.length <= maxChars) return raw;
   return `${raw.slice(0, maxChars)}...`;
@@ -79,7 +78,10 @@ export function recordPlanningRawOutput(
   }
   bucket.planningRawOutputs.push(entry);
   if (bucket.planningRawOutputs.length > PLANNING_RAW_OUTPUT_LIMIT) {
-    bucket.planningRawOutputs.splice(0, bucket.planningRawOutputs.length - PLANNING_RAW_OUTPUT_LIMIT);
+    bucket.planningRawOutputs.splice(
+      0,
+      bucket.planningRawOutputs.length - PLANNING_RAW_OUTPUT_LIMIT,
+    );
   }
   bucket.lastPlanningRawOutput = entry;
   appendCapabilityLog(ctx, {
@@ -108,20 +110,19 @@ function normalizePlanningTextContent(content = "") {
     .trim();
 }
 
-
 function collectAgentStyleHistoryMessages(ctx = {}) {
   const history = resolveModelMessageBlocks(ctx).history;
-  const source = history.length
-    ? history
-    : resolveModelMessages(ctx);
+  const source = history.length ? history : resolveModelMessages(ctx);
 
   return source
     .map((msg = {}) => {
-      const role = String(msg?.role || msg?.lc_kwargs?.role || "").trim().toLowerCase();
+      const role = String(msg?.role || msg?.lc_kwargs?.role || "")
+        .trim()
+        .toLowerCase();
       const assistantRaw =
         typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
           ? msg.rawModelContent
-          : msg?.content ?? msg?.lc_kwargs?.content;
+          : (msg?.content ?? msg?.lc_kwargs?.content);
       const content =
         role === "assistant"
           ? normalizePlanningTextContent(assistantRaw)
@@ -135,13 +136,18 @@ function summarizePlanningMessages(messages = [], maxItems = PLANNING_SUMMARY_MA
   const source = Array.isArray(messages) ? messages : [];
   const simplified = source
     .filter((item) => {
-      const role = String(item?.role || "").trim().toLowerCase();
+      const role = String(item?.role || "")
+        .trim()
+        .toLowerCase();
       return role === "user" || role === "assistant" || role === "tool" || role === "system";
     })
     .slice(-maxItems)
     .map((item = {}) => ({
       role: String(item?.role || "").trim(),
-      content: compactText(extractRawTextContent(item?.content ?? item), PLANNING_COMPACT_TEXT_MAX_CHARS),
+      content: compactText(
+        extractRawTextContent(item?.content ?? item),
+        PLANNING_COMPACT_TEXT_MAX_CHARS,
+      ),
     }))
     .filter((item) => item.content);
   return simplified;
@@ -152,12 +158,16 @@ function buildPlanningContextSummary(ctx = {}, meta = {}, locale = LOCALE.ZH_CN)
     ctx,
     purpose: "planning",
   });
-  const messages = Array.isArray(unifiedMessages) && unifiedMessages.length
-    ? unifiedMessages
-    : collectAgentStyleHistoryMessages(ctx);
-  const latestUserMessage = [...messages]
-    .reverse()
-    .find((item) => String(item?.role || "").trim().toLowerCase() === "user");
+  const messages =
+    Array.isArray(unifiedMessages) && unifiedMessages.length
+      ? unifiedMessages
+      : collectAgentStyleHistoryMessages(ctx);
+  const latestUserMessage = [...messages].reverse().find(
+    (item) =>
+      String(item?.role || "")
+        .trim()
+        .toLowerCase() === "user",
+  );
   const latestUserGoalText =
     resolveLatestUserMessageText(ctx) ||
     compactText(extractRawTextContent(latestUserMessage?.content), PLANNING_CONTEXT_GOAL_MAX_CHARS);
@@ -178,8 +188,7 @@ function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOC
     purpose: "planning",
   });
   const messagePlan = buildPlanningMessagePlan(locale, ctx, meta, {
-    contextSummaryContent:
-      `${getPlanningContextSummaryHeader(locale)}\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
+    contextSummaryContent: `${getPlanningContextSummaryHeader(locale)}\n\`\`\`json\n${JSON.stringify(contextSummary, null, 2)}\n\`\`\``,
     includeWorkflowPolicy: false,
   });
   const messages = renderMessagePlanForSeparateModel({
@@ -191,10 +200,7 @@ function buildPlanningMessagesForSeparateModel(ctx = {}, meta = {}, locale = LOC
 }
 
 function extractPlanningResponseText(response = null) {
-  return (
-    extractRawTextContent(response?.content) ||
-    String(response?.text || response?.output || "").trim()
-  );
+  return String(response?.output?.text || "").trim();
 }
 
 function extractAfterCallContent(ctx = {}) {
@@ -222,10 +228,11 @@ function shouldBlockToolCallOnlyTurn(meta = {}) {
   return false;
 }
 
-function logPlanningCaptureResult(ctx = {}, processed = {}, {
-  event = PLANNING_EVENTS.checklistCaptured,
-  defaultSource = "default",
-} = {}) {
+function logPlanningCaptureResult(
+  ctx = {},
+  processed = {},
+  { event = PLANNING_EVENTS.checklistCaptured, defaultSource = "default" } = {},
+) {
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.PLANNING,
     event,
@@ -283,15 +290,16 @@ async function handleSeparateModelPlanningProcessResult(
     source: "planning",
     stage: "planning",
   });
-  const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
   const relayText = [
     responseText || getPlanningSeparateModelEmptyRelay(locale),
     formatOperationDirectoryForRelay(operationDirectory),
-  ].filter(Boolean).join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning",
     content: relayText,
@@ -350,9 +358,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
     });
     return false;
   }
-  if (
-    String(bucket?.planText || "").trim().length > 0
-  ) {
+  if (String(bucket?.planText || "").trim().length > 0) {
     state.flags.planningCaptured = true;
     return false;
   }
@@ -364,7 +370,7 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
   try {
     let response = null;
     try {
-      response = await invokeWithReasoningRetry({
+      response = await invokeCapabilityModel({
         invoker,
         invokePayload: {
           purpose: "planning",
@@ -381,10 +387,8 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
           ctx,
           toolAllowlist: resolvePlanningToolAllowlist(meta),
         },
-        maxReasoningRetries: 1,
         purpose: "planning",
         domain: CAPABILITY_DOMAIN.PLANNING,
-        appendCapabilityLog,
         appendModelTrace: async (retryResponse = null) => {
           await appendCapabilityModelTraceLog(ctx, {
             domain: CAPABILITY_DOMAIN.PLANNING,
@@ -393,7 +397,6 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
           });
         },
         ctx,
-        meta,
       });
     } catch (error) {
       appendCapabilityLog(ctx, {
@@ -415,7 +418,13 @@ export async function runPlanningBySeparateModel(ctx = {}, meta = {}) {
       repairInvoker: invoker,
       appendCapabilityModelTraceLog,
     });
-    return await handleSeparateModelPlanningProcessResult(ctx, processed, locale, responseText, meta);
+    return await handleSeparateModelPlanningProcessResult(
+      ctx,
+      processed,
+      locale,
+      responseText,
+      meta,
+    );
   } finally {
     state.flags.planningSeparateModelInFlight = false;
   }

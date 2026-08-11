@@ -3,11 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import test, { afterEach } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 
 import { executeMcpTask } from "../../../src/integrations/mcp/task-runner.js";
-import { resetModelAdapter, setModelAdapter } from "../../../src/models/index.js";
 
 function createJsonResponse(payload = {}, { status = 200, headers = {} } = {}) {
   return {
@@ -60,20 +59,36 @@ function createMcpFetch() {
   };
 }
 
-function createFakeModel() {
+function createFakeModelPort() {
   const invocations = [];
   return {
     invocations,
-    bindTools(tools) {
-      this.boundTools = tools;
-      return this;
-    },
-    async invoke(messages, options = {}) {
-      invocations.push({ messages, options });
-      return { content: "done" };
+    async invoke(request) {
+      invocations.push(request);
+      return { output: { text: "done", toolCalls: [] } };
     },
   };
 }
+
+const DASHSCOPE_MODEL = Object.freeze({
+  alias: "dashscope-test",
+  model: "qwen-max",
+  format: "dashscope",
+  providerId: "dashscope",
+  adapterId: "dashscope",
+  preserve_thinking: true,
+  thinking_budget: 4096,
+});
+
+const OPENAI_MODEL = Object.freeze({
+  alias: "openai-alias",
+  model: "gpt-test",
+  format: "openai_compatible",
+  providerId: "openai",
+  adapterId: "openai-compatible",
+  reasoning_effort: "high",
+  tool_reasoning_effort: "medium",
+});
 
 function createGlobalConfig() {
   return {
@@ -87,40 +102,25 @@ function createGlobalConfig() {
   };
 }
 
-afterEach(() => {
-  resetModelAdapter();
-});
-
-test("executeMcpTask bound dashscope requests force thinking disabled options", async () => {
-  const fakeModel = createFakeModel();
-  setModelAdapter({
-    createChatModel: () => fakeModel,
-    resolveDefaultModelSpec: () => ({ format: "dashscope", preserve_thinking: true, thinking_budget: 4096 }),
-  });
+test("executeMcpTask sends the resolved DashScope ModelSpec through the host ModelPort", async () => {
+  const modelPort = createFakeModelPort();
 
   const result = await executeMcpTask({
     globalConfig: createGlobalConfig(),
     mcpName: "fake",
     task: "do it",
     fetchImpl: createMcpFetch(),
+    runtime: { modelPort, modelSpec: DASHSCOPE_MODEL },
   });
 
   assert.equal(result.ok, true);
-  assert.equal(fakeModel.invocations[0].options.preserve_thinking, false);
-  assert.equal(fakeModel.invocations[0].options.thinking_budget, 0);
+  assert.equal(modelPort.invocations[0].model, DASHSCOPE_MODEL);
+  assert.equal(modelPort.invocations[0].tools.length, 1);
+  assert.equal(modelPort.invocations[0].options.streaming, false);
 });
 
-test("executeMcpTask bound openai compatible requests use tool_reasoning_effort", async () => {
-  const fakeModel = createFakeModel();
-  setModelAdapter({
-    createChatModelByName: () => fakeModel,
-    resolveModelSpecByName: ({ modelName }) => ({
-      model: modelName,
-      format: "openai_compatible",
-      reasoning_effort: "high",
-      tool_reasoning_effort: "medium",
-    }),
-  });
+test("executeMcpTask preserves the explicitly selected OpenAI-compatible ModelSpec", async () => {
+  const modelPort = createFakeModelPort();
 
   const result = await executeMcpTask({
     globalConfig: createGlobalConfig(),
@@ -128,8 +128,10 @@ test("executeMcpTask bound openai compatible requests use tool_reasoning_effort"
     task: "do it",
     modelName: "openai-alias",
     fetchImpl: createMcpFetch(),
+    runtime: { modelPort, modelSpec: OPENAI_MODEL },
   });
 
   assert.equal(result.ok, true);
-  assert.equal(fakeModel.invocations[0].options.reasoning_effort, "medium");
+  assert.equal(modelPort.invocations[0].model, OPENAI_MODEL);
+  assert.equal(modelPort.invocations[0].invocation.flow, "mcp.task");
 });

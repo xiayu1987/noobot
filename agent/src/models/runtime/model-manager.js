@@ -6,11 +6,7 @@
 import { emitEvent } from "../../events/index.js";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { createLlmDeltaVisibilityFilter } from "../../events/llm-filter.js";
-import {
-  createChatModel,
-  createChatModelByName,
-  resolveModelSpecByName,
-} from "../index.js";
+import { resolveModelSpecByName } from "../index.js";
 
 function updateModelState(modelState, spec, shouldSwitch) {
   modelState.activeModelName = String(spec.model || "").trim();
@@ -25,8 +21,7 @@ function updateModelState(modelState, spec, shouldSwitch) {
 }
 
 export function resolveLlmForTurn(modelState) {
-  const { runtime, globalConfig, userConfig, defaultModelSpec, eventListener } =
-    modelState;
+  const { runtime, globalConfig, userConfig, defaultModelSpec, eventListener } = modelState;
   const runtimeModel = String(runtime?.runtimeModel || "").trim();
 
   let targetSpec = null;
@@ -52,28 +47,6 @@ export function resolveLlmForTurn(modelState) {
 
   if (!targetSpec?.model) return;
 
-  if (shouldSwitch) {
-    modelState.llm = runtimeModel
-      ? createChatModelByName(runtimeModel, {
-          globalConfig,
-          userConfig,
-          streaming: false,
-          context: {
-            runtime,
-            sessionId: String(runtime?.systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-          },
-        })
-      : createChatModel(targetSpec, {
-          globalConfig,
-          userConfig,
-          streaming: false,
-          context: {
-            runtime,
-            sessionId: String(runtime?.systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-          },
-        });
-  }
-
   updateModelState(modelState, targetSpec, shouldSwitch);
 }
 
@@ -94,9 +67,7 @@ export function createStreamingCallbacks(eventListener = null, runtime = {}) {
   };
   return [
     {
-      handleLLMNewToken: (token) => emitVisibleDelta(
-        visibilityFilter.push(String(token || "")),
-      ),
+      handleLLMNewToken: (token) => emitVisibleDelta(visibilityFilter.push(String(token || ""))),
       handleLLMEnd: () => emitVisibleDelta(visibilityFilter.flush()),
     },
   ];

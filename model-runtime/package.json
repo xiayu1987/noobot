@@ -1,0 +1,21 @@
+{
+  "name": "@noobot/model-runtime",
+  "version": "4.1.6",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./adapters": "./src/adapters/index.js",
+    "./policies": "./src/policies/index.js"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  },
+  "dependencies": {
+    "@langchain/openai": "^1.5.5",
+    "openai": "^6.49.0",
+    "@noobot/model-protocol": "file:../model-protocol",
+    "@noobot/shared": "file:../shared"
+  }
+}

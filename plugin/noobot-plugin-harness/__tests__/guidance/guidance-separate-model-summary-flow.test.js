@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -45,7 +46,7 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
   const meta = {
     harness: {
       planningGuidanceMode: "separate_model",
-      capabilityModelInvoker: async () => ({ content: "小结完成" }),
+      capabilityModelInvoker: async () => createTestModelResponse("小结完成"),
       markMessagesSummarized: ({ messages = [], summaryScope = {} } = {}) => {
         markedCalled += 1;
         assert.equal(Array.isArray(messages), true);
@@ -62,8 +63,17 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
 
   const ctx = {
     messages: [
-      { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
-      { role: "tool", content: '{"toolName":"execute_script","ok":true}', tool_call_id: "c1", toolName: "execute_script" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
+      },
+      {
+        role: "tool",
+        content: '{"toolName":"execute_script","ok":true}',
+        tool_call_id: "c1",
+        toolName: "execute_script",
+      },
     ],
     agentContext,
   };
@@ -72,10 +82,15 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
   assert.equal(ctx.modelContext.messageBlocks.incremental[0].summarized, undefined);
   assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, undefined);
   assert.deepEqual(
-    new Set(agentContext.execution.controllers.runtime.systemRuntime
-      .mainFlowControlInstructions[0].summarizedMessageIds),
-    new Set(ctx.modelContext.messageBlocks.incremental.slice(0, 2).map((message) =>
-      message.additional_kwargs.noobotMessageId)),
+    new Set(
+      agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
+        .summarizedMessageIds,
+    ),
+    new Set(
+      ctx.modelContext.messageBlocks.incremental
+        .slice(0, 2)
+        .map((message) => message.additional_kwargs.noobotMessageId),
+    ),
   );
 });
 
@@ -86,7 +101,8 @@ test("separate_model summary request includes previous summary after complete pl
     planText: "1. 当前完整计划\n1.1 子计划A",
     pending: { summary: true },
   });
-  agentContext.payload.harness.summaryText = "1. [plan=1][status=done] 上一轮概要\n2. [plan=1.1][status=done] 上一轮概要二";
+  agentContext.payload.harness.summaryText =
+    "1. [plan=1][status=done] 上一轮概要\n2. [plan=1.1][status=done] 上一轮概要二";
   agentContext.payload.harness.summaryFullText = [
     "[SUMMARY_OVERVIEW]",
     "1. [plan=1][status=done] 上一轮概要",
@@ -101,7 +117,7 @@ test("separate_model summary request includes previous summary after complete pl
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         if (payload.purpose === "summary") capturedMessages = payload.messages || [];
-        return { content: "1. [plan=1][status=done] 新小结" };
+        return createTestModelResponse("1. [plan=1][status=done] 新小结");
       },
     },
   };
@@ -128,13 +144,23 @@ test("separate_model summary request includes previous summary after complete pl
     String(capturedMessages[previousSummaryIndex]?.content || "").includes("[SUMMARY_DETAIL]"),
     true,
   );
-  assert.match(String(capturedMessages[previousSummaryIndex]?.content || ""), /1\. \[plan=1\]\[status=done\] 上一轮概要/);
-  assert.match(String(capturedMessages[previousSummaryIndex]?.content || ""), /2\. \[plan=1\.1\]\[status=done\] 上一轮概要二/);
-  assert.match(String(capturedMessages[previousSummaryIndex]?.content || ""), /3\. \[plan=1\.2\]\[status=warn\] 上一轮概要三/);
+  assert.match(
+    String(capturedMessages[previousSummaryIndex]?.content || ""),
+    /1\. \[plan=1\]\[status=done\] 上一轮概要/,
+  );
+  assert.match(
+    String(capturedMessages[previousSummaryIndex]?.content || ""),
+    /2\. \[plan=1\.1\]\[status=done\] 上一轮概要二/,
+  );
+  assert.match(
+    String(capturedMessages[previousSummaryIndex]?.content || ""),
+    /3\. \[plan=1\.2\]\[status=warn\] 上一轮概要三/,
+  );
   assert.equal(
-    capturedMessages.some((item = {}) =>
-      String(item?.content || "").includes("基于上一轮小结") ||
-      String(item?.content || "").includes("previous summary"),
+    capturedMessages.some(
+      (item = {}) =>
+        String(item?.content || "").includes("基于上一轮小结") ||
+        String(item?.content || "").includes("previous summary"),
     ),
     true,
   );
@@ -162,7 +188,7 @@ test("separate_model summary request extracts previous summary relay into standa
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         if (payload.purpose === "summary") capturedMessages = payload.messages || [];
-        return { content: "1. [plan=1][status=done] 新小结" };
+        return createTestModelResponse("1. [plan=1][status=done] 新小结");
       },
     },
   };
@@ -209,8 +235,8 @@ test("separate_model summary no longer auto-triggers revision", async () => {
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        if (payload.purpose === "summary") return { content: "小结完成" };
-        return { content: "" };
+        if (payload.purpose === "summary") return createTestModelResponse("小结完成");
+        return createTestModelResponse("");
       },
     },
   };

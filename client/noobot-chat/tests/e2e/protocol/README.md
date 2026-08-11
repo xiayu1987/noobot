@@ -43,7 +43,7 @@ npm run test:e2e:protocol:full
 ## 模型调用观测协议
 
 所有生产模型实例必须由 `agent/src/models/factory/chat-model.js` 创建，并在 provider
-`invoke()` 边界由 `agent/src/models/invoke/observed-chat-model.js` 统一观测。唯一权威事件为：
+`ModelPort` 的真实 Provider Attempt 边界由 `model-runtime/src/executor/model-request-executor.js` 统一观测。唯一权威事件为：
 
 ```text
 event = model_context_trace

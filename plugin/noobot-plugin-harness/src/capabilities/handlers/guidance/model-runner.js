@@ -18,7 +18,7 @@ import {
   normalizeTransferPayload,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
-  invokeWithReasoningRetry,
+  invokeCapabilityModel,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
@@ -176,7 +176,7 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
   });
   let revisionResponse = null;
   try {
-    revisionResponse = await invokeWithReasoningRetry({
+    revisionResponse = await invokeCapabilityModel({
       invoker,
       invokePayload: {
         purpose: "planning_revision",
@@ -193,10 +193,8 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning_revision"),
       },
-      maxReasoningRetries: 1,
       purpose: "planning_revision",
       domain: CAPABILITY_DOMAIN.PLANNING,
-      appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
         await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.PLANNING,
@@ -205,7 +203,6 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
         });
       },
       ctx,
-      meta,
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -215,9 +212,7 @@ export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessa
     });
     return changed;
   }
-  const revisionText =
-    extractRawTextContent(revisionResponse?.content) ||
-    String(revisionResponse?.text || revisionResponse?.output || "").trim();
+  const revisionText = String(revisionResponse?.output?.text || "").trim();
   applyDynamicPolicyPromptFromText(ctx, revisionText, {
     source: "planning_revision",
     stage: "revision",
@@ -429,7 +424,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     });
   }
   try {
-    response = await invokeWithReasoningRetry({
+    response = await invokeCapabilityModel({
       invoker,
       invokePayload: {
         purpose,
@@ -448,12 +443,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, purpose),
       },
-      maxReasoningRetries: 1,
       purpose,
       pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
       chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
       domain: CAPABILITY_DOMAIN.GUIDANCE,
-      appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
         await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.GUIDANCE,
@@ -484,9 +477,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     });
     return false;
   }
-  const responseText =
-    extractRawTextContent(response?.content) ||
-    String(response?.text || response?.output || "").trim();
+  const responseText = String(response?.output?.text || "").trim();
   let relayText = responseText;
   let relayAttachments = [];
   let summaryMergeText = responseText;

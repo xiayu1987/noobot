@@ -5,12 +5,15 @@
  */
 import { readFile, stat } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { HumanMessage } from "@langchain/core/messages";
-import { createChatModelByName, resolveDefaultModelSpec, resolveModelSpecByAlias } from "../../../models/index.js";
-import { DEFAULT_MIME_TYPE, IMAGE_EXTENSION_TO_MIME, IMAGE_EXTENSIONS } from "../file-extension-constants.js";
+import { resolveDefaultModelSpec, resolveModelSpecByAlias } from "../../../models/index.js";
+import {
+  DEFAULT_MIME_TYPE,
+  IMAGE_EXTENSION_TO_MIME,
+  IMAGE_EXTENSIONS,
+} from "../file-extension-constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { tWeb, toModelText, truncateText } from "./utils.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { tWeb, truncateText } from "./utils.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 const MAX_BATCH_BYTES = LENGTH_THRESHOLDS.dataProcessing.batchBytes;
 const MAX_TEXT_CHARS = LENGTH_THRESHOLDS.dataProcessing.webTextChars;
 async function buildImageBatches(imagePaths = []) {
@@ -20,7 +23,7 @@ async function buildImageBatches(imagePaths = []) {
     const st = await stat(imagePath);
     const ext = path.extname(imagePath).toLowerCase();
     const mime = IMAGE_EXTENSIONS.has(ext)
-      ? (IMAGE_EXTENSION_TO_MIME[ext] || DEFAULT_MIME_TYPE)
+      ? IMAGE_EXTENSION_TO_MIME[ext] || DEFAULT_MIME_TYPE
       : DEFAULT_MIME_TYPE;
     const b64 = (await readFile(imagePath)).toString("base64");
     items.push({
@@ -62,30 +65,45 @@ export async function summarizeByModel({
     userConfig?.attachments?.attachment_models?.image ||
     globalConfig?.attachments?.attachment_models?.image ||
     "";
+  if (imagePaths.length > 0 && !imageAlias) {
+    throw new Error("web2data multimodal mode requires an explicit image model");
+  }
   const modelSpec =
     imagePaths.length > 0
       ? resolveModelSpecByAlias({
           alias: imageAlias,
           globalConfig,
           userConfig,
-          fallbackToDefault: true,
+          fallbackToDefault: false,
         })
       : resolveDefaultModelSpec({ globalConfig, userConfig });
-  const llm = createChatModelByName(modelSpec?.alias || modelSpec?.model, {
-    globalConfig,
-    userConfig,
-    streaming: false,
-    context: { runtime },
-    invocation: {
-      flow: "tool.web2data",
-      purpose: "content_extraction",
-      domain: "data_processing",
-      contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-    },
-  });
-  const userPrompt =
-    prompt ||
-    tWeb(runtime, "summarizePrompt");
+  if (!modelSpec) {
+    throw new Error(
+      imagePaths.length > 0
+        ? `configured image model not found: ${imageAlias}`
+        : "web2data model is not configured",
+    );
+  }
+  const modelPort = runtime?.modelPort;
+  if (!modelPort || typeof modelPort.invoke !== "function") {
+    throw new Error("web2data requires runtime.modelPort");
+  }
+  const invokeModel = (messages) =>
+    modelPort.invoke({
+      model: modelSpec,
+      messages,
+      options: {
+        streaming: false,
+        signal: runtime?.abortSignal || undefined,
+      },
+      invocation: {
+        flow: "tool.web2data",
+        purpose: "content_extraction",
+        domain: "data_processing",
+        contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+      },
+    });
+  const userPrompt = prompt || tWeb(runtime, "summarizePrompt");
   const sharedText = truncateText(usefulTextParts.join("\n\n"), MAX_TEXT_CHARS, runtime);
 
   const batchResults = [];
@@ -93,8 +111,9 @@ export async function summarizeByModel({
     const batches = await buildImageBatches(imagePaths);
     for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
       const batch = batches[batchIndex];
-      const modelResponse = await llm.invoke([
-        new HumanMessage({
+      const output = await invokeModel([
+        {
+          role: "user",
           content: [
             {
               type: "text",
@@ -108,28 +127,29 @@ export async function summarizeByModel({
               image_url: { url: imageItem.dataUrl },
             })),
           ],
-        }),
-      ], { signal: runtime?.abortSignal || undefined });
+        },
+      ]);
       batchResults.push({
         batch: batchIndex + 1,
         imageCount: batch.length,
         totalBytes: batch.reduce((sum, item) => sum + item.sizeBytes, 0),
         imagePaths: batch.map((imageItem) => imageItem.imagePath),
-        text: toModelText(modelResponse?.content),
+        text: output.output.text,
       });
     }
   } else {
-    const modelResponse = await llm.invoke([
-      new HumanMessage({
+    const output = await invokeModel([
+      {
+        role: "user",
         content: `${userPrompt}\n\n${tWeb(runtime, "textReference", { sharedText })}`,
-      }),
-    ], { signal: runtime?.abortSignal || undefined });
+      },
+    ]);
     batchResults.push({
       batch: 1,
       imageCount: 0,
       totalBytes: 0,
       imagePaths: [],
-      text: toModelText(modelResponse?.content),
+      text: output.output.text,
     });
   }
 

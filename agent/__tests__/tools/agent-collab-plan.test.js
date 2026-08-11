@@ -3,14 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import test, { afterEach } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import { createPlanMultiTaskCollaborationTool } from "../../src/tools/collaboration/agent-collab/tool-plan-collab.js";
-import { resetModelAdapter, setModelAdapter } from "../../src/models/index.js";
 
 async function readJsonl(file) {
   const text = await fs.readFile(file, "utf8");
@@ -20,26 +19,34 @@ async function readJsonl(file) {
     .map((line) => JSON.parse(line));
 }
 
-function installFakeModel(content) {
-  setModelAdapter({
-    resolveDefaultModelSpec: () => ({ alias: "fake", model: "fake-model" }),
-    createChatModel: () => ({
-      invoke: async () => ({ content }),
-    }),
-  });
+function installFakeModel(runtime, content, onRequest = null) {
+  runtime.globalConfig.defaultProvider = "fake";
+  runtime.globalConfig.providers = {
+    fake: {
+      alias: "fake",
+      model: "fake-model",
+      format: "openai_compatible",
+      providerId: "fake",
+      adapterId: "openai-compatible",
+    },
+  };
+  runtime.modelPort = {
+    invoke: async (request) => {
+      onRequest?.(request);
+      return { output: { text: content }, text: content };
+    },
+  };
 }
-
-afterEach(() => {
-  resetModelAdapter();
-});
 
 test("plan_multi_task_collaboration: JSON parse fallbacks write runtime-events with session context", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-plan-collab-"));
   const sessionDir = path.join(workspaceRoot, "u1", "runtime", "session", "s1");
   await fs.mkdir(sessionDir, { recursive: true });
-  await fs.writeFile(path.join(sessionDir, "session.json"), JSON.stringify({ sessionId: "s1" }), "utf8");
-  installFakeModel('not json\n```json\n{ "tasks": [\n```');
-
+  await fs.writeFile(
+    path.join(sessionDir, "session.json"),
+    JSON.stringify({ sessionId: "s1" }),
+    "utf8",
+  );
   const runtime = {
     userId: "u1",
     globalConfig: { workspaceRoot },
@@ -50,6 +57,7 @@ test("plan_multi_task_collaboration: JSON parse fallbacks write runtime-events w
       turnScopeId: "turn1",
     },
   };
+  installFakeModel(runtime, 'not json\n```json\n{ "tasks": [\n```');
   const tool = createPlanMultiTaskCollaborationTool({
     runtime,
     globalConfig: runtime.globalConfig,
@@ -58,9 +66,15 @@ test("plan_multi_task_collaboration: JSON parse fallbacks write runtime-events w
 
   await tool.invoke({ task: "split this task" });
 
-  const records = await readJsonl(path.join(workspaceRoot, "u1", "runtime", "session", "s1", "events", "system.jsonl"));
-  const fallback = records.find((item) => item.event === "agent.collab.planJsonParse.fallbackToMarkdown");
-  const markdownFailed = records.find((item) => item.event === "agent.collab.planMarkdownJsonParse.failed");
+  const records = await readJsonl(
+    path.join(workspaceRoot, "u1", "runtime", "session", "s1", "events", "system.jsonl"),
+  );
+  const fallback = records.find(
+    (item) => item.event === "agent.collab.planJsonParse.fallbackToMarkdown",
+  );
+  const markdownFailed = records.find(
+    (item) => item.event === "agent.collab.planMarkdownJsonParse.failed",
+  );
 
   for (const record of [fallback, markdownFailed]) {
     assert.ok(record);
@@ -79,14 +93,13 @@ test("plan_multi_task_collaboration: JSON parse fallbacks write runtime-events w
 
 test("plan_multi_task_collaboration: JSON parse fallback without session writes routed system runtime event", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-plan-collab-nosession-"));
-  installFakeModel("not json");
-
   const runtime = {
     userId: "",
     globalConfig: { workspaceRoot },
     userConfig: {},
     systemRuntime: {},
   };
+  installFakeModel(runtime, "not json");
   const tool = createPlanMultiTaskCollaborationTool({
     runtime,
     globalConfig: runtime.globalConfig,
@@ -95,16 +108,12 @@ test("plan_multi_task_collaboration: JSON parse fallback without session writes 
 
   await tool.invoke({ task: "split this task" });
 
-  const records = await readJsonl(path.join(
-    workspaceRoot,
-    "system",
-    "runtime",
-    "events",
-    "system",
-    "agent",
-    "system.jsonl",
-  ));
-  const fallback = records.find((item) => item.event === "agent.collab.planJsonParse.fallbackToMarkdown");
+  const records = await readJsonl(
+    path.join(workspaceRoot, "system", "runtime", "events", "system", "agent", "system.jsonl"),
+  );
+  const fallback = records.find(
+    (item) => item.event === "agent.collab.planJsonParse.fallbackToMarkdown",
+  );
   for (const record of [fallback]) {
     assert.ok(record);
     assert.equal(record.source, "agent");
@@ -118,16 +127,7 @@ test("plan_multi_task_collaboration: JSON parse fallback without session writes 
 
 test("plan_multi_task_collaboration: model invoke receives runtime abort signal", async () => {
   const abortController = new AbortController();
-  let receivedOptions;
-  setModelAdapter({
-    resolveDefaultModelSpec: () => ({ alias: "fake", model: "fake-model" }),
-    createChatModel: () => ({
-      invoke: async (_messages, options) => {
-        receivedOptions = options;
-        return { content: JSON.stringify({ tasks: [] }) };
-      },
-    }),
-  });
+  let receivedRequest;
 
   const runtime = {
     abortSignal: abortController.signal,
@@ -135,6 +135,9 @@ test("plan_multi_task_collaboration: model invoke receives runtime abort signal"
     userConfig: {},
     systemRuntime: {},
   };
+  installFakeModel(runtime, JSON.stringify({ tasks: [] }), (request) => {
+    receivedRequest = request;
+  });
   const tool = createPlanMultiTaskCollaborationTool({
     runtime,
     globalConfig: runtime.globalConfig,
@@ -143,5 +146,9 @@ test("plan_multi_task_collaboration: model invoke receives runtime abort signal"
 
   await tool.invoke({ task: "split this task" });
 
-  assert.equal(receivedOptions?.signal, abortController.signal);
+  assert.equal(receivedRequest?.options?.signal, abortController.signal);
+  assert.equal(receivedRequest?.model?.model, "fake-model");
+  assert.equal(receivedRequest?.model?.format, "openai_compatible");
+  assert.equal(receivedRequest?.messages?.[0]?.role, "system");
+  assert.equal(receivedRequest?.messages?.[1]?.role, "user");
 });

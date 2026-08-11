@@ -29,6 +29,8 @@
     "runtime-events",
     "context-protocol",
     "agent-config-protocol",
+    "model-protocol",
+    "model-runtime",
     "sanitize",
     "client/windows",
     "client/mac"

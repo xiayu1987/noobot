@@ -4,24 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  WORKFLOW_PLUGIN_DEFAULTS,
-  WORKFLOW_SEMANTIC,
-} from "../constants.js";
-import {
-  resolveWorkflowAbortSignal,
-  throwIfWorkflowAborted,
-} from "../hooks/runtime.js";
-import {
-  resolveWorkflowInputAttachments,
-} from "../hooks/attachments.js";
+import { WORKFLOW_PLUGIN_DEFAULTS, WORKFLOW_SEMANTIC } from "../constants.js";
+import { resolveWorkflowAbortSignal, throwIfWorkflowAborted } from "../hooks/runtime.js";
+import { resolveWorkflowInputAttachments } from "../hooks/attachments.js";
 import {
   buildWorkflowAvailableToolsPlanningBlock,
   resolveWorkflowAvailableToolNames,
   resolveWorkflowSemanticContextMessages,
 } from "../hooks/messages.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 
 export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
@@ -31,7 +23,7 @@ export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx 
       const identity = projectAttachmentIdentity(item);
       const attachmentId = identity.attachmentId;
       const name = String(
-          item?.name ||
+        item?.name ||
           item?.fileName ||
           tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();

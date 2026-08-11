@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  createChatModel,
-  createChatModelByName,
   resolveDefaultModelSpec,
   resolveModelSpecByName,
   adaptToolsForBinding,
@@ -20,10 +18,7 @@ import {
 } from "../../context/agent-context-accessor.js";
 import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
-import {
-  PLUGIN_MODEL_HEADER_KEY,
-} from "../../models/headers/plugin-headers.js";
-import { resolveBoundToolModelRequestOverrides } from "../turn/tool-choice-strategy.js";
+import { PLUGIN_MODEL_HEADER_KEY } from "../../models/headers/plugin-headers.js";
 import { resolveHookClientEmitter } from "../../extensions/hooks/index.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createHash } from "node:crypto";
@@ -32,10 +27,9 @@ import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   requireModelContextSequencePolicy,
-} from "@noobot/context-protocol/model-invocation-policy";
+} from "@noobot/model-protocol";
 
-export const MAX_MINI_RUNNER_TOOL_TURNS =
-  TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
+export const MAX_MINI_RUNNER_TOOL_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const GUIDANCE_ANALYSIS_RESPONSE_EVENT = "guidance_analysis_response";
 
 function normalizeTextContent(content = "") {
@@ -55,11 +49,15 @@ function normalizeTextContent(content = "") {
 
 function compactToolMessagesForMiniRunner(messages = []) {
   return (Array.isArray(messages) ? messages : []).map((messageItem = {}) => {
-    const role = String(messageItem?.role || messageItem?.lc_kwargs?.role || "").trim().toLowerCase();
+    const role = String(messageItem?.role || messageItem?.lc_kwargs?.role || "")
+      .trim()
+      .toLowerCase();
     if (role !== "tool") return messageItem;
     return {
       ...messageItem,
-      content: compactToolResultTextForModel(messageItem?.content ?? messageItem?.lc_kwargs?.content ?? ""),
+      content: compactToolResultTextForModel(
+        messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
+      ),
     };
   });
 }
@@ -72,7 +70,9 @@ function resolveSessionMeta(ctx = {}, runtime = {}) {
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   return {
     userId: String(ctx?.userId || runtime?.userId || systemRuntime?.userId || "").trim(),
-    sessionId: String(ctx?.sessionId || runtime?.sessionId || systemRuntime?.sessionId || "").trim(),
+    sessionId: String(
+      ctx?.sessionId || runtime?.sessionId || systemRuntime?.sessionId || "",
+    ).trim(),
     parentSessionId: resolveParentSessionId({
       context: ctx,
       runtime,
@@ -156,23 +156,23 @@ function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data
     }
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
-    const suppliedIdentity = String(data?.eventId || data?.pluginEventId || data?.requestId || "").trim();
-    const stableIdentity = suppliedIdentity || [
-      sessionMeta.sessionId,
-      String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
-      String(runtime?.systemRuntime?.turnScopeId || "").trim(),
-      String(data?.turn || "").trim(),
-      canonicalOutput,
-    ].join("|");
-    const activityKind = isGuidanceAnalysisResponse
-      ? "guidance_analysis"
-      : "workflow_semantic";
+    const suppliedIdentity = String(
+      data?.eventId || data?.pluginEventId || data?.requestId || "",
+    ).trim();
+    const stableIdentity =
+      suppliedIdentity ||
+      [
+        sessionMeta.sessionId,
+        String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
+        String(runtime?.systemRuntime?.turnScopeId || "").trim(),
+        String(data?.turn || "").trim(),
+        canonicalOutput,
+      ].join("|");
+    const activityKind = isGuidanceAnalysisResponse ? "guidance_analysis" : "workflow_semantic";
     const activityEvent = isGuidanceAnalysisResponse
       ? GUIDANCE_ANALYSIS_RESPONSE_EVENT
       : "workflow_semantic_response";
-    const eventIdPrefix = isGuidanceAnalysisResponse
-      ? "guidance-analysis"
-      : "workflow_semantic";
+    const eventIdPrefix = isGuidanceAnalysisResponse ? "guidance-analysis" : "workflow_semantic";
     const eventId = `${eventIdPrefix}:${createHash("sha256").update(stableIdentity).digest("hex").slice(0, 24)}`;
     emitMessageEvent(runtime?.eventListener, runtime, MESSAGE_EVENT_TYPE.THINKING, {
       eventId,
@@ -209,8 +209,6 @@ export function createAgentCapabilityModelInvoker({
   flowPrefix = "",
   fallbackGlobalConfig = null,
   fallbackUserConfig = null,
-  createChatModelFn = createChatModel,
-  createChatModelByNameFn = createChatModelByName,
   resolveDefaultModelSpecFn = resolveDefaultModelSpec,
   resolveModelSpecByNameFn = resolveModelSpecByName,
   adaptToolsForBindingFn = adaptToolsForBinding,
@@ -223,22 +221,52 @@ export function createAgentCapabilityModelInvoker({
       : MAX_MINI_RUNNER_TOOL_TURNS;
 
   function buildDefaultCapabilityOutput({ targetLocale = "zh-CN", targetPurpose = "" } = {}) {
-    const isEn = String(targetLocale || "").trim().toLowerCase() === "en-us";
-    const purposeValue = String(targetPurpose || "").trim().toLowerCase();
+    const isEn =
+      String(targetLocale || "")
+        .trim()
+        .toLowerCase() === "en-us";
+    const purposeValue = String(targetPurpose || "")
+      .trim()
+      .toLowerCase();
     if (purposeValue.includes("planning")) {
       return JSON.stringify(
         {
           taskOwner: "primary_task_owner",
           taskChecklist: isEn
             ? [
-                { index: 1, task: "Clarify scope and constraints", owner: "primary_task_owner", subOwners: [] },
-                { index: 2, task: "Implement minimal safe solution", owner: "primary_task_owner", subOwners: [] },
-                { index: 3, task: "Validate and summarize next actions", owner: "primary_task_owner", subOwners: [] },
+                {
+                  index: 1,
+                  task: "Clarify scope and constraints",
+                  owner: "primary_task_owner",
+                  subOwners: [],
+                },
+                {
+                  index: 2,
+                  task: "Implement minimal safe solution",
+                  owner: "primary_task_owner",
+                  subOwners: [],
+                },
+                {
+                  index: 3,
+                  task: "Validate and summarize next actions",
+                  owner: "primary_task_owner",
+                  subOwners: [],
+                },
               ]
             : [
                 { index: 1, task: "澄清范围与约束", owner: "primary_task_owner", subOwners: [] },
-                { index: 2, task: "实现最小可行且安全的方案", owner: "primary_task_owner", subOwners: [] },
-                { index: 3, task: "完成验证并给出后续建议", owner: "primary_task_owner", subOwners: [] },
+                {
+                  index: 2,
+                  task: "实现最小可行且安全的方案",
+                  owner: "primary_task_owner",
+                  subOwners: [],
+                },
+                {
+                  index: 3,
+                  task: "完成验证并给出后续建议",
+                  owner: "primary_task_owner",
+                  subOwners: [],
+                },
               ],
           meta: {
             source: "mini_runner_default",
@@ -302,16 +330,15 @@ export function createAgentCapabilityModelInvoker({
     });
     const normalizedPurpose = normalizeHeaderValue(purpose || "unknown");
     const normalizedDomain = normalizeHeaderValue(domain || "unknown");
-    const normalizedContextSequencePolicy = requireModelContextSequencePolicy(
-      contextSequencePolicy,
-    );
+    const normalizedContextSequencePolicy =
+      requireModelContextSequencePolicy(contextSequencePolicy);
     const normalizedFlowName = normalizeHeaderValue(pluginFlow || purpose || "unknown");
-    const resolvedHeaderNamespace = normalizeHeaderValue(
-      headerNamespaceOverride || headerNamespace || "plugin",
-    ).toLowerCase() || "plugin";
-    const resolvedFlowPrefix = normalizeHeaderValue(
-      flowPrefixOverride || flowPrefix || resolvedHeaderNamespace,
-    ) || resolvedHeaderNamespace;
+    const resolvedHeaderNamespace =
+      normalizeHeaderValue(headerNamespaceOverride || headerNamespace || "plugin").toLowerCase() ||
+      "plugin";
+    const resolvedFlowPrefix =
+      normalizeHeaderValue(flowPrefixOverride || flowPrefix || resolvedHeaderNamespace) ||
+      resolvedHeaderNamespace;
     const isCanonicalPluginNamespace = resolvedHeaderNamespace === "plugin";
     const namespaceHeaderKeys = isCanonicalPluginNamespace
       ? PLUGIN_MODEL_HEADER_KEY
@@ -333,41 +360,6 @@ export function createAgentCapabilityModelInvoker({
       [customDomainHeaderKey]: normalizedDomain,
       ...(resolvedSessionId ? { [customSessionHeaderKey]: resolvedSessionId } : {}),
     };
-    const llm = normalizedModelName
-      ? createChatModelByNameFn(normalizedModelName, {
-          globalConfig,
-          userConfig,
-          streaming: false,
-          context: {
-            runtime,
-            agentContext: ctx?.agentContext || null,
-            sessionId: resolvedSessionId,
-          },
-          additionalHeaders,
-          invocation: {
-            flow: flowValue,
-            purpose: normalizedPurpose,
-            domain: normalizedDomain,
-            contextSequencePolicy: normalizedContextSequencePolicy,
-          },
-        })
-      : createChatModelFn({
-          globalConfig,
-          userConfig,
-          streaming: false,
-          context: {
-            runtime,
-            agentContext: ctx?.agentContext || null,
-            sessionId: resolvedSessionId,
-          },
-          additionalHeaders,
-          invocation: {
-            flow: flowValue,
-            purpose: normalizedPurpose,
-            domain: normalizedDomain,
-            contextSequencePolicy: normalizedContextSequencePolicy,
-          },
-        });
     const modelSpec = normalizedModelName
       ? resolveModelSpecByNameFn({
           modelName: normalizedModelName,
@@ -376,12 +368,28 @@ export function createAgentCapabilityModelInvoker({
           fallbackToDefault: false,
         })
       : resolveDefaultModelSpecFn({ globalConfig, userConfig });
+    const modelPort = runtime?.modelPort;
+    if (!modelPort || typeof modelPort.invoke !== "function") {
+      throw new TypeError("capability model execution requires the host ModelPort");
+    }
 
     if (enableToolBinding !== true) {
-      const ai = await llm.invoke(runMessages, {
-        signal: runtime?.abortSignal || null,
+      const ai = await modelPort.invoke({
+        model: modelSpec,
+        messages: runMessages,
+        options: {
+          streaming: false,
+          signal: runtime?.abortSignal || null,
+          headers: additionalHeaders,
+        },
+        invocation: {
+          flow: flowValue,
+          purpose: normalizedPurpose,
+          domain: normalizedDomain,
+          contextSequencePolicy: normalizedContextSequencePolicy,
+        },
       });
-      const text = normalizeTextContent(ai?.content);
+      const text = String(ai?.output?.text || "");
       emitPluginCapabilityRealtimeLog({
         ctx,
         event: "plugin_capability_response",
@@ -394,9 +402,9 @@ export function createAgentCapabilityModelInvoker({
         },
       });
       return {
-        content: text,
-        output: text,
-        traces: [
+        output: ai.output,
+        execution: ai.execution,
+        toolTurns: [
           {
             turn: 1,
             purpose,
@@ -423,14 +431,7 @@ export function createAgentCapabilityModelInvoker({
     });
     const boundTools = Array.isArray(adapted?.tools) ? adapted.tools : [];
     const bindOptions =
-      adapted?.bindOptions && typeof adapted.bindOptions === "object"
-        ? adapted.bindOptions
-        : {};
-    const model = boundTools.length
-      ? Object.keys(bindOptions).length
-        ? llm.bindTools(boundTools, bindOptions)
-        : llm.bindTools(boundTools)
-      : llm;
+      adapted?.bindOptions && typeof adapted.bindOptions === "object" ? adapted.bindOptions : {};
     const toolMap = new Map(
       boundTools
         .map((tool) => [String(tool?.name || "").trim(), tool])
@@ -440,13 +441,26 @@ export function createAgentCapabilityModelInvoker({
     let lastAssistantText = "";
     let toolTurnLimitReached = false;
     for (let turn = 1; turn <= maxTurnCount; turn += 1) {
-      const ai = await model.invoke(runMessages, {
-        signal: runtime?.abortSignal || null,
-        ...(boundTools.length ? resolveBoundToolModelRequestOverrides(modelSpec || {}) : {}),
+      const ai = await modelPort.invoke({
+        model: modelSpec,
+        messages: runMessages,
+        tools: boundTools,
+        options: {
+          streaming: false,
+          signal: runtime?.abortSignal || null,
+          headers: additionalHeaders,
+          toolBinding: bindOptions,
+        },
+        invocation: {
+          flow: flowValue,
+          purpose: normalizedPurpose,
+          domain: normalizedDomain,
+          contextSequencePolicy: normalizedContextSequencePolicy,
+        },
       });
-      const text = normalizeTextContent(ai?.content);
+      const text = String(ai?.output?.text || "");
       lastAssistantText = text;
-      const { calls } = normalizeToolCalls(ai);
+      const { calls } = normalizeToolCalls(ai.output);
       traces.push({
         turn,
         purpose,
@@ -457,7 +471,11 @@ export function createAgentCapabilityModelInvoker({
       });
       const currentTrace = traces[traces.length - 1];
       if (text || calls.length) {
-        runMessages.push(ai);
+        runMessages.push({
+          role: "assistant",
+          content: text,
+          tool_calls: ai.output.toolCalls || [],
+        });
       }
       if (!calls.length) {
         emitPluginCapabilityRealtimeLog({
@@ -472,9 +490,9 @@ export function createAgentCapabilityModelInvoker({
           },
         });
         return {
-          content: text,
-          output: text,
-          traces,
+          output: ai.output,
+          execution: ai.execution,
+          toolTurns: traces,
           turn,
           finishedReason: "no_tool_call",
           toolTurnLimitReached: false,
@@ -554,11 +572,22 @@ export function createAgentCapabilityModelInvoker({
           ? "Based on the above tool results, provide the final planning answer now."
           : "请基于以上工具结果，立即给出最终规划答案。";
       try {
-        const finalAi = await llm.invoke(
-          [{ role: "system", content: finalizePrompt }, ...runMessages],
-          { signal: runtime?.abortSignal || null },
-        );
-        finalizedText = normalizeTextContent(finalAi?.content);
+        const finalAi = await modelPort.invoke({
+          model: modelSpec,
+          messages: [{ role: "system", content: finalizePrompt }, ...runMessages],
+          options: {
+            streaming: false,
+            signal: runtime?.abortSignal || null,
+            headers: additionalHeaders,
+          },
+          invocation: {
+            flow: flowValue,
+            purpose: normalizedPurpose,
+            domain: normalizedDomain,
+            contextSequencePolicy: normalizedContextSequencePolicy,
+          },
+        });
+        finalizedText = String(finalAi?.output?.text || "");
       } catch {
         finalizedText = "";
       }
@@ -584,9 +613,20 @@ export function createAgentCapabilityModelInvoker({
     });
 
     return {
-      content: finalizedText,
-      output: finalizedText,
-      traces,
+      output: Object.freeze({
+        text: finalizedText,
+        reasoning: "",
+        toolCalls: [],
+        finishReason: "",
+        usage: {},
+      }),
+      execution: Object.freeze({
+        attemptCount: 0,
+        attempts: [],
+        model: { ...modelSpec },
+        provider: {},
+      }),
+      toolTurns: traces,
       turn: maxTurnCount,
       finishedReason: finalizedText ? "max_turn_reached_finalized" : "max_turn_reached",
       toolTurnLimitReached,

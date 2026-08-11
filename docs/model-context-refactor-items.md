@@ -17,11 +17,10 @@
 - 2026-06-13：`npm -w agent test -- --test __tests__/session/context-window-normalizer.test.js __tests__/session/harness-resolve-model-messages.test.js` 通过（实际 agent test 脚本执行 system-core 测试集，77 tests，0 failed）。
 - 2026-06-13：`npm -w plugin/noobot-plugin-harness test` 通过（30 tests，0 failed）。
 
-
 ## 追加收敛
 
 - [x] 8. 收敛 harness 插件侧遗留 fallback：`resolveCapabilityModelMessages` fallback 不再过滤 summarized，不再裁剪；resolver 返回结果保持原样。
-- [x] 9. 收敛 capability invoker：`invokeWithReasoningRetry` 调用前不再额外过滤 summarized 消息。
+- [x] 9. 收敛 capability invoker：`invokeCapabilityModel` 仅负责消息缓存与业务投影，reasoning 重试由 Model Runtime 独占。
 - [x] 10. 收敛 planning context summary fallback：移除插件侧 summarized/dialog/tool-pair 筛选和固定条数裁剪，仅做 role/content 格式转换卫生。
 - [x] 11. 删除/停止导出 harness 插件侧 agent 上下文裁剪 helper 与 `capabilityModelRecentMessageLimit` 遗留配置。
 

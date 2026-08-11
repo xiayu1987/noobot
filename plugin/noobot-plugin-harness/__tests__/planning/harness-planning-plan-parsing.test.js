@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
 import {
   assert,
   assertFlatCapabilityMessages,
@@ -110,7 +111,7 @@ test("harness planning rejects malformed non-plan json text", async () => {
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: { content: "{\"taskChecklist\":[{index:1,task:\"解析附件\"}]}" },
+    ai: { content: '{"taskChecklist":[{index:1,task:"解析附件"}]}' },
     agentContext,
   });
 
@@ -129,8 +130,8 @@ test("harness planning uses plan text flow without json repair", async () => {
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async ({ purpose }) => {
         purposes.push(purpose);
-        if (purpose === "planning_json_repair") return { content: "{}" };
-        return { content: "1. 解析附件\n2. 执行核心任务" };
+        if (purpose === "planning_json_repair") return createTestModelResponse("{}");
+        return createTestModelResponse("1. 解析附件\n2. 执行核心任务");
       },
     },
   );
@@ -166,9 +167,9 @@ test("harness planning requires parseable main plan payload", async () => {
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return {
-          content: '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
-        };
+        return createTestModelResponse(
+          '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
+        );
       },
     },
   );

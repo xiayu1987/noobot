@@ -14,7 +14,7 @@ import {
   buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
-  invokeWithReasoningRetry,
+  invokeCapabilityModel,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   resolveCapabilityModelInvoker,
@@ -49,12 +49,17 @@ export function maybeInjectPhaseAcceptancePrompt(ctx = {}, meta = {}) {
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
   const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
-  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent, protocolContent } = buildAcceptancePromptParts({
+    summaryReportsContents,
+    planContextContent,
+    phaseReportsContents,
+    requestContent,
+    protocolContent,
+  } = buildAcceptancePromptParts({
     bucket,
     state,
     locale,
@@ -111,7 +116,11 @@ export function maybeCapturePhaseAcceptanceByInject(ctx = {}) {
       }
       return {
         applied: Boolean(report),
-        detail: { phaseAcceptanceCount: Array.isArray(bucket.phaseAcceptanceReports) ? bucket.phaseAcceptanceReports.length : 0 },
+        detail: {
+          phaseAcceptanceCount: Array.isArray(bucket.phaseAcceptanceReports)
+            ? bucket.phaseAcceptanceReports.length
+            : 0,
+        },
       };
     },
   });
@@ -133,7 +142,13 @@ export async function runPhaseAcceptanceBySeparateModel(
     return forceRun === true ? false : maybeInjectPhaseAcceptancePrompt(ctx, meta);
   }
   const locale = state?.locale || LOCALE.ZH_CN;
-  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent, protocolContent } = buildAcceptancePromptParts({
+  const {
+    summaryReportsContents,
+    planContextContent,
+    phaseReportsContents,
+    requestContent,
+    protocolContent,
+  } = buildAcceptancePromptParts({
     bucket,
     state,
     locale,
@@ -143,16 +158,18 @@ export async function runPhaseAcceptanceBySeparateModel(
     meta,
     includeWorkflowPolicy: false,
   });
-  const agentMessages = filterHistoricalSummaryRelayMessages(resolveCapabilityModelMessages(meta, {
-    ctx,
-    purpose: "phase_acceptance",
-  }));
+  const agentMessages = filterHistoricalSummaryRelayMessages(
+    resolveCapabilityModelMessages(meta, {
+      ctx,
+      purpose: "phase_acceptance",
+    }),
+  );
   if (shouldRunFromPending) {
     setPendingStateWithMeta(state, "phaseAcceptance", false);
   }
   let response = null;
   try {
-    response = await invokeWithReasoningRetry({
+    response = await invokeCapabilityModel({
       invoker,
       invokePayload: {
         purpose: "phase_acceptance",
@@ -178,13 +195,15 @@ export async function runPhaseAcceptanceBySeparateModel(
           phaseReportsContents,
           requestContent,
           protocolContent,
-          workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, resolveScenarioPolicyFlagsFromContext(ctx, meta)),
+          workflowPolicyPrompt: buildScenarioPolicyPromptText(
+            locale,
+            resolveScenarioPolicyFlagsFromContext(ctx, meta),
+          ),
           ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance"),
       },
-      maxReasoningRetries: 1,
       purpose: "phase_acceptance",
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       appendCapabilityLog,
@@ -206,9 +225,7 @@ export async function runPhaseAcceptanceBySeparateModel(
     });
     return false;
   }
-  const responseText =
-    extractRawTextContent(response?.content) ||
-    String(response?.text || response?.output || "").trim();
+  const responseText = String(response?.output?.text || "").trim();
   if (!responseText) return false;
   appendPhaseAcceptanceReport(bucket, responseText);
   if (state?.flags && typeof state.flags === "object") {
@@ -254,7 +271,13 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   }
   const locale = state?.locale || LOCALE.ZH_CN;
   const requestPayload = buildPhaseAcceptanceRequestPayload({ bucket, state });
-  const { summaryReportsContents, planContextContent, phaseReportsContents, requestContent, protocolContent } = buildAcceptancePromptParts({
+  const {
+    summaryReportsContents,
+    planContextContent,
+    phaseReportsContents,
+    requestContent,
+    protocolContent,
+  } = buildAcceptancePromptParts({
     bucket,
     state,
     locale,
@@ -281,7 +304,7 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
   }
   let response = null;
   try {
-    response = await invokeWithReasoningRetry({
+    response = await invokeCapabilityModel({
       invoker,
       invokePayload: {
         purpose: "phase_acceptance_before_final",
@@ -298,10 +321,12 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
           locale,
           agentMessages: buildCapabilityModelMessages({
             locale,
-            agentMessages: filterHistoricalSummaryRelayMessages(resolveCapabilityModelMessages(meta, {
-              ctx,
-              purpose: "phase_acceptance_before_final",
-            })),
+            agentMessages: filterHistoricalSummaryRelayMessages(
+              resolveCapabilityModelMessages(meta, {
+                ctx,
+                purpose: "phase_acceptance_before_final",
+              }),
+            ),
             constraints: [],
             task: "",
           }),
@@ -310,13 +335,15 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
           phaseReportsContents,
           requestContent,
           protocolContent,
-          workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, resolveScenarioPolicyFlagsFromContext(ctx, meta)),
+          workflowPolicyPrompt: buildScenarioPolicyPromptText(
+            locale,
+            resolveScenarioPolicyFlagsFromContext(ctx, meta),
+          ),
           ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
         }),
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "phase_acceptance_before_final"),
       },
-      maxReasoningRetries: 1,
       purpose: "phase_acceptance_before_final",
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
       appendCapabilityLog,
@@ -338,10 +365,9 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
     });
     return false;
   }
-  const responseText =
-    extractRawTextContent(response?.content) ||
-    String(response?.text || response?.output || "").trim();
-  const reportText = responseText || buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
+  const responseText = String(response?.output?.text || "").trim();
+  const reportText =
+    responseText || buildFinalOutputFallbackPhaseAcceptanceText(locale, bucket, state);
   const report = appendPhaseAcceptanceReport(bucket, reportText);
   if (!report) return false;
   if (state?.flags && typeof state.flags === "object") {

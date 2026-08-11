@@ -1,0 +1,17 @@
+{
+  "name": "@noobot/model-protocol",
+  "version": "4.1.6",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./protocol": "./src/protocol/index.js",
+    "./policy": "./src/policy/index.js",
+    "./ports": "./src/ports/index.js",
+    "./validation": "./src/validation/index.js"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  }
+}

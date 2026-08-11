@@ -4,35 +4,91 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  createModelContext,
-  resolveModelFinalMessages,
-} from "@noobot/context-protocol";
+import { createModelContext, resolveModelFinalMessages } from "@noobot/context-protocol";
 import { createHookManager } from "@noobot/hook-protocol";
 import {
   attachmentTransfer,
   directTransfer,
   TRANSFER_DIRECTION,
 } from "@noobot/semantic-transfer-protocol";
+import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 let testScopeSequence = 0;
 let testTransferSequence = 0;
+let testModelResponseSequence = 0;
+
+export function createTestModelResponse(
+  text,
+  {
+    reasoning = "",
+    toolCalls = [],
+    finishReason = "stop",
+    usage = {},
+    attempts = null,
+    identity = {},
+  } = {},
+) {
+  testModelResponseSequence += 1;
+  const sequence = testModelResponseSequence;
+  const output = {
+    text: String(text ?? ""),
+    reasoning: String(reasoning ?? ""),
+    toolCalls: Array.isArray(toolCalls) ? toolCalls : [],
+    finishReason: String(finishReason ?? ""),
+    usage: usage && typeof usage === "object" && !Array.isArray(usage) ? usage : {},
+  };
+  const normalizedAttempts =
+    Array.isArray(attempts) && attempts.length
+      ? attempts
+      : [{ attempt: 1, status: "completed", kind: "response", streaming: false, output }];
+  return createModelResponse({
+    invocation: {
+      requestId: `test-model-request-${sequence}`,
+      invocationId: `test-model-invocation-${sequence}`,
+      sessionId: String(identity.sessionId || `test-model-session-${sequence}`),
+      parentSessionId: String(identity.parentSessionId || ""),
+      dialogProcessId: String(identity.dialogProcessId || `test-model-dialog-${sequence}`),
+      turnScopeId: String(identity.turnScopeId || `test-model-turn-${sequence}`),
+      runId: String(identity.runId || `test-model-run-${sequence}`),
+      flow: "harness.test",
+      purpose: "harness_test",
+      domain: "test",
+      contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+    },
+    output,
+    attemptCount: normalizedAttempts.length,
+    attempts: normalizedAttempts,
+    model: {
+      model: "test-model",
+      format: "openai_compatible",
+      providerId: "test-provider",
+      adapterId: "openai-compatible",
+    },
+    provider: {
+      providerId: "test-provider",
+      adapterId: "openai-compatible",
+      format: "openai_compatible",
+    },
+  });
+}
 
 function initializeTestSemanticTransfer(agentContext = {}) {
   const runtime = agentContext?.bindings?.runtime;
   if (!runtime || typeof runtime !== "object") return;
-  const sharedTools = runtime.sharedTools && typeof runtime.sharedTools === "object"
-    ? runtime.sharedTools
-    : (runtime.sharedTools = {});
+  const sharedTools =
+    runtime.sharedTools && typeof runtime.sharedTools === "object"
+      ? runtime.sharedTools
+      : (runtime.sharedTools = {});
   if (typeof sharedTools?.semanticTransfer?.transferSemanticContent === "function") return;
   sharedTools.semanticTransfer = {
     async transferSemanticContent(payload = {}) {
       testTransferSequence += 1;
       const identitySource = agentContext?.context?.identity || {};
       const sessionId = String(identitySource.sessionId || "").trim();
-      const producer = payload?.producer && typeof payload.producer === "object"
-        ? payload.producer
-        : { type: "plugin", id: "harness-test" };
+      const producer =
+        payload?.producer && typeof payload.producer === "object"
+          ? payload.producer
+          : { type: "plugin", id: "harness-test" };
       const common = {
         transferId: `test-transfer-${testTransferSequence}`,
         messageId: `test-transfer-message-${testTransferSequence}`,
@@ -55,29 +111,34 @@ function initializeTestSemanticTransfer(agentContext = {}) {
         (payload.fullText !== undefined || payload.summaryText !== undefined)
       ) {
         const injectMode = String(payload.injectMode || "full").trim();
-        const content = injectMode === "summary"
-          ? String(payload.summaryText || "")
-          : String(payload.fullText || payload.summaryText || "");
+        const content =
+          injectMode === "summary"
+            ? String(payload.summaryText || "")
+            : String(payload.fullText || payload.summaryText || "");
         return { transferEnvelopes: [directTransfer({ ...common, content })] };
       }
       const content = String(payload.detail || payload.content || payload.text || "");
       const name = String(payload.name || `harness-test-${testTransferSequence}.md`).trim();
       return {
-        transferEnvelopes: [attachmentTransfer({
-          ...common,
-          attachments: [{
-            identity: {
-              attachmentId: `test-attachment-${testTransferSequence}`,
-              sessionId,
-              attachmentSource: String(payload.attachmentSource || "model").trim(),
-            },
-            role: "primary",
-            name,
-            mimeType: String(payload.mimeType || "text/plain").trim(),
-            size: Buffer.byteLength(content, "utf8"),
-          }],
-          meta: { persisted: true },
-        })],
+        transferEnvelopes: [
+          attachmentTransfer({
+            ...common,
+            attachments: [
+              {
+                identity: {
+                  attachmentId: `test-attachment-${testTransferSequence}`,
+                  sessionId,
+                  attachmentSource: String(payload.attachmentSource || "model").trim(),
+                },
+                role: "primary",
+                name,
+                mimeType: String(payload.mimeType || "text/plain").trim(),
+                size: Buffer.byteLength(content, "utf8"),
+              },
+            ],
+            meta: { persisted: true },
+          }),
+        ],
       };
     },
   };
@@ -85,32 +146,31 @@ function initializeTestSemanticTransfer(agentContext = {}) {
 
 export function ensureTestAgentExecutionScope(ctx = {}) {
   if (!ctx || typeof ctx !== "object") return null;
-  const agentContext = ctx.agentContext && typeof ctx.agentContext === "object"
-    ? ctx.agentContext
-    : null;
+  const agentContext =
+    ctx.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
   if (!agentContext) return null;
-  const bindings = agentContext.bindings && typeof agentContext.bindings === "object"
-    ? agentContext.bindings
-    : (agentContext.bindings = {});
+  const bindings =
+    agentContext.bindings && typeof agentContext.bindings === "object"
+      ? agentContext.bindings
+      : (agentContext.bindings = {});
   const legacyRuntime = agentContext?.execution?.controllers?.runtime;
   if (!bindings.runtime || typeof bindings.runtime !== "object") {
-    bindings.runtime = legacyRuntime && typeof legacyRuntime === "object"
-      ? legacyRuntime
-      : {};
+    bindings.runtime = legacyRuntime && typeof legacyRuntime === "object" ? legacyRuntime : {};
   }
   if (!Array.isArray(bindings.tools)) {
     bindings.tools = Array.isArray(agentContext?.payload?.tools?.registry)
       ? agentContext.payload.tools.registry
       : [];
   }
-  const extensions = bindings.extensions && typeof bindings.extensions === "object"
-    ? bindings.extensions
-    : (bindings.extensions = {});
+  const extensions =
+    bindings.extensions && typeof bindings.extensions === "object"
+      ? bindings.extensions
+      : (bindings.extensions = {});
   if (!extensions.harness || typeof extensions.harness !== "object") {
-    extensions.harness = agentContext?.payload?.harness &&
-      typeof agentContext.payload.harness === "object"
-      ? agentContext.payload.harness
-      : {};
+    extensions.harness =
+      agentContext?.payload?.harness && typeof agentContext.payload.harness === "object"
+        ? agentContext.payload.harness
+        : {};
   }
   if (!agentContext.context || typeof agentContext.context !== "object") {
     testScopeSequence += 1;
@@ -142,18 +202,23 @@ export function ensureTestAgentExecutionScope(ctx = {}) {
 export function ensureTestHookContext(ctx = {}) {
   if (!ctx || typeof ctx !== "object") return ctx;
   const agentContext = ensureTestAgentExecutionScope(ctx);
-  const explicitIdentity = ctx.activeTurnIdentity && typeof ctx.activeTurnIdentity === "object"
-    ? ctx.activeTurnIdentity
-    : null;
-  const dialogProcessId = resolveDialogProcessId(ctx) ||
+  const explicitIdentity =
+    ctx.activeTurnIdentity && typeof ctx.activeTurnIdentity === "object"
+      ? ctx.activeTurnIdentity
+      : null;
+  const dialogProcessId =
+    resolveDialogProcessId(ctx) ||
     String(explicitIdentity?.dialogProcessId || "test-dialog").trim();
-  const turnScopeId = resolveTurnScopeId(ctx) ||
+  const turnScopeId =
+    resolveTurnScopeId(ctx) ||
     String(explicitIdentity?.turnScopeId || `test-turn:${dialogProcessId}`).trim();
   const activeTurnIdentity = { dialogProcessId, turnScopeId };
   const stampRoundIdentity = (messages = []) => {
     for (const message of Array.isArray(messages) ? messages : []) {
       if (!message || typeof message !== "object") continue;
-      const role = String(message?.role || message?.type || "").trim().toLowerCase();
+      const role = String(message?.role || message?.type || "")
+        .trim()
+        .toLowerCase();
       if (role === "system" || role === "developer") continue;
       if (!String(message.dialogProcessId || "").trim()) message.dialogProcessId = dialogProcessId;
       if (!String(message.turnScopeId || "").trim()) message.turnScopeId = turnScopeId;
@@ -163,13 +228,13 @@ export function ensureTestHookContext(ctx = {}) {
   stampRoundIdentity(ctx.messageBlocks?.history);
   stampRoundIdentity(ctx.messageBlocks?.incremental);
   if (ctx.modelContext?.protocolVersion !== 2) {
-    const explicitMessageBlocks = ctx.messageBlocks || (
-      !ctx.messageStore && !Array.isArray(ctx.messages)
+    const explicitMessageBlocks =
+      ctx.messageBlocks ||
+      (!ctx.messageStore && !Array.isArray(ctx.messages)
         ? { system: [], history: [], incremental: [] }
-        : null
-    );
+        : null);
     ctx.modelContext = createModelContext({
-      messages: explicitMessageBlocks ? null : (Array.isArray(ctx.messages) ? ctx.messages : null),
+      messages: explicitMessageBlocks ? null : Array.isArray(ctx.messages) ? ctx.messages : null,
       messageBlocks: explicitMessageBlocks,
       activeTurnIdentity,
     });
@@ -209,18 +274,18 @@ export function getTestContextMessages(ctx = {}) {
 }
 
 export function getTestContextMessageBlocks(ctx = {}) {
-  return ctx?.modelContext?.messageBlocks || {
-    system: [],
-    history: [],
-    incremental: [],
-  };
+  return (
+    ctx?.modelContext?.messageBlocks || {
+      system: [],
+      history: [],
+      incremental: [],
+    }
+  );
 }
 
 function resolveDialogProcessId(ctx = {}) {
   return String(
-    ctx?.dialogProcessId ||
-      ctx?.agentContext?.context?.identity?.dialogProcessId ||
-      "",
+    ctx?.dialogProcessId || ctx?.agentContext?.context?.identity?.dialogProcessId || "",
   ).trim();
 }
 

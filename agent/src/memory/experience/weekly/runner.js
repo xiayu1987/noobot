@@ -9,7 +9,7 @@ import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
 
 export async function runWeeklySummaryIfNeeded({
   storage,
-  llm = null,
+  invokeModel = null,
   promptI18n = {},
   abortSignal = null,
   basePath = "",
@@ -22,7 +22,7 @@ export async function runWeeklySummaryIfNeeded({
   readExperienceModel,
   upsertModelEntries,
 } = {}) {
-  if (!basePath || !llm) return false;
+  if (!basePath || typeof invokeModel !== "function") return false;
   let hasWrittenSummary = false;
   while (true) {
     const dateDirs = await listDateDirs(basePath);
@@ -48,8 +48,12 @@ export async function runWeeklySummaryIfNeeded({
       });
       let parsedSummary = { domain_name: domainName, categories: [] };
       try {
-        const res = await llm.invoke([{ role: "user", content: prompt }], { signal: abortSignal });
-        parsedSummary = normalizeWeeklySummary(res?.content, domainName, { basePath });
+        const output = await invokeModel({
+          prompt,
+          flow: "memory.experience.weekly",
+          purpose: "memory_experience_weekly",
+        });
+        parsedSummary = normalizeWeeklySummary(output.text, domainName, { basePath });
       } catch (error) {
         if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
         parsedSummary = { domain_name: domainName, categories: [] };
@@ -63,9 +67,8 @@ export async function runWeeklySummaryIfNeeded({
         sourceDates: targetDates,
       });
       if (!saved) continue;
-      const modelEntries = (Array.isArray(parsedSummary?.categories)
-        ? parsedSummary.categories
-        : []
+      const modelEntries = (
+        Array.isArray(parsedSummary?.categories) ? parsedSummary.categories : []
       ).map((item) => ({
         domain_name: parsedSummary.domain_name || domainName,
         category_name: item?.category_name,

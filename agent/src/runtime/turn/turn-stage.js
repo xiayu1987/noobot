@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { filterForModelContext } from "@noobot/context-protocol/message-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { mergeConfig, normalizeBooleanLike, resolveRunConfigValue } from "../../config/index.js";
 import { emitEvent } from "../../events/index.js";
-import { createChatModelFromSpec } from "../../models/index.js";
-import { invokeLlmWithTransientRetry, normalizeAiTextContent } from "../llm-invoker.js";
 import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
 
 function shouldUseFinalStreaming(modelState = {}) {
@@ -17,10 +16,7 @@ function shouldUseFinalStreaming(modelState = {}) {
     runtime?.runConfig && typeof runtime.runConfig === "object" && !Array.isArray(runtime.runConfig)
       ? runtime.runConfig
       : {};
-  const effectiveConfig = mergeConfig(
-    modelState?.globalConfig || {},
-    modelState?.userConfig || {},
-  );
+  const effectiveConfig = mergeConfig(modelState?.globalConfig || {}, modelState?.userConfig || {});
   return resolveRunConfigValue({
     runConfig,
     config: effectiveConfig,
@@ -29,31 +25,6 @@ function shouldUseFinalStreaming(modelState = {}) {
     fallback: false,
   });
 }
-
-function createFinalStreamingLlm(modelState = {}) {
-  return createChatModelFromSpec(
-    {
-      ...(modelState?.defaultModelSpec || {}),
-      ...(modelState?.activeModelName
-        ? { model: String(modelState.activeModelName || "").trim() }
-        : {}),
-      ...(modelState?.activeModelAlias
-        ? { alias: String(modelState.activeModelAlias || "").trim() }
-        : {}),
-    },
-    {
-      streaming: true,
-      context: {
-        runtime: modelState?.runtime || {},
-        agentContext: modelState?.agentContext || null,
-        sessionId: String(
-          modelState?.runtime?.systemRuntime?.sessionId || modelState?.runtime?.sessionId || "",
-        ).trim(),
-      },
-    },
-  );
-}
-
 export async function maybeInvokeFinalStreamingNoTools({
   modelState,
   baseMessages = [],
@@ -71,44 +42,28 @@ export async function maybeInvokeFinalStreamingNoTools({
   }
 
   const { eventListener, runtime, abortSignal } = modelState;
-  let streamingLlm = null;
-  try {
-    streamingLlm = createFinalStreamingLlm(modelState);
-  } catch (error) {
-    emitEvent(eventListener, "llm_final_stream_create_failed_fallback_non_streaming", {
-      turn,
-      mode,
-      error: error?.message || String(error),
-    });
-    return {
-      ai: fallbackAi,
-      text: String(fallbackText || ""),
-      streamed: false,
-    };
-  }
-
   emitEvent(eventListener, "llm_final_stream_start", { turn, mode });
   try {
     const modelMessages = filterForModelContext(baseMessages);
-    const streamedAi = await invokeLlmWithTransientRetry({
-      modelState,
-      turn,
-      mode,
-      invoke: ({ callbacks }) =>
-        streamingLlm.invoke(modelMessages, {
-          callbacks,
-          signal: abortSignal,
-          ...resolveNonThinkingCallOverrides(
-            runtime,
-            "none",
-            modelState?.defaultModelSpec || {},
-          ),
-        }),
+    const streamedResponse = await modelState.modelPort.invoke({
+      messages: modelMessages,
+      options: {
+        streaming: true,
+        callbacks: runtime?.modelCallbacks,
+        signal: abortSignal,
+        invoke: {
+          ...resolveNonThinkingCallOverrides(runtime, "none", modelState?.defaultModelSpec || {}),
+        },
+      },
+      invocation: {
+        flow: "agent.main",
+        purpose: mode,
+        domain: "primary",
+        contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+      },
     });
-    const streamedText = normalizeAiTextContent(streamedAi?.content, {
-      additionalKwargs: streamedAi?.additional_kwargs ?? null,
-      allowReasoningFallback: false,
-    });
+    const streamedAi = streamedResponse.output;
+    const streamedText = String(streamedAi.text || "");
     emitEvent(eventListener, "llm_final_stream_end", {
       turn,
       mode,
@@ -132,15 +87,4 @@ export async function maybeInvokeFinalStreamingNoTools({
       streamed: false,
     };
   }
-}
-
-export function buildReasoningRetrySystemMessage(reasoningText = "", locale = "zh-CN") {
-  const isEn = String(locale || "").trim().toLowerCase() === "en-us";
-  return [
-    "<!-- noobot-reasoning-retry -->",
-    isEn
-      ? "The prior model reasoning is reference-only, not final answer. Return final answer directly."
-      : "以下是上次模型返回的思考内容，仅供参考，不代表最终答案。请直接给出最终答案。",
-    String(reasoningText || "").trim(),
-  ].join("\n");
 }

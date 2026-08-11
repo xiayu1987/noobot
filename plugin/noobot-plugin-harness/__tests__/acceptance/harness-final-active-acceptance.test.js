@@ -12,6 +12,7 @@ import path from "node:path";
 import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
+  createTestModelResponse,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
@@ -74,7 +75,7 @@ test("final acceptance separate model receives revised plan, all phase checklist
         acceptance: { semanticValidation: true },
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1 status=pass 总体验收通过" };
+          return createTestModelResponse("ADD A1 plan=1 status=pass 总体验收通过");
         },
       },
     },
@@ -138,8 +139,8 @@ test("harness active request_task_acceptance semantic validation receives agent 
       resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return {
-          content: JSON.stringify({
+        return createTestModelResponse(
+          JSON.stringify({
             status: "pass",
             consistent: true,
             checklistCoverage: [],
@@ -147,7 +148,7 @@ test("harness active request_task_acceptance semantic validation receives agent 
             unsupportedClaims: [],
             suggestions: [],
           }),
-        };
+        );
       },
     },
   );
@@ -205,8 +206,8 @@ test("harness active request_task_acceptance falls back to closure meta when con
       resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return {
-          content: JSON.stringify({
+        return createTestModelResponse(
+          JSON.stringify({
             status: "pass",
             consistent: true,
             checklistCoverage: [],
@@ -214,7 +215,7 @@ test("harness active request_task_acceptance falls back to closure meta when con
             unsupportedClaims: [],
             suggestions: [],
           }),
-        };
+        );
       },
     },
   );

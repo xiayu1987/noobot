@@ -6,6 +6,7 @@
 import { loadGlobalConfig } from "./global-config-loader.js";
 import { normalizeKnownConfigKeys } from "@noobot/agent-config-protocol";
 import { resolveConfigSecrets } from "./config-secret-resolver.js";
+import { normalizeConfiguredModelProviders } from "./model-config-normalizer.js";
 
 function cloneConfig(value) {
   if (value === null || value === undefined) return value;
@@ -166,7 +167,7 @@ export function createGlobalConfigBuilder({
       loadOptions,
     };
     const migrationResult = await applyMigrations(rawConfig, buildContext);
-    const migratedRawConfig = migrationResult.config || {};
+    const migratedRawConfig = normalizeConfiguredModelProviders(migrationResult.config || {});
     const resolvedConfig = resolveConfigSecretsFn(migratedRawConfig, { configParams, env });
     resolvedConfig.configParams = { ...configParams };
     const warnings = await runValidators({

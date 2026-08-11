@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -45,7 +46,7 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        return { content: "小结完成" };
+        return createTestModelResponse("小结完成");
       },
     },
   };
@@ -54,13 +55,21 @@ test("separate_model mode: when turn-summary and revision are both pending, plan
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
   assert.equal(invocations.length >= 1, true);
   assert.equal(invocations[0]?.purpose, "planning_revision");
-  assert.equal(invocations.some((item = {}) => item.purpose === "planning_revision"), true);
-  assert.equal(invocations.some((item = {}) => item.purpose === "summary"), true);
+  assert.equal(
+    invocations.some((item = {}) => item.purpose === "planning_revision"),
+    true,
+  );
+  assert.equal(
+    invocations.some((item = {}) => item.purpose === "summary"),
+    true,
+  );
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
   assert.equal(
-    ctx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    ctx.modelContext.messages.some((msg = {}) =>
+      String(msg?.content || "").includes("harness-planning-revision"),
+    ),
     false,
   );
 });
@@ -79,17 +88,22 @@ test("separate_model mode: pending revision runs by separate model without promp
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        if (payload.purpose === "planning_revision") return { content: "" };
-        return { content: "" };
+        if (payload.purpose === "planning_revision") return createTestModelResponse("");
+        return createTestModelResponse("");
       },
     },
   };
 
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
-  assert.equal(invocations.some((item = {}) => item.purpose === "planning_revision"), true);
   assert.equal(
-    ctx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    invocations.some((item = {}) => item.purpose === "planning_revision"),
+    true,
+  );
+  assert.equal(
+    ctx.modelContext.messages.some((msg = {}) =>
+      String(msg?.content || "").includes("harness-planning-revision"),
+    ),
     false,
   );
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
@@ -114,12 +128,12 @@ test("separate_model simultaneous plan update follows up with summary before ana
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
         if (payload.purpose === "planning_revision") {
-          return { content: "1. 主任务\n2. 补充执行" };
+          return createTestModelResponse("1. 主任务\n2. 补充执行");
         }
         if (payload.pluginFlow === "analysis") {
-          return { content: "疑点：计划更新后还有待确认项。" };
+          return createTestModelResponse("疑点：计划更新后还有待确认项。");
         }
-        return { content: "小结完成" };
+        return createTestModelResponse("小结完成");
       },
     },
   };
@@ -135,11 +149,17 @@ test("separate_model simultaneous plan update follows up with summary before ana
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
   assert.equal(agentContext.payload.harness.state.pending.summary, false);
   assert.equal(
-    ctx.modelContext.messages.some((item = {}) => item?.pluginFlow === "analysis" && String(item?.content || "").includes("疑点")),
+    ctx.modelContext.messages.some(
+      (item = {}) =>
+        item?.pluginFlow === "analysis" && String(item?.content || "").includes("疑点"),
+    ),
     false,
   );
   assert.equal(
-    ctx.modelContext.messages.some((item = {}) => item?.purpose === "summary" && String(item?.content || "").includes("小结完成")),
+    ctx.modelContext.messages.some(
+      (item = {}) =>
+        item?.purpose === "summary" && String(item?.content || "").includes("小结完成"),
+    ),
     true,
   );
   const executionLog = agentContext.payload.harness.logs.guidance.find(
