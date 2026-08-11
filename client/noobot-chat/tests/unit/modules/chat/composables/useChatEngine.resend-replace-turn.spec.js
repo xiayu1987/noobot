@@ -710,7 +710,7 @@ describe("useChatEngine.resend replace turn", () => {
       status: 409,
       statusText: "Conflict",
       error: "session version conflict",
-      errorCode: "SESSION_VERSION_CONFLICT",
+      errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
     }));
     const applySessionDetail = vi.fn((detail) => {
       const mainSession = detail.sessions?.[0] || {};

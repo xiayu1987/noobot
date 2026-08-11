@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { buildChatPayload } from "./payload.js";
-import { getCurrentSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
+import { createSessionAggregateVersionManager } from "./sessionAggregateVersionManager.js";
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
 import { applySendErrorState, finalizeSendCleanup } from "./sendFinalize.js";
 import { prepareChatSend } from "./sendPrepare.js";
@@ -94,6 +94,12 @@ export function createChatEngineSender({
   finalizePendingResendOperation,
 }) {
   const logSessionEvent = (event = {}) => sessionLogWebSocketClient?.log?.(event);
+  const sessionAggregateVersionManager = createSessionAggregateVersionManager({
+    activeSession,
+    fetchSessionDetail,
+    applySessionDetail: (detail) => applySessionDetail(detail, { scrollToBottom: false }),
+    log: logResendDebug,
+  });
   return async function send(options = {}) {
     const explicitMessageText =
       typeof options?.messageText === "string" ? options.messageText.trim() : "";
@@ -232,12 +238,12 @@ export function createChatEngineSender({
       const attachments = explicitTransportAttachments || (await serializeAttachments(filesToSend));
       const requestedTextStreaming = streamOutput?.value === true;
 
-      const buildPayloadForCurrentVersion = () =>
+      const buildPayloadForCurrentVersion = ({ expectedAggregateVersion } = {}) =>
         buildChatPayload({
           activeSession,
           message: text,
           commandId: turnScopeId,
-          expectedAggregateVersion: getCurrentSessionAggregateVersion(activeSession) ?? 0,
+          expectedAggregateVersion: expectedAggregateVersion ?? 0,
           attachments,
           allowUserInteraction,
           safeConfirmLevel,
@@ -263,7 +269,9 @@ export function createChatEngineSender({
           uploadHint: translate("chat.uploadHint"),
           reuseExistingUserTurn,
         });
-      const payload = buildPayloadForCurrentVersion();
+      let payload = buildPayloadForCurrentVersion({
+        expectedAggregateVersion: sessionAggregateVersionManager.getVersion(),
+      });
       logSessionEvent({
         category: "transport",
         event: "stream.start",
@@ -353,29 +361,21 @@ export function createChatEngineSender({
       });
       const streamOnce = (streamPayload) =>
         chatWebSocketClient.stream(streamPayload, handleStreamEvent);
-      try {
-        await streamOnce(payload);
-        // The stream transport may resolve before the terminal lookup does.
-        // Await a stable snapshot of the promises observed during the stream;
-        // a resolution may schedule a newer one, so drain until quiescent.
-        while (pendingAuthorityResolutions.length > 0) {
-          await Promise.all([...pendingAuthorityResolutions]);
-        }
-      } catch (streamError) {
-        const errorData = streamError?.data || lastStreamErrorEventData || {};
-        const versionConflict =
-          normalizeTrimmedString(errorData?.errorCode) === "SESSION_VERSION_CONFLICT";
-        if (versionConflict) {
-          const detail = await fetchSessionDetail(sessionId, {
-            source: "sendVersionConflict",
-            force: true,
-            reuseRecentlyLoaded: false,
-          }).catch(() => null);
-          if (detail) {
-            applySessionDetail(detail, { scrollToBottom: false });
-          }
-        }
-        throw streamError;
+      const streamResult = await sessionAggregateVersionManager.runAggregateVersionedStream({
+        buildPayload: buildPayloadForCurrentVersion,
+        stream: streamOnce,
+        refreshOptions: {
+          sessionId,
+          detailOptions: { source: "sendVersionConflict" },
+          logContext: { turnScopeId },
+        },
+      });
+      payload = streamResult.payload;
+      // The stream transport may resolve before the terminal lookup does.
+      // Await a stable snapshot of the promises observed during the stream;
+      // a resolution may schedule a newer one, so drain until quiescent.
+      while (pendingAuthorityResolutions.length > 0) {
+        await Promise.all([...pendingAuthorityResolutions]);
       }
       logStateMachineDebug("stateMachine.stream.resolved", () => ({
         sessionId,
