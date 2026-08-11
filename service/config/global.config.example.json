@@ -214,7 +214,9 @@
       },
       "top_p": 0.95,
       "frequency_penalty": 0.1,
-      "presence_penalty": 0.1
+      "presence_penalty": 0.1,
+      "providerId": "anthropic",
+      "adapterId": "openai-compatible"
     },
     "gpt_5_5": {
       "enabled": true,
@@ -237,7 +239,9 @@
       },
       "top_p": 0.95,
       "frequency_penalty": 0.1,
-      "presence_penalty": 0.1
+      "presence_penalty": 0.1,
+      "providerId": "openai",
+      "adapterId": "openai-compatible"
     },
     "gpt_5_6_sol": {
       "enabled": true,
@@ -260,7 +264,9 @@
       },
       "top_p": 0.95,
       "frequency_penalty": 0.1,
-      "presence_penalty": 0.1
+      "presence_penalty": 0.1,
+      "providerId": "openai",
+      "adapterId": "openai-compatible"
     },
     "nano_banana": {
       "enabled": true,
@@ -278,11 +284,11 @@
         "support_understanding": false,
         "support_generation": {
           "enabled": true,
-          "support_scope": [
-            "image"
-          ]
+          "support_scope": ["image"]
         }
-      }
+      },
+      "providerId": "gemini",
+      "adapterId": "openai-compatible"
     },
     "qwen3_5_omni_plus": {
       "enabled": true,
@@ -305,7 +311,9 @@
       },
       "top_p": 0.9,
       "frequency_penalty": 0.3,
-      "presence_penalty": 0.2
+      "presence_penalty": 0.2,
+      "providerId": "dashscope",
+      "adapterId": "dashscope"
     },
     "GLM_5_1": {
       "enabled": true,
@@ -328,7 +336,9 @@
       },
       "top_p": 0.9,
       "frequency_penalty": 0.3,
-      "presence_penalty": 0.2
+      "presence_penalty": 0.2,
+      "providerId": "zhipu",
+      "adapterId": "dashscope"
     }
   },
   "services": {

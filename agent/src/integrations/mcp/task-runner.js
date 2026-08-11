@@ -4,21 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import {
-  createChatModel,
-  createChatModelByName,
-  normalizeToolCalls,
-  resolveDefaultModelSpec,
-  resolveModelSpecByName,
-} from "../../models/index.js";
+import { normalizeToolCalls } from "../../models/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { getMcpServerByName, createMcpClient } from "./client-factory.js";
 import { buildLangChainMcpTools } from "./tool-adapter.js";
-import { resolveBoundToolModelRequestOverrides } from "../../runtime/turn/tool-choice-strategy.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 function toText(content) {
   if (typeof content === "string") return content;
@@ -57,9 +50,7 @@ export async function createMcpAgentTools({
     mcpName: server.name,
     server,
     tools,
-    toolNames: mcpTools
-      .map((item) => String(item?.name || "").trim())
-      .filter(Boolean),
+    toolNames: mcpTools.map((item) => String(item?.name || "").trim()).filter(Boolean),
   };
 }
 
@@ -101,40 +92,11 @@ export async function executeMcpTask({
     };
   }
 
-  const llm = modelName
-    ? createChatModelByName(modelName, {
-        globalConfig,
-        userConfig,
-        streaming: false,
-        context: { runtime },
-        invocation: {
-          flow: "mcp.task",
-          purpose: "mcp_tool_execution",
-          domain: "mcp",
-          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-        },
-      })
-    : createChatModel({
-        globalConfig,
-        userConfig,
-        streaming: false,
-        context: { runtime },
-        invocation: {
-          flow: "mcp.task",
-          purpose: "mcp_tool_execution",
-          domain: "mcp",
-          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-        },
-      });
-  const modelSpec = modelName
-    ? resolveModelSpecByName({
-        modelName,
-        globalConfig,
-        userConfig,
-        fallbackToDefault: false,
-      })
-    : resolveDefaultModelSpec({ globalConfig, userConfig });
-  const boundToolOverrides = resolveBoundToolModelRequestOverrides(modelSpec || {});
+  const modelPort = runtime?.modelPort;
+  const modelSpec = runtime?.modelSpec;
+  if (!modelPort || typeof modelPort.invoke !== "function" || !modelSpec) {
+    throw new TypeError("MCP model execution requires the host ModelPort and resolved modelSpec");
+  }
   const toolMap = new Map(langchainTools.map((tool) => [tool.name, tool]));
 
   const messages = [
@@ -151,18 +113,27 @@ export async function executeMcpTask({
   const traces = [];
   const maxTurns = TURN_THRESHOLDS.subTasks.mcpTaskMaxTurns;
   for (let turn = 1; turn <= maxTurns; turn += 1) {
-    const ai = await llm.bindTools(langchainTools).invoke(messages, {
-      signal: signal || undefined,
-      ...boundToolOverrides,
+    const ai = await modelPort.invoke({
+      model: modelSpec,
+      messages,
+      tools: langchainTools,
+      options: { streaming: false, signal: signal || undefined },
+      invocation: {
+        flow: "mcp.task",
+        purpose: "mcp_tool_execution",
+        domain: "mcp",
+        contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+      },
     });
-    messages.push(ai);
-    const { calls } = normalizeToolCalls(ai);
+    const output = ai.output;
+    messages.push({ role: "assistant", content: output.text, tool_calls: output.toolCalls || [] });
+    const calls = Array.isArray(output.toolCalls) ? output.toolCalls : [];
     if (!calls.length) {
       return {
         ok: true,
         mcpName: server.name,
         tools: toolNames,
-        answer: toText(ai?.content || ""),
+        answer: String(output.text || ""),
         traces,
       };
     }

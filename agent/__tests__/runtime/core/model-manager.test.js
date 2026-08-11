@@ -25,18 +25,21 @@ test("resolveCurrentModelInfo should return trimmed alias/name", () => {
 
 test("createStreamingCallbacks should emit llm_delta event", async () => {
   const events = [];
-  const callbacks = createStreamingCallbacks({
-    onEvent(payload = {}) {
-      events.push(payload);
+  const callbacks = createStreamingCallbacks(
+    {
+      onEvent(payload = {}) {
+        events.push(payload);
+      },
     },
-  }, {
-    systemRuntime: {
-      sessionId: "session-1",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
-      messageEventStream: { sequence: 0, activeMessageId: "message-1" },
+    {
+      systemRuntime: {
+        sessionId: "session-1",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+        messageEventStream: { sequence: 0, activeMessageId: "message-1" },
+      },
     },
-  });
+  );
   assert.equal(Array.isArray(callbacks), true);
   await callbacks[0].handleLLMNewToken("hello");
   assert.equal(events.length, 1);
@@ -58,11 +61,14 @@ test("stream visibility filtering happens before authoritative sequence allocati
       },
     },
   };
-  const [callback] = createStreamingCallbacks({
-    onEvent(payload = {}) {
-      events.push(payload);
+  const [callback] = createStreamingCallbacks(
+    {
+      onEvent(payload = {}) {
+        events.push(payload);
+      },
     },
-  }, runtime);
+    runtime,
+  );
 
   await callback.handleLLMNewToken("<thi");
   await callback.handleLLMNewToken("nk>hidden");
@@ -96,10 +102,18 @@ test("resolveLlmForTurn should switch model by runtimeModel and emit model_switc
       globalConfig: {
         defaultProvider: "openai",
         providers: {
-          openai: { model: "gpt-4o", format: "openai_compatible", enabled: true },
+          openai: {
+            model: "gpt-4o",
+            format: "openai_compatible",
+            providerId: "openai",
+            adapterId: "openai-compatible",
+            enabled: true,
+          },
           anthropic: {
             model: "gpt-4.1-mini",
             format: "openai_compatible",
+            providerId: "anthropic",
+            adapterId: "openai-compatible",
             enabled: true,
           },
         },
@@ -115,7 +129,8 @@ test("resolveLlmForTurn should switch model by runtimeModel and emit model_switc
 
     assert.equal(modelState.activeModelAlias, "anthropic");
     assert.equal(modelState.activeModelName, "gpt-4.1-mini");
-    assert.notEqual(modelState.llm?.id, "old-llm");
+    assert.equal(modelState.llm?.id, "old-llm");
+    assert.equal(modelState.activeModelSpec?.providerId, "anthropic");
     const switched = events.find((item) => item?.event === "model_switched");
     assert.ok(switched);
     assert.equal(switched?.data?.alias, "anthropic");
@@ -129,7 +144,7 @@ test("resolveLlmForTurn should switch model by runtimeModel and emit model_switc
   }
 });
 
-test("resolveLlmForTurn should recreate llm from selected defaultModelSpec without resolving global default", () => {
+test("resolveLlmForTurn should select the canonical defaultModelSpec without creating a model client", () => {
   const previousApiKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "test-key";
   try {
@@ -150,11 +165,15 @@ test("resolveLlmForTurn should recreate llm from selected defaultModelSpec witho
           scenario_default: {
             model: "scenario-default-model",
             format: "openai_compatible",
+            providerId: "scenario_default",
+            adapterId: "openai-compatible",
             enabled: true,
           },
           selected_alias: {
             model: "selected-model",
             format: "openai_compatible",
+            providerId: "selected_alias",
+            adapterId: "openai-compatible",
             enabled: true,
           },
         },
@@ -164,6 +183,8 @@ test("resolveLlmForTurn should recreate llm from selected defaultModelSpec witho
         alias: "selected_alias",
         model: "selected-model",
         format: "openai_compatible",
+        providerId: "selected_alias",
+        adapterId: "openai-compatible",
         enabled: true,
       },
     };
@@ -172,7 +193,8 @@ test("resolveLlmForTurn should recreate llm from selected defaultModelSpec witho
 
     assert.equal(modelState.activeModelAlias, "selected_alias");
     assert.equal(modelState.activeModelName, "selected-model");
-    assert.equal(modelState.llm?.model, "selected-model");
+    assert.equal(modelState.llm?.id, "old-llm");
+    assert.equal(modelState.activeModelSpec?.model, "selected-model");
     const switched = events.find((item) => item?.event === "model_switched");
     assert.ok(switched);
     assert.equal(switched?.data?.alias, "selected_alias");

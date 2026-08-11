@@ -12,6 +12,7 @@ import path from "node:path";
 import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
+  createTestModelResponse,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
@@ -49,8 +50,8 @@ test("harness acceptance semantic validation uses separate model when enabled", 
       resolveModelMessages: runtimeHelpers.createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return {
-          content: JSON.stringify({
+        return createTestModelResponse(
+          JSON.stringify({
             status: "pass",
             consistent: true,
             missingItems: [],
@@ -66,7 +67,7 @@ test("harness acceptance semantic validation uses separate model when enabled", 
             ],
             suggestions: [],
           }),
-        };
+        );
       },
     },
   );
@@ -194,9 +195,9 @@ test("acceptance semantic validation relays via unified ctx.modelContext.message
       acceptance: { semanticValidation: true },
       capabilityModelInvoker: async ({ purpose }) => {
         if (purpose === "acceptance_semantic_validation") {
-          return { content: "ADD 1 验收通过，输出与计划一致" };
+          return createTestModelResponse("ADD 1 验收通过，输出与计划一致");
         }
-        return { content: "" };
+        return createTestModelResponse("");
       },
     },
   };

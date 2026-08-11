@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { appendMessage } from "../../src/core/message-store.js";
@@ -48,7 +49,7 @@ test("separate_model analysis uses aligned agent context then user request and u
       ],
       capabilityModelInvoker: async (payload = {}) => {
         capturedPayload = payload;
-        return { content: "疑点：最近用户目标与执行焦点可能不一致。" };
+        return createTestModelResponse("疑点：最近用户目标与执行焦点可能不一致。");
       },
     },
   };
@@ -128,7 +129,7 @@ test("separate_model skips analysis when trailing assistant tool call has conten
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        return { content: "不应调用" };
+        return createTestModelResponse("不应调用");
       },
     },
   };
@@ -176,7 +177,7 @@ test("separate_model skips analysis for LangChain AIMessage tool call with conte
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        return { content: "不应调用" };
+        return createTestModelResponse("不应调用");
       },
     },
   };
@@ -217,7 +218,7 @@ test("analysis waits for the separate model before the before_llm_call hook comp
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(completed, false);
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);
-  resolveInvocation({ content: "分析完成" });
+  resolveInvocation(createTestModelResponse("分析完成"));
   await hookPromise;
   assert.equal(completed, true);
   assert.equal(
@@ -239,7 +240,7 @@ test("separate_model guidance pending triggers guidance invoker without analysis
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        return { content: "建议先确认失败工具的输入参数。" };
+        return createTestModelResponse("建议先确认失败工具的输入参数。");
       },
     },
   };

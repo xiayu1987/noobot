@@ -24,7 +24,7 @@ function toMonthKey(weekKeys = []) {
 
 export async function runMonthlySummaryIfNeeded({
   storage,
-  llm = null,
+  invokeModel = null,
   promptI18n = {},
   abortSignal = null,
   basePath = "",
@@ -34,7 +34,7 @@ export async function runMonthlySummaryIfNeeded({
   readExperienceModel,
   upsertModelEntries,
 } = {}) {
-  if (!basePath || !llm) return false;
+  if (!basePath || typeof invokeModel !== "function") return false;
   let hasWrittenSummary = false;
   while (true) {
     const weekEntries = await storage.safeReadDirEntries(storage.weeklySummaryDir(basePath));
@@ -63,8 +63,12 @@ export async function runMonthlySummaryIfNeeded({
       });
       let parsedSummary = { domain_name: domainName, categories: [] };
       try {
-        const res = await llm.invoke([{ role: "user", content: prompt }], { signal: abortSignal });
-        parsedSummary = normalizeMonthlySummary(res?.content, domainName, { basePath });
+        const output = await invokeModel({
+          prompt,
+          flow: "memory.experience.monthly",
+          purpose: "memory_experience_monthly",
+        });
+        parsedSummary = normalizeMonthlySummary(output.text, domainName, { basePath });
       } catch (error) {
         if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
         parsedSummary = { domain_name: domainName, categories: [] };

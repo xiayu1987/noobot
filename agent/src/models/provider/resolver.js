@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
+import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 
 export function isProviderEnabled(provider = {}) {
   return provider?.enabled !== false;
@@ -25,9 +25,7 @@ export function getProviders(globalConfig = {}, userConfig = {}) {
 export function getEnabledProviders(globalConfig = {}, userConfig = {}) {
   const providers = getProviders(globalConfig, userConfig);
   return Object.fromEntries(
-    Object.entries(providers).filter(([, provider]) =>
-      isProviderEnabled(provider),
-    ),
+    Object.entries(providers).filter(([, provider]) => isProviderEnabled(provider)),
   );
 }
 
@@ -44,7 +42,7 @@ export function pickAlias({ globalConfig, userConfig, skillConfig }) {
 export function byAliasWithUser(alias, globalConfig = {}, userConfig = {}) {
   const providers = getEnabledProviders(globalConfig, userConfig);
   if (!alias || !providers[alias]) return null;
-  return normalizeModelSpecWithDefaults({ alias, ...providers[alias] });
+  return normalizeRuntimeModelSpec({ alias, ...providers[alias] });
 }
 
 export function firstEnabledAlias(globalConfig = {}, userConfig = {}) {

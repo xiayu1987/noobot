@@ -9,7 +9,8 @@ import { z } from "zod";
 import { DOC2DATA_PARSE_ENGINE } from "@noobot/agent-config-protocol";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
-import { invokeModelWithTextAndAttachments, resolveModelSpecByAlias } from "../../models/index.js";
+import { resolveModelSpecByAlias } from "../../models/resolver/index.js";
+import { buildAttachmentContentBlock } from "../../models/attachment/formatter.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { convertDocumentToImages } from "../../shared/utils/doc/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.js";
@@ -24,7 +25,7 @@ import {
 } from "@noobot/runtime-events";
 import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import {
   decodeLibreOfficeTextBuffer,
   parseDocumentToTextViaLibreOffice,
@@ -304,12 +305,28 @@ export function createDoc2DataTool({ agentContext }) {
         userConfig,
         mediaType: "image",
       });
+      if (!imageAlias) {
+        throw recoverableToolError("doc2data vision mode requires an explicit image model", {
+          code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
+          details: { mediaType: "image" },
+        });
+      }
       const modelSpec = resolveModelSpecByAlias({
         alias: imageAlias,
         globalConfig,
         userConfig,
-        fallbackToDefault: true,
+        fallbackToDefault: false,
       });
+      if (!modelSpec) {
+        throw recoverableToolError(`configured image model not found: ${imageAlias}`, {
+          code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
+          details: { alias: imageAlias, mediaType: "image" },
+        });
+      }
+      const modelPort = runtime?.modelPort;
+      if (!modelPort || typeof modelPort.invoke !== "function") {
+        throw new Error("doc2data requires runtime.modelPort");
+      }
       const userPrompt = resolveDoc2DataPrompt(runtime, prompt);
       const imageBatches = await buildImageBatches(images);
       const batchResults = [];
@@ -317,28 +334,41 @@ export function createDoc2DataTool({ agentContext }) {
         const batch = imageBatches[batchIndex];
         const pageNumbers = batch.map((imageItem) => imageItem.page);
         const range = `${pageNumbers[0]}-${pageNumbers[pageNumbers.length - 1]}`;
-        const modelResult = await invokeModelWithTextAndAttachments({
-          modelName: modelSpec?.alias || modelSpec?.model,
-          text: `${userPrompt}\n\n${tTool(runtime, "tools.doc2data.batchPrompt", { batchIndex: batchIndex + 1, range })}`,
-          attachments: batch.map((imageItem) => ({
-            type: resolveMimeTypeByPath(imageItem.imagePath, "image"),
-            mimeType: resolveMimeTypeByPath(imageItem.imagePath, "image"),
-            data: imageItem.dataUrl,
-          })),
-          globalConfig,
-          userConfig,
-          streaming: false,
-          context: {
-            runtime,
-            invocation: {
-              flow: "tool.doc2data",
-              purpose: "document_extraction",
-              domain: "data_processing",
-              contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+        const attachmentBlocks = batch
+          .map((imageItem) => {
+            const mimeType = resolveMimeTypeByPath(imageItem.imagePath, "image");
+            return buildAttachmentContentBlock({
+              attachment: { type: mimeType, mimeType, data: imageItem.dataUrl },
+              providerFormat: modelSpec.format,
+            });
+          })
+          .filter(Boolean);
+        const modelResponse = await modelPort.invoke({
+          model: modelSpec,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `${userPrompt}\n\n${tTool(runtime, "tools.doc2data.batchPrompt", { batchIndex: batchIndex + 1, range })}`,
+                },
+                ...attachmentBlocks,
+              ],
             },
+          ],
+          options: {
+            streaming: false,
+            signal: runtime?.abortSignal || undefined,
+          },
+          invocation: {
+            flow: "tool.doc2data",
+            purpose: "document_extraction",
+            domain: "data_processing",
+            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
           },
         });
-        const text = normalizeModelOutput(modelResult?.response?.content);
+        const text = normalizeModelOutput(modelResponse.output.text);
         batchResults.push({
           batch: batchIndex + 1,
           pages: pageNumbers,

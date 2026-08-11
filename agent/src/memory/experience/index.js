@@ -39,7 +39,7 @@ export class ExperienceManager {
 
   async readMetadata(basePath) {
     const metadataPath = this.storage.experienceMetadataPath(basePath);
-    const text = String(await this.storage.readText(metadataPath, "") || "").trim();
+    const text = String((await this.storage.readText(metadataPath, "")) || "").trim();
     if (text) return parseExperienceMetadataText(text);
     const legacyJsonPath = metadataPath.replace(/\.md$/i, ".json");
     const legacyJson = await this.storage.readJson(legacyJsonPath, null);
@@ -49,10 +49,7 @@ export class ExperienceManager {
   async writeMetadata(basePath, metadata = null) {
     const metadataPath = this.storage.experienceMetadataPath(basePath);
     await this.storage.ensureDir(this.storage.experienceDir(basePath));
-    await this.storage.writeText(
-      metadataPath,
-      renderExperienceMetadataText(metadata),
-    );
+    await this.storage.writeText(metadataPath, renderExperienceMetadataText(metadata));
   }
 
   async appendParseErrorLog({
@@ -102,8 +99,7 @@ export class ExperienceManager {
     return entries
       .filter(
         (entry) =>
-          entry.isDirectory() &&
-          /^\d{4}-\d{2}-\d{2}$/.test(String(entry.name || "").trim()),
+          entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(String(entry.name || "").trim()),
       )
       .map((entry) => entry.name)
       .sort();
@@ -173,13 +169,13 @@ export class ExperienceManager {
 
   async runWeeklySummaryIfNeeded({
     basePath = "",
-    llm = null,
+    invokeModel = null,
     promptI18n = {},
     abortSignal = null,
   } = {}) {
     return runWeeklySummaryIfNeeded({
       storage: this.storage,
-      llm,
+      invokeModel,
       promptI18n,
       abortSignal,
       basePath,
@@ -212,13 +208,13 @@ export class ExperienceManager {
 
   async runMonthlySummaryIfNeeded({
     basePath = "",
-    llm = null,
+    invokeModel = null,
     promptI18n = {},
     abortSignal = null,
   } = {}) {
     return runMonthlySummaryIfNeeded({
       storage: this.storage,
-      llm,
+      invokeModel,
       promptI18n,
       abortSignal,
       basePath,
@@ -248,13 +244,13 @@ export class ExperienceManager {
 
   async runYearlySummaryIfNeeded({
     basePath = "",
-    llm = null,
+    invokeModel = null,
     promptI18n = {},
     abortSignal = null,
   } = {}) {
     return runYearlySummaryIfNeeded({
       storage: this.storage,
-      llm,
+      invokeModel,
       promptI18n,
       abortSignal,
       basePath,
@@ -269,13 +265,13 @@ export class ExperienceManager {
 
   async runDaily({
     basePath = "",
-    llm = null,
+    invokeModel = null,
     promptI18n = {},
     promptPayload = [],
     createdAt = "",
     abortSignal = null,
   } = {}) {
-    if (!llm) return false;
+    if (typeof invokeModel !== "function") return false;
     try {
       const knownDomainNames = await this.collectKnownDomainNames(basePath);
       const lessonPrompt = buildDailyExperiencePrompt({
@@ -283,11 +279,12 @@ export class ExperienceManager {
         knownDomainText: dedupeTextList(knownDomainNames).join(", "),
         shortMemoryItems: promptPayload,
       });
-      const lessonRes = await llm.invoke(
-        [{ role: "user", content: lessonPrompt }],
-        { signal: abortSignal },
-      );
-      const normalizedResults = this.parseDaily(lessonRes?.content, { basePath });
+      const output = await invokeModel({
+        prompt: lessonPrompt,
+        flow: "memory.experience.daily",
+        purpose: "memory_experience_daily",
+      });
+      const normalizedResults = this.parseDaily(output.text, { basePath });
       const modelEntries = normalizedResults.map((item) => ({
         domain_name: item?.domain_name,
       }));

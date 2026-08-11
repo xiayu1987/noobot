@@ -121,3 +121,38 @@ test("createGlobalConfigBuilder: source 原始 snake_case 配置应由 builder �
   assert.equal(built.rawConfig.workspaceRoot, "/tmp/workspace");
   assert.equal(built.rawConfig.defaultProvider, "openai");
 });
+
+test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化入口", async () => {
+  const builder = createGlobalConfigBuilder({
+    source: async () => ({
+      providers: {
+        main: {
+          model: "gpt-5.5",
+          format: "openai_compatible",
+          providerId: "openai",
+          adapterId: "openai-compatible",
+        },
+      },
+    }),
+  });
+
+  const built = await builder.build();
+  assert.equal(built.rawConfig.providers.main.alias, "main");
+  assert.equal(built.rawConfig.providers.main.temperature, 0.55);
+  assert.equal(built.rawConfig.providers.main.top_p, 1);
+});
+
+test("createGlobalConfigBuilder: 拒绝缺少显式供应商身份的 provider", async () => {
+  const builder = createGlobalConfigBuilder({
+    source: async () => ({
+      providers: {
+        legacy: { model: "gpt-4", format: "openai_compatible" },
+      },
+    }),
+  });
+
+  await assert.rejects(
+    () => builder.build(),
+    /invalid configured model provider legacy: model spec\.providerId is required/,
+  );
+});

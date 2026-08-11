@@ -11,6 +11,7 @@ import path from "node:path";
 
 import {
   createTestHookManager as createAgentHookManager,
+  createTestModelResponse,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
@@ -48,11 +49,11 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "summary") {
-          return { content: "已完成：完成初始检查\n小结完成" };
+          return createTestModelResponse("已完成：完成初始检查\n小结完成");
         }
         if (payload.purpose === "planning_refinement") {
-          return {
-            content: JSON.stringify({
+          return createTestModelResponse(
+            JSON.stringify({
               totalGoal: "完成 harness 计划闭环",
               taskOwner: "primary_task_owner",
               nextPhase: { objective: "实现验收闭环", checklistIndexes: [2] },
@@ -75,11 +76,11 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
                 },
               ],
             }),
-          };
+          );
         }
         if (payload.purpose === "planning_revision") {
-          return {
-            content: JSON.stringify({
+          return createTestModelResponse(
+            JSON.stringify({
               totalGoal: "完成 harness 计划闭环",
               taskOwner: "primary_task_owner",
               nextPhase: { objective: "实现验收闭环", checklistIndexes: [2] },
@@ -102,9 +103,9 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
                 },
               ],
             }),
-          };
+          );
         }
-        return { content: "{}" };
+        return createTestModelResponse("{}");
       },
     },
   );
@@ -200,10 +201,10 @@ test("planning_revision reuses summary model messages in separate_model flow", a
       },
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        if (payload.purpose === "summary") return { content: "小结完成" };
+        if (payload.purpose === "summary") return createTestModelResponse("小结完成");
         if (payload.purpose === "planning_refinement") {
-          return {
-            content: JSON.stringify({
+          return createTestModelResponse(
+            JSON.stringify({
               totalGoal: "完成计划细化",
               taskOwner: "primary_task_owner",
               taskChecklist: [
@@ -221,11 +222,11 @@ test("planning_revision reuses summary model messages in separate_model flow", a
                 },
               ],
             }),
-          };
+          );
         }
         if (payload.purpose === "planning_revision") {
-          return {
-            content: JSON.stringify({
+          return createTestModelResponse(
+            JSON.stringify({
               totalGoal: "完成计划修复",
               taskOwner: "primary_task_owner",
               taskChecklist: [
@@ -243,9 +244,9 @@ test("planning_revision reuses summary model messages in separate_model flow", a
                 },
               ],
             }),
-          };
+          );
         }
-        return { content: "{}" };
+        return createTestModelResponse("{}");
       },
     },
   );
@@ -302,14 +303,14 @@ test("planning_refinement is scheduled independently after revision main-plan ch
       resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        if (payload.purpose === "summary") return { content: "小结完成" };
+        if (payload.purpose === "summary") return createTestModelResponse("小结完成");
         if (payload.purpose === "planning_revision") {
-          return { content: "1. 修复后的主计划\n2. 新增主任务" };
+          return createTestModelResponse("1. 修复后的主计划\n2. 新增主任务");
         }
         if (payload.purpose === "planning_refinement") {
-          return { content: "ADD 1.1 细化修复后的主计划" };
+          return createTestModelResponse("ADD 1.1 细化修复后的主计划");
         }
-        return { content: "{}" };
+        return createTestModelResponse("{}");
       },
     },
   );
@@ -363,9 +364,9 @@ test("harness summary without completion marker still triggers planning revision
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "summary") {
-          return { content: "已完成：完成初始检查" };
+          return createTestModelResponse("已完成：完成初始检查");
         }
-        return { content: "{}" };
+        return createTestModelResponse("{}");
       },
     },
   );

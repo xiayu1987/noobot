@@ -16,10 +16,7 @@ import {
   resolveCurrentTurnMessagesStore,
 } from "./message/injected-message-utils.js";
 import { resolveModelMessages } from "../../../core/message-store.js";
-import {
-  assertTransferEnvelope,
-  transferIdentityKey,
-} from "@noobot/semantic-transfer-protocol";
+import { assertTransferEnvelope, transferIdentityKey } from "@noobot/semantic-transfer-protocol";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 function isPlainObject(value) {
@@ -130,7 +127,9 @@ export function appendCapabilityLog(
 export function deferCapabilityLogs(ctx = {}, entries = []) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return 0;
-  const logs = Array.isArray(entries) ? entries.filter((entry) => entry && typeof entry === "object") : [];
+  const logs = Array.isArray(entries)
+    ? entries.filter((entry) => entry && typeof entry === "object")
+    : [];
   if (!logs.length) return 0;
   if (!Array.isArray(holder.bucket.capabilityLogOutbox)) {
     holder.bucket.capabilityLogOutbox = [];
@@ -181,18 +180,20 @@ export async function saveCapabilityOutputAsTransferArtifacts(
   const producerId = String(purpose || "").trim();
   if (!producerId) throw new Error("harness_semantic_transfer_producer_required");
   try {
-    const strategy = domain === CAPABILITY_DOMAIN.ACCEPTANCE
-      ? "harness_acceptance"
-      : domain === CAPABILITY_DOMAIN.PLANNING
-        ? "harness_planning"
-        : purpose === "summary_detail"
-          ? "harness_summary"
-          : "";
-    const category = domain === CAPABILITY_DOMAIN.ACCEPTANCE
-      ? "acceptance"
-      : domain === CAPABILITY_DOMAIN.PLANNING
-        ? "planning"
-        : "summary";
+    const strategy =
+      domain === CAPABILITY_DOMAIN.ACCEPTANCE
+        ? "harness_acceptance"
+        : domain === CAPABILITY_DOMAIN.PLANNING
+          ? "harness_planning"
+          : purpose === "summary_detail"
+            ? "harness_summary"
+            : "";
+    const category =
+      domain === CAPABILITY_DOMAIN.ACCEPTANCE
+        ? "acceptance"
+        : domain === CAPABILITY_DOMAIN.PLANNING
+          ? "planning"
+          : "summary";
     if (!strategy) return { transferEnvelopes: [] };
     if (typeof transferSemanticContent === "function") {
       const staged = await transferSemanticContent({
@@ -234,16 +235,15 @@ export async function appendCapabilityModelTraceLog(
   ctx = {},
   { domain = "", purpose = "", pluginFlow = undefined, chain = undefined, response = null } = {},
 ) {
-  const traces = Array.isArray(response?.traces) ? response.traces : [];
-  if (!traces.length) return false;
+  const modelAttempts = Array.isArray(response?.execution?.attempts)
+    ? response.execution.attempts
+    : [];
+  if (!modelAttempts.length) return false;
   const detail = {
-    purpose: String(purpose || response?.purpose || "").trim() || undefined,
-    pluginFlow: String(pluginFlow || response?.pluginFlow || "").trim() || undefined,
-    chain: String(chain || response?.chain || "").trim() || undefined,
-    finishedReason: response?.finishedReason || undefined,
-    turn: response?.turn || undefined,
-    toolTurnLimitReached: response?.toolTurnLimitReached === true,
-    traces,
+    purpose: String(purpose || "").trim() || undefined,
+    pluginFlow: String(pluginFlow || "").trim() || undefined,
+    chain: String(chain || "").trim() || undefined,
+    modelAttempts,
   };
   const log = {
     traceId: randomUUID(),

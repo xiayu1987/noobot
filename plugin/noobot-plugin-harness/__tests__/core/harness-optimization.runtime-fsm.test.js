@@ -24,7 +24,6 @@ import {
   createPlanningHandler,
 } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
 
 test("pending states are auto-cleaned by hook turns without timers", async () => {

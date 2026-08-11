@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createChatModel } from "../models/index.js";
 import { mergeConfig } from "../config/index.js";
 import { emitEvent } from "../events/index.js";
 import {
@@ -39,9 +38,9 @@ import {
   emitContextIdentityDebug,
 } from "../observability/context-identity-debug.js";
 import { emitAgentContextProtocolDebug } from "../observability/agent-context-protocol-debug.js";
+import { attachAgentModelPort } from "./model-port-host.js";
 
 export function createStateBuilder({
-  createChatModelFn = createChatModel,
   mergeConfigFn = mergeConfig,
   emitEventFn = emitEvent,
   buildContextMessagesFn = buildContextMessages,
@@ -64,7 +63,6 @@ export function createStateBuilder({
     const effectiveConfig = mergeConfigFn(globalConfig, userConfig);
     const eventListener = runtime.eventListener || null;
     const abortSignal = runtime.abortSignal || null;
-    const dialogProcessId = context.identity.dialogProcessId;
     const tools = getToolsFromAgentContext(agentContext);
 
     normalizeSystemRuntimeCountersFn(sys, currentUserMessage.content);
@@ -87,16 +85,6 @@ export function createStateBuilder({
     const helpPromptLoopTurns = resolveHelpPromptLoopTurnsFn(effectiveConfig);
     const toolFailureHelpCount = resolveToolFailureHelpCountFn(effectiveConfig);
 
-    const llm = createChatModelFn(selectedModelSpec, {
-      globalConfig,
-      userConfig,
-      streaming: false,
-      context: {
-        runtime,
-        agentContext,
-        sessionId: String(sys?.sessionId || runtime?.sessionId || "").trim(),
-      },
-    });
     emitEventFn(eventListener, "model_selected", {
       alias: selectedModelSpec?.alias || "",
       model: selectedModelSpec?.model || "",
@@ -111,9 +99,49 @@ export function createStateBuilder({
           currentUserMessage,
         });
 
+    const activeTurnIdentity = {
+      dialogProcessId: String(currentUserMessage?.dialogProcessId || "").trim(),
+      turnScopeId: String(currentUserMessage?.turnScopeId || "").trim(),
+    };
+    if (!activeTurnIdentity.dialogProcessId || !activeTurnIdentity.turnScopeId) {
+      throw new Error("current canonical user message requires dialogProcessId and turnScopeId");
+    }
+    const contextIdentity = context.identity || {};
+    for (const [field, currentValue] of Object.entries(activeTurnIdentity)) {
+      const contextValue = String(contextIdentity[field] || "").trim();
+      if (!contextValue) throw new Error(`agent context identity.${field} is required`);
+      if (contextValue !== currentValue) {
+        throw new Error(
+          `current canonical user message ${field} conflicts with agent context identity`,
+        );
+      }
+    }
+    const invocationIdentity = {
+      sessionId: String(contextIdentity.sessionId || "").trim(),
+      parentSessionId: String(contextIdentity.parentSessionId || "").trim(),
+      dialogProcessId: activeTurnIdentity.dialogProcessId,
+      turnScopeId: activeTurnIdentity.turnScopeId,
+      runId: String(contextIdentity.runId || "").trim(),
+    };
+    for (const field of ["sessionId", "dialogProcessId", "turnScopeId", "runId"]) {
+      if (!invocationIdentity[field]) throw new Error(`agent model identity.${field} is required`);
+    }
+    const runtimeIdentitySources = {
+      sessionId: sys?.sessionId,
+      parentSessionId: sys?.parentSessionId,
+      dialogProcessId: sys?.dialogProcessId,
+      turnScopeId: sys?.turnScopeId,
+      runId: runtime?.runId,
+    };
+    for (const [field, rawValue] of Object.entries(runtimeIdentitySources)) {
+      const runtimeValue = String(rawValue || "").trim();
+      if (runtimeValue && runtimeValue !== invocationIdentity[field]) {
+        throw new Error(`runtime ${field} conflicts with agent context identity`);
+      }
+    }
+
     const modelState = {
       agentContext,
-      llm,
       activeModelName: selectedModelSpec?.model || "",
       activeModelAlias: selectedModelSpec?.alias || "",
       eventListener,
@@ -122,25 +150,13 @@ export function createStateBuilder({
       userConfig,
       defaultModelSpec: selectedModelSpec,
       abortSignal,
+      invocationIdentity: Object.freeze(invocationIdentity),
     };
+    modelState.activeModelSpec = selectedModelSpec;
+    attachAgentModelPort(modelState);
+    runtime.modelPort = modelState.modelPort;
+    runtime.modelSpec = selectedModelSpec;
 
-    const activeTurnIdentity = {
-      dialogProcessId: String(currentUserMessage?.dialogProcessId || "").trim(),
-      turnScopeId: String(currentUserMessage?.turnScopeId || "").trim(),
-    };
-    if (!activeTurnIdentity.dialogProcessId || !activeTurnIdentity.turnScopeId) {
-      throw new Error("current canonical user message requires dialogProcessId and turnScopeId");
-    }
-    const runtimeDialogProcessId = String(dialogProcessId || sys?.dialogProcessId || "").trim();
-    const runtimeTurnScopeId = String(
-      runConfig?.turnScopeId || sys?.turnScopeId || sys?.config?.turnScopeId || "",
-    ).trim();
-    if (runtimeDialogProcessId && runtimeDialogProcessId !== activeTurnIdentity.dialogProcessId) {
-      throw new Error("current canonical user message dialogProcessId conflicts with runtime identity");
-    }
-    if (runtimeTurnScopeId && runtimeTurnScopeId !== activeTurnIdentity.turnScopeId) {
-      throw new Error("current canonical user message turnScopeId conflicts with runtime identity");
-    }
     const modelContext = createModelContext({
       messages,
       activeTurnIdentity,
@@ -183,7 +199,10 @@ export function createStateBuilder({
       consumer: "agent-state-builder",
       revision: 0,
       blockCounts: Object.fromEntries(
-        Object.entries(modelContext.messageBlocks).map(([name, blockMessages]) => [name, blockMessages.length]),
+        Object.entries(modelContext.messageBlocks).map(([name, blockMessages]) => [
+          name,
+          blockMessages.length,
+        ]),
       ),
       messageCount: modelContext.messages.length,
     });
@@ -227,7 +246,8 @@ export function createStateBuilder({
       contentProjectionFound: modelMessageIds.includes(sourceMessageUid),
       userMetaProjectionFound: modelMessageIds.includes(`${sourceMessageUid}::user_meta`),
       contentProjectionId: modelMessageIds.find((id) => id === sourceMessageUid) || "",
-      userMetaProjectionId: modelMessageIds.find((id) => id === `${sourceMessageUid}::user_meta`) || "",
+      userMetaProjectionId:
+        modelMessageIds.find((id) => id === `${sourceMessageUid}::user_meta`) || "",
       messageCount: modelContext.messages.length,
       systemCount: modelContext.messageBlocks.system.length,
       historyCount: modelContext.messageBlocks.history.length,

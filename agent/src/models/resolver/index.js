@@ -9,7 +9,7 @@ import {
   firstEnabledAlias,
   getEnabledProviders,
 } from "../provider/resolver.js";
-import { normalizeModelSpecWithDefaults } from "../spec/normalizer.js";
+import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 
 export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
   const alias = pickAlias({ globalConfig, userConfig, skillConfig: {} });
@@ -60,18 +60,14 @@ export function resolveModelSpecByName({
       modelName.toLowerCase() === targetName.toLowerCase() ||
       alias.toLowerCase() === targetName.toLowerCase()
     ) {
-      return normalizeModelSpecWithDefaults({ alias, ...provider });
+      return normalizeRuntimeModelSpec({ alias, ...provider });
     }
   }
   if (!fallbackToDefault) return null;
   return resolveDefaultModelSpec({ globalConfig, userConfig });
 }
 
-export function resolveSkillModelSpec({
-  skillConfig,
-  globalConfig,
-  userConfig,
-}) {
+export function resolveSkillModelSpec({ skillConfig, globalConfig, userConfig }) {
   const alias = pickAlias({ globalConfig, userConfig, skillConfig });
   if (!alias) return resolveDefaultModelSpec({ globalConfig, userConfig });
 
@@ -79,14 +75,11 @@ export function resolveSkillModelSpec({
   if (!spec) return null;
 
   if (skillConfig.model) spec.model = skillConfig.model;
-  if (skillConfig.temperature != null)
-    spec.temperature = skillConfig.temperature;
+  if (skillConfig.temperature != null) spec.temperature = skillConfig.temperature;
   if (skillConfig.maxTokens != null) spec.maxTokens = skillConfig.maxTokens;
   if (skillConfig.topP != null) spec.topP = skillConfig.topP;
-  if (skillConfig.frequencyPenalty != null)
-    spec.frequencyPenalty = skillConfig.frequencyPenalty;
-  if (skillConfig.presencePenalty != null)
-    spec.presencePenalty = skillConfig.presencePenalty;
+  if (skillConfig.frequencyPenalty != null) spec.frequencyPenalty = skillConfig.frequencyPenalty;
+  if (skillConfig.presencePenalty != null) spec.presencePenalty = skillConfig.presencePenalty;
 
   return spec;
 }

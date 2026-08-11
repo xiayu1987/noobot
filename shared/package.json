@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./length-thresholds": "./length-thresholds.mjs",
+    "./message-diagnostics": "./message-diagnostics.mjs",
     "./quantity-thresholds": "./quantity-thresholds.mjs",
     "./runtime-events-config": "./runtime-events-config.mjs",
     "./turn-replacement-protocol": "./turn-replacement-protocol.mjs",

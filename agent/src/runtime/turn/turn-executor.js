@@ -4,43 +4,30 @@
  * SPDX-License-Identifier: MIT
  */
 import { filterForModelContext } from "@noobot/context-protocol/message-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { resolveModelFinalMessages } from "@noobot/context-protocol/window-reducer";
 import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
 } from "../../context/session/current-turn-store.js";
-import { resolveInvokeLlm } from "../../models/index.js";
 import { emitEvent } from "../../events/index.js";
 import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { persistModelGeneratedArtifacts } from "../../artifacts/runtime/artifact-service.js";
-import {
-  invokeLlmWithTransientRetry,
-  normalizeAiTextContent,
-} from "../llm-invoker.js";
 import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/hook-context";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import {
-  resolveNonThinkingCallOverrides,
-} from "./tool-choice-strategy.js";
+import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
 import {
   buildAssistantModelMessageForToolCalls,
   formatToolCallsForStorage,
 } from "./tool-call-message.js";
-import {
-  maybeInvokeFinalStreamingNoTools,
-} from "./turn-stage.js";
+import { maybeInvokeFinalStreamingNoTools } from "./turn-stage.js";
 import { prepareToolBinding } from "./tool-binding-preparer.js";
 import { createBoundLlmToolChoiceInvoker } from "./tool-invoke-strategy.js";
-import {
-  maybeRetryToolCallStreamingMismatch,
-  normalizeToolTurnAi,
-} from "./tool-call-retry-stage.js";
-import { maybeRetryReasoningOnlyWithTools } from "./tool-reasoning-retry-stage.js";
-import { maybeRetryReasoningOnlyNoTools } from "./no-tools-reasoning-retry-stage.js";
+import { normalizeToolTurnAi } from "./tool-turn-normalizer.js";
 import { finalizeNoToolsStreamingTurn } from "./no-tools-final-stream-stage.js";
 import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
 import { maybeCreateRequiredToolChoiceUnsupportedFallbackAi } from "./tool-choice-fallback-stage.js";
@@ -78,7 +65,9 @@ function normalizeBlockList(value = []) {
 function requireLoopStateModelContext(loopState = {}) {
   const modelContext = loopState?.modelContext;
   if (modelContext?.protocolVersion !== MODEL_CONTEXT_PROTOCOL_VERSION) {
-    throw new Error(`agent loop requires modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`);
+    throw new Error(
+      `agent loop requires modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`,
+    );
   }
   return modelContext;
 }
@@ -129,20 +118,17 @@ export async function invokeNoToolsTurn({
 }) {
   const modelContext = requireLoopStateModelContext(loopState);
   const messages = modelContext.messages;
-  const {
-    traces,
-    turnMessages,
-    currentTurnMessages,
-    currentTurnTasks,
-    dialogProcessId,
-  } = loopState;
+  const { traces, turnMessages, currentTurnMessages, currentTurnTasks, dialogProcessId } =
+    loopState;
   const { eventListener, runtime, abortSignal } = modelState;
 
-  const invokeLlm = resolveInvokeLlm(modelState, "no_tools");
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
-  traceLoopStateContext(runtime, "before_llm_hook_context_input", loopState, { turn, mode: "no_tools" });
+  traceLoopStateContext(runtime, "before_llm_hook_context_input", loopState, {
+    turn,
+    mode: "no_tools",
+  });
   const beforeLlmHookContext = buildHookContext(HOOK_POINT.AGENT.BEFORE_LLM_CALL, runtime, {
     phase: "llm_call",
     turn,
@@ -168,31 +154,39 @@ export async function invokeNoToolsTurn({
   assertHookContextRetainsModelContext(loopState, beforeLlmHookContext);
   await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
   syncMessagesFromBlocks(loopState);
-  traceLoopStateContext(runtime, "before_llm_final_composed", loopState, { turn, mode: "no_tools" });
+  traceLoopStateContext(runtime, "before_llm_final_composed", loopState, {
+    turn,
+    mode: "no_tools",
+  });
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
   let modelResponse = null;
   const assistantMessageId = beginAssistantMessageEventStream(runtime, { turn });
   const presentationMessageId = currentAssistantPresentationMessageId(runtime);
   try {
-    modelResponse = await invokeLlmWithTransientRetry({
-      modelState,
-      turn,
-      mode: "no_tools",
-      invoke: ({ callbacks }) => {
-        const modelMessages = filterForModelContext(messages);
-        return invokeLlm.invoke(modelMessages, {
-          callbacks,
-          signal: abortSignal,
+    const protocolResponse = await modelState.modelPort.invoke({
+      messages: filterForModelContext(messages),
+      options: {
+        streaming: false,
+        callbacks: runtime?.modelCallbacks,
+        signal: abortSignal,
+        invoke: {
           ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
           ...resolveNonThinkingCallOverrides(
             runtime,
             forceToolChoiceNone ? "none" : "",
             modelState?.defaultModelSpec || {},
           ),
-        });
+        },
+      },
+      invocation: {
+        flow: "agent.main",
+        purpose: "no_tools",
+        domain: "primary",
+        contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
       },
     });
+    modelResponse = protocolResponse.output;
   } catch (error) {
     await runAgentRuntimeHook({
       runtime,
@@ -233,27 +227,7 @@ export async function invokeNoToolsTurn({
     }),
   });
   await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
-  let responseContentText = normalizeAiTextContent(modelResponse?.content, {
-    additionalKwargs: modelResponse?.additional_kwargs ?? null,
-    allowReasoningFallback: false,
-  });
-  const reasoningOnlyRetry = await maybeRetryReasoningOnlyNoTools({
-    modelResponse,
-    responseContentText,
-    messages,
-    messageHolder: modelContext,
-    invokeLlm,
-    modelState,
-    runtime,
-    abortSignal,
-    forceToolChoiceNone,
-    eventListener,
-    turn,
-    locale,
-  });
-  if (reasoningOnlyRetry) {
-    ({ modelResponse, responseContentText } = reasoningOnlyRetry);
-  }
+  let responseContentText = String(modelResponse?.text || "");
   const finalStreamingTurn = await finalizeNoToolsStreamingTurn({
     modelState,
     messages,
@@ -299,19 +273,13 @@ export async function invokeNoToolsTurn({
 export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const modelContext = requireLoopStateModelContext(loopState);
   const messages = modelContext.messages;
-  const {
-    traces,
-    tools,
-    turnMessages,
-    currentTurnMessages,
-    currentTurnTasks,
-    dialogProcessId,
-  } = loopState;
+  const { traces, tools, turnMessages, currentTurnMessages, currentTurnTasks, dialogProcessId } =
+    loopState;
   const { eventListener, runtime, abortSignal } = modelState;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const locale = String(systemRuntime?.locale || "zh-CN");
 
-  const { adaptedBinding, configuredToolChoice, invokeLlm, boundTools, toolMap } = prepareToolBinding({
+  const { adaptedBinding, configuredToolChoice, boundTools, toolMap } = prepareToolBinding({
     tools,
     modelState,
     runtime,
@@ -324,7 +292,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
     adaptedBinding,
     boundTools,
-    invokeLlm,
     messages,
     modelState,
     runtime,
@@ -334,7 +301,10 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   const llmStartedAtMs = Date.now();
   const llmStartedAt = new Date(llmStartedAtMs).toISOString();
-  traceLoopStateContext(runtime, "before_llm_hook_context_input", loopState, { turn, mode: "with_tools" });
+  traceLoopStateContext(runtime, "before_llm_hook_context_input", loopState, {
+    turn,
+    mode: "with_tools",
+  });
   const beforeLlmHookContext = buildHookContext(HOOK_POINT.AGENT.BEFORE_LLM_CALL, runtime, {
     phase: "llm_call",
     turn,
@@ -361,10 +331,12 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   assertHookContextRetainsModelContext(loopState, beforeLlmHookContext);
   await consumeSummaryCheckpointCommand({ runtime, loopState, eventListener, turn });
   syncMessagesFromBlocks(loopState);
-  traceLoopStateContext(runtime, "before_llm_final_composed", loopState, { turn, mode: "with_tools" });
+  traceLoopStateContext(runtime, "before_llm_final_composed", loopState, {
+    turn,
+    mode: "with_tools",
+  });
 
-  const mainFlowFinalNoToolsInstruction =
-    peekMainFlowFinalNoToolsTurnInstruction(systemRuntime);
+  const mainFlowFinalNoToolsInstruction = peekMainFlowFinalNoToolsTurnInstruction(systemRuntime);
   if (mainFlowFinalNoToolsInstruction) {
     emitEvent(eventListener, "with_tools_llm_call_skipped_for_main_flow_instruction", {
       turn,
@@ -417,30 +389,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }
   }
 
-  let { rawCalls, calls, aiContentText } = normalizeToolTurnAi(ai);
-  const reasoningOnlyRetry = await maybeRetryReasoningOnlyWithTools({
-    ai,
-    calls,
-    aiContentText,
-    messages,
-    messageHolder: modelContext,
-    invokeBoundLlmWithToolChoice,
-    eventListener,
-    turn,
-    locale,
-  });
-  if (reasoningOnlyRetry) {
-    ({ ai, rawCalls, calls, aiContentText } = reasoningOnlyRetry);
-  }
-  const toolCallStreamingRetry = await maybeRetryToolCallStreamingMismatch({
-    ai,
-    calls,
-    modelState,
-    invokeBoundLlmWithToolChoice,
-  });
-  if (toolCallStreamingRetry) {
-    ({ ai, rawCalls, calls, aiContentText } = toolCallStreamingRetry);
-  }
+  const { rawCalls, calls, aiContentText } = normalizeToolTurnAi(ai);
   applyAuthoritativeMessageId(ai, assistantMessageId);
   await runAgentRuntimeHook({
     runtime,
@@ -477,17 +426,23 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   }
   const assistantMessageUid = createSessionMessageUid();
   if (!calls.length) {
-    if (!ai.additional_kwargs || typeof ai.additional_kwargs !== "object") ai.additional_kwargs = {};
-    ai.additional_kwargs.noobotMessageId = assistantMessageUid;
+    ai = {
+      ...ai,
+      messageId: assistantMessageUid,
+    };
   }
-  appendMessage(modelContext, calls.length
-    ? buildAssistantModelMessageForToolCalls({
-        ai,
-        contentText: aiContentText,
-        toolCalls: calls,
-        noobotMessageId: assistantMessageUid,
-      })
-    : ai, { block: "incremental" });
+  appendMessage(
+    modelContext,
+    calls.length
+      ? buildAssistantModelMessageForToolCalls({
+          ai,
+          contentText: aiContentText,
+          toolCalls: calls,
+          noobotMessageId: assistantMessageUid,
+        })
+      : ai,
+    { block: "incremental" },
+  );
 
   const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages);
   const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
@@ -505,9 +460,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   await stateCommitter.pushAssistantMessage({
     content: aiContentText,
-    rawModelContent: ai?.content ?? null,
-    modelAdditionalKwargs: ai?.additional_kwargs ?? null,
-    modelResponseMetadata: ai?.response_metadata ?? null,
+    rawModelContent: ai?.text ?? null,
+    modelAdditionalKwargs: { reasoning: ai?.reasoning || "" },
+    modelResponseMetadata: { finishReason: ai?.finishReason || "", usage: ai?.usage || {} },
     type: calls.length ? "tool_call" : "message",
     toolCalls: calls.length ? formatToolCallsForStorage(calls) : [],
     modelAlias: currentModelInfo.modelAlias,
@@ -517,7 +472,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     presentationMessageId,
     chatPresentation: calls.length === 0,
     attachments: await persistModelGeneratedArtifacts({
-      aiContent: ai?.content,
+      aiContent: ai?.text,
       runtime,
       eventListener,
       dialogProcessId,
@@ -527,11 +482,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   });
 
   const mainModelToolTurnContent = String(aiContentText || "").trim();
-  if (
-    eventListener?.onEvent &&
-    mainModelToolTurnContent &&
-    calls.length
-  ) {
+  if (eventListener?.onEvent && mainModelToolTurnContent && calls.length) {
     emitMessageEvent(eventListener, runtime, "main_model_content", {
       turn,
       text: mainModelToolTurnContent,

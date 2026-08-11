@@ -8,42 +8,48 @@ import assert from "node:assert/strict";
 
 import {
   buildSearchEngineRequest,
-  searchWithOpenaiResponsesApi,
+  createWebSearchTool,
   searchWithSearchEngine,
 } from "../../src/tools/ai-models/web-search-tool.js";
 
-test("web_search: Responses API 调用应启用 web_search 工具", async () => {
+test("web_search: Responses API 模式只通过 canonical ModelPort 发起操作", async () => {
   let capturedRequest = null;
-  let capturedOptions = null;
   const abortController = new AbortController();
-  const openaiClient = {
-    responses: {
-      create: async (request, options) => {
+  const runtime = {
+    abortSignal: abortController.signal,
+    runtimeModel: "search-model",
+    globalConfig: {
+      providers: {
+        "search-model": {
+          enabled: true,
+          used_for_conversation: true,
+          api_key: "test-key",
+          model: "gpt-5.5",
+          format: "openai_compatible",
+          providerId: "openai",
+          adapterId: "openai-compatible",
+        },
+      },
+    },
+    userConfig: {},
+    modelPort: {
+      async invoke(request) {
         capturedRequest = request;
-        capturedOptions = options;
-        return {
-          output_text: "search result",
-          output: [{ type: "message" }],
-        };
+        return { result: { rawText: "search result", output: [{ type: "message" }] } };
       },
     },
   };
+  const [tool] = createWebSearchTool({ agentContext: { bindings: { runtime } } });
+  const result = JSON.parse(await tool.invoke({ query: "latest noobot news" }));
 
-  const result = await searchWithOpenaiResponsesApi({
-    openaiClient,
-    modelName: "gpt-5.5",
-    query: "latest noobot news",
-    abortSignal: abortController.signal,
-  });
-
-  assert.deepEqual(capturedRequest?.tools, [{ type: "web_search" }]);
-  assert.equal(capturedOptions?.signal, abortController.signal);
-  assert.equal(capturedRequest?.model, "gpt-5.5");
-  const inputText = capturedRequest?.input?.[0]?.content?.[0]?.text;
+  assert.equal(capturedRequest?.operation?.kind, "web_search");
+  assert.equal(capturedRequest?.options?.signal, abortController.signal);
+  assert.equal(capturedRequest?.model?.model, "gpt-5.5");
+  const inputText = capturedRequest?.operation?.input?.query;
   assert.match(inputText, /必须使用网页搜索/);
   assert.match(inputText, /不要只依赖模型已有知识/);
   assert.match(inputText, /latest noobot news/);
-  assert.equal(result.rawText, "search result");
+  assert.equal(result.text, "search result");
   assert.deepEqual(result.output, [{ type: "message" }]);
 });
 

@@ -31,6 +31,7 @@ import {
 } from "../helpers/guidance-plan-update-threshold-helper.js";
 import {
   createTestHookContext,
+  createTestModelResponse,
   createTestResolveModelMessages,
 } from "../helpers/public-runtime-fixtures.js";
 
@@ -106,8 +107,9 @@ test("separate_model refinement-only flow runs planning_refinement then guidance
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        if (payload.purpose === "planning_refinement") return { content: "ADD 1.1 细化步骤A" };
-        return { content: "" };
+        if (payload.purpose === "planning_refinement")
+          return createTestModelResponse("ADD 1.1 细化步骤A");
+        return createTestModelResponse("");
       },
     },
   };
@@ -129,7 +131,6 @@ test("separate_model refinement-only flow runs planning_refinement then guidance
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
   assert.equal(agentContext.payload.harness.state.pending.guidance, null);
 });
-
 
 test("planning revision followup uses dynamic programming scenario over initial text scenario", async () => {
   const agentContext = createAgentContext({
@@ -165,9 +166,9 @@ test("planning revision followup uses dynamic programming scenario over initial 
     harness: {
       resolveModelMessages,
       capabilityModelInvoker: async (payload = {}) => {
-        if (payload.purpose === "planning_refinement") return { content: "" };
-        return {
-          content: [
+        if (payload.purpose === "planning_refinement") return createTestModelResponse("");
+        return createTestModelResponse(
+          [
             revisedPlan,
             "[HARNESS_DYNAMIC_POLICY_PROMPT]",
             "scenario = programming",
@@ -176,7 +177,7 @@ test("planning revision followup uses dynamic programming scenario over initial 
             "Dynamic policy: perform smallest-slice reversible code changes and verify after each step.",
             "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
           ].join("\n"),
-        };
+        );
       },
     },
   };
@@ -191,7 +192,10 @@ test("planning revision followup uses dynamic programming scenario over initial 
   const followupText = String(followupMessage?.content || "");
   assert.match(followupText, /具体推进方式遵守系统场景策略/);
   assert.doesNotMatch(followupText, /\[HARNESS_SCENARIO_POLICY\]/);
-  assert.doesNotMatch(followupText, /Dynamic policy: perform smallest-slice reversible code changes and verify after each step/);
+  assert.doesNotMatch(
+    followupText,
+    /Dynamic policy: perform smallest-slice reversible code changes and verify after each step/,
+  );
   assert.doesNotMatch(followupText, /文本场景批次产出/);
   assert.doesNotMatch(followupText, /建议外部文本拿到就保真消费/);
 });
@@ -212,13 +216,16 @@ test("runPlanUpdateAfterSummary does not start revision when refinement is alrea
       resolveModelMessages,
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        return { content: "" };
+        return createTestModelResponse("");
       },
     },
   };
   const changed = await runPlanUpdateAfterSummary(ctx, meta, "小结完成");
   assert.equal(changed, false);
-  assert.deepEqual(invocations.map((item = {}) => item.purpose), []);
+  assert.deepEqual(
+    invocations.map((item = {}) => item.purpose),
+    [],
+  );
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRefinement, true);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
 });
@@ -239,7 +246,7 @@ test("separate_model skips planning_revision when revision attempts already reac
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        return { content: "小结完成" };
+        return createTestModelResponse("小结完成");
       },
     },
   };
@@ -249,7 +256,10 @@ test("separate_model skips planning_revision when revision attempts already reac
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
     meta,
   });
-  assert.deepEqual(invocations.map((item = {}) => item.purpose), ["summary"]);
+  assert.deepEqual(
+    invocations.map((item = {}) => item.purpose),
+    ["summary"],
+  );
 });
 
 test("separate_model summary does not consume refinement attempts", async () => {
@@ -269,8 +279,8 @@ test("separate_model summary does not consume refinement attempts", async () => 
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        if (payload.purpose === "summary") return { content: "小结完成" };
-        return { content: "" };
+        if (payload.purpose === "summary") return createTestModelResponse("小结完成");
+        return createTestModelResponse("");
       },
     },
   };
@@ -280,9 +290,15 @@ test("separate_model summary does not consume refinement attempts", async () => 
     ctx: { messages: [{ role: "user", content: "继续" }], agentContext },
     meta,
   });
-  assert.deepEqual(invocations.map((item = {}) => item.purpose), ["summary"]);
+  assert.deepEqual(
+    invocations.map((item = {}) => item.purpose),
+    ["summary"],
+  );
   assert.equal(agentContext.payload.harness.state.counters.planRevisionAttempts, 0);
-  assert.equal(agentContext.payload.harness.state.counters.planRefinementAttempts, MAX_PLAN_UPDATE_ATTEMPTS);
+  assert.equal(
+    agentContext.payload.harness.state.counters.planRefinementAttempts,
+    MAX_PLAN_UPDATE_ATTEMPTS,
+  );
   assert.equal(agentContext.payload.harness.logs.planning.length >= 0, true);
 });
 
@@ -298,8 +314,8 @@ test("separate_model does not auto-run refinement when revision has no main-plan
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload = {}) => {
         invocations.push(payload);
-        if (payload.purpose === "summary") return { content: "小结完成" };
-        return { content: "" };
+        if (payload.purpose === "summary") return createTestModelResponse("小结完成");
+        return createTestModelResponse("");
       },
     },
   };

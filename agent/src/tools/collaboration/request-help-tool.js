@@ -4,16 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { HumanMessage } from "@langchain/core/messages";
 import { filePath as path } from "@noobot/path-resolver";
 import { z } from "zod";
 import { mergeConfig } from "../../config/index.js";
-import {
-  createChatModel,
-  createChatModelByName,
-  resolveDefaultModelSpec,
-  resolveModelSpecByName,
-} from "../../models/index.js";
+import { resolveDefaultModelSpec, resolveModelSpecByName } from "../../models/index.js";
 import { TASK_STATUS } from "../../bot/async/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { invokeServiceHandler } from "../../integrations/services/index.js";
@@ -25,7 +19,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 export const REQUEST_HELP_TOOL_NAME = TOOL_NAME.REQUEST_HELP;
 const DEFAULT_HELP_SERVICES = [];
@@ -54,8 +48,7 @@ const MEMORY_PATHS = Object.freeze({
   YEARLY_SUMMARY_DIR: "yearly_summary",
 });
 const HELP_HINTS = Object.freeze({
-  EXPERIENCE:
-    "Use read_file/list tools to inspect memory paths for experience help.",
+  EXPERIENCE: "Use read_file/list tools to inspect memory paths for experience help.",
 });
 const REQUEST_HELP_TYPES = Object.freeze({
   ALL: "all_help",
@@ -81,10 +74,7 @@ function isEnabled(config = {}) {
 
 function resolveHelpConfig(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const effectiveConfig = mergeConfig(
-    runtime?.globalConfig || {},
-    runtime?.userConfig || {},
-  );
+  const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   const toolConfig =
     effectiveConfig?.tools?.[REQUEST_HELP_TOOL_NAME] &&
     typeof effectiveConfig.tools[REQUEST_HELP_TOOL_NAME] === "object"
@@ -94,10 +84,7 @@ function resolveHelpConfig(agentContext = {}) {
 }
 
 function normalizeHelpServiceList(toolConfig = {}) {
-  const configured =
-    toolConfig?.help_services ??
-    toolConfig?.helpServices ??
-    DEFAULT_HELP_SERVICES;
+  const configured = toolConfig?.help_services ?? toolConfig?.helpServices ?? DEFAULT_HELP_SERVICES;
   if (!Array.isArray(configured)) return [];
   return configured
     .map((item) =>
@@ -112,17 +99,13 @@ function normalizeHelpServiceList(toolConfig = {}) {
       const serviceName = normalizeName(
         item?.serviceName ?? item?.service_name ?? item?.name ?? "",
       );
-      const endpointName = normalizeName(
-        item?.endpointName ?? item?.endpoint_name ?? "",
-      );
-      const customParam = normalizeName(
-        item?.custom_param ?? item?.customParam ?? "",
-      );
-      const queryKey = normalizeName(
-        item?.query_key ?? item?.queryKey ?? DEFAULT_QUERY_KEY,
-      );
+      const endpointName = normalizeName(item?.endpointName ?? item?.endpoint_name ?? "");
+      const customParam = normalizeName(item?.custom_param ?? item?.customParam ?? "");
+      const queryKey = normalizeName(item?.query_key ?? item?.queryKey ?? DEFAULT_QUERY_KEY);
       const queryString =
-        item?.queryString && typeof item.queryString === "object" && !Array.isArray(item.queryString)
+        item?.queryString &&
+        typeof item.queryString === "object" &&
+        !Array.isArray(item.queryString)
           ? item.queryString
           : {};
       return {
@@ -139,9 +122,7 @@ function normalizeHelpServiceList(toolConfig = {}) {
 function pickEndpointName(serviceCfg = {}, preferred = "") {
   const configured = normalizeName(preferred);
   const endpoints =
-    serviceCfg?.endpoints && typeof serviceCfg.endpoints === "object"
-      ? serviceCfg.endpoints
-      : {};
+    serviceCfg?.endpoints && typeof serviceCfg.endpoints === "object" ? serviceCfg.endpoints : {};
   if (!Object.keys(endpoints).length) return "";
   if (configured && endpoints[configured]) return configured;
   if (endpoints[DEFAULT_SEARCH_ENDPOINT]) return DEFAULT_SEARCH_ENDPOINT;
@@ -215,15 +196,13 @@ async function invokeOneHelpService({
   }
 }
 
-function resolveHelpModelName({
+function resolveHelpModelSpec({
   runtime = {},
   toolConfig = {},
   globalConfig = {},
   userConfig = {},
 }) {
-  const configuredHelpModel = normalizeName(
-    toolConfig?.help_model ?? toolConfig?.helpModel ?? "",
-  );
+  const configuredHelpModel = normalizeName(toolConfig?.help_model ?? toolConfig?.helpModel ?? "");
   if (configuredHelpModel) {
     const spec = resolveModelSpecByName({
       modelName: configuredHelpModel,
@@ -231,7 +210,8 @@ function resolveHelpModelName({
       userConfig,
       fallbackToDefault: false,
     });
-    if (spec) return spec?.alias || spec?.model || configuredHelpModel;
+    if (!spec) throw new Error(`configured help model not found: ${configuredHelpModel}`);
+    return spec;
   }
   const runtimeModel = normalizeName(runtime?.runtimeModel || "");
   if (runtimeModel) {
@@ -241,60 +221,42 @@ function resolveHelpModelName({
       userConfig,
       fallbackToDefault: false,
     });
-    if (spec) return spec?.alias || spec?.model || runtimeModel;
+    if (!spec) throw new Error(`runtime help model not found: ${runtimeModel}`);
+    return spec;
   }
   const defaultSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
-  return defaultSpec?.alias || defaultSpec?.model || "";
+  if (!defaultSpec) throw new Error("request help model is not configured");
+  return defaultSpec;
 }
 
-async function invokeHelpModel({
-  helpContent,
-  runtime,
-  toolConfig,
-  globalConfig,
-  userConfig,
-}) {
-  const modelName = resolveHelpModelName({
+async function invokeHelpModel({ helpContent, runtime, toolConfig, globalConfig, userConfig }) {
+  const modelSpec = resolveHelpModelSpec({
     runtime,
     toolConfig,
     globalConfig,
     userConfig,
   });
-  const llm = modelName
-    ? createChatModelByName(modelName, {
-        globalConfig,
-        userConfig,
-        streaming: false,
-        context: { runtime },
-        invocation: {
-          flow: "tool.request_help",
-          purpose: "collaboration_help",
-          domain: "collaboration",
-          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-        },
-      })
-    : createChatModel({
-        globalConfig,
-        userConfig,
-        streaming: false,
-        context: { runtime },
-        invocation: {
-          flow: "tool.request_help",
-          purpose: "collaboration_help",
-          domain: "collaboration",
-          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-        },
-      });
-  const response = await llm.invoke([new HumanMessage(helpContent)], {
-    signal: runtime?.abortSignal || undefined,
+  const modelPort = runtime?.modelPort;
+  if (!modelPort || typeof modelPort.invoke !== "function") {
+    throw new Error("request help requires runtime.modelPort");
+  }
+  const response = await modelPort.invoke({
+    model: modelSpec,
+    messages: [{ role: "user", content: helpContent }],
+    options: {
+      streaming: false,
+      signal: runtime?.abortSignal || undefined,
+    },
+    invocation: {
+      flow: "tool.request_help",
+      purpose: "collaboration_help",
+      domain: "collaboration",
+      contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+    },
   });
-  const content =
-    typeof response?.content === "string"
-      ? response.content
-      : JSON.stringify(response?.content || "");
   return {
-    modelName: modelName || "",
-    content: String(content || "").trim(),
+    modelName: modelSpec.alias || modelSpec.model,
+    content: response.output.text,
   };
 }
 
@@ -343,10 +305,9 @@ export function createRequestHelpTool({ agentContext } = {}) {
       const normalizedHelpContent = String(helpContent || "").trim();
       const normalizedRequestType = normalizeRequestType(requestType);
       if (!normalizedHelpContent) {
-        throw recoverableToolError(
-          tTool(runtime, "tools.request_help.helpContentRequired"),
-          { code: ERROR_CODE.RECOVERABLE_INPUT_MISSING },
-        );
+        throw recoverableToolError(tTool(runtime, "tools.request_help.helpContentRequired"), {
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+        });
       }
 
       if (normalizedRequestType === REQUEST_HELP_TYPES.EXPERIENCE) {
@@ -369,17 +330,12 @@ export function createRequestHelpTool({ agentContext } = {}) {
       const globalConfig = runtime?.globalConfig || {};
       const userConfig = runtime?.userConfig || {};
       const userId = normalizeName(
-        agentContext?.userId ||
-          runtime?.userId ||
-          runtime?.systemRuntime?.userId ||
-          "",
+        agentContext?.userId || runtime?.userId || runtime?.systemRuntime?.userId || "",
       );
       const servicesConfig = effectiveConfig?.services || {};
       const helpServiceList = normalizeHelpServiceList(toolConfig);
       const shouldCallServices = Boolean(
-        normalizedRequestType !== REQUEST_HELP_TYPES.MODEL &&
-          helpServiceList.length &&
-          userId,
+        normalizedRequestType !== REQUEST_HELP_TYPES.MODEL && helpServiceList.length && userId,
       );
       const shouldCallModel = normalizedRequestType !== REQUEST_HELP_TYPES.WEB_SEARCH;
 
@@ -430,14 +386,13 @@ export function createRequestHelpTool({ agentContext } = {}) {
       const hasServiceSuccess = serviceResults.some((item) => item?.ok === true);
       const hasModelSuccess = shouldCallModel ? !modelResult?.error : false;
       const hasAnySuccess = shouldCallServices ? hasServiceSuccess : hasModelSuccess;
-      const status =
-        hasAnySuccess
-          ? shouldCallServices && shouldCallModel
-            ? hasServiceSuccess && hasModelSuccess
-              ? TOOL_RESULT_STATUS.COMPLETED
-              : TOOL_RESULT_STATUS.PARTIAL
-            : TOOL_RESULT_STATUS.COMPLETED
-          : TOOL_RESULT_STATUS.FAILED;
+      const status = hasAnySuccess
+        ? shouldCallServices && shouldCallModel
+          ? hasServiceSuccess && hasModelSuccess
+            ? TOOL_RESULT_STATUS.COMPLETED
+            : TOOL_RESULT_STATUS.PARTIAL
+          : TOOL_RESULT_STATUS.COMPLETED
+        : TOOL_RESULT_STATUS.FAILED;
       const systemRuntime = getSystemRuntimeFromRuntime(runtime);
       systemRuntime.toolConsecutiveFailureCount = 0;
 

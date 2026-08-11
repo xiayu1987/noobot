@@ -11,6 +11,7 @@ import path from "node:path";
 
 import {
   createTestHookManager as createAgentHookManager,
+  createTestModelResponse,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
@@ -158,7 +159,9 @@ test("phase acceptance separate model receives context, summaries, revised plan,
         planningGuidanceMode: "separate_model",
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1.1 status=pass risk=low evidence=[ok] [阶段通过]" };
+          return createTestModelResponse(
+            "ADD A1 plan=1.1 status=pass risk=low evidence=[ok] [阶段通过]",
+          );
         },
       },
     },
@@ -292,7 +295,9 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
         },
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]" };
+          return createTestModelResponse(
+            "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]",
+          );
         },
       },
     },
@@ -420,7 +425,9 @@ test("phase acceptance separate model drops historical summary relays and passes
         resolveModelMessages,
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]" };
+          return createTestModelResponse(
+            "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]",
+          );
         },
       },
     },
@@ -504,7 +511,9 @@ test("phase acceptance separate model uses messageBlocks incremental when ctx.mo
         resolveModelMessages,
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]" };
+          return createTestModelResponse(
+            "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]",
+          );
         },
       },
     },

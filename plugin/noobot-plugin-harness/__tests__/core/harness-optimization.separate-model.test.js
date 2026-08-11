@@ -20,9 +20,11 @@ import {
   createPlanningHandler,
 } from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
-import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestHookContext,
+  createTestModelResponse,
+} from "../helpers/public-runtime-fixtures.js";
 import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
 
 test("planning separate_model avoids duplicate invoker calls while one run is in-flight", async () => {
@@ -38,12 +40,12 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
       capabilityModelInvoker: async () => {
         invokerCalls += 1;
         await new Promise((resolve) => setTimeout(resolve, 80));
-        return {
-          content: JSON.stringify({
+        return createTestModelResponse(
+          JSON.stringify({
             taskOwner: "admin",
             taskChecklist: [{ index: 1, task: "inspect planning path", owner: "admin" }],
           }),
-        };
+        );
       },
     },
   };
@@ -65,7 +67,6 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
     false,
   );
 });
-
 test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when enabled", () => {
   const ctx = createTestHookContext();
   const payload = {
@@ -194,12 +195,12 @@ test("planning separate_model uses injected resolveModelMessages from harness me
       },
       capabilityModelInvoker: async ({ messages = [] } = {}) => {
         capturedMessages = messages;
-        return {
-          content: JSON.stringify({
+        return createTestModelResponse(
+          JSON.stringify({
             taskOwner: "admin",
             taskChecklist: [{ index: 1, task: "ok", owner: "admin" }],
           }),
-        };
+        );
       },
     },
   };
@@ -215,39 +216,4 @@ test("planning separate_model uses injected resolveModelMessages from harness me
     capturedMessages.some((item = {}) => String(item?.content || "") === "keep-me"),
     true,
   );
-});
-
-test("invokeWithReasoningRetry throws error when reasoning-only persists after one retry", async () => {
-  let calls = 0;
-  const ctx = {
-    agentContext: {
-      payload: {
-        harness: {
-          state: { counters: {}, flags: {}, signals: {}, pending: {} },
-          taskChecklist: [],
-          acceptanceReports: [],
-          reviewReports: [],
-          planningRawOutputs: [],
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
-        },
-      },
-    },
-  };
-
-  await assert.rejects(
-    () =>
-      invokeWithReasoningRetry({
-        invoker: async () => {
-          calls += 1;
-          return { content: "<think>only reasoning</think>" };
-        },
-        invokePayload: { messages: [{ role: "user", content: "x" }] },
-        maxReasoningRetries: 1,
-        purpose: "planning",
-        domain: "planning",
-        ctx,
-      }),
-    (error) => error?.code === "CAPABILITY_REASONING_RETRY_EXHAUSTED",
-  );
-  assert.equal(calls, 2);
 });

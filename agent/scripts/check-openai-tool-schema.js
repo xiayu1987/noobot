@@ -8,9 +8,9 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { ChatOpenAI } from "@langchain/openai";
-import { HumanMessage } from "@langchain/core/messages";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
+import { createModelRequestExecutor } from "@noobot/model-runtime";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { buildTools } from "noobot-agent/tools";
 import { createConnectorTools } from "noobot-agent/tools/connectors/connector-toolkit";
 import { sanitizeUserConfig } from "noobot-agent/config";
@@ -378,29 +378,45 @@ async function main() {
     return;
   }
 
-  const llm = new ChatOpenAI({
-    model: String(modelSpec.model || ""),
-    temperature: Number(modelSpec?.temperature ?? 0),
-    streaming: false,
-    apiKey: resolvedApiKey,
-    ...(resolvedBaseUrl ? { configuration: { baseURL: resolvedBaseUrl } } : {}),
+  const modelPort = createModelRequestExecutor({
+    credentialPort: {
+      resolve: async () => resolvedApiKey,
+    },
   });
   const liveErrors = [];
   for (const item of targetTools) {
     try {
       const toolName = String(item?.name || "").trim();
-      const result = await llm
-        .bindTools([item], { tool_choice: "auto" })
-        .invoke([
-          new HumanMessage(
-            [
+      const result = await modelPort.invoke({
+        model: modelSpec,
+        messages: [
+          {
+            role: "user",
+            content: [
               "请调用工具完成测试。",
               `工具名：${toolName}`,
               "要求：必须发起一次 tool call；参数可使用最小可行占位值。",
             ].join("\n"),
-          ),
-        ]);
-      const toolCalls = Array.isArray(result?.tool_calls) ? result.tool_calls : [];
+          },
+        ],
+        tools: [item],
+        options: {
+          streaming: false,
+          toolBinding: { tool_choice: "auto" },
+        },
+        invocation: {
+          sessionId: "tool-schema-check",
+          parentSessionId: "",
+          dialogProcessId: "tool-schema-check",
+          turnScopeId: `tool-schema-check:${toolName}`,
+          runId: `tool-schema-check:${toolName}`,
+          flow: "diagnostic.tool_schema",
+          purpose: "live_tool_schema_validation",
+          domain: "diagnostic",
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+        },
+      });
+      const toolCalls = result.output.toolCalls;
       const hasExpectedToolCall = toolCalls.some(
         (call) => String(call?.name || "").trim() === toolName,
       );

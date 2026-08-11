@@ -63,6 +63,20 @@ export const PROVIDER_FORMAT = {
   DASHSCOPE: "dashscope",
 };
 
+export const MODEL_PROVIDER_ID = {
+  OPENAI: "openai",
+  ANTHROPIC: "anthropic",
+  GEMINI: "gemini",
+  DEEPSEEK: "deepseek",
+  DASHSCOPE: "dashscope",
+  ZHIPU: "zhipu",
+};
+
+export const MODEL_ADAPTER_ID = {
+  OPENAI_COMPATIBLE: "openai-compatible",
+  DASHSCOPE: "dashscope",
+};
+
 export const MCP_SERVER_TYPE = {
   STREAMABLE_HTTP: "streamableHttp",
   SSE: "sse",
@@ -194,8 +208,23 @@ export function normalizeProviderFormat(input = "") {
   const value = String(input || "")
     .trim()
     .toLowerCase();
+  if (value === PROVIDER_FORMAT.OPENAI_COMPATIBLE) return PROVIDER_FORMAT.OPENAI_COMPATIBLE;
   if (value === PROVIDER_FORMAT.DASHSCOPE) return PROVIDER_FORMAT.DASHSCOPE;
-  return PROVIDER_FORMAT.OPENAI_COMPATIBLE;
+  return "";
+}
+
+export function normalizeModelProviderId(input = "") {
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
+  return Object.values(MODEL_PROVIDER_ID).includes(value) ? value : "";
+}
+
+export function normalizeModelAdapterId(input = "") {
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
+  return Object.values(MODEL_ADAPTER_ID).includes(value) ? value : "";
 }
 
 export function normalizeMcpServerType(input = "") {
