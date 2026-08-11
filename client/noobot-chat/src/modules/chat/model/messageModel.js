@@ -237,6 +237,7 @@ function createMessageModel(messageItem = {}) {
     sessionId,
     session_id: sessionId,
     role: messageRole,
+    chatPresentation: canonicalMessage.chatPresentation,
     content:
       canonicalMessage?.chatPresentation === false
         ? ""
@@ -373,6 +374,7 @@ function foldConversationMessages(messages = [], buildView) {
     .filter((messageItem) => {
       if (isPluginInjectedMessage(messageItem)) return false;
       const role = getMessageRole(messageItem);
+      if (role !== "assistant" && messageItem?.chatPresentation === false) return false;
       return role === "assistant" || role === "user";
     })
     .map((messageItem) => normalizeFoldedPresentationMessage(messageItem, buildView(messageItem)));

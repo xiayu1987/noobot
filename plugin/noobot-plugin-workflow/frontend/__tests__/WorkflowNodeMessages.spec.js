@@ -18,40 +18,50 @@ describe("workflow node message projection", () => {
       messages: [stale],
     });
     let messages;
-    const wrapper = mount(defineComponent({
-      setup() {
-        messages = useWorkflowNodeMessages({
-          props: {
-            userId: "user-1",
-            isImageMime: vi.fn(() => false),
-            logWorkflowDiagnostics: vi.fn(),
-          },
-          selectedNode: ref({ sessionId: "child-session" }),
-          selectedRuntimeNode: ref(null),
-          selectedNodeMessages,
-          selectedNodeRawMessages: ref([]),
-          selectedNodeSessionSummary,
-          selectedNodeSessionId: ref("child-session"),
-        });
-        return () => h("div");
-      },
-    }));
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          messages = useWorkflowNodeMessages({
+            props: {
+              userId: "user-1",
+              isImageMime: vi.fn(() => false),
+              logWorkflowDiagnostics: vi.fn(),
+            },
+            selectedNode: ref({ sessionId: "child-session" }),
+            selectedRuntimeNode: ref(null),
+            selectedNodeMessages,
+            selectedNodeRawMessages: ref([]),
+            selectedNodeSessionSummary,
+            selectedNodeSessionId: ref("child-session"),
+          });
+          return () => h("div");
+        },
+      }),
+    );
 
     expect(messages.displayNodeMessages.value).toEqual([]);
     selectedNodeMessages.value = [final];
     await nextTick();
 
     expect(messages.displayNodeMessages.value).toHaveLength(1);
-    expect(messages.displayNodeMessages.value[0]).toEqual(expect.objectContaining({
-      id: "final",
-      content: "final result",
-    }));
+    expect(messages.displayNodeMessages.value[0]).toEqual(
+      expect.objectContaining({
+        id: "final",
+        content: "final result",
+      }),
+    );
     wrapper.unmount();
   });
 
   it("projects one assistant conversation and keeps tool results out of message bubbles", async () => {
     const selectedNodeMessages = ref([
-      { id: "user-1", role: "user", content: "inspect", sessionId: "child-session", turnScopeId: "turn-1" },
+      {
+        id: "user-1",
+        role: "user",
+        content: "inspect",
+        sessionId: "child-session",
+        turnScopeId: "turn-1",
+      },
       {
         id: "assistant-1",
         presentationMessageId: "assistant-presentation-1",
@@ -82,29 +92,82 @@ describe("workflow node message projection", () => {
       },
     ]);
     let messages;
-    const wrapper = mount(defineComponent({
-      setup() {
-        messages = useWorkflowNodeMessages({
-          props: {
-            userId: "user-1",
-            isImageMime: vi.fn(() => false),
-            logWorkflowDiagnostics: vi.fn(),
-          },
-          selectedNode: ref({ sessionId: "child-session" }),
-          selectedRuntimeNode: ref(null),
-          selectedNodeMessages,
-          selectedNodeRawMessages: ref([]),
-          selectedNodeSessionSummary: ref({ sessionId: "child-session" }),
-          selectedNodeSessionId: ref("child-session"),
-        });
-        return () => h("div");
-      },
-    }));
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          messages = useWorkflowNodeMessages({
+            props: {
+              userId: "user-1",
+              isImageMime: vi.fn(() => false),
+              logWorkflowDiagnostics: vi.fn(),
+            },
+            selectedNode: ref({ sessionId: "child-session" }),
+            selectedRuntimeNode: ref(null),
+            selectedNodeMessages,
+            selectedNodeRawMessages: ref([]),
+            selectedNodeSessionSummary: ref({ sessionId: "child-session" }),
+            selectedNodeSessionId: ref("child-session"),
+          });
+          return () => h("div");
+        },
+      }),
+    );
 
     await nextTick();
-    expect(messages.displayNodeMessages.value.map((item) => item.role)).toEqual(["user", "assistant"]);
+    expect(messages.displayNodeMessages.value.map((item) => item.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
     expect(messages.displayNodeMessages.value[1].toolTimeline.length).toBeGreaterThan(0);
     expect(messages.displayNodeMessages.value.some((item) => item.role === "tool")).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("uses the shared chat presentation projection for child-session control messages", async () => {
+    const selectedNodeMessages = ref([
+      {
+        id: "child-task",
+        role: "user",
+        content: "完成工作流节点任务",
+        sessionId: "child-session",
+        turnScopeId: "turn-1",
+      },
+      {
+        id: "task-check-control",
+        role: "user",
+        content: "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片",
+        chatPresentation: false,
+        sessionId: "child-session",
+        turnScopeId: "turn-1",
+      },
+    ]);
+    let messages;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          messages = useWorkflowNodeMessages({
+            props: {
+              userId: "user-1",
+              isImageMime: vi.fn(() => false),
+              logWorkflowDiagnostics: vi.fn(),
+            },
+            selectedNode: ref({ sessionId: "child-session" }),
+            selectedRuntimeNode: ref(null),
+            selectedNodeMessages,
+            selectedNodeRawMessages: ref([]),
+            selectedNodeSessionSummary: ref({ sessionId: "child-session" }),
+            selectedNodeSessionId: ref("child-session"),
+          });
+          return () => h("div");
+        },
+      }),
+    );
+
+    await nextTick();
+    expect(messages.displayNodeMessages.value).toHaveLength(1);
+    expect(messages.displayNodeMessages.value[0]).toEqual(
+      expect.objectContaining({ id: "child-task", content: "完成工作流节点任务" }),
+    );
     wrapper.unmount();
   });
 });
