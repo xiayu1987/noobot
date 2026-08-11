@@ -7,9 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { HumanMessage } from "@langchain/core/messages";
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
-import {
-  createModelContext,
-} from "@noobot/context-protocol";
+import { createModelContext } from "@noobot/context-protocol";
 
 import {
   maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
@@ -49,9 +47,17 @@ test("task check prompt is periodic and independent from phase summary state", (
   assert.equal(modelContext.messageBlocks.incremental.length, 1);
   const taskCheckEntity = modelState.runtime.currentTurnMessages.toArray()[0];
   assert.equal(taskCheckEntity.role, "user");
+  assert.equal(taskCheckEntity.chatPresentation, false);
   assert.equal(modelContext.messages[0] instanceof HumanMessage, true);
-  assert.equal(taskCheckEntity.messageUid, modelContext.messages[0].additional_kwargs.noobotMessageId);
-  assert.equal(taskCheckEntity.additional_kwargs.noobotInternalMessageType, "noobot.task_check_prompt");
+  assert.equal(modelContext.messages[0].additional_kwargs.chatPresentation, false);
+  assert.equal(
+    taskCheckEntity.messageUid,
+    modelContext.messages[0].additional_kwargs.noobotMessageId,
+  );
+  assert.equal(
+    taskCheckEntity.additional_kwargs.noobotInternalMessageType,
+    "noobot.task_check_prompt",
+  );
   assert.equal(
     modelContext.messageBlocks.incremental[0].additional_kwargs.noobotInternalMessageType,
     "noobot.task_check_prompt",
@@ -74,11 +80,14 @@ test("a task_check call starts the next periodic slice without adding a prompt",
     modelContext,
   };
   attachCanonicalTurn(modelState, loopState);
-  assert.equal(maybeRequestTaskCheck({
-    modelState,
-    loopState,
-    toolCallResults: [{ call: { name: "task_check" } }],
-  }), false);
+  assert.equal(
+    maybeRequestTaskCheck({
+      modelState,
+      loopState,
+      toolCallResults: [{ call: { name: "task_check" } }],
+    }),
+    false,
+  );
   assert.equal(modelState.runtime.systemRuntime.taskCheckLoopCount, 0);
   assert.equal(modelContext.messages.length, 0);
 });
@@ -114,10 +123,16 @@ test("maybePromptHelpToolByFailure injects prompt and resets failure counter", (
   assert.equal(modelState.runtime.systemRuntime.toolConsecutiveFailureCount, 0);
   assert.equal(loopState.modelContext.messages.length, 1);
   assert.equal(loopState.modelContext.messages[0] instanceof HumanMessage, true);
-  assert.equal(loopState.modelContext.messageBlocks.incremental[0], loopState.modelContext.messages[0]);
+  assert.equal(
+    loopState.modelContext.messageBlocks.incremental[0],
+    loopState.modelContext.messages[0],
+  );
   assert.ok(loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
-  assert.equal(events.some((item) => item?.event === "help_tool_failure_prompted"), true);
+  assert.equal(
+    events.some((item) => item?.event === "help_tool_failure_prompted"),
+    true,
+  );
 });
 
 test("maybePromptHelpToolByLoop injects prompt through message store", () => {
@@ -145,12 +160,18 @@ test("maybePromptHelpToolByLoop injects prompt through message store", () => {
   assert.equal(triggered, true);
   assert.equal(loopState.modelContext.messages.length, 1);
   assert.equal(loopState.modelContext.messages[0] instanceof HumanMessage, true);
-  assert.equal(loopState.modelContext.messageBlocks.incremental[0], loopState.modelContext.messages[0]);
+  assert.equal(
+    loopState.modelContext.messageBlocks.incremental[0],
+    loopState.modelContext.messages[0],
+  );
   assert.deepEqual(loopState.modelContext.messageBlocks.system, []);
   assert.equal(modelState.runtime.currentTurnMessages.toArray()[0].role, "user");
   assert.ok(loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
   assert.equal(loopState.modelContext.messageBlocks.systemIds, undefined);
-  assert.equal(events.some((item) => item?.event === "help_tool_loop_prompted"), true);
+  assert.equal(
+    events.some((item) => item?.event === "help_tool_loop_prompted"),
+    true,
+  );
 });
 
 test("maybeRequestPhaseSummary injects summary prompt when threshold reached", () => {
@@ -184,14 +205,26 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
   assert.equal(modelState.runtime.systemRuntime.needsPhaseSummary, true);
   assert.equal(loopState.modelContext.messages.length, 1);
   assert.equal(loopState.modelContext.messages[0] instanceof HumanMessage, true);
-  assert.equal(loopState.modelContext.messageBlocks.incremental[0], loopState.modelContext.messages[0]);
+  assert.equal(
+    loopState.modelContext.messageBlocks.incremental[0],
+    loopState.modelContext.messages[0],
+  );
   const phaseEntity = modelState.runtime.currentTurnMessages.toArray()[0];
   assert.equal(phaseEntity.role, "user");
-  assert.equal(phaseEntity.messageUid, loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
-  assert.equal(phaseEntity.additional_kwargs.noobotInternalMessageType, "noobot.phase_summary_prompt");
+  assert.equal(
+    phaseEntity.messageUid,
+    loopState.modelContext.messages[0].additional_kwargs.noobotMessageId,
+  );
+  assert.equal(
+    phaseEntity.additional_kwargs.noobotInternalMessageType,
+    "noobot.phase_summary_prompt",
+  );
   assert.ok(loopState.modelContext.messages[0].additional_kwargs.noobotMessageId);
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
-  assert.equal(events.some((item) => item?.event === "phase_summary_required"), true);
+  assert.equal(
+    events.some((item) => item?.event === "phase_summary_required"),
+    true,
+  );
 });
 
 test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars exceed threshold", () => {
@@ -230,7 +263,10 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
   assert.equal(modelState.runtime.systemRuntime.needsPhaseSummary, true);
   assert.equal(loopState.modelContext.messages.length, 2);
   assert.equal(loopState.modelContext.messages[1] instanceof HumanMessage, true);
-  assert.equal(loopState.modelContext.messageBlocks.incremental[1], loopState.modelContext.messages[1]);
+  assert.equal(
+    loopState.modelContext.messageBlocks.incremental[1],
+    loopState.modelContext.messages[1],
+  );
   assert.ok(loopState.modelContext.messages[1].additional_kwargs.noobotMessageId);
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
   const event = events.find((item) => item?.event === "phase_summary_required") || {};

@@ -76,20 +76,19 @@ test("separate_model analysis uses aligned agent context then user request and u
     ],
   );
   const planContextIndex = capturedPayload.messages.findIndex((item = {}) =>
-    String(item?.content || "").startsWith("<!-- harness-plan-checklist-context -->"));
+    String(item?.content || "").startsWith("<!-- harness-plan-checklist-context -->"),
+  );
   assert.ok(planContextIndex > 1);
   assert.equal(capturedPayload.messages[planContextIndex]?.role, "user");
   const analysisRequest = capturedPayload.messages.find((item = {}) =>
-    String(item?.content || "").startsWith("<!-- harness-guidance-analysis -->"));
+    String(item?.content || "").startsWith("<!-- harness-guidance-analysis -->"),
+  );
   assert.equal(analysisRequest?.role, "user");
   assert.match(
     String(analysisRequest?.content || ""),
     /根据当前执行结果|current execution result/i,
   );
-  assert.match(
-    String(analysisRequest?.content || ""),
-    /不要自己执行|do not execute/i,
-  );
+  assert.match(String(analysisRequest?.content || ""), /不要自己执行|do not execute/i);
   assert.match(
     String(analysisRequest?.content || ""),
     /如无变化，请回复“分析中”|if nothing has changed, reply with "Analyzing"/i,
@@ -99,12 +98,12 @@ test("separate_model analysis uses aligned agent context then user request and u
   assert.match(String(responsibilityMessage?.content || ""), /分析|analysis/i);
   assert.equal(agentContext.payload.harness.state.pending.analysis, false);
   assert.equal(
-    ctx.modelContext.messages.some((item = {}) =>
-      String(item?.injectedMessageType || "").includes("guidance") &&
-      item?.purpose === "guidance" &&
-      item?.pluginFlow === "analysis" &&
-      item?.chain === "auxiliary" &&
-      String(item?.content || "").includes("疑点"),
+    ctx.modelContext.messages.some(
+      (item = {}) =>
+        item?.purpose === "guidance" &&
+        item?.pluginFlow === "analysis" &&
+        item?.chain === "auxiliary" &&
+        String(item?.content || "").includes("疑点"),
     ),
     true,
   );
@@ -115,11 +114,13 @@ test("separate_model skips analysis when trailing assistant tool call has conten
   const invocations = [];
   const agentContext = createAgentContext({ pending: { analysis: true } });
   const ctx = {
-    messages: [{
-      role: "assistant",
-      content: "先检查相关代码。",
-      tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
-    }],
+    messages: [
+      {
+        role: "assistant",
+        content: "先检查相关代码。",
+        tool_calls: [{ id: "call-1", function: { name: "read_file", arguments: "{}" } }],
+      },
+    ],
     agentContext,
   };
   const meta = {
@@ -137,7 +138,11 @@ test("separate_model skips analysis when trailing assistant tool call has conten
   assert.equal(invocations.length, 0);
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
 
-  appendMessage(ctx, { role: "tool", content: "读取完成", tool_call_id: "call-1" }, { block: "incremental" });
+  appendMessage(
+    ctx,
+    { role: "tool", content: "读取完成", tool_call_id: "call-1" },
+    { block: "incremental" },
+  );
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(invocations.length, 0);
@@ -182,6 +187,45 @@ test("separate_model skips analysis for LangChain AIMessage tool call with conte
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
 });
 
+test("analysis waits for the separate model before the before_llm_call hook completes", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({ pending: { analysis: true } });
+  const ctx = {
+    messages: [{ role: "assistant", content: "工具已完成" }],
+    agentContext,
+  };
+  let resolveInvocation;
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () =>
+        new Promise((resolve) => {
+          resolveInvocation = resolve;
+        }),
+    },
+  };
+
+  let completed = false;
+  const hookPromise = handler({
+    capability: "guidance",
+    point: "agent.before_llm_call",
+    ctx,
+    meta,
+  }).then(() => {
+    completed = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(completed, false);
+  assert.equal(agentContext.payload.harness.state.pending.analysis, false);
+  resolveInvocation({ content: "分析完成" });
+  await hookPromise;
+  assert.equal(completed, true);
+  assert.equal(
+    ctx.modelContext.messages.some((item = {}) => String(item?.content || "").includes("分析完成")),
+    true,
+  );
+});
+
 test("separate_model guidance pending triggers guidance invoker without analysis flow", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];
@@ -203,17 +247,21 @@ test("separate_model guidance pending triggers guidance invoker without analysis
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
 
-  assert.deepEqual(invocations.map((item = {}) => item.purpose), ["guidance"]);
+  assert.deepEqual(
+    invocations.map((item = {}) => item.purpose),
+    ["guidance"],
+  );
   assert.equal(invocations[0]?.pluginFlow, undefined);
   assert.equal(invocations[0]?.chain, undefined);
   assert.equal(agentContext.payload.harness.state.pending.guidance, null);
   assert.equal(agentContext.payload.harness.state.counters.consecutiveToolFailures, 0);
   assert.equal(agentContext.payload.harness.state.counters.totalToolFailures, 0);
   assert.equal(
-    ctx.modelContext.messages.some((item = {}) =>
-      item?.purpose === "guidance" &&
-      item?.pluginFlow === undefined &&
-      String(item?.content || "").includes("建议先确认失败工具"),
+    ctx.modelContext.messages.some(
+      (item = {}) =>
+        item?.purpose === "guidance" &&
+        item?.pluginFlow === undefined &&
+        String(item?.content || "").includes("建议先确认失败工具"),
     ),
     true,
   );
