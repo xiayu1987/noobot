@@ -352,7 +352,7 @@ describe("6. 配置获取完整性测试", () => {
       });
       assert.ok(spec !== null, "应能解析到 spec");
       assert.equal(spec.temperature, 0.5, "temperature 应被 skill 覆盖");
-      assert.equal(spec.maxTokens, 2048, "maxTokens 应被 skill 覆盖");
+      assert.equal(spec.max_tokens, 2048, "max_tokens 应被 skill 覆盖");
     });
 
     it("skill 配置为空时应使用默认模型", () => {
@@ -438,7 +438,7 @@ describe("7. 模型切换测试", () => {
       const skillSpec = resolveSkillModelSpec({ skillConfig, globalConfig, userConfig });
 
       assert.ok(skillSpec.temperature === 0.2, "skill temperature 应生效");
-      assert.ok(skillSpec.maxTokens === 1024, "skill maxTokens 应生效");
+      assert.ok(skillSpec.max_tokens === 1024, "skill max_tokens 应生效");
     });
   });
 

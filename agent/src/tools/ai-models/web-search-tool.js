@@ -242,7 +242,10 @@ export function createWebSearchTool({ agentContext }) {
               kind: MODEL_OPERATION_KIND.WEB_SEARCH,
               input: { query: buildWebSearchInputText(normalizedQuery) },
             },
-            options: { signal: runtime?.abortSignal || undefined },
+            options: {
+              signal: runtime?.abortSignal || undefined,
+              locale: runtime?.systemRuntime?.config?.locale || runtime?.locale || "zh-CN",
+            },
             invocation: {
               flow: WEB_SEARCH_FLOW_NAME,
               purpose: WEB_SEARCH_PURPOSE_NAME,

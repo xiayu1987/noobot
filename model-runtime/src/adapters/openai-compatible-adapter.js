@@ -56,9 +56,11 @@ export function createOpenAiCompatibleClient({
   const promptCacheRetention = modelKwargs.prompt_cache_retention;
   const defaultHeaders = { ...headers };
   const configuration = { defaultHeaders, ...(spec.base_url ? { baseURL: spec.base_url } : {}) };
+  const sampling = {};
+  if (spec.temperature !== undefined && spec.top_p === undefined) sampling.temperature = Number(spec.temperature);
   return new ChatOpenAI({
     model: spec.model,
-    temperature: Number(spec.temperature ?? 0.7),
+    ...sampling,
     streaming: streaming === true,
     maxTokens: spec.max_tokens !== undefined ? Number(spec.max_tokens) : undefined,
     apiKey: credential,

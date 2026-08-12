@@ -16,6 +16,8 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
   );
   expect(record.data?.invocationId).toBeTruthy();
   expect(record.data?.modelInstanceId).toBeTruthy();
+  expect(Number.isInteger(record.data?.attempt)).toBe(true);
+  expect(record.data.attempt).toBeGreaterThan(0);
   expect(Number.isInteger(record.data?.invocationSequence)).toBe(true);
   expect(record.userId).toBeTruthy();
   expect(record.sessionId).toBeTruthy();
@@ -234,7 +236,8 @@ export function assertWorkflowChildModelInvocation(record, rootSessionId) {
 }
 
 export function isMainAgentModelInvocation(record) {
-  return record.data?.invocation?.purpose === "main_agent";
+  const invocation = record.data?.invocation || {};
+  return invocation.flow === "agent.main" && invocation.domain === "primary";
 }
 
 export function assertModelInvocationTraceSet(records, { rootSessionId } = {}) {
@@ -242,8 +245,22 @@ export function assertModelInvocationTraceSet(records, { rootSessionId } = {}) {
   expect(traces.length).toBeGreaterThan(0);
   traces.forEach((record) => assertModelInvocationTrace(record, { rootSessionId }));
 
-  const invocationIds = traces.map((record) => record.data.invocationId);
-  expect(new Set(invocationIds).size).toBe(invocationIds.length);
+  const attempts = traces.map(
+    (record) => `${record.data.invocationId}:${record.data.attempt}`,
+  );
+  expect(new Set(attempts).size).toBe(attempts.length);
+
+  const attemptsByInvocation = new Map();
+  for (const record of traces) {
+    const attemptsForInvocation = attemptsByInvocation.get(record.data.invocationId) || [];
+    attemptsForInvocation.push(record.data.attempt);
+    attemptsByInvocation.set(record.data.invocationId, attemptsForInvocation);
+  }
+  for (const invocationAttempts of attemptsByInvocation.values()) {
+    expect(invocationAttempts).toEqual(
+      invocationAttempts.map((_, index) => index + 1),
+    );
+  }
 
   const sequencesByModel = new Map();
   for (const record of traces) {

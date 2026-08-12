@@ -43,7 +43,7 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
       semanticModel: "semantic-model",
       semanticPrompt: "emit workflow dsl",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A" task="执行当前请求"',
@@ -51,7 +51,7 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
           'EDGE from=start to=act',
           'EDGE from=act to=end',
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async ({ abortSignal } = {}) => {
         receivedAbortSignal = abortSignal;
@@ -118,7 +118,7 @@ test("workflow waits for every parallel node sub-session to stop before planner 
       parallelNodeExecution: true,
       maxParallelNodeAgents: 2,
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=a type=action name="节点A" task="执行A"',
@@ -129,7 +129,7 @@ test("workflow waits for every parallel node sub-session to stop before planner 
           'EDGE from=a to=end',
           'EDGE from=b to=end',
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async ({ abortSignal, metadata } = {}) => {
         startedNodes += 1;

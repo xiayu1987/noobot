@@ -432,7 +432,10 @@ export function createMultimodalGenerateTool({ agentContext }) {
               imageUrls: normalizeStringArray(image_urls),
             },
           },
-          options: { signal: runtime?.abortSignal || undefined },
+          options: {
+            signal: runtime?.abortSignal || undefined,
+            locale: runtime?.systemRuntime?.config?.locale || runtime?.locale || "zh-CN",
+          },
           invocation: {
             flow: MULTIMODAL_FLOW_NAME,
             purpose: MULTIMODAL_PURPOSE_NAME,

@@ -39,13 +39,13 @@ test("super-user: configured super user id alone does not grant super user", () 
 test("super-user: role and agent context checks share the same helper", () => {
   assert.equal(isSuperAdminRole(SUPER_ADMIN_ROLE), true);
   assert.equal(isSuperUserAgentContext({
-    environment: { identity: { userId: "custom-root" } },
-    execution: {
-      controllers: {
-        runtime: {
-          globalConfig: { superAdmin: { userId: "custom-root" } },
-          systemRuntime: { sessionId: "s1", isSuperUser: true },
-        },
+    context: {
+      environment: { identity: { userId: "custom-root" } },
+    },
+    bindings: {
+      runtime: {
+        globalConfig: { superAdmin: { userId: "custom-root" } },
+        systemRuntime: { sessionId: "s1", isSuperUser: true },
       },
     },
   }), true);

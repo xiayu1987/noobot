@@ -4,13 +4,13 @@
  */
 
 const OPENAI_MODELS = [/^gpt-4\.1(?:\b|[-_.])/, /^gpt-5(?:\b|[-_.])/];
-const PROVIDER_IDS = new Set(["openai", "anthropic", "gemini", "deepseek", "dashscope", "zhipu"]);
+const PROVIDER_IDS = new Set(["openai", "anthropic", "google", "gemini", "deepseek", "alibaba", "dashscope", "zhipu", "generic"]);
 
 function providerId(spec = {}) {
-  const value = String(spec.providerId || "")
+  const value = String(spec.operatorId || spec.providerId || "")
     .trim()
     .toLowerCase();
-  if (!value) throw new TypeError("model spec.providerId is required");
+  if (!value) throw new TypeError("model spec.operatorId is required");
   if (!PROVIDER_IDS.has(value)) throw new TypeError(`unsupported model providerId: ${value}`);
   return value;
 }
@@ -88,7 +88,7 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
     }
   }
 
-  if (vendor === "gemini") {
+  if (vendor === "google" || vendor === "gemini") {
     const value = String(
       spec.cached_content ?? spec.cachedContent ?? spec.gemini_cached_content ?? "",
     ).trim();
@@ -104,7 +104,10 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
   ) {
     out.top_p = spec.top_p;
   }
-  if (format === "dashscope") {
+  if (format === "dashscope" || vendor === "alibaba" || vendor === "zhipu") {
+    for (const key of ["top_k", "min_p"]) {
+      if (spec[key] !== undefined) out[key] = spec[key];
+    }
     if (spec.enable_thinking !== undefined) out.enable_thinking = spec.enable_thinking === true;
     if (spec.preserve_thinking !== undefined) out.preserve_thinking = spec.preserve_thinking;
     if (spec.thinking_budget !== undefined) {

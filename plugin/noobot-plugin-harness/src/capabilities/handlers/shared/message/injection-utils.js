@@ -126,17 +126,20 @@ export function injectMessageWithPolicy(
       if (dedupe && dedupeExists(systemContextMessages, message)) {
         return { injected: false, target: "agent_system", deduped: true };
       }
-      appendMessage(ctx, message, { block: "system" });
-      persistHarnessMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
+      const canonicalMessage = appendMessage(ctx, message, { block: "system" });
+      persistHarnessMessageToCurrentTurn(ctx, canonicalMessage, persistToCurrentTurn);
       return { injected: true, target: "agent_system" };
     }
   }
 
+  let canonicalMessage;
   if (normalizedInjectAt === "prepend") {
-    replaceMessages(ctx, [message, ...messages]);
+    [canonicalMessage] = replaceMessages(ctx, [message, ...messages]);
   } else {
-    appendMessage(ctx, message, { block: isSystemLikeRole(resolvedRole) ? "system" : "incremental" });
+    canonicalMessage = appendMessage(ctx, message, {
+      block: isSystemLikeRole(resolvedRole) ? "system" : "incremental",
+    });
   }
-  persistHarnessMessageToCurrentTurn(ctx, message, persistToCurrentTurn);
+  persistHarnessMessageToCurrentTurn(ctx, canonicalMessage, persistToCurrentTurn);
   return { injected: true, target: "ctx_messages" };
 }

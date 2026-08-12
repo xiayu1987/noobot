@@ -46,7 +46,7 @@ test("workflow semantic planning passes conversation context before current user
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: [
+          output: { text: [
             "WORKFLOW_DSL/1",
             'NODE id=start type=state stateType=start name="开始"',
             'NODE id=act type=action name="节点A" task="执行当前请求"',
@@ -54,7 +54,7 @@ test("workflow semantic planning passes conversation context before current user
             'EDGE from=start to=act',
             'EDGE from=act to=end',
             "END",
-          ].join("\n"),
+          ].join("\n") },
         };
       },
       subSessionRunner: async (payload = {}) => ({
@@ -117,7 +117,7 @@ test("workflow semantic planning falls back to messageBlocks context when ctx.me
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: [
+          output: { text: [
             "WORKFLOW_DSL/1",
             'NODE id=start type=state stateType=start name="开始"',
             'NODE id=act type=action name="节点A" task="执行当前请求"',
@@ -125,7 +125,7 @@ test("workflow semantic planning falls back to messageBlocks context when ctx.me
             'EDGE from=start to=act',
             'EDGE from=act to=end',
             "END",
-          ].join("\n"),
+          ].join("\n") },
         };
       },
       subSessionRunner: async (payload = {}) => ({
@@ -189,7 +189,7 @@ test("workflow semantic planning includes current available tools like harness p
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: [
+          output: { text: [
             "WORKFLOW_DSL/1",
             'NODE id=start type=state stateType=start name="开始"',
             'NODE id=act type=action name="生成报告" task="使用 search_docs 查询资料后生成报告"',
@@ -197,7 +197,7 @@ test("workflow semantic planning includes current available tools like harness p
             'EDGE from=start to=act',
             'EDGE from=act to=end',
             "END",
-          ].join("\n"),
+          ].join("\n") },
         };
       },
       subSessionRunner: async (payload = {}) => ({
@@ -263,7 +263,7 @@ test("workflow semantic planning reads available tools from the canonical agentC
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: [
+          output: { text: [
             "WORKFLOW_DSL/1",
             'NODE id=start type=state stateType=start name="开始"',
             'NODE id=act type=action name="生成报告" task="使用 search_docs 查询资料后生成报告"',
@@ -271,7 +271,7 @@ test("workflow semantic planning reads available tools from the canonical agentC
             'EDGE from=start to=act',
             'EDGE from=act to=end',
             "END",
-          ].join("\n"),
+          ].join("\n") },
         };
       },
       subSessionRunner: async (payload = {}) => ({
@@ -333,7 +333,7 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: [
+          output: { text: [
             "WORKFLOW_DSL/1",
             'NODE id=start type=state stateType=start name="开始"',
             'NODE id=act type=action name="节点A" task="执行当前请求"',
@@ -341,7 +341,7 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
             'EDGE from=start to=act',
             'EDGE from=act to=end',
             "END",
-          ].join("\n"),
+          ].join("\n") },
         };
       },
       subSessionRunner: async (payload = {}) => ({

@@ -633,15 +633,30 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   const runner = createRunner({
     botHookManager,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+      const turnScopeId = buildContextPayload.runConfig.turnScopeId;
+      const invocationIdentity = {
+        sessionId: buildContextPayload.sessionId,
+        parentSessionId: buildContextPayload.parentSessionId || "",
+        dialogProcessId: buildContextPayload.dialogProcessId,
+        turnScopeId,
+        runId: `agent:${turnScopeId}`,
+      };
+      const modelPort = {
+        async invoke() {
+          return { output: { text: "WORKFLOW_DSL/1\nEND" } };
+        },
+      };
       const runtimeAgentContext = createTestAgentExecutionScope({
         attachmentMetas: [],
         eventListener: buildContextPayload.eventListener,
-        modelPort: {
-          async invoke() {
-            return { output: { text: "WORKFLOW_DSL/1\nEND" } };
-          },
+        modelHost: {
+          modelSpec: { alias: "test", model: "test", format: "openai_compatible" },
+          modelPort,
+          modelState: {},
+          invocationIdentity,
         },
-      });
+        modelPort,
+      }, { identity: invocationIdentity });
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
   });

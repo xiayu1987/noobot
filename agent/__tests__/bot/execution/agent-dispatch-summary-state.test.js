@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { dispatchAgentTurn } from "../../../src/bot/execution/runner/agent-dispatch.js";
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
 test("dispatchAgentTurn accepts completed-turn summary state into the canonical store", async () => {
   const events = [];
@@ -53,10 +54,16 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
     errorLogger: null,
     lifecycle: { enterRunning() {} },
     dispatchRuntime,
-    runtimeAgentContext: {
-      payload: { messages: { history: [] } },
-      execution: { controllers: { runtime: dispatchRuntime } },
-    },
+    runtimeAgentContext: createTestAgentExecutionScope(dispatchRuntime, {
+      identity: {
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dp1",
+        turnScopeId: "ts1",
+        messageId: "sm_user",
+      },
+      messageBlocks: { history: [] },
+    }),
     abortSignal: null,
     normalizedMessage: { userId: "u1", content: "question" },
     currentUserMessage: {

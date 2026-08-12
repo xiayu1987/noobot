@@ -130,7 +130,7 @@ test("resolveLlmForTurn should switch model by runtimeModel and emit model_switc
     assert.equal(modelState.activeModelAlias, "anthropic");
     assert.equal(modelState.activeModelName, "gpt-4.1-mini");
     assert.equal(modelState.llm?.id, "old-llm");
-    assert.equal(modelState.activeModelSpec?.providerId, "anthropic");
+    assert.equal(modelState.activeModelSpec?.providerId, "openai");
     const switched = events.find((item) => item?.event === "model_switched");
     assert.ok(switched);
     assert.equal(switched?.data?.alias, "anthropic");

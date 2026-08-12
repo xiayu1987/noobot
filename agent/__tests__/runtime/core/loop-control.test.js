@@ -5,7 +5,6 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HumanMessage } from "@langchain/core/messages";
 import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
 import { createModelContext } from "@noobot/context-protocol";
 
@@ -48,7 +47,6 @@ test("task check prompt is periodic and independent from phase summary state", (
   const taskCheckEntity = modelState.runtime.currentTurnMessages.toArray()[0];
   assert.equal(taskCheckEntity.role, "user");
   assert.equal(taskCheckEntity.chatPresentation, false);
-  assert.equal(modelContext.messages[0] instanceof HumanMessage, true);
   assert.equal(modelContext.messages[0].additional_kwargs.chatPresentation, false);
   assert.equal(
     taskCheckEntity.messageUid,
@@ -122,7 +120,6 @@ test("maybePromptHelpToolByFailure injects prompt and resets failure counter", (
   assert.equal(loopState.toolConsecutiveFailureCount, 0);
   assert.equal(modelState.runtime.systemRuntime.toolConsecutiveFailureCount, 0);
   assert.equal(loopState.modelContext.messages.length, 1);
-  assert.equal(loopState.modelContext.messages[0] instanceof HumanMessage, true);
   assert.equal(
     loopState.modelContext.messageBlocks.incremental[0],
     loopState.modelContext.messages[0],
@@ -159,7 +156,6 @@ test("maybePromptHelpToolByLoop injects prompt through message store", () => {
 
   assert.equal(triggered, true);
   assert.equal(loopState.modelContext.messages.length, 1);
-  assert.equal(loopState.modelContext.messages[0] instanceof HumanMessage, true);
   assert.equal(
     loopState.modelContext.messageBlocks.incremental[0],
     loopState.modelContext.messages[0],
@@ -182,7 +178,6 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
     },
     runtime: {
       systemRuntime: {
-        toolLoopExecutionCount: 2,
         phaseSummaryLoopCount: 2,
       },
     },
@@ -204,7 +199,6 @@ test("maybeRequestPhaseSummary injects summary prompt when threshold reached", (
   assert.equal(triggered, true);
   assert.equal(modelState.runtime.systemRuntime.needsPhaseSummary, true);
   assert.equal(loopState.modelContext.messages.length, 1);
-  assert.equal(loopState.modelContext.messages[0] instanceof HumanMessage, true);
   assert.equal(
     loopState.modelContext.messageBlocks.incremental[0],
     loopState.modelContext.messages[0],
@@ -235,7 +229,6 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
     },
     runtime: {
       systemRuntime: {
-        toolLoopExecutionCount: 0,
         phaseSummaryLoopCount: 0,
       },
     },
@@ -262,7 +255,6 @@ test("maybeRequestPhaseSummary injects summary prompt when unsummarized chars ex
   assert.equal(triggered, true);
   assert.equal(modelState.runtime.systemRuntime.needsPhaseSummary, true);
   assert.equal(loopState.modelContext.messages.length, 2);
-  assert.equal(loopState.modelContext.messages[1] instanceof HumanMessage, true);
   assert.equal(
     loopState.modelContext.messageBlocks.incremental[1],
     loopState.modelContext.messages[1],
@@ -281,7 +273,6 @@ test("maybeRequestPhaseSummary marks no-tools when overflow remains after the re
     },
     runtime: {
       systemRuntime: {
-        toolLoopExecutionCount: 0,
         phaseSummaryLoopCount: 0,
         phaseSummaryByCharsPrompted: true,
       },

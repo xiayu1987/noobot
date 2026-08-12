@@ -116,6 +116,7 @@ export function createModelRequestExecutor({
                   ...(requestBase.options.headers || {}),
                 },
                 signal: requestBase.options.signal,
+                locale: requestBase.options.locale,
                 clock,
                 ...providerRuntime,
               });

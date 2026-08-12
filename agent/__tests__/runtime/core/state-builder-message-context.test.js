@@ -19,7 +19,6 @@ function createRuntime() {
       sessionId: "s1",
       parentSessionId: "parent-s1",
       dialogProcessId: "dlg-1",
-      toolLoopExecutionCount: 0,
       phaseSummaryLoopCount: 0,
       toolConsecutiveFailureCount: 0,
     },

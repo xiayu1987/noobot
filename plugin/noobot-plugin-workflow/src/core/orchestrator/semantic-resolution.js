@@ -104,7 +104,7 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
     contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
   });
   throwIfWorkflowAborted(ctx);
-  const resolvedText = String(result?.content || result?.output || "").trim() || sourceText;
+  const resolvedText = String(result?.output?.text || "").trim() || sourceText;
   return {
     text: resolvedText,
     invoked: true,
