@@ -108,7 +108,6 @@ Session 日志 WebSocket：
 | `tools.web_to_data.enabled` | boolean | 启用网页内容提取工具 |
 | `tools.web_to_data.switch_web_mode` | string | 网页提取模式（如 `browser_simulate`） |
 | `tools.doc_to_data.enabled` | boolean | 启用文档解析工具 |
-| `tools.doc_to_data.parse_engine` | string | 文档解析引擎（默认 `libreoffice`） |
 | `tools.process_content_task.enabled` | boolean | 启用内容处理工具 |
 | `tools.process_content_task.max_tool_loop_turns` | number | 内容任务内部循环上限 |
 | `tools.execute_script.enabled` | boolean | 启用脚本执行工具 |
@@ -258,7 +257,7 @@ Session 日志 WebSocket：
 | `providers.<alias>.preserve_thinking` | boolean | 是否保留思考（模型支持时） |
 | `providers.<alias>.thinking_budget` | number | 思考预算（模型支持时） |
 | `providers.<alias>.description` | string | 提供方说明 |
-| `providers.<alias>.multimodal_generation.support_understanding` | boolean | 是否支持多模态理解 |
+| `providers.<alias>.multimodal_parsing.enabled` | boolean | 是否启用多模态解析 |
 | `providers.<alias>.multimodal_generation.support_generation.enabled` | boolean | 是否支持多模态生成 |
 | `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[] | 生成范围（如 `["image"]`） |
 

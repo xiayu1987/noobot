@@ -15,6 +15,7 @@ function deepFreeze(value) {
 
 const KiB = 1024;
 const MiB = 1024 * KiB;
+const MB = 1000 * 1000;
 
 const LENGTH_TIERS = deepFreeze({
   chars: {
@@ -67,6 +68,7 @@ const LENGTH_TIERS = deepFreeze({
     desktopLogFile: 10 * MiB,
     searchBuffer: 16 * MiB,
     attachmentTotal: 30 * MiB,
+    responsesFileInput: 50 * MB,
     libreOfficeTempBaseline: 512 * MiB,
   },
 });
@@ -126,6 +128,8 @@ export const LENGTH_THRESHOLDS = deepFreeze({
 
   dataProcessing: {
     batchBytes: LENGTH_TIERS.bytes.batchPayload,
+
+    responsesFileInputBytes: LENGTH_TIERS.bytes.responsesFileInput,
 
     directTextBytes: LENGTH_TIERS.bytes.directText,
 

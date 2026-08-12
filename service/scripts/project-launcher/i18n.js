@@ -24,7 +24,7 @@ const CONFIG_TEXT_BILINGUAL_PAIRS = [
   { zh: "擅长通用对话、多模态推理", en: "Strong at general conversation and multimodal reasoning." },
   { zh: "擅长图片生成", en: "Strong at image generation." },
   { zh: "擅长通用对话、快速响应", en: "Strong at general conversation with fast responses." },
-  { zh: "多模态理解", en: "Multimodal understanding." },
+  { zh: "多模态解析", en: "Multimodal parsing." },
   { zh: "优先用于补充实时或外部网页信息，先检索再回答。", en: "Use for real-time/external web info; search first, then answer." },
   { zh: "搜索网页", en: "Search web pages" },
   { zh: "返回可引用的检索结果摘要与来源。", en: "Return citable result summaries with sources." },

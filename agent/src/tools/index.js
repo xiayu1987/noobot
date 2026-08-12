@@ -14,6 +14,7 @@ import { createMcpTool } from "./execution/mcp-tool.js";
 import { createConnectorAccessTool } from "./connectors/connector-access-tool.js";
 import { createWebSearchTool } from "./ai-models/web-search-tool.js";
 import { createMultimodalGenerateTool } from "./ai-models/multimodal-generate-tool.js";
+import { createMultimodalParseTool } from "./ai-models/multimodal-parse-tool.js";
 import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
 import { createTaskCheckTool } from "./collaboration/task-check-tool.js";
 import { createRequestHelpTool } from "./collaboration/request-help-tool.js";
@@ -89,6 +90,7 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.INSPECT_CONNECTORS]: [TOOL_NAME.INSPECT_CONNECTORS],
   [TOOL_NAME.WEB_SEARCH]: [TOOL_NAME.WEB_SEARCH],
   [TOOL_NAME.MULTIMODAL_GENERATE]: [TOOL_NAME.MULTIMODAL_GENERATE],
+  [TOOL_NAME.MULTIMODAL_PARSE]: [TOOL_NAME.MULTIMODAL_PARSE],
   [TOOL_NAME.TASK_SUMMARY]: [TOOL_NAME.TASK_SUMMARY],
   [TOOL_NAME.TASK_CHECK]: [TOOL_NAME.TASK_CHECK],
   [TOOL_NAME.REQUEST_HELP]: [TOOL_NAME.REQUEST_HELP],
@@ -135,6 +137,14 @@ function hasEnabledMultimodalGenerationProvider(effectiveConfig = {}) {
   return false;
 }
 
+function hasEnabledMultimodalParsingProvider(effectiveConfig = {}) {
+  const providers = effectiveConfig?.providers || {};
+  return Object.values(providers).some((providerConfig) =>
+    providerConfig?.enabled !== false &&
+    providerConfig?.multimodal_parsing?.enabled === true,
+  );
+}
+
 function resolveMaxSubAgentDepth(_effectiveConfig = {}) {
   return DEFAULT_MAX_SUB_AGENT_DEPTH;
 }
@@ -144,6 +154,7 @@ async function buildToolsDefault(ctx) {
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   const allowUserInteraction = runtime?.systemRuntime?.config?.allowUserInteraction !== false;
   const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(effectiveConfig);
+  const enableMultimodalParseTool = hasEnabledMultimodalParsingProvider(effectiveConfig);
   const baseTools = [
     ...createFileTool(ctx),
     ...createScriptTool(ctx),
@@ -153,6 +164,7 @@ async function buildToolsDefault(ctx) {
     ...createMcpTool(ctx),
     ...createWebSearchTool(ctx),
     ...(enableMultimodalGenerateTool ? createMultimodalGenerateTool(ctx) : []),
+    ...(enableMultimodalParseTool ? createMultimodalParseTool(ctx) : []),
     ...createConnectorAccessTool(ctx),
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),

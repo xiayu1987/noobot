@@ -55,6 +55,41 @@ test("model operations are strict discriminated contracts", () => {
     input: { query: "latest news" },
     options: {},
   });
+  const multimodalParse = createModelRequest({
+    invocation,
+    model,
+    messages: [],
+    operation: {
+      kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
+      input: {
+        prompt: "parse",
+        attachments: [{
+          mimeType: "application/pdf",
+          data: "data:application/pdf;base64,AA==",
+          fileName: "input.pdf",
+        }],
+      },
+    },
+  });
+  assert.equal(multimodalParse.operation.input.attachments[0].fileName, "input.pdf");
+  assert.throws(
+    () => createModelRequest({
+      invocation,
+      model,
+      messages: [],
+      operation: {
+        kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
+        input: {
+          prompt: "parse",
+          attachment: {
+            mimeType: "application/pdf",
+            data: "data:application/pdf;base64,AA==",
+          },
+        },
+      },
+    }),
+    /unsupported fields: attachment/,
+  );
   assert.throws(
     () => createModelRequest({ invocation, model, messages: [], operation: { kind: "web_search", input: {} } }),
     /input\.query is required/,

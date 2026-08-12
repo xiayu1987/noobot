@@ -9,7 +9,16 @@ import assert from "node:assert/strict";
 import { buildTools } from "../../src/tools/index.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
-function createContext({ globalConfig = {}, userConfig = {}, runtimePatch = {} } = {}) {
+function createContext({ globalConfig = {
+  providers: {
+    parse_model: {
+      enabled: true,
+      model: "gpt-5.4",
+      format: "openai_compatible",
+      multimodal_parsing: { enabled: true },
+    },
+  },
+}, userConfig = {}, runtimePatch = {} } = {}) {
   return {
     agentContext: createTestAgentExecutionScope({
       basePath: "/tmp/noobot-test-workspace",
@@ -24,6 +33,11 @@ function createContext({ globalConfig = {}, userConfig = {}, runtimePatch = {} }
     }),
   };
 }
+
+test("buildTools: multimodal_parse requires configured parsing capability", async () => {
+  const tools = await buildTools(createContext({ globalConfig: { providers: {} } }));
+  assert.equal(tools.some((tool) => tool?.name === "multimodal_parse"), false);
+});
 
 test("buildTools: 重组后应注册关键工具", async () => {
   const tools = await buildTools(createContext());
@@ -44,6 +58,7 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "request_help",
     "user_interaction",
     "web_search",
+    "multimodal_parse",
   ];
 
   for (const toolName of expected) {
@@ -57,6 +72,11 @@ test("buildTools: 重组后应注册关键工具", async () => {
   ]);
   assert.deepEqual(Object.keys(toolByName.get("web_search")?.schema?.shape || {}).sort(), [
     "query",
+  ]);
+  assert.deepEqual(Object.keys(toolByName.get("multimodal_parse")?.schema?.shape || {}).sort(), [
+    "file_paths",
+    "model_name",
+    "prompt",
   ]);
 
   const hardDisabled = [

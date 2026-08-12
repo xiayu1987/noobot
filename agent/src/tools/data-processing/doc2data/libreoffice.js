@@ -9,7 +9,6 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import { filePath as path } from "@noobot/path-resolver";
 import { promisify } from "node:util";
-import { DOC2DATA_PARSE_ENGINE } from "@noobot/agent-config-protocol";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { tTool } from "../../core/tool-i18n.js";
@@ -228,7 +227,6 @@ async function recordLibreOfficeParseFailed({
         errorName: String(error?.name || ""),
         errorCode: String(error?.code || ""),
         errorMessage: error?.message || String(error || ""),
-        parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
         libreOfficeModule: String(converters?.moduleName || ""),
         libreOfficeOutputFormat: outputFormat?.format || "",
         timeoutMs: Number(convertBudget?.timeoutMs || 0),

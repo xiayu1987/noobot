@@ -8,6 +8,7 @@ import {
   resolveUseResponsesApi,
 } from "./openai-compatible-adapter.js";
 import { classifyTransportError } from "../policies/default-retry-policy.js";
+import { executeOpenAiOperation } from "./openai-capability-adapter.js";
 
 export function createDashScopeClient(input = {}) {
   const modelSpec = input.modelSpec || {};
@@ -27,5 +28,8 @@ export const dashscopeAdapter = Object.freeze({
   },
   bindTools({ client, tools, toolOptions, invokeOptions }) {
     return bindOpenAiCompatibleTools(client, tools, toolOptions, invokeOptions);
+  },
+  executeOperation(input) {
+    return executeOpenAiOperation(input);
   },
 });

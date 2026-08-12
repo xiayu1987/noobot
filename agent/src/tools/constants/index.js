@@ -71,6 +71,7 @@ export const TOOL_NAME = Object.freeze({
   INSPECT_CONNECTORS: "inspect_connectors",
   WEB_SEARCH: "web_search",
   MULTIMODAL_GENERATE: "multimodal_generate",
+  MULTIMODAL_PARSE: "multimodal_parse",
   TASK_SUMMARY: "task_summary",
   TASK_CHECK: "task_check",
   REQUEST_HELP: "request_help",
@@ -116,6 +117,7 @@ export const TOOL_ATTACHMENT_SOURCE = Object.freeze({
 
 export const ARTIFACT_GENERATION_SOURCE = Object.freeze({
   MULTIMODAL_GENERATE_TOOL: "multimodal_generate_tool",
+  MULTIMODAL_PARSE_TOOL: "multimodal_parse_tool",
   DOC_TO_DATA_TOOL: "doc_to_data_tool",
   MEDIA_TO_DATA_TOOL: "media_to_data_tool",
   WEB_TO_DATA_TOOL: "web_to_data_tool",

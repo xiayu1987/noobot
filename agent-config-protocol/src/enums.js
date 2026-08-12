@@ -117,16 +117,6 @@ export const DOC2DATA_FORMAT_ALIASES = {
   [DOC2DATA_FORMAT.JPEG]: [DOC2DATA_FORMAT.JPEG, "jpg"],
 };
 
-export const DOC2DATA_PARSE_ENGINE = {
-  LIBREOFFICE: "libreoffice",
-  VISION: "vision",
-};
-
-export const DOC2DATA_PARSE_ENGINE_ALIASES = {
-  [DOC2DATA_PARSE_ENGINE.LIBREOFFICE]: [DOC2DATA_PARSE_ENGINE.LIBREOFFICE, "libre_office", "lo"],
-  [DOC2DATA_PARSE_ENGINE.VISION]: [DOC2DATA_PARSE_ENGINE.VISION, "image_model", "model"],
-};
-
 export const MULTIMODAL_SCOPE = {
   IMAGE: "image",
   AUDIO: "audio",
@@ -237,10 +227,6 @@ export function normalizeSkillAction(input = "") {
 
 export function normalizeDoc2DataFormat(input = "") {
   return normalizeWithAliases(input, DOC2DATA_FORMAT_ALIASES);
-}
-
-export function normalizeDoc2DataParseEngine(input = "") {
-  return normalizeWithAliases(input, DOC2DATA_PARSE_ENGINE_ALIASES);
 }
 
 export function normalizeContextSection(input = "") {

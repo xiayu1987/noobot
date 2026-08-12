@@ -108,6 +108,32 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.trySwitchApiType": "请尝试更换 api_type，例如 openai_responses 或 images_async。"
     }
   },
+  "multimodal_parse": {
+    "description": {
+      "key": "tools.multimodalParse.description",
+      "text": "一起解析一个或多个文件并保存解析结果。"
+    },
+    "params": {
+      "file_paths": {
+        "key": "tools.multimodalParse.fieldFilePaths",
+        "text": "需要一起解析的一个或多个文件地址。"
+      },
+      "model_name": {
+        "key": "tools.multimodalParse.fieldModelName",
+        "text": "用于解析这些文件的模型名称（可选）。"
+      },
+      "prompt": {
+        "key": "tools.multimodalParse.fieldPrompt",
+        "text": "解析要求（可选）。"
+      }
+    },
+    "texts": {
+      "tools.multimodalParse.filePathsRequired": "file_paths 至少需要包含一个文件地址",
+      "tools.multimodalParse.fileTooLarge": (params = {}) => `所有文件合计必须小于 ${Number(params.maxSizeMB || 50)} MB`,
+      "tools.multimodalParse.defaultPrompt": "请完整解析所有文件内容，保留原始结构和关键信息，按文件区分内容，不要编造内容。",
+      "tools.multimodalParse.modelNotFound": "未找到已启用多模态解析的模型"
+    }
+  },
   "switch_model": {
     "description": {
       "key": "tools.model.description",

@@ -245,6 +245,23 @@ export async function executeOpenAiOperation({
     }, { signal: signal || undefined });
     return { rawText: String(result?.output_text || "").trim(), output: Array.isArray(result?.output) ? result.output : [] };
   }
+  if (operation.kind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
+    const attachmentContent = operation.input.attachments.map((attachment) => {
+      const mimeType = String(attachment.mimeType || "application/octet-stream").trim();
+      const data = String(attachment.data || "").trim();
+      return mimeType.toLowerCase().startsWith("image/")
+        ? { type: "input_image", image_url: data }
+        : { type: "input_file", file_data: data, filename: String(attachment.fileName || "").trim() || undefined };
+    });
+    const result = await client.responses.create({
+      model: modelSpec.model,
+      input: [{ role: "user", content: [
+        { type: "input_text", text: String(operation.input.prompt || "").trim() },
+        ...attachmentContent,
+      ] }],
+    }, { signal: signal || undefined });
+    return { rawText: String(result?.output_text || "").trim(), output: Array.isArray(result?.output) ? result.output : [] };
+  }
   if (operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION) {
     const result = await client.responses.create({
       model: modelSpec.model,
