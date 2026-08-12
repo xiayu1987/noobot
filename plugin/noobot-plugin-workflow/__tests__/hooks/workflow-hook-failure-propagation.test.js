@@ -55,7 +55,7 @@ test("workflow hook fails the parent workflow and stops downstream after a sub-a
       enabled: true,
       mode: "on",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=a type=action name="节点A" task="执行A"',
@@ -65,7 +65,7 @@ test("workflow hook fails the parent workflow and stops downstream after a sub-a
           "EDGE from=a to=b",
           "EDGE from=b to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
@@ -127,7 +127,7 @@ test("workflow hook stops all fan-out downstream nodes after their upstream node
       enabled: true,
       mode: "on",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=a type=action name="节点A" task="执行A任务"',
@@ -142,7 +142,7 @@ test("workflow hook stops all fan-out downstream nodes after their upstream node
           "EDGE from=b to=end",
           "EDGE from=c to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
@@ -192,7 +192,7 @@ test("workflow hook does not execute a merge downstream node after an upstream b
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=branch type=state stateType=branch name="分叉"',
@@ -209,7 +209,7 @@ test("workflow hook does not execute a merge downstream node after an upstream b
           "EDGE from=merge to=c",
           "EDGE from=c to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
@@ -258,7 +258,7 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=branch type=state stateType=branch name="分叉"',
@@ -280,7 +280,7 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
           "EDGE from=c to=end",
           "EDGE from=d to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);

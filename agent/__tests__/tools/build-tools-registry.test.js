@@ -12,6 +12,7 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 function createContext({ globalConfig = {}, userConfig = {}, runtimePatch = {} } = {}) {
   return {
     agentContext: createTestAgentExecutionScope({
+      basePath: "/tmp/noobot-test-workspace",
       globalConfig,
       userConfig,
       systemRuntime: {
@@ -33,6 +34,9 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "write_file",
     "call_service",
     "call_mcp_task",
+    "doc_to_data",
+    "media_to_data",
+    "web_to_data",
     "process_content_task",
     "process_connector_tool",
     "switch_model",
@@ -73,6 +77,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
           service: { enabled: false },
           model: { enabled: false },
           process_content_task: { enabled: false },
+          media_to_data: { enabled: false },
           process_connector_tool: { enabled: false },
           request_help: { enabled: false },
           web_search: { enabled: false },
@@ -88,6 +93,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
     "call_service",
     "switch_model",
     "process_content_task",
+    "media_to_data",
     "process_connector_tool",
     "request_help",
     "web_search",

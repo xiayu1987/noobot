@@ -124,11 +124,10 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
     .some((r) => String(r?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME);
   if (hasTaskSummaryCall) return false;
 
-  const currentCount = Number(systemRuntime.toolLoopExecutionCount || 0);
+  const currentCount = Number(systemRuntime.phaseSummaryLoopCount || 0);
   const nextCount = Number.isFinite(currentCount) && currentCount >= 0
     ? currentCount + 1
     : 1;
-  systemRuntime.toolLoopExecutionCount = nextCount;
   systemRuntime.phaseSummaryLoopCount = nextCount;
 
   if (!hasTaskSummaryTool(loopState?.tools || [])) return false;

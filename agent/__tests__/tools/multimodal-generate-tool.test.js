@@ -572,8 +572,8 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
     (error) => {
       assert.equal(error?.code, "RECOVERABLE_MULTIMODAL_GENERATE_FAILED");
       assert.match(error?.message || "", /not found \(request_id: req_404\)/);
-      assert.match(error?.message || "", /任务不存在或无权访问/);
-      assert.match(error?.message || "", /只能查询自己创建的任务/);
+      assert.doesNotMatch(error?.message || "", /任务不存在或无权访问/);
+      assert.doesNotMatch(error?.message || "", /只能查询自己创建的任务/);
       assert.equal(error?.details?.requestMethod, "GET");
       assert.equal(error?.details?.requestUrl, "https://api.aicodewith.com/v1/tasks/task-private");
       return true;

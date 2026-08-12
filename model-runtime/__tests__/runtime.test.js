@@ -289,6 +289,93 @@ test("provider cache parameters are isolated by explicit provider identity", () 
   });
 });
 
+test("model defaults follow provider-specific sampling guidance", async () => {
+  const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
+  const openai = normalizeRuntimeModelSpec({
+    model: "gpt-5.6",
+    format: "openai_compatible",
+    providerId: "openai",
+    adapterId: "openai-compatible",
+  });
+  assert.deepEqual(
+    { temperature: openai.temperature, top_p: openai.top_p, frequency_penalty: openai.frequency_penalty },
+    { temperature: 0.7, top_p: undefined, frequency_penalty: undefined },
+  );
+  const openaiTopP = normalizeRuntimeModelSpec({
+    model: "gpt-4.1",
+    format: "openai_compatible",
+    providerId: "openai",
+    adapterId: "openai-compatible",
+    top_p: 0.9,
+  });
+  assert.deepEqual(
+    { temperature: openaiTopP.temperature, top_p: openaiTopP.top_p },
+    { temperature: undefined, top_p: 0.9 },
+  );
+  const qwen = normalizeRuntimeModelSpec({
+    model: "qwen3.6-plus",
+    format: "dashscope",
+    providerId: "dashscope",
+    adapterId: "dashscope",
+  });
+  assert.deepEqual(
+    { temperature: qwen.temperature, top_p: qwen.top_p, top_k: qwen.top_k, min_p: qwen.min_p },
+    { temperature: 0.7, top_p: 0.8, top_k: 20, min_p: 0 },
+  );
+  const thinking = normalizeRuntimeModelSpec({
+    model: "qwen3.6-plus",
+    format: "dashscope",
+    providerId: "dashscope",
+    adapterId: "dashscope",
+    enable_thinking: true,
+  });
+  assert.deepEqual(
+    { temperature: thinking.temperature, top_p: thinking.top_p, top_k: thinking.top_k },
+    { temperature: 0.6, top_p: 0.95, top_k: 20 },
+  );
+});
+
+test("model identity and defaults layer operator, family, concrete model, then explicit config", async () => {
+  const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
+  const proxiedGpt = normalizeRuntimeModelSpec({
+    model: "gpt-5.6-sol",
+    format: "openai_compatible",
+    base_url: "https://third-party.example.com/v1",
+    operatorId: "openai",
+    modelFamily: "qwen",
+    providerId: "openai",
+    adapterId: "dashscope",
+  });
+  assert.equal(proxiedGpt.operatorId, "generic");
+  assert.equal(proxiedGpt.modelFamily, "gpt");
+  assert.equal(proxiedGpt.providerId, "generic");
+  assert.equal(proxiedGpt.adapterId, "openai-compatible");
+  assert.equal(proxiedGpt.temperature, 0.7);
+
+  const explicit = normalizeRuntimeModelSpec({
+    model: "qwen3-thinking",
+    format: "dashscope",
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    enable_thinking: true,
+    temperature: 0.2,
+    top_p: 0.7,
+  });
+  assert.equal(explicit.operatorId, "alibaba");
+  assert.equal(explicit.modelFamily, "qwen");
+  assert.equal(explicit.temperature, 0.2);
+  assert.equal(explicit.top_p, 0.7);
+  assert.equal(explicit.top_k, 20);
+
+  const dashscopeGlm = normalizeRuntimeModelSpec({
+    model: "ZHIPU/GLM-5.1",
+    format: "dashscope",
+    base_url: "https://api.zhipu.ai/v4",
+  });
+  assert.equal(dashscopeGlm.operatorId, "alibaba");
+  assert.equal(dashscopeGlm.modelFamily, "glm");
+  assert.equal(dashscopeGlm.adapterId, "dashscope");
+});
+
 test("reasoning-only exhaustion is a typed terminal protocol error", async () => {
   const adapter = {
     id: "test",

@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import {
   createTestTurnMessagesStore,
+  createTestModelPort,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 
@@ -79,7 +80,7 @@ function createModelState(llm, defaultModelSpec = null) {
       ? defaultModelSpec
       : { alias: "test_alias", model: "test-model" };
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
     eventListener: null,

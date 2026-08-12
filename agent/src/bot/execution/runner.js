@@ -49,6 +49,7 @@ import {
   emitContextIdentityDebug,
 } from "../../observability/context-identity-debug.js";
 import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
+import { initializeAgentModelHost } from "../../runtime/model-port-host.js";
 
 function applyCanonicalRunMessageIdentity(runConfig = {}) {
   const resolvedTurnScopeId = String(runConfig?.turnScopeId || "").trim();
@@ -525,6 +526,13 @@ export class SessionExecutionRunner {
             ? dispatchSystemRuntime.config
             : {};
         dispatchSystemRuntime.config.turnScopeId = resolvedTurnScopeId;
+        const modelHost = initializeAgentModelHost({
+          runtime: dispatchRuntime,
+          invocationIdentity: getAgentContextEnvelope(runtimeAgentContext).identity,
+        });
+        botHookRuntime.modelHost = modelHost;
+        botHookRuntime.modelPort = modelHost.modelPort;
+        botHookRuntime.modelSpec = modelHost.modelSpec;
         bindAssistantMessageEventStream(dispatchRuntime, {
           messageId,
           presentationMessageId,

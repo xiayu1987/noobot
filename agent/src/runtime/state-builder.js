@@ -38,7 +38,7 @@ import {
   emitContextIdentityDebug,
 } from "../observability/context-identity-debug.js";
 import { emitAgentContextProtocolDebug } from "../observability/agent-context-protocol-debug.js";
-import { attachAgentModelPort } from "./model-port-host.js";
+import { initializeAgentModelHost } from "./model-port-host.js";
 
 export function createStateBuilder({
   mergeConfigFn = mergeConfig,
@@ -68,12 +68,6 @@ export function createStateBuilder({
     normalizeSystemRuntimeCountersFn(sys, currentUserMessage.content);
 
     const runConfig = runtime?.runConfig || {};
-    const selectedModelSpec = resolveEffectiveModelSpecFn({
-      globalConfig,
-      userConfig,
-      selectedModel: runConfig.selectedModel,
-      scenario: runConfig.scenario,
-    });
     const maxToolLoopTurns = resolveMaxToolLoopTurnsFn({
       systemRuntime: sys,
       effectiveConfig,
@@ -84,11 +78,6 @@ export function createStateBuilder({
       resolvePhaseSummaryMessageCharsThresholdFn(effectiveConfig);
     const helpPromptLoopTurns = resolveHelpPromptLoopTurnsFn(effectiveConfig);
     const toolFailureHelpCount = resolveToolFailureHelpCountFn(effectiveConfig);
-
-    emitEventFn(eventListener, "model_selected", {
-      alias: selectedModelSpec?.alias || "",
-      model: selectedModelSpec?.model || "",
-    });
 
     const messageBlocks = buildContextMessageBlocksFn(agentContext, {
       currentUserMessage,
@@ -140,22 +129,17 @@ export function createStateBuilder({
       }
     }
 
-    const modelState = {
-      agentContext,
-      activeModelName: selectedModelSpec?.model || "",
-      activeModelAlias: selectedModelSpec?.alias || "",
-      eventListener,
+    const modelHost = initializeAgentModelHost({
       runtime,
-      globalConfig,
-      userConfig,
-      defaultModelSpec: selectedModelSpec,
-      abortSignal,
-      invocationIdentity: Object.freeze(invocationIdentity),
-    };
+      invocationIdentity,
+      resolveModelSpec: resolveEffectiveModelSpecFn,
+    });
+    const selectedModelSpec = modelHost.modelSpec;
+    const modelState = modelHost.modelState;
+    modelState.agentContext = agentContext;
+    modelState.activeModelName = selectedModelSpec?.model || "";
+    modelState.activeModelAlias = selectedModelSpec?.alias || "";
     modelState.activeModelSpec = selectedModelSpec;
-    attachAgentModelPort(modelState);
-    runtime.modelPort = modelState.modelPort;
-    runtime.modelSpec = selectedModelSpec;
 
     const modelContext = createModelContext({
       messages,

@@ -45,7 +45,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=a type=action name="节点A" task="执行A"',
@@ -69,7 +69,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
           "EDGE from=d to=end",
           "EDGE from=e to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
@@ -158,7 +158,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=a type=action name="节点A" task="执行A"',
@@ -171,7 +171,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
           "EDGE from=b to=end",
           "EDGE from=c to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);

@@ -13,6 +13,7 @@ import {
   requireModelSpec,
 } from "@noobot/model-protocol";
 import { emitEvent } from "../events/index.js";
+import { resolveEffectiveModelSpec } from "./run-config/index.js";
 
 function resolveCredential(modelSpec = {}) {
   return String(modelSpec.api_key || "").trim();
@@ -125,4 +126,70 @@ export function createAgentAuxiliaryModelPort({ modelSpec, modelState } = {}) {
 export function attachAgentModelPort(modelState) {
   modelState.modelPort = createAgentModelPort(modelState);
   return modelState.modelPort;
+}
+
+export function initializeAgentModelHost({
+  runtime,
+  invocationIdentity,
+  resolveModelSpec = resolveEffectiveModelSpec,
+} = {}) {
+  if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
+    throw new TypeError("agent model host requires runtime");
+  }
+  const identity = Object.freeze({
+    sessionId: String(invocationIdentity?.sessionId || "").trim(),
+    parentSessionId: String(invocationIdentity?.parentSessionId || "").trim(),
+    dialogProcessId: String(invocationIdentity?.dialogProcessId || "").trim(),
+    turnScopeId: String(invocationIdentity?.turnScopeId || "").trim(),
+    runId: String(invocationIdentity?.runId || "").trim(),
+  });
+  for (const field of ["sessionId", "dialogProcessId", "turnScopeId", "runId"]) {
+    if (!identity[field]) throw new TypeError(`agent model host identity.${field} is required`);
+  }
+
+  const existing = runtime.modelHost;
+  if (existing) {
+    for (const field of Object.keys(identity)) {
+      if (String(existing.invocationIdentity?.[field] || "").trim() !== identity[field]) {
+        throw new TypeError(`agent model host identity.${field} conflict`);
+      }
+    }
+    return existing;
+  }
+
+  const globalConfig = runtime.globalConfig || {};
+  const userConfig = runtime.userConfig || {};
+  const runConfig = runtime.runConfig || {};
+  const modelSpec = resolveModelSpec({
+    globalConfig,
+    userConfig,
+    selectedModel: runConfig.selectedModel,
+    scenario: runConfig.scenario,
+  });
+  const modelState = {
+    activeModelSpec: modelSpec,
+    defaultModelSpec: modelSpec,
+    eventListener: runtime.eventListener || null,
+    runtime,
+    globalConfig,
+    userConfig,
+    abortSignal: runtime.abortSignal || null,
+    invocationIdentity: identity,
+  };
+  const modelPort = createAgentModelPort(modelState);
+  modelState.modelPort = modelPort;
+  const host = Object.freeze({
+    modelSpec,
+    modelPort,
+    modelState,
+    invocationIdentity: identity,
+  });
+  runtime.modelHost = host;
+  runtime.modelPort = modelPort;
+  runtime.modelSpec = modelSpec;
+  emitEvent(runtime.eventListener, "model_selected", {
+    alias: modelSpec?.alias || "",
+    model: modelSpec?.model || "",
+  });
+  return host;
 }

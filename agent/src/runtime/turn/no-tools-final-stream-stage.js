@@ -4,12 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { maybeInvokeFinalStreamingNoTools } from "./turn-stage.js";
-import { appendContextMessage as appendMessage } from "@noobot/context-protocol/context-mutation";
 
 export async function finalizeNoToolsStreamingTurn({
   modelState,
   messages = [],
-  messageHolder = null,
   modelResponse = null,
   responseContentText = "",
   turn,
@@ -28,12 +26,6 @@ export async function finalizeNoToolsStreamingTurn({
   });
   const finalizedModelResponse = finalStreamResult.ai || modelResponse;
   const finalizedResponseContentText = finalStreamResult.text || responseContentText;
-  if (messageHolder && typeof messageHolder === "object") {
-    appendMessage(messageHolder, finalizedModelResponse, { block: "incremental" });
-  } else {
-    messages.push(finalizedModelResponse);
-  }
-
   return {
     modelResponse: finalizedModelResponse,
     responseContentText: finalizedResponseContentText,

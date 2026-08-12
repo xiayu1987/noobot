@@ -231,14 +231,22 @@ export async function invokeNoToolsTurn({
   const finalStreamingTurn = await finalizeNoToolsStreamingTurn({
     modelState,
     messages,
-    messageHolder: modelContext,
     modelResponse,
     responseContentText,
     turn,
     forceToolChoiceNone,
   });
   ({ modelResponse, responseContentText } = finalStreamingTurn);
-  applyAuthoritativeMessageId(modelResponse, assistantMessageId);
+  appendMessage(
+    modelContext,
+    buildAssistantModelMessageForToolCalls({
+      ai: modelResponse,
+      contentText: responseContentText,
+      toolCalls: [],
+      noobotMessageId: assistantMessageId,
+    }),
+    { block: "incremental" },
+  );
   const { finalStreamResult } = finalStreamingTurn;
 
   const { turnMessageStore, turnTaskStore } = await commitNoToolsTurnState({
@@ -389,8 +397,8 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }
   }
 
-  const { rawCalls, calls, aiContentText } = normalizeToolTurnAi(ai);
-  applyAuthoritativeMessageId(ai, assistantMessageId);
+  const { rawCalls, calls, aiContentText: normalizedAiContentText } = normalizeToolTurnAi(ai);
+  ai = applyAuthoritativeMessageId(ai, assistantMessageId);
   await runAgentRuntimeHook({
     runtime,
     point: HOOK_POINT.AGENT.AFTER_LLM_CALL,
@@ -417,13 +425,13 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       modelState,
       baseMessages: messages,
       fallbackAi: ai,
-      fallbackText: aiContentText,
+      fallbackText: normalizedAiContentText,
       turn,
       mode: "final_stream_after_tools_no_calls",
     });
     ai = finalStreamResult.ai || ai;
-    aiContentText = finalStreamResult.text || aiContentText;
   }
+  const finalAiContentText = finalStreamResult?.text || normalizedAiContentText;
   const assistantMessageUid = createSessionMessageUid();
   if (!calls.length) {
     ai = {
@@ -433,14 +441,12 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   }
   appendMessage(
     modelContext,
-    calls.length
-      ? buildAssistantModelMessageForToolCalls({
-          ai,
-          contentText: aiContentText,
-          toolCalls: calls,
-          noobotMessageId: assistantMessageUid,
-        })
-      : ai,
+    buildAssistantModelMessageForToolCalls({
+      ai,
+      contentText: finalAiContentText,
+      toolCalls: calls,
+      noobotMessageId: assistantMessageUid,
+    }),
     { block: "incremental" },
   );
 
@@ -459,7 +465,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   });
 
   await stateCommitter.pushAssistantMessage({
-    content: aiContentText,
+    content: finalAiContentText,
     rawModelContent: ai?.text ?? null,
     modelAdditionalKwargs: { reasoning: ai?.reasoning || "" },
     modelResponseMetadata: { finishReason: ai?.finishReason || "", usage: ai?.usage || {} },
@@ -481,7 +487,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }),
   });
 
-  const mainModelToolTurnContent = String(aiContentText || "").trim();
+  const mainModelToolTurnContent = String(finalAiContentText || "").trim();
   if (eventListener?.onEvent && mainModelToolTurnContent && calls.length) {
     emitMessageEvent(eventListener, runtime, "main_model_content", {
       turn,
@@ -507,7 +513,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   return {
     ai,
     assistantMessageId,
-    aiContentText,
+    aiContentText: finalAiContentText,
     calls,
     toolMap,
     stateCommitter,
@@ -517,7 +523,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     finalStreaming: finalStreamResult?.streamed
       ? {
           streamed: true,
-          output: aiContentText,
+          output: finalAiContentText,
           mode: finalStreamResult.mode || "final_stream_after_tools_no_calls",
         }
       : null,

@@ -43,7 +43,7 @@ test("workflow hook passes planned user attachments to node sub-session", async 
       capabilityModelInvoker: async (payload = {}) => {
         semanticRequestMessages.push(...(Array.isArray(payload?.messages) ? payload.messages : []));
         return {
-          output: [
+          output: { text: [
             "WORKFLOW_DSL/1",
             'NODE id=start type=state stateType=start name="开始"',
             'NODE id=read type=action name="读取附件" task="请读取并总结用户附件" attachments="att-user-1"',
@@ -51,7 +51,7 @@ test("workflow hook passes planned user attachments to node sub-session", async 
             "EDGE from=start to=read",
             "EDGE from=read to=end",
             "END",
-          ].join("\n"),
+          ].join("\n") },
         };
       },
       subSessionRunner: async (payload = {}) => {

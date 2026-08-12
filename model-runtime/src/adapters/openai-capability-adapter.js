@@ -10,12 +10,37 @@ import { IMAGE_GENERATION_API_TYPE, MODEL_OPERATION_KIND } from "@noobot/model-p
 const POLL_INTERVAL_MS = TIME_THRESHOLDS.tools.imagesAsyncPollIntervalMs;
 const TIMEOUT_MS = TIME_THRESHOLDS.tools.imagesAsyncTimeoutMs;
 const RATIO_SIZE = /^(auto|\d+(?:\.\d+)?:\d+(?:\.\d+)?)$/i;
-const HTTP_STATUS_HINTS = Object.freeze({
-  400: "参数错误，如不支持的 size 格式",
-  401: "API Key 无效",
-  402: "余额不足",
-  404: "任务不存在或无权访问；任务查询只能查询自己创建的任务",
-  503: "无可用渠道",
+// OpenAI's documented status-level meanings are only used when the provider
+// does not return a usable error message. A compatible provider's own message
+// is more specific and must remain visible to the caller.
+const HTTP_STATUS_FALLBACKS = Object.freeze({
+  "zh-CN": Object.freeze({
+    400: "请求参数或格式无效",
+    401: "认证失败，请检查 API Key",
+    403: "没有访问该资源的权限",
+    404: "请求的资源不存在",
+    429: "请求过于频繁或账户额度已用尽",
+    500: "服务端处理错误，请稍后重试",
+    503: "服务当前过载，请稍后重试",
+  }),
+  "en-US": Object.freeze({
+    400: "Invalid request parameters or format",
+    401: "Authentication failed; check your API key",
+    403: "You do not have permission to access this resource",
+    404: "The requested resource was not found",
+    429: "Too many requests or account quota exhausted",
+    500: "Server error while processing the request; try again later",
+    503: "The service is currently overloaded; try again later",
+  }),
+});
+
+function normalizeLocale(locale = "") {
+  return String(locale || "").trim().toLowerCase().startsWith("en") ? "en-US" : "zh-CN";
+}
+
+const IMAGES_ASYNC_FALLBACKS = Object.freeze({
+  "zh-CN": Object.freeze({ taskIdMissing: "缺少任务 ID", taskFailed: "任务执行失败", taskTimeout: (id) => `任务超时：${id}` }),
+  "en-US": Object.freeze({ taskIdMissing: "Task ID is missing", taskFailed: "Task failed", taskTimeout: (id) => `Task timed out: ${id}` }),
 });
 
 function normalizeBaseUrl(baseUrl = "") {
@@ -83,7 +108,7 @@ function imageArtifacts(items = []) {
     .filter((item) => item.b64Json || item.url);
 }
 
-async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body, signal }) {
+async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body, signal, locale = "zh-CN" }) {
   let response;
   try {
     response = await fetchImpl(url, {
@@ -99,11 +124,23 @@ async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body,
   }
   const responseText = await response.text();
   let payload;
-  try { payload = responseText ? JSON.parse(responseText) : {}; } catch { payload = { message: responseText }; }
+  let parsedJson = false;
+  try {
+    payload = responseText ? JSON.parse(responseText) : {};
+    parsedJson = true;
+  } catch {
+    payload = { message: responseText };
+  }
   if (!response.ok) {
-    const hint = HTTP_STATUS_HINTS[response.status] || "";
-    const message = String(payload?.error?.message || payload?.message || payload?.error || responseText || `HTTP ${response.status}`).trim();
-    const error = new Error([message, hint].filter(Boolean).join("；"));
+    const returnedMessage = String(
+      (typeof payload?.error?.message === "string" ? payload.error.message : "") ||
+      (typeof payload?.message === "string" ? payload.message : "") ||
+      (typeof payload?.error === "string" ? payload.error : "") ||
+      (!parsedJson ? responseText : "") ||
+      "",
+    ).trim();
+    const message = returnedMessage || HTTP_STATUS_FALLBACKS[normalizeLocale(locale)]?.[response.status] || `HTTP ${response.status}`;
+    const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
     error.requestUrl = url;
@@ -113,7 +150,8 @@ async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body,
   return payload;
 }
 
-async function executeImagesAsync({ modelSpec, credential, input, options, signal, fetchImpl, clock }) {
+async function executeImagesAsync({ modelSpec, credential, input, options, signal, fetchImpl, clock, locale }) {
+  const localized = IMAGES_ASYNC_FALLBACKS[normalizeLocale(locale)];
   const baseUrl = normalizeBaseUrl(modelSpec.base_url);
   const createUrl = buildApiUrl(baseUrl, "/v1/images/generations");
   const headers = { Authorization: `Bearer ${credential}`, ...(options.headers || {}) };
@@ -125,6 +163,7 @@ async function executeImagesAsync({ modelSpec, credential, input, options, signa
     method: "POST",
     headers,
     signal,
+    locale,
     body: {
       model: modelSpec.model,
       prompt: String(input.prompt || "").trim(),
@@ -137,26 +176,26 @@ async function executeImagesAsync({ modelSpec, credential, input, options, signa
   });
   const id = taskId(created);
   if (!id) {
-    const error = new Error(String(options.taskIdMissingMessage || "Task id missing"));
+    const error = new Error(String(options.taskIdMissingMessage || localized.taskIdMissing));
     error.apiTypeSwitchHint = true;
     throw error;
   }
   const taskUrl = buildApiUrl(baseUrl, `/v1/tasks/${encodeURIComponent(id)}`);
   const startedAt = Date.now();
   while (Date.now() - startedAt < Number(options.timeoutMs || TIMEOUT_MS)) {
-    const task = normalizeTask(await requestJson({ fetchImpl, url: taskUrl, headers, signal }));
+    const task = normalizeTask(await requestJson({ fetchImpl, url: taskUrl, headers, signal, locale }));
     const status = String(task.status || "").trim().toLowerCase();
     if (status === "completed") {
       return { taskId: id, imageArtifacts: imageArtifacts(task.result_data), rawText: "", rawTask: task };
     }
     if (status === "failed") {
-      const error = new Error(String(task.error || task.message || options.taskFailedMessage || "Task failed"));
+      const error = new Error(String(task.error || task.message || options.taskFailedMessage || localized.taskFailed));
       error.apiTypeSwitchHint = true;
       throw error;
     }
     await clock.sleep(Number(options.pollIntervalMs || POLL_INTERVAL_MS));
   }
-  const error = new Error(String(options.taskTimeoutMessage || `Task timed out: ${id}`));
+  const error = new Error(String(options.taskTimeoutMessage || localized.taskTimeout(id)));
   error.apiTypeSwitchHint = true;
   throw error;
 }
@@ -184,13 +223,14 @@ export async function executeOpenAiOperation({
   signal,
   fetchImpl = globalThis.fetch,
   clock = { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
+  locale = "zh-CN",
   openAiClientFactory = (config) => new OpenAI(config),
 }) {
   if (
     operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION &&
     operation.options.apiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
   ) {
-    return executeImagesAsync({ modelSpec, credential, input: operation.input, options: operation.options, signal, fetchImpl, clock });
+    return executeImagesAsync({ modelSpec, credential, input: operation.input, options: operation.options, signal, fetchImpl, clock, locale });
   }
   const client = openAiClientFactory({
     apiKey: credential,

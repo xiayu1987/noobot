@@ -11,7 +11,22 @@ import { createCurrentTurnMessagesStore } from "../../../src/context/session/cur
 import {
   beginAssistantMessageEventStream,
   bindAssistantMessageEventStream,
+  applyAuthoritativeMessageId,
 } from "../../../src/events/message-event-stream.js";
+
+test("authoritative message id can be applied to immutable model output", () => {
+  const output = Object.freeze({
+    text: "answer",
+    additional_kwargs: Object.freeze({ provider: "openai" }),
+  });
+  const projected = applyAuthoritativeMessageId(output, "assistant-1");
+
+  assert.equal(projected.id, "assistant-1");
+  assert.equal(projected.messageId, "assistant-1");
+  assert.equal(projected.additional_kwargs.provider, "openai");
+  assert.equal(projected.additional_kwargs.noobotMessageId, "assistant-1");
+  assert.equal(output.id, undefined);
+});
 
 test("authoritative final event owns generated attachment envelopes before persistence", () => {
   const events = [];

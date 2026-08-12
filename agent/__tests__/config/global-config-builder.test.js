@@ -138,21 +138,25 @@ test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化�
 
   const built = await builder.build();
   assert.equal(built.rawConfig.providers.main.alias, "main");
-  assert.equal(built.rawConfig.providers.main.temperature, 0.55);
-  assert.equal(built.rawConfig.providers.main.top_p, 1);
+  assert.equal(built.rawConfig.providers.main.temperature, 0.7);
+  assert.equal(built.rawConfig.providers.main.top_p, undefined);
 });
 
-test("createGlobalConfigBuilder: 拒绝缺少显式供应商身份的 provider", async () => {
+test("createGlobalConfigBuilder: 自动推导供应商身份并忽略配置覆盖", async () => {
   const builder = createGlobalConfigBuilder({
     source: async () => ({
       providers: {
-        legacy: { model: "gpt-4", format: "openai_compatible" },
+        legacy: {
+          model: "gpt-4",
+          format: "openai_compatible",
+          providerId: "dashscope",
+          adapterId: "dashscope",
+        },
       },
     }),
   });
 
-  await assert.rejects(
-    () => builder.build(),
-    /invalid configured model provider legacy: model spec\.providerId is required/,
-  );
+  const built = await builder.build();
+  assert.equal(built.rawConfig.providers.legacy.providerId, "openai");
+  assert.equal(built.rawConfig.providers.legacy.adapterId, "openai-compatible");
 });

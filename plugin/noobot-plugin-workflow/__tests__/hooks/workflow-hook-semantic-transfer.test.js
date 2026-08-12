@@ -46,7 +46,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       semanticModel: "qwen3_6_plus",
       semanticPrompt: "emit workflow dsl",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A" task="请输出：节点A执行完成"',
@@ -54,7 +54,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
           "EDGE from=start to=act",
           "EDGE from=act to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
         traces: [{ id: "semantic_trace_1" }],
       }),
       subSessionRunner: async (payload = {}) => {
@@ -290,7 +290,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
       mode: "on",
       semanticModel: "qwen3_6_plus",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A" task="请输出节点结果"',
@@ -298,7 +298,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
           "EDGE from=start to=act",
           "EDGE from=act to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => ({
         lifecycle: {
@@ -397,7 +397,7 @@ test("workflow hook routes final attachment summary composition through semantic
       mode: "on",
       semanticModel: "qwen3_6_plus",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A" task="请输出节点结果"',
@@ -405,7 +405,7 @@ test("workflow hook routes final attachment summary composition through semantic
           "EDGE from=start to=act",
           "EDGE from=act to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => ({
         lifecycle: {

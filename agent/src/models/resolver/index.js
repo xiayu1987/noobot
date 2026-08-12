@@ -74,12 +74,20 @@ export function resolveSkillModelSpec({ skillConfig, globalConfig, userConfig })
   const spec = byAliasWithUser(alias, globalConfig, userConfig);
   if (!spec) return null;
 
-  if (skillConfig.model) spec.model = skillConfig.model;
-  if (skillConfig.temperature != null) spec.temperature = skillConfig.temperature;
-  if (skillConfig.maxTokens != null) spec.maxTokens = skillConfig.maxTokens;
-  if (skillConfig.topP != null) spec.topP = skillConfig.topP;
-  if (skillConfig.frequencyPenalty != null) spec.frequencyPenalty = skillConfig.frequencyPenalty;
-  if (skillConfig.presencePenalty != null) spec.presencePenalty = skillConfig.presencePenalty;
-
-  return spec;
+  // A skill may select another concrete model. Re-normalize after applying
+  // the override so modelFamily, operator defaults, and concrete-model rules
+  // are recalculated instead of leaking the alias model's identity.
+  return normalizeRuntimeModelSpec({
+    ...spec,
+    ...(skillConfig.model ? { model: skillConfig.model } : {}),
+    ...(skillConfig.temperature != null ? { temperature: skillConfig.temperature } : {}),
+    ...(skillConfig.maxTokens != null ? { max_tokens: skillConfig.maxTokens } : {}),
+    ...(skillConfig.topP != null ? { top_p: skillConfig.topP } : {}),
+    ...(skillConfig.frequencyPenalty != null
+      ? { frequency_penalty: skillConfig.frequencyPenalty }
+      : {}),
+    ...(skillConfig.presencePenalty != null
+      ? { presence_penalty: skillConfig.presencePenalty }
+      : {}),
+  });
 }

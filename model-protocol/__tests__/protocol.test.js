@@ -140,17 +140,16 @@ test("model request requires one explicit context sequence policy", () => {
   );
 });
 
-test("model request requires transport, provider and adapter identities", () => {
+test("model request requires transport identity and derives provider/adapter identities", () => {
   assert.throws(
     () => createModelRequest({ invocation, model: { ...model, format: "" }, messages: [] }),
     /model spec.format is required/,
   );
-  assert.throws(
-    () => createModelRequest({ invocation, model: { ...model, providerId: "" }, messages: [] }),
-    /model spec.providerId is required/,
-  );
-  assert.throws(
-    () => createModelRequest({ invocation, model: { ...model, adapterId: "" }, messages: [] }),
-    /model spec.adapterId is required/,
-  );
+  const derived = createModelRequest({
+    invocation,
+    model: { ...model, providerId: "", adapterId: "", operatorId: "openai" },
+    messages: [],
+  });
+  assert.equal(derived.model.providerId, "openai");
+  assert.equal(derived.model.adapterId, "openai-compatible");
 });
