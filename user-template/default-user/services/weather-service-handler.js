@@ -54,17 +54,17 @@ function pickWeatherSummary(raw = {}, city = "") {
 }
 
 export default async function weatherServiceHandler({
-  agentContext = null,
+  runtime,
   endpointCfg,
   custom_param = "",
   queryString = {},
   body = {},
 }) {
-  const fetcher = agentContext?.bindings?.runtime?.sharedTools?.fetch;
+  const fetcher = runtime?.sharedTools?.fetch;
   if (typeof fetcher !== "function") {
     return {
       ok: false,
-      error: "fetch missing in agentContext.bindings.runtime.sharedTools",
+      error: "fetch missing in runtime.sharedTools",
     };
   }
   const hint = formatHint(endpointCfg);

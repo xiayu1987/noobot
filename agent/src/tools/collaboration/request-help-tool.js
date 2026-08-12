@@ -131,6 +131,7 @@ function pickEndpointName(serviceCfg = {}, preferred = "") {
 
 async function invokeOneHelpService({
   agentContext,
+  runtime,
   globalConfig,
   userId,
   services,
@@ -170,6 +171,7 @@ async function invokeOneHelpService({
   try {
     const result = await invokeServiceHandler({
       agentContext,
+      runtime,
       globalConfig,
       userId,
       serviceName,
@@ -344,6 +346,7 @@ export function createRequestHelpTool({ agentContext } = {}) {
             helpServiceList.map((configItem) =>
               invokeOneHelpService({
                 agentContext,
+                runtime,
                 globalConfig,
                 userId,
                 services: servicesConfig,
