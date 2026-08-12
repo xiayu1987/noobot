@@ -5,35 +5,16 @@
 -->
 <script setup>
 import SharedChatMessageItem from "./SharedChatMessageItem.vue";
+import { chatMessageItemProps } from "../../model/messageItemProps.js";
 
 defineEmits(["open-thinking-details"]);
 
-const props = defineProps({
-  messageItem: { type: Object, required: true },
-  allMessages: { type: Array, default: () => [] },
-  sessionDocs: { type: Array, default: () => [] },
-  userId: { type: String, default: "" },
-  renderMarkdown: { type: Function, required: true },
-  formatTime: { type: Function, required: true },
-  formatFileSize: { type: Function, required: true },
-  isImageMime: { type: Function, required: true },
-  sending: { type: Boolean, default: false },
-  currentTurn: { type: Boolean, default: false },
-  deleteMonotonicMessage: { type: Function, default: null },
-  resendMonotonicMessage: { type: Function, default: null },
-  stopExecution: { type: Function, default: null },
-  hideHeader: { type: Boolean, default: false },
-  attachmentPreviewDialogClass: {
-    type: String,
-    default: "attachment-preview-dialog",
-  },
-  filePreviewDialogClass: {
-    type: String,
-    default: "generated-file-preview-dialog",
-  },
-});
+const props = defineProps(chatMessageItemProps);
 </script>
 
 <template>
-  <SharedChatMessageItem v-bind="props" @open-thinking-details="$emit('open-thinking-details', $event)" />
+  <SharedChatMessageItem
+    v-bind="props"
+    @open-thinking-details="$emit('open-thinking-details', $event)"
+  />
 </template>

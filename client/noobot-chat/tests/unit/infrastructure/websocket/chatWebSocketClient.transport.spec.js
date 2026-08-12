@@ -6,7 +6,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
-import { flushPromises, MockWebSocket, setupWebSocketTestHooks } from "./chatWebSocketClientTestFixtures.js";
+import {
+  flushPromises,
+  MockWebSocket,
+  setupWebSocketTestHooks,
+} from "./chatWebSocketClientTestFixtures.js";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -19,16 +23,21 @@ setupWebSocketTestHooks();
 describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("settles a deleted Turn stream as an intentional cancellation", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
-    const streamPromise = client.stream({
-      action: "chat",
-      sessionId: "session-delete",
-      turnScopeId: "turn-delete",
-    }, vi.fn());
+    const streamPromise = client.stream(
+      {
+        action: "chat",
+        sessionId: "session-delete",
+        turnScopeId: "turn-delete",
+      },
+      vi.fn(),
+    );
 
-    expect(client.cancelStreamForTurn({
-      sessionId: "session-delete",
-      turnScopeId: "turn-delete",
-    })).toBe(true);
+    expect(
+      client.cancelStreamForTurn({
+        sessionId: "session-delete",
+        turnScopeId: "turn-delete",
+      }),
+    ).toBe(true);
     await expect(streamPromise).resolves.toBeUndefined();
   });
 
@@ -39,11 +48,14 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       sessionLogSink,
     });
     const onEvent = vi.fn();
-    const streamPromise = client.stream({
-      action: "chat",
-      sessionId: "session-transport-log",
-      turnScopeId: "turn-transport-log",
-    }, onEvent);
+    const streamPromise = client.stream(
+      {
+        action: "chat",
+        sessionId: "session-transport-log",
+        turnScopeId: "turn-transport-log",
+      },
+      onEvent,
+    );
     const socket = MockWebSocket.instances[0];
     const authoritativeEvent = {
       eventId: "event-transport-log",
@@ -93,21 +105,26 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       turnScopeId: "turn-transport-log",
     });
     await streamPromise;
-    expect(sessionLogSink.log).toHaveBeenCalledWith(expect.objectContaining({
-      category: "transport",
-      event: "frontend.websocket.transportEventReceived",
-      sessionId: "session-transport-log",
-    }));
+    expect(sessionLogSink.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "transport",
+        event: "frontend.websocket.transportEventReceived",
+        sessionId: "session-transport-log",
+      }),
+    );
   });
 
   it("acknowledges authoritative lifecycle before handing it to the business reducer", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
-    const streamPromise = client.stream({
-      action: "chat",
-      sessionId: "session-receipt-1",
-      turnScopeId: "turn-receipt-1",
-    }, onEvent);
+    const streamPromise = client.stream(
+      {
+        action: "chat",
+        sessionId: "session-receipt-1",
+        turnScopeId: "turn-receipt-1",
+      },
+      onEvent,
+    );
     const socket = MockWebSocket.instances[0];
     socket.sent = [];
     const lifecycle = createTurnLifecycleEnvelope({
@@ -146,12 +163,17 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
 
   it("keeps lifecycle delivery acknowledged when the business reducer throws", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
-    const onEvent = vi.fn(() => { throw new Error("reducer failed"); });
-    const streamPromise = client.stream({
-      action: "chat",
-      sessionId: "session-receipt-before-reducer",
-      turnScopeId: "turn-receipt-before-reducer",
-    }, onEvent);
+    const onEvent = vi.fn(() => {
+      throw new Error("reducer failed");
+    });
+    const streamPromise = client.stream(
+      {
+        action: "chat",
+        sessionId: "session-receipt-before-reducer",
+        turnScopeId: "turn-receipt-before-reducer",
+      },
+      onEvent,
+    );
     const socket = MockWebSocket.instances[0];
     socket.sent = [];
     const lifecycle = createTurnLifecycleEnvelope({
@@ -192,13 +214,18 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("still dispatches authoritative lifecycle when writing its receipt fails", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
-    const streamPromise = client.stream({
-      action: "chat",
-      sessionId: "session-receipt-failure",
-      turnScopeId: "turn-receipt-failure",
-    }, onEvent);
+    const streamPromise = client.stream(
+      {
+        action: "chat",
+        sessionId: "session-receipt-failure",
+        turnScopeId: "turn-receipt-failure",
+      },
+      onEvent,
+    );
     const socket = MockWebSocket.instances[0];
-    socket.send = () => { throw new Error("receipt send failed"); };
+    socket.send = () => {
+      throw new Error("receipt send failed");
+    };
     const lifecycle = createTurnLifecycleEnvelope({
       eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId: "event-receipt-failure",
@@ -237,12 +264,14 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
 
     socket.onopen?.();
 
-    expect(JSON.parse(socket.sent[0])).toEqual(expect.objectContaining({
-      action: "reconnect",
-      currentSessionId: "s-1",
-      userId: "u-1",
-      requestId: expect.stringMatching(/^reconnect:/),
-    }));
+    expect(JSON.parse(socket.sent[0])).toEqual(
+      expect.objectContaining({
+        action: "reconnect",
+        currentSessionId: "s-1",
+        userId: "u-1",
+        requestId: expect.stringMatching(/^reconnect:/),
+      }),
+    );
 
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 0 });
     await reconnectPromise;
@@ -265,23 +294,26 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
 
   it("extracts a readable message from structured stream errors", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
-    const streamPromise = client.stream({
-      action: "chat",
-      sessionId: "s-error-object",
-      turnScopeId: "turn-error-object",
-    }, vi.fn());
+    const streamPromise = client.stream(
+      {
+        action: "chat",
+        sessionId: "s-error-object",
+        turnScopeId: "turn-error-object",
+      },
+      vi.fn(),
+    );
     const socket = MockWebSocket.instances[0];
 
     socket.emit(StreamEventEnum.ERROR, {
       sessionId: "s-error-object",
       turnScopeId: "turn-error-object",
-      errorCode: "SESSION_VERSION_CONFLICT",
+      errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
       error: { message: "session version conflict" },
     });
 
     await expect(streamPromise).rejects.toMatchObject({
       message: "session version conflict",
-      data: expect.objectContaining({ errorCode: "SESSION_VERSION_CONFLICT" }),
+      data: expect.objectContaining({ errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT" }),
     });
   });
 
@@ -331,10 +363,13 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("rejects stream send failures and releases the failed transport", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const socket = client.connect();
-    socket.send = () => { throw new DOMException("socket closing", "InvalidStateError"); };
+    socket.send = () => {
+      throw new DOMException("socket closing", "InvalidStateError");
+    };
 
-    await expect(client.stream({ action: "chat", turnScopeId: "turn-send-failed" }, vi.fn()))
-      .rejects.toMatchObject({ name: "InvalidStateError" });
+    await expect(
+      client.stream({ action: "chat", turnScopeId: "turn-send-failed" }, vi.fn()),
+    ).rejects.toMatchObject({ name: "InvalidStateError" });
     expect(client.getActiveSocket()).toBe(null);
     expect(socket.readyState).toBe(MockWebSocket.CLOSED);
   });
@@ -342,7 +377,9 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("rejects reconnect immediately when command send fails", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const socket = client.connect();
-    socket.send = () => { throw new Error("send failed"); };
+    socket.send = () => {
+      throw new Error("send failed");
+    };
 
     await expect(client.reconnect({ currentSessionId: "s-1" })).rejects.toThrow("send failed");
     expect(client.getActiveSocket()).toBe(null);
@@ -398,5 +435,4 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     socket.emit(StreamEventEnum.DONE, { turnScopeId: "turn-continue" });
     await streamPromise;
   });
-
 });

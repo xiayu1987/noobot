@@ -28,11 +28,9 @@ import { hydrateTurnSnapshot } from "../runtime/engine/turnProjectionStore.js";
 import { isPendingInteractionReplay } from "@noobot/event-protocol";
 
 function isReconnectTerminalEvent(eventName = "") {
-  return [
-    StreamEventEnum.DONE,
-    StreamEventEnum.USER_STOPPED,
-    StreamEventEnum.ERROR,
-  ].includes(String(eventName || "").trim());
+  return [StreamEventEnum.DONE, StreamEventEnum.USER_STOPPED, StreamEventEnum.ERROR].includes(
+    String(eventName || "").trim(),
+  );
 }
 
 function isSessionEntryRunning(sessionEntry = {}) {
@@ -43,16 +41,14 @@ function isSessionEntryRunning(sessionEntry = {}) {
   const activeTurnScopeId = String(activeTurn?.turnScopeId || "").trim();
   const activeTurnState = String(activeTurn?.state || "").trim();
   if (!activeTurnState || isAuthoritativeTerminalState(activeTurnState)) return false;
-  return Boolean(
-    sessionId &&
-    activeTurnSessionId === sessionId &&
-    activeTurnScopeId,
-  );
+  return Boolean(sessionId && activeTurnSessionId === sessionId && activeTurnScopeId);
 }
 
 function hasPendingInteractions(sessionEntry = {}) {
-  return Array.isArray(sessionEntry?.replayBatch?.pendingInteractions) &&
-    sessionEntry.replayBatch.pendingInteractions.length > 0;
+  return (
+    Array.isArray(sessionEntry?.replayBatch?.pendingInteractions) &&
+    sessionEntry.replayBatch.pendingInteractions.length > 0
+  );
 }
 
 function isDialogProcessRecoverable(sessionEntry = {}) {
@@ -63,9 +59,15 @@ function isDialogProcessRecoverable(sessionEntry = {}) {
 function findRecoverableReconnectSessionId(sessionsPayload = [], preferredSessionId = "") {
   const preferred = String(preferredSessionId || "").trim();
   if (preferred) {
-    const preferredEntry = (Array.isArray(sessionsPayload) ? sessionsPayload : [])
-      .find((sessionEntry) => String(sessionEntry?.sessionId || "").trim() === preferred);
-    if (preferredEntry && isDialogProcessRecoverable(preferredEntry)) return preferred;
+    const preferredEntry = (Array.isArray(sessionsPayload) ? sessionsPayload : []).find(
+      (sessionEntry) => String(sessionEntry?.sessionId || "").trim() === preferred,
+    );
+    // The server-provided currentSessionId is the singular authoritative UI
+    // session on reconnect. A different running/pending session must not hijack
+    // activation and mix histories, interactions, or thinking projections into
+    // the wrong session. Fallback recovery is only valid when the preferred
+    // session is absent from the payload entirely.
+    if (preferredEntry) return preferred;
   }
   for (const sessionEntry of Array.isArray(sessionsPayload) ? sessionsPayload : []) {
     const sessionId = String(sessionEntry?.sessionId || "").trim();
@@ -104,10 +106,7 @@ function getReconnectEnvelopeSequence(envelope = {}) {
   return Number(envelope?.data?.seq || envelope?.sequence || 0);
 }
 
-function splitReconnectMessagesByTurnIdentity(
-  messages = [],
-  fallbackDialogProcessId = "",
-) {
+function splitReconnectMessagesByTurnIdentity(messages = [], fallbackDialogProcessId = "") {
   const normalizedFallback = String(fallbackDialogProcessId || "").trim();
   const groups = new Map();
   for (const envelope of Array.isArray(messages) ? messages : []) {
@@ -178,12 +177,7 @@ function hasArrayItems(value = null) {
 }
 
 function buildTransferEnvelopeKey(envelope = {}) {
-  return [
-    envelope?.protocol,
-    envelope?.version,
-    envelope?.transferId,
-    envelope?.messageId,
-  ]
+  return [envelope?.protocol, envelope?.version, envelope?.transferId, envelope?.messageId]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join("::");
@@ -211,11 +205,7 @@ function messageCompareKey(messageItem = {}) {
   if (role === RoleEnum.USER) {
     const attachmentKey = getMessageAttachments(messageItem)
       .map((attachmentItem) =>
-        [
-          attachmentItem?.name,
-          attachmentItem?.attachmentId,
-          attachmentItem?.size,
-        ]
+        [attachmentItem?.name, attachmentItem?.attachmentId, attachmentItem?.size]
           .map((item) => String(item || "").trim())
           .join(":"),
       )
@@ -228,7 +218,6 @@ function messageCompareKey(messageItem = {}) {
 function parseMessageTimeMs(value) {
   return parseTimeMs(value);
 }
-
 
 function mergeCurrentUserMessagesIntoFoldedMessages({
   foldedMessages = [],
@@ -270,11 +259,13 @@ function findReusableMessageObject(nextMessage = {}, existingMessages = []) {
   if (nextRole === RoleEnum.ASSISTANT) {
     const presentationMessageId = String(nextMessage?.presentationMessageId || "").trim();
     if (!presentationMessageId) return null;
-    return existingMessages.find(
-      (existingMessage) =>
-        getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
-        String(existingMessage?.presentationMessageId || "").trim() === presentationMessageId,
-    ) || null;
+    return (
+      existingMessages.find(
+        (existingMessage) =>
+          getMessageRole(existingMessage) === RoleEnum.ASSISTANT &&
+          String(existingMessage?.presentationMessageId || "").trim() === presentationMessageId,
+      ) || null
+    );
   }
 
   const nextKey = messageCompareKey(nextMessage);
@@ -310,7 +301,11 @@ function patchNonTurnMessageMetadata(targetMessage = {}, sourceMessage = {}) {
   }
 }
 
-function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage = {}, turnStatus = null) {
+function patchMessageObjectPreservingUiState(
+  targetMessage = {},
+  sourceMessage = {},
+  turnStatus = null,
+) {
   const sourceRole = getMessageRole(sourceMessage);
   const sourceTurnScopeId = getMessageTurnScopeId(sourceMessage);
   const sourceCanUseTurnScopedAssets = canUseTurnScopedAssets(sourceMessage);
@@ -331,7 +326,9 @@ function patchMessageObjectPreservingUiState(targetMessage = {}, sourceMessage =
     hydrateTurnSnapshot({
       targetMessage,
       snapshot: sourceMessage,
-      throughSequence: Number(sourceMessage?.throughSequence || sourceMessage?.messageEventState?.lastSequence || 0),
+      throughSequence: Number(
+        sourceMessage?.throughSequence || sourceMessage?.messageEventState?.lastSequence || 0,
+      ),
     });
   } else {
     patchNonTurnMessageMetadata(targetMessage, sourceMessage);

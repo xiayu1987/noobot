@@ -81,18 +81,12 @@ export class AsyncSessionRunner {
       };
     }
 
-    const sessionData = bundle.sessions?.find(
-      (s) => s.sessionId === sessionId,
-    );
+    const sessionData = bundle.sessions?.find((s) => s.sessionId === sessionId);
     const messages = sessionData?.messages || [];
 
     const assistantMessage = [...messages]
       .reverse()
-      .find(
-        (m) =>
-          m.role === MESSAGE_ROLE.ASSISTANT &&
-          m.type === MESSAGE_TYPE.MESSAGE,
-      );
+      .find((m) => m.role === MESSAGE_ROLE.ASSISTANT && m.type === MESSAGE_TYPE.MESSAGE);
 
     const answer = assistantMessage?.content || "";
     const dialogProcessId = resolveMessageDialogProcessId(assistantMessage);
@@ -179,7 +173,6 @@ export class AsyncSessionRunner {
       error: "",
       task: String(task || ""),
       sharedTaskSpec: String(sharedTaskSpec || ""),
-      parentSessionId: normalizeParentSessionId(parentSessionId),
       parentDialogProcessId: String(parentDialogProcessId || ""),
       sourceDialogProcessId: String(sourceDialogProcessId || ""),
       parentAsyncResultContainer,
@@ -314,9 +307,7 @@ export class AsyncSessionRunner {
       });
       return {
         ok: !!bundle?.exists,
-        status: bundle?.exists
-          ? SESSION_ASYNC_STATUS.COMPLETED
-          : SESSION_ASYNC_STATUS.NOT_FOUND,
+        status: bundle?.exists ? SESSION_ASYNC_STATUS.COMPLETED : SESSION_ASYNC_STATUS.NOT_FOUND,
         sessionId: normalizedSessionId,
         parentSessionId: normalizedParentSessionId,
       };
@@ -325,11 +316,7 @@ export class AsyncSessionRunner {
     while (Date.now() - startedAtMs < waitTimeoutMs) {
       const job = this.jobs.get(key);
       if (!job) break;
-      if (
-        SESSION_ASYNC_TERMINAL_STATUSES.includes(
-          String(job?.status || ""),
-        )
-      ) {
+      if (SESSION_ASYNC_TERMINAL_STATUSES.includes(String(job?.status || ""))) {
         return resolveDone(job);
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -343,11 +330,7 @@ export class AsyncSessionRunner {
         sessionId: normalizedSessionId,
       });
     }
-    if (
-      SESSION_ASYNC_TERMINAL_STATUSES.includes(
-        String(latest?.status || ""),
-      )
-    ) {
+    if (SESSION_ASYNC_TERMINAL_STATUSES.includes(String(latest?.status || ""))) {
       return resolveDone(latest);
     }
     return {

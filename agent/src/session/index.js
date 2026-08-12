@@ -503,6 +503,7 @@ export {
   readJsonlArtifactFile,
   iterateExecutionLogs,
   readRecentSessionTurns,
+  readSessionArtifact,
   readSessionMessageCount,
   readSessionTurn,
   readSessionArtifactSnapshot,

@@ -12,11 +12,14 @@ import path from "node:path";
 import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
+  createTestModelResponse,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import {
+  createAcceptanceHandler,
+  createGuidanceHandler,
+} from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
@@ -24,13 +27,15 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 1, true);
   const roles = messages.map((item = {}) => String(item?.role || "").trim());
-  assert.equal(roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)), true);
+  assert.equal(
+    roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)),
+    true,
+  );
   const first = messages[0] || {};
   const last = messages[messages.length - 1] || {};
   assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
   assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
 }
-
 
 test("harness acceptance semantic validation uses separate model when enabled", async () => {
   const hookManager = createAgentHookManager();
@@ -45,18 +50,24 @@ test("harness acceptance semantic validation uses separate model when enabled", 
       resolveModelMessages: runtimeHelpers.createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return {
-          content: JSON.stringify({
+        return createTestModelResponse(
+          JSON.stringify({
             status: "pass",
             consistent: true,
             missingItems: [],
             unsupportedClaims: [],
             checklistCoverage: [
-              { index: 1, task: "执行核心任务", covered: true, evidence: "final output", risk: "low" },
+              {
+                index: 1,
+                task: "执行核心任务",
+                covered: true,
+                evidence: "final output",
+                risk: "low",
+              },
             ],
             suggestions: [],
           }),
-        };
+        );
       },
     },
   );
@@ -68,7 +79,12 @@ test("harness acceptance semantic validation uses separate model when enabled", 
         state: {
           flags: { planningCaptured: true, acceptanceRequested: false },
           counters: { llmTurns: 0, consecutiveToolFailures: 0, totalToolFailures: 0 },
-          signals: { parsedAttachment: false, subtaskStarted: false, subtaskWaited: false, successfulToolCount: 1 },
+          signals: {
+            parsedAttachment: false,
+            subtaskStarted: false,
+            subtaskWaited: false,
+            successfulToolCount: 1,
+          },
           pending: { guidance: null, summary: false },
         },
         logs: { planning: [], guidance: [], acceptance: [], review: [] },
@@ -77,28 +93,46 @@ test("harness acceptance semantic validation uses separate model when enabled", 
   };
   const result = { output: "done: 执行核心任务" };
 
-  const finalContext = createTestHookContext({
-    userId: "u19",
-    sessionId: "s19",
-    dialogProcessId: "dp19",
-    result,
-    agentContext,
-  }, {
-    messageBlocks: {
-      system: [{ role: "system", content: "系统上下文：必须保留" }],
-      history: [
-        { role: "user", content: "用户原始需求：执行核心任务", frontendUserMessage: true, dialogProcessId: "dp-history" },
-        { role: "assistant", content: "执行过程上下文：已完成核心任务", dialogProcessId: "dp-history" },
-      ],
-      incremental: [],
+  const finalContext = createTestHookContext(
+    {
+      userId: "u19",
+      sessionId: "s19",
+      dialogProcessId: "dp19",
+      result,
+      agentContext,
     },
-  });
+    {
+      messageBlocks: {
+        system: [{ role: "system", content: "系统上下文：必须保留" }],
+        history: [
+          {
+            role: "user",
+            content: "用户原始需求：执行核心任务",
+            frontendUserMessage: true,
+            dialogProcessId: "dp-history",
+          },
+          {
+            role: "assistant",
+            content: "执行过程上下文：已完成核心任务",
+            dialogProcessId: "dp-history",
+          },
+        ],
+        incremental: [],
+      },
+    },
+  );
   await hookManager.emit("agent.before_final_output", finalContext);
 
   assert.equal(invocations.length, 2);
   assert.equal(invocations[0].purpose, "phase_acceptance_before_final");
-  assert.match(invocations[0].messages.map((item = {}) => String(item.content || "")).join("\n"), /用户原始需求：执行核心任务/);
-  assert.match(invocations[0].messages.map((item = {}) => String(item.content || "")).join("\n"), /执行过程上下文：已完成核心任务/);
+  assert.match(
+    invocations[0].messages.map((item = {}) => String(item.content || "")).join("\n"),
+    /用户原始需求：执行核心任务/,
+  );
+  assert.match(
+    invocations[0].messages.map((item = {}) => String(item.content || "")).join("\n"),
+    /执行过程上下文：已完成核心任务/,
+  );
   assert.equal(invocations[1].purpose, "acceptance_semantic_validation");
   assert.equal(invocations[1].promptVersion, "v1");
   assert.equal(invocations[1].envelopeType, "structured_v1");
@@ -106,11 +140,18 @@ test("harness acceptance semantic validation uses separate model when enabled", 
   assert.equal(Array.isArray(agentContext.payload.harness.phaseAcceptanceReports), true);
   assert.equal(agentContext.payload.harness.phaseAcceptanceReports.length, 1);
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");
-  assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
+  assert.equal(
+    agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent,
+    true,
+  );
   assert.doesNotMatch(String(result.output), /"semanticValidation"|acceptanceReport|完整计划清单/);
-  assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "acceptance_semantic_validation_completed"), true);
+  assert.equal(
+    agentContext.payload.harness.logs.acceptance.some(
+      (log) => log.event === "acceptance_semantic_validation_completed",
+    ),
+    true,
+  );
 });
-
 
 test("acceptance semantic validation relays via unified ctx.modelContext.messages protocol", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -154,14 +195,19 @@ test("acceptance semantic validation relays via unified ctx.modelContext.message
       acceptance: { semanticValidation: true },
       capabilityModelInvoker: async ({ purpose }) => {
         if (purpose === "acceptance_semantic_validation") {
-          return { content: "ADD 1 验收通过，输出与计划一致" };
+          return createTestModelResponse("ADD 1 验收通过，输出与计划一致");
         }
-        return { content: "" };
+        return createTestModelResponse("");
       },
     },
   };
 
-  const res = await handler({ capability: "acceptance", point: "agent.before_final_output", ctx, meta });
+  const res = await handler({
+    capability: "acceptance",
+    point: "agent.before_final_output",
+    ctx,
+    meta,
+  });
   assert.equal(res.status, "active");
   assert.equal(Array.isArray(ctx.modelContext.messages), true);
   assert.equal(
@@ -175,7 +221,6 @@ test("acceptance semantic validation relays via unified ctx.modelContext.message
     true,
   );
 });
-
 
 test("harness acceptance semantic validation failure does not block active acceptance", async () => {
   const hookManager = createAgentHookManager();
@@ -208,7 +253,9 @@ test("harness acceptance semantic validation failure does not block active accep
   };
 
   await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
-  const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
+  const tool = agentContext.payload.tools.registry.find(
+    (item) => item.name === "request_task_acceptance",
+  );
   const raw = await tool.invoke(
     { mode: "active" },
     {
@@ -222,10 +269,19 @@ test("harness acceptance semantic validation failure does not block active accep
   assert.equal(result.ok, true);
   assert.equal(result.phaseAcceptanceTriggered, false);
   assert.equal(result.report.semanticValidation, undefined);
-  assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "phase_acceptance_failed"), true);
-  assert.equal(agentContext.payload.harness.logs.acceptance.some((log) => log.event === "acceptance_semantic_validation_failed"), true);
+  assert.equal(
+    agentContext.payload.harness.logs.acceptance.some(
+      (log) => log.event === "phase_acceptance_failed",
+    ),
+    true,
+  );
+  assert.equal(
+    agentContext.payload.harness.logs.acceptance.some(
+      (log) => log.event === "acceptance_semantic_validation_failed",
+    ),
+    true,
+  );
 });
-
 
 test("acceptance handler inject mode schedules and captures semantic validation without invoker", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -262,7 +318,12 @@ test("acceptance handler inject mode schedules and captures semantic validation 
   };
 
   const finalCtx = { agentContext, result: { output: "done" } };
-  await handler({ capability: "acceptance", point: "agent.before_final_output", ctx: finalCtx, meta });
+  await handler({
+    capability: "acceptance",
+    point: "agent.before_final_output",
+    ctx: finalCtx,
+    meta,
+  });
   assert.equal(
     agentContext.payload.harness.logs.acceptance.some(
       (item) => item.event === "acceptance_semantic_validation_scheduled_by_inject",
@@ -287,14 +348,19 @@ test("acceptance handler inject mode schedules and captures semantic validation 
         consistent: true,
         missingItems: [],
         unsupportedClaims: [],
-        checklistCoverage: [{ index: 1, task: "执行核心任务", covered: true, evidence: "done", risk: "low" }],
+        checklistCoverage: [
+          { index: 1, task: "执行核心任务", covered: true, evidence: "done", risk: "low" },
+        ],
         suggestions: [],
       }),
     },
   };
   await handler({ capability: "acceptance", point: "agent.after_llm_call", ctx: captureCtx, meta });
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");
-  assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
+  assert.equal(
+    agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent,
+    true,
+  );
   assert.equal(
     agentContext.payload.harness.logs.acceptance.some(
       (item) => item.event === "acceptance_semantic_validation_completed_inject",

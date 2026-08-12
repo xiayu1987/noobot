@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, watch } from "vue";
-import { buildViewMessage } from "noobot-chat/plugin-api/session-domain";
-import { buildSessionDetailProjection } from "noobot-chat/plugin-api/session-domain";
+import {
+  buildSessionDetailProjection,
+  buildViewMessage,
+} from "noobot-chat/plugin-api/session-domain";
 
 export function useWorkflowNodeMessages({
   props,
@@ -42,10 +44,7 @@ export function useWorkflowNodeMessages({
         ? selectedNodeSessionSummary.value
         : {};
     const sessionId = String(
-      selectedNodeSessionId.value ||
-        summary?.sessionId ||
-        selectedNode.value?.sessionId ||
-        "",
+      selectedNodeSessionId.value || summary?.sessionId || selectedNode.value?.sessionId || "",
     ).trim();
     if (!sessionId) return [];
     return [
@@ -53,9 +52,7 @@ export function useWorkflowNodeMessages({
         ...summary,
         sessionId,
         parentSessionId: String(
-          summary?.parentSessionId ||
-            selectedNode.value?.rootSessionId ||
-            "",
+          summary?.parentSessionId || selectedNode.value?.rootSessionId || "",
         ).trim(),
         caller: String(summary?.caller || "bot").trim() || "bot",
         depth: Number.isFinite(Number(summary?.depth)) ? Number(summary.depth) : 1,
@@ -64,22 +61,22 @@ export function useWorkflowNodeMessages({
         // Reading it here created a second message fact source: live events updated the
         // canonical list while rendering continued to use the stale snapshot, and a
         // later detail reload could fold both copies into one duplicated content body.
-        messages: Array.isArray(selectedNodeMessages.value)
-          ? selectedNodeMessages.value
-          : [],
+        messages: Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : [],
       },
     ];
   });
 
-  const selectedNodeProjection = computed(() => buildSessionDetailProjection({
-    sessionDetail: {
-      sessionId: selectedNodeSessionId.value,
-      sessionSummary: selectedNodeSessionSummary.value || {},
-      messages: selectedNodeMessages.value,
-    },
-    sessionDocs: selectedNodeSessionDocs.value,
-    makeViewMessage: buildNodeViewMessage,
-  }));
+  const selectedNodeProjection = computed(() =>
+    buildSessionDetailProjection({
+      sessionDetail: {
+        sessionId: selectedNodeSessionId.value,
+        sessionSummary: selectedNodeSessionSummary.value || {},
+        messages: selectedNodeMessages.value,
+      },
+      sessionDocs: selectedNodeSessionDocs.value,
+      makeViewMessage: buildNodeViewMessage,
+    }),
+  );
 
   const rawNodeSessionMessages = computed(() =>
     (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).map(
@@ -129,8 +126,12 @@ export function useWorkflowNodeMessages({
       pending: messageItem?.pending === true,
       contentLength: String(messageItem?.content || "").length,
       rawEventCount: Array.isArray(messageItem?.rawEvents) ? messageItem.rawEvents.length : 0,
-      activityTimelineCount: Array.isArray(messageItem?.activityTimeline) ? messageItem.activityTimeline.length : 0,
-      toolTimelineCount: Array.isArray(messageItem?.toolTimeline) ? messageItem.toolTimeline.length : 0,
+      activityTimelineCount: Array.isArray(messageItem?.activityTimeline)
+        ? messageItem.activityTimeline.length
+        : 0,
+      toolTimelineCount: Array.isArray(messageItem?.toolTimeline)
+        ? messageItem.toolTimeline.length
+        : 0,
       toolCallCount: Array.isArray(messageItem?.tool_calls) ? messageItem.tool_calls.length : 0,
     };
   }
@@ -138,7 +139,9 @@ export function useWorkflowNodeMessages({
   watch(
     () => ({
       sessionId: selectedNodeSessionId.value,
-      source: (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).map(summarizeMessage),
+      source: (Array.isArray(selectedNodeMessages.value) ? selectedNodeMessages.value : []).map(
+        summarizeMessage,
+      ),
       display: displayNodeMessages.value.map(summarizeMessage),
     }),
     (projection) => {
@@ -159,7 +162,8 @@ export function useWorkflowNodeMessages({
     const rawMessages = Array.isArray(selectedNodeRawMessages.value)
       ? selectedNodeRawMessages.value
       : [];
-    if (rawMessages.length) return rawMessages.map((messageItem = {}) => buildNodeViewMessage(messageItem));
+    if (rawMessages.length)
+      return rawMessages.map((messageItem = {}) => buildNodeViewMessage(messageItem));
     return Array.isArray(rawNodeSessionMessages.value) ? rawNodeSessionMessages.value : [];
   });
 
@@ -181,7 +185,8 @@ export function useWorkflowNodeMessages({
         0,
       ),
       boxIds: selectedRuntimeBoxes.value.map((box = {}) =>
-        String(box?.actionNodeStateId || box?.nodeStateId || "").trim()),
+        String(box?.actionNodeStateId || box?.nodeStateId || "").trim(),
+      ),
     }),
     (projection) => {
       props.logWorkflowDiagnostics?.("frontend.workflowNodeDetail.runtimeBoxesProjected", {
@@ -201,8 +206,12 @@ export function useWorkflowNodeMessages({
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,
     displayNodeMessages,
-    turnTimingsByTurnScopeId: computed(() => selectedNodeProjection.value.turnTimingsByTurnScopeId || {}),
-    turnStatusesByTurnScopeId: computed(() => selectedNodeProjection.value.turnStatusesByTurnScopeId || {}),
+    turnTimingsByTurnScopeId: computed(
+      () => selectedNodeProjection.value.turnTimingsByTurnScopeId || {},
+    ),
+    turnStatusesByTurnScopeId: computed(
+      () => selectedNodeProjection.value.turnStatusesByTurnScopeId || {},
+    ),
     nodeSessionAllMessages,
     selectedRuntimeBoxes,
   };

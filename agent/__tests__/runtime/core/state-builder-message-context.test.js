@@ -19,7 +19,6 @@ function createRuntime() {
       sessionId: "s1",
       parentSessionId: "parent-s1",
       dialogProcessId: "dlg-1",
-      toolLoopExecutionCount: 0,
       phaseSummaryLoopCount: 0,
       toolConsecutiveFailureCount: 0,
     },
@@ -41,7 +40,6 @@ test("state-builder canonicalizes model messages and block views through one sto
     additional_kwargs: { noobotMessageId: "sm_current_task" },
   };
   const buildAgentState = createStateBuilder({
-    createChatModelFn: () => ({ invoke: async () => ({ content: "ok" }) }),
     mergeConfigFn: () => ({}),
     emitEventFn: () => {},
     buildContextMessageBlocksFn: () => ({
@@ -63,7 +61,12 @@ test("state-builder canonicalizes model messages and block views through one sto
   runtime.eventListener = {
     onEvent: (event) => identityEvents.push(event),
   };
-  const agentContext = createTestAgentExecutionScope(runtime);
+  const agentContext = createTestAgentExecutionScope(runtime, {
+    identity: {
+      dialogProcessId: "dlg-1",
+      turnScopeId: "turn-1",
+    },
+  });
 
   const { loopState } = buildAgentState({
     agentContext,
@@ -80,8 +83,14 @@ test("state-builder canonicalizes model messages and block views through one sto
     loopState.modelContext.messages.map((message) => message.content),
     ["system context", "history answer", "current task"],
   );
-  assert.equal(loopState.modelContext.messages[2], loopState.modelContext.messageBlocks.incremental[0]);
-  assert.equal(loopState.modelContext.messages[2].additional_kwargs?.noobotMessageId, "sm_current_task");
+  assert.equal(
+    loopState.modelContext.messages[2],
+    loopState.modelContext.messageBlocks.incremental[0],
+  );
+  assert.equal(
+    loopState.modelContext.messages[2].additional_kwargs?.noobotMessageId,
+    "sm_current_task",
+  );
   assert.equal(loopState.modelContext.messageBlocks.incrementalIds, undefined);
   assert.deepEqual(loopState.modelContext.activeTurnIdentity, {
     dialogProcessId: "dlg-1",
@@ -96,15 +105,12 @@ test("state-builder canonicalizes model messages and block views through one sto
     messages: loopState.modelContext.messages,
     messageBlocks: loopState.modelContext.messageBlocks,
   });
-  const contextIdentityEvents = identityEvents.filter(
-    (event) => event.event.startsWith("agent.contextIdentity."),
+  const contextIdentityEvents = identityEvents.filter((event) =>
+    event.event.startsWith("agent.contextIdentity."),
   );
   assert.deepEqual(
     contextIdentityEvents.map((event) => event.event),
-    [
-      "agent.contextIdentity.modelContextCreated",
-      "agent.contextIdentity.snapshotCandidateCreated",
-    ],
+    ["agent.contextIdentity.modelContextCreated", "agent.contextIdentity.snapshotCandidateCreated"],
   );
   assert.equal(contextIdentityEvents[0].data.debugType, "context-identity");
   assert.equal(contextIdentityEvents[0].data.sourceMessageUid, "sm_current_task");

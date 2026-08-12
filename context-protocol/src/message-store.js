@@ -58,9 +58,8 @@ function applyActiveTurnIdentity(holder = {}, message = {}) {
     if (existing[field] && existing[field] !== active[field]) {
       throw new Error(`canonical message ${field} conflicts with the active turn identity`);
     }
-    message[field] = active[field];
   }
-  return message;
+  return { ...message, ...active };
 }
 
 function resolveRole(message = {}) {
@@ -238,16 +237,21 @@ function isKnownCanonicalEntity(store = null, message = {}) {
 }
 
 function prepareNewCanonicalEntities(holder = {}, store = null, messages = []) {
-  const prepared = [];
+  const addedEntities = [];
+  const entitiesBySource = new Map();
   const seen = new Set();
   for (const message of normalizeList(messages)) {
     if (!message || typeof message !== "object" || seen.has(message)) continue;
     seen.add(message);
-    if (isKnownCanonicalEntity(store, message)) continue;
-    applyActiveTurnIdentity(holder, message);
-    prepared.push(message);
+    if (isKnownCanonicalEntity(store, message)) {
+      entitiesBySource.set(message, message);
+      continue;
+    }
+    const identifiedMessage = applyActiveTurnIdentity(holder, message);
+    entitiesBySource.set(message, identifiedMessage);
+    addedEntities.push(identifiedMessage);
   }
-  return prepared;
+  return { addedEntities, entitiesBySource };
 }
 
 function notifyCanonicalEntitiesAdded(holder = {}, messages = [], meta = {}) {
@@ -394,8 +398,11 @@ export function markMessagesSummarizedByIds(holder = {}, ids = []) {
 export function replaceMessages(holder = {}, messages = []) {
   if (!holder || typeof holder !== "object") return [];
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
-  const addedEntities = prepareNewCanonicalEntities(holder, store, messages);
-  const canonicalMessages = canonicalizeList(store, messages);
+  const prepared = prepareNewCanonicalEntities(holder, store, messages);
+  const canonicalMessages = canonicalizeList(
+    store,
+    normalizeList(messages).map((message) => prepared.entitiesBySource.get(message) || message),
+  );
   if (!Array.isArray(holder.messages)) holder.messages = [];
   holder.messages.splice(0, holder.messages.length, ...canonicalMessages);
   const blocks = holder.messageBlocks && typeof holder.messageBlocks === "object"
@@ -422,7 +429,7 @@ export function replaceMessages(holder = {}, messages = []) {
     }
     syncBlockIds(blocks);
   }
-  notifyCanonicalEntitiesAdded(holder, addedEntities, { operation: "replace" });
+  notifyCanonicalEntitiesAdded(holder, prepared.addedEntities, { operation: "replace" });
   return holder.messages;
 }
 
@@ -474,7 +481,7 @@ export function writeMessageBlocks(holder = {}, blocks = {}) {
       ? holder.messageBlocks
       : {};
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
-  const addedEntities = prepareNewCanonicalEntities(holder, store, [
+  const prepared = prepareNewCanonicalEntities(holder, store, [
     ...normalizeList(blocks.system),
     ...normalizeList(blocks.history),
     ...normalizeList(blocks.incremental),
@@ -482,7 +489,12 @@ export function writeMessageBlocks(holder = {}, blocks = {}) {
   reserveExplicitMessageIds(store, [blocks.system, blocks.history, blocks.incremental]);
   for (const blockName of ["system", "history", "incremental"]) {
     if (Object.prototype.hasOwnProperty.call(blocks, blockName)) {
-      existing[blockName] = canonicalizeList(store, blocks[blockName]);
+      existing[blockName] = canonicalizeList(
+        store,
+        normalizeList(blocks[blockName]).map(
+          (message) => prepared.entitiesBySource.get(message) || message,
+        ),
+      );
     } else if (!Array.isArray(existing[blockName])) {
       existing[blockName] = [];
     }
@@ -500,7 +512,7 @@ export function writeMessageBlocks(holder = {}, blocks = {}) {
   }
   if (!Array.isArray(holder.messages)) holder.messages = [];
   holder.messages.splice(0, holder.messages.length, ...projected);
-  notifyCanonicalEntitiesAdded(holder, addedEntities, { operation: "write_blocks" });
+  notifyCanonicalEntitiesAdded(holder, prepared.addedEntities, { operation: "write_blocks" });
   return existing;
 }
 
@@ -508,10 +520,10 @@ export function appendMessage(holder = {}, message = {}, { block = "" } = {}) {
   if (!holder || typeof holder !== "object") return message;
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
   const isNewEntity = !isKnownCanonicalEntity(store, message);
-  if (isNewEntity) applyActiveTurnIdentity(holder, message);
+  const identifiedMessage = isNewEntity ? applyActiveTurnIdentity(holder, message) : message;
   // Appends create a new entity unless the producer supplied a stable Noobot message id.
   // Content-based matching is restricted to list hydration in canonicalizeList.
-  const canonicalMessage = canonicalizeMessage(store, message);
+  const canonicalMessage = canonicalizeMessage(store, identifiedMessage);
   if (!Array.isArray(holder.messages)) holder.messages = [];
   if (!holder.messages.includes(canonicalMessage)) holder.messages.push(canonicalMessage);
   const blockName = String(block || "").trim();

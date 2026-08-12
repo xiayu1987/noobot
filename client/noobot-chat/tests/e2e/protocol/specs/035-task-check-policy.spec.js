@@ -73,19 +73,19 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   test.setTimeout(900000);
   await selectPlugins(noobot.page, []);
   await setRunSummaryPolicy(noobot.page, {
-    phaseSummaryLoopTurns: 4,
+    phaseSummaryLoopTurns: 3,
     taskCheckLoopTurns: 2,
   });
   await sendMessage(noobot.page, uniquePrompt(testInfo, [
-    "完成一个五步顺序只读计算链，每一步都必须等待上一步的实际输出。",
-    "依次调用 execute_script：生成随机十六进制 token、计算其 SHA-256、提取前八位、把前八位反转、计算反转值的字符数。",
-    "当收到周期任务检查提示时，调用 task_check 按协议记录当时的真实任务状态后继续。",
+    "完成一个三步顺序只读计算链，每一步都必须等待上一步的实际输出。",
+    "依次调用 execute_script：生成随机十六进制 token、计算其 SHA-256、计算该 SHA-256 的字符数。",
+    "第二次 execute_script 成功后，下一次只能调用 task_check，按协议记录当时的真实任务状态；task_check 成功前不得执行第三次 execute_script。",
     "不得并行调用，最后汇总每一步实际结果。",
   ].join(" ")));
 
   const firstSend = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   expect(firstSend.preferences.summaryPolicy).toEqual({
-    phaseSummaryLoopTurns: 4,
+    phaseSummaryLoopTurns: 3,
     taskCheckLoopTurns: 2,
   });
   expect(firstSend.preferences.frontendThresholdsEnabled).toBe(true);
@@ -134,7 +134,6 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   )).toBe(true);
   const checks = taskCheckCalls(firstMessages);
   expect(checks.length).toBeGreaterThan(0);
-  expect(checks.length).toBeGreaterThanOrEqual(2);
   expect(checks.length).toBeLessThanOrEqual(taskCheckRequired.length);
   for (const { call } of checks) {
     expect(parseTaskCheckContent(toolCallArgs(call).checkContent).protocolVersion).toBe(1);
@@ -173,14 +172,26 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
       && String(message.tool_call_id || "").trim() === latestCheckBeforeSummaryCallId,
   );
   expect(latestCheckBeforeSummaryResult).toBeTruthy();
-  const checkpointEvent = firstScoped.find((item) => item.event === "summary_checkpoint_committed");
+  const checkpointEvents = firstScoped.filter((item) => item.event === "summary_checkpoint_committed");
+  const checkpointEvent = checkpointEvents.at(-1);
   expect(checkpointEvent).toBeTruthy();
-  expect(checkpointEvent.data?.preservedTaskCheckMessageUids).toEqual(expect.arrayContaining([
-    latestCheckBeforeSummary.message.messageUid,
-    latestCheckBeforeSummaryResult.messageUid,
-  ]));
-  expect(latestCheckBeforeSummary.message.summarized).toBe(true);
-  expect(latestCheckBeforeSummaryResult?.summarized).toBe(true);
+  const preservedTaskCheckMessageUids = checkpointEvent.data?.preservedTaskCheckMessageUids || [];
+  expect(preservedTaskCheckMessageUids).toHaveLength(2);
+  const preservedCheck = checks.find(({ message, call }) => {
+    const result = firstMessages.find((candidate) =>
+      candidate.role === "tool"
+        && String(candidate.tool_call_id || "").trim() === toolCallId(call),
+    );
+    return preservedTaskCheckMessageUids.includes(message.messageUid)
+      && preservedTaskCheckMessageUids.includes(result?.messageUid);
+  });
+  expect(preservedCheck).toBeTruthy();
+  const preservedCheckResult = firstMessages.find((message) =>
+    message.role === "tool"
+      && String(message.tool_call_id || "").trim() === toolCallId(preservedCheck.call),
+  );
+  expect(preservedCheck.message.summarized).toBe(false);
+  expect(preservedCheckResult?.summarized).toBe(false);
   const summarizedTaskCheckPrompts = taskCheckPrompts.filter((message) => message.summarized === true);
   expect(summarizedTaskCheckPrompts.length).toBeGreaterThan(0);
 

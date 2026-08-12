@@ -7,10 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { resolveScenarioProfile } from "../../src/context/builders/scenario-resolver.js";
-import {
-  resolveBuiltinScenarios,
-  sanitizeScenarioConfig,
-} from "../../src/config/core/builtin-scenarios.js";
+import { resolveBuiltinScenarios, sanitizeScenarioConfig } from "@noobot/agent-config-protocol";
 
 test("resolveScenarioProfile prefers runConfig scenarioProfile over builtin scenario definition", () => {
   const result = resolveScenarioProfile({

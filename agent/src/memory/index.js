@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createChatModelByName, resolveDefaultModelSpec, resolveModelSpecByName } from "../models/index.js";
+import { resolveDefaultModelSpec, resolveModelSpecByName } from "../models/index.js";
+import { createAgentAuxiliaryModelPort } from "../runtime/model-port-host.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { normalizeLocale } from "noobot-i18n/shared";
 import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptI18n } from "noobot-i18n/agent/locales/zh-CN/system-prompt";
@@ -12,14 +13,13 @@ import { StorageManager } from "./storage/index.js";
 import { ShortMemoryManager } from "./short-memory/index.js";
 import { LongMemoryManager } from "./long-memory/index.js";
 import { ExperienceManager } from "./experience/index.js";
-import { normalizeModelContent } from "./utils/format.js";
 import { trimPromptPayloadByCharLimit } from "./utils/payload-trimmer.js";
 import { isAbortLikeError, throwIfAborted } from "./experience/abort-control.js";
 import {
   MEMORY_LONG_PROMPT_PAYLOAD_MAX_CHARS,
   MEMORY_LONG_PROMPT_PAYLOAD_SHRINK_RATIO,
 } from "./constants.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 const MEMORY_PROMPT_I18N = Object.freeze({
   "zh-CN": Object.freeze(zhSystemPromptI18n?.memoryPrompt || {}),
@@ -38,24 +38,30 @@ function resolveMemoryModelSpec({ globalConfig, userConfig } = {}) {
       globalConfig,
       userConfig,
     });
-    if (selectedModelSpec) return selectedModelSpec;
+    if (!selectedModelSpec) {
+      throw new Error(`configured memory model not found: ${selectedMemoryModel}`);
+    }
+    return selectedModelSpec;
   }
-  return resolveDefaultModelSpec({
+  const defaultModelSpec = resolveDefaultModelSpec({
     globalConfig,
     userConfig,
   });
+  if (!defaultModelSpec) {
+    throw new Error("memory model is not configured");
+  }
+  return defaultModelSpec;
 }
 
 function resolveMemoryPromptI18n(locale = "zh-CN") {
   const normalizedLocale = normalizeLocale(locale, "zh-CN");
-  return normalizedLocale === "en-US"
-    ? MEMORY_PROMPT_I18N["en-US"]
-    : MEMORY_PROMPT_I18N["zh-CN"];
+  return normalizedLocale === "en-US" ? MEMORY_PROMPT_I18N["en-US"] : MEMORY_PROMPT_I18N["zh-CN"];
 }
 
 export class MemoryManager {
-  constructor(globalConfig) {
+  constructor(globalConfig, { createModelPort = createAgentAuxiliaryModelPort } = {}) {
     this.globalConfig = globalConfig;
+    this.createModelPort = createModelPort;
     this.storage = new StorageManager(globalConfig);
     this.shortMemory = new ShortMemoryManager(this.storage);
     this.longMemory = new LongMemoryManager(this.storage);
@@ -67,12 +73,7 @@ export class MemoryManager {
     return this.longMemory.read(basePath);
   }
 
-  async captureSessionToShortMemory({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    userConfig = {},
-  }) {
+  async captureSessionToShortMemory({ userId, sessionId, parentSessionId = "", userConfig = {} }) {
     const basePath = this.storage.resolveBasePath(userId);
     return this.shortMemory.captureSessionToShortMemory({
       basePath,
@@ -115,25 +116,37 @@ export class MemoryManager {
       globalConfig: this.globalConfig,
       userConfig,
     });
-    const llm = createChatModelByName(modelSpec?.alias || modelSpec?.model, {
-      globalConfig: this.globalConfig,
-      userConfig,
-      context: {
+    const modelPort = this.createModelPort({
+      modelSpec,
+      modelState: {
+        eventListener,
+        invocationIdentity: {
+          sessionId,
+          parentSessionId: "",
+          dialogProcessId: `memory:${sessionId}`,
+          turnScopeId: `memory-summary:${sessionId}`,
+          runId: `memory-summary:${sessionId}`,
+        },
         runtime: {
           userId,
           sessionId,
-          eventListener,
           systemRuntime: { userId, sessionId },
         },
-        sessionId,
-      },
-      invocation: {
-        flow: "memory.summary",
-        purpose: "memory_consolidation",
-        domain: "memory",
-        contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
       },
     });
+    const invokeModel = async ({ prompt, flow, purpose }) => {
+      const response = await modelPort.invoke({
+        messages: [{ role: "user", content: prompt }],
+        options: { signal: abortSignal },
+        invocation: {
+          flow,
+          purpose,
+          domain: "memory",
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+        },
+      });
+      return response.output;
+    };
 
     let nextLongMemory = existingLongMemory;
     const summaryCreatedAt = new Date().toISOString();
@@ -151,8 +164,12 @@ export class MemoryManager {
       ).trim();
       if (!prompt) return;
       try {
-        const res = await llm.invoke([{ role: "user", content: prompt }], { signal: abortSignal });
-        nextLongMemory = normalizeModelContent(res?.content);
+        const output = await invokeModel({
+          prompt,
+          flow: "memory.summary",
+          purpose: "memory_consolidation",
+        });
+        nextLongMemory = output.text;
       } catch (error) {
         if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
         nextLongMemory = existingLongMemory;
@@ -170,7 +187,7 @@ export class MemoryManager {
     if (shouldUpdateLongMemory && promptPayload.length) {
       hasAppendedExperienceLessons = await this.experience.runDaily({
         basePath,
-        llm,
+        invokeModel,
         promptI18n,
         promptPayload,
         createdAt: summaryCreatedAt,
@@ -180,21 +197,21 @@ export class MemoryManager {
 
     await this.experience.runWeeklySummaryIfNeeded({
       basePath,
-      llm,
+      invokeModel,
       promptI18n,
       abortSignal,
     });
 
     await this.experience.runMonthlySummaryIfNeeded({
       basePath,
-      llm,
+      invokeModel,
       promptI18n,
       abortSignal,
     });
 
     await this.experience.runYearlySummaryIfNeeded({
       basePath,
-      llm,
+      invokeModel,
       promptI18n,
       abortSignal,
     });

@@ -7,16 +7,13 @@
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { Plus } from "@element-plus/icons-vue";
-import { getConfigParamsApi, putConfigParamsApi } from "../../../infrastructure/api/chat/chatApi.js";
-import { useLocale } from "../../../shared/i18n/useLocale.js";
 import {
-  SettingsActionGroup,
-  SettingsJsonEditor,
-  SettingsPanelHeader,
-  SettingsTreeActionButton,
-  SettingsWorkspaceLayout,
-  SettingsWorkspacePanel,
-} from "../public-api.js";
+  getConfigParamsApi,
+  putConfigParamsApi,
+} from "../../../infrastructure/api/chat/chatApi.js";
+import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { createApiKeyFetch } from "../../../shared/network/apiKeyFetch.js";
+import { SettingsJsonListEditorLayout } from "../public-api.js";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },
@@ -34,13 +31,19 @@ const paramsJsonDraft = ref("");
 const jsonParseError = ref("");
 const { translate } = useLocale();
 const activeScopeLabel = computed(() =>
-  activeScope.value === "system" ? translate("settings.systemParams") : translate("settings.userParams"),
+  activeScope.value === "system"
+    ? translate("settings.systemParams")
+    : translate("settings.userParams"),
 );
 const activeScopeFilePath = computed(() =>
   activeScope.value === "system"
     ? "workspace/config-params.json"
     : `workspace/${String(props.userId || "").trim() || "<user>"}/config-params.json`,
 );
+const visibleScopes = computed(() => [
+  { name: "user", label: translate("settings.userParams") },
+  ...(props.isSuperAdmin ? [{ name: "system", label: translate("settings.systemParams") }] : []),
+]);
 const editorActions = computed(() => [
   {
     command: "save",
@@ -50,20 +53,7 @@ const editorActions = computed(() => [
     loading: saving.value,
   },
 ]);
-
-function authHeaders(extra = {}) {
-  return {
-    ...extra,
-    ...(props.apiKey ? { "x-api-key": props.apiKey } : {}),
-  };
-}
-
-function authFetch(url, options = {}) {
-  return fetch(url, {
-    ...options,
-    headers: authHeaders(options.headers || {}),
-  });
-}
+const { authFetch } = createApiKeyFetch(() => props.apiKey);
 
 function normalizeParams(input = []) {
   const source = Array.isArray(input) ? input : [];
@@ -93,9 +83,7 @@ function paramsListFromApi({ keys = [], values = {} } = {}) {
 }
 
 function toValuesObject(list = params.value) {
-  return Object.fromEntries(
-    normalizeParams(list).map((item) => [item.key, item.value]),
-  );
+  return Object.fromEntries(normalizeParams(list).map((item) => [item.key, item.value]));
 }
 
 function buildParamsJsonText(list = params.value) {
@@ -253,125 +241,62 @@ watch(
 
 <template>
   <el-tabs v-model="activeScope" class="settings-tabs" @tab-change="onScopeChanged">
-    <el-tab-pane :label="translate('settings.userParams')" name="user">
-      <SettingsWorkspaceLayout :loading="loading">
-        <SettingsWorkspacePanel>
-          <SettingsPanelHeader :title="translate('settings.paramsList', { label: activeScopeLabel })">
-            <template #right>
-              <SettingsTreeActionButton
-                class-name="icon-btn"
-                :icon="Plus"
-                :title="translate('settings.addParam')"
-                @click="addParamRow"
-              />
-            </template>
-          </SettingsPanelHeader>
-          <div class="panel-body noobot-workspace-body">
-            <el-scrollbar class="tree-scroll">
-              <div class="users-list">
-                <div
-                  v-for="(item, idx) in params"
-                  :key="idx"
-                  class="user-row param-row noobot-flat-card noobot-list-row"
+    <el-tab-pane
+      v-for="scopeItem in visibleScopes"
+      :key="scopeItem.name"
+      :label="scopeItem.label"
+      :name="scopeItem.name"
+    >
+      <SettingsJsonListEditorLayout
+        v-model="paramsJsonText"
+        :loading="loading"
+        :left-title="translate('settings.paramsList', { label: activeScopeLabel })"
+        :left-action-icon="Plus"
+        :left-action-title="translate('settings.addParam')"
+        :editor-file-path="activeScopeFilePath"
+        :editor-actions="editorActions"
+        :parse-error="jsonParseError"
+        placeholder='{"values":{"DASHSCOPE_API_KEY":"..."}}'
+        @left-action="addParamRow"
+        @editor-command="handleEditorAction"
+      >
+        <template #list>
+          <div class="users-list">
+            <div
+              v-for="(item, idx) in params"
+              :key="idx"
+              class="user-row param-row noobot-flat-card noobot-list-row"
+            >
+              <div class="row-header">
+                <span class="user-idx param-index">Param {{ idx + 1 }}</span>
+                <el-button
+                  class="icon-btn danger-text"
+                  size="small"
+                  text
+                  @click="removeParamRow(idx)"
+                  >✕</el-button
                 >
-                  <div class="row-header">
-                    <span class="user-idx param-index">Param {{ idx + 1 }}</span>
-                    <el-button
-                      class="icon-btn danger-text"
-                      size="small"
-                      text
-                      @click="removeParamRow(idx)"
-                    >✕</el-button>
-                  </div>
-                  <el-input v-model="item.key" :placeholder="translate('settings.paramKey')" clearable class="row-input param-key-input" />
-                  <el-input v-model="item.value" :placeholder="translate('settings.paramValue')" clearable class="row-input param-value-input" />
-                </div>
-                <div v-if="!params.length" class="empty-tip list-empty-tip">
-                  <div class="empty-icon">🔐</div>
-                  <p>{{ translate("settings.noParamsAdd") }}</p>
-                </div>
               </div>
-            </el-scrollbar>
-          </div>
-        </SettingsWorkspacePanel>
-
-        <SettingsWorkspacePanel panel-class="workspace-editor">
-          <SettingsPanelHeader>
-            <template #left>
-              <div class="file-info">
-                <span class="active-file noobot-flat-chip" :title="activeScopeFilePath">{{ activeScopeFilePath }}</span>
-              </div>
-            </template>
-            <template #right>
-              <SettingsActionGroup :actions="editorActions" @command="handleEditorAction" />
-            </template>
-          </SettingsPanelHeader>
-          <div class="panel-body noobot-workspace-body editor-body">
-            <SettingsJsonEditor
-              v-model="paramsJsonText"
-              :parse-error="jsonParseError"
-              placeholder='{"values":{"DASHSCOPE_API_KEY":"..."}}'
-            />
-          </div>
-        </SettingsWorkspacePanel>
-      </SettingsWorkspaceLayout>
-    </el-tab-pane>
-    <el-tab-pane v-if="isSuperAdmin" :label="translate('settings.systemParams')" name="system">
-      <SettingsWorkspaceLayout :loading="loading">
-        <SettingsWorkspacePanel>
-          <SettingsPanelHeader :title="translate('settings.paramsList', { label: activeScopeLabel })">
-            <template #right>
-              <SettingsTreeActionButton
-                class-name="icon-btn"
-                :icon="Plus"
-                :title="translate('settings.addParam')"
-                @click="addParamRow"
+              <el-input
+                v-model="item.key"
+                :placeholder="translate('settings.paramKey')"
+                clearable
+                class="row-input param-key-input"
               />
-            </template>
-          </SettingsPanelHeader>
-          <div class="panel-body noobot-workspace-body">
-            <el-scrollbar class="tree-scroll">
-              <div class="users-list">
-                <div
-                  v-for="(item, idx) in params"
-                  :key="idx"
-                  class="user-row param-row noobot-flat-card noobot-list-row"
-                >
-                  <div class="row-header">
-                    <span class="user-idx param-index">Param {{ idx + 1 }}</span>
-                    <el-button class="icon-btn danger-text" size="small" text @click="removeParamRow(idx)">✕</el-button>
-                  </div>
-                  <el-input v-model="item.key" :placeholder="translate('settings.paramKey')" clearable class="row-input param-key-input" />
-                  <el-input v-model="item.value" :placeholder="translate('settings.paramValue')" clearable class="row-input param-value-input" />
-                </div>
-                <div v-if="!params.length" class="empty-tip list-empty-tip">
-                  <div class="empty-icon">🔐</div>
-                  <p>{{ translate("settings.noParamsAdd") }}</p>
-                </div>
-              </div>
-            </el-scrollbar>
+              <el-input
+                v-model="item.value"
+                :placeholder="translate('settings.paramValue')"
+                clearable
+                class="row-input param-value-input"
+              />
+            </div>
+            <div v-if="!params.length" class="empty-tip list-empty-tip">
+              <div class="empty-icon">🔐</div>
+              <p>{{ translate("settings.noParamsAdd") }}</p>
+            </div>
           </div>
-        </SettingsWorkspacePanel>
-        <SettingsWorkspacePanel panel-class="workspace-editor">
-          <SettingsPanelHeader>
-            <template #left>
-              <div class="file-info">
-                <span class="active-file noobot-flat-chip" :title="activeScopeFilePath">{{ activeScopeFilePath }}</span>
-              </div>
-            </template>
-            <template #right>
-              <SettingsActionGroup :actions="editorActions" @command="handleEditorAction" />
-            </template>
-          </SettingsPanelHeader>
-          <div class="panel-body noobot-workspace-body editor-body">
-            <SettingsJsonEditor
-              v-model="paramsJsonText"
-              :parse-error="jsonParseError"
-              placeholder='{"values":{"DASHSCOPE_API_KEY":"..."}}'
-            />
-          </div>
-        </SettingsWorkspacePanel>
-      </SettingsWorkspaceLayout>
+        </template>
+      </SettingsJsonListEditorLayout>
     </el-tab-pane>
   </el-tabs>
 </template>
@@ -412,8 +337,8 @@ watch(
 
 .param-value-input :deep(.el-input__inner) {
   font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
 }
 
 .file-info {

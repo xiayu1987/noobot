@@ -15,13 +15,12 @@ import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
-import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
-  relaySeparateModelOutputAsUserMessage,
-} from "../../src/capabilities/handlers/shared.js";
+  createGuidanceHandler,
+  createPlanningHandler,
+} from "../helpers/context-aware-handler-fixtures.js";
+import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
+import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
 
 test("normalizeOptions applies schema defaults and coercion", () => {
   const options = normalizeOptions({
@@ -64,7 +63,6 @@ test("normalizeOptions does not expose workflow strategy options", () => {
   assert.equal(Object.hasOwn(options, "execution" + "First"), false);
   assert.equal(Object.hasOwn(options, "action" + "First"), false);
 });
-
 
 test("normalizeOptions enables optional tool-burst summary trigger", () => {
   const options = normalizeOptions({ enableToolBurstSummary: true });

@@ -33,20 +33,69 @@ describe("messageModel attachment normalization", () => {
     );
 
     expect(viewMessage.attachments).toHaveLength(1);
-    expect(viewMessage.attachments[0]).toEqual(expect.objectContaining({
-      attachmentId: "source-a",
-      parsedResultAttachmentId: "parsed-a",
-      parsedResultPath: "/workspace/admin/runtime/attach/scoped/session-a/model/parsed-a.md",
-      parsedResultRelativePath: "runtime/attach/scoped/session-a/model/parsed-a.md",
-      parsedResultSessionId: "session-a",
-      parsedResultAttachmentSource: "model",
-      parsedResultUrl: "/api/internal/attachment/admin/parsed-a?sessionId=session-a&attachmentSource=model",
-      parsedResultName: "parsed-a.md",
-    }));
-    expect(viewMessage.attachments[0].parsedResult).toEqual(expect.objectContaining({
-      attachmentId: "parsed-a",
-      sessionId: "session-a",
-      attachmentSource: "model",
-    }));
+    expect(viewMessage.attachments[0]).toEqual(
+      expect.objectContaining({
+        attachmentId: "source-a",
+        parsedResultAttachmentId: "parsed-a",
+        parsedResultPath: "/workspace/admin/runtime/attach/scoped/session-a/model/parsed-a.md",
+        parsedResultRelativePath: "runtime/attach/scoped/session-a/model/parsed-a.md",
+        parsedResultSessionId: "session-a",
+        parsedResultAttachmentSource: "model",
+        parsedResultUrl:
+          "/api/internal/attachment/admin/parsed-a?sessionId=session-a&attachmentSource=model",
+        parsedResultName: "parsed-a.md",
+      }),
+    );
+    expect(viewMessage.attachments[0].parsedResult).toEqual(
+      expect.objectContaining({
+        attachmentId: "parsed-a",
+        sessionId: "session-a",
+        attachmentSource: "model",
+      }),
+    );
+  });
+
+  it("projects canonical tool result attachments that carry protocol nested identity", () => {
+    const viewMessage = buildViewMessage(
+      {
+        role: "assistant",
+        sessionId: "session-a",
+        dialogProcessId: "dp-a",
+        turnScopeId: "turn-a",
+        toolTimeline: [
+          {
+            tool: "write_file",
+            status: "completed",
+            resultEvent: {
+              attachments: [
+                {
+                  identity: {
+                    attachmentId: "generated-a",
+                    sessionId: "session-a",
+                    attachmentSource: "model",
+                  },
+                  role: "primary",
+                  name: "case036.txt",
+                  mimeType: "text/plain",
+                  size: 20,
+                },
+              ],
+            },
+          },
+        ],
+      },
+      { userId: "admin" },
+    );
+
+    expect(viewMessage.attachments).toEqual([
+      expect.objectContaining({
+        attachmentId: "generated-a",
+        sessionId: "session-a",
+        attachmentSource: "model",
+        name: "case036.txt",
+        mimeType: "text/plain",
+        size: 20,
+      }),
+    ]);
   });
 });

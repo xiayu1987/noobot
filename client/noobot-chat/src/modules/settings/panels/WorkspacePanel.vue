@@ -22,6 +22,8 @@ import {
   putWorkspaceFileApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
+import { createApiKeyFetch } from "../../../shared/network/apiKeyFetch.js";
+import { parseContentDisposition } from "../../chat/composables/message/useMessagePreview/path-utils.js";
 import {
   SettingsWorkspaceLayout,
   WorkspaceResourcePanel,
@@ -71,11 +73,11 @@ const RESET_SECTION_OPTIONS = [
 ];
 const RESET_SECTION_DEFAULTS = ["service", "config"];
 const resetDialogTitle = computed(() =>
-  resetDialogMode.value === "all" ? translate("settings.resetAllWorkspaceTitle") : translate("settings.resetWorkspaceTitle"),
+  resetDialogMode.value === "all"
+    ? translate("settings.resetAllWorkspaceTitle")
+    : translate("settings.resetWorkspaceTitle"),
 );
-const resetDialogConfirmLoading = computed(
-  () => resetting.value || resettingAll.value,
-);
+const resetDialogConfirmLoading = computed(() => resetting.value || resettingAll.value);
 const editorActions = computed(() => [
   {
     command: "download",
@@ -92,49 +94,17 @@ const editorActions = computed(() => [
     disabled: !activePath.value || !isTextFile.value,
   },
 ]);
-const systemParamTreeData = computed(() =>
-  (systemParamCatalog.value || []).map((item) => ({
+const { authFetch } = createApiKeyFetch(() => props.apiKey);
+const systemParamTreeData = computed(() => toParamTreeData(systemParamCatalog.value));
+const userParamTreeData = computed(() => toParamTreeData(userParamCatalog.value));
+
+function toParamTreeData(list = []) {
+  return (list || []).map((item) => ({
     key: String(item?.key || "").trim(),
     label: String(item?.key || "").trim(),
     description: String(item?.description || "").trim(),
     type: "param",
-  })),
-);
-const userParamTreeData = computed(() =>
-  (userParamCatalog.value || []).map((item) => ({
-    key: String(item?.key || "").trim(),
-    label: String(item?.key || "").trim(),
-    description: String(item?.description || "").trim(),
-    type: "param",
-  })),
-);
-
-function authHeaders(extra = {}) {
-  return {
-    ...extra,
-    ...(props.apiKey ? { "x-api-key": props.apiKey } : {}),
-  };
-}
-
-function authFetch(url, options = {}) {
-  return fetch(url, {
-    ...options,
-    headers: authHeaders(options.headers || {}),
-  });
-}
-
-function parseContentDisposition(contentDisposition = "") {
-  if (!contentDisposition) return "";
-  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match?.[1]) {
-    try {
-      return decodeURIComponent(String(utf8Match[1]).trim());
-    } catch {
-      return String(utf8Match[1]).trim();
-    }
-  }
-  const basicMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
-  return String(basicMatch?.[1] || "").trim();
+  }));
 }
 
 async function triggerBlobDownload(blob, fileName = "download") {
@@ -152,12 +122,10 @@ async function loadTree() {
   if (!props.connected || !props.userId || !props.apiKey) return;
   loadingTree.value = true;
   try {
-    const res = await getWorkspaceTreeApi(
-      { userId: props.userId },
-      { fetcher: authFetch },
-    );
+    const res = await getWorkspaceTreeApi({ userId: props.userId }, { fetcher: authFetch });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadingWorkspaceFailed"));
+    if (!res.ok || !data.ok)
+      throw new Error(data.error || translate("settings.loadingWorkspaceFailed"));
     tree.value = data.tree || [];
   } catch (error) {
     ElMessage.error(error.message || translate("settings.loadingWorkspaceFailed"));
@@ -172,7 +140,8 @@ async function loadAllWorkspaceTree() {
   try {
     const res = await getWorkspaceAllTreeApi({ fetcher: authFetch });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadingAllWorkspaceFailed"));
+    if (!res.ok || !data.ok)
+      throw new Error(data.error || translate("settings.loadingAllWorkspaceFailed"));
     allWorkspaceTree.value = data.tree || [];
   } catch (error) {
     ElMessage.error(error.message || translate("settings.loadingAllWorkspaceFailed"));
@@ -183,7 +152,12 @@ async function loadAllWorkspaceTree() {
 
 async function loadParamCatalog(scope = "system") {
   if (!props.connected || !props.apiKey) return;
-  const normalizedScope = String(scope || "").trim().toLowerCase() === "user" ? "user" : "system";
+  const normalizedScope =
+    String(scope || "")
+      .trim()
+      .toLowerCase() === "user"
+      ? "user"
+      : "system";
   if (normalizedScope === "system") loadingSystemParamCatalog.value = true;
   else loadingUserParamCatalog.value = true;
   try {
@@ -192,7 +166,8 @@ async function loadParamCatalog(scope = "system") {
       fetcher: authFetch,
     });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadingParamCatalogFailed"));
+    if (!res.ok || !data.ok)
+      throw new Error(data.error || translate("settings.loadingParamCatalogFailed"));
     if (normalizedScope === "system") {
       systemParamCatalog.value = Array.isArray(data.catalog) ? data.catalog : [];
     } else {
@@ -216,8 +191,7 @@ async function refreshAll() {
 }
 
 async function openFile(node, source = "user") {
-  if (!props.connected || !node || !props.userId || !props.apiKey)
-    return;
+  if (!props.connected || !node || !props.userId || !props.apiKey) return;
   const normalizedSource = source === "all" ? "all" : "user";
   const nodePath = String(node.path || "").trim();
   if (!nodePath) return;
@@ -233,10 +207,7 @@ async function openFile(node, source = "user") {
   try {
     const res =
       normalizedSource === "all"
-        ? await getWorkspaceAllFileApi(
-            { path: nodePath },
-            { fetcher: authFetch },
-          )
+        ? await getWorkspaceAllFileApi({ path: nodePath }, { fetcher: authFetch })
         : await getWorkspaceFileApi(
             { userId: props.userId, path: nodePath },
             { fetcher: authFetch },
@@ -255,13 +226,7 @@ async function openFile(node, source = "user") {
 }
 
 async function saveFile() {
-  if (
-    !props.connected ||
-    !activePath.value ||
-    !props.userId ||
-    !props.apiKey ||
-    !isTextFile.value
-  )
+  if (!props.connected || !activePath.value || !props.userId || !props.apiKey || !isTextFile.value)
     return;
   saving.value = true;
   try {
@@ -298,10 +263,7 @@ async function downloadFile() {
   try {
     const response =
       activePathSource.value === "all"
-        ? await downloadWorkspaceAllFileApi(
-            { path: activePath.value },
-            { fetcher: authFetch },
-          )
+        ? await downloadWorkspaceAllFileApi({ path: activePath.value }, { fetcher: authFetch })
         : await downloadWorkspaceFileApi(
             { userId: props.userId, path: activePath.value },
             { fetcher: authFetch },
@@ -316,7 +278,9 @@ async function downloadFile() {
     }
     const fileName =
       parseContentDisposition(response.headers?.get("content-disposition") || "") ||
-      String(activePath.value || "").split("/").pop() ||
+      String(activePath.value || "")
+        .split("/")
+        .pop() ||
       "download";
     const blob = await response.blob();
     await triggerBlobDownload(blob, fileName);
@@ -338,7 +302,8 @@ async function doResetWorkspace(sections = []) {
       { fetcher: authFetch },
     );
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.resetWorkspaceFailed"));
+    if (!res.ok || !data.ok)
+      throw new Error(data.error || translate("settings.resetWorkspaceFailed"));
     activePath.value = "";
     activePathSource.value = "user";
     content.value = "";
@@ -357,10 +322,7 @@ async function syncWorkspace() {
   if (!props.connected || !props.userId || !props.apiKey) return;
   syncing.value = true;
   try {
-    const res = await postSyncWorkspaceApi(
-      { userId: props.userId },
-      { fetcher: authFetch },
-    );
+    const res = await postSyncWorkspaceApi({ userId: props.userId }, { fetcher: authFetch });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.syncConfigFailed"));
     await refreshAll();
@@ -380,7 +342,12 @@ async function syncAllWorkspace() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.syncAllFailed"));
     await refreshAll();
-    ElMessage.success(translate("settings.syncDoneWithCount", { success: Number(data.success || 0), total: Number(data.total || 0) }));
+    ElMessage.success(
+      translate("settings.syncDoneWithCount", {
+        success: Number(data.success || 0),
+        total: Number(data.total || 0),
+      }),
+    );
   } catch (error) {
     ElMessage.error(error.message || translate("settings.syncAllFailed"));
   } finally {
@@ -396,10 +363,7 @@ async function resetAllWorkspace() {
 async function doResetAllWorkspace(sections = []) {
   resettingAll.value = true;
   try {
-    const res = await postResetAllWorkspaceApi(
-      { sections },
-      { fetcher: authFetch },
-    );
+    const res = await postResetAllWorkspaceApi({ sections }, { fetcher: authFetch });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.resetAllFailed"));
     activePath.value = "";
@@ -407,7 +371,12 @@ async function doResetAllWorkspace(sections = []) {
     content.value = "";
     isTextFile.value = true;
     await refreshAll();
-    ElMessage.success(translate("settings.resetDoneWithCount", { success: Number(data.success || 0), total: Number(data.total || 0) }));
+    ElMessage.success(
+      translate("settings.resetDoneWithCount", {
+        success: Number(data.success || 0),
+        total: Number(data.total || 0),
+      }),
+    );
   } catch (error) {
     ElMessage.error(error.message || translate("settings.resetAllFailed"));
   } finally {
@@ -442,8 +411,7 @@ async function confirmResetDialog() {
       return;
     }
     await doResetWorkspace(sections);
-  } catch {
-  }
+  } catch {}
 }
 
 async function insertParamAtCursor(key = "") {
@@ -594,6 +562,5 @@ watch(
   .workspace-layout {
     overflow: visible;
   }
-
 }
 </style>

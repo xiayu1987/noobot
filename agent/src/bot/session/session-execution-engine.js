@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  runAgentTurn,
-  AgentContextFactory,
-  AgentRuntimeFacade,
-} from "../../runtime/index.js";
+import { runAgentTurn, AgentContextFactory, AgentRuntimeFacade } from "../../runtime/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { SessionExecutionInitializer } from "../execution/initializer.js";
@@ -16,7 +12,7 @@ import { SessionTurnPersister } from "../execution/turn-persister.js";
 import { SessionExecutionRunner } from "../execution/runner.js";
 import { BotManageValidator } from "../config/validator.js";
 import { ParentAsyncTaskManager } from "../execution/parent-async-task-manager.js";
-import { RunConfigResolver } from "../config/run-config-resolver.js";
+import { RunConfigResolver } from "@noobot/agent-config-protocol";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -148,8 +144,7 @@ export class SessionExecutionEngine {
       turnPersister: this.turnPersister,
       resolveMemoryPostProcessAsyncEnabled: (userConfig = {}) =>
         this._resolveMemoryPostProcessAsyncEnabled(userConfig),
-      runMemoryPostProcessFlow: (payload = {}) =>
-        this._runMemoryPostProcessFlow(payload),
+      runMemoryPostProcessFlow: (payload = {}) => this._runMemoryPostProcessFlow(payload),
       resolveExecutionBundleTimeoutMs: (userConfig = {}) =>
         this._resolveExecutionBundleTimeoutMs(userConfig),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
@@ -165,8 +160,6 @@ export class SessionExecutionEngine {
       attach: this.attach,
       skill: this.skill,
       botManager: this.botManager,
-      applyRunConfigToolPolicy: (agentContext = {}, runConfig = {}) =>
-        this._applyRunConfigToolPolicy(agentContext, runConfig),
     });
   }
 
@@ -198,32 +191,34 @@ export class SessionExecutionEngine {
     const runnerRuntimeDeps = {
       ensureParentAsyncResultContainer: (payload = {}) =>
         this._ensureParentAsyncResultContainer(payload),
-      initializeRunSessionRuntime: (payload = {}) =>
-        this._initializeRunSessionRuntime(payload),
+      initializeRunSessionRuntime: (payload = {}) => this._initializeRunSessionRuntime(payload),
       resolveScenarioRunConfig: (runConfig = {}, userConfig = {}) =>
         this._resolveScenarioRunConfig(runConfig, userConfig),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
       prepareTurnInput: (payload = {}) => this._prepareTurnInput(payload),
-      prepareAgentTurnExecution: (payload = {}) =>
-        this._prepareAgentTurnExecution(payload),
-      commitSummaryCheckpoint: (payload = {}) => commitSummaryCheckpoint({
-        session: this.session,
-        turnPersister: this.turnPersister,
-        ...payload,
-      }),
+      prepareAgentTurnExecution: (payload = {}) => this._prepareAgentTurnExecution(payload),
+      commitSummaryCheckpoint: (payload = {}) =>
+        commitSummaryCheckpoint({
+          session: this.session,
+          turnPersister: this.turnPersister,
+          ...payload,
+        }),
     };
     const runnerPersistenceDeps = {
-      assertPersistenceContextIdentity: typeof this.session?.assertPersistenceContextIdentity === "function"
-        ? (context = null, identity = {}) => this.session.assertPersistenceContextIdentity(context, identity)
-        : null,
+      assertPersistenceContextIdentity:
+        typeof this.session?.assertPersistenceContextIdentity === "function"
+          ? (context = null, identity = {}) =>
+              this.session.assertPersistenceContextIdentity(context, identity)
+          : null,
       appendAgentMessages: (payload = {}) => this._appendAgentMessages(payload),
-      commitSessionTurn: typeof this.session?.commitTurn === "function"
-        ? (payload = {}) => this.session.commitTurn(payload)
-        : null,
-      assertReusedUserTurnIdentity: (payload = {}) =>
-        this._assertReusedUserTurnIdentity(payload),
+      commitSessionTurn:
+        typeof this.session?.commitTurn === "function"
+          ? (payload = {}) => this.session.commitTurn(payload)
+          : null,
+      assertReusedUserTurnIdentity: (payload = {}) => this._assertReusedUserTurnIdentity(payload),
       getSessionTurns: (payload = {}) => this.session?.getSessionTurns?.(payload),
-      getTurnSummaryCheckpointState: (payload = {}) => this.session?.getTurnSummaryCheckpointState?.(payload),
+      getTurnSummaryCheckpointState: (payload = {}) =>
+        this.session?.getTurnSummaryCheckpointState?.(payload),
       finalizeRunSession: (payload = {}) => this._finalizeRunSession(payload),
       upsertParentAsyncTask: (payload = {}) => this._upsertParentAsyncTask(payload),
     };
@@ -245,12 +240,7 @@ export class SessionExecutionEngine {
     return this.validator.normalizeRunMessage(message);
   }
 
-  _validateRunInput({
-    userId,
-    sessionId,
-    caller = CALLER_ROLE.USER,
-    parentSessionId = "",
-  }) {
+  _validateRunInput({ userId, sessionId, caller = CALLER_ROLE.USER, parentSessionId = "" }) {
     this.validator.validateRunInput({
       userId,
       sessionId,
@@ -292,8 +282,6 @@ export class SessionExecutionEngine {
       dialogProcessId,
     });
   }
-
-
 
   _normalizeStringArray(input = []) {
     return this.runConfigResolver.normalizeStringArray(input);
@@ -360,10 +348,6 @@ export class SessionExecutionEngine {
     });
   }
 
-  _applyRunConfigToolPolicy(agentContext = {}, runConfig = {}) {
-    return this.runConfigResolver.applyRunConfigToolPolicy(agentContext, runConfig);
-  }
-
   _mergeScenarioRestrictedList({ scenarioItems = [], currentItems = [], hasWildcard = false }) {
     return this.runConfigResolver.mergeScenarioRestrictedList({
       scenarioItems,
@@ -420,7 +404,6 @@ export class SessionExecutionEngine {
     return this.scopedArtifactPersistenceHelpers.persistSubSessionSnapshot(payload);
   }
 
-
   _createScopedJsonWriter() {
     return this.scopedArtifactPersistenceHelpers.createScopedJsonWriter();
   }
@@ -450,7 +433,6 @@ export class SessionExecutionEngine {
   async runDetachedSubSession(payload = {}) {
     return this._createDetachedSubSessionRunner()(payload);
   }
-
 
   _buildContextBuilder({
     userId,
@@ -488,10 +470,7 @@ export class SessionExecutionEngine {
     return prepareTurnInput(this, { buildContextPayload });
   }
 
-  async _prepareAgentTurnExecution({
-    buildContextPayload = {},
-    abortSignal = null,
-  } = {}) {
+  async _prepareAgentTurnExecution({ buildContextPayload = {}, abortSignal = null } = {}) {
     return prepareAgentTurnExecution(this, { buildContextPayload, abortSignal });
   }
 
@@ -527,7 +506,12 @@ export class SessionExecutionEngine {
     });
   }
 
-  async _enrichUserInputAttachmentsFromIndex({ userId = "", sessionId = "", attachments = [], existingAttachments = [] } = {}) {
+  async _enrichUserInputAttachmentsFromIndex({
+    userId = "",
+    sessionId = "",
+    attachments = [],
+    existingAttachments = [],
+  } = {}) {
     return enrichUserInputAttachmentsFromIndex(this, {
       userId,
       sessionId,
@@ -716,7 +700,6 @@ export class SessionExecutionEngine {
     });
   }
 
-
   _mergePluginOptions(...items) {
     return this.modelMessageRuntimeHelpers.mergePluginOptions(...items);
   }
@@ -761,13 +744,7 @@ export class SessionExecutionEngine {
     });
   }
 
-  async runSessionAsUser({
-    userId,
-    sessionId,
-    message,
-    attachments = [],
-    eventListener = null,
-  }) {
+  async runSessionAsUser({ userId, sessionId, message, attachments = [], eventListener = null }) {
     if (!sessionId) {
       throw recoverableToolError(tSystem("common.sessionIdRequired"), {
         code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,

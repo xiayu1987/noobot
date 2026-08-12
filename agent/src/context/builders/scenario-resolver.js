@@ -4,14 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveBuiltinScenarios } from "../../config/core/builtin-scenarios.js";
+import { resolveLocalizedBuiltinScenarios } from "../../config/core/scenario-localization-adapter.js";
 
 function normalizeStringArray(input = []) {
-  return Array.isArray(input)
-    ? input
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-    : [];
+  return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
 }
 
 export function resolveScenarioProfile({ runConfig = {}, effectiveConfig = {} } = {}) {
@@ -20,9 +16,11 @@ export function resolveScenarioProfile({ runConfig = {}, effectiveConfig = {} } 
       ? runConfig.scenarioProfile
       : {};
   const runConfigScenarioKey = String(runConfig?.scenario || "").trim();
-  const scenarioConfig = resolveBuiltinScenarios(effectiveConfig?.scenarios, {}, {
-    locale: runConfig?.locale || effectiveConfig?.locale,
-  });
+  const scenarioConfig = resolveLocalizedBuiltinScenarios(
+    effectiveConfig?.scenarios,
+    {},
+    { locale: runConfig?.locale || effectiveConfig?.locale },
+  );
   const defaultScenarioKey = String(scenarioConfig?.default || "").trim();
   const resolvedScenarioKey = runConfigScenarioKey || defaultScenarioKey;
   const scenarioDefinitions =
@@ -43,12 +41,8 @@ export function resolveScenarioProfile({ runConfig = {}, effectiveConfig = {} } 
       runConfigProfile?.description || scenarioDefinition?.description || "",
     ).trim(),
     model: String(runConfigProfile?.model || scenarioDefinition?.model || "").trim(),
-    tools: normalizeStringArray(
-      runConfigProfile?.tools ?? scenarioDefinition?.tools ?? [],
-    ),
-    context: normalizeStringArray(
-      runConfigProfile?.context ?? scenarioDefinition?.context ?? [],
-    ),
+    tools: normalizeStringArray(runConfigProfile?.tools ?? scenarioDefinition?.tools ?? []),
+    context: normalizeStringArray(runConfigProfile?.context ?? scenarioDefinition?.context ?? []),
     services: normalizeStringArray(
       runConfigProfile?.services ?? scenarioDefinition?.services ?? [],
     ),

@@ -9,7 +9,7 @@ import { isAbortLikeError, throwIfAborted } from "../abort-control.js";
 
 export async function runYearlySummaryIfNeeded({
   storage,
-  llm = null,
+  invokeModel = null,
   promptI18n = {},
   abortSignal = null,
   basePath = "",
@@ -19,7 +19,7 @@ export async function runYearlySummaryIfNeeded({
   readExperienceModel,
   upsertModelEntries,
 } = {}) {
-  if (!basePath || !llm) return false;
+  if (!basePath || typeof invokeModel !== "function") return false;
   let hasWrittenSummary = false;
   while (true) {
     const monthEntries = await storage.safeReadDirEntries(storage.monthlySummaryDir(basePath));
@@ -31,7 +31,8 @@ export async function runYearlySummaryIfNeeded({
     if (monthDirs.length < 12) break;
 
     const targetMonths = monthDirs.slice(0, 12);
-    const yearKey = String(targetMonths[0] || "").slice(0, 4) || new Date().toISOString().slice(0, 4);
+    const yearKey =
+      String(targetMonths[0] || "").slice(0, 4) || new Date().toISOString().slice(0, 4);
     const mergedDomainMap = await mergeDomainText(basePath, targetMonths);
     if (!mergedDomainMap.size) break;
 
@@ -48,8 +49,12 @@ export async function runYearlySummaryIfNeeded({
       });
       let parsedSummary = { domain_name: domainName, categories: [] };
       try {
-        const res = await llm.invoke([{ role: "user", content: prompt }], { signal: abortSignal });
-        parsedSummary = normalizeYearlySummary(res?.content, domainName, { basePath });
+        const output = await invokeModel({
+          prompt,
+          flow: "memory.experience.yearly",
+          purpose: "memory_experience_yearly",
+        });
+        parsedSummary = normalizeYearlySummary(output.text, domainName, { basePath });
       } catch (error) {
         if (isAbortLikeError(error) || abortSignal?.aborted) throw error;
         parsedSummary = { domain_name: domainName, categories: [] };

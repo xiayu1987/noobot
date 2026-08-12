@@ -13,13 +13,25 @@ import { SessionCrudService } from "../../src/session/services/session-crud-serv
 const now = () => "2026-07-18T00:00:00.000Z";
 
 function harness(initial = {}) {
-  let persisted = structuredClone({ sessionId: "s1", parentSessionId: "", aggregateVersion: 3, messages: [], ...initial });
+  let persisted = structuredClone({
+    sessionId: "s1",
+    parentSessionId: "",
+    aggregateVersion: 3,
+    messages: [],
+    ...initial,
+  });
   let displaySummarySession = null;
   let saveFailure = null;
   const repo = {
-    async withSessionMutation(_u, _s, _p, operation) { return operation(); },
-    async resolveParentSessionId() { return ""; },
-    async findById() { return normalizeSessionEntity(structuredClone(persisted), { now }); },
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
+    },
+    async resolveParentSessionId() {
+      return "";
+    },
+    async findById() {
+      return normalizeSessionEntity(structuredClone(persisted), { now });
+    },
     async save(_u, next, _p, { expectedAggregateVersion } = {}) {
       assert.equal(expectedAggregateVersion, Number(persisted.aggregateVersion ?? 0));
       if (saveFailure) {
@@ -36,21 +48,29 @@ function harness(initial = {}) {
   return {
     service: new SessionMessageService({ sessionRepo: repo, now }),
     reload: () => normalizeSessionEntity(structuredClone(persisted), { now }),
-    reloadDisplaySummarySession: () => displaySummarySession && normalizeSessionEntity(
-      structuredClone(displaySummarySession),
-      { now },
-    ),
-    failNextSave: (error = new Error("session_save_failed")) => { saveFailure = error; },
+    reloadDisplaySummarySession: () =>
+      displaySummarySession &&
+      normalizeSessionEntity(structuredClone(displaySummarySession), { now }),
+    failNextSave: (error = new Error("session_save_failed")) => {
+      saveFailure = error;
+    },
   };
 }
 
 function newSessionHarness() {
   let persisted = null;
   const repo = {
-    async withSessionMutation(_u, _s, _p, operation) { return operation(); },
-    async resolveParentSessionId() { return ""; },
+    async withSessionMutation(_u, _s, _p, operation) {
+      return operation();
+    },
+    async resolveParentSessionId() {
+      return "";
+    },
     createInitialSession({ sessionId }) {
-      return normalizeSessionEntity({ sessionId, parentSessionId: "", aggregateVersion: 0, messages: [] }, { now });
+      return normalizeSessionEntity(
+        { sessionId, parentSessionId: "", aggregateVersion: 0, messages: [] },
+        { now },
+      );
     },
     async findById() {
       return persisted ? normalizeSessionEntity(structuredClone(persisted), { now }) : null;
@@ -68,9 +88,16 @@ function newSessionHarness() {
 }
 
 const event = (eventType, commandId, expectedRevision, extra = {}) => ({
-  userId: "u1", sessionId: "s1", turnScopeId: "t1", dialogProcessId: "dp1",
-  messageId: "turn-message-t1", presentationMessageId: "presentation-t1",
-  eventType, commandId, expectedRevision, ...extra,
+  userId: "u1",
+  sessionId: "s1",
+  turnScopeId: "t1",
+  dialogProcessId: "dp1",
+  messageId: "turn-message-t1",
+  presentationMessageId: "presentation-t1",
+  eventType,
+  commandId,
+  expectedRevision,
+  ...extra,
 });
 
 test("first send creates the session before committing action accepted", async () => {
@@ -91,71 +118,103 @@ test("first send creates the session before committing action accepted", async (
 
 test("authority outbox delivery is read, attempted, and acknowledged through the session transaction", async () => {
   const h = harness();
-  const accepted = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "outbox-r1", 0, {
-    action: "send",
-    phase: TURN_PHASE.ACTION,
-  }));
+  const accepted = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "outbox-r1", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
   const eventId = accepted.envelope.eventId;
 
   const pending = await h.service.getPendingAuthorityEvents({ userId: "u1", sessionId: "s1" });
   assert.equal(pending.found, true);
-  assert.deepEqual(pending.events.map((item) => item.eventId), [eventId]);
+  assert.deepEqual(
+    pending.events.map((item) => item.eventId),
+    [eventId],
+  );
   assert.equal(pending.events[0].delivery.attempts, 0);
 
-  const attempted = await h.service.recordAuthorityEventAttempt({ userId: "u1", sessionId: "s1", eventId });
+  const attempted = await h.service.recordAuthorityEventAttempt({
+    userId: "u1",
+    sessionId: "s1",
+    eventId,
+  });
   assert.equal(attempted.recorded, true);
   assert.equal(h.reload().authorityEventOutbox[0].delivery.attempts, 1);
   assert.equal(h.reload().authorityEventOutbox[0].delivery.lastAttemptAt, now());
 
-  const acknowledged = await h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", eventId });
+  const acknowledged = await h.service.acknowledgeAuthorityEvent({
+    userId: "u1",
+    sessionId: "s1",
+    eventId,
+  });
   assert.equal(acknowledged.acknowledged, true);
-  assert.equal((await h.service.getPendingAuthorityEvents({ userId: "u1", sessionId: "s1" })).events.length, 0);
+  assert.equal(
+    (await h.service.getPendingAuthorityEvents({ userId: "u1", sessionId: "s1" })).events.length,
+    0,
+  );
   assert.equal(h.reload().authorityEventOutbox[0].delivery.deliveredAt, now());
 
-  const replay = await h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", eventId });
+  const replay = await h.service.acknowledgeAuthorityEvent({
+    userId: "u1",
+    sessionId: "s1",
+    eventId,
+  });
   assert.equal(replay.acknowledged, true);
   assert.equal(replay.deduplicated, true);
 });
 
 test("authority outbox delivery mutations remain atomic when session persistence fails", async () => {
   const h = harness();
-  const accepted = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "outbox-failure-r1", 0, {
-    action: "send",
-    phase: TURN_PHASE.ACTION,
-  }));
+  const accepted = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "outbox-failure-r1", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
   const eventId = accepted.envelope.eventId;
 
   h.failNextSave();
-  await assert.rejects(() => h.service.recordAuthorityEventAttempt({ userId: "u1", sessionId: "s1", eventId }));
+  await assert.rejects(() =>
+    h.service.recordAuthorityEventAttempt({ userId: "u1", sessionId: "s1", eventId }),
+  );
   assert.equal(h.reload().authorityEventOutbox[0].delivery.attempts, 0);
 
   h.failNextSave();
-  await assert.rejects(() => h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", eventId }));
+  await assert.rejects(() =>
+    h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", eventId }),
+  );
   assert.equal(h.reload().authorityEventOutbox[0].delivery.deliveredAt, "");
 });
 
 test("authority outbox compaction is explicit, receipt-safe, and atomic on persistence failure", async () => {
   const h = harness();
-  const accepted = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "compact-r1", 0, {
-    action: "send",
-    phase: TURN_PHASE.ACTION,
-  }));
+  const accepted = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "compact-r1", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
   const eventId = accepted.envelope.eventId;
   await h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", eventId });
 
   const invalid = await h.service.compactAuthorityEvents({
-    userId: "u1", sessionId: "s1", deliveredThroughSequence: 1,
+    userId: "u1",
+    sessionId: "s1",
+    deliveredThroughSequence: 1,
   });
   assert.equal(invalid.reason, "invalid_retention_cutoff");
   assert.equal(h.reload().authorityEventOutbox.length, 1);
 
   h.failNextSave();
-  await assert.rejects(() => h.service.compactAuthorityEvents({
-    userId: "u1",
-    sessionId: "s1",
-    deliveredThroughSequence: 1,
-    retainDeliveredAfter: "2026-07-19T00:00:00.000Z",
-  }));
+  await assert.rejects(() =>
+    h.service.compactAuthorityEvents({
+      userId: "u1",
+      sessionId: "s1",
+      deliveredThroughSequence: 1,
+      retainDeliveredAfter: "2026-07-19T00:00:00.000Z",
+    }),
+  );
   assert.equal(h.reload().authorityEventOutbox.length, 1);
 
   const compacted = await h.service.compactAuthorityEvents({
@@ -168,19 +227,24 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
   assert.equal(compacted.removed, 1);
   assert.equal(h.reload().authorityEventOutbox.length, 0);
 
-  const replay = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "compact-r1", 0, {
-    action: "send",
-    phase: TURN_PHASE.ACTION,
-  }));
+  const replay = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "compact-r1", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
   assert.equal(replay.deduplicated, true);
   assert.equal(replay.envelope.eventId, eventId);
 });
 
 test("missing session send requires an explicit provision intent", async () => {
   const h = newSessionHarness();
-  const result = await h.service.applyTurnLifecycleEvent(event(
-    TURN_EVENT.ACTION_ACCEPTED, "implicit-send", 0, { action: "send", phase: TURN_PHASE.ACTION },
-  ));
+  const result = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "implicit-send", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
   assert.equal(result.reason, "session_not_found");
   assert.equal(h.reload(), null);
 });
@@ -188,11 +252,17 @@ test("missing session send requires an explicit provision intent", async () => {
 test("initial provision replay is idempotent and concurrent first actions are mutually exclusive", async () => {
   const h = newSessionHarness();
   const first = event(TURN_EVENT.ACTION_ACCEPTED, "provision", 0, {
-    action: "send", phase: TURN_PHASE.ACTION, createSessionIfAbsent: true,
+    action: "send",
+    phase: TURN_PHASE.ACTION,
+    createSessionIfAbsent: true,
   });
   const accepted = await h.service.applyTurnLifecycleEvent(first);
   const replay = await h.service.applyTurnLifecycleEvent(first);
-  const competing = await h.service.applyTurnLifecycleEvent({ ...first, commandId: "competing", turnScopeId: "t2" });
+  const competing = await h.service.applyTurnLifecycleEvent({
+    ...first,
+    commandId: "competing",
+    turnScopeId: "t2",
+  });
   assert.equal(accepted.sessionCreated, true);
   assert.equal(replay.deduplicated, true);
   assert.equal(replay.envelope?.eventId, accepted.envelope?.eventId);
@@ -218,16 +288,27 @@ test("resend and continue do not create a missing session", async () => {
 
 test("authoritative lifecycle persists, sequences and restores the complete path", async () => {
   const h = harness();
-  const accepted = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "c1", 0, { action: "send", phase: TURN_PHASE.ACTION }));
+  const accepted = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "c1", 0, { action: "send", phase: TURN_PHASE.ACTION }),
+  );
   assert.equal(accepted.turn.state, TURN_STATE.ACTION_REQUESTING);
-  const started = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "c2", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
+  const started = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "c2", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
   assert.equal(started.turn.state, TURN_STATE.PROCESSING);
-  const processed = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_COMPLETED, "c3", 2, { phase: TURN_PHASE.COMPLETION }));
-  const completed = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.COMPLETED, "c4", 3, {
-    phase: TURN_PHASE.COMPLETION,
-    summaryVersion: 1,
-    terminalStatus: { command: "completed" },
-  }));
+  const processed = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_COMPLETED, "c3", 2, { phase: TURN_PHASE.COMPLETION }),
+  );
+  const completed = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.COMPLETED, "c4", 3, {
+      phase: TURN_PHASE.COMPLETION,
+      summaryVersion: 1,
+      terminalStatus: { command: "completed" },
+    }),
+  );
   assert.equal(processed.turn.state, TURN_STATE.COMPLETION_REQUESTING);
   assert.equal(completed.turn.state, TURN_STATE.COMPLETED);
   assert.equal(completed.turn.executionState, "completed");
@@ -252,28 +333,39 @@ test("repository save failure atomically preserves lifecycle, terminal status an
   const h = harness();
   h.failNextSave();
   await assert.rejects(
-    h.service.applyTurnLifecycleEvent(event(
-      TURN_EVENT.ACTION_ACCEPTED,
-      "save-fails-before-first-commit",
-      0,
-      { action: "send", phase: TURN_PHASE.ACTION },
-    )),
+    h.service.applyTurnLifecycleEvent(
+      event(TURN_EVENT.ACTION_ACCEPTED, "save-fails-before-first-commit", 0, {
+        action: "send",
+        phase: TURN_PHASE.ACTION,
+      }),
+    ),
     /session_save_failed/,
   );
   assert.equal(h.reload().turnLifecycle.sequence, 0);
   assert.equal(h.reload().authorityEventOutbox.length, 0);
   assert.equal(h.reload().turnStatuses.length, 0);
 
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "atomic-a", 0, { action: "send", phase: TURN_PHASE.ACTION }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "atomic-p", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_COMPLETED, "atomic-pc", 2, { phase: TURN_PHASE.COMPLETION }));
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "atomic-a", 0, { action: "send", phase: TURN_PHASE.ACTION }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "atomic-p", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_COMPLETED, "atomic-pc", 2, { phase: TURN_PHASE.COMPLETION }),
+  );
   const beforeTerminal = structuredClone(h.reload());
   h.failNextSave();
   await assert.rejects(
-    h.service.applyTurnLifecycleEvent(event(TURN_EVENT.COMPLETED, "atomic-c", 3, {
-      phase: TURN_PHASE.COMPLETION,
-      terminalStatus: { command: "completed" },
-    })),
+    h.service.applyTurnLifecycleEvent(
+      event(TURN_EVENT.COMPLETED, "atomic-c", 3, {
+        phase: TURN_PHASE.COMPLETION,
+        terminalStatus: { command: "completed" },
+      }),
+    ),
     /session_save_failed/,
   );
   const afterTerminal = h.reload();
@@ -284,14 +376,28 @@ test("repository save failure atomically preserves lifecycle, terminal status an
 
 test("terminal materialization rejection does not mutate lifecycle or outbox", async () => {
   const h = harness();
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "materialize-a", 0, { action: "send", phase: TURN_PHASE.ACTION }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "materialize-p", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_COMPLETED, "materialize-pc", 2, { phase: TURN_PHASE.COMPLETION }));
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "materialize-a", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "materialize-p", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_COMPLETED, "materialize-pc", 2, { phase: TURN_PHASE.COMPLETION }),
+  );
   const before = structuredClone(h.reload());
-  const rejected = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.COMPLETED, "materialize-c", 3, {
-    phase: TURN_PHASE.COMPLETION,
-    terminalStatus: { command: "not-a-terminal-command" },
-  }));
+  const rejected = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.COMPLETED, "materialize-c", 3, {
+      phase: TURN_PHASE.COMPLETION,
+      terminalStatus: { command: "not-a-terminal-command" },
+    }),
+  );
   assert.equal(rejected.reason, "invalid_turn_status_command");
   const after = h.reload();
   assert.deepEqual(after.turnLifecycle, before.turnLifecycle);
@@ -301,32 +407,52 @@ test("terminal materialization rejection does not mutate lifecycle or outbox", a
 
 test("terminal resolution reads status from the Turn without returning messages", async () => {
   const h = harness({
-    turnTimings: [{
-      turnScopeId: "t1",
-      dialogProcessId: "dp1",
-      thinkingStartedAt: "2026-07-17T23:59:30.000Z",
-      thinkingFinishedAt: "2026-07-18T00:00:00.000Z",
-    }],
+    turnTimings: [
+      {
+        turnScopeId: "t1",
+        dialogProcessId: "dp1",
+        thinkingStartedAt: "2026-07-17T23:59:30.000Z",
+        thinkingFinishedAt: "2026-07-18T00:00:00.000Z",
+      },
+    ],
   });
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "r1", 0, {
-    action: "send",
-    phase: TURN_PHASE.ACTION,
-    startedAt: "2026-07-17T23:59:30.000Z",
-  }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "r2", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_COMPLETED, "r3", 2, { phase: TURN_PHASE.COMPLETION }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.COMPLETED, "r4", 3, {
-    phase: TURN_PHASE.COMPLETION,
-    terminalStatus: { command: "completed" },
-  }));
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "r1", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+      startedAt: "2026-07-17T23:59:30.000Z",
+    }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "r2", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_COMPLETED, "r3", 2, { phase: TURN_PHASE.COMPLETION }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.COMPLETED, "r4", 3, {
+      phase: TURN_PHASE.COMPLETION,
+      terminalStatus: { command: "completed" },
+    }),
+  );
   const crud = new SessionCrudService({
-    sessionRepo: { async findById() { return h.reload(); } },
+    sessionRepo: {
+      async findById() {
+        return h.reload();
+      },
+    },
     treeRepo: {},
     now,
   });
 
   const response = await crud.resolveTurnTerminalState({
-    userId: "u1", sessionId: "s1", turnScopeId: "t1", commandId: "resolve-1",
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "t1",
+    commandId: "resolve-1",
   });
   assert.equal(response.resolved, true);
   assert.equal(response.turn.terminalStatus.status, "completed");
@@ -338,21 +464,27 @@ test("terminal resolution reads status from the Turn without returning messages"
 });
 
 test("noncanonical terminal snapshots are discarded without mutating Turns", () => {
-  const normalized = normalizeSessionEntity({
-    sessionId: "legacy",
-    messages: [],
-    turnLifecycle: {
-      sequence: 1,
-      turns: { t1: { turnScopeId: "t1", state: "completed", revision: 1, sequence: 1 } },
-    },
-    turnTerminalCommits: {
-      t1: {
-        turnScopeId: "t1",
-        terminalStatus: { status: "completed", reason: "run_completed" },
-        messages: Array.from({ length: 100 }, (_, index) => ({ role: "assistant", content: `large-${index}` })),
+  const normalized = normalizeSessionEntity(
+    {
+      sessionId: "legacy",
+      messages: [],
+      turnLifecycle: {
+        sequence: 1,
+        turns: { t1: { turnScopeId: "t1", state: "completed", revision: 1, sequence: 1 } },
+      },
+      turnTerminalCommits: {
+        t1: {
+          turnScopeId: "t1",
+          terminalStatus: { status: "completed", reason: "run_completed" },
+          messages: Array.from({ length: 100 }, (_, index) => ({
+            role: "assistant",
+            content: `large-${index}`,
+          })),
+        },
       },
     },
-  }, { now });
+    { now },
+  );
 
   assert.equal(normalized.turnLifecycle.turns.t1.terminalStatus, null);
   assert.equal(normalized.turnTerminalCommits, undefined);
@@ -360,7 +492,10 @@ test("noncanonical terminal snapshots are discarded without mutating Turns", () 
 
 test("command replay is idempotent and conflicting reuse is rejected", async () => {
   const h = harness();
-  const input = event(TURN_EVENT.ACTION_ACCEPTED, "same", 0, { action: "send", phase: TURN_PHASE.ACTION });
+  const input = event(TURN_EVENT.ACTION_ACCEPTED, "same", 0, {
+    action: "send",
+    phase: TURN_PHASE.ACTION,
+  });
   await h.service.applyTurnLifecycleEvent(input);
   const replay = await h.service.applyTurnLifecycleEvent(input);
   const conflict = await h.service.applyTurnLifecycleEvent({ ...input, action: "resend" });
@@ -371,30 +506,28 @@ test("command replay is idempotent and conflicting reuse is rejected", async () 
 
 test("accepted Turn message identities are immutable", async () => {
   const h = harness();
-  const accepted = await h.service.applyTurnLifecycleEvent(event(
-    TURN_EVENT.ACTION_ACCEPTED,
-    "identity-accepted",
-    0,
-    { action: "send", phase: TURN_PHASE.ACTION },
-  ));
+  const accepted = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "identity-accepted", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
   assert.equal(accepted.applied, true);
-  const messageConflict = await h.service.applyTurnLifecycleEvent(event(
-    TURN_EVENT.PROCESSING_STARTED,
-    "identity-message-conflict",
-    1,
-    { phase: TURN_PHASE.PROCESSING, executionState: "sending", messageId: "other-message" },
-  ));
+  const messageConflict = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "identity-message-conflict", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+      messageId: "other-message",
+    }),
+  );
   assert.equal(messageConflict.reason, "turn_message_identity_conflict");
-  const presentationConflict = await h.service.applyTurnLifecycleEvent(event(
-    TURN_EVENT.PROCESSING_STARTED,
-    "identity-presentation-conflict",
-    1,
-    {
+  const presentationConflict = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "identity-presentation-conflict", 1, {
       phase: TURN_PHASE.PROCESSING,
       executionState: "sending",
       presentationMessageId: "other-presentation",
-    },
-  ));
+    }),
+  );
   assert.equal(presentationConflict.reason, "turn_presentation_identity_conflict");
   assert.equal(h.reload().turnLifecycle.sequence, 1);
 });
@@ -422,38 +555,87 @@ test("command idempotency fingerprint includes execution ownership metadata", as
 
 test("session mutex, turn revision and session version conflicts do not mutate state", async () => {
   const h = harness();
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "c1", 0, { action: "send", phase: TURN_PHASE.ACTION }));
-  const second = await h.service.applyTurnLifecycleEvent({ ...event(TURN_EVENT.ACTION_ACCEPTED, "c2", 0, { action: "resend", phase: TURN_PHASE.ACTION }), turnScopeId: "t2" });
-  const stale = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "c3", 0, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
-  const sessionStale = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "c4", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending", expectedAggregateVersion: 2 }));
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "c1", 0, { action: "send", phase: TURN_PHASE.ACTION }),
+  );
+  const second = await h.service.applyTurnLifecycleEvent({
+    ...event(TURN_EVENT.ACTION_ACCEPTED, "c2", 0, { action: "resend", phase: TURN_PHASE.ACTION }),
+    turnScopeId: "t2",
+  });
+  const stale = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "c3", 0, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
+  const sessionStale = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "c4", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+      expectedAggregateVersion: 2,
+    }),
+  );
   assert.equal(second.reason, "session_action_conflict");
   assert.equal(stale.reason, "turn_revision_conflict");
-  assert.equal(sessionStale.reason, "session_version_conflict");
+  assert.equal(sessionStale.reason, "SESSION_AGGREGATE_VERSION_CONFLICT");
   assert.equal(h.reload().turnLifecycle.sequence, 1);
 });
 
 test("stop is accepted only while authoritative execution state is sending", async () => {
   for (const executionState of ["reconnecting", "interaction_pending"]) {
     const h = harness();
-    await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, `a-${executionState}`, 0, { action: "send", phase: TURN_PHASE.ACTION }));
-    await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, `p-${executionState}`, 1, { phase: TURN_PHASE.PROCESSING, executionState }));
-    const denied = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.STOP_ACCEPTED, `s-${executionState}`, 2, { phase: TURN_PHASE.ACTION }));
+    await h.service.applyTurnLifecycleEvent(
+      event(TURN_EVENT.ACTION_ACCEPTED, `a-${executionState}`, 0, {
+        action: "send",
+        phase: TURN_PHASE.ACTION,
+      }),
+    );
+    await h.service.applyTurnLifecycleEvent(
+      event(TURN_EVENT.PROCESSING_STARTED, `p-${executionState}`, 1, {
+        phase: TURN_PHASE.PROCESSING,
+        executionState,
+      }),
+    );
+    const denied = await h.service.applyTurnLifecycleEvent(
+      event(TURN_EVENT.STOP_ACCEPTED, `s-${executionState}`, 2, { phase: TURN_PHASE.ACTION }),
+    );
     assert.equal(denied.reason, "stop_not_allowed");
   }
   const h = harness();
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "a", 0, { action: "send", phase: TURN_PHASE.ACTION }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "p", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
-  const accepted = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.STOP_ACCEPTED, "s", 2, { phase: TURN_PHASE.ACTION }));
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "a", 0, { action: "send", phase: TURN_PHASE.ACTION }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "p", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
+  const accepted = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.STOP_ACCEPTED, "s", 2, { phase: TURN_PHASE.ACTION }),
+  );
   assert.equal(accepted.turn.action, "stop");
   assert.equal(accepted.turn.state, TURN_STATE.ACTION_REQUESTING);
 });
 
 test("snapshot reloads authoritative state without mutating sequence and supports unchanged", async () => {
   const h = harness();
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "c1", 0, { action: "send", phase: TURN_PHASE.ACTION }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "c2", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "c1", 0, { action: "send", phase: TURN_PHASE.ACTION }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "c2", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
   const before = h.reload().turnLifecycle.sequence;
-  const result = await h.service.getTurnLifecycleSnapshot({ userId: "u1", sessionId: "s1", commandId: "snapshot-1", knownSequence: before });
+  const result = await h.service.getTurnLifecycleSnapshot({
+    userId: "u1",
+    sessionId: "s1",
+    commandId: "snapshot-1",
+    knownSequence: before,
+  });
   assert.equal(result.found, true);
   assert.equal(result.snapshot.unchanged, true);
   assert.equal(result.snapshot.activeTurn.turnScopeId, "t1");
@@ -464,39 +646,90 @@ test("snapshot reloads authoritative state without mutating sequence and support
 
 test("retryable finalize failure keeps the session locked and completes idempotently after reload", async () => {
   const h = harness();
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "a", 0, { action: "send", phase: TURN_PHASE.ACTION }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "p", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_COMPLETED, "pc", 2, { phase: TURN_PHASE.COMPLETION, finalizeCommandId: "finalize:t1" }));
-  const failed = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.FAILED, "f", 3, {
-    phase: TURN_PHASE.COMPLETION,
-    failure: { code: "summary_failed", retryable: true },
-  }));
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "a", 0, { action: "send", phase: TURN_PHASE.ACTION }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "p", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_COMPLETED, "pc", 2, {
+      phase: TURN_PHASE.COMPLETION,
+      finalizeCommandId: "finalize:t1",
+    }),
+  );
+  const failed = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.FAILED, "f", 3, {
+      phase: TURN_PHASE.COMPLETION,
+      failure: { code: "summary_failed", retryable: true },
+    }),
+  );
   assert.equal(failed.turn.state, TURN_STATE.COMPLETION_FAILED);
   assert.equal(failed.turn.executionState, "error");
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "t1");
   assert.equal(h.reload().turnLifecycle.turns.t1.finalizeIntent.commandId, "finalize:t1");
-  const blocked = await h.service.applyTurnLifecycleEvent({ ...event(TURN_EVENT.ACTION_ACCEPTED, "other", 0, { action: "send", phase: TURN_PHASE.ACTION }), turnScopeId: "t2" });
+  const blocked = await h.service.applyTurnLifecycleEvent({
+    ...event(TURN_EVENT.ACTION_ACCEPTED, "other", 0, { action: "send", phase: TURN_PHASE.ACTION }),
+    turnScopeId: "t2",
+  });
   assert.equal(blocked.reason, "session_action_conflict");
-  const completed = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.COMPLETED, "finalize:t1", 4, { phase: TURN_PHASE.COMPLETION, summaryVersion: 8 }));
+  const completed = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.COMPLETED, "finalize:t1", 4, {
+      phase: TURN_PHASE.COMPLETION,
+      summaryVersion: 8,
+    }),
+  );
   assert.equal(completed.turn.state, TURN_STATE.COMPLETED);
   assert.equal(completed.turn.finalizeIntent, null);
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "");
-  const replay = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.COMPLETED, "finalize:t1", 4, { phase: TURN_PHASE.COMPLETION, summaryVersion: 8 }));
+  const replay = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.COMPLETED, "finalize:t1", 4, {
+      phase: TURN_PHASE.COMPLETION,
+      summaryVersion: 8,
+    }),
+  );
   assert.equal(replay.deduplicated, true);
   assert.equal(h.reload().turnLifecycle.sequence, 5);
 });
 
 test("retryable stop finalize failure keeps intent and can recover once", async () => {
   const h = harness();
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.ACTION_ACCEPTED, "a-stop", 0, { action: "send", phase: TURN_PHASE.ACTION }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.PROCESSING_STARTED, "p-stop", 1, { phase: TURN_PHASE.PROCESSING, executionState: "sending" }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.STOP_ACCEPTED, "s-stop", 2, { phase: TURN_PHASE.ACTION }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.STOP_PROCESSING_COMPLETED, "sp-stop", 3, { phase: TURN_PHASE.STOP, finalizeCommandId: "finalize-stop:t1" }));
-  await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.FAILED, "sf-stop", 4, { phase: TURN_PHASE.STOP, failure: { retryable: true } }));
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "a-stop", 0, { action: "send", phase: TURN_PHASE.ACTION }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.PROCESSING_STARTED, "p-stop", 1, {
+      phase: TURN_PHASE.PROCESSING,
+      executionState: "sending",
+    }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.STOP_ACCEPTED, "s-stop", 2, { phase: TURN_PHASE.ACTION }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.STOP_PROCESSING_COMPLETED, "sp-stop", 3, {
+      phase: TURN_PHASE.STOP,
+      finalizeCommandId: "finalize-stop:t1",
+    }),
+  );
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.FAILED, "sf-stop", 4, {
+      phase: TURN_PHASE.STOP,
+      failure: { retryable: true },
+    }),
+  );
   const restored = h.reload().turnLifecycle;
   assert.equal(restored.activeTurnScopeId, "t1");
   assert.equal(restored.turns.t1.finalizeIntent.commandId, "finalize-stop:t1");
-  const completed = await h.service.applyTurnLifecycleEvent(event(TURN_EVENT.STOP_COMPLETED, "finalize-stop:t1", 5, { phase: TURN_PHASE.STOP, summaryVersion: 9 }));
+  const completed = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.STOP_COMPLETED, "finalize-stop:t1", 5, {
+      phase: TURN_PHASE.STOP,
+      summaryVersion: 9,
+    }),
+  );
   assert.equal(completed.turn.state, TURN_STATE.STOP_COMPLETED);
   assert.equal(completed.turn.executionState, "user_stopped");
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "");

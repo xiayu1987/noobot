@@ -18,6 +18,7 @@ test("desktop backend runtime follows the complete production workspace dependen
     "event-protocol",
     "authoritative-state",
     "context-protocol",
+    "agent-config-protocol",
     "service",
     "agent",
     "agent-proxy",
@@ -27,5 +28,8 @@ test("desktop backend runtime follows the complete production workspace dependen
   ]) {
     assert.equal(runtimeWorkspaces.includes(requiredWorkspace), true, requiredWorkspace);
   }
-  assert.equal(runtimeWorkspaces.some((workspace) => workspace.startsWith("client/")), false);
+  assert.equal(
+    runtimeWorkspaces.some((workspace) => workspace.startsWith("client/")),
+    false,
+  );
 });

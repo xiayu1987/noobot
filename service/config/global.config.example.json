@@ -1,12 +1,12 @@
 {
   "workspace_root": "../workspace",
   "workspace_template_path": "../user-template/default-user",
-  "default_provider": "GLM_5_1",
+  "default_provider": "gpt_5_6_sol",
   "attachments": {
     "attachment_models": {
-      "audio": "qwen3_5_omni_plus",
-      "video": "qwen3_5_omni_plus",
-      "image": "qwen3_5_omni_plus"
+      "audio": "gpt_5_6_sol",
+      "video": "gpt_5_6_sol",
+      "image": "gpt_5_6_sol"
     }
   },
   "tools": {
@@ -117,7 +117,7 @@
       "enabled": true,
       "mode": "responses_api",
       "responses_api": {
-        "model": "GLM_5_1"
+        "model": "gpt_5_6_sol"
       },
       "search_engine": {
         "prompt": "优先用于补充实时或外部网页信息，优先关键词搜索，再精确搜索，最后再回答。",
@@ -164,10 +164,10 @@
     "default": "full",
     "definitions": {
       "programming": {
-        "model": "GLM_5_1"
+        "model": "gpt_5_6_sol"
       },
       "text": {
-        "model": "GLM_5_1"
+        "model": "gpt_5_6_sol"
       }
     }
   },
@@ -176,16 +176,16 @@
       "enabled": true,
       "mode": "off",
       "stepModels": {
-        "planning": "GLM_5_1",
-        "guidance": "GLM_5_1",
-        "acceptance": "GLM_5_1",
-        "default": "GLM_5_1"
+        "planning": "gpt_5_6_sol",
+        "guidance": "gpt_5_6_sol",
+        "acceptance": "gpt_5_6_sol",
+        "default": "gpt_5_6_sol"
       }
     },
     "workflow": {
       "enabled": true,
       "mode": "off",
-      "semanticModel": "GLM_5_1",
+      "semanticModel": "gpt_5_6_sol",
       "parallelNodeExecution": true
     }
   },
@@ -202,8 +202,6 @@
       "format": "openai_compatible",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "low",
-      "temperature": 0.7,
-      "max_tokens": 10000,
       "description": "擅长编码",
       "multimodal_generation": {
         "support_understanding": true,
@@ -211,10 +209,7 @@
           "enabled": false,
           "support_scope": []
         }
-      },
-      "top_p": 0.95,
-      "frequency_penalty": 0.1,
-      "presence_penalty": 0.1
+      }
     },
     "gpt_5_5": {
       "enabled": true,
@@ -225,8 +220,6 @@
       "format": "openai_compatible",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "low",
-      "temperature": 0.7,
-      "max_tokens": 10000,
       "description": "擅长编码",
       "multimodal_generation": {
         "support_understanding": true,
@@ -234,10 +227,7 @@
           "enabled": false,
           "support_scope": []
         }
-      },
-      "top_p": 0.95,
-      "frequency_penalty": 0.1,
-      "presence_penalty": 0.1
+      }
     },
     "gpt_5_6_sol": {
       "enabled": true,
@@ -248,8 +238,6 @@
       "format": "openai_compatible",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "low",
-      "temperature": 0.7,
-      "max_tokens": 10000,
       "description": "擅长编码",
       "multimodal_generation": {
         "support_understanding": true,
@@ -257,10 +245,7 @@
           "enabled": false,
           "support_scope": []
         }
-      },
-      "top_p": 0.95,
-      "frequency_penalty": 0.1,
-      "presence_penalty": 0.1
+      }
     },
     "nano_banana": {
       "enabled": true,
@@ -271,16 +256,12 @@
       "format": "openai_compatible",
       "reasoning_effort": "low",
       "tool_reasoning_effort": "low",
-      "temperature": 0.5,
-      "max_tokens": 10000,
       "description": "擅长图片生成",
       "multimodal_generation": {
         "support_understanding": false,
         "support_generation": {
           "enabled": true,
-          "support_scope": [
-            "image"
-          ]
+          "support_scope": ["image"]
         }
       }
     },
@@ -291,10 +272,7 @@
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.5-omni-plus",
       "format": "dashscope",
-      "temperature": 0.7,
-      "max_tokens": 10000,
       "preserve_thinking": false,
-      "thinking_budget": 0,
       "description": "多模态理解",
       "multimodal_generation": {
         "support_understanding": true,
@@ -302,10 +280,7 @@
           "enabled": false,
           "support_scope": []
         }
-      },
-      "top_p": 0.9,
-      "frequency_penalty": 0.3,
-      "presence_penalty": 0.2
+      }
     },
     "GLM_5_1": {
       "enabled": true,
@@ -314,10 +289,7 @@
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "ZHIPU/GLM-5.1",
       "format": "dashscope",
-      "temperature": 0.7,
-      "max_tokens": 10000,
       "preserve_thinking": false,
-      "thinking_budget": 0,
       "description": "擅长通用对话、快速响应",
       "multimodal_generation": {
         "support_understanding": false,
@@ -325,10 +297,7 @@
           "enabled": false,
           "support_scope": []
         }
-      },
-      "top_p": 0.9,
-      "frequency_penalty": 0.3,
-      "presence_penalty": 0.2
+      }
     }
   },
   "services": {

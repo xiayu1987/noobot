@@ -16,10 +16,16 @@ import {
 } from "@noobot/runtime-events";
 
 function mapExecutionLogToSessionChannelCategory(normalizedLog = {}) {
-  const category = String(normalizedLog?.category || "").trim().toLowerCase();
+  const category = String(normalizedLog?.category || "")
+    .trim()
+    .toLowerCase();
   if (category === "tool") return RUNTIME_EVENT_CATEGORIES.INTERACTION;
   if (category === "error") return RUNTIME_EVENT_CATEGORIES.SYSTEM;
-  if (["semantic_transfer", "context_identity", "agent_context", "agent_context_protocol"].includes(category)) {
+  if (
+    ["semantic_transfer", "context_identity", "agent_context", "agent_context_protocol"].includes(
+      category,
+    )
+  ) {
     return RUNTIME_EVENT_CATEGORIES.DEBUG;
   }
   return RUNTIME_EVENT_CATEGORIES.SYSTEM;
@@ -41,24 +47,29 @@ export class ExecutionLogRepository {
 
   async _appendSessionChannelLog(userId, sessionId, normalizedLog = {}, parentSessionId = "") {
     if (!sessionId) return;
-    await writeRoutedRuntimeEvent({
-      scope: "session",
-      userId,
-      sessionId,
-      parentSessionId,
-      dialogProcessId: resolveMessageDialogProcessId(normalizedLog),
-      turnScopeId: normalizedLog.turnScopeId,
-      source: "agent",
-      category: mapExecutionLogToSessionChannelCategory(normalizedLog),
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      event: normalizedLog.event || "agent.execution",
-      data: {
-        executionCategory: normalizedLog.category || "",
-        type: normalizedLog.type || "",
-        ts: normalizedLog.ts || "",
-        ...(normalizedLog.data && typeof normalizedLog.data === "object" ? normalizedLog.data : {}),
+    await writeRoutedRuntimeEvent(
+      {
+        scope: "session",
+        userId,
+        sessionId,
+        parentSessionId,
+        dialogProcessId: resolveMessageDialogProcessId(normalizedLog),
+        turnScopeId: normalizedLog.turnScopeId,
+        source: "agent",
+        category: mapExecutionLogToSessionChannelCategory(normalizedLog),
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        event: normalizedLog.event || "agent.execution",
+        data: {
+          executionCategory: normalizedLog.category || "",
+          type: normalizedLog.type || "",
+          ts: normalizedLog.ts || "",
+          ...(normalizedLog.data && typeof normalizedLog.data === "object"
+            ? normalizedLog.data
+            : {}),
+        },
       },
-    }, this.workspaceRoot ? { workspaceRoot: this.workspaceRoot } : undefined);
+      this.workspaceRoot ? { workspaceRoot: this.workspaceRoot } : undefined,
+    );
   }
 
   _appendQueueKey(userId = "", sessionId = "", parentSessionId = "") {
@@ -71,10 +82,7 @@ export class ExecutionLogRepository {
 
   async _withAppendQueue(queueKey = "", operation = async () => {}) {
     const previous = this.appendQueues.get(queueKey) || Promise.resolve();
-    const current = previous
-      .catch(() => {
-      })
-      .then(operation);
+    const current = previous.catch(() => {}).then(operation);
     this.appendQueues.set(queueKey, current);
     try {
       return await current;
@@ -164,13 +172,7 @@ export class ExecutionLogRepository {
     }
     bundle.logs = Array.isArray(bundle.logs) ? bundle.logs : [];
     bundle.logs.push(normalizedLog);
-    return this._saveBundleStore(
-      userId,
-      sessionId,
-      bundle,
-      parentSessionId,
-      persistenceContext,
-    );
+    return this._saveBundleStore(userId, sessionId, bundle, parentSessionId, persistenceContext);
   }
 
   async getBundle(userId, sessionId, parentSessionId = "", persistenceContext = null) {
@@ -180,12 +182,7 @@ export class ExecutionLogRepository {
         code: ERROR_CODE.FATAL_SESSION_ID_REQUIRED,
       });
     }
-    return this._getBundleStore(
-      userId,
-      normalizedSessionId,
-      parentSessionId,
-      persistenceContext,
-    );
+    return this._getBundleStore(userId, normalizedSessionId, parentSessionId, persistenceContext);
   }
 
   async appendLog(
@@ -215,10 +212,11 @@ export class ExecutionLogRepository {
         ? bundle.logs.findLast((logItem) => Boolean(resolveMessageDialogProcessId(logItem)))
         : null;
       const bundleDialogProcessId = resolveMessageDialogProcessId(bundle);
-      const targetDialogProcessId = incomingDialogProcessId ||
+      const targetDialogProcessId =
+        incomingDialogProcessId ||
         bundleDialogProcessId ||
         resolveMessageDialogProcessId(existingLatestDialogProcessId);
-      let resetExecutionLogs = false;
+      const resetExecutionLogs = false;
       if (!incomingDialogProcessId && targetDialogProcessId) {
         normalizedLog.dialogProcessId = targetDialogProcessId;
       }

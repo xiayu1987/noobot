@@ -17,10 +17,8 @@ import {
   TRANSFER_SOURCE,
 } from "../../transfer-adapter/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
-import {
-  invokeModelWithTextAndAttachments,
-  resolveModelSpecByAlias,
-} from "../../models/index.js";
+import { resolveModelSpecByAlias } from "../../models/resolver/index.js";
+import { buildAttachmentContentBlock } from "../../models/attachment/formatter.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
   resolveCanonicalUserSourceAttachment,
@@ -31,7 +29,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { emitEvent } from "../../events/index.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -65,7 +63,9 @@ function getMediaBinaryExecutableName(binaryName = "", platform = process.platfo
 }
 
 function getMediaBinaryEnvVarName(binaryName = "") {
-  return `NOOBOT_${String(binaryName || "").trim().toUpperCase()}_PATH`;
+  return `NOOBOT_${String(binaryName || "")
+    .trim()
+    .toUpperCase()}_PATH`;
 }
 
 function uniqueExistingDirectories(directories = []) {
@@ -112,15 +112,18 @@ function resolveMediaBinaryCandidateDirectories({
   ]);
 }
 
-export function resolveMediaBinaryPath(binaryName = "", {
-  env = process.env,
-  platform = process.platform,
-  arch = process.arch,
-  resourcesPath = process.resourcesPath,
-  execPath = process.execPath,
-  cwd = process.cwd(),
-  exists = existsSync,
-} = {}) {
+export function resolveMediaBinaryPath(
+  binaryName = "",
+  {
+    env = process.env,
+    platform = process.platform,
+    arch = process.arch,
+    resourcesPath = process.resourcesPath,
+    execPath = process.execPath,
+    cwd = process.cwd(),
+    exists = existsSync,
+  } = {},
+) {
   const normalizedBinaryName = String(binaryName || "").trim();
   const fallbackExecutableName = getMediaBinaryExecutableName(normalizedBinaryName, platform);
   if (!fallbackExecutableName) return "";
@@ -129,9 +132,14 @@ export function resolveMediaBinaryPath(binaryName = "", {
   if (envPath) return envPath;
 
   if (normalizedBinaryName === MEDIA_BINARY_NAMES.ffprobe) {
-    const ffmpegEnvPath = String(env?.[getMediaBinaryEnvVarName(MEDIA_BINARY_NAMES.ffmpeg)] || "").trim();
+    const ffmpegEnvPath = String(
+      env?.[getMediaBinaryEnvVarName(MEDIA_BINARY_NAMES.ffmpeg)] || "",
+    ).trim();
     const siblingFfprobePath = ffmpegEnvPath
-      ? path.join(path.dirname(ffmpegEnvPath), getMediaBinaryExecutableName(normalizedBinaryName, platform))
+      ? path.join(
+          path.dirname(ffmpegEnvPath),
+          getMediaBinaryExecutableName(normalizedBinaryName, platform),
+        )
       : "";
     if (siblingFfprobePath && exists(siblingFfprobePath)) return siblingFfprobePath;
   }
@@ -161,7 +169,11 @@ function normalizeMediaInputPath(rawFilePath = "") {
   }
 }
 
-async function resolveMediaInputPathFromAttachmentMetas(filePath = "", agentContext = {}, attachmentId = "") {
+async function resolveMediaInputPathFromAttachmentMetas(
+  filePath = "",
+  agentContext = {},
+  attachmentId = "",
+) {
   const normalizedInputPath = normalizeMediaInputPath(filePath);
   const matchedMeta = await resolveCanonicalUserSourceAttachment({
     filePath: normalizedInputPath,
@@ -200,11 +212,7 @@ async function toDataUrl(filePath = "", preferredMediaType = "") {
   return `data:${mimeType};base64,${contentBase64}`;
 }
 
-function resolveAttachmentAliasByType({
-  globalConfig,
-  userConfig,
-  mediaType = "image",
-}) {
+function resolveAttachmentAliasByType({ globalConfig, userConfig, mediaType = "image" }) {
   const normalizedMediaType = String(mediaType || "image").trim() || "image";
   return (
     userConfig?.attachments?.attachment_models?.[normalizedMediaType] ||
@@ -228,9 +236,7 @@ function createMediaProcessError(message = "", code = "", details = {}) {
   return error;
 }
 
-function terminateMediaProcess(childProcess, {
-  forceAfterMs = MEDIA_PROCESS_KILL_GRACE_MS,
-} = {}) {
+function terminateMediaProcess(childProcess, { forceAfterMs = MEDIA_PROCESS_KILL_GRACE_MS } = {}) {
   if (!childProcess) return;
   try {
     childProcess.kill("SIGTERM");
@@ -238,22 +244,28 @@ function terminateMediaProcess(childProcess, {
     return;
   }
   if (Number(forceAfterMs || 0) <= 0) return;
-  const forceTimer = setTimeout(() => {
-    try {
-      childProcess.kill("SIGKILL");
-    } catch {
-    }
-  }, Number(forceAfterMs || 0));
+  const forceTimer = setTimeout(
+    () => {
+      try {
+        childProcess.kill("SIGKILL");
+      } catch {}
+    },
+    Number(forceAfterMs || 0),
+  );
   forceTimer.unref?.();
 }
 
-export function runMediaProcess(command = "", args = [], {
-  timeoutMs = MEDIA_TRANSCODE_TIMEOUT_MS,
-  abortSignal = null,
-  errorLabel = "media process",
-  killGraceMs = MEDIA_PROCESS_KILL_GRACE_MS,
-  spawnImpl = spawn,
-} = {}) {
+export function runMediaProcess(
+  command = "",
+  args = [],
+  {
+    timeoutMs = MEDIA_TRANSCODE_TIMEOUT_MS,
+    abortSignal = null,
+    errorLabel = "media process",
+    killGraceMs = MEDIA_PROCESS_KILL_GRACE_MS,
+    spawnImpl = spawn,
+  } = {},
+) {
   return new Promise((resolve, reject) => {
     if (abortSignal?.aborted) {
       reject(
@@ -290,15 +302,22 @@ export function runMediaProcess(command = "", args = [], {
       );
     };
     if (Number(timeoutMs || 0) > 0) {
-      timeoutTimer = setTimeout(() => {
-        terminateMediaProcess(childProcess, { forceAfterMs: killGraceMs });
-        finish(
-          reject,
-          createMediaProcessError(`${errorLabel} timeout after ${timeoutMs}ms`, "MEDIA_PROCESS_TIMEOUT", {
-            timeoutMs,
-          }),
-        );
-      }, Number(timeoutMs || 0));
+      timeoutTimer = setTimeout(
+        () => {
+          terminateMediaProcess(childProcess, { forceAfterMs: killGraceMs });
+          finish(
+            reject,
+            createMediaProcessError(
+              `${errorLabel} timeout after ${timeoutMs}ms`,
+              "MEDIA_PROCESS_TIMEOUT",
+              {
+                timeoutMs,
+              },
+            ),
+          );
+        },
+        Number(timeoutMs || 0),
+      );
       timeoutTimer.unref?.();
     }
     abortSignal?.addEventListener?.("abort", onAbort, { once: true });
@@ -314,7 +333,10 @@ export function runMediaProcess(command = "", args = [], {
     childProcess.on("close", (exitCode) => {
       if (settled) return;
       if (exitCode !== 0) {
-        finish(reject, new Error(stderrText.trim() || `${errorLabel} exited with code ${exitCode}`));
+        finish(
+          reject,
+          new Error(stderrText.trim() || `${errorLabel} exited with code ${exitCode}`),
+        );
         return;
       }
       finish(resolve, { stdoutText, stderrText });
@@ -326,14 +348,7 @@ async function runFfprobe(filePath = "", { abortSignal = null } = {}) {
   const ffprobePath = resolveMediaBinaryPath(MEDIA_BINARY_NAMES.ffprobe);
   const result = await runMediaProcess(
     ffprobePath,
-    [
-      "-v",
-      "error",
-      "-show_streams",
-      "-print_format",
-      "json",
-      String(filePath || ""),
-    ],
+    ["-v", "error", "-show_streams", "-print_format", "json", String(filePath || "")],
     {
       timeoutMs: MEDIA_PROBE_TIMEOUT_MS,
       abortSignal,
@@ -353,15 +368,19 @@ async function resolveMediaTypeByPathWithProbe(filePath = "", { abortSignal = nu
   try {
     const ffprobeJsonText = await runFfprobe(normalizedFilePath, { abortSignal });
     const ffprobePayload = JSON.parse(ffprobeJsonText || "{}");
-    const streamList = Array.isArray(ffprobePayload?.streams)
-      ? ffprobePayload.streams
-      : [];
+    const streamList = Array.isArray(ffprobePayload?.streams) ? ffprobePayload.streams : [];
     const hasVideoStream = streamList.some(
-      (streamItem) => String(streamItem?.codec_type || "").trim().toLowerCase() === "video",
+      (streamItem) =>
+        String(streamItem?.codec_type || "")
+          .trim()
+          .toLowerCase() === "video",
     );
     if (hasVideoStream) return "video";
     const hasAudioStream = streamList.some(
-      (streamItem) => String(streamItem?.codec_type || "").trim().toLowerCase() === "audio",
+      (streamItem) =>
+        String(streamItem?.codec_type || "")
+          .trim()
+          .toLowerCase() === "audio",
     );
     if (hasAudioStream) return "audio";
     return extensionResolvedType;
@@ -379,7 +398,11 @@ async function runFfmpeg(args = [], { abortSignal = null } = {}) {
   });
 }
 
-async function ensureAudioFileForModel(inputFile = "", outputDirectory = "", { abortSignal = null } = {}) {
+async function ensureAudioFileForModel(
+  inputFile = "",
+  outputDirectory = "",
+  { abortSignal = null } = {},
+) {
   await mkdir(outputDirectory, { recursive: true });
   const extension = path.extname(String(inputFile || "")).toLowerCase();
   if (MODEL_READY_AUDIO_EXTENSIONS.has(extension)) {
@@ -390,23 +413,17 @@ async function ensureAudioFileForModel(inputFile = "", outputDirectory = "", { a
   }
   const outputFilePath = path.join(outputDirectory, `${randomUUID()}.mp3`);
   await runFfmpeg(
-    [
-      "-y",
-      "-i",
-      inputFile,
-      "-vn",
-      "-acodec",
-      "libmp3lame",
-      "-ar",
-      "16000",
-      outputFilePath,
-    ],
+    ["-y", "-i", inputFile, "-vn", "-acodec", "libmp3lame", "-ar", "16000", outputFilePath],
     { abortSignal },
   );
   return { filePath: outputFilePath, format: "mp3" };
 }
 
-async function ensureVideoFileForModel(inputFile = "", outputDirectory = "", { abortSignal = null } = {}) {
+async function ensureVideoFileForModel(
+  inputFile = "",
+  outputDirectory = "",
+  { abortSignal = null } = {},
+) {
   await mkdir(outputDirectory, { recursive: true });
   const extension = path.extname(String(inputFile || "")).toLowerCase();
   if (extension === ".mp4") {
@@ -431,11 +448,7 @@ async function ensureVideoFileForModel(inputFile = "", outputDirectory = "", { a
   return { filePath: outputFilePath, mimeType: MIME_TYPE.VIDEO_MP4 };
 }
 
-function resolveMedia2DataPromptByMediaType({
-  runtime,
-  mediaType = "image",
-  prompt = "",
-}) {
+function resolveMedia2DataPromptByMediaType({ runtime, mediaType = "image", prompt = "" }) {
   const customPrompt = String(prompt || "").trim();
   if (customPrompt) return customPrompt;
   if (mediaType === "audio") {
@@ -534,20 +547,16 @@ export function createMedia2DataTool({ agentContext }) {
     description: tTool(runtime, "tools.media2data.description"),
     schema: z.object({
       filePath: z.string().describe(tTool(runtime, "tools.media2data.fieldFilePath")),
-      attachmentId: z.string().optional().describe("Canonical source attachment ID when the input is a session attachment."),
-      prompt: z
+      attachmentId: z
         .string()
         .optional()
-        .describe(tTool(runtime, "tools.media2data.fieldPrompt")),
+        .describe("Canonical source attachment ID when the input is a session attachment."),
+      prompt: z.string().optional().describe(tTool(runtime, "tools.media2data.fieldPrompt")),
     }),
     func: async ({ filePath, attachmentId, prompt }, _runManager, toolConfig = {}) => {
       const transferIdentity = toolConfig?.configurable?.transferIdentity;
       const { resolvedInputPath: resolvedInputHintPath, sourceAttachmentMeta } =
-        await resolveMediaInputPathFromAttachmentMetas(
-          filePath,
-          agentContext,
-          attachmentId,
-        );
+        await resolveMediaInputPathFromAttachmentMetas(filePath, agentContext, attachmentId);
       const inputFile = await assertAndResolveUserWorkspaceFilePath({
         filePath: resolvedInputHintPath,
         agentContext,
@@ -557,13 +566,10 @@ export function createMedia2DataTool({ agentContext }) {
       const abortSignal = runtime?.abortSignal || null;
       const mediaType = await resolveMediaTypeByPathWithProbe(inputFile, { abortSignal });
       if (!mediaType) {
-        throw recoverableToolError(
-          tTool(runtime, "tools.media2data.unsupportedMediaFileType"),
-          {
-            code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_MEDIA_FILE_TYPE,
-            details: { input: inputFile },
-          },
-        );
+        throw recoverableToolError(tTool(runtime, "tools.media2data.unsupportedMediaFileType"), {
+          code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_MEDIA_FILE_TYPE,
+          details: { input: inputFile },
+        });
       }
 
       const outputDirectory = path.join(
@@ -578,12 +584,28 @@ export function createMedia2DataTool({ agentContext }) {
         userConfig,
         mediaType,
       });
+      if (!modelAlias) {
+        throw recoverableToolError(`media2data requires an explicit ${mediaType} model`, {
+          code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
+          details: { mediaType },
+        });
+      }
       const modelSpec = resolveModelSpecByAlias({
         alias: modelAlias,
         globalConfig,
         userConfig,
-        fallbackToDefault: true,
+        fallbackToDefault: false,
       });
+      if (!modelSpec) {
+        throw recoverableToolError(`configured ${mediaType} model not found: ${modelAlias}`, {
+          code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
+          details: { alias: modelAlias, mediaType },
+        });
+      }
+      const modelPort = runtime?.modelPort;
+      if (!modelPort || typeof modelPort.invoke !== "function") {
+        throw new Error("media2data requires runtime.modelPort");
+      }
       const userPrompt = resolveMedia2DataPromptByMediaType({
         runtime,
         mediaType,
@@ -592,21 +614,21 @@ export function createMedia2DataTool({ agentContext }) {
 
       let attachmentPayload = null;
       if (mediaType === "audio") {
-        const preparedAudioFile = await ensureAudioFileForModel(inputFile, outputDirectory, { abortSignal });
-        const contentBase64 = (
-          await readFile(preparedAudioFile.filePath)
-        ).toString("base64");
+        const preparedAudioFile = await ensureAudioFileForModel(inputFile, outputDirectory, {
+          abortSignal,
+        });
+        const contentBase64 = (await readFile(preparedAudioFile.filePath)).toString("base64");
         const audioMimeType =
-          preparedAudioFile.format === "wav"
-            ? MIME_TYPE.AUDIO_WAV
-            : MIME_TYPE.AUDIO_MPEG;
+          preparedAudioFile.format === "wav" ? MIME_TYPE.AUDIO_WAV : MIME_TYPE.AUDIO_MPEG;
         attachmentPayload = {
           type: audioMimeType,
           mimeType: audioMimeType,
           data: contentBase64,
         };
       } else if (mediaType === "video") {
-        const preparedVideoFile = await ensureVideoFileForModel(inputFile, outputDirectory, { abortSignal });
+        const preparedVideoFile = await ensureVideoFileForModel(inputFile, outputDirectory, {
+          abortSignal,
+        });
         attachmentPayload = {
           type: preparedVideoFile.mimeType,
           mimeType: preparedVideoFile.mimeType,
@@ -621,24 +643,33 @@ export function createMedia2DataTool({ agentContext }) {
         };
       }
 
-      const modelResult = await invokeModelWithTextAndAttachments({
-        modelName: modelSpec?.alias || modelSpec?.model,
-        text: userPrompt,
-        attachments: [attachmentPayload],
-        globalConfig,
-        userConfig,
-        streaming: false,
-        context: {
-          runtime,
-          invocation: {
-            flow: "tool.media2data",
-            purpose: "media_extraction",
-            domain: "data_processing",
-            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+      const attachmentBlock = buildAttachmentContentBlock({
+        attachment: attachmentPayload,
+        providerFormat: modelSpec.format,
+      });
+      if (!attachmentBlock) {
+        throw new Error(`unsupported ${mediaType} attachment payload for model request`);
+      }
+      const modelResponse = await modelPort.invoke({
+        model: modelSpec,
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "text", text: userPrompt }, attachmentBlock],
           },
+        ],
+        options: {
+          streaming: false,
+          signal: abortSignal || undefined,
+        },
+        invocation: {
+          flow: "tool.media2data",
+          purpose: "media_extraction",
+          domain: "data_processing",
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
         },
       });
-      const extractedText = String(modelResult.text || "");
+      const extractedText = String(modelResponse.output.text || "");
       const persistedOutput = await persistMedia2DataTextAttachment({
         runtime,
         agentContext,
@@ -669,7 +700,8 @@ export function createMedia2DataTool({ agentContext }) {
         {
           ok: true,
           status: TOOL_RESULT_STATUS.COMPLETED,
-          message: "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
+          message:
+            "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
           mode: `${mediaType}_model`,
           input: inputFile,
           ...persistedOutput.resultFields,

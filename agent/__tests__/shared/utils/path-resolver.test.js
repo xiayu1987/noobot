@@ -53,7 +53,7 @@ test("keeps an unmapped path and marks conversion as unmapped", () => {
 });
 
 test("uses the recorded server platform for host views", () => {
-  const agentContext = { environment: { os: { platform: "win32" } } };
+  const agentContext = { context: { environment: { os: { platform: "win32" } } } };
   const fromHost = convertPathView({
     path: "C:\\work\\file.txt",
     sourceView: "host",
@@ -79,7 +79,7 @@ test("explicit platforms override the recorded host platform", () => {
     sourcePlatform: "linux",
     targetView: "host",
     targetPlatform: "macos",
-    agentContext: { environment: { os: { platform: "win32" } } },
+    agentContext: { context: { environment: { os: { platform: "win32" } } } },
   });
   assert.equal(result.sourcePlatform, PATH_PLATFORMS.LINUX);
   assert.equal(result.targetPlatform, PATH_PLATFORMS.MACOS);
@@ -109,12 +109,12 @@ test("joins paths using the source path semantics", () => {
 });
 
 test("resolves path platform and case-sensitivity from context", () => {
-  assert.equal(resolvePathPlatformFromContext({ environment: { os: { platform: "win32" } } }), PATH_PLATFORMS.WINDOWS);
-  assert.equal(resolvePathPlatformFromContext({ environment: { platform: "darwin" } }), PATH_PLATFORMS.MACOS);
+  assert.equal(resolvePathPlatformFromContext({ context: { environment: { os: { platform: "win32" } } } }), PATH_PLATFORMS.WINDOWS);
+  assert.equal(resolvePathPlatformFromContext({ context: { environment: { os: { platform: "darwin" } } } }), PATH_PLATFORMS.MACOS);
   assert.equal(isCaseInsensitivePathPlatform("windows"), true);
   assert.equal(isCaseInsensitivePathPlatform("darwin"), true);
   assert.equal(isCaseInsensitivePathPlatform("linux"), false);
-  assert.equal(isCaseInsensitivePathContext({ environment: { os: { platform: "win32" } } }), true);
+  assert.equal(isCaseInsensitivePathContext({ context: { environment: { os: { platform: "win32" } } } }), true);
 });
 
 test("resolves relative targets under root without corrupting foreign absolute paths", () => {

@@ -13,7 +13,7 @@ import {
   appendCapabilityModelTraceLog,
   ensureHarnessBucket,
   extractRawTextContent,
-  invokeWithReasoningRetry,
+  invokeCapabilityModel,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
   resolveCapabilityModelInvoker,
@@ -23,7 +23,10 @@ import {
 } from "./deps.js";
 import { captureInjectedResult, scheduleInjectTask } from "../inject-fallback.js";
 import { setCaptureFlagStateWithMeta, setPendingStateWithMeta } from "../../pending-cleanup.js";
-import { applySemanticAcceptanceToReport, buildSemanticValidationPromptPayload } from "./report-builder.js";
+import {
+  applySemanticAcceptanceToReport,
+  buildSemanticValidationPromptPayload,
+} from "./report-builder.js";
 import {
   buildTextAcceptanceValidationResult,
   buildFinalAcceptanceSemanticValidationMessages,
@@ -89,12 +92,12 @@ export function maybeInjectAcceptanceSemanticValidationPrompt(ctx = {}, meta = {
   const messages = resolveModelMessages(ctx);
   if (!messages) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
-  const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
-  const promptPayload = pendingData.payload && typeof pendingData.payload === "object" ? pendingData.payload : {};
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
+  const promptPayload =
+    pendingData.payload && typeof pendingData.payload === "object" ? pendingData.payload : {};
   const mainPlanContext = resolveAcceptanceMainPlanContext(promptPayload, bucket, locale, ctx);
   const requestPayload = resolveAcceptanceValidationRequestPayload(promptPayload);
   const systemContent = buildAcceptanceMainPlanContextPromptText({
@@ -170,7 +173,8 @@ export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
     completedEvent: ACCEPTANCE_EVENTS.semanticValidationCompletedInject,
     failedEvent: ACCEPTANCE_EVENTS.semanticValidationCaptureFailedInject,
-    isCapturePending: ({ state }) => state.flags.acceptanceSemanticValidationCapturePending === true,
+    isCapturePending: ({ state }) =>
+      state.flags.acceptanceSemanticValidationCapturePending === true,
     consumeCaptureMeta: ({ state }) => {
       const reportIndex = Number(state.flags.acceptanceSemanticValidationCaptureReportIndex);
       setCaptureFlagStateWithMeta(state, "acceptanceSemanticValidationCapturePending", false);
@@ -204,7 +208,8 @@ export function maybeCaptureAcceptanceSemanticValidationByInject(ctx = {}) {
       };
     },
     buildCompletedDetail: ({ result }) => result?.detail || {},
-    buildFailedDetail: ({ result, captureMeta }) => result?.detail || { reportIndex: Number(captureMeta?.reportIndex) },
+    buildFailedDetail: ({ result, captureMeta }) =>
+      result?.detail || { reportIndex: Number(captureMeta?.reportIndex) },
   });
 }
 
@@ -212,12 +217,14 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   const holder = ensureHarnessBucket(ctx);
   if (!holder || !baseReport) return false;
   const { bucket, state } = holder;
-  const acceptanceOptions = meta?.harness?.acceptance && typeof meta.harness.acceptance === "object"
-    ? meta.harness.acceptance
-    : {};
-  const semanticValidationEnabled = acceptanceOptions.semanticValidation === undefined
-    ? WORKFLOW_PARAMS.acceptance.semanticValidation.enabled === true
-    : acceptanceOptions.semanticValidation === true;
+  const acceptanceOptions =
+    meta?.harness?.acceptance && typeof meta.harness.acceptance === "object"
+      ? meta.harness.acceptance
+      : {};
+  const semanticValidationEnabled =
+    acceptanceOptions.semanticValidation === undefined
+      ? WORKFLOW_PARAMS.acceptance.semanticValidation.enabled === true
+      : acceptanceOptions.semanticValidation === true;
   if (!semanticValidationEnabled) return false;
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) {
@@ -263,12 +270,15 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     phaseReportsContents: phaseReportsPrompts,
     requestContent: prompt,
     protocolContent: buildAcceptancePatchProtocolText({ locale, mode: "final" }),
-    workflowPolicyPrompt: buildScenarioPolicyPromptText(locale, resolveScenarioPolicyFlagsFromContext(ctx, meta)),
+    workflowPolicyPrompt: buildScenarioPolicyPromptText(
+      locale,
+      resolveScenarioPolicyFlagsFromContext(ctx, meta),
+    ),
     ...resolveScenarioPolicyFlagsFromContext(ctx, meta),
   });
   let response = null;
   try {
-    response = await invokeWithReasoningRetry({
+    response = await invokeCapabilityModel({
       invoker,
       invokePayload: {
         purpose: "acceptance_semantic_validation",
@@ -286,10 +296,8 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
         baseReport,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "acceptance_semantic_validation"),
       },
-      maxReasoningRetries: 1,
       purpose: "acceptance_semantic_validation",
       domain: CAPABILITY_DOMAIN.ACCEPTANCE,
-      appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
         await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.ACCEPTANCE,
@@ -298,7 +306,6 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
         });
       },
       ctx,
-      meta,
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -308,9 +315,7 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
     });
     return false;
   }
-  const responseText =
-    extractRawTextContent(response?.content) ||
-    String(response?.text || response?.output || "").trim();
+  const responseText = String(response?.output?.text || "").trim();
   const attachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "acceptance_semantic_validation",
     content: responseText,
@@ -338,7 +343,10 @@ export async function runAcceptanceBySeparateModel(ctx = {}, meta = {}, baseRepo
   appendCapabilityLog(ctx, {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
     event: ACCEPTANCE_EVENTS.semanticValidationCompleted,
-    detail: { status: baseReport.semanticValidation?.status, consistent: baseReport.semanticValidation?.consistent },
+    detail: {
+      status: baseReport.semanticValidation?.status,
+      consistent: baseReport.semanticValidation?.consistent,
+    },
   });
   return true;
 }

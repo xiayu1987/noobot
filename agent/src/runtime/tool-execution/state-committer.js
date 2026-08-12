@@ -110,7 +110,7 @@ export function createStateCommitter({
           : []),
       ];
       const canonicalMessageUid = String(messageUid || "").trim() || createSessionMessageUid();
-      const assistantMessage = {
+      let assistantMessage = {
         messageUid: canonicalMessageUid,
         role: "assistant",
         content: String(content || ""),
@@ -145,7 +145,7 @@ export function createStateCommitter({
             ? modelResponseMetadata
             : null,
       };
-      applyAuthoritativeMessageId(assistantMessage, messageId);
+      assistantMessage = applyAuthoritativeMessageId(assistantMessage, messageId);
       if (!assistantMessage.additional_kwargs || typeof assistantMessage.additional_kwargs !== "object") {
         assistantMessage.additional_kwargs = {};
       }

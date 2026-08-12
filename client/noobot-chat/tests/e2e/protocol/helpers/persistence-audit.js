@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { readSessionArtifact } from "noobot-agent/session";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../..");
 
@@ -171,25 +172,8 @@ export async function auditSessionSummaryArtifacts(userId, sessionId, { expectat
 }
 
 export async function readSessionTurnMessages(userId, sessionId) {
-  const directory = path.join(sessionRoot(userId, sessionId), "turns");
-  let names = [];
-  try {
-    names = (await fs.readdir(directory)).filter((name) => name.endsWith(".jsonl")).sort();
-  } catch (error) {
-    if (error?.code === "ENOENT") return [];
-    throw error;
-  }
-  const records = (await Promise.all(names.map((name) => readJsonLines(path.join(directory, name))))).flat();
-  const messages = new Map();
-  for (const record of records) {
-    const messageUid = String(record?.messageUid || record?.message?.messageUid || "").trim();
-    if (!messageUid) continue;
-    if (record.op === "delete") messages.delete(messageUid);
-    if (record.op === "upsert" && record.message && typeof record.message === "object") {
-      messages.set(messageUid, record.message);
-    }
-  }
-  return [...messages.values()];
+  const session = await readSessionArtifact({ sessionDir: sessionRoot(userId, sessionId) });
+  return Array.isArray(session?.messages) ? session.messages : [];
 }
 
 export async function readSnapshots(userId, sessionId) {
@@ -198,14 +182,21 @@ export async function readSnapshots(userId, sessionId) {
   return Promise.all(names.map((name) => readJson(path.join(directory, name))));
 }
 
-export async function readJsonLines(filePath) {
-  const text = await fs.readFile(filePath, "utf8");
-  return text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+export function parseJsonLines(text, { committedFramesOnly = false } = {}) {
+  const source = String(text || "");
+  const lines = source.split(/\r?\n/);
+  if (committedFramesOnly && source && !source.endsWith("\n")) lines.pop();
+  return lines.filter(Boolean).map((line) => JSON.parse(line));
 }
 
-async function readJsonLinesIfPresent(filePath) {
+export async function readJsonLines(filePath, options = {}) {
+  const text = await fs.readFile(filePath, "utf8");
+  return parseJsonLines(text, options);
+}
+
+async function readJsonLinesIfPresent(filePath, options = {}) {
   try {
-    return await readJsonLines(filePath);
+    return await readJsonLines(filePath, options);
   } catch (error) {
     if (error?.code === "ENOENT") return [];
     throw error;
@@ -221,7 +212,10 @@ export async function readSessionRuntimeEvents(userId, sessionId) {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
-  return (await Promise.all(names.map((name) => readJsonLinesIfPresent(path.join(eventsDir, name))))).flat();
+  return (await Promise.all(names.map((name) => readJsonLinesIfPresent(
+    path.join(eventsDir, name),
+    { committedFramesOnly: true },
+  )))).flat();
 }
 
 export async function readSessionExecutionEvents(userId, sessionId) {
@@ -236,7 +230,7 @@ export async function readSessionExecutionEvents(userId, sessionId) {
     throw error;
   }
   return (await Promise.all(names.map((name) =>
-    readJsonLinesIfPresent(path.join(executionDir, name)),
+    readJsonLinesIfPresent(path.join(executionDir, name), { committedFramesOnly: true }),
   ))).flat();
 }
 
@@ -273,7 +267,9 @@ export async function readSessionExecutionEventTree(userId, sessionId, { rootSes
   // session. A child id alone is not a filesystem scope and must never be
   // resolved as a top-level session.
   const segments = await findExecutionEventSegments(sessionRoot(userId, normalizedRootSessionId));
-  const records = (await Promise.all(segments.sort().map(readJsonLinesIfPresent))).flat();
+  const records = (await Promise.all(segments.sort().map((segment) =>
+    readJsonLinesIfPresent(segment, { committedFramesOnly: true }),
+  ))).flat();
   return hasExplicitRoot
     ? records.filter((record) => String(record?.sessionId || "").trim() === normalizedSessionId)
     : records;

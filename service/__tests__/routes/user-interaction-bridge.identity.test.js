@@ -51,7 +51,9 @@ test("timeout publishes the canonical failed interaction lifecycle and rejects t
   const sentEvents = [];
   const pendingInteractionRequests = new Map();
   const { userInteractionBridge } = createUserInteractionBridge({
-    sendEvent(event, data) { sentEvents.push({ event, data }); },
+    sendEvent(event, data) {
+      sentEvents.push({ event, data });
+    },
     translateText: () => "interaction timed out",
     pendingInteractionRequests,
     interactionTimeoutMs: 1,
@@ -72,4 +74,30 @@ test("timeout publishes the canonical failed interaction lifecycle and rejects t
   assert.equal(sentEvents[1].data.lifecycle, "failed");
   assert.equal(sentEvents[1].data.resolvedBy, "system");
   assert.equal(sentEvents[1].data.interactionData.reason, "timeout");
+});
+
+test("explicit per-request timeoutMs overrides the bridge default when shorter", async () => {
+  const sentEvents = [];
+  const pendingInteractionRequests = new Map();
+  const { userInteractionBridge } = createUserInteractionBridge({
+    sendEvent(event, data) {
+      sentEvents.push({ event, data });
+    },
+    translateText: () => "interaction timed out",
+    pendingInteractionRequests,
+    interactionTimeoutMs: 60000,
+  });
+
+  const request = userInteractionBridge.requestUserInteraction({
+    interactionId: "timeout-call-short",
+    sessionId: "session-timeout-short",
+    dialogProcessId: "dialog-timeout-short",
+    turnScopeId: "turn-timeout-short",
+    toolName: "user_interaction",
+    content: "confirm?",
+    timeoutMs: 1,
+  });
+  await assert.rejects(request, /interaction timed out/);
+  assert.equal(sentEvents[0].data.timeoutMs, 1);
+  assert.equal(sentEvents[1].data.timeoutMs, 1);
 });

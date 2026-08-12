@@ -9,11 +9,16 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
-import { TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestHookManager as createAgentHookManager,
+  createTestModelResponse,
+  TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
+} from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import {
+  createAcceptanceHandler,
+  createGuidanceHandler,
+} from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
@@ -21,13 +26,15 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 1, true);
   const roles = messages.map((item = {}) => String(item?.role || "").trim());
-  assert.equal(roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)), true);
+  assert.equal(
+    roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)),
+    true,
+  );
   const first = messages[0] || {};
   const last = messages[messages.length - 1] || {};
   assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
   assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
 }
-
 
 test("phase acceptance injects context, revised plan checklist, then phase request", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -72,13 +79,22 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   );
   assert.equal(ctx.modelContext.messages[protocolIndex].role, "system");
   assert.equal(ctx.modelContext.messages[planContextIndex].role, "user");
-  assert.match(String(ctx.modelContext.messages[planContextIndex].content), /计划清单上下文|Plan checklist context/);
+  assert.match(
+    String(ctx.modelContext.messages[planContextIndex].content),
+    /计划清单上下文|Plan checklist context/,
+  );
   assert.match(String(ctx.modelContext.messages[planContextIndex].content), /核心实现/);
   assert.equal(ctx.modelContext.messages[planContextIndex].injectedMessage, true);
   assert.equal(ctx.modelContext.messages[planContextIndex].injectedBy, "harness-plugin");
   assert.equal(ctx.modelContext.messages[requestIndex].role, "user");
-  assert.doesNotMatch(String(ctx.modelContext.messages[requestIndex].content), /acceptance_patch_v1/);
-  assert.match(String(ctx.modelContext.messages[protocolIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
+  assert.doesNotMatch(
+    String(ctx.modelContext.messages[requestIndex].content),
+    /acceptance_patch_v1/,
+  );
+  assert.match(
+    String(ctx.modelContext.messages[protocolIndex].content),
+    /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/,
+  );
   assert.match(String(ctx.modelContext.messages[protocolIndex].content), /evidence=\[简短证据\]/);
   assert.equal(ctx.modelContext.messages[requestIndex].injectedMessage, true);
   assert.equal(ctx.modelContext.messages[requestIndex].injectedBy, "harness-plugin");
@@ -99,7 +115,6 @@ test("phase acceptance injects context, revised plan checklist, then phase reque
   assert.equal(ctx.agentContext.payload.harness.phaseAcceptanceReports.length, 1);
   assert.match(ctx.agentContext.payload.harness.phaseAcceptanceReports[0].content, /pass/);
 });
-
 
 test("phase acceptance separate model receives context, summaries, revised plan, phase checklists, then phase request", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -144,7 +159,9 @@ test("phase acceptance separate model receives context, summaries, revised plan,
         planningGuidanceMode: "separate_model",
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1.1 status=pass risk=low evidence=[ok] [阶段通过]" };
+          return createTestModelResponse(
+            "ADD A1 plan=1.1 status=pass risk=low evidence=[ok] [阶段通过]",
+          );
         },
       },
     },
@@ -155,14 +172,20 @@ test("phase acceptance separate model receives context, summaries, revised plan,
   assert.equal(Array.isArray(messages), true);
   const summaryIndexes = messages
     .map((item = {}, index) =>
-      String(item.content || "").includes("harness-summary-reports") ? index : -1)
+      String(item.content || "").includes("harness-summary-reports") ? index : -1,
+    )
     .filter((index) => index >= 0);
-  const planIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-acceptance-main-plan"));
+  const planIndex = messages.findIndex((item = {}) =>
+    String(item.content || "").includes("harness-acceptance-main-plan"),
+  );
   const phaseIndexes = messages
     .map((item = {}, index) =>
-      String(item.content || "").includes("harness-phase-acceptance-reports") ? index : -1)
+      String(item.content || "").includes("harness-phase-acceptance-reports") ? index : -1,
+    )
     .filter((index) => index >= 0);
-  const requestIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-phase-acceptance-request"));
+  const requestIndex = messages.findIndex((item = {}) =>
+    String(item.content || "").includes("harness-phase-acceptance-request"),
+  );
   assert.equal(summaryIndexes.length, 1);
   assert.equal(messages[summaryIndexes[0]].role, "user");
   assert.match(String(messages[summaryIndexes[0]].content || ""), /最新小结概要/);
@@ -181,7 +204,6 @@ test("phase acceptance separate model receives context, summaries, revised plan,
   );
 });
 
-
 test("model-context rules 2: phase acceptance separate model uses six ordered context segments", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const runtimeHelpers = new ModelMessageRuntimeHelpers();
@@ -196,19 +218,19 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
         role: "assistant",
         content: "",
         dialogProcessId: "dlg_current",
-        tool_calls: [{ id: "call-ctx", function: { name: "execute_script", arguments: "{\"cmd\":\"pwd\"}" } }],
+        tool_calls: [
+          { id: "call-ctx", function: { name: "execute_script", arguments: '{"cmd":"pwd"}' } },
+        ],
       },
       {
         role: "tool",
-        content: "{\"ok\":true,\"stdout\":\"/workspace\"}",
+        content: '{"ok":true,"stdout":"/workspace"}',
         tool_call_id: "call-ctx",
         dialogProcessId: "dlg_current",
       },
     ],
     messageBlocks: {
-      system: [
-        { role: "system", content: "agent-system", dialogProcessId: "dlg_current" },
-      ],
+      system: [{ role: "system", content: "agent-system", dialogProcessId: "dlg_current" }],
       history: [
         { role: "user", content: "history-user-first", dialogProcessId: "dlg_old" },
         { role: "user", content: "history-user-second", dialogProcessId: "dlg_old" },
@@ -221,11 +243,13 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
           role: "assistant",
           content: "",
           dialogProcessId: "dlg_current",
-          tool_calls: [{ id: "call-ctx", function: { name: "execute_script", arguments: "{\"cmd\":\"pwd\"}" } }],
+          tool_calls: [
+            { id: "call-ctx", function: { name: "execute_script", arguments: '{"cmd":"pwd"}' } },
+          ],
         },
         {
           role: "tool",
-          content: "{\"ok\":true,\"stdout\":\"/workspace\"}",
+          content: '{"ok":true,"stdout":"/workspace"}',
           tool_call_id: "call-ctx",
           dialogProcessId: "dlg_current",
         },
@@ -271,7 +295,9 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
         },
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]" };
+          return createTestModelResponse(
+            "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]",
+          );
         },
       },
     },
@@ -281,12 +307,15 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   assert.equal(resolverCalls[0]?.purpose, "phase_acceptance");
   assert.equal(invocations.length, 1);
   const messages = invocations[0].messages || [];
-  const indexOf = (pattern) => messages.findIndex((item = {}) => pattern.test(String(item.content || "")));
+  const indexOf = (pattern) =>
+    messages.findIndex((item = {}) => pattern.test(String(item.content || "")));
   const agentSystemIndex = indexOf(/agent-system/);
   const historyUserIndex = indexOf(/history-user-first/);
   const historyAssistantIndex = indexOf(/history-assistant-latest/);
   const toolCallSemanticIndex = indexOf(/工具调用记录：execute_script脚本被调用/);
-  const toolResultIndex = messages.findIndex((item = {}) => String(item.content || "").includes('"stdout":"/workspace"'));
+  const toolResultIndex = messages.findIndex((item = {}) =>
+    String(item.content || "").includes('"stdout":"/workspace"'),
+  );
   const summaryIndex = indexOf(/harness-summary-reports/);
   const planIndex = indexOf(/harness-acceptance-main-plan/);
   const phaseReportIndex = indexOf(/harness-phase-acceptance-reports/);
@@ -315,7 +344,6 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   assert.match(String(messages[summaryIndex]?.content || ""), /最后一次完整小结：用于阶段验收/);
   assert.match(String(messages[phaseReportIndex]?.content || ""), /上一阶段验收：warn/);
 });
-
 
 test("phase acceptance separate model drops historical summary relays and passes only latest complete summary context", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -348,7 +376,8 @@ test("phase acceptance separate model drops historical summary relays and passes
         },
         {
           role: "user",
-          content: "[来自harness外部模型输出/summary]\n旧小结完整-3：历史持久化前缀消息也不应传给阶段验收模型",
+          content:
+            "[来自harness外部模型输出/summary]\n旧小结完整-3：历史持久化前缀消息也不应传给阶段验收模型",
           dialogProcessId: "dlg_old",
         },
         { role: "assistant", content: "阶段历史最终回答", dialogProcessId: "dlg_old" },
@@ -396,7 +425,9 @@ test("phase acceptance separate model drops historical summary relays and passes
         resolveModelMessages,
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]" };
+          return createTestModelResponse(
+            "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]",
+          );
         },
       },
     },
@@ -421,24 +452,35 @@ test("phase acceptance separate model drops historical summary relays and passes
   );
 });
 
-
 test("phase acceptance separate model uses messageBlocks incremental when ctx.modelContext.messages is history-only", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const resolveModelMessages = new ModelMessageRuntimeHelpers().createResolveModelMessages();
   const invocations = [];
   const ctx = {
     messages: [
-      { role: "user", content: "history-only-visible-in-ctx.modelContext.messages", dialogProcessId: "dlg_old" },
+      {
+        role: "user",
+        content: "history-only-visible-in-ctx.modelContext.messages",
+        dialogProcessId: "dlg_old",
+      },
     ],
     messageBlocks: {
       system: [],
       history: [
         { role: "user", content: "history-from-message-block", dialogProcessId: "dlg_old" },
-        { role: "assistant", content: "history-assistant-from-message-block", dialogProcessId: "dlg_old" },
+        {
+          role: "assistant",
+          content: "history-assistant-from-message-block",
+          dialogProcessId: "dlg_old",
+        },
       ],
       incremental: [
         { role: "user", content: "current-incremental-context", dialogProcessId: "dlg_current" },
-        { role: "assistant", content: "current-incremental-result", dialogProcessId: "dlg_current" },
+        {
+          role: "assistant",
+          content: "current-incremental-result",
+          dialogProcessId: "dlg_current",
+        },
       ],
     },
     dialogProcessId: "dlg_current",
@@ -469,7 +511,9 @@ test("phase acceptance separate model uses messageBlocks incremental when ctx.mo
         resolveModelMessages,
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]" };
+          return createTestModelResponse(
+            "ADD A1 plan=1 status=pass risk=low evidence=[ok] [阶段通过]",
+          );
         },
       },
     },

@@ -30,14 +30,10 @@ const ALL_PROJECTS = {
 
 const args = process.argv.slice(2);
 const projectArg = args.find((item) => item.startsWith("--project="));
-const selected = projectArg
-  ? String(projectArg.split("=")[1] || "").trim()
-  : "";
+const selected = projectArg ? String(projectArg.split("=")[1] || "").trim() : "";
 
 const projects = selected
-  ? Object.fromEntries(
-      Object.entries(ALL_PROJECTS).filter(([name]) => name === selected),
-    )
+  ? Object.fromEntries(Object.entries(ALL_PROJECTS).filter(([name]) => name === selected))
   : ALL_PROJECTS;
 
 if (selected && !projects[selected]) {
@@ -91,7 +87,7 @@ const directImportRegexes = [
   /import\s*\(\s*["']noobot-i18n(?:\/[^"']*)?["']\s*\)/g,
 ];
 
-let violations = [];
+const violations = [];
 
 for (const [name, cfg] of Object.entries(projects)) {
   const projectRoot = path.join(repoRoot, cfg.root);
@@ -116,7 +112,9 @@ for (const [name, cfg] of Object.entries(projects)) {
 }
 
 if (violations.length) {
-  console.error(`[i18n-check] found ${violations.length} forbidden direct import(s) of noobot-i18n:`);
+  console.error(
+    `[i18n-check] found ${violations.length} forbidden direct import(s) of noobot-i18n:`,
+  );
   for (const v of violations) {
     console.error(`- [${v.project}] ${v.file}`);
     if (v.sample) console.error(`  ${v.sample}`);

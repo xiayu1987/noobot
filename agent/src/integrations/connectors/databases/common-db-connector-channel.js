@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveTimeMs } from "../../../config/core/time-config-normalizer.js";
+import { resolveTimeMs } from "@noobot/agent-config-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 export function normalizeConnectionSource(connectionInfo = {}) {
@@ -43,7 +43,11 @@ export function resolveHostPortUserPasswordDatabase({
     port = Number.isFinite(port) && port > 0 ? port : Number(parsedUrl.port || defaultPort);
     user = user || decodeURIComponent(String(parsedUrl.username || ""));
     password = password || decodeURIComponent(String(parsedUrl.password || ""));
-    database = database || String(parsedUrl.pathname || "").replace(/^\/+/, "").trim();
+    database =
+      database ||
+      String(parsedUrl.pathname || "")
+        .replace(/^\/+/, "")
+        .trim();
   }
 
   return {

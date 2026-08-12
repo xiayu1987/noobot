@@ -5,9 +5,19 @@
  */
 export { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 
-export { CAPABILITY_DOMAIN, LOCALE, PLAN_REFINEMENT_TOOL_NAME, PROMPT_ENVELOPE } from "../shared/constants.js";
+export {
+  CAPABILITY_DOMAIN,
+  LOCALE,
+  PLAN_REFINEMENT_TOOL_NAME,
+  PROMPT_ENVELOPE,
+} from "../shared/constants.js";
 
-export { getDefaultTaskOwner, getTaskTemplate, HARNESS_I18N_KEYSET, translateI18nText } from "../shared/i18n.js";
+export {
+  getDefaultTaskOwner,
+  getTaskTemplate,
+  HARNESS_I18N_KEYSET,
+  translateI18nText,
+} from "../shared/i18n.js";
 
 export { ensureHarnessBucket } from "../shared/bucket-utils.js";
 
@@ -27,15 +37,11 @@ export {
   shouldUseSeparateModel,
 } from "../shared/model/utils.js";
 
-export {
-  extractRawTextContent,
-  sanitizeInternalMessages,
-} from "../shared/message/utils.js";
+export { extractRawTextContent, sanitizeInternalMessages } from "../shared/message/utils.js";
 export { buildCapabilityProtocolModelMessages } from "../shared/model/message-factory.js";
-export { invokeWithReasoningRetry } from "../shared/model/invocation-utils.js";
+export { invokeCapabilityModel } from "../shared/model/invocation-utils.js";
 export { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
 export { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
-
 
 export { disableBlockedToolsInRegistry, resolveSceneToolNames } from "../shared/tool-utils.js";
 

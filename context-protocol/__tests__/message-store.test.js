@@ -162,12 +162,15 @@ test("append atomically assigns the authoritative active turn identity", () => {
   };
   attachRuntime(holder);
 
-  const appended = appendMessage(holder, {
+  const source = Object.freeze({
     role: "assistant",
     content: "",
     dialogProcessId: "dialog-current",
-  }, { block: "incremental" });
+  });
+  const appended = appendMessage(holder, source, { block: "incremental" });
 
+  assert.notEqual(appended, source);
+  assert.equal(source.turnScopeId, undefined);
   assert.equal(appended.dialogProcessId, "dialog-current");
   assert.equal(appended.turnScopeId, "turn-current");
   assert.throws(
@@ -224,22 +227,31 @@ test("replace and block writes bind only newly registered entities to the active
     dialogProcessId: "dialog-current",
   };
 
-  replaceMessages(holder, [prepended, historical]);
+  const [canonicalPrepended] = replaceMessages(holder, [prepended, historical]);
   const dynamicSystem = { role: "system", content: "dynamic" };
   writeMessageBlocks(holder, {
     system: [dynamicSystem],
     history: [historical],
-    incremental: [prepended],
+    incremental: [canonicalPrepended],
   });
+  const canonicalDynamicSystem = holder.messageBlocks.system[0];
 
   assert.deepEqual(
-    { dialogProcessId: prepended.dialogProcessId, turnScopeId: prepended.turnScopeId },
+    {
+      dialogProcessId: canonicalPrepended.dialogProcessId,
+      turnScopeId: canonicalPrepended.turnScopeId,
+    },
     holder.activeTurnIdentity,
   );
   assert.deepEqual(
-    { dialogProcessId: dynamicSystem.dialogProcessId, turnScopeId: dynamicSystem.turnScopeId },
+    {
+      dialogProcessId: canonicalDynamicSystem.dialogProcessId,
+      turnScopeId: canonicalDynamicSystem.turnScopeId,
+    },
     holder.activeTurnIdentity,
   );
+  assert.equal(prepended.turnScopeId, undefined);
+  assert.equal(dynamicSystem.dialogProcessId, undefined);
   assert.deepEqual(
     { dialogProcessId: historical.dialogProcessId, turnScopeId: historical.turnScopeId },
     { dialogProcessId: "dialog-history", turnScopeId: "turn-history" },

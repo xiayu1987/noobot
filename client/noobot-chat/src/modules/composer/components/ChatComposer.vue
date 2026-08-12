@@ -14,6 +14,7 @@ import ComposerMoreOptions from "./ComposerMoreOptions.vue";
 import ComposerCameraDialog from "./ComposerCameraDialog.vue";
 import { useComposerMediaCapture } from "../composables/useComposerMediaCapture.js";
 import { useComposerOptions } from "../composables/useComposerOptions.js";
+import { sharedComposerOptionProps } from "../model/composerOptionProps.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { logResendDebug } from "../../debug/loggers/resendDebugLogger.js";
 
@@ -25,18 +26,8 @@ const props = defineProps({
   connected: { type: Boolean, default: false },
   sessionReady: { type: Boolean, default: false },
   canStop: { type: Boolean, default: false },
-  allowUserInteraction: { type: Boolean, default: true },
-  safeConfirm: { type: Boolean, default: true },
-  safeConfirmLevel: { type: String, default: "low" },
-  sanitizeOutput: { type: Boolean, default: true },
-  streamOutput: { type: Boolean, default: false },
-  botScenario: { type: String, default: "" },
+  ...sharedComposerOptionProps,
   scenarioOptions: { type: Array, default: () => [] },
-  selectedModel: { type: String, default: "" },
-  memoryModel: { type: String, default: "" },
-  modelOptions: { type: Array, default: () => [] },
-  pluginModelConfig: { type: Object, default: () => ({}) },
-  summaryPolicy: { type: Object, default: () => ({}) },
   availablePlugins: { type: Array, default: () => [] },
   selectedPlugins: { type: Array, default: () => [] },
   interactionActive: { type: Boolean, default: false },
@@ -55,6 +46,7 @@ const emit = defineEmits([
   "update:selectedModel",
   "update:memoryModel",
   "update:pluginModelConfig",
+  "update:frontendThresholdsEnabled",
   "update:summaryPolicy",
   "update:selectedPlugins",
   "update:morePanelVisible",
@@ -73,9 +65,7 @@ const { translate } = useLocale();
 
 const effectiveMorePanelVisible = computed({
   get: () =>
-    props.morePanelVisible === null
-      ? localMorePanelVisible.value
-      : Boolean(props.morePanelVisible),
+    props.morePanelVisible === null ? localMorePanelVisible.value : Boolean(props.morePanelVisible),
   set: (value) => {
     const nextVisible = Boolean(value);
     localMorePanelVisible.value = nextVisible;
@@ -113,9 +103,9 @@ const sendDisabledState = computed(() => {
       ? "disconnected"
       : sessionNotReady
         ? "sessionNotReady"
-      : blockedByMessageState
-        ? "lastMessageInFlight"
-        : "";
+        : blockedByMessageState
+          ? "lastMessageInFlight"
+          : "";
   return { disabled, disabledReason, inputLength, attachmentCount: attachmentCount.value };
 });
 const sendDisabled = computed(() => sendDisabledState.value.disabled);
@@ -136,14 +126,15 @@ const sendDisabledSignature = computed(() => {
 
 watch(
   sendDisabledSignature,
-  () => logResendDebug("ui.sendDisabled", () => ({
-    ...sendDisabledState.value,
-    connected: props.connected,
-    sending: props.sending,
-    userStopped: Boolean(props.composerActionState?.userStopped),
-    canStop: props.canStop,
-    interactionActive: props.interactionActive,
-  })),
+  () =>
+    logResendDebug("ui.sendDisabled", () => ({
+      ...sendDisabledState.value,
+      connected: props.connected,
+      sending: props.sending,
+      userStopped: Boolean(props.composerActionState?.userStopped),
+      canStop: props.canStop,
+      interactionActive: props.interactionActive,
+    })),
   { immediate: true, flush: "post" },
 );
 
@@ -315,10 +306,7 @@ defineExpose({
           <div class="more-panel noobot-overlay-card">
             <div class="more-actions-row noobot-overlay-card-header">
               <span class="more-panel-title">{{ translate("common.moreActions") }}</span>
-              <el-button
-                class="more-collapse-btn"
-                @click="effectiveMorePanelVisible = false"
-              >
+              <el-button class="more-collapse-btn" @click="effectiveMorePanelVisible = false">
                 <span>{{ translate("message.collapse") }}</span>
                 <el-icon><ArrowDown /></el-icon>
               </el-button>
@@ -342,6 +330,7 @@ defineExpose({
                 :memory-model="memoryModel"
                 :model-options="modelOptions"
                 :plugin-model-config="pluginModelConfig"
+                :frontend-thresholds-enabled="frontendThresholdsEnabled"
                 :summary-policy="summaryPolicy"
                 :normalized-scenario-options="normalizedScenarioOptions"
                 :selected-scenario-description="selectedScenarioDescription"
@@ -356,6 +345,9 @@ defineExpose({
                 @update:selected-model="emit('update:selectedModel', $event)"
                 @update:memory-model="emit('update:memoryModel', $event)"
                 @update:plugin-model-config="emit('update:pluginModelConfig', $event)"
+                @update:frontend-thresholds-enabled="
+                  emit('update:frontendThresholdsEnabled', $event)
+                "
                 @update:summary-policy="emit('update:summaryPolicy', $event)"
                 @select-scenario="onScenarioSelect"
                 @toggle-programming-scenario="onProgrammingScenarioToggle"
@@ -430,7 +422,11 @@ defineExpose({
 }
 
 .composer-wrapper.is-file-dragging .composer {
-  border-color: color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 58%, var(--noobot-panel-border, var(--noobot-panel-border)));
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 58%,
+    var(--noobot-panel-border, var(--noobot-panel-border))
+  );
   box-shadow: var(--noobot-focus-ring);
 }
 
@@ -478,7 +474,8 @@ defineExpose({
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden; overflow-y: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .more-actions-row {
@@ -503,8 +500,13 @@ defineExpose({
   min-height: 28px;
   padding: 0 10px;
   border-radius: var(--noobot-radius-pill);
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--noobot-panel-border)) 70%, transparent);
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--noobot-base-white)) 78%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--noobot-panel-border, var(--noobot-panel-border)) 70%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--noobot-surface-sidebar, var(--noobot-base-white)) 78%,
+    transparent
+  );
   color: var(--noobot-text-main, var(--noobot-text-strong));
   box-shadow: none;
   display: inline-flex;
@@ -513,7 +515,11 @@ defineExpose({
 }
 
 .more-collapse-btn:hover {
-  background: color-mix(in srgb, var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 10%, var(--noobot-surface-sidebar, var(--noobot-base-white)));
+  background: color-mix(
+    in srgb,
+    var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 10%,
+    var(--noobot-surface-sidebar, var(--noobot-base-white))
+  );
   color: var(--noobot-text-strong, var(--noobot-text-strong));
 }
 
@@ -577,5 +583,4 @@ defineExpose({
     padding: 10px;
   }
 }
-
 </style>

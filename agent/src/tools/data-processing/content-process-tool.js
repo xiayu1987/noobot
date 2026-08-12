@@ -233,5 +233,5 @@ export function createContentProcessTool({ agentContext }) {
     },
   });
 
-  return [processContentTaskTool];
+  return [...contentProcessTools, processContentTaskTool];
 }

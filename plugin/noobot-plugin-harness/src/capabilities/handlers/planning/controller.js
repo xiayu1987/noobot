@@ -22,10 +22,7 @@ import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine
 import { resolvePendingPlanUpdate } from "./plan-update-scheduler.js";
 import { LOCALE } from "../shared/constants.js";
 import { translateI18nText } from "../shared/i18n.js";
-import {
-  resolveWorkflowMode,
-  runWorkflowLifecycle,
-} from "../shared/workflow/pattern.js";
+import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
@@ -33,7 +30,8 @@ const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
 const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;
-const DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD = WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
+const DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD =
+  WORKFLOW_PARAMS.planning.planUpdate.triggerTurnsThreshold;
 const DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD =
   WORKFLOW_PARAMS.acceptance.phase.triggerTurnsThreshold;
 const PLANNING_THRESHOLD_SNAPSHOT_EVENT = "planning_threshold_snapshot";
@@ -58,11 +56,15 @@ function resolvePlanningTurnThresholds(ctx = {}, meta = {}) {
     : 0;
   return {
     mode: modeThresholds[thresholdMode] ? thresholdMode : "full",
-    planUpdateTriggerTurnsThreshold: runtimePlanUpdateThreshold || normalizePositiveInteger(
+    planUpdateTriggerTurnsThreshold:
+      runtimePlanUpdateThreshold ||
+      normalizePositiveInteger(
         scoped?.planUpdate?.triggerTurnsThreshold,
         DEFAULT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
       ),
-    phaseAcceptanceTriggerTurnsThreshold: runtimePhaseAcceptanceThreshold || normalizePositiveInteger(
+    phaseAcceptanceTriggerTurnsThreshold:
+      runtimePhaseAcceptanceThreshold ||
+      normalizePositiveInteger(
         scopedMode?.acceptance?.phase?.triggerTurnsThreshold,
         DEFAULT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
       ),
@@ -82,7 +84,8 @@ const PLANNING_REASON_LABEL_KEY = Object.freeze({
 });
 const PLANNING_BLOCKED_REASON_LABEL_KEY = Object.freeze({
   plan_update_blocked_by_pending_plan_update: "planningBlockedPlanUpdatePending",
-  phase_acceptance_blocked_by_higher_priority_pending: "planningBlockedPhaseAcceptanceHigherPriority",
+  phase_acceptance_blocked_by_higher_priority_pending:
+    "planningBlockedPhaseAcceptanceHigherPriority",
 });
 
 function resolvePlanningReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
@@ -97,10 +100,7 @@ function resolvePlanningBlockedReasonLabel(locale = LOCALE.ZH_CN, reason = "") {
   return translateI18nText(locale, key) || String(reason || "").trim();
 }
 
-function resolvePlanningTriggeredActions({
-  planUpdate = false,
-  phaseAcceptance = false,
-} = {}) {
+function resolvePlanningTriggeredActions({ planUpdate = false, phaseAcceptance = false } = {}) {
   const actions = [];
   if (planUpdate) {
     actions.push(PLANNING_DECISION.label.planUpdateRevision);
@@ -129,7 +129,12 @@ function consumePlanningTurnIncrement(state = {}, ctx = {}) {
 export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => true } = {}) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
     if (
-      [HOOK_POINT.AGENT.BEFORE_LLM_CALL, HOOK_POINT.AGENT.AFTER_LLM_CALL, HOOK_POINT.AGENT.AFTER_TOOL_CALLS, HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT].includes(point) &&
+      [
+        HOOK_POINT.AGENT.BEFORE_LLM_CALL,
+        HOOK_POINT.AGENT.AFTER_LLM_CALL,
+        HOOK_POINT.AGENT.AFTER_TOOL_CALLS,
+        HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+      ].includes(point) &&
       !shouldProcessPrimaryToolHooks(ctx)
     ) {
       return { capability, point, status: "active", changed: false };
@@ -139,8 +144,9 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       if (current?.state?.flags?.acceptanceCompleted === true) {
         return { capability, point, status: "active", changed: false };
       }
-      const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.PLANNING }) === true;
-      let setupChanged = invariantChanged;
+      const invariantChanged =
+        enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.PLANNING }) === true;
+      const setupChanged = invariantChanged;
       const holder = ensureHarnessBucket(ctx);
       const mode = resolveWorkflowMode(meta);
       let decisionReason = PLANNING_DECISION.reason.idle;
@@ -292,11 +298,12 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
       const normalizedPendingSnapshot = {
         summary: {
           active: pendingSnapshotRaw.summary === true,
-          reason: pendingSnapshotRaw.summary === true
-            ? (pendingSnapshotRaw.summaryByCharsPrompted === true
-              ? PLANNING_DECISION.label.summaryOverflow
-              : PLANNING_DECISION.label.summaryTurns)
-            : "",
+          reason:
+            pendingSnapshotRaw.summary === true
+              ? pendingSnapshotRaw.summaryByCharsPrompted === true
+                ? PLANNING_DECISION.label.summaryOverflow
+                : PLANNING_DECISION.label.summaryTurns
+              : "",
         },
         guidance: {
           active: Boolean(pendingSnapshotRaw.guidance),
@@ -316,7 +323,9 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         },
         phaseAcceptance: {
           active: pendingSnapshotRaw.phaseAcceptance === true,
-          blockedBy: blockedActions.includes(WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance)
+          blockedBy: blockedActions.includes(
+            WORKFLOW_PARAMS.acceptance.decisions.action.phaseAcceptance,
+          )
             ? ["summary_or_guidance_or_plan_update_or_planning_not_captured"]
             : [],
         },
@@ -326,7 +335,8 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         flags: {
           planningCaptured: pendingSnapshotRaw.planningCaptured === true,
           summaryByCharsPrompted: pendingSnapshotRaw.summaryByCharsPrompted === true,
-          overflowForceAcceptancePending: holder?.state?.flags?.overflowForceAcceptancePending === true,
+          overflowForceAcceptancePending:
+            holder?.state?.flags?.overflowForceAcceptancePending === true,
         },
       };
 
@@ -337,7 +347,10 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         resolveDecision: () => ({
           chosenAction: PLANNING_DECISION.action.planningBootstrap,
           chosenReason: decisionReason,
-          chosenReasonLabel: resolvePlanningReasonLabel(holder?.state?.locale || LOCALE.ZH_CN, decisionReason),
+          chosenReasonLabel: resolvePlanningReasonLabel(
+            holder?.state?.locale || LOCALE.ZH_CN,
+            decisionReason,
+          ),
           candidateActions,
           deferredActions: candidateActions,
           triggeredActions: candidateActions,

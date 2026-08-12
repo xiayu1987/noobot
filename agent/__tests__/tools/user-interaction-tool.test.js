@@ -16,21 +16,23 @@ test("user_interaction: should forward lifecycle/ackMode defaults to bridge", as
   const calls = [];
   const tools = createUserInteractionTool({
     agentContext: {
-      bindings: { runtime: {
-        userInteractionBridge: {
-          async requestUserInteraction(payload = {}) {
-            calls.push(payload);
-            return {
-              confirmTest: "yes",
-              response: "ok",
-            };
+      bindings: {
+        runtime: {
+          userInteractionBridge: {
+            async requestUserInteraction(payload = {}) {
+              calls.push(payload);
+              return {
+                confirmTest: "yes",
+                response: "ok",
+              };
+            },
+          },
+          systemRuntime: {
+            dialogProcessId: "dp-1",
+            sessionId: "s-1",
           },
         },
-        systemRuntime: {
-          dialogProcessId: "dp-1",
-          sessionId: "s-1",
-        },
-      } },
+      },
     },
   });
 
@@ -68,25 +70,58 @@ test("user_interaction: should forward lifecycle/ackMode defaults to bridge", as
   assert.equal(String(calls[0]?.interactionId || ""), "call-stable-1");
 });
 
+test("user_interaction: should forward explicit timeoutMs to bridge", async () => {
+  const calls = [];
+  const tools = createUserInteractionTool({
+    agentContext: {
+      bindings: {
+        runtime: {
+          userInteractionBridge: {
+            async requestUserInteraction(payload = {}) {
+              calls.push(payload);
+              return { response: "ok" };
+            },
+          },
+          systemRuntime: {
+            dialogProcessId: "dp-timeout",
+            sessionId: "s-timeout",
+          },
+        },
+      },
+    },
+  });
+
+  const tool = tools.find((item) => item?.name === "user_interaction");
+  assert.ok(tool, "user_interaction tool should exist");
+
+  const result = parseToolJson(await tool.invoke({ content: "please confirm", timeoutMs: 3000 }));
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.timeoutMs, 3000);
+});
+
 test("user_interaction: should tolerate unescaped quotes inside fields string descriptions", async () => {
   const calls = [];
   const tools = createUserInteractionTool({
     agentContext: {
-      bindings: { runtime: {
-        userInteractionBridge: {
-          async requestUserInteraction(payload = {}) {
-            calls.push(payload);
-            return {
-              contentPath: "/workspace/primary-user/input.pdf",
-              response: "ok",
-            };
+      bindings: {
+        runtime: {
+          userInteractionBridge: {
+            async requestUserInteraction(payload = {}) {
+              calls.push(payload);
+              return {
+                contentPath: "/workspace/primary-user/input.pdf",
+                response: "ok",
+              };
+            },
+          },
+          systemRuntime: {
+            dialogProcessId: "dp-quote",
+            sessionId: "s-quote",
           },
         },
-        systemRuntime: {
-          dialogProcessId: "dp-quote",
-          sessionId: "s-quote",
-        },
-      } },
+      },
     },
   });
 
@@ -106,6 +141,6 @@ test("user_interaction: should tolerate unescaped quotes inside fields string de
   assert.equal(calls[0]?.fields?.length, 2);
   assert.equal(
     calls[0].fields[1].description,
-    "可选：您希望从内容中提取什么信息，如\"提取文本内容\"、\"提取音频中的语音\"等，留空则默认提取全部文本",
+    '可选：您希望从内容中提取什么信息，如"提取文本内容"、"提取音频中的语音"等，留空则默认提取全部文本',
   );
 });

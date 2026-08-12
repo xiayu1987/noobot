@@ -3,11 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { resolveCapabilityModelMessages } from "../../src/capabilities/handlers/shared/model/utils.js";
-import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
+import { invokeCapabilityModel } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
   clearIncrementalCapabilityMessageCacheForContext,
   resolveIncrementalCapabilityMessages,
@@ -69,7 +70,6 @@ test("resolveDialogProcessIdFromContext reads the explicit hook identity", () =>
   assert.equal(dialogProcessId, "dlg_explicit");
 });
 
-
 test("resolveCapabilityModelMessages preserves authoritative resolver output without plugin-side filtering", () => {
   const resolved = resolveCapabilityModelMessages(
     {
@@ -82,7 +82,10 @@ test("resolveCapabilityModelMessages preserves authoritative resolver output wit
     },
     { ctx: { modelContext: { protocolVersion: 2 } } },
   );
-  assert.deepEqual(resolved.map((item) => item.content), ["keep-resolved", "summarized-resolved"]);
+  assert.deepEqual(
+    resolved.map((item) => item.content),
+    ["keep-resolved", "summarized-resolved"],
+  );
 });
 
 test("resolveCapabilityModelMessages delegates the authoritative modelContext to the injected resolver", () => {
@@ -104,8 +107,8 @@ test("resolveCapabilityModelMessages delegates the authoritative modelContext to
         modelContext: {
           protocolVersion: 2,
           messageBlocks: {
-          history: [{ role: "user", content: "history-from-block" }],
-          incremental: [{ role: "assistant", content: "incremental-from-block" }],
+            history: [{ role: "user", content: "history-from-block" }],
+            incremental: [{ role: "assistant", content: "incremental-from-block" }],
           },
         },
       },
@@ -114,10 +117,10 @@ test("resolveCapabilityModelMessages delegates the authoritative modelContext to
   );
 
   assert.equal(Object.hasOwn(capturedPayload, "messages"), false);
-  assert.deepEqual(resolved.map((item) => item.content), [
-    "history-from-block",
-    "incremental-from-block",
-  ]);
+  assert.deepEqual(
+    resolved.map((item) => item.content),
+    ["history-from-block", "incremental-from-block"],
+  );
 });
 
 test("buildModelMessagesWithStructuredEnvelope preserves provided agent messages without plugin-side filtering", () => {
@@ -134,12 +137,12 @@ test("buildModelMessagesWithStructuredEnvelope preserves provided agent messages
   assert.match(output[0].content, /drop/);
 });
 
-test("invokeWithReasoningRetry preserves provided messages before invoking capability model", async () => {
+test("invokeCapabilityModel preserves provided messages before invoking capability model", async () => {
   let capturedMessages = null;
-  const response = await invokeWithReasoningRetry({
+  const response = await invokeCapabilityModel({
     invoker: async ({ messages = [] } = {}) => {
       capturedMessages = messages;
-      return { content: "ok" };
+      return createTestModelResponse("ok");
     },
     invokePayload: {
       messages: [
@@ -149,21 +152,24 @@ test("invokeWithReasoningRetry preserves provided messages before invoking capab
     },
   });
 
-  assert.equal(response.content, "ok");
+  assert.equal(response.output.text, "ok");
   assert.equal(capturedMessages[0]?.role, "system");
   assert.match(capturedMessages[0]?.content, /禁止直接输出可执行脚本或命令/);
-  assert.deepEqual(capturedMessages.slice(1).map((item) => item.content), ["keep", "drop"]);
+  assert.deepEqual(
+    capturedMessages.slice(1).map((item) => item.content),
+    ["keep", "drop"],
+  );
 });
 
-test("invokeWithReasoningRetry reuses previous capability messages and appends current increment", async () => {
+test("invokeCapabilityModel reuses previous capability messages and appends current increment", async () => {
   const captured = [];
   const ctx = { sessionId: "incremental-cache-session-1" };
   const invoker = async ({ messages = [] } = {}) => {
     captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
-    return { content: "ok" };
+    return createTestModelResponse("ok");
   };
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "summary",
@@ -176,7 +182,7 @@ test("invokeWithReasoningRetry reuses previous capability messages and appends c
     },
   });
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "summary",
@@ -189,15 +195,13 @@ test("invokeWithReasoningRetry reuses previous capability messages and appends c
     },
   });
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "summary",
     invokePayload: {
       purpose: "summary",
-      messages: [
-        { role: "assistant", content: "a3" },
-      ],
+      messages: [{ role: "assistant", content: "a3" }],
     },
   });
 
@@ -214,10 +218,10 @@ test("incremental capability message cache can be cleared for summary reset", as
   const ctx = { sessionId: "incremental-cache-session-2" };
   const invoker = async ({ messages = [] } = {}) => {
     captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
-    return { content: "ok" };
+    return createTestModelResponse("ok");
   };
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "analysis",
@@ -230,7 +234,7 @@ test("incremental capability message cache can be cleared for summary reset", as
     },
   });
   clearIncrementalCapabilityMessageCacheForContext(ctx);
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "analysis",
@@ -268,10 +272,10 @@ test("incremental capability message cache is cleared when agent turn ends", asy
   };
   const invoker = async ({ messages = [] } = {}) => {
     captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
-    return { content: "ok" };
+    return createTestModelResponse("ok");
   };
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "analysis",
@@ -288,7 +292,7 @@ test("incremental capability message cache is cleared when agent turn ends", asy
   const nextCtx = { ...ctx, dialogProcessId: "turn-end-dialog-2" };
   markHarnessTurnLifecycle("agent.before_turn", nextCtx);
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx: nextCtx,
     purpose: "analysis",
@@ -313,10 +317,10 @@ test("incremental capability message cache keeps purpose lanes isolated", async 
   const ctx = { sessionId: "incremental-cache-purpose-isolation" };
   const invoker = async ({ messages = [] } = {}) => {
     captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
-    return { content: "ok" };
+    return createTestModelResponse("ok");
   };
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "summary",
@@ -325,7 +329,7 @@ test("incremental capability message cache keeps purpose lanes isolated", async 
       messages: [{ role: "system", content: "summary-sys" }],
     },
   });
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "analysis",
@@ -335,10 +339,7 @@ test("incremental capability message cache keeps purpose lanes isolated", async 
     },
   });
 
-  assert.deepEqual(captured, [
-    ["summary-sys"],
-    ["analysis-only"],
-  ]);
+  assert.deepEqual(captured, [["summary-sys"], ["analysis-only"]]);
   clearIncrementalCapabilityMessageCacheForContext(ctx);
 });
 
@@ -346,10 +347,10 @@ test("incremental capability message cache keeps sessions isolated", async () =>
   const captured = [];
   const invoker = async ({ messages = [] } = {}) => {
     captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
-    return { content: "ok" };
+    return createTestModelResponse("ok");
   };
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx: { sessionId: "incremental-cache-session-a" },
     purpose: "summary",
@@ -358,7 +359,7 @@ test("incremental capability message cache keeps sessions isolated", async () =>
       messages: [{ role: "system", content: "session-a-sys" }],
     },
   });
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx: { sessionId: "incremental-cache-session-b" },
     purpose: "summary",
@@ -368,10 +369,7 @@ test("incremental capability message cache keeps sessions isolated", async () =>
     },
   });
 
-  assert.deepEqual(captured, [
-    ["session-a-sys"],
-    ["session-b-only"],
-  ]);
+  assert.deepEqual(captured, [["session-a-sys"], ["session-b-only"]]);
   clearIncrementalCapabilityMessageCacheForContext({ sessionId: "incremental-cache-session-a" });
   clearIncrementalCapabilityMessageCacheForContext({ sessionId: "incremental-cache-session-b" });
 });
@@ -380,10 +378,10 @@ test("incremental capability message cache is disabled when session id is missin
   const captured = [];
   const invoker = async ({ messages = [] } = {}) => {
     captured.push(withoutNoScriptConstraint(messages).map((item = {}) => item.content));
-    return { content: "ok" };
+    return createTestModelResponse("ok");
   };
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     purpose: "summary",
     invokePayload: {
@@ -391,7 +389,7 @@ test("incremental capability message cache is disabled when session id is missin
       messages: [{ role: "system", content: "sys-without-session" }],
     },
   });
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     purpose: "summary",
     invokePayload: {
@@ -400,10 +398,7 @@ test("incremental capability message cache is disabled when session id is missin
     },
   });
 
-  assert.deepEqual(captured, [
-    ["sys-without-session"],
-    ["current-without-session"],
-  ]);
+  assert.deepEqual(captured, [["sys-without-session"], ["current-without-session"]]);
 });
 
 test("incremental capability message cache accepts full rebuilds with common prefix without duplicating", () => {
@@ -428,13 +423,14 @@ test("incremental capability message cache accepts full rebuilds with common pre
     ],
   });
 
-  assert.deepEqual(first.map((item) => item.content), ["stable-sys", "u1"]);
-  assert.deepEqual(second.map((item) => item.content), [
-    "stable-sys",
-    "u1",
-    "a2",
-    "protocol-v2",
-  ]);
+  assert.deepEqual(
+    first.map((item) => item.content),
+    ["stable-sys", "u1"],
+  );
+  assert.deepEqual(
+    second.map((item) => item.content),
+    ["stable-sys", "u1", "a2", "protocol-v2"],
+  );
   clearIncrementalCapabilityMessageCacheForContext(ctx);
 });
 
@@ -458,7 +454,10 @@ test("incremental capability message cache rebuilds when system prefix changes",
     ],
   });
 
-  assert.deepEqual(rebuilt.map((item) => item.content), ["new-sys", "new-u1"]);
+  assert.deepEqual(
+    rebuilt.map((item) => item.content),
+    ["new-sys", "new-u1"],
+  );
   clearIncrementalCapabilityMessageCacheForContext(ctx);
 });
 
@@ -478,12 +477,13 @@ test("incremental capability message cache stores clones instead of returned mes
   const second = resolveIncrementalCapabilityMessages({
     ctx,
     purpose: "summary",
-    messages: [
-      { role: "assistant", content: "a2" },
-    ],
+    messages: [{ role: "assistant", content: "a2" }],
   });
 
-  assert.deepEqual(second.map((item) => item.content), ["sys", "u1", "a2"]);
+  assert.deepEqual(
+    second.map((item) => item.content),
+    ["sys", "u1", "a2"],
+  );
   clearIncrementalCapabilityMessageCacheForContext(ctx);
 });
 
@@ -510,14 +510,10 @@ test("incremental capability message cache prefers explicit source ids over posi
     ],
   });
 
-  assert.deepEqual(resolved.map((item) => item.content), [
-    "protocol-v1",
-    "old source",
-    "request-v1",
-    "new source",
-    "protocol-v2",
-    "request-v2",
-  ]);
+  assert.deepEqual(
+    resolved.map((item) => item.content),
+    ["protocol-v1", "old source", "request-v1", "new source", "protocol-v2", "request-v2"],
+  );
   clearIncrementalCapabilityMessageCacheForContext(ctx);
 });
 
@@ -545,14 +541,17 @@ test("incremental capability message cache skips repeated system protocol but ap
     ],
   });
 
-  assert.deepEqual(resolved.map((item) => `${item.role}:${item.content}`), [
-    "system:stable protocol",
-    "system:stable policy",
-    "user:u1",
-    "user:flow user 1",
-    "assistant:a2",
-    "user:flow user 2",
-  ]);
+  assert.deepEqual(
+    resolved.map((item) => `${item.role}:${item.content}`),
+    [
+      "system:stable protocol",
+      "system:stable policy",
+      "user:u1",
+      "user:flow user 1",
+      "assistant:a2",
+      "user:flow user 2",
+    ],
+  );
   clearIncrementalCapabilityMessageCacheForContext(ctx);
 });
 
@@ -572,32 +571,43 @@ test("incremental capability message cache keeps origin-marked tool execution co
     purpose: "analysis",
     messages: [
       contextMessage({ role: "user", content: "first source moved" }, "m1"),
-      contextMessage({ role: "assistant", content: "工具调用：read_file /project/client/App.vue" }, "tool-call-1"),
-      contextMessage({ role: "assistant", content: "工具结果：读取到了 memoryModel 相关配置" }, "tool-result-1"),
+      contextMessage(
+        { role: "assistant", content: "工具调用：read_file /project/client/App.vue" },
+        "tool-call-1",
+      ),
+      contextMessage(
+        { role: "assistant", content: "工具结果：读取到了 memoryModel 相关配置" },
+        "tool-result-1",
+      ),
       protocolMessage({ role: "user", content: "request-v2" }, "request-v2"),
     ],
   });
 
-  assert.deepEqual(resolved.map((item) => item.content), [
-    "first source",
-    "request-v1",
-    "工具调用：read_file /project/client/App.vue",
-    "工具结果：读取到了 memoryModel 相关配置",
-    "request-v2",
-  ]);
+  assert.deepEqual(
+    resolved.map((item) => item.content),
+    [
+      "first source",
+      "request-v1",
+      "工具调用：read_file /project/client/App.vue",
+      "工具结果：读取到了 memoryModel 相关配置",
+      "request-v2",
+    ],
+  );
   clearIncrementalCapabilityMessageCacheForContext(ctx);
 });
 
-test("invokeWithReasoningRetry uses non-enumerable source markers and strips them before invoke", async () => {
+test("invokeCapabilityModel uses non-enumerable source markers and strips them before invoke", async () => {
   const captured = [];
   const ctx = { sessionId: "incremental-cache-nonenumerable-source-id" };
   const invoker = async ({ messages = [] } = {}) => {
-    captured.push(withoutNoScriptConstraint(messages).map((item = {}) => ({
-      content: item.content,
-      keys: Object.keys(item).sort(),
-      origin: item[HARNESS_MESSAGE_ORIGIN_FIELD],
-    })));
-    return { content: "ok" };
+    captured.push(
+      withoutNoScriptConstraint(messages).map((item = {}) => ({
+        content: item.content,
+        keys: Object.keys(item).sort(),
+        origin: item[HARNESS_MESSAGE_ORIGIN_FIELD],
+      })),
+    );
+    return createTestModelResponse("ok");
   };
   const firstSource = {
     role: "user",
@@ -610,7 +620,7 @@ test("invokeWithReasoningRetry uses non-enumerable source markers and strips the
     additional_kwargs: { noobotMessageId: "source-2" },
   };
 
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "analysis",
@@ -622,7 +632,7 @@ test("invokeWithReasoningRetry uses non-enumerable source markers and strips the
       }),
     },
   });
-  await invokeWithReasoningRetry({
+  await invokeCapabilityModel({
     invoker,
     ctx,
     purpose: "analysis",
@@ -635,10 +645,13 @@ test("invokeWithReasoningRetry uses non-enumerable source markers and strips the
     },
   });
 
-  assert.deepEqual(captured.map((items) => items.map((item) => item.content)), [
-    ["first source", "request-v1"],
-    ["first source", "request-v1", "second source", "request-v2"],
-  ]);
+  assert.deepEqual(
+    captured.map((items) => items.map((item) => item.content)),
+    [
+      ["first source", "request-v1"],
+      ["first source", "request-v1", "second source", "request-v2"],
+    ],
+  );
   assert.deepEqual(
     captured.flat().map((item) => ({
       keys: item.keys,
@@ -674,16 +687,11 @@ test("buildCapabilityModelMessages assigns origin to every capability message", 
 
   assert.equal(messages.length, 6);
   assert.ok(messages.every((message) => resolveMessageOrigin(message)));
-  assert.deepEqual(messages.map((message) => resolveMessageOrigin(message).kind), [
-    "protocol",
-    "context",
-    "context",
-    "context",
-    "protocol",
-    "protocol",
-  ]);
+  assert.deepEqual(
+    messages.map((message) => resolveMessageOrigin(message).kind),
+    ["protocol", "context", "context", "context", "protocol", "protocol"],
+  );
 });
-
 
 test("resolveCapabilityModelMessages requires the authoritative resolver", () => {
   assert.throws(
@@ -704,18 +712,32 @@ test("resolveCapabilityModelMessages does not filter resolver output or use payl
     },
     {
       ctx: {
-        modelContext: { protocolVersion: 2, messageBlocks: { system: [], history: [], incremental: [] } },
+        modelContext: {
+          protocolVersion: 2,
+          messageBlocks: { system: [], history: [], incremental: [] },
+        },
       },
       purpose: "analysis",
     },
   );
-  assert.deepEqual(resolved.map((item) => item.content), ["drop-resolver", "keep-resolver"]);
+  assert.deepEqual(
+    resolved.map((item) => item.content),
+    ["drop-resolver", "keep-resolver"],
+  );
 
   assert.throws(
-    () => resolveCapabilityModelMessages({}, {
-      ctx: { agentContext: { payload: { messages: { history: [{ role: "user", content: "payload" }] } } } },
-      purpose: "phase_acceptance",
-    }),
+    () =>
+      resolveCapabilityModelMessages(
+        {},
+        {
+          ctx: {
+            agentContext: {
+              payload: { messages: { history: [{ role: "user", content: "payload" }] } },
+            },
+          },
+          purpose: "phase_acceptance",
+        },
+      ),
     /authoritative modelContext resolver/,
   );
 });
@@ -734,7 +756,30 @@ test("buildModelMessagesWithStructuredEnvelope does not clip agent context in pl
   const agentContext = JSON.parse(jsonText);
   assert.deepEqual(
     agentContext.map((item) => item.content),
-    ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15", "m16", "m17", "m18", "m19", "m20", "m21", "m22"],
+    [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13",
+      "m14",
+      "m15",
+      "m16",
+      "m17",
+      "m18",
+      "m19",
+      "m20",
+      "m21",
+      "m22",
+    ],
   );
   assert.equal(output.at(-1).content, "task");
 });

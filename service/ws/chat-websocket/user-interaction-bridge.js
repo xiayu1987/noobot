@@ -10,12 +10,21 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
-import {
-  EVENT_TYPE,
-  validateInteractionRequestPayload,
-} from "@noobot/event-protocol";
+import { EVENT_TYPE, validateInteractionRequestPayload } from "@noobot/event-protocol";
 
 const USER_INTERACTION_TIMEOUT_MS = resolveUserInteractionTimeoutMs();
+
+function normalizeInteractionTimeoutMs(timeoutMs, fallbackTimeoutMs = USER_INTERACTION_TIMEOUT_MS) {
+  const normalizedFallbackTimeoutMs =
+    Number.isInteger(fallbackTimeoutMs) && fallbackTimeoutMs > 0
+      ? fallbackTimeoutMs
+      : USER_INTERACTION_TIMEOUT_MS;
+  const normalizedTimeoutMs = Number(timeoutMs);
+  if (!Number.isInteger(normalizedTimeoutMs) || normalizedTimeoutMs <= 0) {
+    return normalizedFallbackTimeoutMs;
+  }
+  return Math.min(normalizedTimeoutMs, normalizedFallbackTimeoutMs);
+}
 
 export function createUserInteractionBridge({
   sendEvent,
@@ -29,17 +38,20 @@ export function createUserInteractionBridge({
   const interactionRequestsByIdentity = new Map();
   const writeInteractionLifecycle = (event, data = {}) => {
     const currentRunMeta = getCurrentRunMeta();
-    void writeRoutedRuntimeEvent({
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.INTERACTION,
-      event,
-      userId: currentRunMeta?.userId || "",
-      sessionId: currentRunMeta?.sessionId || "",
-      dialogProcessId: currentRunMeta?.dialogProcessId || "",
-      turnScopeId: currentRunMeta?.turnScopeId || "",
-      data,
-    }, sessionLogConfig);
+    void writeRoutedRuntimeEvent(
+      {
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.INTERACTION,
+        event,
+        userId: currentRunMeta?.userId || "",
+        sessionId: currentRunMeta?.sessionId || "",
+        dialogProcessId: currentRunMeta?.dialogProcessId || "",
+        turnScopeId: currentRunMeta?.turnScopeId || "",
+        data,
+      },
+      sessionLogConfig,
+    );
   };
   const rejectAllPendingInteractions = (error) => {
     const currentRunMeta = getCurrentRunMeta();
@@ -47,18 +59,21 @@ export function createUserInteractionBridge({
       try {
         requestItem?.reject?.(error);
       } catch (rejectError) {
-        void writeRoutedRuntimeEvent({
-          source: "service",
-          channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-          category: RUNTIME_EVENT_CATEGORIES.INTERACTION,
-          level: "warn",
-          event: "service.websocket.pendingInteraction.reject.failed",
-          userId: currentRunMeta?.userId || "",
-          sessionId: currentRunMeta?.sessionId || "",
-          dialogProcessId: currentRunMeta?.dialogProcessId || "",
-          turnScopeId: currentRunMeta?.turnScopeId || "",
-          error: rejectError,
-        }, sessionLogConfig);
+        void writeRoutedRuntimeEvent(
+          {
+            source: "service",
+            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+            category: RUNTIME_EVENT_CATEGORIES.INTERACTION,
+            level: "warn",
+            event: "service.websocket.pendingInteraction.reject.failed",
+            userId: currentRunMeta?.userId || "",
+            sessionId: currentRunMeta?.sessionId || "",
+            dialogProcessId: currentRunMeta?.dialogProcessId || "",
+            turnScopeId: currentRunMeta?.turnScopeId || "",
+            error: rejectError,
+          },
+          sessionLogConfig,
+        );
       }
       clearTimeout(requestItem?.timer);
     }
@@ -85,6 +100,7 @@ export function createUserInteractionBridge({
       ackMode = "manual",
       resolvedBy = "",
       notification = {},
+      timeoutMs = undefined,
     } = {}) => {
       const normalizedInteractionId = String(interactionId || "").trim();
       const currentRunMeta = getCurrentRunMeta() || {};
@@ -92,9 +108,7 @@ export function createUserInteractionBridge({
       const normalizedDialogProcessId = String(
         dialogProcessId || currentRunMeta.dialogProcessId || "",
       ).trim();
-      const normalizedTurnScopeId = String(
-        turnScopeId || currentRunMeta.turnScopeId || "",
-      ).trim();
+      const normalizedTurnScopeId = String(turnScopeId || currentRunMeta.turnScopeId || "").trim();
       const interactionIdentityKey = normalizedInteractionId
         ? `${normalizedSessionId}::${normalizedInteractionId}`
         : "";
@@ -127,6 +141,7 @@ export function createUserInteractionBridge({
         timer: null,
         payload: null,
       };
+      const effectiveTimeoutMs = normalizeInteractionTimeoutMs(timeoutMs, interactionTimeoutMs);
       requestItem.promise = new Promise((resolveInteraction, rejectInteraction) => {
         const timer = setTimeout(() => {
           pendingInteractionRequests.delete(requestId);
@@ -137,7 +152,7 @@ export function createUserInteractionBridge({
             interactionId: normalizedInteractionId,
             requestId,
             reason: "timeout",
-            timeoutMs: interactionTimeoutMs,
+            timeoutMs: effectiveTimeoutMs,
           });
           sendEvent(EVENT_TYPE.INTERACTION_REQUEST, {
             ...requestItem.payload,
@@ -163,19 +178,21 @@ export function createUserInteractionBridge({
             requestId,
             lifecycle: "failed",
             reason: "timeout",
-            timeoutMs: interactionTimeoutMs,
+            timeoutMs: effectiveTimeoutMs,
             sendStarted: true,
           });
           rejectInteraction(error);
-        }, interactionTimeoutMs);
+        }, effectiveTimeoutMs);
 
         requestItem.timer = timer;
         writeInteractionLifecycle("service.websocket.interaction.timeoutScheduled", {
           interactionId: normalizedInteractionId,
           requestId,
-          timeoutMs: interactionTimeoutMs,
+          timeoutMs: effectiveTimeoutMs,
         });
         requestItem.resolve = (response) => {
+          clearTimeout(requestItem.timer);
+          pendingInteractionRequests.delete(requestId);
           requestItem.state = "resolved";
           requestItem.result = response;
           writeInteractionLifecycle("service.websocket.interaction.resolved", {
@@ -185,6 +202,8 @@ export function createUserInteractionBridge({
           resolveInteraction(response);
         };
         requestItem.reject = (error) => {
+          clearTimeout(requestItem.timer);
+          pendingInteractionRequests.delete(requestId);
           requestItem.state = "rejected";
           if (interactionIdentityKey) interactionRequestsByIdentity.delete(interactionIdentityKey);
           rejectInteraction(error);
@@ -208,17 +227,24 @@ export function createUserInteractionBridge({
           connectorName: String(connectorName || "").trim(),
           connectorType: String(connectorType || "").trim(),
           interactionType: String(interactionType || "").trim(),
-          lifecycle: String(lifecycle || "").trim().toLowerCase() || "pending",
-          ackMode: String(ackMode || "").trim().toLowerCase() || "manual",
-          resolvedBy: String(resolvedBy || "").trim().toLowerCase(),
+          lifecycle:
+            String(lifecycle || "")
+              .trim()
+              .toLowerCase() || "pending",
+          ackMode:
+            String(ackMode || "")
+              .trim()
+              .toLowerCase() || "manual",
+          resolvedBy: String(resolvedBy || "")
+            .trim()
+            .toLowerCase(),
           notification:
             notification && typeof notification === "object" && !Array.isArray(notification)
               ? notification
               : {},
+          timeoutMs: effectiveTimeoutMs,
           interactionData:
-            interactionData && typeof interactionData === "object"
-              ? interactionData
-              : {},
+            interactionData && typeof interactionData === "object" ? interactionData : {},
         };
         const validation = validateInteractionRequestPayload(requestItem.payload);
         if (!validation.valid) {
@@ -239,7 +265,9 @@ export function createUserInteractionBridge({
     },
     emitNotification: ({ eventName = "notification", data = {} } = {}) => {
       const normalizedEventName =
-        String(eventName || "").trim().toLowerCase() || "notification";
+        String(eventName || "")
+          .trim()
+          .toLowerCase() || "notification";
       const payload = data && typeof data === "object" ? data : {};
       sendEvent(normalizedEventName, payload);
       return Promise.resolve({

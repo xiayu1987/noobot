@@ -16,6 +16,7 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 function buildAgentContext(runtime = {}) {
   return {
     agentContext: createTestAgentExecutionScope({
+        basePath: "/tmp/noobot-test-workspace",
         globalConfig: {},
         userConfig: {},
         systemRuntime: {
@@ -34,7 +35,10 @@ test("工具初始化 smoke: plugin/data-processing/ai/execution/connectors", as
   assert.equal(fileTools[1]?.name, "write_file");
 
   const contentTools = createContentProcessTool(buildAgentContext());
-  assert.equal(contentTools[0]?.name, "process_content_task");
+  assert.deepEqual(
+    contentTools.map((tool) => tool?.name).sort(),
+    ["doc_to_data", "media_to_data", "process_content_task", "web_to_data"],
+  );
 
   const modelTools = createModelTool(buildAgentContext());
   assert.ok(modelTools.some((tool) => tool?.name === "switch_model"));

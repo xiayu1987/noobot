@@ -4,25 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
-import {
-  createChatModel,
-  createChatModelByName,
-  resolveDefaultModelSpec,
-  resolveModelSpecByName,
-} from "../../../models/index.js";
+import { resolveDefaultModelSpec, resolveModelSpecByName } from "../../../models/index.js";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 async function recordPlanJsonParseFallback({ runtime, event, error, hasMarkdownBlock }) {
   const userId = String(runtime?.userId || "").trim();
@@ -48,11 +42,7 @@ async function recordPlanJsonParseFallback({ runtime, event, error, hasMarkdownB
   );
 }
 
-export function createPlanMultiTaskCollaborationTool({
-  runtime,
-  globalConfig,
-  userConfig,
-}) {
+export function createPlanMultiTaskCollaborationTool({ runtime, globalConfig, userConfig }) {
   return new DynamicStructuredTool({
     name: TOOL_NAME.PLAN_MULTI_TASK_COLLABORATION,
     description: tTool(runtime, "tools.agent_collab.planDescription"),
@@ -69,62 +59,55 @@ export function createPlanMultiTaskCollaborationTool({
       }
 
       const runtimeModel = String(runtime?.runtimeModel || "").trim();
-      let llm;
-      let modelSpec = null;
-      if (runtimeModel) {
-        modelSpec = resolveModelSpecByName({
-          modelName: runtimeModel,
-          globalConfig,
-          userConfig,
-          fallbackToDefault: false,
-        });
-        if (modelSpec) {
-          llm = createChatModelByName(runtimeModel, {
+      const modelSpec = runtimeModel
+        ? resolveModelSpecByName({
+            modelName: runtimeModel,
             globalConfig,
             userConfig,
-            streaming: false,
-            context: { runtime },
-            invocation: {
-              flow: "tool.agent_collab",
-              purpose: "collaboration_plan",
-              domain: "collaboration",
-              contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
-            },
-          });
-        }
+            fallbackToDefault: false,
+          })
+        : resolveDefaultModelSpec({ globalConfig, userConfig });
+      if (!modelSpec) {
+        throw new Error(
+          runtimeModel
+            ? `runtime collaboration model not found: ${runtimeModel}`
+            : "collaboration model is not configured",
+        );
       }
-      if (!llm) {
-        modelSpec = resolveDefaultModelSpec({ globalConfig, userConfig });
-        llm = createChatModel({
-          globalConfig,
-          userConfig,
-          streaming: false,
-          context: { runtime },
-          invocation: {
-            flow: "tool.agent_collab",
-            purpose: "collaboration_plan",
-            domain: "collaboration",
-            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+      const modelPort = runtime?.modelPort;
+      if (!modelPort || typeof modelPort.invoke !== "function") {
+        throw new Error("collaboration planning requires runtime.modelPort");
+      }
+      const response = await modelPort.invoke({
+        model: modelSpec,
+        messages: [
+          {
+            role: "system",
+            content: [
+              tTool(runtime, "tools.agent_collab.planPrompt1"),
+              tTool(runtime, "tools.agent_collab.planPrompt2"),
+              tTool(runtime, "tools.agent_collab.planPrompt3"),
+              tTool(runtime, "tools.agent_collab.planPrompt4"),
+              tTool(runtime, "tools.agent_collab.planPrompt5"),
+            ].join("\n"),
           },
-        });
-      }
-
-      const res = await llm.invoke([
-        new SystemMessage(
-          [
-            tTool(runtime, "tools.agent_collab.planPrompt1"),
-            tTool(runtime, "tools.agent_collab.planPrompt2"),
-            tTool(runtime, "tools.agent_collab.planPrompt3"),
-            tTool(runtime, "tools.agent_collab.planPrompt4"),
-            tTool(runtime, "tools.agent_collab.planPrompt5"),
-          ].join("\n"),
-        ),
-        new HumanMessage(`${tTool(runtime, "tools.agent_collab.humanTaskPrefix")}\n${taskText}`),
-      ], { signal: runtime?.abortSignal || undefined });
-      const content =
-        typeof res?.content === "string"
-          ? res.content
-          : JSON.stringify(res?.content || "");
+          {
+            role: "user",
+            content: `${tTool(runtime, "tools.agent_collab.humanTaskPrefix")}\n${taskText}`,
+          },
+        ],
+        options: {
+          streaming: false,
+          signal: runtime?.abortSignal || undefined,
+        },
+        invocation: {
+          flow: "tool.agent_collab",
+          purpose: "collaboration_plan",
+          domain: "collaboration",
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+        },
+      });
+      const content = response.output.text;
 
       let parsedPlan = null;
       try {

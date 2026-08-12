@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { loadGlobalConfig } from "./global-config-loader.js";
-import { normalizeKnownConfigKeys } from "./key-normalizer.js";
-import { resolveConfigSecrets } from "./template-resolver.js";
+import { normalizeKnownConfigKeys } from "@noobot/agent-config-protocol";
+import { resolveConfigSecrets } from "./config-secret-resolver.js";
+import { normalizeConfiguredModelProviders } from "./model-config-normalizer.js";
 
 function cloneConfig(value) {
   if (value === null || value === undefined) return value;
@@ -143,9 +144,7 @@ export function createGlobalConfigBuilder({
         }
         if (Array.isArray(result.warnings)) {
           warnings.push(
-            ...result.warnings
-              .map((warning) => String(warning || "").trim())
-              .filter(Boolean),
+            ...result.warnings.map((warning) => String(warning || "").trim()).filter(Boolean),
           );
         }
       }
@@ -168,7 +167,7 @@ export function createGlobalConfigBuilder({
       loadOptions,
     };
     const migrationResult = await applyMigrations(rawConfig, buildContext);
-    const migratedRawConfig = migrationResult.config || {};
+    const migratedRawConfig = normalizeConfiguredModelProviders(migrationResult.config || {});
     const resolvedConfig = resolveConfigSecretsFn(migratedRawConfig, { configParams, env });
     resolvedConfig.configParams = { ...configParams };
     const warnings = await runValidators({

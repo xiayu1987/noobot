@@ -36,9 +36,7 @@
     },
     "service": {
       "hooks": {
-        "registers": [
-          "service.after_session_delete"
-        ],
+        "registers": ["service.after_session_delete"],
         "emits": []
       }
     },
@@ -75,9 +73,7 @@
       "session.delete.observe",
       "http.authenticated"
     ],
-    "authenticatedRoutes": [
-      "/api/internal/session/:userId/:sessionId/thinking-detail"
-    ]
+    "authenticatedRoutes": ["/api/internal/session/:userId/:sessionId/thinking-detail"]
   },
   "enabledByDefault": true
 }

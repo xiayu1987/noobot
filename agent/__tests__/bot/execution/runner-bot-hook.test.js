@@ -116,12 +116,17 @@ function createRunner({
     const result = await agentRunner(payload);
     if (!result || typeof result !== "object" || !String(result.output || "")) return result;
     const runtime = payload?.agentContext?.bindings?.runtime;
-    const messageId = String(runtime?.systemRuntime?.messageEventStream?.activeMessageId || "").trim();
+    const messageId = String(
+      runtime?.systemRuntime?.messageEventStream?.activeMessageId || "",
+    ).trim();
     if (!messageId) throw new Error("test Agent result requires the bound canonical messageId");
     const store = runtime.currentTurnMessages;
     for (const [index, message] of store.toArray().entries()) {
       const canonicalMessageId = canonicalMessageIdForTest(message, messageId);
-      store.updateWhere({ messageId: canonicalMessageId }, (_current, currentIndex) => currentIndex === index);
+      store.updateWhere(
+        { messageId: canonicalMessageId },
+        (_current, currentIndex) => currentIndex === index,
+      );
     }
     for (const message of Array.isArray(result.turnMessages) ? result.turnMessages : []) {
       const canonicalMessageId = canonicalMessageIdForTest(message, messageId);
@@ -140,10 +145,7 @@ function createRunner({
     if (assistantIndex === undefined) {
       store.push({ role: "assistant", type: "message", messageId, content: String(result.output) });
     } else {
-      store.updateWhere(
-        { messageId },
-        (_message, index) => index === assistantIndex,
-      );
+      store.updateWhere({ messageId }, (_message, index) => index === assistantIndex);
     }
     return {
       ...result,
@@ -152,7 +154,7 @@ function createRunner({
     };
   };
   const commitCanonicalUserMessage = async (payload = {}) => {
-    const result = await commitSessionTurn(payload) || {};
+    const result = (await commitSessionTurn(payload)) || {};
     const turnIdentity = String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_");
     const sourceAttachments = Array.isArray(result.attachments)
       ? result.attachments
@@ -165,8 +167,10 @@ function createRunner({
     const sourceUserMessage = result.userMessage || {};
     const messageUid = String(sourceUserMessage.messageUid || `sm_test_${turnIdentity}`).trim();
     const messageId = String(
-      sourceUserMessage.messageId || sourceUserMessage.id ||
-      payload?.runConfig?.userMessageId || `msg_user_test_${turnIdentity}`,
+      sourceUserMessage.messageId ||
+        sourceUserMessage.id ||
+        payload?.runConfig?.userMessageId ||
+        `msg_user_test_${turnIdentity}`,
     ).trim();
     return {
       ...result,
@@ -186,14 +190,17 @@ function createRunner({
         dialogProcessId: payload.dialogProcessId,
         parentDialogProcessId: payload.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
-        frontendUserMessage: sourceUserMessage.frontendUserMessage ?? payload.frontendUserMessage === true,
-        messageOrigin: sourceUserMessage.messageOrigin || (payload.frontendUserMessage === true ? "user" : "internal"),
+        frontendUserMessage:
+          sourceUserMessage.frontendUserMessage ?? payload.frontendUserMessage === true,
+        messageOrigin:
+          sourceUserMessage.messageOrigin ||
+          (payload.frontendUserMessage === true ? "user" : "internal"),
         attachments,
       },
     };
   };
   const assertCanonicalReusedUserMessage = async (payload = {}) => {
-    const result = await assertReusedUserTurnIdentity(payload) || {};
+    const result = (await assertReusedUserTurnIdentity(payload)) || {};
     return {
       ...result,
       userMessage: result.userMessage || {
@@ -243,17 +250,21 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
   const runtime = {
     attachmentMetas: [],
     currentTurnMessages: {
-      items: [{
-        messageUid: "sm_checkpoint",
-        role: "assistant",
-        type: "message",
-        content: "analysis",
-        presentationMessageId: "msg_chat_checkpoint",
-        chatPresentation: true,
-        activityTimeline: [{ eventId: "activity-checkpoint-1" }],
-        toolTimeline: [{ toolCallId: "tool-checkpoint-1" }],
-      }],
-      toArray() { return this.items.slice(); },
+      items: [
+        {
+          messageUid: "sm_checkpoint",
+          role: "assistant",
+          type: "message",
+          content: "analysis",
+          presentationMessageId: "msg_chat_checkpoint",
+          chatPresentation: true,
+          activityTimeline: [{ eventId: "activity-checkpoint-1" }],
+          toolTimeline: [{ toolCallId: "tool-checkpoint-1" }],
+        },
+      ],
+      toArray() {
+        return this.items.slice();
+      },
     },
   };
   const runtimeAgentContext = createTestAgentExecutionScope(runtime);
@@ -305,14 +316,16 @@ test("SessionExecutionRunner checkpoints current turn messages with scoped persi
       activityTimelineCount: 1,
       toolTimelineCount: 1,
       toolCallIds: ["tool-checkpoint-1"],
-      activityTimeline: [{
-        eventId: "activity-checkpoint-1",
-        activityKind: "",
-        sequence: 0,
-        sequenceDomain: "",
-        sequenceScopeId: "",
-        authority: "",
-      }],
+      activityTimeline: [
+        {
+          eventId: "activity-checkpoint-1",
+          activityKind: "",
+          sequence: 0,
+          sequenceDomain: "",
+          sequenceScopeId: "",
+          authority: "",
+        },
+      ],
     },
   );
 });
@@ -384,7 +397,9 @@ test("SessionExecutionRunner checkpoints only new or changed current-turn messag
     "sm_tool_1",
     "sm_tool_2",
   ]);
-  const checkpointEvents = events.filter((event) => event?.event === "timeline_checkpoint_persisted");
+  const checkpointEvents = events.filter(
+    (event) => event?.event === "timeline_checkpoint_persisted",
+  );
   assert.equal(checkpointEvents.length, 3);
   assert.equal(checkpointEvents.at(-1)?.data?.messageCount, 3);
   assert.equal(checkpointEvents.at(-1)?.data?.persistedMessageCount, 1);
@@ -496,15 +511,17 @@ test("SessionExecutionRunner validates scoped persistence identity before execut
     persistenceContext,
   });
 
-  assert.deepEqual(calls, [{
-    context: persistenceContext,
-    identity: {
-      userId: "u1",
-      sessionId: "child-1",
-      parentSessionId: "root-1",
-      scopeId: "agent:child-1",
+  assert.deepEqual(calls, [
+    {
+      context: persistenceContext,
+      identity: {
+        userId: "u1",
+        sessionId: "child-1",
+        parentSessionId: "root-1",
+        scopeId: "agent:child-1",
+      },
     },
-  }]);
+  ]);
 });
 
 test("SessionExecutionRunner emits bot orchestration hooks", async () => {
@@ -555,16 +572,18 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     "bot.after_agent_dispatch",
     "bot.after_session_run",
   ]);
-  assert.deepEqual(capturedBuildContextPayload?.userMessageAttachments, [{ attachmentId: "att1", sessionId: "s1" }]);
+  assert.deepEqual(capturedBuildContextPayload?.userMessageAttachments, [
+    { attachmentId: "att1", sessionId: "s1" },
+  ]);
   assert.equal(capturedBuildContextPayload?.attachmentMetas, undefined);
   assert.equal(
-    beforeDispatchContext?.agentContext?.bindings?.runtime
-      ?.systemRuntime?.messageEventStream?.activeMessageId,
+    beforeDispatchContext?.agentContext?.bindings?.runtime?.systemRuntime?.messageEventStream
+      ?.activeMessageId,
     beforeDispatchContext?.runConfig?.messageId,
   );
   assert.equal(
-    beforeDispatchContext?.agentContext?.bindings?.runtime
-      ?.systemRuntime?.messageEventStream?.activePresentationMessageId,
+    beforeDispatchContext?.agentContext?.bindings?.runtime?.systemRuntime?.messageEventStream
+      ?.activePresentationMessageId,
     beforeDispatchContext?.runConfig?.presentationMessageId,
   );
   assert.match(beforeDispatchContext?.runConfig?.messageId, /^msg_event_msg_/);
@@ -580,18 +599,22 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
     ],
   );
   assert.equal(beforeDispatchContext?.modelContext?.protocolVersion, 2);
-  assert.deepEqual({
-    ...beforeDispatchContext?.modelContext?.messageBlocks,
-    history: beforeDispatchContext?.modelContext?.messageBlocks?.history
-      .map(({ role, content }) => ({ role, content })),
-  }, {
-    system: [],
-    history: [
-      { role: "user", content: "history user" },
-      { role: "assistant", content: "history assistant" },
-    ],
-    incremental: [],
-  });
+  assert.deepEqual(
+    {
+      ...beforeDispatchContext?.modelContext?.messageBlocks,
+      history: beforeDispatchContext?.modelContext?.messageBlocks?.history.map(
+        ({ role, content }) => ({ role, content }),
+      ),
+    },
+    {
+      system: [],
+      history: [
+        { role: "user", content: "history user" },
+        { role: "assistant", content: "history assistant" },
+      ],
+      incremental: [],
+    },
+  );
 });
 
 test("before-dispatch capability events use the bound Turn message domain", async () => {
@@ -599,11 +622,6 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   const events = [];
   const capabilityModelInvoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
-    createChatModelFn: () => ({
-      async invoke() {
-        return { content: "WORKFLOW_DSL/1\nEND" };
-      },
-    }),
   });
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
     await capabilityModelInvoker({
@@ -615,10 +633,30 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   const runner = createRunner({
     botHookManager,
     prepareAgentTurnExecution: async ({ buildContextPayload = {} } = {}) => {
+      const turnScopeId = buildContextPayload.runConfig.turnScopeId;
+      const invocationIdentity = {
+        sessionId: buildContextPayload.sessionId,
+        parentSessionId: buildContextPayload.parentSessionId || "",
+        dialogProcessId: buildContextPayload.dialogProcessId,
+        turnScopeId,
+        runId: `agent:${turnScopeId}`,
+      };
+      const modelPort = {
+        async invoke() {
+          return { output: { text: "WORKFLOW_DSL/1\nEND" } };
+        },
+      };
       const runtimeAgentContext = createTestAgentExecutionScope({
         attachmentMetas: [],
         eventListener: buildContextPayload.eventListener,
-      });
+        modelHost: {
+          modelSpec: { alias: "test", model: "test", format: "openai_compatible" },
+          modelPort,
+          modelState: {},
+          invocationIdentity,
+        },
+        modelPort,
+      }, { identity: invocationIdentity });
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
   });
@@ -635,14 +673,11 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
     eventListener: { onEvent: (event) => events.push(event) },
   });
 
-  const thinkingEvent = events.find((item = {}) => (
-    item.event === "thinking" && item?.data?.event === "workflow_semantic_response"
-  ));
-  assert.equal(thinkingEvent?.data?.messageId, "message-workflow-semantic");
-  assert.equal(
-    thinkingEvent?.data?.presentationMessageId,
-    "presentation-workflow-semantic",
+  const thinkingEvent = events.find(
+    (item = {}) => item.event === "thinking" && item?.data?.event === "workflow_semantic_response",
   );
+  assert.equal(thinkingEvent?.data?.messageId, "message-workflow-semantic");
+  assert.equal(thinkingEvent?.data?.presentationMessageId, "presentation-workflow-semantic");
   assert.equal(thinkingEvent?.data?.sequence, 1);
   assert.equal(thinkingEvent?.data?.envelopeKind, "noobot.message_event");
   assert.equal(thinkingEvent?.data?.sequenceDomain, "message-event");
@@ -652,7 +687,9 @@ test("before-dispatch takeover can claim root processing before the hook complet
   const botHookManager = createTestBotHookManager();
   const lifecycleStates = [];
   let releaseHook;
-  const hookGate = new Promise((resolve) => { releaseHook = resolve; });
+  const hookGate = new Promise((resolve) => {
+    releaseHook = resolve;
+  });
   let claimedInsideHook = false;
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
     claimedInsideHook = ctx.claimAgentDispatch({ owner: "test_takeover", source: "test_takeover" });
@@ -688,18 +725,24 @@ test("before-dispatch takeover publishes immutable execution ownership metadata 
   const botHookManager = createTestBotHookManager();
   const lifecycleStates = [];
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
-    assert.equal(ctx.claimAgentDispatch({
-      owner: "workflow",
-      source: "workflow_takeover",
-      executionKind: "workflow",
-      origin: { type: "workflow", workflowRunId: "wf-1" },
-      stage: "planning",
-    }), true);
-    assert.equal(ctx.claimAgentDispatch({
-      source: "conflicting_takeover",
-      executionKind: "agent",
-      origin: { type: "chat" },
-    }), false);
+    assert.equal(
+      ctx.claimAgentDispatch({
+        owner: "workflow",
+        source: "workflow_takeover",
+        executionKind: "workflow",
+        origin: { type: "workflow", workflowRunId: "wf-1" },
+        stage: "planning",
+      }),
+      true,
+    );
+    assert.equal(
+      ctx.claimAgentDispatch({
+        source: "conflicting_takeover",
+        executionKind: "agent",
+        origin: { type: "chat" },
+      }),
+      false,
+    );
     return createBotDispatchHandled({
       owner: "workflow",
       result: createCanonicalHandledResult(ctx, "hook result"),
@@ -760,25 +803,26 @@ test("structured dispatch outcome routes exclusively to the workflow owner", asy
   });
 
   assert.equal(rootAgentCalls, 0);
-  assert.deepEqual(
-    events.find((event) => event?.event === "bot_dispatch_routed")?.data,
-    {
-      disposition: "handled",
-      owner: "workflow",
-      claimed: true,
-      claimedSource: "workflow_router",
-      executionKind: "workflow",
-      stage: "planning",
-      failureCode: "",
-    },
-  );
+  assert.deepEqual(events.find((event) => event?.event === "bot_dispatch_routed")?.data, {
+    disposition: "handled",
+    owner: "workflow",
+    claimed: true,
+    claimedSource: "workflow_router",
+    executionKind: "workflow",
+    stage: "planning",
+    failureCode: "",
+  });
 });
 
 test("a handled workflow failure terminates the root Turn without Agent fallback", async () => {
   const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
-    ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router", executionKind: "workflow" });
+    ctx.claimAgentDispatch({
+      owner: "workflow",
+      source: "workflow_router",
+      executionKind: "workflow",
+    });
     return createBotDispatchHandled({
       owner: "workflow",
       failure: { code: "WORKFLOW_NODE_FAILED", message: "node failed" },
@@ -793,7 +837,8 @@ test("a handled workflow failure terminates the root Turn without Agent fallback
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+    () =>
+      runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
     (error) => error?.code === "WORKFLOW_NODE_FAILED" && error?.dispatchOwner === "workflow",
   );
   assert.equal(rootAgentCalls, 0);
@@ -815,7 +860,8 @@ test("a claimed dispatch hook failure cannot fall back to the root Agent", async
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+    () =>
+      runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
     /workflow owner failed/,
   );
   assert.equal(rootAgentCalls, 0);
@@ -825,7 +871,11 @@ test("a claimed dispatch cannot pass the same task back to the root Agent", asyn
   const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, (ctx = {}) => {
-    ctx.claimAgentDispatch({ owner: "workflow", source: "workflow_router", executionKind: "workflow" });
+    ctx.claimAgentDispatch({
+      owner: "workflow",
+      source: "workflow_router",
+      executionKind: "workflow",
+    });
     return undefined;
   });
   const runner = createRunner({
@@ -837,7 +887,8 @@ test("a claimed dispatch cannot pass the same task back to the root Agent", asyn
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+    () =>
+      runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
     (error) => error?.code === "BOT_DISPATCH_CLAIM_RELEASE_FORBIDDEN",
   );
   assert.equal(rootAgentCalls, 0);
@@ -846,9 +897,9 @@ test("a claimed dispatch cannot pass the same task back to the root Agent", asyn
 test("a structured dispatch takeover must claim ownership before returning handled", async () => {
   const botHookManager = createTestBotHookManager();
   let rootAgentCalls = 0;
-  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, () => (
-    createBotDispatchHandled({ owner: "workflow", result: { output: "done" } })
-  ));
+  botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, () =>
+    createBotDispatchHandled({ owner: "workflow", result: { output: "done" } }),
+  );
   const runner = createRunner({
     botHookManager,
     agentRunner: async () => {
@@ -858,7 +909,8 @@ test("a structured dispatch takeover must claim ownership before returning handl
   });
 
   await assert.rejects(
-    () => runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
+    () =>
+      runner.runSession({ userId: "u1", sessionId: "s1", message: "workflow task", runConfig: {} }),
     (error) => error?.code === "BOT_DISPATCH_CLAIM_REQUIRED",
   );
   assert.equal(rootAgentCalls, 0);
@@ -872,16 +924,17 @@ test("runner failures expose the committed execution lifecycle snapshot", async 
   });
 
   await assert.rejects(
-    () => runner.runSession({
-      userId: "u1",
-      sessionId: "s1",
-      message: "task",
-      runConfig: {
-        executionId: "agent:child-1",
-        parentExecutionId: "workflow:root",
-        rootExecutionId: "workflow:root",
-      },
-    }),
+    () =>
+      runner.runSession({
+        userId: "u1",
+        sessionId: "s1",
+        message: "task",
+        runConfig: {
+          executionId: "agent:child-1",
+          parentExecutionId: "workflow:root",
+          rootExecutionId: "workflow:root",
+        },
+      }),
     (error) => {
       assert.equal(error?.lifecycle?.state, "failed");
       assert.equal(error?.lifecycle?.executionId, "agent:child-1");
@@ -1108,7 +1161,10 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
     },
   });
 
-  assert.deepEqual(calls.map((item) => item.type), ["assert", "assert", "prepare"]);
+  assert.deepEqual(
+    calls.map((item) => item.type),
+    ["assert", "assert", "prepare"],
+  );
   assert.deepEqual(calls[1].payload, {
     userId: "u1",
     sessionId: "s1",
@@ -1168,21 +1224,26 @@ test("SessionExecutionRunner preserves the precommitted reused Turn dialogProces
 
 test("SessionExecutionRunner rejects reused Turn execution without a precommitted dialogProcessId", async () => {
   const runner = createRunner();
-  await assert.rejects(runner.runSession({
-    userId: "u1",
-    sessionId: "s1",
-    message: "edited",
-    runConfig: {
-      reuseExistingUserTurn: true,
-      turnScopeId: "client-turn:edited",
-    },
-  }), (error) => error?.errorCode === "MISSING_REUSED_TURN_DIALOG_PROCESS_ID");
+  await assert.rejects(
+    runner.runSession({
+      userId: "u1",
+      sessionId: "s1",
+      message: "edited",
+      runConfig: {
+        reuseExistingUserTurn: true,
+        turnScopeId: "client-turn:edited",
+      },
+    }),
+    (error) => error?.errorCode === "MISSING_REUSED_TURN_DIALOG_PROCESS_ID",
+  );
 });
 
 test("SessionExecutionRunner emits bot error hooks", async () => {
   const botHookManager = createTestBotHookManager();
   const events = [];
-  botHookManager.on(HOOK_POINT.BOT.AGENT_DISPATCH_ERROR, () => events.push("bot.agent_dispatch_error"));
+  botHookManager.on(HOOK_POINT.BOT.AGENT_DISPATCH_ERROR, () =>
+    events.push("bot.agent_dispatch_error"),
+  );
   botHookManager.on(HOOK_POINT.BOT.SESSION_RUN_ERROR, () => events.push("bot.session_run_error"));
   const runner = createRunner({
     botHookManager,

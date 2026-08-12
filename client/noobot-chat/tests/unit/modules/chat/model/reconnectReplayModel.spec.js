@@ -9,6 +9,7 @@ import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   findLatestPendingAssistantAfterLastUser,
+  findRecoverableReconnectSessionId,
   findReconnectDoneEnvelopeWithMessages,
   findReusableMessageObject,
   isDialogProcessRecoverable,
@@ -38,36 +39,55 @@ describe("reconnectReplayModel", () => {
     });
     const runningBatch = createReplayBatch({ sessionId: "s-1", snapshot, snapshotSequence: 1 });
     expect(
-      isDialogProcessRecoverable(
-        { sessionId: "s-1", replayBatch: runningBatch },
-        [{ event: StreamEventEnum.DELTA, data: { text: "x" } }],
-      ),
+      isDialogProcessRecoverable({ sessionId: "s-1", replayBatch: runningBatch }, [
+        { event: StreamEventEnum.DELTA, data: { text: "x" } },
+      ]),
     ).toBe(true);
 
     expect(
       isDialogProcessRecoverable(
-        { sessionId: "s-1", replayBatch: createReplayBatch({
+        {
           sessionId: "s-1",
-          snapshot: createTurnLifecycleSnapshot({
-            commandId: "command-stopped", sessionId: "s-1", sequence: 1,
-            activeTurnScopeId: "turn-stopped",
-            activeTurn: { sessionId: "s-1", turnScopeId: "turn-stopped", messageId: "m-stopped", presentationMessageId: "p-stopped", revision: 1, sequence: 1, state: "stop_completed" },
-          }), snapshotSequence: 1,
-        }) },
+          replayBatch: createReplayBatch({
+            sessionId: "s-1",
+            snapshot: createTurnLifecycleSnapshot({
+              commandId: "command-stopped",
+              sessionId: "s-1",
+              sequence: 1,
+              activeTurnScopeId: "turn-stopped",
+              activeTurn: {
+                sessionId: "s-1",
+                turnScopeId: "turn-stopped",
+                messageId: "m-stopped",
+                presentationMessageId: "p-stopped",
+                revision: 1,
+                sequence: 1,
+                state: "stop_completed",
+              },
+            }),
+            snapshotSequence: 1,
+          }),
+        },
         [{ event: StreamEventEnum.DELTA, data: { text: "history" } }],
       ),
     ).toBe(false);
 
     expect(
       isDialogProcessRecoverable(
-        { sessionId: "s-1", replayBatch: createReplayBatch({ sessionId: "s-1", snapshot: null, snapshotSequence: 0 }) },
+        {
+          sessionId: "s-1",
+          replayBatch: createReplayBatch({ sessionId: "s-1", snapshot: null, snapshotSequence: 0 }),
+        },
         [{ event: StreamEventEnum.DELTA, data: { text: "x" } }],
       ),
     ).toBe(false);
 
     expect(
       isDialogProcessRecoverable(
-        { sessionId: "s-1", replayBatch: createReplayBatch({ sessionId: "s-1", snapshot: null, snapshotSequence: 0 }) },
+        {
+          sessionId: "s-1",
+          replayBatch: createReplayBatch({ sessionId: "s-1", snapshot: null, snapshotSequence: 0 }),
+        },
         [
           { event: "message", data: {} },
           { event: StreamEventEnum.DELTA, data: { text: "history" } },
@@ -77,10 +97,23 @@ describe("reconnectReplayModel", () => {
 
     expect(
       isDialogProcessRecoverable(
-        { sessionId: "s-1", replayBatch: createReplayBatch({
-          sessionId: "s-1", snapshot: null, snapshotSequence: 0,
-          pendingInteractions: [{ requestId: "request-1", sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1", payload: { type: "confirm" } }],
-        }) },
+        {
+          sessionId: "s-1",
+          replayBatch: createReplayBatch({
+            sessionId: "s-1",
+            snapshot: null,
+            snapshotSequence: 0,
+            pendingInteractions: [
+              {
+                requestId: "request-1",
+                sessionId: "s-1",
+                dialogProcessId: "dp-1",
+                turnScopeId: "turn-1",
+                payload: { type: "confirm" },
+              },
+            ],
+          }),
+        },
         [
           {
             event: StreamEventEnum.INTERACTION_REQUEST,
@@ -91,12 +124,61 @@ describe("reconnectReplayModel", () => {
     ).toBe(true);
   });
 
+  it("findRecoverableReconnectSessionId keeps the authoritative current session when present", () => {
+    const currentIdle = {
+      sessionId: "s-current",
+      replayBatch: createReplayBatch({
+        sessionId: "s-current",
+        snapshot: createTurnLifecycleSnapshot({
+          commandId: "command-current",
+          sessionId: "s-current",
+          sequence: 1,
+          activeTurnScopeId: "",
+          activeTurn: null,
+        }),
+        snapshotSequence: 1,
+      }),
+    };
+    const otherRecoverable = {
+      sessionId: "s-other",
+      replayBatch: createReplayBatch({
+        sessionId: "s-other",
+        snapshot: createTurnLifecycleSnapshot({
+          commandId: "command-other",
+          sessionId: "s-other",
+          sequence: 2,
+          activeTurnScopeId: "turn-other",
+          activeTurn: {
+            sessionId: "s-other",
+            turnScopeId: "turn-other",
+            messageId: "message-other",
+            presentationMessageId: "presentation-other",
+            revision: 1,
+            sequence: 2,
+            state: "processing",
+          },
+        }),
+        snapshotSequence: 2,
+      }),
+    };
+
+    expect(findRecoverableReconnectSessionId([currentIdle, otherRecoverable], "s-current")).toBe(
+      "s-current",
+    );
+  });
+
   it("splitReconnectMessagesByDialogProcessId splits mixed batches", () => {
     const groups = splitReconnectMessagesByDialogProcessId([
-      { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-1", turnScopeId: "turn-1", text: "a" } },
+      {
+        event: StreamEventEnum.DELTA,
+        data: { dialogProcessId: "dp-1", turnScopeId: "turn-1", text: "a" },
+      },
       { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-2", text: "b" } },
       { event: "message", data: { dialogProcessId: "dp-1", turnScopeId: "turn-1" } },
-      { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-1", turnScopeId: "turn-2", text: "c" } },
+      {
+        event: StreamEventEnum.DELTA,
+        data: { dialogProcessId: "dp-1", turnScopeId: "turn-2", text: "c" },
+      },
     ]);
 
     expect(groups).toHaveLength(3);
@@ -133,7 +215,6 @@ describe("reconnectReplayModel", () => {
       content: "partial",
       pending: true,
       channelState: { state: "sending", createdAt: startedAt, createdAtMs: Date.parse(startedAt) },
-      thinkingStartedAt: startedAt,
       thinkingStartedAt: startedAt,
     };
 
@@ -189,15 +270,28 @@ describe("reconnectReplayModel", () => {
 
   it("patchMessageObjectPreservingUiState merges distinct V2 transfer envelopes", () => {
     const makeEnvelope = (id) => ({
-      protocol: "noobot.semantic-transfer", version: 2, transferId: `transfer-${id}`, messageId: "message-1",
-      identity: { sessionId: "session-transfer", turnScopeId: "turn-1", runId: "run-1", producer: { type: "tool", id: `call-${id}` } },
-      direction: "output", payload: { mode: "direct", content: id },
-      intent: { source: "tool", reason: "test", scenario: "tool", strategy: "test" }, meta: {},
+      protocol: "noobot.semantic-transfer",
+      version: 2,
+      transferId: `transfer-${id}`,
+      messageId: "message-1",
+      identity: {
+        sessionId: "session-transfer",
+        turnScopeId: "turn-1",
+        runId: "run-1",
+        producer: { type: "tool", id: `call-${id}` },
+      },
+      direction: "output",
+      payload: { mode: "direct", content: id },
+      intent: { source: "tool", reason: "test", scenario: "tool", strategy: "test" },
+      meta: {},
     });
     const existingTransferEnvelope = makeEnvelope("old");
     const incomingTransferEnvelope = makeEnvelope("new");
     const target = { role: RoleEnum.ASSISTANT, transferEnvelopes: [existingTransferEnvelope] };
-    patchMessageObjectPreservingUiState(target, { role: RoleEnum.ASSISTANT, transferEnvelopes: [incomingTransferEnvelope] });
+    patchMessageObjectPreservingUiState(target, {
+      role: RoleEnum.ASSISTANT,
+      transferEnvelopes: [incomingTransferEnvelope],
+    });
     expect(target.transferEnvelopes).toEqual([existingTransferEnvelope, incomingTransferEnvelope]);
   });
 
@@ -215,30 +309,55 @@ describe("reconnectReplayModel", () => {
 
   it("findReusableMessageObject reuses assistant only by presentationMessageId", () => {
     const existing = [
-      { role: RoleEnum.ASSISTANT, presentationMessageId: "presentation-1", dialogProcessId: "dp-1", turnScopeId: "turn-1", content: "old" },
-      { role: RoleEnum.ASSISTANT, presentationMessageId: "presentation-2", dialogProcessId: "dp-2", turnScopeId: "turn-2", content: "other" },
+      {
+        role: RoleEnum.ASSISTANT,
+        presentationMessageId: "presentation-1",
+        dialogProcessId: "dp-1",
+        turnScopeId: "turn-1",
+        content: "old",
+      },
+      {
+        role: RoleEnum.ASSISTANT,
+        presentationMessageId: "presentation-2",
+        dialogProcessId: "dp-2",
+        turnScopeId: "turn-2",
+        content: "other",
+      },
     ];
     const reusable = findReusableMessageObject(
-      { role: RoleEnum.ASSISTANT, presentationMessageId: "presentation-2", dialogProcessId: "dp-2", turnScopeId: "turn-2", content: "new" },
+      {
+        role: RoleEnum.ASSISTANT,
+        presentationMessageId: "presentation-2",
+        dialogProcessId: "dp-2",
+        turnScopeId: "turn-2",
+        content: "new",
+      },
       existing,
     );
     expect(reusable).toBe(existing[1]);
   });
 
   it("findReusableMessageObject does not guess assistant identity from a shared turn", () => {
-    const existing = [{
-      role: RoleEnum.ASSISTANT,
-      presentationMessageId: "presentation-existing",
-      turnScopeId: "turn-shared",
-      toolTimeline: [{ key: "call:complete", args: { path: "README.md" } }],
-    }];
+    const existing = [
+      {
+        role: RoleEnum.ASSISTANT,
+        presentationMessageId: "presentation-existing",
+        turnScopeId: "turn-shared",
+        toolTimeline: [{ key: "call:complete", args: { path: "README.md" } }],
+      },
+    ];
 
-    expect(findReusableMessageObject({
-      role: RoleEnum.ASSISTANT,
-      presentationMessageId: "presentation-next",
-      turnScopeId: "turn-shared",
-      toolCalls: [{ name: "read_file" }],
-    }, existing)).toBeNull();
+    expect(
+      findReusableMessageObject(
+        {
+          role: RoleEnum.ASSISTANT,
+          presentationMessageId: "presentation-next",
+          turnScopeId: "turn-shared",
+          toolCalls: [{ name: "read_file" }],
+        },
+        existing,
+      ),
+    ).toBeNull();
     expect(existing[0].toolTimeline[0].args).toEqual({ path: "README.md" });
   });
 
@@ -321,19 +440,39 @@ describe("reconnectReplayModel", () => {
 
   it("findReusableMessageObject rejects dialogProcessId reuse when turn identity conflicts", () => {
     const existing = [
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", turnScopeId: "client-old", content: "old" },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", turnScopeId: "turn-old", content: "other" },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-1",
+        turnScopeId: "client-old",
+        content: "old",
+      },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-2",
+        turnScopeId: "turn-old",
+        content: "other",
+      },
     ];
 
     expect(
       findReusableMessageObject(
-        { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-1", turnScopeId: "client-new", content: "new" },
+        {
+          role: RoleEnum.ASSISTANT,
+          dialogProcessId: "dp-1",
+          turnScopeId: "client-new",
+          content: "new",
+        },
         existing,
       ),
     ).toBeNull();
     expect(
       findReusableMessageObject(
-        { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-2", turnScopeId: "turn-new", content: "new" },
+        {
+          role: RoleEnum.ASSISTANT,
+          dialogProcessId: "dp-2",
+          turnScopeId: "turn-new",
+          content: "new",
+        },
         existing,
       ),
     ).toBeNull();

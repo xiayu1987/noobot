@@ -5,13 +5,8 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ChatOpenAI } from "@langchain/openai";
-
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
-import {
-  applyBoundToolModelRequestOverridesToLlm,
-  resolveBoundToolModelRequestOverrides,
-} from "../../../src/runtime/turn/tool-choice-strategy.js";
+import { resolveBoundToolModelRequestOverrides } from "../../../src/runtime/turn/tool-choice-strategy.js";
 import { createBoundLlmToolChoiceInvoker } from "../../../src/runtime/turn/tool-invoke-strategy.js";
 import {
   createTestTurnMessagesStore,
@@ -20,6 +15,10 @@ import {
 
 function runFunctionCallLoop(args = {}) {
   prepareTestTurnExecution(args.modelState, args.loopState, "orchestrator-model-overrides");
+  args.loopState.modelContext.activeTurnIdentity = {
+    dialogProcessId: "dialog-1",
+    turnScopeId: args.modelState.runtime.systemRuntime.turnScopeId,
+  };
   return runFunctionCallLoopProduction(args);
 }
 
@@ -27,35 +26,30 @@ function delay(ms = 0) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
 }
 
-function createToolCallingLlm(responses = []) {
+function createToolCallingModelPort(responses = []) {
   const capturedInvocations = [];
-  const capturedBindOptions = [];
   const capturedNoToolInvokeOptions = [];
   let invokeIndex = 0;
-  const llm = {
-    bindTools(_tools = [], bindOptions = {}) {
-      capturedBindOptions.push(bindOptions);
-      return {
-        async invoke(messages = [], options = {}) {
-          capturedInvocations.push(messages);
-          capturedNoToolInvokeOptions.push(options);
-          const next = responses[invokeIndex] || responses[responses.length - 1] || {};
-          invokeIndex += 1;
-          if (next instanceof Error) throw next;
-          return next;
-        },
-      };
-    },
-    async invoke(messages = [], options = {}) {
-      capturedInvocations.push(messages);
-      capturedNoToolInvokeOptions.push(options);
+  const modelPort = {
+    async invoke(request = {}) {
+      capturedInvocations.push(request);
+      capturedNoToolInvokeOptions.push(request.options?.invoke || {});
       const next = responses[invokeIndex] || responses[responses.length - 1] || {};
       invokeIndex += 1;
       if (next instanceof Error) throw next;
-      return next;
+      return {
+        output: {
+          text: String(next.text ?? next.content ?? ""),
+          toolCalls: Array.isArray(next.toolCalls)
+            ? next.toolCalls
+            : Array.isArray(next.tool_calls)
+              ? next.tool_calls
+              : [],
+        },
+      };
     },
   };
-  return { llm, capturedInvocations, capturedBindOptions, capturedNoToolInvokeOptions };
+  return { modelPort, capturedInvocations, capturedNoToolInvokeOptions };
 }
 
 function createLoopState({ maxTurns = 1, tool = null } = {}) {
@@ -79,17 +73,20 @@ function createLoopState({ maxTurns = 1, tool = null } = {}) {
   };
 }
 
-function createModelState(llm, defaultModelSpec = null) {
+function createModelState(modelPort, defaultModelSpec = null) {
   const resolvedModelSpec =
     defaultModelSpec && typeof defaultModelSpec === "object"
       ? defaultModelSpec
       : { alias: "test_alias", model: "test-model" };
   const modelState = {
-    llm,
+    modelPort,
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
     eventListener: null,
     runtime: {
+      runConfig: {
+        executionId: "run-orchestrator-model-overrides",
+      },
       systemRuntime: {
         config: { safeConfirm: true },
       },
@@ -121,10 +118,10 @@ test("auto tool_choice should apply bound tool dashscope request overrides", asy
     name: "execute_script",
     async invoke() {
       toolInvokeCount += 1;
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
-  const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
+  const { modelPort, capturedNoToolInvokeOptions } = createToolCallingModelPort([
     {
       content: "",
       tool_calls: [{ id: "call_1", name: "execute_script", args: {} }],
@@ -140,7 +137,7 @@ test("auto tool_choice should apply bound tool dashscope request overrides", asy
   ]);
 
   const result = await runFunctionCallLoop({
-    modelState: createModelState(llm, { format: "dashscope", model: "qwen3.6-plus" }),
+    modelState: createModelState(modelPort, { format: "dashscope", model: "qwen3.6-plus" }),
     loopState: createLoopState({ maxTurns: 1, tool }),
     turn: 1,
   });
@@ -177,66 +174,14 @@ test("bound tool requests default openai_compatible reasoning_effort to low", ()
   );
 });
 
-test("bound ChatOpenAI request params force openai_compatible reasoning_effort low", () => {
-  const tool = {
-    type: "function",
-    function: {
-      name: "execute_script",
-      description: "execute script",
-      parameters: { type: "object", properties: {} },
-    },
-  };
-  const llm = new ChatOpenAI({
-    apiKey: "test-key",
-    configuration: { baseURL: "http://localhost" },
-    model: "gpt-5.5",
-    modelKwargs: { reasoning_effort: "high" },
-    reasoning: { effort: "high" },
-  });
-  const bound = llm.bindTools([tool]);
-
-  applyBoundToolModelRequestOverridesToLlm(bound, { reasoning_effort: "low" });
-
-  assert.equal(llm.invocationParams({}).reasoning_effort, "high");
-  assert.equal(bound.invocationParams({}).reasoning_effort, "low");
-});
-
-test("bound ChatOpenAI request params force dashscope thinking off", () => {
-  const tool = {
-    type: "function",
-    function: {
-      name: "execute_script",
-      description: "execute script",
-      parameters: { type: "object", properties: {} },
-    },
-  };
-  const llm = new ChatOpenAI({
-    apiKey: "test-key",
-    configuration: { baseURL: "http://localhost" },
-    model: "qwen3.6-plus",
-    modelKwargs: { preserve_thinking: true, thinking_budget: 1024 },
-  });
-  const bound = llm.bindTools([tool]);
-
-  applyBoundToolModelRequestOverridesToLlm(bound, {
-    preserve_thinking: false,
-    thinking_budget: 0,
-  });
-
-  assert.equal(llm.invocationParams({}).preserve_thinking, true);
-  assert.equal(llm.invocationParams({}).thinking_budget, 1024);
-  assert.equal(bound.invocationParams({}).preserve_thinking, false);
-  assert.equal(bound.invocationParams({}).thinking_budget, 0);
-});
-
 test("bound tool openai_compatible request overrides are passed to invoke options", async () => {
   const tool = {
     name: "execute_script",
     async invoke() {
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
-  const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
+  const { modelPort, capturedNoToolInvokeOptions } = createToolCallingModelPort([
     {
       content: "完成",
       tool_calls: [],
@@ -246,7 +191,7 @@ test("bound tool openai_compatible request overrides are passed to invoke option
   ]);
 
   const result = await runFunctionCallLoop({
-    modelState: createModelState(llm, {
+    modelState: createModelState(modelPort, {
       format: "openai_compatible",
       model: "gpt-5.5",
       reasoning_effort: "high",
@@ -261,7 +206,7 @@ test("bound tool openai_compatible request overrides are passed to invoke option
 });
 
 test("bound tool overrides use active model spec when it differs from default spec", async () => {
-  const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
+  const { modelPort, capturedNoToolInvokeOptions } = createToolCallingModelPort([
     {
       content: "完成",
       tool_calls: [],
@@ -269,7 +214,7 @@ test("bound tool overrides use active model spec when it differs from default sp
       response_metadata: {},
     },
   ]);
-  const modelState = createModelState(llm, { format: "dashscope", model: "qwen3.6-plus" });
+  const modelState = createModelState(modelPort, { format: "dashscope", model: "qwen3.6-plus" });
   modelState.activeModelSpec = {
     format: "openai_compatible",
     model: "gpt-5.5",
@@ -278,7 +223,6 @@ test("bound tool overrides use active model spec when it differs from default sp
   const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
     adaptedBinding: { bindOptions: { tool_choice: "auto" } },
     boundTools: [{ name: "execute_script" }],
-    invokeLlm: llm,
     messages: [],
     modelState,
     runtime: modelState.runtime,

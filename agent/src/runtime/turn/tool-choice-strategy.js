@@ -3,10 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { emitEvent } from "../../events/index.js";
-import { createChatModelFromSpec, resolveInvokeLlm } from "../../models/index.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { normalizeProviderFormat, PROVIDER_FORMAT } from "../../config/core/enums.js";
+import { normalizeProviderFormat, PROVIDER_FORMAT } from "@noobot/agent-config-protocol";
 
 export function resolveBoundToolModelRequestOverrides(modelSpec = {}) {
   const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
@@ -21,98 +19,6 @@ export function resolveBoundToolModelRequestOverrides(modelSpec = {}) {
   }
   return {};
 }
-
-export function applyBoundToolModelRequestOverridesToLlm(llm, overrides = {}) {
-  if (!llm || typeof llm !== "object" || !overrides || typeof overrides !== "object") {
-    return llm;
-  }
-  const entries = Object.entries(overrides);
-  if (!entries.length) return llm;
-
-  const applyInvocationParamsPatch = (target) => {
-    if (!target || typeof target !== "object" || typeof target.invocationParams !== "function") {
-      return;
-    }
-    if (target.__noobotBoundToolRequestOverridesPatched === true) {
-      target.__noobotBoundToolRequestOverrides = {
-        ...(target.__noobotBoundToolRequestOverrides || {}),
-        ...overrides,
-      };
-      return;
-    }
-    const originalInvocationParams = target.invocationParams.bind(target);
-    target.__noobotBoundToolRequestOverrides = { ...overrides };
-    target.__noobotBoundToolRequestOverridesPatched = true;
-    target.invocationParams = function invocationParamsWithBoundToolOverrides(...args) {
-      const params = originalInvocationParams(...args);
-      const currentOverrides = this.__noobotBoundToolRequestOverrides || {};
-      const nextParams = {
-        ...(params && typeof params === "object" ? params : {}),
-        ...currentOverrides,
-      };
-      if (Object.prototype.hasOwnProperty.call(currentOverrides, "reasoning_effort")) {
-        if (nextParams.reasoning && typeof nextParams.reasoning === "object") {
-          nextParams.reasoning = {
-            ...nextParams.reasoning,
-            effort: currentOverrides.reasoning_effort,
-          };
-        }
-        nextParams.reasoning_effort = currentOverrides.reasoning_effort;
-      }
-      return nextParams;
-    };
-  };
-
-  const currentModelKwargs =
-    llm.modelKwargs && typeof llm.modelKwargs === "object" && !Array.isArray(llm.modelKwargs)
-      ? llm.modelKwargs
-      : {};
-  llm.modelKwargs = {
-    ...currentModelKwargs,
-    ...overrides,
-  };
-
-  if (llm.lc_kwargs && typeof llm.lc_kwargs === "object" && !Array.isArray(llm.lc_kwargs)) {
-    const currentLcModelKwargs =
-      llm.lc_kwargs.modelKwargs &&
-      typeof llm.lc_kwargs.modelKwargs === "object" &&
-      !Array.isArray(llm.lc_kwargs.modelKwargs)
-        ? llm.lc_kwargs.modelKwargs
-        : {};
-    llm.lc_kwargs = {
-      ...llm.lc_kwargs,
-      modelKwargs: {
-        ...currentLcModelKwargs,
-        ...overrides,
-      },
-    };
-  }
-
-  if (Object.prototype.hasOwnProperty.call(overrides, "reasoning_effort")) {
-    llm.reasoning = {
-      ...(llm.reasoning && typeof llm.reasoning === "object" ? llm.reasoning : {}),
-      effort: overrides.reasoning_effort,
-    };
-    if (llm.lc_kwargs && typeof llm.lc_kwargs === "object" && !Array.isArray(llm.lc_kwargs)) {
-      llm.lc_kwargs = {
-        ...llm.lc_kwargs,
-        reasoning: {
-          ...(llm.lc_kwargs.reasoning && typeof llm.lc_kwargs.reasoning === "object"
-            ? llm.lc_kwargs.reasoning
-            : {}),
-          effort: overrides.reasoning_effort,
-        },
-      };
-    }
-  }
-
-  applyInvocationParamsPatch(llm);
-  applyInvocationParamsPatch(llm.completions);
-  applyInvocationParamsPatch(llm.responses);
-
-  return llm;
-}
-
 export function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
   return (
@@ -124,7 +30,9 @@ export function isRequiredToolChoiceUnsupportedError(error = null) {
 }
 
 export function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "", modelSpec = {}) {
-  const normalizedToolChoice = String(toolChoice || "").trim().toLowerCase();
+  const normalizedToolChoice = String(toolChoice || "")
+    .trim()
+    .toLowerCase();
   const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
   const hasEnableThinkingConfig = Object.prototype.hasOwnProperty.call(
     modelSpec || {},
@@ -157,36 +65,4 @@ export function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "", m
     preserve_thinking: false,
     thinking_budget: 0,
   };
-}
-
-export function resolveLlmForRequiredToolChoice({ modelState, eventListener, turn }) {
-  try {
-    return createChatModelFromSpec(
-      {
-        ...(modelState?.defaultModelSpec || {}),
-        ...(modelState?.activeModelName
-          ? { model: String(modelState.activeModelName || "").trim() }
-          : {}),
-        ...(modelState?.activeModelAlias
-          ? { alias: String(modelState.activeModelAlias || "").trim() }
-          : {}),
-      },
-      {
-        streaming: false,
-        context: {
-          runtime: modelState?.runtime || {},
-          agentContext: modelState?.agentContext || null,
-          sessionId: String(
-            modelState?.runtime?.systemRuntime?.sessionId || modelState?.runtime?.sessionId || "",
-          ).trim(),
-        },
-      },
-    );
-  } catch {
-    emitEvent(eventListener, "tool_choice_required_non_thinking_model_fallback_skipped", {
-      turn,
-      reason: "model_create_failed_fallback_to_current",
-    });
-    return resolveInvokeLlm(modelState, "with_tools");
-  }
 }
